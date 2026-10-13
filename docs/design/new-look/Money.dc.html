@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Money Exchange</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/globeskimmers/components/bundle.css">
+<script src="ds/globeskimmers/components/bundle.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Inter+Tight:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+:root{--fs:1;--radius:.5rem;--passport-navy:#0c2b50;--passport-gold:#d6a64a;--cream-rule:#eadfc9;--stamp:#b0472f;--font-sans:"Inter Tight",ui-sans-serif,system-ui,sans-serif;--font-serif:"Instrument Serif",Georgia,serif;--font-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;--ivory:#fffcf7;--ivory-2:#f7f4ec;--paper:#ffffff;--cream:#fbf6ec;--ink:#16110d;--ink-2:#3a3128;--ink-3:#736657;--ink-cool:#0f1419;--rule:#f0e9dc;--brand-teal:#0e7c73;--radius-chip:10px;--radius-button:14px;--radius-card:16px;--radius-tile:18px;--radius-pill:999px;--space-banner:50px;--space-grid:10px;--space-screen:16px;--shadow-banner:0 2px 14px rgba(14,124,115,.25);--shadow-nav:0 18px 40px -10px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.06) inset;--shadow-chunky:0 6px 18px -6px rgba(0,0,0,.25),0 1px 0 rgba(255,255,255,.18) inset}
+body{margin:0}
+a{color:#0e7c73}a:hover{color:#0b5f55}
+</style>
+</helmet>
+<div style="width: 390px; height: 1400px; position: relative; overflow: hidden; box-sizing: border-box; background: #F2F5EF; font-family: 'Inter Tight', ui-sans-serif, system-ui, sans-serif; color: #16110d;">
+  <x-import component-from-global-scope="Globeskimmers.BrandBanner" style="display: block; width: 390px;"></x-import>
+  <button type="button" aria-label="Text size" style="position: absolute; top: 5px; right: 12px; z-index: 2; width: 40px; height: 40px; border-radius: 999px; background: #ffffff; border: 1px solid #f0e9dc; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;">
+    <svg width="24" height="24" viewBox="0 0 28 28" fill="none" stroke="#16110d" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="16" r="6"></circle><circle cx="20.5" cy="16" r="6"></circle><path d="M13.5 15.2h1"></path><path d="M1.8 14 4.2 7.5"></path><path d="M26.2 14 23.8 7.5"></path></svg>
+  </button>
+
+  <div style="height: 12px;"></div>
+
+  <section aria-label="Money exchange" style="position: relative; margin: 0 16px; padding: 12px 16px 18px; border-radius: 22px; background: #E2EEE6; overflow: hidden; box-sizing: border-box; min-height: 164px;">
+    <svg aria-hidden="true" width="358" height="14" viewBox="0 0 358 14" fill="none" style="position: absolute; left: 0; bottom: 2px; display: block; pointer-events: none;"><path d="M0 7 Q8 -1 16 7 T32 7 T48 7 T64 7 T80 7 T96 7 T112 7 T128 7 T144 7 T160 7 T176 7 T192 7 T208 7 T224 7 T240 7 T256 7 T272 7 T288 7 T304 7 T320 7 T336 7 T352 7 T368 7 T384 7" stroke="#245A36" stroke-opacity="0.3" stroke-width="0.75"></path><path d="M0 7 Q8 -1 16 7 T32 7 T48 7 T64 7 T80 7 T96 7 T112 7 T128 7 T144 7 T160 7 T176 7 T192 7 T208 7 T224 7 T240 7 T256 7 T272 7 T288 7 T304 7 T320 7 T336 7 T352 7 T368 7 T384 7" transform="translate(-10.67 0)" stroke="#245A36" stroke-opacity="0.3" stroke-width="0.75"></path><path d="M0 7 Q8 -1 16 7 T32 7 T48 7 T64 7 T80 7 T96 7 T112 7 T128 7 T144 7 T160 7 T176 7 T192 7 T208 7 T224 7 T240 7 T256 7 T272 7 T288 7 T304 7 T320 7 T336 7 T352 7 T368 7 T384 7" transform="translate(-21.33 0)" stroke="#9C3A60" stroke-opacity="0.35" stroke-width="0.75"></path></svg>
+
+    <div style="position: relative; display: flex; align-items: center; justify-content: space-between; height: 44px;">
+      <button type="button" aria-label="Back" style="width: 44px; height: 44px; padding: 0; border-radius: 999px; background: #FFFFFF; border: 1px solid #D3E2D8; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+        <x-import component-from-global-scope="Globeskimmers.Icons.ChevronLeft" size="{{ n20 }}" color="#245A36" style="display: block; width: 20px; height: 20px;"></x-import>
+      </button>
+      <button type="button" aria-label="Refresh" style="width: 44px; height: 44px; padding: 0; border-radius: 999px; background: #FFFFFF; border: 1px solid #D3E2D8; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#245A36" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg>
+      </button>
+    </div>
+
+    <p style="position: relative; margin: 8px 0 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 13px; letter-spacing: 0.16em; color: #245A36;">MONEY EXCHANGE · RATES UPDATED OCT 12</p>
+    <h1 style="position: relative; max-width: 72%; margin: 6px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 32px; line-height: 1.05; color: #245A36;">What your money is <em style="font-style: italic; color: #9C3A60;">worth</em></h1>
+
+    <div style="position: relative; display: flex; align-items: center; gap: 6px; height: 44px; margin-top: 6px;">
+      <x-import component-from-global-scope="Globeskimmers.Icons.MapPin" size="{{ n14 }}" color="#9C3A60" style="display: block; width: 14px; height: 14px; flex-shrink: 0;"></x-import>
+      <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: #245A36;">Downtown Los Angeles</span>
+      <a href="#" style="display: inline-flex; align-items: center; height: 44px; padding: 0 4px; flex-shrink: 0; font-size: 13px; font-weight: 500; color: #245A36; text-decoration: underline; text-underline-offset: 3px;">Change</a>
+      <div role="group" aria-label="Distance unit" style="margin-left: auto; flex-shrink: 0; display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D3E2D8;">
+        <button type="button" aria-pressed="true" style="width: 40px; height: 30px; padding: 0; border: 0; border-radius: 999px; background: #245A36; color: #FFFFFF; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; cursor: pointer;">MI</button>
+        <button type="button" aria-pressed="false" style="width: 40px; height: 30px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: #3A3128; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; cursor: pointer;">KM</button>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="Rates and converter" style="margin: 12px 16px 0; background: #FFFFFF; border: 1px solid #D3E2D8; border-radius: 22px; overflow: hidden; box-shadow: 0 10px 24px -18px rgba(36,90,54,0.35);">
+    <div aria-hidden="true" style="height: 28px; background: #E2EEE6; overflow: hidden;">
+      <svg width="358" height="28" viewBox="0 0 358 28" fill="none" style="display: block;"><path d="M0 14 Q8 -2 16 14 T32 14 T48 14 T64 14 T80 14 T96 14 T112 14 T128 14 T144 14 T160 14 T176 14 T192 14 T208 14 T224 14 T240 14 T256 14 T272 14 T288 14 T304 14 T320 14 T336 14 T352 14 T368 14 T384 14" stroke="#245A36" stroke-opacity="0.3" stroke-width="0.75"></path><path d="M0 14 Q8 -2 16 14 T32 14 T48 14 T64 14 T80 14 T96 14 T112 14 T128 14 T144 14 T160 14 T176 14 T192 14 T208 14 T224 14 T240 14 T256 14 T272 14 T288 14 T304 14 T320 14 T336 14 T352 14 T368 14 T384 14" transform="translate(-10.67 0)" stroke="#245A36" stroke-opacity="0.3" stroke-width="0.75"></path><path d="M0 14 Q8 -2 16 14 T32 14 T48 14 T64 14 T80 14 T96 14 T112 14 T128 14 T144 14 T160 14 T176 14 T192 14 T208 14 T224 14 T240 14 T256 14 T272 14 T288 14 T304 14 T320 14 T336 14 T352 14 T368 14 T384 14" transform="translate(-21.33 0)" stroke="#9C3A60" stroke-opacity="0.35" stroke-width="0.75"></path></svg>
+    </div>
+
+    <div style="padding: 14px 16px 16px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; height: 34px;">
+        <span style="font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: 28px; line-height: 34px; color: #245A36; white-space: nowrap;">$1.00 = MX$18.42</span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; letter-spacing: 0.12em; color: #736657; white-space: nowrap;">USD → MXN</span>
+      </div>
+      <div style="height: 1px; background: #D3E2D8;"></div>
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; height: 34px;">
+        <span style="font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: 28px; line-height: 34px; color: #245A36; white-space: nowrap;">$1.00 = ¥149.20</span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; letter-spacing: 0.12em; color: #736657; white-space: nowrap;">USD → JPY</span>
+      </div>
+      <p style="margin: 8px 0 0; font-size: 12px; line-height: 16px; color: #3A3128;">Mid-market rate · Updated Oct 12, 9:00 AM</p>
+      <p style="margin: 0; font-size: 12px; line-height: 16px; color: #736657;">Source: ExchangeRate-API. Stores may charge 2–5% fees.</p>
+
+      <div style="height: 1px; margin-top: 12px; background: #D3E2D8;"></div>
+
+      <div style="position: relative; margin-top: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 10px 0 14px; box-sizing: border-box; border: 1px solid #D3E2D8; border-radius: 14px; background: #FFFFFF;">
+          <div style="display: flex; flex-direction: column; min-width: 0;">
+            <label for="mx-from" style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 500; line-height: 12px; letter-spacing: 0.14em; color: #736657;">FROM</label>
+            <input id="mx-from" type="text" inputmode="decimal" value="100" style="width: 140px; height: 42px; margin: 0; padding: 0; border: 0; background: transparent; font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: 40px; line-height: 42px; color: #245A36; outline: none;">
+          </div>
+          <button type="button" aria-label="From currency: US dollar" style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px 0 12px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D3E2D8; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.06em; color: #245A36; cursor: pointer;">
+            USD
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#245A36" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+          </button>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; height: 64px; margin-top: 10px; padding: 0 10px 0 14px; box-sizing: border-box; border: 1px solid #D3E2D8; border-radius: 14px; background: #DCEBDF;">
+          <div style="display: flex; flex-direction: column; min-width: 0;">
+            <label for="mx-to" style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 500; line-height: 12px; letter-spacing: 0.14em; color: #245A36;">TO</label>
+            <input id="mx-to" type="text" readonly="readonly" value="1,842.00" style="width: 150px; height: 42px; margin: 0; padding: 0; border: 0; background: transparent; font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: 40px; line-height: 42px; color: #245A36; outline: none;">
+          </div>
+          <button type="button" aria-label="To currency: Mexican peso" style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px 0 12px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D3E2D8; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.06em; color: #245A36; cursor: pointer;">
+            MXN
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#245A36" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+          </button>
+        </div>
+        <button type="button" aria-label="Swap currencies" style="position: absolute; top: 47px; left: 172px; width: 44px; height: 44px; padding: 0; box-sizing: border-box; border-radius: 999px; background: #FFFFFF; border: 1.5px solid #9C3A60; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 14px -8px rgba(156,58,96,0.45);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9C3A60" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 16-4 4-4-4"></path><path d="M17 20V4"></path><path d="m3 8 4-4 4 4"></path><path d="M7 4v16"></path></svg>
+        </button>
+      </div>
+
+      <div role="group" aria-label="Quick currencies" style="display: flex; gap: 8px; margin-top: 12px;">
+        <button type="button" aria-pressed="false" style="height: 36px; padding: 0 14px; border-radius: 10px; background: #FFFFFF; border: 1px solid #D3E2D8; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 500; letter-spacing: 0.06em; color: #245A36; cursor: pointer;">EUR</button>
+        <button type="button" aria-pressed="false" style="height: 36px; padding: 0 14px; border-radius: 10px; background: #FFFFFF; border: 1px solid #D3E2D8; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 500; letter-spacing: 0.06em; color: #245A36; cursor: pointer;">JPY</button>
+        <button type="button" aria-pressed="true" style="height: 36px; padding: 0 14px; border-radius: 10px; background: #245A36; border: 1px solid #245A36; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 500; letter-spacing: 0.06em; color: #FFFFFF; cursor: pointer;">MXN</button>
+        <button type="button" aria-pressed="false" style="height: 36px; padding: 0 14px; border-radius: 10px; background: #FFFFFF; border: 1px solid #D3E2D8; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 500; letter-spacing: 0.06em; color: #245A36; cursor: pointer;">GBP</button>
+        <button type="button" aria-pressed="false" style="height: 36px; padding: 0 14px; border-radius: 10px; background: #FFFFFF; border: 1px solid #D3E2D8; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 500; letter-spacing: 0.06em; color: #245A36; cursor: pointer;">CAD</button>
+      </div>
+    </div>
+  </section>
+
+  <div aria-hidden="true" style="display: flex; align-items: center; gap: 14px; margin: 18px 16px 0;">
+    <span style="flex: 1; height: 1px; background: #D3E2D8;"></span>
+    <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 14px; letter-spacing: 0.18em; color: #736657;">OR</span>
+    <span style="flex: 1; height: 1px; background: #D3E2D8;"></span>
+  </div>
+
+  <h2 style="margin: 12px 16px 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 28px; color: #16110D;">Exchange <em style="font-style: italic; color: #9C3A60;">near you</em></h2>
+  <p style="margin: 4px 16px 0; font-size: 13px; line-height: 18px; color: #3A3128;"><span style="margin-right: 6px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; letter-spacing: 0.14em; color: #245A36;">TIP</span>Airport counters usually pay less — compare before you swap.</p>
+
+  <div style="display: flex; align-items: center; gap: 8px; margin: 12px 16px 0;">
+    <div role="group" aria-label="Sort by" style="display: flex; gap: 2px; padding: 3px; box-sizing: border-box; height: 36px; border-radius: 12px; background: #FFFFFF; border: 1px solid #D3E2D8;">
+      <button type="button" aria-pressed="true" style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 0; border-radius: 9px; background: #245A36; color: #FFFFFF; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer;">
+        <x-import component-from-global-scope="Globeskimmers.Icons.MapPin" size="{{ n14 }}" color="#FFFFFF" style="display: block; width: 14px; height: 14px;"></x-import>
+        Nearest
+      </button>
+      <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; color: #3A3128; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#245A36" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 7 13.5 15.5 8.5 10.5 2 17"></path><path d="M16 7h6v6"></path></svg>
+        Best rate
+      </button>
+    </div>
+    <button type="button" aria-pressed="false" style="margin-left: auto; display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #D3E2D8; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <x-import component-from-global-scope="Globeskimmers.Icons.Clock" size="{{ n16 }}" color="#245A36" style="display: block; width: 16px; height: 16px;"></x-import>
+      Open now
+    </button>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px; margin: 12px 16px 0;">
+
+    <article aria-label="1. Ria Money Transfer" style="padding: 14px 16px; background: #FFFFFF; border: 1px solid #D3E2D8; border-radius: 16px; box-shadow: 0 10px 24px -18px rgba(36,90,54,0.35);">
+      <div style="display: flex; align-items: flex-start; gap: 10px;">
+        <span style="flex-shrink: 0; width: 28px; height: 28px; box-sizing: border-box; border-radius: 999px; background: #FFFFFF; border: 1px solid #D3E2D8; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 17px; line-height: 1; color: #245A36;">1</span>
+        <div style="min-width: 0;">
+          <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 13px; letter-spacing: 0.12em; color: #245A36;">MONEY TRANSFER</p>
+          <h3 style="margin: 3px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 22px; line-height: 25px; color: #16110D;">Ria Money Transfer</h3>
+        </div>
+      </div>
+      <p style="margin: 6px 0 0; font-size: 13px; line-height: 18px; color: #3A3128;"><span style="color: #2E6B4E; font-weight: 600;">Open until 6 PM</span> · 0.4 mi · Broadway</p>
+      <p style="margin: 6px 0 0; font-size: 12.5px; line-height: 18px; color: #736657;">Rates not listed: ask at the counter</p>
+      <div style="display: flex; gap: 8px; margin-top: 12px;">
+        <button type="button" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 12px; border: 0; border-radius: 14px; background: #245A36; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer;">
+          <x-import component-from-global-scope="Globeskimmers.Icons.Navigation" size="{{ n16 }}" color="#FFFFFF" style="display: block; width: 16px; height: 16px;"></x-import>
+          Directions
+        </button>
+        <button type="button" aria-label="Ria Money Transfer on the map" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D3E2D8; cursor: pointer;">
+          <x-import component-from-global-scope="Globeskimmers.Icons.Map" size="{{ n18 }}" color="#245A36" style="display: block; width: 18px; height: 18px;"></x-import>
+        </button>
+        <button type="button" aria-label="Call Ria Money Transfer" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D3E2D8; cursor: pointer;">
+          <x-import component-from-global-scope="Globeskimmers.Icons.Phone" size="{{ n18 }}" color="#245A36" style="display: block; width: 18px; height: 18px;"></x-import>
+        </button>
+        <button type="button" aria-label="More about Ria Money Transfer" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D3E2D8; cursor: pointer;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#245A36" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+        </button>
+      </div>
+    </article>
+
+    <article aria-label="2. Currency Exchange International" style="padding: 14px 16px; background: #FFFFFF; border: 1px solid #D3E2D8; border-radius: 16px; box-shadow: 0 10px 24px -18px rgba(36,90,54,0.35);">
+      <div style="display: flex; align-items: flex-start; gap: 10px;">
+        <span style="flex-shrink: 0; width: 28px; height: 28px; box-sizing: border-box; border-radius: 999px; background: #FFFFFF; border: 1px solid #D3E2D8; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 17px; line-height: 1; color: #245A36;">2</span>
+        <div style="min-width: 0;">
+          <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 13px; letter-spacing: 0.12em; color: #245A36;">CURRENCY EXCHANGE</p>
+          <h3 style="margin: 3px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 22px; line-height: 25px; color: #16110D;">Currency Exchange International</h3>
+        </div>
+      </div>
+      <p style="margin: 6px 0 0; font-size: 13px; line-height: 18px; color: #3A3128;"><span style="color: #2E6B4E; font-weight: 600;">Open until 9 PM</span> · 9.8 mi · Westfield Century City</p>
+      <p style="margin: 6px 0 0; font-size: 12.5px; line-height: 18px; color: #736657;">Rates not listed: ask at the counter</p>
+      <div style="display: flex; gap: 8px; margin-top: 12px;">
+        <button type="button" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 12px; border: 0; border-radius: 14px; background: #245A36; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer;">
+          <x-import component-from-global-scope="Globeskimmers.Icons.Navigation" size="{{ n16 }}" color="#FFFFFF" style="display: block; width: 16px; height: 16px;"></x-import>
+          Directions
+        </button>
+        <button type="button" aria-label="Currency Exchange International on the map" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D3E2D8; cursor: pointer;">
+          <x-import component-from-global-scope="Globeskimmers.Icons.Map" size="{{ n18 }}" color="#245A36" style="display: block; width: 18px; height: 18px;"></x-import>
+        </button>
+        <button type="button" aria-label="Call Currency Exchange International" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D3E2D8; cursor: pointer;">
+          <x-import component-from-global-scope="Globeskimmers.Icons.Phone" size="{{ n18 }}" color="#245A36" style="display: block; width: 18px; height: 18px;"></x-import>
+        </button>
+        <button type="button" aria-label="More about Currency Exchange International" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D3E2D8; cursor: pointer;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#245A36" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+        </button>
+      </div>
+    </article>
+
+    <article aria-label="3. Travelex" style="padding: 14px 16px; background: #FFFFFF; border: 1px solid #D3E2D8; border-radius: 16px; box-shadow: 0 10px 24px -18px rgba(36,90,54,0.35);">
+      <div style="display: flex; align-items: flex-start; gap: 10px;">
+        <span style="flex-shrink: 0; width: 28px; height: 28px; box-sizing: border-box; border-radius: 999px; background: #FFFFFF; border: 1px solid #D3E2D8; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 17px; line-height: 1; color: #245A36;">3</span>
+        <div style="min-width: 0;">
+          <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 13px; letter-spacing: 0.12em; color: #245A36;">AIRPORT COUNTER</p>
+          <h3 style="margin: 3px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 22px; line-height: 25px; color: #16110D;">Travelex</h3>
+        </div>
+      </div>
+      <p style="margin: 6px 0 0; font-size: 13px; line-height: 18px; color: #3A3128;"><span style="color: #2E6B4E; font-weight: 600;">Open until 10 PM</span> · 15.4 mi · LAX Terminal B</p>
+      <p style="margin: 6px 0 0; font-size: 12.5px; line-height: 18px; color: #736657;">Rates not listed: ask at the counter</p>
+      <div style="display: flex; gap: 8px; margin-top: 12px;">
+        <button type="button" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 12px; border: 0; border-radius: 14px; background: #245A36; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer;">
+          <x-import component-from-global-scope="Globeskimmers.Icons.Navigation" size="{{ n16 }}" color="#FFFFFF" style="display: block; width: 16px; height: 16px;"></x-import>
+          Directions
+        </button>
+        <button type="button" aria-label="Travelex on the map" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D3E2D8; cursor: pointer;">
+          <x-import component-from-global-scope="Globeskimmers.Icons.Map" size="{{ n18 }}" color="#245A36" style="display: block; width: 18px; height: 18px;"></x-import>
+        </button>
+        <button type="button" aria-label="Call Travelex" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D3E2D8; cursor: pointer;">
+          <x-import component-from-global-scope="Globeskimmers.Icons.Phone" size="{{ n18 }}" color="#245A36" style="display: block; width: 18px; height: 18px;"></x-import>
+        </button>
+        <button type="button" aria-label="More about Travelex" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D3E2D8; cursor: pointer;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#245A36" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+        </button>
+      </div>
+    </article>
+
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 22px; display: flex; justify-content: center;">
+    <x-import component-from-global-scope="Globeskimmers.FloatingNav" unread="{{ n2 }}"></x-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1400}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { n2: 2, n14: 14, n16: 16, n18: 18, n20: 20 };
+  }
+}
+</script>
+</body>
+</html>

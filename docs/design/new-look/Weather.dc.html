@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Weather · Bluebird</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/globeskimmers/components/bundle.css">
+<script src="ds/globeskimmers/components/bundle.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Inter+Tight:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+:root{--fs:1;--radius:.5rem;--passport-navy:#0c2b50;--passport-gold:#d6a64a;--cream-rule:#eadfc9;--stamp:#b0472f;--font-sans:"Inter Tight",ui-sans-serif,system-ui,sans-serif;--font-serif:"Instrument Serif",Georgia,serif;--font-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;--ivory:#fffcf7;--ivory-2:#f7f4ec;--paper:#ffffff;--cream:#fbf6ec;--ink:#16110d;--ink-2:#3a3128;--ink-3:#736657;--ink-cool:#0f1419;--rule:#f0e9dc;--brand-teal:#0e7c73;--radius-chip:10px;--radius-button:14px;--radius-card:16px;--radius-tile:18px;--radius-pill:999px;--space-banner:50px;--space-grid:10px;--space-screen:16px;--shadow-banner:0 2px 14px rgba(14,124,115,.25);--shadow-nav:0 18px 40px -10px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.06) inset;--shadow-chunky:0 6px 18px -6px rgba(0,0,0,.25),0 1px 0 rgba(255,255,255,.18) inset}
+body{margin:0}
+a{color:#0e7c73}a:hover{color:#0b5f55}
+</style>
+</helmet>
+<div style="width: 390px; height: 1400px; position: relative; overflow: hidden; box-sizing: border-box; background: #faf8f1; font-family: 'Inter Tight', ui-sans-serif, system-ui, sans-serif; color: #16110d;">
+  <x-import component-from-global-scope="Globeskimmers.BrandBanner" style="display: block; width: 390px;"></x-import>
+  <button type="button" aria-label="Text size" style="position: absolute; top: 5px; right: 12px; z-index: 2; width: 40px; height: 40px; box-sizing: border-box; padding: 0; border-radius: 999px; background: #ffffff; border: 1px solid #f0e9dc; display: flex; align-items: center; justify-content: center; cursor: pointer;"><svg width="28" height="16" viewBox="0 0 28 16" fill="none" stroke="#16110d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="9" r="6"></circle><circle cx="21" cy="9" r="6"></circle><path d="M12.5 6.6C13.4 5.4 14.6 5.4 15.5 6.6"></path></svg></button>
+
+  <main style="padding: 12px 16px 0;">
+
+    <section aria-label="Weather for Downtown Los Angeles" style="position: relative; overflow: hidden; box-sizing: border-box; min-height: 164px; padding: 12px 16px 18px; border-radius: 22px; background: #0f6d9a;">
+      <div style="display: flex; align-items: center; justify-content: space-between; height: 44px;">
+        <button type="button" aria-label="Back" style="width: 44px; height: 44px; box-sizing: border-box; padding: 0; border-radius: 999px; background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.28); display: flex; align-items: center; justify-content: center; cursor: pointer;"><x-import component-from-global-scope="Globeskimmers.Icons.ChevronLeft" size="{{ n20 }}" color="#ffffff"></x-import></button>
+        <button type="button" aria-label="Refresh" style="width: 44px; height: 44px; box-sizing: border-box; padding: 0; border-radius: 999px; background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.28); display: flex; align-items: center; justify-content: center; cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg></button>
+      </div>
+      <p style="margin: 10px 0 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; letter-spacing: 0.16em; line-height: 14px; text-transform: uppercase; white-space: nowrap; color: #dceffa;">Weather · Los Angeles · Updated 2:10 PM</p>
+      <h1 style="margin: 6px 0 0; max-width: 72%; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: calc(32px*var(--fs)); line-height: 1.05; color: #ffffff;">The week <em style="font-style: italic; color: #fdea53;">ahead</em></h1>
+      <div style="display: flex; align-items: center; gap: 6px; margin-top: 14px; min-height: 34px;">
+        <span aria-hidden="true" style="display: flex; flex-shrink: 0;"><x-import component-from-global-scope="Globeskimmers.Icons.MapPin" size="{{ n14 }}" color="#fdea53"></x-import></span>
+        <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; line-height: 18px; color: #ffffff;">Downtown Los Angeles</span>
+        <a href="#" style="flex-shrink: 0; display: inline-flex; align-items: center; min-height: 44px; margin: -5px 0; padding: 0 4px; font-size: 13px; font-weight: 500; color: #ffffff; text-decoration: underline; text-underline-offset: 2px;">Change</a>
+        <div role="group" aria-label="Temperature unit" style="margin-left: auto; flex-shrink: 0; display: flex; align-items: center; height: 34px; box-sizing: border-box; padding: 0 2px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.28); background: rgba(255,255,255,0.10);">
+          <button type="button" aria-pressed="true" style="display: flex; align-items: center; height: 44px; margin: -5px 0; padding: 0 1px; background: transparent; border: 0; cursor: pointer; font-family: inherit;"><span style="display: flex; align-items: center; height: 28px; padding: 0 11px; border-radius: 999px; background: #ffffff; color: #0f6d9a; font-size: 12px; font-weight: 700;">°F</span></button>
+          <button type="button" aria-pressed="false" style="display: flex; align-items: center; height: 44px; margin: -5px 0; padding: 0 1px; background: transparent; border: 0; cursor: pointer; font-family: inherit;"><span style="display: flex; align-items: center; height: 28px; padding: 0 11px; border-radius: 999px; color: #ffffff; font-size: 12px; font-weight: 700;">°C</span></button>
+        </div>
+      </div>
+    </section>
+
+    <section aria-label="Now" style="margin-top: 16px; box-sizing: border-box; padding: 20px; border-radius: 22px; background: #ffffff; border: 1px solid #d6e4ed;">
+      <svg width="316" height="80" viewBox="0 0 316 80" role="img" aria-label="Day arc from sunrise at 6:55 AM to sunset at 6:31 PM, the sun past midday" style="display: block;">
+        <line x1="0" y1="70.5" x2="316" y2="70.5" stroke="#d6e4ed" stroke-width="1"></line>
+        <path d="M18 70 A140 62 0 0 1 211.6 12.7" fill="none" stroke="#0f6d9a" stroke-opacity="0.35" stroke-width="2" stroke-linecap="round" stroke-dasharray="0 6"></path>
+        <path d="M211.6 12.7 A140 62 0 0 1 298 70" fill="none" stroke="#0f6d9a" stroke-opacity="0.15" stroke-width="2" stroke-linecap="round" stroke-dasharray="0 6"></path>
+        <circle cx="211.6" cy="12.7" r="11" fill="#fbdc13" fill-opacity="0.28"></circle>
+        <circle cx="211.6" cy="12.7" r="6" fill="#fbdc13" stroke="#0f6d9a" stroke-width="1.5"></circle>
+      </svg>
+      <div style="display: flex; justify-content: space-between; margin-top: 6px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.1em; line-height: 14px; text-transform: uppercase; color: #736657;">
+        <span>Sunrise 6:55 AM</span>
+        <span>Sunset 6:31 PM</span>
+      </div>
+      <p style="margin: 16px 0 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.14em; line-height: 14px; text-transform: uppercase; color: #736657;">Now · Monday, October 12</p>
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; margin-top: 4px;">
+        <p style="margin: 0; display: flex; align-items: flex-start; color: #0f6d9a;"><span style="font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: calc(72px*var(--fs)); line-height: 0.92; letter-spacing: -0.02em;">68°</span><span style="margin: 8px 0 0 3px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 14px; line-height: 18px; color: #736657;">F</span></p>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding-bottom: 4px;">
+          <p style="margin: 0; display: flex; align-items: baseline; gap: 6px;"><abbr title="High" style="text-decoration: none; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.14em; color: #736657;">H</abbr><span style="font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: 24px; line-height: 24px; color: #16110d;">74°</span></p>
+          <p style="margin: 0; display: flex; align-items: baseline; gap: 6px;"><abbr title="Low" style="text-decoration: none; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.14em; color: #736657;">L</abbr><span style="font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: 24px; line-height: 24px; color: #736657;">61°</span></p>
+        </div>
+      </div>
+      <p style="margin: 10px 0 0; display: flex; align-items: center; gap: 8px; font-size: 15px; line-height: 20px; color: #3a3128;"><span aria-hidden="true" style="display: flex; flex-shrink: 0;"><x-import component-from-global-scope="Globeskimmers.Icons.Sun" size="{{ n16 }}" color="#0f6d9a"></x-import></span><span>Sunny · Feels like 68°</span></p>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin-top: 16px; padding-top: 14px; border-top: 1px solid #d6e4ed;">
+        <div style="padding-right: 8px;">
+          <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: 0.1em; line-height: 13px; text-transform: uppercase; color: #736657;">Humidity</p>
+          <p style="margin: 4px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 22px; line-height: 26px; color: #16110d;">48%</p>
+        </div>
+        <div style="padding: 0 8px; border-left: 1px solid #d6e4ed;">
+          <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: 0.1em; line-height: 13px; text-transform: uppercase; color: #736657;">Wind</p>
+          <p style="margin: 4px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 22px; line-height: 26px; color: #16110d;">6 mph</p>
+        </div>
+        <div style="padding: 0 8px; border-left: 1px solid #d6e4ed;">
+          <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: 0.1em; line-height: 13px; text-transform: uppercase; color: #736657;">Rain</p>
+          <p style="margin: 4px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 22px; line-height: 26px; color: #16110d;">None</p>
+        </div>
+        <div style="padding-left: 8px; border-left: 1px solid #d6e4ed;">
+          <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: 0.1em; line-height: 13px; text-transform: uppercase; color: #736657;">UV index</p>
+          <p style="margin: 4px 0 0; display: flex; align-items: center; gap: 6px;"><span style="font-family: 'Instrument Serif', Georgia, serif; font-size: 22px; line-height: 26px; color: #16110d;">6</span><span style="padding: 2px 6px; border-radius: 6px; background: #fff2bf; color: #744f00; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; font-weight: 500; letter-spacing: 0.08em; line-height: 13px; text-transform: uppercase;">High</span></p>
+        </div>
+      </div>
+    </section>
+
+    <div style="display: flex; align-items: baseline; justify-content: space-between; margin-top: 24px; padding: 0 2px;">
+      <h2 style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; letter-spacing: 0.14em; line-height: 14px; text-transform: uppercase; color: #736657;">7-day forecast</h2>
+      <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; line-height: 14px; text-transform: uppercase; color: #0f6d9a;">Tap for hourly</p>
+    </div>
+
+    <section aria-label="7-day forecast" style="margin-top: 10px; overflow: hidden; border-radius: 16px; background: #ffffff; border: 1px solid #d6e4ed;">
+
+      <button type="button" aria-expanded="true" aria-controls="today-hours" style="display: flex; align-items: center; width: 100%; min-height: 64px; box-sizing: border-box; padding: 10px 14px; background: transparent; border: 0; text-align: left; cursor: pointer; font-family: inherit; color: inherit;">
+        <span style="display: block; width: 136px; flex-shrink: 0;">
+          <span style="display: flex; align-items: baseline; gap: 6px; white-space: nowrap;"><span style="font-family: 'Instrument Serif', Georgia, serif; font-size: 20px; line-height: 24px; color: #16110d;">Today</span><span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; color: #736657;">OCT 12</span></span>
+          <span style="display: block; margin-top: 2px; font-size: 12.5px; line-height: 16px; color: #736657;">Sunny</span>
+        </span>
+        <span aria-hidden="true" style="display: flex; flex-shrink: 0; width: 22px; height: 22px; margin: 0 8px;"><x-import component-from-global-scope="Globeskimmers.Icons.Sun" size="{{ n22 }}" color="#0f6d9a"></x-import></span>
+        <span style="flex-shrink: 0; width: 26px; text-align: right; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 22px; color: #736657;">61°</span>
+        <span aria-hidden="true" style="position: relative; display: block; flex-shrink: 0; width: 56px; height: 4px; margin: 0 8px; border-radius: 999px; background: #e2f0f9;"><span style="position: absolute; top: 0; left: 11.8px; width: 38.3px; height: 4px; border-radius: 999px; background-image: linear-gradient(90deg, #9ccdec 0%, #e3f1f9 42%, #ffefaa 64%, #fbdc13 100%); background-size: 56px 4px; background-position: -11.8px 0;"></span></span>
+        <span style="flex-shrink: 0; width: 30px; font-family: 'Instrument Serif', Georgia, serif; font-size: 22px; line-height: 24px; color: #16110d;">74°</span>
+        <span style="display: flex; margin-left: auto; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0f6d9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg></span>
+      </button>
+
+      <div id="today-hours" style="overflow: hidden; padding: 2px 0 14px 14px;">
+        <div style="display: flex; gap: 6px;">
+          <div style="flex-shrink: 0; width: 48px; box-sizing: border-box; padding: 8px 0 10px; border-radius: 12px; background: #e2f0f9; text-align: center;">
+            <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; font-weight: 500; letter-spacing: 0.06em; line-height: 13px; color: #0f6d9a;">NOW</p>
+            <span aria-hidden="true" style="display: flex; justify-content: center; height: 18px; margin-top: 6px;"><x-import component-from-global-scope="Globeskimmers.Icons.Sun" size="{{ n18 }}" color="#0f6d9a"></x-import></span>
+            <p style="margin: 6px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 20px; color: #16110d;">68°</p>
+          </div>
+          <div style="flex-shrink: 0; width: 48px; box-sizing: border-box; padding: 8px 0 10px; text-align: center;">
+            <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: 0.06em; line-height: 13px; color: #736657;">3 PM</p>
+            <span aria-hidden="true" style="display: flex; justify-content: center; height: 18px; margin-top: 6px;"><x-import component-from-global-scope="Globeskimmers.Icons.Sun" size="{{ n18 }}" color="#0f6d9a"></x-import></span>
+            <p style="margin: 6px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 20px; color: #16110d;">71°</p>
+          </div>
+          <div style="flex-shrink: 0; width: 48px; box-sizing: border-box; padding: 8px 0 10px; text-align: center;">
+            <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: 0.06em; line-height: 13px; color: #736657;">4 PM</p>
+            <span aria-hidden="true" style="display: flex; justify-content: center; height: 18px; margin-top: 6px;"><x-import component-from-global-scope="Globeskimmers.Icons.Sun" size="{{ n18 }}" color="#0f6d9a"></x-import></span>
+            <p style="margin: 6px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 20px; color: #16110d;">74°</p>
+          </div>
+          <div style="flex-shrink: 0; width: 48px; box-sizing: border-box; padding: 8px 0 10px; text-align: center;">
+            <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: 0.06em; line-height: 13px; color: #736657;">5 PM</p>
+            <span aria-hidden="true" style="display: flex; justify-content: center; height: 18px; margin-top: 6px;"><x-import component-from-global-scope="Globeskimmers.Icons.Sun" size="{{ n18 }}" color="#0f6d9a"></x-import></span>
+            <p style="margin: 6px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 20px; color: #16110d;">72°</p>
+          </div>
+          <div style="flex-shrink: 0; width: 48px; box-sizing: border-box; padding: 8px 0 10px; text-align: center;">
+            <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: 0.06em; line-height: 13px; color: #736657;">6 PM</p>
+            <span aria-hidden="true" style="display: flex; justify-content: center; height: 18px; margin-top: 6px;"><x-import component-from-global-scope="Globeskimmers.Icons.Sun" size="{{ n18 }}" color="#0f6d9a"></x-import></span>
+            <p style="margin: 6px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 20px; color: #16110d;">69°</p>
+          </div>
+          <div style="flex-shrink: 0; width: 48px; box-sizing: border-box; padding: 8px 0 10px; text-align: center;">
+            <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: 0.06em; line-height: 13px; color: #736657;">6:31 PM</p>
+            <span style="display: flex; justify-content: center; height: 18px; margin-top: 6px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f6d9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 10V2"></path><path d="m4.93 10.93 1.41 1.41"></path><path d="M2 18h2"></path><path d="M20 18h2"></path><path d="m19.07 10.93-1.41 1.41"></path><path d="M22 22H2"></path><path d="m16 6-4 4-4-4"></path><path d="M16 18a4 4 0 0 0-8 0"></path></svg></span>
+            <p style="margin: 6px 0 0; font-size: 11px; line-height: 20px; color: #736657;">Sunset</p>
+          </div>
+          <div style="flex-shrink: 0; width: 48px; box-sizing: border-box; padding: 8px 0 10px; text-align: center;">
+            <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: 0.06em; line-height: 13px; color: #736657;">7 PM</p>
+            <span style="display: flex; justify-content: center; height: 18px; margin-top: 6px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f6d9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></span>
+            <p style="margin: 6px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 20px; color: #16110d;">66°</p>
+          </div>
+          <div style="flex-shrink: 0; width: 48px; box-sizing: border-box; padding: 8px 0 10px; text-align: center;">
+            <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: 0.06em; line-height: 13px; color: #736657;">8 PM</p>
+            <span style="display: flex; justify-content: center; height: 18px; margin-top: 6px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f6d9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></span>
+            <p style="margin: 6px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 20px; color: #16110d;">64°</p>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" aria-expanded="false" style="display: flex; align-items: center; width: 100%; min-height: 64px; box-sizing: border-box; padding: 10px 14px; background: transparent; border: 0; border-top: 1px solid #d6e4ed; text-align: left; cursor: pointer; font-family: inherit; color: inherit;">
+        <span style="display: block; width: 136px; flex-shrink: 0;">
+          <span style="display: flex; align-items: baseline; gap: 6px; white-space: nowrap;"><span style="font-family: 'Instrument Serif', Georgia, serif; font-size: 20px; line-height: 24px; color: #16110d;">Tuesday</span><span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; color: #736657;">OCT 13</span></span>
+          <span style="display: block; margin-top: 2px; font-size: 12.5px; line-height: 16px; color: #736657;">Sunny</span>
+        </span>
+        <span aria-hidden="true" style="display: flex; flex-shrink: 0; width: 22px; height: 22px; margin: 0 8px;"><x-import component-from-global-scope="Globeskimmers.Icons.Sun" size="{{ n22 }}" color="#0f6d9a"></x-import></span>
+        <span style="flex-shrink: 0; width: 26px; text-align: right; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 22px; color: #736657;">62°</span>
+        <span aria-hidden="true" style="position: relative; display: block; flex-shrink: 0; width: 56px; height: 4px; margin: 0 8px; border-radius: 999px; background: #e2f0f9;"><span style="position: absolute; top: 0; left: 14.7px; width: 41.3px; height: 4px; border-radius: 999px; background-image: linear-gradient(90deg, #9ccdec 0%, #e3f1f9 42%, #ffefaa 64%, #fbdc13 100%); background-size: 56px 4px; background-position: -14.7px 0;"></span></span>
+        <span style="flex-shrink: 0; width: 30px; font-family: 'Instrument Serif', Georgia, serif; font-size: 22px; line-height: 24px; color: #16110d;">76°</span>
+        <span style="display: flex; margin-left: auto; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0f6d9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span>
+      </button>
+
+      <button type="button" aria-expanded="false" style="display: flex; align-items: center; width: 100%; min-height: 64px; box-sizing: border-box; padding: 10px 14px; background: transparent; border: 0; border-top: 1px solid #d6e4ed; text-align: left; cursor: pointer; font-family: inherit; color: inherit;">
+        <span style="display: block; width: 136px; flex-shrink: 0;">
+          <span style="display: flex; align-items: baseline; gap: 6px; white-space: nowrap;"><span style="font-family: 'Instrument Serif', Georgia, serif; font-size: 20px; line-height: 24px; color: #16110d;">Wednesday</span><span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; color: #736657;">OCT 14</span></span>
+          <span style="display: block; margin-top: 2px; font-size: 12.5px; line-height: 16px; color: #736657;">Partly cloudy</span>
+        </span>
+        <span aria-hidden="true" style="display: flex; flex-shrink: 0; width: 22px; height: 22px; margin: 0 8px;"><x-import component-from-global-scope="Globeskimmers.Icons.CloudSun" size="{{ n22 }}" color="#0f6d9a"></x-import></span>
+        <span style="flex-shrink: 0; width: 26px; text-align: right; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 22px; color: #736657;">60°</span>
+        <span aria-hidden="true" style="position: relative; display: block; flex-shrink: 0; width: 56px; height: 4px; margin: 0 8px; border-radius: 999px; background: #e2f0f9;"><span style="position: absolute; top: 0; left: 8.8px; width: 35.4px; height: 4px; border-radius: 999px; background-image: linear-gradient(90deg, #9ccdec 0%, #e3f1f9 42%, #ffefaa 64%, #fbdc13 100%); background-size: 56px 4px; background-position: -8.8px 0;"></span></span>
+        <span style="flex-shrink: 0; width: 30px; font-family: 'Instrument Serif', Georgia, serif; font-size: 22px; line-height: 24px; color: #16110d;">72°</span>
+        <span style="display: flex; margin-left: auto; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0f6d9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span>
+      </button>
+
+      <button type="button" aria-expanded="false" style="display: flex; align-items: center; width: 100%; min-height: 64px; box-sizing: border-box; padding: 10px 14px; background: transparent; border: 0; border-top: 1px solid #d6e4ed; text-align: left; cursor: pointer; font-family: inherit; color: inherit;">
+        <span style="display: block; width: 136px; flex-shrink: 0;">
+          <span style="display: flex; align-items: baseline; gap: 6px; white-space: nowrap;"><span style="font-family: 'Instrument Serif', Georgia, serif; font-size: 20px; line-height: 24px; color: #16110d;">Thursday</span><span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; color: #736657;">OCT 15</span></span>
+          <span style="display: block; margin-top: 2px; font-size: 12.5px; line-height: 16px; color: #736657;">Cloudy</span>
+        </span>
+        <span style="display: flex; flex-shrink: 0; width: 22px; height: 22px; margin: 0 8px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0f6d9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path></svg></span>
+        <span style="flex-shrink: 0; width: 26px; text-align: right; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 22px; color: #736657;">59°</span>
+        <span aria-hidden="true" style="position: relative; display: block; flex-shrink: 0; width: 56px; height: 4px; margin: 0 8px; border-radius: 999px; background: #e2f0f9;"><span style="position: absolute; top: 0; left: 5.9px; width: 29.5px; height: 4px; border-radius: 999px; background-image: linear-gradient(90deg, #9ccdec 0%, #e3f1f9 42%, #ffefaa 64%, #fbdc13 100%); background-size: 56px 4px; background-position: -5.9px 0;"></span></span>
+        <span style="flex-shrink: 0; width: 30px; font-family: 'Instrument Serif', Georgia, serif; font-size: 22px; line-height: 24px; color: #16110d;">69°</span>
+        <span style="display: flex; margin-left: auto; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0f6d9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span>
+      </button>
+
+      <button type="button" aria-expanded="false" style="display: flex; align-items: center; width: 100%; min-height: 64px; box-sizing: border-box; padding: 10px 14px; background: transparent; border: 0; border-top: 1px solid #d6e4ed; text-align: left; cursor: pointer; font-family: inherit; color: inherit;">
+        <span style="display: block; width: 136px; flex-shrink: 0;">
+          <span style="display: flex; align-items: baseline; gap: 6px; white-space: nowrap;"><span style="font-family: 'Instrument Serif', Georgia, serif; font-size: 20px; line-height: 24px; color: #16110d;">Friday</span><span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; color: #736657;">OCT 16</span></span>
+          <span style="display: block; margin-top: 2px; font-size: 12.5px; line-height: 16px; color: #736657;">Light rain</span>
+        </span>
+        <span style="display: flex; flex-shrink: 0; width: 22px; height: 22px; margin: 0 8px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0f6d9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M8 19v1"></path><path d="M8 14v1"></path><path d="M16 19v1"></path><path d="M16 14v1"></path><path d="M12 21v1"></path><path d="M12 16v1"></path></svg></span>
+        <span style="flex-shrink: 0; width: 26px; text-align: right; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 22px; color: #736657;">57°</span>
+        <span aria-hidden="true" style="position: relative; display: block; flex-shrink: 0; width: 56px; height: 4px; margin: 0 8px; border-radius: 999px; background: #e2f0f9;"><span style="position: absolute; top: 0; left: 0; width: 20.6px; height: 4px; border-radius: 999px; background-image: linear-gradient(90deg, #9ccdec 0%, #e3f1f9 42%, #ffefaa 64%, #fbdc13 100%); background-size: 56px 4px; background-position: 0 0;"></span></span>
+        <span style="flex-shrink: 0; width: 30px; font-family: 'Instrument Serif', Georgia, serif; font-size: 22px; line-height: 24px; color: #16110d;">64°</span>
+        <span style="display: flex; margin-left: auto; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0f6d9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span>
+      </button>
+
+      <button type="button" aria-expanded="false" style="display: flex; align-items: center; width: 100%; min-height: 64px; box-sizing: border-box; padding: 10px 14px; background: transparent; border: 0; border-top: 1px solid #d6e4ed; text-align: left; cursor: pointer; font-family: inherit; color: inherit;">
+        <span style="display: block; width: 136px; flex-shrink: 0;">
+          <span style="display: flex; align-items: baseline; gap: 6px; white-space: nowrap;"><span style="font-family: 'Instrument Serif', Georgia, serif; font-size: 20px; line-height: 24px; color: #16110d;">Saturday</span><span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; color: #736657;">OCT 17</span></span>
+          <span style="display: block; margin-top: 2px; font-size: 12.5px; line-height: 16px; color: #736657;">Partly cloudy</span>
+        </span>
+        <span aria-hidden="true" style="display: flex; flex-shrink: 0; width: 22px; height: 22px; margin: 0 8px;"><x-import component-from-global-scope="Globeskimmers.Icons.CloudSun" size="{{ n22 }}" color="#0f6d9a"></x-import></span>
+        <span style="flex-shrink: 0; width: 26px; text-align: right; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 22px; color: #736657;">58°</span>
+        <span aria-hidden="true" style="position: relative; display: block; flex-shrink: 0; width: 56px; height: 4px; margin: 0 8px; border-radius: 999px; background: #e2f0f9;"><span style="position: absolute; top: 0; left: 2.9px; width: 29.5px; height: 4px; border-radius: 999px; background-image: linear-gradient(90deg, #9ccdec 0%, #e3f1f9 42%, #ffefaa 64%, #fbdc13 100%); background-size: 56px 4px; background-position: -2.9px 0;"></span></span>
+        <span style="flex-shrink: 0; width: 30px; font-family: 'Instrument Serif', Georgia, serif; font-size: 22px; line-height: 24px; color: #16110d;">68°</span>
+        <span style="display: flex; margin-left: auto; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0f6d9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span>
+      </button>
+
+      <button type="button" aria-expanded="false" style="display: flex; align-items: center; width: 100%; min-height: 64px; box-sizing: border-box; padding: 10px 14px; background: transparent; border: 0; border-top: 1px solid #d6e4ed; text-align: left; cursor: pointer; font-family: inherit; color: inherit;">
+        <span style="display: block; width: 136px; flex-shrink: 0;">
+          <span style="display: flex; align-items: baseline; gap: 6px; white-space: nowrap;"><span style="font-family: 'Instrument Serif', Georgia, serif; font-size: 20px; line-height: 24px; color: #16110d;">Sunday</span><span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; color: #736657;">OCT 18</span></span>
+          <span style="display: block; margin-top: 2px; font-size: 12.5px; line-height: 16px; color: #736657;">Sunny</span>
+        </span>
+        <span aria-hidden="true" style="display: flex; flex-shrink: 0; width: 22px; height: 22px; margin: 0 8px;"><x-import component-from-global-scope="Globeskimmers.Icons.Sun" size="{{ n22 }}" color="#0f6d9a"></x-import></span>
+        <span style="flex-shrink: 0; width: 26px; text-align: right; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 22px; color: #736657;">60°</span>
+        <span aria-hidden="true" style="position: relative; display: block; flex-shrink: 0; width: 56px; height: 4px; margin: 0 8px; border-radius: 999px; background: #e2f0f9;"><span style="position: absolute; top: 0; left: 8.8px; width: 38.3px; height: 4px; border-radius: 999px; background-image: linear-gradient(90deg, #9ccdec 0%, #e3f1f9 42%, #ffefaa 64%, #fbdc13 100%); background-size: 56px 4px; background-position: -8.8px 0;"></span></span>
+        <span style="flex-shrink: 0; width: 30px; font-family: 'Instrument Serif', Georgia, serif; font-size: 22px; line-height: 24px; color: #16110d;">73°</span>
+        <span style="display: flex; margin-left: auto; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0f6d9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span>
+      </button>
+
+    </section>
+
+    <div style="display: flex; align-items: flex-start; gap: 12px; margin-top: 20px; padding: 0 2px;">
+      <span style="display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 999px; background: #e2f0f9;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f6d9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 20a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2"></path><path d="M8 18V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v14"></path><path d="M10 20h4"></path><circle cx="16" cy="20" r="2"></circle><circle cx="8" cy="20" r="2"></circle></svg></span>
+      <div style="min-width: 0;">
+        <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; font-weight: 500; letter-spacing: 0.14em; line-height: 13px; text-transform: uppercase; color: #0f6d9a;">What to pack</p>
+        <p style="margin: 3px 0 0; font-size: 13.5px; line-height: 19px; color: #3a3128;">A light layer for 61° evenings, and an umbrella for Friday’s light rain.</p>
+      </div>
+    </div>
+
+  </main>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 22px; display: flex; justify-content: center;">
+    <x-import component-from-global-scope="Globeskimmers.FloatingNav" unread="{{ n2 }}"></x-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1400}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { n2: 2, n14: 14, n16: 16, n18: 18, n20: 20, n22: 22 };
+  }
+}
+</script>
+</body>
+</html>

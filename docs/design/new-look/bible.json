@@ -1,0 +1,2404 @@
+{
+ "direction_name": "Papers & Inks, filed: one travel journal, eleven stocks",
+ "thesis": "Globeskimmers becomes one well-bound travel journal. The binding never changes: the teal banner, the floating tab bar, the three typefaces, one plate shape, one card anatomy and the 16px margins are the same on every screen, so it is always one app. What changes is the paper and the ink. Every Home zone is printed on its own stock and filed under its own tab, stepped dark, light and mid so neighbours separate by lightness, not by hue alone. Every finder is a world of two or three tones (an anchor ink, one accent, one wash) on its own paper, with one quiet motif and one card signature that belong to it alone: a menu leader for Eat, a cup sleeve and a time-aware title for Coffee, a poster band and contour lines for Things to Do. The eleven anchors spread around the hue wheel, the few close neighbours held apart by lightness, and brand teal is kept for the app itself. The profile is the owner's own bound journal in a cloth colour they choose, with the trunk resting on the cover and their circle drawn as orbits of other people's colours. Colour does the separating, so layouts stay quiet; type and one motif carry the adventure, so colour can stay classy. Every text pair in this bible was measured with the WCAG 2.1 relative-luminance formula, and only passing pairs are listed.",
+ "principles": [
+  "One journal, many stocks. Every surface has a paper (its ground), an ink (its words and its one solid button) and at most one accent (the italic word, rules, the motif), plus the shared neutrals ink #16110D, ink-2 #3A3128 and ink-3 #736657. Never a fourth hue on one surface. Stamp red #B0472F (passport moments) and open-green #2E6B4E (status words) are the only guests allowed anywhere.",
+  "Colour separates, type unifies. Instrument Serif titles carry exactly one italic word or phrase (marked *like this* in this bible); Inter Tight is for reading; JetBrains Mono is for kickers, counts and dates at 0.12-0.2em tracking; Caveat only on the guestbook doodle line. Sizes are the same on every page and all scale with calc(Npx*var(--fs)), so a new colour never feels like a new app.",
+  "Separate by lightness first. Home zones step dark, light and mid so every neighbour differs by at least 9 L* (CIELAB lightness), even when a zone hides. States that must be told apart (intent tiers, restroom access, open or closed, unread) step solid, pale, outline, plain, and always carry a word and an icon.",
+  "Eleven finders, eleven anchors. Anchor hues around the wheel (HSL): Bordeaux 346, espresso 22, mustard 41, olive 76, banknote green 140, bluebird 199, lapis 224, cornflower 230, iris 250, night 280, plum 309; every anchor carries a hue. Neighbours sit at least 24 degrees apart, and the three closer pairs are held apart by lightness instead. Espresso and mustard (19 degrees) sit at opposite ends of the lightness scale (L* 12 against 71) and read as brown against yellow. Cornflower shares lapis's LCh hue, 6 degrees from it in HSL and 20 from iris, but it is a mid-tone stock about 30 L* lighter than both (L* 59 against 29 and 29; CIEDE2000 28.1 and 28.9) that carries carbon type where lapis carries cream, so it reads as periwinkle against ultramarine and indigo. Brand teal (175) is held for the app: banner, nav, greeting, links and Local favorites. No finder is teal; the nearest, bluebird, sits 24 degrees away.",
+  "Deep inks carry words; bright accents decorate. Text in a world colour on paper or white uses that world's text-safe ink (4.5:1 or better, measured). Bright accents (saffron, ember, terracotta light, lime, lemon, sunflower, brass, gold) never set text on a light ground: they appear as fills behind dark text, as hairlines and icons, and, on their own dark plate, as the italic word or the kicker only where they measure 4.5:1 or better.",
+  "One motif and one card signature per world, quiet and drawn from data where possible: a menu leader, a cup ring and sleeve, contour lines and a poster band, porcelain tile and access plaques, a security tint and a receipt, guilloche and the converter, a day arc, a thumb index, accession tags, a lit window, a swing tag. Plate motifs stay at 35% opacity or less and out from under the type (the lit window's single 3px line is the one full-strength mark), aria-hidden, pointer-events none. If you see the motif before the place name, it is too loud.",
+  "Stamps print on paper. TypographicStamp, AirportStamp, LandStamp and the commissioned square landmark art sit only on cream #FBF6EC or white. Dark zones and dark plates hold stamps on cream tiles or discs, never on the colour.",
+  "One solid per card. The world's Directions is the only solid fill on a result card. The stamp action is a rubber stamp (cream, a dashed stamp-red ring, a stamp-red label), so the passport moment is unmistakable and never reads as a second Directions.",
+  "Honest by design. Counts appear only when real; zeros become words ('39 TO COLLECT', 'Your first page is waiting'); freshness is text ('Updated Oct 12'), never a dot; every rating names Google or Globeskimmers; unknowns say 'Not confirmed' or 'Not listed'; thin results get the FallbackDisclaimer printed in the world's own wash.",
+  "Emoji-free surfaces. Mastheads, chips, badges, ranks, placeholders and buttons use lucide line icons at 2px (every icon named here ships in the installed lucide-react 0.475). Emoji stay in the tab bar and in people's own words.",
+  "Space is the luxury. 16px gutters, 24px zone padding, hairlines instead of boxes inside a zone or a card, three tags at most, one note at a time, one kicker and one title per zone, 44px touch targets everywhere."
+ ],
+ "word": {
+  "choice": "your circle",
+  "why": "It is the mildest word that still means the people connected to you in both directions, without saying 'friends' or 'followers', and it never sounds like an audience. It sets well as one italic word in Instrument Serif, fits a button and a mono kicker, and it gives the design a shape: the profile draws your circle as orbits, and the mutual follows (the people a private passport is shared with) become your 'inner circle', so the privacy rule finally has a warm name. No proposal made a clearly better case, and all three chose it. The follow mechanics keep their plain verbs (Follow, Follow back, Following, Requested): they are actions, not the name of a group, and renaming them would touch toasts, requests and the data model for no gain in kindness.",
+  "alternatives": [
+   "your crew: warm, but young and casual, and it dates quickly",
+   "your company: the most grand-hotel line ('in good company'), but it also means a business, next to Official seals",
+   "fellow travelers: accurate, but long in a title, and it suggests strangers on the same trip",
+   "your companions: formal, and implies you travel together",
+   "kindred / kindred spirits: lovely, but precious on a button",
+   "your travel circle: clear, but 'travel' is redundant inside a travel app",
+   "your folks: warm, but reads as family and regional"
+  ],
+  "lines": [
+   "Home zone kicker and Option B tab: 'YOUR CIRCLE'",
+   "Home invite title (no follows yet): 'Travel is better with your *circle*'",
+   "Home invite body: 'Follow the ones you travel with, and their real stamps and postcards land here: where they went, and whether they were really there.'",
+   "Home invite button: 'Start your circle' with an arrow (opens Mailbox); the dismiss control is labelled 'Hide this'",
+   "Home with news: title 'Where your *circle* has been', subtitle 'Everything here really happened', link 'Mailbox'",
+   "Home and Mailbox card verbs stay factual: 'stamped *Griffith Observatory*', 'landed at *LAX*', 'sent a postcard from Lisbon'",
+   "Mailbox kicker and title: 'GLOBESKIMMERS · MAILBOX' / 'Where your *circle* has been' (also the title over the teen hold note)",
+   "Mailbox follow field: placeholder 'follow a friend by @username', button 'Follow'",
+   "Mailbox claim card: 'Claim your @username' / 'It's how your circle finds you, follows you, and sends you postcards.'",
+   "Mailbox empty state: 'An empty mailbox, *for now*' / 'Follow a friend by their @username and their new stamps land here: where they went, when, and whether it's verified.'",
+   "Mailbox footer row (replaces the tap-to-unfollow 'Following' chips): 'Your circle · 9'",
+   "Mailbox activity keeps plain verbs: 'Aiko followed you', 'Ben stamped WOW on your Griffith Observatory page'; requests kicker 'WANTS TO FOLLOW YOU' with 'Allow' / 'Not now'",
+   "Postcard compose title: 'A postcard to your *circle*'",
+   "Profile circle folder: tab 'YOUR CIRCLE', title 'Your *circle*', legend rows 'INNER CIRCLE · 7', 'YOU FOLLOW · 9', 'FOLLOW YOU · 12' (a row at 0 is left out)",
+   "Profile circle folder with nobody yet: 'Your circle starts with *one*' and the button 'Invite someone by text'",
+   "Profile privacy: 'Your passport is private' / 'Just you and your inner circle: people you follow who follow you back. Flip to public to share with anyone by link.'",
+   "Invite button on Profile and Mailbox (replaces 'Invite friends & family by text'; same text-message flow): 'Invite someone to your circle'",
+   "Circle screen: title 'Your *circle*'; tabs 'Inner circle 7 · You follow 9 · Follow you 12'; search 'Find someone in your circle'; row tag 'BOTH WAYS'; empty tab 'No one here yet' with 'Invite someone to your circle'",
+   "Visiting a profile: 'Follow', then 'Requested' or 'Following', and 'Inner circle' with the two-ring mark once it is both ways; shared line '3 in your circle know Aiko'",
+   "Visiting a private passport: 'This passport is private: just Aiko's inner circle.'",
+   "Settings username helper (today 'How friends find you, follow you, and send you postcards'): 'How your circle finds you, follows you, and sends you postcards.'"
+  ]
+ },
+ "home": {
+  "ground": "Ivory #FFFCF7 is the page. The lobby at the top (greeting, date and place, search) and the closing quote at the bottom sit on it, and in Option B it is also the gutter between boxes. Between them, six zones are printed on their own stocks, stepped by lightness: passport navy (dark, L* 17), airmail (light, 96), kraft (mid, 86), passport cream (light, 97), plum velvet (dark, 17), sage (mid, 87). Option A prints each stock as a full-bleed band, edge to edge, with content on the max-w-md column (720px cap on iPad). Option B prints the same stock as an inset, bordered folder box with a tab. Order, content and colours are identical in A and B; only the containment changes, so the founder compares one thing. Shared text neutrals: ink #16110D, ink-2 #3A3128, ink-3 #736657 (never ink-3 on the mid zones: 3.89:1 on kraft, 4.03:1 on sage).",
+  "top": "The lobby, on ivory, identical in A and B and emoji-free. Line 1: 'HELLO' in JetBrains Mono 10.5px .12em #736657 (5.45:1), the first name in Instrument Serif italic 24px brand teal #0E7C73 (4.95:1, large), and the home-flag image badge. 'PASSPORT · 2' is dropped because the passport zone right below carries the count, and the eyeglass text-size button moves into the banner's right corner, where every other screen already has it, so the greeting never truncates. Line 2: 'Mon, Oct 12 · 20°C' in Inter Tight 12px/500 #3A3128 (12.44:1), then the place pill on ivory-2 #F7F4EC: lucide MapPin 14px #0E7C73, the place 11.5px/600 #16110D (17.06:1), 'Change' 10.5px underlined in teal-deep #0B5F55 (6.87:1, up from #0E7C73). The pill shows 'Finding you…' while locating and 'Current location' when the name lookup fails, never a cut-off 'Detecting your locati…', and loses its width cap. Search stays in the lobby, where the founder restored it on 2026-10-07: the SmartSearchBar, a 52px white field, radius 14, 1px #E6DFD0, lucide Search #0E7C73, placeholder 'Search food, sights, a whole city…' in #736657 (5.57:1), with the DestinationStrip glued underneath when a city is typed. 16px of ivory, then zone 1.",
+  "order": [
+   "Lobby on ivory #FFFCF7: greeting, date · temperature · place, search",
+   "1 · MY VIRTUAL PASSPORT: passport navy #0C2B50 (dark, L* 17)",
+   "2 · YOUR CIRCLE: airmail #EEF3FA (light, L* 96); absent for teens, after the invite is dismissed, and in a quiet week",
+   "3 · NEARBY SERVICES: kraft #E4D6BC (mid, L* 86)",
+   "4 · STAMPS NEAR YOU: passport cream #FBF6EC (light, L* 97)",
+   "5 · STAMP SHELF: plum velvet #3A1F3F (dark, L* 17); dream stack only, hidden when no row has 3 places",
+   "6 · LOCAL FAVORITES: sage #CCE0D5 (mid, L* 87)",
+   "Closing quote on ivory #FFFCF7"
+  ],
+  "zones": [
+   {
+    "id": "passport",
+    "label": "MY VIRTUAL PASSPORT",
+    "contains": "The passport doorway, first under the lobby because the passport is the product. The whole zone is one button to the Passport (aria-label 'Open your Virtual Passport'). Kicker 'MY VIRTUAL PASSPORT'. Serif count '2 stamps *collected*' ('1 stamp *collected*' at one; zero: 'Your first page is *waiting*'). Mono line 'NEXT STAMP · DODGER STADIUM · 1.5 MI', with today's fallbacks 'OPEN THE BOOKLET · SHARE A PAGE' and 'STAMP YOUR HOME CITY TO BEGIN'. At right, the newest stamp printed on a cream tile (one /passport/list read, which DreamShelf already makes in the dream stack; share it); with no stamps yet, a gold line-drawn globe crest. The 🛂 badge goes.",
+    "bands": "Full-bleed passport navy #0C2B50, padding 22px 16px 24px. One ornament, the passport cover's double rule: a 1px gold #D6A64A line at 40% inset 6px from the band's top and bottom edges, full width. Kicker JetBrains Mono 10px .2em gold #D6A64A (6.37:1). Count Instrument Serif 28px cream #FBF6EC (13.20:1), its italic word in gold. Next-stamp line mono 10.5px .06em gold-pale #E8D3A3 (9.67:1), one line, truncating. At right a 64x64 cream #FBF6EC tile, radius 12, 1px gold border, printing the newest stamp at 52px; zero state: the same tile in cover-night #081F3B holding a 26px globe drawn in 1.5px gold strokes. Pressed state #0A2443. No shadow: the band's depth is the separation.",
+    "boxes": "Folder box inset 16px, radius 22, fill #0C2B50, 1px #D6A64A at 55%, an inner gold keyline (1px rgba(214,166,74,.35), inset 6px, radius 16), padding 22px 18px 18px, shadow 0 16px 30px -22px rgba(12,43,80,.6): the only shadowed box on Home. Tab: 28px tall, radius 10px 10px 0 0, attached above the top edge 16px from the left, in navy #0C2B50 (the folder's own cloth), label 'MY VIRTUAL PASSPORT' in mono 9.5px .16em gold #D6A64A (6.37:1). Contents as in A.",
+    "palette": [
+     {
+      "name": "Passport navy",
+      "hex": "#0C2B50",
+      "role": "ground and anchor: band or folder fill, tab"
+     },
+     {
+      "name": "Passport gold",
+      "hex": "#D6A64A",
+      "role": "accent: kicker, tab label, italic word, double rule, keyline, tile border"
+     },
+     {
+      "name": "Cream",
+      "hex": "#FBF6EC",
+      "role": "ink on navy (the count) and the tile the newest stamp prints on"
+     },
+     {
+      "name": "Gold pale",
+      "hex": "#E8D3A3",
+      "role": "secondary: the NEXT STAMP line"
+     },
+     {
+      "name": "Cover night",
+      "hex": "#081F3B",
+      "role": "zero-state crest tile"
+     },
+     {
+      "name": "Navy pressed",
+      "hex": "#0A2443",
+      "role": "pressed state"
+     }
+    ],
+    "pairs": [
+     {
+      "fg": "#FBF6EC",
+      "bg": "#0C2B50",
+      "ratio": 13.2,
+      "use": "Count '2 stamps collected', serif 28px"
+     },
+     {
+      "fg": "#D6A64A",
+      "bg": "#0C2B50",
+      "ratio": 6.37,
+      "use": "Kicker and B tab label, mono 10px; italic word"
+     },
+     {
+      "fg": "#E8D3A3",
+      "bg": "#0C2B50",
+      "ratio": 9.67,
+      "use": "NEXT STAMP line, mono 10.5px"
+     }
+    ]
+   },
+   {
+    "id": "circle",
+    "label": "YOUR CIRCLE",
+    "contains": "FriendsTravels. With no follows yet (dismissible, remembered as today): title 'Travel is better with your *circle*', body 'Follow the ones you travel with, and their real stamps and postcards land here: where they went, and whether they were really there.', button 'Start your circle' (opens Mailbox). With news: title 'Where your *circle* has been', subtitle 'Everything here really happened', link 'Mailbox', and a row of up to ten envelope cards, newest first, never ranked. Following people but a quiet week, or the invite dismissed: the zone renders nothing. Teen accounts: absent.",
+    "bands": "Full-bleed airmail #EEF3FA, padding 24px 16px, opened by the airmail chevron: a 5px strip along the band's top edge, repeating-linear-gradient(135deg, #B0472F 0 10px, #FBF6EC 10px 14px, #2B4C8C 14px 24px, #FBF6EC 24px 28px). Kicker mono 10.5px .14em airmail blue #2B4C8C (7.49:1). Title Instrument Serif 22px #16110D (16.82:1), the italic 'circle' in #2B4C8C. Body 13px #3A3128 (11.42:1). Button: airmail blue #2B4C8C, white 14px/600 (8.35:1), radius 14, 44px, lucide ArrowRight. Dismiss: lucide X 16px #3A3128 in a 44px hit area, top right. Envelope cards: 190px wide, white, radius 12, 1px #C9D6EA, a 3px chevron strip along the top; header mono 9.5px #736657 'AIKO · 2D AGO' (5.57:1) beside a 20px avatar ringed 1.5px in Aiko's own cloth colour; Instrument Serif 16px #16110D 'stamped *Griffith Observatory*' ('landed at *LAX*' for airports); for a verified visit the word 'Verified' 11px/600 #2E6B4E (6.31:1) after a 12px dashed-ring check, never a social tick; then a mono city line in #736657. Postcards add their 3:2 photo above and the message in serif italic. 'Mailbox' link 13px/600 #2B4C8C with an arrow.",
+    "boxes": "Folder box, radius 18, fill #EEF3FA, 1px #C9D6EA, overflow hidden so the same chevron runs 4px along the inside of the top edge. Tab: airmail blue #2B4C8C, label 'YOUR CIRCLE' in mono 9.5px .16em cream #FBF6EC (7.75:1). Padding 18px 16px 16px; contents as in A.",
+    "palette": [
+     {
+      "name": "Airmail",
+      "hex": "#EEF3FA",
+      "role": "ground: band or folder fill (also the Mailbox page and the profile's circle folder)"
+     },
+     {
+      "name": "Airmail blue",
+      "hex": "#2B4C8C",
+      "role": "anchor: kicker, italic word, button, link, tab, chevron stripe"
+     },
+     {
+      "name": "Stamp red",
+      "hex": "#B0472F",
+      "role": "accent: chevron stripe only"
+     },
+     {
+      "name": "Cream",
+      "hex": "#FBF6EC",
+      "role": "chevron gaps, tab label"
+     },
+     {
+      "name": "Envelope line",
+      "hex": "#C9D6EA",
+      "role": "line: folder border, envelope border"
+     },
+     {
+      "name": "Envelope white",
+      "hex": "#FFFFFF",
+      "role": "envelope cards"
+     },
+     {
+      "name": "Open green",
+      "hex": "#2E6B4E",
+      "role": "the word 'Verified'"
+     }
+    ],
+    "pairs": [
+     {
+      "fg": "#2B4C8C",
+      "bg": "#EEF3FA",
+      "ratio": 7.49,
+      "use": "Kicker, italic 'circle', Mailbox link"
+     },
+     {
+      "fg": "#16110D",
+      "bg": "#EEF3FA",
+      "ratio": 16.82,
+      "use": "Title, serif 22px"
+     },
+     {
+      "fg": "#3A3128",
+      "bg": "#EEF3FA",
+      "ratio": 11.42,
+      "use": "Body 13px, dismiss icon"
+     },
+     {
+      "fg": "#FFFFFF",
+      "bg": "#2B4C8C",
+      "ratio": 8.35,
+      "use": "'Start your circle' button 14px/600"
+     },
+     {
+      "fg": "#FBF6EC",
+      "bg": "#2B4C8C",
+      "ratio": 7.75,
+      "use": "B tab label, mono 9.5px"
+     },
+     {
+      "fg": "#16110D",
+      "bg": "#FFFFFF",
+      "ratio": 18.75,
+      "use": "Envelope line 'stamped Griffith Observatory'"
+     },
+     {
+      "fg": "#736657",
+      "bg": "#FFFFFF",
+      "ratio": 5.57,
+      "use": "Envelope mono header and city line"
+     },
+     {
+      "fg": "#2E6B4E",
+      "bg": "#FFFFFF",
+      "ratio": 6.31,
+      "use": "'Verified' on envelopes"
+     }
+    ]
+   },
+   {
+    "id": "services",
+    "label": "NEARBY SERVICES",
+    "contains": "The kicker 'NEARBY NOW' becomes 'NEARBY SERVICES', the founder's own name for this zone. The finder chips, one stable row in a fixed order, never shuffled: Eat, Coffee, Things to do, Restrooms, and All services (opens AllServicesSheet). Each chip wears its finder's crest, the same disc and icon that finder's plate and the All services sheet use, so the colour you tap is the colour the page opens in. The AllServicesSheet becomes a 3-column grid of white tiles (radius 18, 1px #EADFC9, a 36px crest, a 12.5px/600 #16110D label) for all eleven finders in the order Eat, Coffee, Things to do, Restrooms, ATMs, Money exchange, Weather, Phrases, Culture, Convenience, Shopping.",
+    "bands": "Full-bleed kraft #E4D6BC, padding 20px 16px 22px. Kicker row: mono 10.5px .14em umber #4E3A20 (7.51:1) followed by a 1px rgba(78,58,32,.25) rule to the right edge. Chips: 44px tall, radius 999, white, 1px #D3C2A0, padding 6px 14px 6px 6px, label Inter Tight 13.5px/600 #16110D (18.75:1), each led by a 28px crest disc holding a 16px lucide icon: Eat #7A1D33 with a #E8AE4C UtensilsCrossed (5.16:1); Coffee #2B1B12 with a #E5672A Coffee (4.97:1); Things to do #213E8C with a #F2A47E Compass (4.87:1); Restrooms #45388A with a #E6E0F5 Toilet (7.48:1). 'All services' is the quiet chip: transparent, 1px #4E3A20, umber label (7.51:1), lucide LayoutGrid. The row scrolls and bleeds off the right edge.",
+    "boxes": "Folder box, radius 18, fill #E4D6BC, 1px #CDBB98, padding 18px 0 16px 16px so the chip row bleeds to the box's right edge under a 16px fade to #E4D6BC. Tab: umber #4E3A20, label 'NEARBY SERVICES' in cream #FBF6EC (10.00:1). Chips as in A.",
+    "palette": [
+     {
+      "name": "Kraft",
+      "hex": "#E4D6BC",
+      "role": "ground: band or folder fill (also the profile's ON MY MAP folder)"
+     },
+     {
+      "name": "Umber",
+      "hex": "#4E3A20",
+      "role": "ink: kicker, rule, All services chip, tab"
+     },
+     {
+      "name": "Kraft chip line",
+      "hex": "#D3C2A0",
+      "role": "line: chip borders"
+     },
+     {
+      "name": "Kraft border",
+      "hex": "#CDBB98",
+      "role": "line: folder border"
+     },
+     {
+      "name": "Paper",
+      "hex": "#FFFFFF",
+      "role": "chips"
+     },
+     {
+      "name": "Crest discs",
+      "hex": "#7A1D33",
+      "role": "each chip's disc in its finder's anchor (Bordeaux shown; also #2B1B12, #213E8C, #45388A)"
+     }
+    ],
+    "pairs": [
+     {
+      "fg": "#4E3A20",
+      "bg": "#E4D6BC",
+      "ratio": 7.51,
+      "use": "Kicker and All services label"
+     },
+     {
+      "fg": "#16110D",
+      "bg": "#E4D6BC",
+      "ratio": 13.07,
+      "use": "Any text set directly on kraft"
+     },
+     {
+      "fg": "#3A3128",
+      "bg": "#E4D6BC",
+      "ratio": 8.88,
+      "use": "Secondary text on kraft (ink-3 fails here at 3.89)"
+     },
+     {
+      "fg": "#FBF6EC",
+      "bg": "#4E3A20",
+      "ratio": 10,
+      "use": "B tab label"
+     },
+     {
+      "fg": "#16110D",
+      "bg": "#FFFFFF",
+      "ratio": 18.75,
+      "use": "Chip labels 13.5px/600"
+     },
+     {
+      "fg": "#E8AE4C",
+      "bg": "#7A1D33",
+      "ratio": 5.16,
+      "use": "Eat crest icon"
+     },
+     {
+      "fg": "#E5672A",
+      "bg": "#2B1B12",
+      "ratio": 4.97,
+      "use": "Coffee crest icon"
+     },
+     {
+      "fg": "#F2A47E",
+      "bg": "#213E8C",
+      "ratio": 4.87,
+      "use": "Things to do crest icon"
+     },
+     {
+      "fg": "#E6E0F5",
+      "bg": "#45388A",
+      "ratio": 7.48,
+      "use": "Restrooms crest icon"
+     }
+    ]
+   },
+   {
+    "id": "stamps",
+    "label": "STAMPS NEAR YOU",
+    "contains": "StampsNearYou. Title 'Be there, and it's *yours*'. The dismissible explainer card retires into a one-line deck: 'The famous places around you. Be at one and its stamp is yours for life, dated and verified.' Then the carousel of stamps with names and distances (Dodger Stadium 1.5 mi, Shrine Auditorium 3.0 mi, Natural History Museum of LA County 3.5 mi) and 'My Passport'. Far mode: title 'The nearest *stamps*', deck '178 MI AWAY · WORTH THE TRIP'. No coverage: 'No famous stamps around here yet' with 'Add a past trip' (stamp red, white text, no emoji) and 'Things to do nearby' (outline).",
+    "bands": "Full-bleed passport cream #FBF6EC, the paper stamps print on. Its top edge is perforated like a sheet of stamps: 4px-radius semicircles every 12px cut out with a CSS mask (radial-gradient(circle 4px at 6px 0, transparent 98%, #000) 0 0 / 12px 100% repeat-x, with -webkit-mask for the iOS WebView), so the kraft above shows through. Padding 26px 16px 24px. Kicker mono 10.5px stamp red #B0472F (5.15:1). Title Instrument Serif 22px #16110D (17.40:1), the italic 'yours' in stamp red. Deck 12.5px #736657 (5.18:1). 'My Passport' 13px/600 stamp red with an arrow. Stamps 104px on their own cream discs (the dashed 'not yet earned' ring stays as built) with a low lift shadow 0 6px 14px -10px rgba(22,17,13,.35); names Instrument Serif 15px #16110D, two lines; distances mono 10.5px #736657.",
+    "boxes": "Folder box, radius 18, fill #FBF6EC, 1px #EADFC9, no perforation (the tab is the edge device in B). Tab: stamp red #B0472F, label 'STAMPS NEAR YOU' in cream #FBF6EC (5.15:1). Contents as in A.",
+    "palette": [
+     {
+      "name": "Passport cream",
+      "hex": "#FBF6EC",
+      "role": "ground: band or folder fill, the paper stamps print on"
+     },
+     {
+      "name": "Stamp red",
+      "hex": "#B0472F",
+      "role": "accent: kicker, italic word, My Passport link, tab, Add a past trip"
+     },
+     {
+      "name": "Cream rule",
+      "hex": "#EADFC9",
+      "role": "line: folder border"
+     },
+     {
+      "name": "Ink",
+      "hex": "#16110D",
+      "role": "title and stamp names"
+     },
+     {
+      "name": "Ink-3",
+      "hex": "#736657",
+      "role": "deck and distances"
+     }
+    ],
+    "pairs": [
+     {
+      "fg": "#B0472F",
+      "bg": "#FBF6EC",
+      "ratio": 5.15,
+      "use": "Kicker, italic word, My Passport link; B tab label in reverse"
+     },
+     {
+      "fg": "#16110D",
+      "bg": "#FBF6EC",
+      "ratio": 17.4,
+      "use": "Title and stamp names"
+     },
+     {
+      "fg": "#736657",
+      "bg": "#FBF6EC",
+      "ratio": 5.18,
+      "use": "Deck 12.5px and distances"
+     },
+     {
+      "fg": "#3A3128",
+      "bg": "#FBF6EC",
+      "ratio": 11.82,
+      "use": "No-coverage note body"
+     },
+     {
+      "fg": "#FFFFFF",
+      "bg": "#B0472F",
+      "ratio": 5.54,
+      "use": "'Add a past trip' button"
+     }
+    ]
+   },
+   {
+    "id": "shelf",
+    "label": "STAMP SHELF",
+    "contains": "DreamShelf (dream stack). Title 'Stamps of *Los Angeles*'. Count line '39 TO COLLECT' until one is earned, then '3 OF 39 COLLECTED' (the set is still the endowment, without leading with a 0), plus '68°F NOW' and, when far, '~9H FLIGHT (EST)'. Rows named by the worker: ICONS OF LOS ANGELES (Griffith Observatory 9 km, Disneyland Park 40 km), CUSTOMER FAVORITES (Christ Cathedral 43 km, Geffen Contemporary 0.5 km), WORTH A DAY TRIP (San Diego Zoo 178 km, Joshua Tree National Park 226 km); not-yet-collected first; ferry crossings read 'FERRY · 32 KM' with a lucide Ship in place of the ⛴ emoji.",
+    "bands": "Full-bleed plum velvet #3A1F3F, a jeweller's display tray, with 1px brass #D8B97E hairlines at 45% along its top and bottom edges; padding 28px 16px. Kicker mono 10.5px brass #D8B97E (7.71:1). Title Instrument Serif 24px cream #FBF6EC (13.47:1), the city italic in brass. Count and data line mono 10px lilac #D9C8DC (9.15:1). Row labels mono 10px .14em lilac, each with a 1px rgba(251,246,236,.14) rule to the edge. Every stamp sits on a cream tile #FBF6EC (132x176, radius 18): the stamp at 96px, the name in Instrument Serif 15px #16110D (17.40:1), the distance in mono 10px #736657 (5.18:1). Photo cards: white, radius 16, a 4:3 photo, the same two lines. Collected tiles add a 1px brass border and the existing mono 'COLLECTED' in stamp red (5.15:1 on cream). Stamps never touch the plum.",
+    "boxes": "Folder box, radius 22, fill #3A1F3F, 1px #5A3A5E, padding 22px 16px 18px. Tab: plum #3A1F3F (the folder's own cloth), label 'STAMP SHELF' in brass #D8B97E (7.71:1). Rows and tiles as in A.",
+    "palette": [
+     {
+      "name": "Plum velvet",
+      "hex": "#3A1F3F",
+      "role": "ground and anchor: band or folder fill, tab"
+     },
+     {
+      "name": "Brass",
+      "hex": "#D8B97E",
+      "role": "accent: kicker, tab label, italic city, hairlines, collected-tile border"
+     },
+     {
+      "name": "Lilac",
+      "hex": "#D9C8DC",
+      "role": "secondary: count line, row labels"
+     },
+     {
+      "name": "Cream",
+      "hex": "#FBF6EC",
+      "role": "title type and the tiles stamps print on"
+     },
+     {
+      "name": "Plum line",
+      "hex": "#5A3A5E",
+      "role": "line: folder border (B)"
+     }
+    ],
+    "pairs": [
+     {
+      "fg": "#FBF6EC",
+      "bg": "#3A1F3F",
+      "ratio": 13.47,
+      "use": "Title, serif 24px"
+     },
+     {
+      "fg": "#D8B97E",
+      "bg": "#3A1F3F",
+      "ratio": 7.71,
+      "use": "Kicker, tab label, italic city"
+     },
+     {
+      "fg": "#D9C8DC",
+      "bg": "#3A1F3F",
+      "ratio": 9.15,
+      "use": "Count line, row labels"
+     },
+     {
+      "fg": "#16110D",
+      "bg": "#FBF6EC",
+      "ratio": 17.4,
+      "use": "Tile names"
+     },
+     {
+      "fg": "#736657",
+      "bg": "#FBF6EC",
+      "ratio": 5.18,
+      "use": "Tile distances"
+     },
+     {
+      "fg": "#B0472F",
+      "bg": "#FBF6EC",
+      "ratio": 5.15,
+      "use": "'COLLECTED' on tiles"
+     }
+    ]
+   },
+   {
+    "id": "local",
+    "label": "LOCAL FAVORITES",
+    "contains": "SuggestPlaceSection. The success note when one of your suggestions became a stamp: 'Your suggestion is now a stamp. Grand Park fountain became a Local favorite.' with 'See the stamp'. Title 'Know a spot worth *a visit?*'. One sentence: 'When 5 people suggest the same place, we review it for a Local favorite stamp anyone can collect.' Button 'Suggest a place' (adults only). 'Almost a stamp near you' with 'See all', then up to three places: Micheltorena Stairs, 3 OF 5, 17 hearts; Eaton Canyon Falls, 4 OF 5, 23; Great Wall of Los Angeles, 7 · IN REVIEW, 41.",
+    "bands": "Full-bleed sage #CCE0D5, the Local favorite stamp's teal softened, padding 24px 16px 26px. Kicker mono 10.5px pine #0A4A42 (7.33:1). Title Instrument Serif 28px #16110D (13.56:1), the italic phrase in teal-deep #0B5F55 (5.46:1, large). Body 14px #3A3128 (9.21:1). Button: teal-deep #0B5F55, white 15px/600 (7.55:1), lucide MapPinPlus, radius 14, 48px, auto width. 'Almost a stamp near you' 13px/600 #16110D and 'See all' 13px/600 pine. The places sit on one white sheet, radius 16, rows divided by 1px #E3EEE8: name 15px/600 #16110D; 'Los Angeles · Views & photos' 12.5px #736657 (5.57:1); at right '3 OF 5' mono 11px #0B5F55 (7.55:1) over a 3px track #DCEBE3 with a teal-deep fill ('7 · IN REVIEW' once at review); a white heart pill, 1px #E8D5DA, lucide Heart and the count in #A3253F (7.26:1). The success note is a cream #FBF6EC card holding the teal Local favorite stamp at 40px. Today's white box and shadow go.",
+    "boxes": "Folder box, radius 18, fill #CCE0D5, 1px #B5CFC2, padding 18px 16px 16px. Tab: pine #0A4A42, label 'LOCAL FAVORITES' in cream #FBF6EC (9.41:1). Contents as in A.",
+    "palette": [
+     {
+      "name": "Sage",
+      "hex": "#CCE0D5",
+      "role": "ground: band or folder fill"
+     },
+     {
+      "name": "Pine",
+      "hex": "#0A4A42",
+      "role": "ink: kicker, See all, tab"
+     },
+     {
+      "name": "Teal-deep",
+      "hex": "#0B5F55",
+      "role": "accent: italic phrase, Suggest a place button, progress fill and figures"
+     },
+     {
+      "name": "Paper",
+      "hex": "#FFFFFF",
+      "role": "the places sheet, heart pills"
+     },
+     {
+      "name": "Heart",
+      "hex": "#A3253F",
+      "role": "heart counts"
+     },
+     {
+      "name": "Sage line",
+      "hex": "#B5CFC2",
+      "role": "line: folder border; rows #E3EEE8, track #DCEBE3"
+     }
+    ],
+    "pairs": [
+     {
+      "fg": "#0A4A42",
+      "bg": "#CCE0D5",
+      "ratio": 7.33,
+      "use": "Kicker and See all"
+     },
+     {
+      "fg": "#16110D",
+      "bg": "#CCE0D5",
+      "ratio": 13.56,
+      "use": "Title 28px and sub-heads"
+     },
+     {
+      "fg": "#3A3128",
+      "bg": "#CCE0D5",
+      "ratio": 9.21,
+      "use": "Body 14px (ink-3 fails here at 4.03)"
+     },
+     {
+      "fg": "#0B5F55",
+      "bg": "#CCE0D5",
+      "ratio": 5.46,
+      "use": "Italic phrase in the 28px title"
+     },
+     {
+      "fg": "#FFFFFF",
+      "bg": "#0B5F55",
+      "ratio": 7.55,
+      "use": "'Suggest a place' button"
+     },
+     {
+      "fg": "#FBF6EC",
+      "bg": "#0A4A42",
+      "ratio": 9.41,
+      "use": "B tab label"
+     },
+     {
+      "fg": "#0B5F55",
+      "bg": "#FFFFFF",
+      "ratio": 7.55,
+      "use": "'3 OF 5' and 'See the stamp' on white"
+     },
+     {
+      "fg": "#736657",
+      "bg": "#FFFFFF",
+      "ratio": 5.57,
+      "use": "Row meta 12.5px"
+     },
+     {
+      "fg": "#A3253F",
+      "bg": "#FFFFFF",
+      "ratio": 7.26,
+      "use": "Heart counts"
+     }
+    ]
+   }
+  ],
+  "separation": "Option A, bands: colour and lightness do the dividing. Bands abut with no gaps and no shadows; each opens with its kicker row (mono, the zone's ink, a hairline to the right edge) and carries one serif title with one italic. The ladder alternates dark, light and mid: ivory 99, navy 17, airmail 96, kraft 86, cream 97, plum 17, sage 87, ivory 99 (L*), so every neighbour differs by at least 9 L*, and still does when the circle zone hides (navy meets kraft, 69) or the shelf hides (cream meets sage, 9.6). Only three edges carry an ornament, each with a meaning: the passport's gold double rule, the circle's airmail chevron, the stamps band's perforation. If hiding a zone ever makes two bands of the same step meet, a 6px ivory seam separates them. Option B, folders: ivory is the gutter; boxes are inset 16px and 20px apart, tab included. Each box has one 1px border a step deeper than its fill and a 28px folder tab in the zone's deep colour, attached above its top edge 16px from the left, so the tabs line up down the page like the dividers of a field guide: navy, airmail blue, umber, stamp red, plum, pine. Radius 18 (22 for the passport and the shelf); only the passport box has a shadow. Both options: inside a zone, hairlines and 12px gaps, never a box inside a box (the cream tiles and white sheets that hold stamps, envelopes and rows are the only paper inside a zone); one kicker and one title per zone; no second explainer card; horizontal rows bleed off the right edge; a zone with nothing honest to show renders nothing. The closing quote sits on ivory under a 40px brass #B8955A rule with a 5px diamond (decorative): the quote in Instrument Serif italic 18px #3A3128 (12.44:1), the author in mono 10px .18em #736657 (5.45:1). Recommendation: B on phones, where the folders keep a 390px column calm and the tabs organize the scroll; A is the bolder magazine and the better choice on iPad, where bands run full width around a 720px column."
+ },
+ "profile": {
+  "concept": "Your world, bound. A profile is its owner's travel journal. The cover is the cloth colour they chose; their trunk rests on it (luggage stays on top, as the founder set on 2026-09-30); a bookplate says whose world this is; and below it every part of their world is filed in its own folder on their own paper, using the stocks Home uses so a colour means the same thing everywhere: airmail is your circle, kraft is places, cream is keepsakes, navy is the passport. Their circle is drawn as orbits, each face ringed in that person's own cloth, so you see a constellation of other people's worlds. Visiting someone opens their journal in their cloth; the binding (banner, tab bar, type) stays Globeskimmers, so you always know where you are.",
+  "palette": [
+   {
+    "name": "Harbour cloth (Margaret's; the default)",
+    "hex": "#284B63",
+    "role": "anchor: cover band, italic name and bookplate frame, orbit rings, her ring on every face, Follow fill and active segment on her pages"
+   },
+   {
+    "name": "Harbour paper",
+    "hex": "#ECF1F5",
+    "role": "ground: her page under the cover (every cloth has its own paper)"
+   },
+   {
+    "name": "Gold foil",
+    "hex": "#E7C877",
+    "role": "accent: 'MY WORLD' kicker and the cover's hairline frame, the same foil on all eight cloths"
+   },
+   {
+    "name": "Bookplate cream",
+    "hex": "#FBF6EC",
+    "role": "the identity plate; the MY KIT folder"
+   },
+   {
+    "name": "Stamp red",
+    "hex": "#B0472F",
+    "role": "stat numerals on the bookplate"
+   },
+   {
+    "name": "Teal-deep",
+    "hex": "#0B5F55",
+    "role": "'Claim your @username' link; website; privacy switch track #0E7C73 when public"
+   },
+   {
+    "name": "Airmail",
+    "hex": "#EEF3FA",
+    "role": "YOUR CIRCLE folder, the same stock as Home's circle zone and the Mailbox"
+   },
+   {
+    "name": "Airmail blue",
+    "hex": "#2B4C8C",
+    "role": "YOUR CIRCLE tab, legend labels, 'See all'"
+   },
+   {
+    "name": "Kraft",
+    "hex": "#E4D6BC",
+    "role": "ON MY MAP folder (places), with the umber #4E3A20 tab"
+   },
+   {
+    "name": "Saddle leather",
+    "hex": "#7A4A12",
+    "role": "MY KIT tab"
+   },
+   {
+    "name": "Passport navy",
+    "hex": "#0C2B50",
+    "role": "the 'Open my Virtual Passport' door, with gold #D6A64A"
+   },
+   {
+    "name": "Paper",
+    "hex": "#FFFFFF",
+    "role": "trunk card, privacy card, kit tiles, place chips, circle-screen rows"
+   },
+   {
+    "name": "Ink",
+    "hex": "#16110D",
+    "role": "names and figures; ink-2 #3A3128 body; ink-3 #736657 mono"
+   }
+  ],
+  "pairs": [
+   {
+    "fg": "#FFFFFF",
+    "bg": "#284B63",
+    "ratio": 9.22,
+    "use": "Harbour cover: pencil icon, Follow and Follow back buttons, active segment"
+   },
+   {
+    "fg": "#E7C877",
+    "bg": "#284B63",
+    "ratio": 5.68,
+    "use": "Harbour cover: 'MY WORLD' foil kicker, mono 10px"
+   },
+   {
+    "fg": "#284B63",
+    "bg": "#ECF1F5",
+    "ratio": 8.11,
+    "use": "Harbour as text on its paper: invite outline label, links"
+   },
+   {
+    "fg": "#736657",
+    "bg": "#ECF1F5",
+    "ratio": 4.9,
+    "use": "Secondary text on Harbour paper"
+   },
+   {
+    "fg": "#284B63",
+    "bg": "#FBF6EC",
+    "ratio": 8.56,
+    "use": "Italic name on the bookplate, serif 30px"
+   },
+   {
+    "fg": "#16110D",
+    "bg": "#FBF6EC",
+    "ratio": 17.4,
+    "use": "Bookplate text"
+   },
+   {
+    "fg": "#736657",
+    "bg": "#FBF6EC",
+    "ratio": 5.18,
+    "use": "'FROM THE TRAVELS OF', handle, country, stat labels"
+   },
+   {
+    "fg": "#B0472F",
+    "bg": "#FBF6EC",
+    "ratio": 5.15,
+    "use": "Stat numerals, serif 22px"
+   },
+   {
+    "fg": "#0B5F55",
+    "bg": "#FBF6EC",
+    "ratio": 7.01,
+    "use": "'Claim your @username', website"
+   },
+   {
+    "fg": "#2B4C8C",
+    "bg": "#EEF3FA",
+    "ratio": 7.49,
+    "use": "Circle folder: legend labels, italic 'circle', See all"
+   },
+   {
+    "fg": "#16110D",
+    "bg": "#EEF3FA",
+    "ratio": 16.82,
+    "use": "Circle folder: legend figures, serif 22px"
+   },
+   {
+    "fg": "#3A3128",
+    "bg": "#EEF3FA",
+    "ratio": 11.42,
+    "use": "Circle folder: empty-state line"
+   },
+   {
+    "fg": "#FBF6EC",
+    "bg": "#2B4C8C",
+    "ratio": 7.75,
+    "use": "YOUR CIRCLE tab label"
+   },
+   {
+    "fg": "#16110D",
+    "bg": "#E4D6BC",
+    "ratio": 13.07,
+    "use": "ON MY MAP folder text"
+   },
+   {
+    "fg": "#FBF6EC",
+    "bg": "#4E3A20",
+    "ratio": 10,
+    "use": "ON MY MAP tab label"
+   },
+   {
+    "fg": "#3A3128",
+    "bg": "#FFFFFF",
+    "ratio": 12.73,
+    "use": "Place chips, kit tile labels, privacy body"
+   },
+   {
+    "fg": "#FBF6EC",
+    "bg": "#7A4A12",
+    "ratio": 6.92,
+    "use": "MY KIT tab label"
+   },
+   {
+    "fg": "#736657",
+    "bg": "#FFFFFF",
+    "ratio": 5.57,
+    "use": "Circle-screen row mono, 'TAP TO SEE IT'"
+   },
+   {
+    "fg": "#16110D",
+    "bg": "#FFFFFF",
+    "ratio": 18.75,
+    "use": "Circle-screen names, privacy title"
+   },
+   {
+    "fg": "#FFFFFF",
+    "bg": "#2E6B4E",
+    "ratio": 6.31,
+    "use": "'Allow' on follow requests"
+   },
+   {
+    "fg": "#FBF6EC",
+    "bg": "#0C2B50",
+    "ratio": 13.2,
+    "use": "'Open my Virtual Passport' label"
+   },
+   {
+    "fg": "#FFFFFF",
+    "bg": "#284A33",
+    "ratio": 9.92,
+    "use": "Forest cloth: white on the cover and on cloth buttons"
+   },
+   {
+    "fg": "#E7C877",
+    "bg": "#284A33",
+    "ratio": 6.1,
+    "use": "Forest cloth: foil kicker"
+   },
+   {
+    "fg": "#284A33",
+    "bg": "#ECF2EA",
+    "ratio": 8.72,
+    "use": "Forest cloth as text on its paper #ECF2EA"
+   },
+   {
+    "fg": "#FFFFFF",
+    "bg": "#6B4423",
+    "ratio": 8.48,
+    "use": "Saddle cloth: white on the cover and on cloth buttons"
+   },
+   {
+    "fg": "#E7C877",
+    "bg": "#6B4423",
+    "ratio": 5.22,
+    "use": "Saddle cloth: foil kicker"
+   },
+   {
+    "fg": "#6B4423",
+    "bg": "#F6EFE7",
+    "ratio": 7.44,
+    "use": "Saddle cloth as text on its paper #F6EFE7"
+   },
+   {
+    "fg": "#FFFFFF",
+    "bg": "#4F2B57",
+    "ratio": 11.57,
+    "use": "Plum cloth: white on the cover and on cloth buttons"
+   },
+   {
+    "fg": "#E7C877",
+    "bg": "#4F2B57",
+    "ratio": 7.12,
+    "use": "Plum cloth: foil kicker"
+   },
+   {
+    "fg": "#4F2B57",
+    "bg": "#F2ECF4",
+    "ratio": 9.96,
+    "use": "Plum cloth as text on its paper #F2ECF4"
+   },
+   {
+    "fg": "#FFFFFF",
+    "bg": "#3A4652",
+    "ratio": 9.64,
+    "use": "Slate cloth: white on the cover and on cloth buttons"
+   },
+   {
+    "fg": "#E7C877",
+    "bg": "#3A4652",
+    "ratio": 5.94,
+    "use": "Slate cloth: foil kicker"
+   },
+   {
+    "fg": "#3A4652",
+    "bg": "#EEF1F4",
+    "ratio": 8.51,
+    "use": "Slate cloth as text on its paper #EEF1F4"
+   },
+   {
+    "fg": "#FFFFFF",
+    "bg": "#6E4B0E",
+    "ratio": 7.85,
+    "use": "Ochre cloth: white on the cover and on cloth buttons"
+   },
+   {
+    "fg": "#E7C877",
+    "bg": "#6E4B0E",
+    "ratio": 4.83,
+    "use": "Ochre cloth: foil kicker"
+   },
+   {
+    "fg": "#6E4B0E",
+    "bg": "#F8F0DF",
+    "ratio": 6.92,
+    "use": "Ochre cloth as text on its paper #F8F0DF"
+   },
+   {
+    "fg": "#FFFFFF",
+    "bg": "#263F86",
+    "ratio": 9.82,
+    "use": "Lapis cloth: white on the cover and on cloth buttons"
+   },
+   {
+    "fg": "#E7C877",
+    "bg": "#263F86",
+    "ratio": 6.05,
+    "use": "Lapis cloth: foil kicker"
+   },
+   {
+    "fg": "#263F86",
+    "bg": "#EDF0F8",
+    "ratio": 8.62,
+    "use": "Lapis cloth as text on its paper #EDF0F8"
+   },
+   {
+    "fg": "#FFFFFF",
+    "bg": "#2B2F36",
+    "ratio": 13.44,
+    "use": "Graphite cloth: white on the cover and on cloth buttons"
+   },
+   {
+    "fg": "#E7C877",
+    "bg": "#2B2F36",
+    "ratio": 8.27,
+    "use": "Graphite cloth: foil kicker"
+   },
+   {
+    "fg": "#2B2F36",
+    "bg": "#F0F0F2",
+    "ratio": 11.81,
+    "use": "Graphite cloth as text on its paper #F0F0F2"
+   }
+  ],
+  "header": "Under the banner, a 12px mat in the owner's paper, then three layers. (1) The cover band: full-bleed, 132px, in the owner's cloth (Harbour #284B63 for Margaret), with a 1px gold-foil #E7C877 hairline frame inset 8px, 'MY WORLD' in foil mono 10px .2em at top left (5.68:1 on Harbour; 4.83:1 on Ochre, the lowest cloth), and a 44px pencil circle at top right (rgba(255,255,255,.12) fill, 1px rgba(255,255,255,.3), white lucide Pencil) that opens Edit profile. (2) The trunk rests on the cloth: a white card, radius 18, a 1px #EADFC9 hairline in place of the black bezel, overlapping the band by 72px. Header in mono 10px #736657, 'MY LUGGAGE · 3 STICKERS TO PLACE' (once one is placed, 'MY LUGGAGE · 2 OF 3 PLACED'; never '0 of 3'), over 'The *Classic*' in Instrument Serif 22px. Open and Share are 40px outline pills with 44px hit areas; Share appears once a label is on the trunk. Caption 'Earned by traveling, never bought. Tap a label for its story.' 12px #736657. (3) The bookplate, directly under: cream #FBF6EC, radius 16, a double frame (1px cloth at 45%, then 1px cloth at 20% inset 4px), centred. A 72px avatar (photo, or the initial in Instrument Serif 30px cream on the cloth). Mono 9.5px .2em #736657 'FROM THE TRAVELS OF' (5.18:1). Instrument Serif 30px italic '*Margaret*' in the cloth colour (8.56:1 on Harbour; 7.29:1 for Ochre, the lowest). Mono 11px #736657 '@margaret · UNITED STATES' with the OfficialSeal after the handle when verified (never a checkmark), or 'Claim your @username' 12px/600 teal-deep #0B5F55 underlined (7.01:1). One stats line: Instrument Serif 22px stamp-red numerals (5.15:1) with mono 9.5px #736657 labels, '2 STAMPS · 1 COUNTRY · 2 VERIFIED' (singular at one; a stat at zero is left out; a brand-new account reads 'A NEW PASSPORT'). Then the bio, 14px #3A3128 (11.82:1), three lines with 'More', and the website in mono 12px teal-deep. The four stat boxes and the full-width 'Edit profile' button go: stamps and countries live on the bookplate, followers and following live in the circle, editing lives behind the pencil.",
+  "sections": [
+   "1 · Cover band in the owner's cloth, 132px: gold-foil hairline frame, 'MY WORLD', the pencil.",
+   "2 · My luggage: the trunk on a white hairline card resting on the cover, with its header, Open and Share, and the caption.",
+   "3 · Bookplate (cream): avatar, FROM THE TRAVELS OF, *name*, @handle · country, OfficialSeal or the claim link, one stats line, bio, website.",
+   "4 · YOUR CIRCLE folder: airmail #EEF3FA, 1px #C9D6EA, tab airmail blue #2B4C8C; the orbit and its legend (see circle).",
+   "5 · ON MY MAP folder: kraft #E4D6BC, 1px #CDBB98, tab umber #4E3A20. 'My favorite places' as white chips with a 1px solid cloth border and a lucide MapPin in the cloth colour; 'On the horizon' as white chips with a 1px dashed cloth border and a lucide Plane (dashed because not visited yet); labels 13px #3A3128 (12.73:1). Editing adds the field inline; owners remove a chip with its X.",
+   "6 · MY KIT folder: cream #FBF6EC, 1px #EADFC9, tab saddle #7A4A12 (6.92:1 under cream). My virtual items and Travel buddies as 2-up white tiles, radius 18, 1px #EADFC9, mono 'TAP TO SEE IT' #736657; an empty buddy seat is a dashed #B8955A tile reading 'Room for 6 travel buddies' with 'Add your travel buddy', never '0/6'.",
+   "7 · Privacy: a plain white card, because it is a setting: Instrument Serif 17px 'Your passport is private' (or 'public'), the inner-circle sentence in 12.5px #736657 (5.57:1), and a switch whose track is #0E7C73 when public and #D8D2C6 when private, with the state also in words.",
+   "8 · Open my Virtual Passport: the navy door, #0C2B50 with a 1px gold #D6A64A hairline, 56px, Instrument Serif 17px cream #FBF6EC (13.20:1), a lucide BookOpen 20px in gold in place of 🛂.",
+   "9 · Invite someone to your circle: an outline button in the cloth colour (6.92:1 or better on every paper), lucide Send, the same text-message flow as today.",
+   "10 · Photo packets: unchanged, on the owner's paper."
+  ],
+  "circle": "The orbit is the creative followers and following treatment, inside the YOUR CIRCLE folder on airmail #EEF3FA. Inside the folder: Instrument Serif 22px 'Your *circle*' (italic in airmail blue #2B4C8C, 7.49:1) and 'See all' 13px/600 airmail blue at right. Left, a 168px inline SVG: three concentric hairline rings (radius 34, 56 and 78px; 1px in the owner's cloth at 55%, 35% and 20%) around the owner's 44px avatar ringed 2px in their cloth. Up to ten faces, 24px circles with a 2px white ring and then a 1.5px ring in that person's own cloth, sit on the rings: inner ring, your inner circle (you follow each other); middle ring, people you follow; outer ring, people who follow you. Faces are spaced evenly from 12 o'clock, most recent stamp first; overflow shows as a mono '+12' on its ring; a pending request is a dashed empty face on the outer ring. Right, the legend as three 44px tappable rows, each a mono 10px .14em airmail-blue label over an Instrument Serif 22px #16110D figure (16.82:1): 'INNER CIRCLE' 7, 'YOU FOLLOW' 9, 'FOLLOW YOU' 12; each opens the circle screen on that tab, and a row at zero is left out. While loading, the figures show an em dash, never a guess. With nobody yet, the rings stay empty around the owner, with 'Your circle starts with *one*' and an outline button 'Invite someone by text' in airmail blue. No ranking and no counts on other people. Teen accounts see TeenHoldNote in place of the folder. Data: one new profile field, cloth (one of eight keys, default 'harbour'), sent with every face the lists and the feed return.",
+  "circle_screen": "'Your circle', a new page registered by hand in src/pages.config.js (key 'Circle'; the file's 'auto-generated' header is stale), opened from the legend rows, 'See all' and Mailbox's 'Your circle · 9' row. Ground: the owner's paper, after the 12px mat. Top: a 112px cloth cover band with a 44px back circle, 'YOUR CIRCLE' in foil mono and Instrument Serif 30px white 'Your *circle*' with the italic in foil. Below it, the orbit at 240px, centred, on an airmail card (radius 18); tapping a face opens that person's world. Then a 44px three-segment control, white with a 1px cloth line, the active segment in cloth with white text: 'Inner circle 7 · You follow 9 · Follow you 12'. A search field, 'Find someone in your circle'. 'WANTS TO FOLLOW YOU' requests come first when there are any: 'Allow' (#2E6B4E with white, 6.31:1) and 'Not now' (paper). The list reads like an address book: A-Z mono dividers, 10px .2em #736657 on a hairline, then 64px white rows, each with a 44px avatar ringed in that person's cloth, the name in Instrument Serif 18px #16110D with their OfficialSeal, and mono 10.5px #736657 '@aiko · JAPAN'. Inner-circle rows carry a mono 'BOTH WAYS' tag with the two-ring mark (two interlocking 12px circles, inline SVG). The action at right follows the relationship: 'Follow back' (solid cloth, white) for someone who follows you, 'Following' (outline) for people you follow, 'Requested' (text) while pending. Tapping 'Following' opens a confirm sheet, 'Unfollow @aiko?', where today one tap on a Mailbox chip unfollows instantly. A row tap visits that person's world; the ••• menu holds Unfollow and Report. Footer: 'Invite someone to your circle'. Within a tab the order is A-Z, never by popularity, and the screen shows nobody's stamp or follower counts.",
+  "visiting": "Opening someone's profile opens their journal in their cloth. The mat and page take their paper; the cover band takes their cloth, with the foil kicker 'AIKO'S WORLD' and a 44px back circle in place of the pencil. Their trunk rests on the cover, read-only (tap a label for its story). Their bookplate: 'FROM THE TRAVELS OF' / '*Aiko*', handle, country and OfficialSeal tier (gold Honored, burgundy Official, teal House, sunshine Friends & Family), and stats only as far as they share them. One action under the bookplate: 'Follow' (solid in their cloth, white text), which becomes 'Requested' (text) or 'Following' (outline), and 'Inner circle' with the two-ring mark once it is both ways. Their orbit shows the figures and only the faces you both know, captioned '3 in your circle know Aiko', never a list of strangers. ON MY MAP reads as invitations ('Aiko dreams of Kyoto' for a horizon). Their passport opens from the navy door 'Open Aiko's Virtual Passport', where the Blotter (WOW, TAKE ME, BEEN, I WANNA GO, MORE PICS, YUMMY!) prints as small rubber-stamp marks in stamp red on cream, and the guestbook takes signatures, its doodle line the one place Caveat appears. A private passport shows the bookplate and 'This passport is private: just Aiko's inner circle.' Nothing more precise than a city, no edit controls, and the banner, tab bar and type never change. Teen profiles cannot be visited while social is held.",
+  "personalisation": "In Edit profile the owner chooses one cloth from a row of eight 44px swatches (a fine 2px weave, the name in mono beneath), each paired with its paper: Harbour #284B63 on #ECF1F5 (default), Forest #284A33 on #ECF2EA, Saddle #6B4423 on #F6EFE7, Plum #4F2B57 on #F2ECF4, Slate #3A4652 on #EEF1F4, Ochre #6E4B0E on #F8F0DF, Lapis #263F86 on #EDF0F8, Graphite #2B2F36 on #F0F0F2. Measured: white on cloth 7.85 to 13.44:1; gold foil #E7C877 on cloth 4.83 to 8.27:1, so the foil kicker passes on all eight; cloth as text on its own paper 6.92 to 11.81:1; cloth on cream 7.29 to 12.48:1; ink-3 on each paper 4.80 to 4.92:1. The cloth paints the cover, the bookplate's italic name and frame, the orbit rings, the owner's ring wherever their face appears (other people's orbits, Mailbox and Home envelopes, guestbook signatures), and the segment and Follow buttons on their pages. Excluded on purpose: passport navy (the passport's), brand and House teal, burgundy, gold and sunshine (OfficialSeal tiers), and stamp red. Limits: these eight only, no custom hex, no photo backgrounds, no font or layout changes. Stamps, trunk, items and buddies stay on cream or white; the banner, the tab bar and the finder worlds never take the cloth. Also theirs, as today: photo, name, bio (200 characters), website, favorite places, On the horizon. Trunk skins and sticker placement are earned, never bought. Teen accounts may choose a cloth (it is personal, not social) but have no circle folder and cannot be visited while social is held."
+ },
+ "mailbox": "The airmail world, on the same stock as Home's circle zone and the profile's circle folder, so your circle reads as one place. Page ground airmail #EEF3FA after the 12px mat; column max-w-md (md:max-w-2xl on iPad, as today). Masthead on the page, emoji-free: kicker mono 10px .2em stamp red #B0472F 'GLOBESKIMMERS · MAILBOX' (4.97:1); title Instrument Serif 30px #16110D 'Where your *circle* has been' (16.82:1), the italic 'circle' in airmail blue #2B4C8C (7.49:1); at right the Postcard button, stamp red #B0472F with white 13px/600 and a lucide Mail (5.54:1), a 44px pill, shown as an airmail-blue outline until someone is in your circle to send to. Directly under the masthead, full-bleed, the airmail chevron, 5px: repeating-linear-gradient(135deg, #B0472F 0 10px, #FBF6EC 10px 14px, #2B4C8C 14px 24px, #FBF6EC 24px 28px). Follow row: a 48px white field, radius 14, 1px #C9D6EA, '@' and the placeholder 'follow a friend by @username' in #736657 (5.57:1), beside a 48px airmail-blue square with a white UserPlus (8.35:1); disabled, it takes an ivory fill, a 1px line and an ink-3 icon, never a faded teal. Claim card, only until claimed: cream #FBF6EC, 1px #EADFC9, radius 16; 'Claim your @username' 14px/700 #16110D (17.40:1); 'It's how your circle finds you, follows you, and sends you postcards.' 13px #3A3128 (11.82:1); the field and a 'Claim' button in airmail blue with white. 'ON YOUR PASSPORT · 2 NEW' in mono airmail blue (7.49:1), then one white sheet, radius 16, with hairline rows: a 28px avatar ringed in the sender's cloth, '<b>Ben</b> stamped WOW on your Griffith Observatory page' 13px #3A3128 (12.73:1), and the time in mono #736657 (5.57:1). Unread rows sit on #F5F8FC and carry the word 'NEW' in mono stamp red (5.20:1) instead of a red dot (ink-2 11.95:1 and ink-3 5.23:1 on that tint). 'WANTS TO FOLLOW YOU' rows offer 'Allow' (#2E6B4E with white, 6.31:1) and 'Not now' (ivory, ink). The feed, newest first and never ranked, arrives as letters. Stamp news is an envelope: white, radius 14, 1px #C9D6EA, a 3px chevron along its top. Left, the friend's stamp at 64px on a cream square tilted -3 degrees, its corner crossed by a postmark (three 1px wavy lines in airmail blue at 40%, decorative). Right, mono 10px #736657 'AIKO · 2D AGO' beside her 20px avatar ringed in her cloth; Instrument Serif 18px #16110D 'stamped *Griffith Observatory*' (the place is the one italic, replacing today's bold; 'landed at *LAX*' for airports); 'Verified' 11px/600 #2E6B4E (6.31:1) after a 12px dashed-ring check when the visit was verified, never a social tick; mono 'LOS ANGELES · US', and 'FILMED HERE: LA LA LAND' when present. The stamp art needs the feed to send each stamp's id, kind, region and art key; until it does, an airmail-blue postmark ring holding the city stands in. Postcards look like postcards: the 3:2 photo is the front; the back is a cream #FBF6EC panel with the message in Instrument Serif italic 17px #16110D (17.40:1), a 44px cream stamp box printing the place's stamp, a 40px postmark ring (1px #736657) with mono 'LISBON / OCT 9', and the footer mono 'FROM ANA · TO YOU' #736657 (5.18:1). Empty state: a white card, radius 18, a 40px lucide Mailbox in airmail blue in place of the 📬, Instrument Serif 20px 'An empty mailbox, *for now*', the body 'Follow a friend by their @username and their new stamps land here: where they went, when, and whether it's verified.' in #3A3128, and one outline button, 'Invite someone to your circle'. Footer: the 'Following · n' chip cloud, where one tap unfollows instantly, becomes one 56px white row, 'Your circle · 9', with up to five overlapping 24px faces ringed in their cloths and a chevron; it opens the circle screen, where unfollowing asks first. Teen accounts keep the masthead and the chevron, with TeenHoldNote beneath.",
+ "finders": [
+  {
+   "key": "eat",
+   "page": "Places to Eat (src/pages/PlacesToEat.jsx; WORLD.eat replaces CAT.food)",
+   "world_name": "Bistro Menu",
+   "personality": "A good bistro's printed menu: Bordeaux card stock, saffron spice, warm linen. Appetite with manners. Adventurous in what it finds (dish specialists, late-night spots, the dish you searched set in italics as the title), classy in how it sets the table, and organized the way a menu is: the name, leader dots, the number that matters.",
+   "palette": [
+    {
+     "name": "Bordeaux",
+     "hex": "#7A1D33",
+     "role": "anchor: plate; every word in the eat colour (card kicker, links, Change on linen); Directions; search submit; active chip; Dish Specialist pill; crest disc"
+    },
+    {
+     "name": "Saffron",
+     "hex": "#E3A33B",
+     "role": "accent: menu-leader dots on linen and white, Authentic Match pill fill; never text on light (2.00:1 on linen)"
+    },
+    {
+     "name": "Saffron light",
+     "hex": "#E8AE4C",
+     "role": "highlight on Bordeaux: the italic word, the plate's leader dots and MapPin, the crest icon"
+    },
+    {
+     "name": "Linen type",
+     "hex": "#FBF1E6",
+     "role": "ink on the plate: the title, the place, the MI/KM active segment"
+    },
+    {
+     "name": "Kicker cream",
+     "hex": "#EBC98F",
+     "role": "plate kicker and 'Change' on the plate"
+    },
+    {
+     "name": "Saffron wash",
+     "hex": "#F8EACB",
+     "role": "wash: Related pill, skeletons, FallbackDisclaimer"
+    },
+    {
+     "name": "Umber",
+     "hex": "#5E3F08",
+     "role": "wash ink: text on saffron wash"
+    },
+    {
+     "name": "Linen",
+     "hex": "#FAF3EC",
+     "role": "paper: the page"
+    },
+    {
+     "name": "Menu line",
+     "hex": "#E9D8CB",
+     "role": "line: card, chip and field borders"
+    }
+   ],
+   "pairs": [
+    {
+     "fg": "#FBF1E6",
+     "bg": "#7A1D33",
+     "ratio": 9.18,
+     "use": "Plate title 'Places to eat', serif 32px"
+    },
+    {
+     "fg": "#E8AE4C",
+     "bg": "#7A1D33",
+     "ratio": 5.16,
+     "use": "Italic 'eat' or the dish word; plate MapPin and leader dots; crest icon"
+    },
+    {
+     "fg": "#EBC98F",
+     "bg": "#7A1D33",
+     "ratio": 6.48,
+     "use": "Plate kicker mono 10.5px and 'Change'"
+    },
+    {
+     "fg": "#7A1D33",
+     "bg": "#FBF1E6",
+     "ratio": 9.18,
+     "use": "MI/KM active segment label on the plate"
+    },
+    {
+     "fg": "#7A1D33",
+     "bg": "#FAF3EC",
+     "ratio": 9.31,
+     "use": "Links and section kickers on linen"
+    },
+    {
+     "fg": "#7A1D33",
+     "bg": "#FFFFFF",
+     "ratio": 10.24,
+     "use": "Card kicker 'PIZZA RESTAURANT'; tier text on white"
+    },
+    {
+     "fg": "#FFFFFF",
+     "bg": "#7A1D33",
+     "ratio": 10.24,
+     "use": "Directions, search submit, active chip, Dish Specialist pill"
+    },
+    {
+     "fg": "#7A1D33",
+     "bg": "#E3A33B",
+     "ratio": 4.66,
+     "use": "Authentic Match pill, mono 10px bold"
+    },
+    {
+     "fg": "#5E3F08",
+     "bg": "#F8EACB",
+     "ratio": 8.05,
+     "use": "Related pill; FallbackDisclaimer body on the wash"
+    },
+    {
+     "fg": "#7A1D33",
+     "bg": "#F8EACB",
+     "ratio": 8.59,
+     "use": "FallbackDisclaimer title and action on the wash"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#FFFFFF",
+     "ratio": 5.57,
+     "use": "Serves It outline pill; distance after the leader; address"
+    },
+    {
+     "fg": "#3A3128",
+     "bg": "#FFFFFF",
+     "ratio": 12.73,
+     "use": "Outline tags, Say it / Translate links, price"
+    },
+    {
+     "fg": "#2E6B4E",
+     "bg": "#FFFFFF",
+     "ratio": 6.31,
+     "use": "'Open until 1:30 PM'"
+    },
+    {
+     "fg": "#B0472F",
+     "bg": "#FFFFFF",
+     "ratio": 5.54,
+     "use": "'Closed · opens 7 AM'"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#FAF3EC",
+     "ratio": 5.07,
+     "use": "Result line and meta on linen"
+    },
+    {
+     "fg": "#3A3128",
+     "bg": "#FAF3EC",
+     "ratio": 11.57,
+     "use": "Empty-state hint on linen"
+    }
+   ],
+   "masthead": "The plate in Bordeaux #7A1D33 on linen #FAF3EC. Circles: rgba(251,241,230,.10) fill, 1px rgba(251,241,230,.30), linen icons. Kicker mono 10.5px .16em #EBC98F (6.48:1): 'PLACES TO EAT', a saffron menu leader, then '40 NEAR YOU' once the count is real. Title Instrument Serif 32px #FBF1E6 (9.18:1): 'Places to *eat*', the italic in saffron light #E8AE4C (5.16:1). A dish search rewrites it with the dish as the one italic: 'Where to eat *ramen*'. Location row: MapPin #E8AE4C, 'Downtown Los Angeles' 13px/600 #FBF1E6, 'Change' underlined #EBC98F, and the MI/KM pill (active segment #FBF1E6 with Bordeaux text, 9.18:1). The motif sits in the right third. On linen below: search 'Search a dish or a restaurant…' with a 48px Bordeaux square holding a white ArrowRight, then the chips.",
+   "card": "White card on linen: radius 16, 1px #E9D8CB, shadow 0 10px 24px -18px rgba(122,29,51,.35). Photo 16:10; with no photo, a 72px Bordeaux strip carrying a saffron leader line and a 22px UtensilsCrossed in #E8AE4C, never a plate emoji. Number: a plain Bordeaux serif numeral in a 28px white circle at top left; the medals go. Body, 16px padding: (1) On dish searches the intent tier leads, a lightness ladder from TIER_LABELS: Dish Specialist solid #7A1D33 with white mono 10px bold (10.24:1); Authentic Match saffron #E3A33B with #7A1D33 (4.66:1); Related saffron wash #F8EACB with #5E3F08 (8.05:1); Serves It white with 1px #E9D8CB and #736657 (5.57:1). 'Chain option' is a plain outline tag. (2) Kicker mono 10.5px .12em #7A1D33: 'PIZZA RESTAURANT'. (3) The menu line, this world's card signature: the name in Instrument Serif 24px #16110D, a saffron dotted leader, then the distance in mono 11px #736657, right-aligned like a price ('Universe Pizza ······ 79 FT'); with a two-line name the leader runs on the last line. (4) 'Say it · Translate' as quiet 12.5px #3A3128 links with Volume2 and Languages. (5) One facts line, 13px: 'Open until 1:30 PM' #2E6B4E or 'Closed · opens 7 AM' #B0472F, worded in the place's time zone · '★ 4.5 (1,910) Google' · '$$' #3A3128. (6) The address, 13px #736657. (7) Up to three outline tags (white, 1px #E9D8CB, #3A3128), dietary first: Vegetarian, Halal, Late night. (8) Quiet rows with 18px lucide icons in Bordeaux: Hours; AI DETAILS (Sparkles; the word 'AI' stays); 'Add a photo of what you ordered' (Camera). (9) The rubber stamp, full width. (10) Actions: Directions (solid Bordeaux, white, radius 14, 44px, flex 1), Map and Call as 44px icon buttons (white, 1px #E9D8CB, Bordeaux icons), More.",
+   "chips": "Two rows on linen. Row 1, utility: Open now (Clock), Late night (Moon), Filters (SlidersHorizontal; the count inside as mono 'FILTERS · 2', hidden at zero). Row 2, cuisines, scrolling: American, Mexican, Italian, Pizza, Chinese, Japanese, Sushi, Korean, Thai, Vietnamese, Indian, Mediterranean, Filipino, Seafood, Steakhouse, Breakfast, Fast food, Dessert. 36px chips with 44px hit areas, radius 10, white, 1px #E9D8CB, Inter Tight 13px/600 #3A3128; active Bordeaux with white text and a 12px X to clear. No 'All food' chip (nothing selected means all) and no emoji; dietary options live in Filters.",
+   "cta": "Directions: solid Bordeaux #7A1D33, white 15px/600 (10.24:1), lucide Navigation, radius 14, 44px. Search submit: a 48px Bordeaux square with a white ArrowRight. 'Change', 'See all' and 'Hours' are Bordeaux links. 'Expand radius' in the empty state is a Bordeaux outline.",
+   "motif": "The menu leader: the dotted line that joins a dish to its price on a printed menu. Build it as a flex spacer with background: radial-gradient(circle, #E3A33B 1px, transparent 1.3px) 0 50% / 6px 4px repeat-x (#E8AE4C on the plate). It appears in the plate's kicker ('PLACES TO EAT ······ 40 NEAR YOU'), as three faint 120px leader lines at 20% in the plate's right third, and in every card's name line.",
+   "avoid": "Tomato #E63946 (white text 4.17:1; its own tint pair 3.46:1). Saffron as text on linen or white. Plate and food emoji, gold and silver medals. The rainbow tier badges (green, cyan, yellow, grey). A green 'open' panel beside Bordeaux, which reads as Christmas: open status is a word in the facts line. The blue phone panel and the lilac AI box. More than three tags."
+  },
+  {
+   "key": "todo",
+   "page": "Things to Do (src/pages/ThingsToDo.jsx)",
+   "world_name": "Expedition Atlas",
+   "personality": "An explorer's atlas crossed with a vintage travel poster: lapis cloth, terracotta route marks, sand-coloured map paper. Adventurous through contour lines, numbered waypoints and poster-bold photo cards; classy because the map stays quiet and the photos stay big; organized into chapters, from national icons to the places near you.",
+   "palette": [
+    {
+     "name": "Lapis",
+     "hex": "#213E8C",
+     "role": "anchor: plate, poster band, kickers on sand and white, Directions, search, active chips, List | Map, crest disc"
+    },
+    {
+     "name": "Terracotta",
+     "hex": "#A64826",
+     "role": "accent, text-safe on sand and white: waypoint numerals and rings, the 32px chapter rule"
+    },
+    {
+     "name": "Terracotta light",
+     "hex": "#F2A47E",
+     "role": "highlight on lapis: the italic word, the poster-band kicker, the crest icon"
+    },
+    {
+     "name": "Map cream",
+     "hex": "#F7F1E3",
+     "role": "ink on lapis: plate title, poster-band names"
+    },
+    {
+     "name": "Sand line",
+     "hex": "#E8D6B0",
+     "role": "plate kicker, location row, contour lines"
+    },
+    {
+     "name": "Lapis wash",
+     "hex": "#E3E8F4",
+     "role": "wash: Hidden gem tag, no-photo strip, skeletons, FallbackDisclaimer"
+    },
+    {
+     "name": "Terracotta wash",
+     "hex": "#F6E2D6",
+     "role": "Bucket list tag fill (text #8E3A1A)"
+    },
+    {
+     "name": "Atlas sand",
+     "hex": "#F5F0E6",
+     "role": "paper: the page"
+    },
+    {
+     "name": "Map line",
+     "hex": "#E3DBCB",
+     "role": "line: card, chip and field borders"
+    }
+   ],
+   "pairs": [
+    {
+     "fg": "#F7F1E3",
+     "bg": "#213E8C",
+     "ratio": 8.74,
+     "use": "Plate title; poster-band name, serif 20px"
+    },
+    {
+     "fg": "#F2A47E",
+     "bg": "#213E8C",
+     "ratio": 4.87,
+     "use": "Italic 'do' (32px); poster-band kicker mono 10px; crest icon"
+    },
+    {
+     "fg": "#E8D6B0",
+     "bg": "#213E8C",
+     "ratio": 6.88,
+     "use": "Plate kicker and location row"
+    },
+    {
+     "fg": "#213E8C",
+     "bg": "#F5F0E6",
+     "ratio": 8.67,
+     "use": "Chapter titles and links on sand"
+    },
+    {
+     "fg": "#213E8C",
+     "bg": "#FFFFFF",
+     "ratio": 9.85,
+     "use": "Card kicker"
+    },
+    {
+     "fg": "#FFFFFF",
+     "bg": "#213E8C",
+     "ratio": 9.85,
+     "use": "Directions, search, active chip, active segment"
+    },
+    {
+     "fg": "#A64826",
+     "bg": "#F5F0E6",
+     "ratio": 5.17,
+     "use": "Waypoint numerals '01' on sand"
+    },
+    {
+     "fg": "#A64826",
+     "bg": "#FFFFFF",
+     "ratio": 5.87,
+     "use": "Terracotta text on cards"
+    },
+    {
+     "fg": "#8E3A1A",
+     "bg": "#F6E2D6",
+     "ratio": 6.05,
+     "use": "Bucket list tag"
+    },
+    {
+     "fg": "#213E8C",
+     "bg": "#E3E8F4",
+     "ratio": 8.03,
+     "use": "Hidden gem tag; FallbackDisclaimer on the wash"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#F5F0E6",
+     "ratio": 4.91,
+     "use": "Chapter counts and meta on sand"
+    },
+    {
+     "fg": "#3A3128",
+     "bg": "#FFFFFF",
+     "ratio": 12.73,
+     "use": "Outline tags"
+    },
+    {
+     "fg": "#2E6B4E",
+     "bg": "#FFFFFF",
+     "ratio": 6.31,
+     "use": "'Open until 10 PM'"
+    }
+   ],
+   "masthead": "Plate lapis #213E8C on sand #F5F0E6, contour lines in the right third. Circles rgba(247,241,227,.10) with 1px rgba(247,241,227,.30) and cream icons. Kicker mono #E8D6B0 (6.88:1): 'THINGS TO DO · 30 NEAR YOU'. Title Instrument Serif 32px #F7F1E3 (8.74:1): 'Things to *do*', the italic in terracotta light #F2A47E (4.87:1). A search sets the activity as the italic: '*Zip lining* nearby'. Location row in #E8D6B0 with 'Change' underlined and MI/KM (active segment map cream with lapis text). On sand below: search 'Search anything to do: zip lining, snorkeling…' with a lapis Search square, replacing the amber gradient whose white text measures 2.15:1.",
+   "card": "Chapters on sand, numbered like waypoints: a 26px circle with a 1.5px terracotta #A64826 ring holding mono 11px '01' (5.17:1), the mono 11px .14em lapis title 'NATIONAL ICONS · UNITED STATES', a mono '(12)' in #736657 and a collapse chevron, with a 32px terracotta rule beneath; then '02 REGIONAL MUST-SEE · CALIFORNIA', '03 NEARBY ATTRACTIONS', '04 NEAR YOU'. Strip cards carry the card signature, the poster band: 240px wide in a horizontal scroll, white, radius 16, 1px #E3DBCB, a 4:3 photo whose foot is a solid 56px lapis strip (with a 24px fade into it) holding the mono 10px kicker in #F2A47E ('MUSEUM · 2.3 MI', 4.87:1) and the name in Instrument Serif 20px #F7F1E3 (8.74:1), two lines at most; beneath it one facts line, 'Open until 10 PM · ★ 4.7 (8,210) Google', and at most one tag. Full cards (search results and list view): photo 16:10, a lapis serif numeral in a 28px white circle, mono kicker in lapis, Instrument Serif 24px name, one facts line 'Open until 10 PM · 2.3 mi · ★ 4.7 (8,210) Google · Free entry', and up to three tags: Bucket list (#F6E2D6 with #8E3A1A), Hidden gem (#E3E8F4 with lapis), then outline tags (Family friendly, Photo worthy) in #3A3128 on white with 1px #E3DBCB. Quiet rows for Hours, AI DETAILS and Website; the rubber stamp where the place is stampable; actions Directions solid lapis, Map, Website, More. With no photo, a 72px lapis-wash strip with lapis contour lines and a Compass.",
+   "chips": "Row 1, utility: Open now, Free entry, 'Filters · 2' (today's Advanced filters, the count inside, hidden at zero; the orange count bubble goes), and a List | Map segmented control (white, 1px #E3DBCB; active segment lapis with white). Row 2, categories with no colours of their own: Culture, Outdoors, Fun, Nightlife, Family, Wellness, Tours. White, 1px #E3DBCB, 13px/600 #3A3128; active lapis with white. No coloured category dots and no emoji. The persona chooser becomes a lapis segmented control.",
+   "cta": "Directions: solid lapis #213E8C with white 15px/600 (9.85:1). Search: a lapis square. Expand radius: a lapis outline.",
+   "motif": "Contour lines: an inline SVG of five nested, irregular closed loops, like a hilltop on a topographic map, 1px #E8D6B0 at 22%, 200px square, pinned to the plate's top right and cropped by its edge; repeated at 30% lapis on the no-photo strip. The chapter numerals are its waypoints.",
+   "avoid": "Magenta #C5197A (its own tint pair 4.41:1) and the amber Search and List view buttons (white on #F59E0B 2.15:1). The 20-colour prop-tag rainbow, emoji row icons, the star emoji in the header. Terracotta #B9532C as small text on sand (4.26:1; use #A64826). More than one tag on a strip card. Red map pins, which read as 'stamp'."
+  },
+  {
+   "key": "coffee",
+   "page": "Coffee (src/pages/CoffeeFinder.jsx)",
+   "world_name": "Roaster's Counter",
+   "personality": "A specialty roaster's counter: espresso-dark wood, the ember glow of the machine, crema on top. Energetic in its ember button and the bright sleeve on every card; sophisticated in espresso and crema type and a quiet cup ring; personal because it speaks to the time of your day ('Your *morning* cup') and lights up the drink you asked for.",
+   "palette": [
+    {
+     "name": "Espresso",
+     "hex": "#2B1B12",
+     "role": "anchor: plate, names, active chips, SPECIALTY pill, crest disc, sleeve text"
+    },
+    {
+     "name": "Ember",
+     "hex": "#E5672A",
+     "role": "energy: Directions and search fills under espresso text, the plate's italic, the cup ring, the 'your drink' underline, chip dot, crest icon; never text on light (3.33:1 on white)"
+    },
+    {
+     "name": "Copper",
+     "hex": "#A9481B",
+     "role": "text-safe accent on white and oat: card kicker, number ring, icons, links"
+    },
+    {
+     "name": "Crema",
+     "hex": "#F3DFC1",
+     "role": "ink on espresso: plate title, SPECIALTY text, active chip label, 'your drink' label"
+    },
+    {
+     "name": "Crema dim",
+     "hex": "#D9BE98",
+     "role": "plate kicker and location row"
+    },
+    {
+     "name": "Crema wash",
+     "hex": "#F2E3CD",
+     "role": "wash: the cup sleeve, skeletons, FallbackDisclaimer"
+    },
+    {
+     "name": "Oat",
+     "hex": "#F5EDE2",
+     "role": "paper: the page"
+    },
+    {
+     "name": "Counter line",
+     "hex": "#E6D7C3",
+     "role": "line: card, chip and field borders"
+    }
+   ],
+   "pairs": [
+    {
+     "fg": "#F3DFC1",
+     "bg": "#2B1B12",
+     "ratio": 12.72,
+     "use": "Plate title; SPECIALTY pill; active chip label; 'your drink' in the sleeve"
+    },
+    {
+     "fg": "#E5672A",
+     "bg": "#2B1B12",
+     "ratio": 4.97,
+     "use": "Italic 'morning' (32px); cup ring; crest icon"
+    },
+    {
+     "fg": "#D9BE98",
+     "bg": "#2B1B12",
+     "ratio": 9.28,
+     "use": "Plate kicker mono 10.5px and location row"
+    },
+    {
+     "fg": "#2B1B12",
+     "bg": "#E5672A",
+     "ratio": 4.97,
+     "use": "Directions 15px/700 and the search arrow on ember"
+    },
+    {
+     "fg": "#2B1B12",
+     "bg": "#F2E3CD",
+     "ratio": 13.12,
+     "use": "Cup sleeve drinks, mono 10.5px; FallbackDisclaimer on the wash"
+    },
+    {
+     "fg": "#3A3128",
+     "bg": "#F2E3CD",
+     "ratio": 10.09,
+     "use": "Secondary text on the wash (ink-3 fails here at 4.42)"
+    },
+    {
+     "fg": "#A9481B",
+     "bg": "#FFFFFF",
+     "ratio": 5.79,
+     "use": "Card kicker, number ring, icons"
+    },
+    {
+     "fg": "#A9481B",
+     "bg": "#F5EDE2",
+     "ratio": 4.98,
+     "use": "Links on oat"
+    },
+    {
+     "fg": "#2B1B12",
+     "bg": "#FFFFFF",
+     "ratio": 16.56,
+     "use": "Place names, serif 24px"
+    },
+    {
+     "fg": "#2E6B4E",
+     "bg": "#FFFFFF",
+     "ratio": 6.31,
+     "use": "'Open until 5:00 PM'"
+    },
+    {
+     "fg": "#3A3128",
+     "bg": "#FFFFFF",
+     "ratio": 12.73,
+     "use": "'Good for working' row"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#FFFFFF",
+     "ratio": 5.57,
+     "use": "Address, '(from reviews)'"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#F5EDE2",
+     "ratio": 4.8,
+     "use": "Meta on oat"
+    }
+   ],
+   "masthead": "The one finder that opens dark and warm, like walking into the cafe. Plate espresso #2B1B12 on oat #F5EDE2; circles rgba(243,223,193,.10) with 1px rgba(243,223,193,.30) and crema icons. Kicker mono #D9BE98 (9.28:1): 'COFFEE · 30 NEAR YOU · 3 SPECIALTY', each fragment only when real. Title Instrument Serif 32px #F3DFC1 (12.72:1), time-aware, with the time as the one italic in ember #E5672A (4.97:1): 'Your *morning* cup' (5 to 11), 'Your *afternoon* cup' (11 to 17), 'Your *evening* cup' (17 to 5), by the device clock. A drink search makes the drink the italic: 'Your next *matcha*'. Location row in crema dim with 'Change' underlined and the MI/KM pill (active segment crema with espresso text, 12.72:1). The cup ring sits behind the plate's right third. On oat below: search 'Search a cafe or a drink: latte, matcha, cold brew…' with a 48px ember square holding an espresso ArrowRight, then the chips.",
+   "card": "White card on oat: radius 16, 1px #E6D7C3, shadow 0 10px 24px -18px rgba(43,27,18,.4). Photo 16:10. Number: a 30px white disc with a 2px copper #A9481B ring and an espresso serif numeral, the cup ring in miniature. SPECIALTY at the photo's top right: an espresso pill with crema mono 10px text and Sparkles. The card signature is the cup sleeve: a 34px crema-wash #F2E3CD band directly under the photo that prints the drinks we detected in mono 10.5px .14em espresso (13.12:1), separated by 4px ember dots: 'ESPRESSO · POUR-OVER · COLD BREW'. The drink matching your search is inverted (espresso fill, crema text, 12.72:1) with a 2px ember underline, and reads as your drink; the sleeve hides when no drinks are detected. Body: kicker mono 10.5px copper (5.79:1) 'SPECIALTY COFFEE' or 'CAFE'; name Instrument Serif 24px espresso (16.56:1); one facts line, 'Open until 5:00 PM' #2E6B4E · '174 ft' · '★ 4.6 (312) Google'; the address 13px #736657. One quiet row: a copper Laptop and 'Good for working: Wi-Fi reported, outlets mentioned' 13px #3A3128 with '(from reviews)' in #736657, never a claim. Then AI DETAILS (Sparkles), 'Add a photo of what you ordered' (Camera), the rubber stamp, and actions: Directions in ember with espresso text, Map and Call as 44px white icon buttons with copper icons, More. With no photo, a 96px espresso strip holds the ember cup ring and the cafe's initial in crema Instrument Serif italic 44px, never a beige cup.",
+   "chips": "One row on oat: Open now (Clock; disabled with its existing hint until hours load), Specialty (Sparkles), Good for work (Laptop), Filters (Specialty only, Chains only, Wi-Fi, Outlets, Quiet and A/C live inside). White, 1px #E6D7C3, 13px/600 #3A3128; active espresso with crema text (12.72:1) and a 6px ember dot before the label.",
+   "cta": "Directions is the energetic button: ember #E5672A filled, espresso #2B1B12 text 15px/700 (4.97:1), radius 14, 44px, one of two finders whose primary button carries dark text (ATMs' cornflower Directions is the other). The search submit is ember too. Active chips are espresso, so ember stays the one solid on a card.",
+   "motif": "The cup ring: an inline SVG open circle, 150px, 2px stroke in ember #E5672A at 30%, with a 50-degree gap at two o'clock and one 3px-thicker arc, like a mug set down on the page. It sits behind the plate's right third, cropped by the plate edge, and is echoed by the copper ring around each card's number. Static: no steam loops.",
+   "avoid": "Mid-brown on mid-brown (#A85A2E on #F2DDC4 today). Ember as text on white (3.33:1) or oat (2.87:1); copper as small text on the sleeve; ink-3 on crema wash (4.42:1). The taupe Search button, the flat beige cup placeholder, the cyan 'Good for working' panel and the lilac AI box. Cartoon cups, beans, steam clip-art and the cup emoji. Looping animation. An all-brown page: cards stay white so photos breathe."
+  },
+  {
+   "key": "restroom",
+   "page": "Restrooms (src/pages/RestroomFinder.jsx)",
+   "world_name": "Powder Room",
+   "personality": "A clean, calm powder room: lavender soap, sage leaves, white porcelain tile. The lightest, quietest world, built to be read in two seconds when it is urgent: big type, plain words about access, nothing to decode.",
+   "palette": [
+    {
+     "name": "Iris",
+     "hex": "#45388A",
+     "role": "anchor: plate type and kicker, card kicker, Directions, active chips, amenity text, crest disc"
+    },
+    {
+     "name": "Lavender",
+     "hex": "#E6E0F5",
+     "role": "the plate (light); crest icon"
+    },
+    {
+     "name": "Sage deep",
+     "hex": "#2F6046",
+     "role": "accent: the italic word, the 'Free restroom' plaque, CONFIRMED"
+    },
+    {
+     "name": "Honey",
+     "hex": "#F6EBD2",
+     "role": "'Customers only' plaque fill, with umber #6A4A12"
+    },
+    {
+     "name": "Lavender wash",
+     "hex": "#ECE8F7",
+     "role": "wash: amenity chips, skeletons, FallbackDisclaimer"
+    },
+    {
+     "name": "Porcelain",
+     "hex": "#F7F6FB",
+     "role": "paper: the page"
+    },
+    {
+     "name": "Tile line",
+     "hex": "#DDD7EE",
+     "role": "line: card and chip borders, the tile grid's base"
+    }
+   ],
+   "pairs": [
+    {
+     "fg": "#45388A",
+     "bg": "#E6E0F5",
+     "ratio": 7.48,
+     "use": "Plate title and kicker"
+    },
+    {
+     "fg": "#2F6046",
+     "bg": "#E6E0F5",
+     "ratio": 5.67,
+     "use": "Italic 'restroom' (32px)"
+    },
+    {
+     "fg": "#45388A",
+     "bg": "#F7F6FB",
+     "ratio": 8.94,
+     "use": "Links on porcelain"
+    },
+    {
+     "fg": "#45388A",
+     "bg": "#FFFFFF",
+     "ratio": 9.61,
+     "use": "Card kicker; 'Inside ticketed venue' plaque"
+    },
+    {
+     "fg": "#FFFFFF",
+     "bg": "#45388A",
+     "ratio": 9.61,
+     "use": "Directions, active chip, MI/KM active"
+    },
+    {
+     "fg": "#FFFFFF",
+     "bg": "#2F6046",
+     "ratio": 7.29,
+     "use": "'Free restroom' plaque (the darkest step)"
+    },
+    {
+     "fg": "#6A4A12",
+     "bg": "#F6EBD2",
+     "ratio": 6.82,
+     "use": "'Customers only' plaque (the pale step)"
+    },
+    {
+     "fg": "#6A4A12",
+     "bg": "#FFFFFF",
+     "ratio": 8.07,
+     "use": "'Fee required' plaque (dashed outline step); 'LIKELY'"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#FFFFFF",
+     "ratio": 5.57,
+     "use": "'Access unclear' plaque (plain step); 'POSSIBLE'"
+    },
+    {
+     "fg": "#2F6046",
+     "bg": "#FFFFFF",
+     "ratio": 7.29,
+     "use": "'CONFIRMED'"
+    },
+    {
+     "fg": "#45388A",
+     "bg": "#ECE8F7",
+     "ratio": 7.98,
+     "use": "Amenity chips; FallbackDisclaimer on the wash"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#F7F6FB",
+     "ratio": 5.18,
+     "use": "Meta on porcelain"
+    },
+    {
+     "fg": "#E6E0F5",
+     "bg": "#45388A",
+     "ratio": 7.48,
+     "use": "Crest icon"
+    }
+   ],
+   "masthead": "Plate lavender #E6E0F5 (light) with the tile grid. Circles white with 1px #DDD7EE and iris icons. Kicker mono #45388A (7.48:1): 'RESTROOMS · 30 NEAR YOU'. Title Instrument Serif 32px #45388A: 'The nearest *restroom*', the italic in sage deep #2F6046 (5.67:1). Location row: the Crosshair 'Refresh search near me' in iris, the place, 'Change', and MI/KM (active segment iris with white). No search field. On porcelain below: the place-type chips.",
+   "card": "White card on porcelain: radius 16, 1px #DDD7EE. Photo 16:9 with ONE access plaque at top right, the card signature, stepped by lightness and always carrying a word and an icon, straight from accessType: 'Free restroom' solid sage deep with white and Check (7.29:1); 'Customers only' honey with umber and ShoppingBag (6.82:1); 'Inside ticketed venue' white with a 1px solid iris border, iris text and Ticket (9.61:1); 'Fee required' white with a 1px dashed umber border, umber text and Coins (8.07:1); 'Access unclear' white with #736657 and CircleHelp (5.57:1). Beside the word, the confidence in mono 9.5px: 'CONFIRMED' #2F6046, 'LIKELY' #6A4A12, 'POSSIBLE' #736657, never a guess. Open status moves into the facts line, so the photo carries one badge only. Number: an iris serif numeral in a 28px white circle. Body: kicker mono iris 'GROCERY STORE'; Instrument Serif 24px name; one facts line 'Open now' #2E6B4E · '0.2 mi' · '★ 4.5 (1,910) Google'; up to three amenities as lavender-wash chips (iris text, 7.98:1, 14px lucide icons): Toilet paper, Accessible (Accessibility), Baby changing (Baby), Bidet, 24/7, May have stairs; the address as a plain MapPin row, not a beige box. Actions: Directions solid iris, Map, Call, More. With no photo, a 72px lavender strip with the tile grid and a lucide Toilet in iris.",
+   "chips": "Place types with 16px lucide icons: Public (Landmark), Transit (TrainFront), Coffee & food (Coffee), Shopping (ShoppingBag), Medical (Cross), Parks (Trees); then Open now (Clock) and Accessible (Accessibility). White, 1px #DDD7EE, 13px/600 #3A3128; active iris with white. The emoji tiles and the 'All' tile go. The map legend uses the same five plaques.",
+   "cta": "Directions: solid iris #45388A with white (9.61:1). On the urgent GPS path one full-width iris button reads 'Nearest open restroom', and the list auto-widens from 5 mi as today.",
+   "motif": "Porcelain tile: a 14px square grid of 1px iris lines at 7% (repeating-linear-gradient at 0 and 90 degrees) across the plate, masked to fade under the title so the type sits on clean lavender; 10% on the no-photo strip. It should read as clean tile, never graph paper.",
+   "avoid": "Teal, which belongs to the brand (and #0F8A82 gives white text only 4.22:1). Free and Customers only told apart by hue alone. Emoji tiles and the 💚 / 🛒 / 💰 / ❓ badges. Urgency red. A second 'Open now' badge on the photo. Any gendered colour coding."
+  },
+  {
+   "key": "atm",
+   "page": "ATMs (src/pages/ATMFinder.jsx)",
+   "world_name": "Carbon Copy",
+   "personality": "The blue customer copy of a card receipt: cornflower slip stock, sharp carbon lettering, a faint carbon security tint and a white card chip. Crisp and quietly reassuring, cash without the casino: the fee in plain words, only as far as the data goes, and the card networks you need, never a rank we can't prove. The set's second mid-tone plate, built like Phrases: near-black type on a saturated mid-tone stock.",
+   "palette": [
+    {
+     "name": "Cornflower",
+     "hex": "#7487E6",
+     "role": "anchor (HSL 230, L* 58.7): the plate, the Directions and search-submit fills (carbon labels), the crest disc and the receipt's dashed tear line; a fill and graphic colour, never text (3.30:1 on white)"
+    },
+    {
+     "name": "Carbon",
+     "hex": "#15171C",
+     "role": "ink: every word printed on the cornflower plate, the italic included (as on Phrases), and its MapPin; the card kicker and name, the PLUS / CIRRUS pill labels, active chips, the 24/7 tag, the active MI segment, receipt values, the Directions label, the crest icon and every lucide icon but the Banks chip's #3A3128 chevron; the number chip's border, contacts and numeral; the security tint (10% on the plate, 8% on the strip)"
+    },
+    {
+     "name": "Cornflower mist",
+     "hex": "#C7D0F8",
+     "role": "the 52px no-photo strip, under the carbon tint at 8%"
+    },
+    {
+     "name": "Cornflower wash",
+     "hex": "#E1E6FC",
+     "role": "wash: the fee note, the 'Fee-free network' tag (BadgeCheck), the city-level line, FallbackDisclaimer and skeletons, always with carbon text (ink-3 fails here at 4.49:1)"
+    },
+    {
+     "name": "Copy white",
+     "hex": "#F7F8FE",
+     "role": "the receipt panel"
+    },
+    {
+     "name": "Slip paper",
+     "hex": "#F4F6FD",
+     "role": "paper: the page and the 12px mat"
+    },
+    {
+     "name": "Slip line",
+     "hex": "#D2D9F5",
+     "role": "line: card, chip, field, network-pill, MI/KM-pill, action-button and plate-circle borders"
+    }
+   ],
+   "pairs": [
+    {
+     "fg": "#15171C",
+     "bg": "#7487E6",
+     "ratio": 5.42,
+     "use": "Plate kicker 10.5px, title and italic 'nearby' 32px, place, 'Change' and MapPin; the Directions label 15px/600 and the search-submit icon; the crest icon on the cornflower disc"
+    },
+    {
+     "fg": "#15171C",
+     "bg": "#6A7BD1",
+     "ratio": 4.58,
+     "use": "Kicker where its tail runs into the security tint, on a full-strength 10% carbon tint line as rendered (the worst case; 4.62 in exact arithmetic)"
+    },
+    {
+     "fg": "#15171C",
+     "bg": "#FFFFFF",
+     "ratio": 17.93,
+     "use": "Card kicker and name, PLUS / CIRRUS pills, number-chip numeral, chip and plate-circle icons, action and quiet-row icons and the 'Expand radius' outline"
+    },
+    {
+     "fg": "#FFFFFF",
+     "bg": "#15171C",
+     "ratio": 17.93,
+     "use": "Active chip, 24/7 tag, MI active segment and the Back-to-top arrow"
+    },
+    {
+     "fg": "#15171C",
+     "bg": "#F4F6FD",
+     "ratio": 16.6,
+     "use": "Text on the slip paper"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#F4F6FD",
+     "ratio": 5.16,
+     "use": "Result line '17 BANKS · 27 OPEN NOW'"
+    },
+    {
+     "fg": "#15171C",
+     "bg": "#E1E6FC",
+     "ratio": 14.45,
+     "use": "Fee note 12.5px, 'Fee-free network' tag, FallbackDisclaimer and the city-level line on the wash"
+    },
+    {
+     "fg": "#15171C",
+     "bg": "#F7F8FE",
+     "ratio": 16.91,
+     "use": "Receipt values"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#F7F8FE",
+     "ratio": 5.25,
+     "use": "Receipt labels NETWORK / FEES / HOURS, mono 11.5px"
+    },
+    {
+     "fg": "#3A3128",
+     "bg": "#FFFFFF",
+     "ratio": 12.72,
+     "use": "Inactive chip labels 13px/600, the venue tag (white outline), inactive KM and the facts line (shared)"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#FFFFFF",
+     "ratio": 5.57,
+     "use": "Search placeholder, address and 'Hours not listed' (shared)"
+    },
+    {
+     "fg": "#7487E6",
+     "bg": "#FFFFFF",
+     "ratio": 3.3,
+     "use": "Directions fill against the white card; the white plate circles and MI/KM pill against the plate (non-text, needs 3:1)"
+    },
+    {
+     "fg": "#7487E6",
+     "bg": "#F4F6FD",
+     "ratio": 3.06,
+     "use": "Search-submit square against the paper (non-text, needs 3:1)"
+    },
+    {
+     "fg": "#15171C",
+     "bg": "#C7D0F8",
+     "ratio": 11.78,
+     "use": "CreditCard icon and the number chip's carbon border on the cornflower-mist strip (graphic; 10.10 on a tint line)"
+    },
+    {
+     "fg": "#2E6B4E",
+     "bg": "#FFFFFF",
+     "ratio": 6.3,
+     "use": "'Open 24 hours' / 'Open until 5:00 PM' (shared)"
+    },
+    {
+     "fg": "#B0472F",
+     "bg": "#FFFFFF",
+     "ratio": 5.54,
+     "use": "'Closed · opens 7 AM' (shared)"
+    }
+   ],
+   "masthead": "Plate cornflower #7487E6 (light): a saturated mid-tone stock, L* 58.7, built like Phrases, printed with the carbon security tint and set on slip paper #F4F6FD. Circles white with 1px #D2D9F5 and carbon icons, ChevronLeft and RefreshCw (17.93:1). Every word printed on the cornflower is carbon #15171C (5.42:1). Kicker mono 10.5px .16em: 'ATMS · 40 NEAR YOU · 27 OPEN NOW', each count only when real; where its tail runs into the tint it still measures 4.58:1. Title Instrument Serif 32px: 'Cash, *nearby*', the italic carbon too (the shape does the work, as on Phrases). Location row: a carbon MapPin, 'Downtown Los Angeles' 13px/600 and 'Change' 13px underlined, then MI/KM at right as a white pill with 1px #D2D9F5 holding two 44x30 mono 11px segments, each with a 44px-tall hit area (margin -7px 0, as on Eat; the artboard draws bare 40x30 buttons, so build to these numbers): active MI carbon with white (17.93:1), inactive KM #3A3128 (12.72:1). On the slip paper below: the two chip rows, then the fee note, a cornflower-wash panel (radius 12) with a 16px carbon Info and 12.5px carbon text (14.45:1): 'Fees vary by your bank: check before you withdraw.' The optional mono result line, '17 BANKS · 27 OPEN NOW' in #736657 (5.16:1), prints each fragment only when its count is real.",
+   "card": "White card on slip paper: radius 16, 1px #D2D9F5, shadow 0 10px 24px -18px rgba(21,23,28,.35). Photo 16:9; with no photo, as on every card drawn, a 52px no-photo strip in cornflower mist #C7D0F8 under the carbon tint at 8%, holding a 22px carbon CreditCard (11.78:1) beside the number. Strip or photo, the number sits at top left as a card chip: 30x24, radius 5, white with a 1px carbon border and two 1px carbon contact lines 5px inside its sides, around a carbon Instrument Serif 16px numeral (17.93:1); on the mist the carbon border is what draws it (11.78:1), since the white fill is only 1.52:1. At top right sit white network pills, 22px, 1px #D2D9F5, mono 11px .08em carbon, 'PLUS' and 'CIRRUS' (17.93:1), only for networks the data confirms (the list response carries no card networks today, so list cards print no pills until it does, and the artboard's pills only show where they will sit; AI cardCompatibility from /atm-ai-details stays in the labelled AI DETAILS row). Body, padding 12px 16px 14px: kicker mono 10.5px .12em carbon, 'BANK BRANCH · 7TH & FLOWER', 'BANK BRANCH' or 'STANDALONE ATM'; the name in Instrument Serif 24px carbon, 'Chase ATM'; one facts line 13px #3A3128: 'Open 24 hours' #2E6B4E (6.30:1) or 'Hours not listed' #736657 (5.57:1) · '0.2 mi', with the rating and its source ('★ 3.2 (29) Google') when there is one. The card signature is the receipt: a copy-white #F7F8FE panel, radius 12, padding 10px 12px, with a 1px dashed cornflower tear line along its top (inset 10px), set as a two-column mono 11.5px table, a 52px label column in #736657 (5.25:1) and values in carbon (16.91:1): 'NETWORK  Chase'; 'FEES  Free for Chase customers' over 'Others $3.00–$3.50 + your bank's fee', or 'Not listed: ask your bank'; 'HOURS  9:00 AM - 5:00 PM'. FEES says only what the data allows: a bank's own terms from the worker's ATM_NETWORKS table, never a typical range dressed as this ATM's fee. The artboard's Chase card shortens this to 'Free with Chase cards' and 'Others ~$3': build the wording and the full range given here. The cards drawn print the FEES row alone; NETWORK (the bank network from ATM_NETWORKS, which the list response carries) and HOURS (also in the facts line) are optional rows. The PLUS / CIRRUS pills are card networks, a different thing, and need data the list response does not carry yet. Up to three tags (the cards drawn carry none), stepped solid, pale, outline: '24/7' solid carbon with white (17.93:1); 'Fee-free network' on the cornflower wash with carbon and BadgeCheck (14.45:1) (only where ATM_NETWORKS marks a surcharge-free network, '$0 in-network': Allpoint, MoneyPass, CO-OP; never from a bank's 'Free for <bank> customers', which is a customer term, not a network, nor from the generic 'credit union' match, whose surcharge reads 'Varies'); the venue ('Bank branch', 'Grocery', 'Transit') as a white outline tag, 1px #D2D9F5, #3A3128 (12.72:1). No 'Best overall' or 'Safest' badges we can't prove. The address 13px #736657. Actions: Directions solid cornflower with a carbon label and Navigation; Map, Call and More as 44px white buttons, radius 14, 1px #D2D9F5, 18px carbon icons; Call only when there is a phone number (the standalone Citi ATM has none).",
+   "chips": "Two rows on the slip paper, 8px apart. Row 1: Open only (Clock), Open 24 hours (Moon), and 'Banks' as a dropdown chip with Landmark and a 14px #3A3128 ChevronDown that opens the Banks sheet. Row 2, fees and card networks: No-fee for my bank (BadgeCheck), Visa Plus (CreditCard), Mastercard Cirrus (CreditCard); the two network chips ship only once the list response carries verified networks per ATM (none does today; /atm-ai-details' cardCompatibility is an AI estimate), and No-fee for my bank needs the traveler's bank, which the app does not know. So Row 2 is not built yet (the artboard shows where it will sit); in its place Row 1 gains 'Surcharge-free' (BadgeCheck), on only for Allpoint, MoneyPass and CO-OP ATMs. 36px with 44px hit areas (margin -4px 0, so the rows stay 8px apart and the areas meet without overlapping; the artboard draws them as bare 36px buttons), radius 10, white, 1px #D2D9F5, 13px/600 #3A3128 (12.72:1) with 16px carbon icons; active carbon with white (17.93:1).",
+   "cta": "Directions: solid cornflower #7487E6 with a carbon 15px/600 label and Navigation (5.42:1); the fill holds 3.30:1 against the white card. Where a search field appears, its submit square matches: cornflower with a carbon Search (3.06:1 against the paper). Map, Call and More are 44px white buttons with 1px #D2D9F5 and carbon icons. 'Expand radius' is a carbon outline, and Back-to-top a 44px carbon circle with a white arrow (17.93:1).",
+   "motif": "The security tint printed in carbon: repeating-linear-gradient(45deg, #15171C 0 1px, transparent 1px 5px) layered with the same at -45 degrees on a layer at 10% opacity, under a left-to-right mask (clear to 38%, full by 84%), so the title sits on clean or barely tinted cornflower and the plate reads like the faint pattern on a carbon copy; even on a full-strength tint line carbon type measures 4.58:1 as rendered, so the tint stays at 10% (at 12% it falls under 4.5). The same tint at 8% runs across the cornflower-mist no-photo strip, unmasked. Each card echoes it twice: the white card chip with its carbon contacts, and the receipt's dashed cornflower tear line. Crest: a cornflower disc with a carbon CreditCard (5.42:1).",
+   "avoid": "Cornflower as text (3.30:1 on white, 3.06:1 on the slip paper) and white type on cornflower (3.30:1): every word printed on the cornflower, the plate and the Directions alike, is carbon. #3A3128 on the plate (3.84:1) and #736657 on the cornflower wash (4.49:1). A saturated bank-brand blue such as #1F5BD6, and bank or card-network colours (Chase or Visa blue, Mastercard red and yellow) in our chrome: networks are words in white pills. A grey or near-black plate: cash should not feel dull, and Coffee and Convenience already own the near-black plates. Rank badges ('Best overall', 'Safest'). Emoji tags (🏦 🆓 🕐). Fee amounts or card networks the data doesn't have."
+  },
+  {
+   "key": "money",
+   "page": "Money Exchange (src/pages/MoneyExchange.jsx)",
+   "world_name": "Banknote",
+   "personality": "Engraved banknote paper: deep currency green, a rose security ink, pale bond stock and guilloche borders. Exact and calm, with big serif-italic figures, rates that always say where and when they came from, and nothing invented.",
+   "palette": [
+    {
+     "name": "Banknote green",
+     "hex": "#245A36",
+     "role": "anchor (hue 140, moved off brand teal): plate type and kicker, figures, card kicker, Directions, active chips, crest disc"
+    },
+    {
+     "name": "Rose",
+     "hex": "#9C3A60",
+     "role": "accent: the italic word, the Swap ring and icon, one guilloche line"
+    },
+    {
+     "name": "Bond mint",
+     "hex": "#E2EEE6",
+     "role": "the plate (light); crest icon"
+    },
+    {
+     "name": "Mint wash",
+     "hex": "#DCEBDF",
+     "role": "wash: the converted-result field, skeletons, FallbackDisclaimer"
+    },
+    {
+     "name": "Rose tint",
+     "hex": "#F5E3EA",
+     "role": "dated rate tag, with #7E2A4B"
+    },
+    {
+     "name": "Bond",
+     "hex": "#F2F5EF",
+     "role": "paper: the page"
+    },
+    {
+     "name": "Bond line",
+     "hex": "#D3E2D8",
+     "role": "line: converter, card and chip borders"
+    }
+   ],
+   "pairs": [
+    {
+     "fg": "#245A36",
+     "bg": "#E2EEE6",
+     "ratio": 6.8,
+     "use": "Plate title and kicker"
+    },
+    {
+     "fg": "#9C3A60",
+     "bg": "#E2EEE6",
+     "ratio": 5.52,
+     "use": "Italic 'worth' (32px)"
+    },
+    {
+     "fg": "#245A36",
+     "bg": "#F2F5EF",
+     "ratio": 7.37,
+     "use": "Links on bond"
+    },
+    {
+     "fg": "#245A36",
+     "bg": "#FFFFFF",
+     "ratio": 8.11,
+     "use": "Amount figures, card kicker, currency chips"
+    },
+    {
+     "fg": "#245A36",
+     "bg": "#DCEBDF",
+     "ratio": 6.56,
+     "use": "Converted figure on the mint wash; FallbackDisclaimer"
+    },
+    {
+     "fg": "#FFFFFF",
+     "bg": "#245A36",
+     "ratio": 8.11,
+     "use": "Directions, active currency chip"
+    },
+    {
+     "fg": "#9C3A60",
+     "bg": "#FFFFFF",
+     "ratio": 6.59,
+     "use": "Swap ring and icon"
+    },
+    {
+     "fg": "#7E2A4B",
+     "bg": "#F5E3EA",
+     "ratio": 7.35,
+     "use": "Dated rate tag '1 USD = 0.92 EUR · Oct 12'"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#FFFFFF",
+     "ratio": 5.57,
+     "use": "Rate source line, 'Rates not listed: ask at the counter'"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#F2F5EF",
+     "ratio": 5.07,
+     "use": "Meta on bond"
+    },
+    {
+     "fg": "#E2EEE6",
+     "bg": "#245A36",
+     "ratio": 6.8,
+     "use": "Crest icon"
+    }
+   ],
+   "masthead": "Plate bond mint #E2EEE6 (light) with the guilloche along its bottom edge. Circles white with 1px #D3E2D8 and green icons. Kicker mono #245A36 (6.80:1): 'MONEY EXCHANGE · RATES UPDATED OCT 12, 2:10 PM'. Title Instrument Serif 32px #245A36: 'What your money is *worth*', the italic in rose #9C3A60 (5.52:1). One name everywhere, 'Money exchange', replacing 'Currency Exchange'. Location row with Change.",
+   "card": "The converter is the hero card and the signature: white, radius 22, 1px #D3E2D8, a 28px guilloche strip across its top. Mono 10px 'FROM' and 'TO' in #736657. The amount in Instrument Serif italic 44px #245A36 (8.11:1); the result in the same italic on the mint wash #DCEBDF (6.56:1). Currency pickers are white pills (a flag image and the mono code). Swap is a 44px circle with a 1.5px rose ring and a rose ArrowUpDown (6.59:1). Under it, mono 10.5px #736657: 'Mid-market rate from ExchangeRate-API · Updated Oct 12, 2:10 PM'. Until both currencies are set the result reads an em dash, never 0.00. Then a hairline 'OR' divider and 'Exchange near you', with a standard white search field (not a mint slab). Result cards: white, radius 16; mono kicker green 'CURRENCY EXCHANGE'; Instrument Serif 22px name; one facts line 'Open until 6 PM · 0.4 mi · ★ 4.1 (88) Google'; then 'Rates not listed: ask at the counter' in #736657, or, only when we truly have one, a rose-tint tag '1 USD = 0.92 EUR · Oct 12' (7.35:1). Directions solid green.",
+   "chips": "Quick currency chips under the converter (EUR, JPY, MXN, GBP, CAD): white, 1px #D3E2D8, JetBrains Mono 12px #245A36 with a flag image; active green with white text.",
+   "cta": "Directions: solid banknote green #245A36 with white (8.11:1). Swap is a rose outline circle. Conversion is live, so there is no Convert button.",
+   "motif": "Guilloche: an inline SVG band of three interlaced sine waves, 0.75px, two in #245A36 at 30% and one in #9C3A60 at 35%, phase-shifted 120 degrees, like a banknote's engraved border. It runs along the plate's bottom edge and across the converter's top.",
+   "avoid": "The old mint #0F9A6B (white text 3.59:1) and teal-leaning greens such as #1C5641 or malachite, which crowd the brand teal. A bare 0.00. Any rate without its source and time. Dollar-sign decoration, red and green market arrows, green-on-green input slabs."
+  },
+  {
+   "key": "weather",
+   "page": "Weather (src/pages/Weather.jsx)",
+   "world_name": "Bluebird",
+   "personality": "A classic travel poster on a sunlit wall: one flat sheet of clear bluebird sky, a single lemon word, a sunflower sun and warm whitewashed paper. Bright and confident, readable at a glance outdoors, with the day drawn as a diagram from real data and a plate that turns to midnight after local sunset.",
+   "palette": [
+    {
+     "name": "Bluebird",
+     "hex": "#0F6D9A",
+     "role": "anchor (HSL 199, L* 43.3): the flat day plate and the crest disc; on white and paper the 72px temperature, condition icons, chevrons, links and mono captions ('TAP FOR HOURLY', 'WHAT TO PACK'); washInk ('NOW' on the hourly cell); the active °F label, the Back-to-top fill, the day-arc dots and the 1.5px ring around the sun"
+    },
+    {
+     "name": "Cloud white",
+     "hex": "#FFFFFF",
+     "role": "ink on the plate: the title, the place, 'Change', the back and refresh icons and the inactive °C; also the fill of the active unit segment"
+    },
+    {
+     "name": "Haze",
+     "hex": "#DCEFFA",
+     "role": "the plate kicker"
+    },
+    {
+     "name": "Lemon",
+     "hex": "#FDEA53",
+     "role": "accent, on the plate only: the italic word and the MapPin, by day and, as the moon, on the night plate; never text on a light ground (1.23:1 on white)"
+    },
+    {
+     "name": "Sunflower",
+     "hex": "#FBDC13",
+     "role": "decorative sun, never text: the day-arc disk and its 28% halo, the warm end of the range bars, the crest icon (CloudSun); 1.36:1 on white, so the sun always wears a Bluebird ring"
+    },
+    {
+     "name": "Sky wash",
+     "hex": "#E2F0F9",
+     "role": "wash: the NOW hourly cell, the range-bar track, the What-to-pack disc, skeletons, FallbackDisclaimer and the city-level line, with Bluebird as washInk (the NOW cell's temperature stays #16110D)"
+    },
+    {
+     "name": "Lemon wash",
+     "hex": "#FFF2BF",
+     "role": "the UV chip's fill ('HIGH', from UV 6 up)"
+    },
+    {
+     "name": "Sun deep",
+     "hex": "#744F00",
+     "role": "UV chip text only"
+    },
+    {
+     "name": "Whitewash",
+     "hex": "#FAF8F1",
+     "role": "paper: the page and the 12px mat; warm, so the blue plate reads as sky on a sunlit wall"
+    },
+    {
+     "name": "Sky line",
+     "hex": "#D6E4ED",
+     "role": "line: now-card and forecast-sheet borders, the stats-row rules, row hairlines and the day-arc horizon"
+    },
+    {
+     "name": "Range cool",
+     "hex": "#9CCDEC",
+     "role": "the cool end of the range bars: linear-gradient(90deg, #9CCDEC 0%, #E3F1F9 42%, #FFEFAA 64%, #FBDC13 100%), whose pale middle stops keep the blue-to-yellow blend from going khaki"
+    },
+    {
+     "name": "Midnight",
+     "hex": "#0E1B26",
+     "role": "the night plate after local sunset: linear-gradient(160deg, #0E1B26, #0A1219), with cream #FBF6EC title and place, the lemon italic, a mist #BCD8EA kicker, and a cream active segment with a #0A1219 label"
+    }
+   ],
+   "pairs": [
+    {
+     "fg": "#DCEFFA",
+     "bg": "#0F6D9A",
+     "ratio": 4.83,
+     "use": "Plate kicker, mono 10.5px"
+    },
+    {
+     "fg": "#FFFFFF",
+     "bg": "#0F6D9A",
+     "ratio": 5.71,
+     "use": "Plate title 32px, place 13px/600 and 'Change' 13px; the Back-to-top arrow (graphic)"
+    },
+    {
+     "fg": "#FDEA53",
+     "bg": "#0F6D9A",
+     "ratio": 4.64,
+     "use": "Italic 'ahead' at 32px, held to 4.5 like every bright accent, and the plate MapPin"
+    },
+    {
+     "fg": "#FFFFFF",
+     "bg": "#277CA4",
+     "ratio": 4.66,
+     "use": "Inactive °C on the 10% white toggle track, and the back and refresh icons in the 10% white circles (both composited over Bluebird)"
+    },
+    {
+     "fg": "#0F6D9A",
+     "bg": "#FFFFFF",
+     "ratio": 5.71,
+     "use": "Active °F on the white segment; the 72px temperature, condition icons, chevrons, links and mono captions on white"
+    },
+    {
+     "fg": "#0F6D9A",
+     "bg": "#FEF5BD",
+     "ratio": 5.17,
+     "use": "The 1.5px ring around the sun, against its 28% sunflower halo (graphic; 4.17 against the #FBDC13 disk)"
+    },
+    {
+     "fg": "#0F6D9A",
+     "bg": "#FAF8F1",
+     "ratio": 5.37,
+     "use": "'TAP FOR HOURLY' and 'WHAT TO PACK' on the whitewash paper"
+    },
+    {
+     "fg": "#0F6D9A",
+     "bg": "#E2F0F9",
+     "ratio": 4.91,
+     "use": "'NOW' mono 9.5px on the sky-wash hourly cell, the Luggage icon on the What-to-pack disc, FallbackDisclaimer 13px and the city-level line"
+    },
+    {
+     "fg": "#744F00",
+     "bg": "#FFF2BF",
+     "ratio": 6.53,
+     "use": "'HIGH' UV chip beside the UV value, mono 9.5px"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#FAF8F1",
+     "ratio": 5.24,
+     "use": "'7-DAY FORECAST' kicker (shared ink-3) on paper"
+    },
+    {
+     "fg": "#3A3128",
+     "bg": "#FAF8F1",
+     "ratio": 11.97,
+     "use": "What-to-pack sentence on paper"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#FFFFFF",
+     "ratio": 5.57,
+     "use": "Stat labels, lows, dates, conditions, the 'F', and the sunrise and sunset times (shared)"
+    },
+    {
+     "fg": "#16110D",
+     "bg": "#FFFFFF",
+     "ratio": 18.74,
+     "use": "Stat values, highs, day names and hourly temperatures (shared)"
+    },
+    {
+     "fg": "#3A3128",
+     "bg": "#FFFFFF",
+     "ratio": 12.72,
+     "use": "'Sunny · Feels like 68°' 15px on the now card (shared)"
+    },
+    {
+     "fg": "#16110D",
+     "bg": "#E2F0F9",
+     "ratio": 16.12,
+     "use": "The current hour's temperature on the sky-wash NOW cell"
+    },
+    {
+     "fg": "#FBDC13",
+     "bg": "#0F6D9A",
+     "ratio": 4.17,
+     "use": "Crest icon (CloudSun) on the Bluebird disc (graphic, needs 3:1)"
+    },
+    {
+     "fg": "#FBF6EC",
+     "bg": "#0E1B26",
+     "ratio": 16.19,
+     "use": "Night plate title and place at the start stop (17.50 on the #0A1219 end)"
+    },
+    {
+     "fg": "#FDEA53",
+     "bg": "#0E1B26",
+     "ratio": 14.18,
+     "use": "Night italic, the lemon moon, and the MapPin (15.33 on the #0A1219 end)"
+    },
+    {
+     "fg": "#BCD8EA",
+     "bg": "#0E1B26",
+     "ratio": 11.75,
+     "use": "Night kicker and the rest of the location row (12.70 on the #0A1219 end)"
+    },
+    {
+     "fg": "#BCD8EA",
+     "bg": "#26323C",
+     "ratio": 8.82,
+     "use": "Night inactive °C on the 10% white track (composited over #0E1B26; 9.81 over #0A1219)"
+    },
+    {
+     "fg": "#FBF6EC",
+     "bg": "#26323C",
+     "ratio": 12.15,
+     "use": "Night back and refresh icons in the 10% white circles (composited over #0E1B26; graphic)"
+    },
+    {
+     "fg": "#0A1219",
+     "bg": "#FBF6EC",
+     "ratio": 17.5,
+     "use": "Night active °F label on the cream segment"
+    }
+   ],
+   "masthead": "Plate Bluebird #0F6D9A (dark) on whitewash #FAF8F1, flat: no gradient and no plate motif. Circles rgba(255,255,255,.10) with 1px rgba(255,255,255,.28) and white icons, ChevronLeft and RefreshCw (4.66:1 on the composited #277CA4). Kicker mono 10.5px .16em haze #DCEFFA (4.83:1): 'WEATHER · LOS ANGELES · UPDATED 2:10 PM'. It wraps to a second line rather than clipping, so 'UPDATED 2:10 PM' always shows at any city length or text size (leave out the artboard's white-space: nowrap, which fits only this city at 390px). Title Instrument Serif 32px white (5.71:1): 'The week *ahead*', the italic in lemon #FDEA53 (4.64:1, held to 4.5 at 32px like every bright accent). Location row: a lemon MapPin, 'Downtown Los Angeles' 13px/600 white and 'Change' 13px white, underlined. The °F/°C segmented control sits at right: a 34px pill with a rgba(255,255,255,.10) track and a 1px rgba(255,255,255,.28) border, the active segment white with a Bluebird 12px/700 '°F' (5.71:1), the inactive '°C' white (4.66:1). Each segment keeps a 44x44 hit area (min-width 44px); the artboard draws them about 36px wide. After local sunset the plate turns to midnight, linear-gradient(160deg, #0E1B26, #0A1219): cream #FBF6EC title and place (16.19:1) and circle icons (12.15:1 on the 10% white), the lemon italic and MapPin (14.18:1), mist #BCD8EA for the kicker and the rest of the location row (11.75:1; 8.82:1 for the inactive °C on the track), and the active segment cream with a #0A1219 label (17.50:1).",
+   "card": "The now card is the signature: white, radius 22, 1px #D6E4ED, 20px padding, the day arc across its top with 'SUNRISE 6:55 AM' and 'SUNSET 6:31 PM' in mono 10px #736657 at its feet. 'NOW · MONDAY, OCTOBER 12' in mono 10px #736657 (5.57:1). The temperature in Instrument Serif italic 72px Bluebird (5.71:1), '68°', with 'F' in mono 14px #736657; at right the day's range in Instrument Serif italic 24px, the high '74°' in #16110D (18.74:1) and the low '61°' in #736657, each after a mono 10px 'H' or 'L' (abbr High, Low). A 16px Bluebird condition icon (Sun) before 'Sunny · Feels like 68°' 15px #3A3128 (12.72:1). A 4-up stats row under a 1px #D6E4ED rule, divided by hairlines: mono 9.5px #736657 labels HUMIDITY / WIND / RAIN / UV INDEX over Instrument Serif 22px #16110D values, '48%', '6 mph', 'None', '6'. RAIN is today's chance of rain from the daily forecast (precipitation_probability), as 'N%', and 'None' at 0. UV 6 and up adds a lemon-wash chip beside the value with its level in words: 'HIGH' in mono 9.5px sun deep #744F00 on #FFF2BF (6.53:1). Then, on the paper, '7-DAY FORECAST' in mono 10.5px #736657 (5.24:1) with 'TAP FOR HOURLY' in mono 10px Bluebird at right (5.37:1), and the forecast as one sheet (white, radius 16, 1px #D6E4ED, 64px rows divided by 1px #D6E4ED), not seven boxed cards: the day in Instrument Serif 20px #16110D with a mono 10px date in #736657 ('Wednesday OCT 14') and the condition beneath in 12.5px #736657 ('Partly cloudy'); a 22px Bluebird lucide icon (Sun, CloudSun, Cloud, CloudDrizzle, CloudRain); the low in Instrument Serif 18px #736657; a 56x4px range bar on the week's scale (see motif), the numbers always printed; the high in Instrument Serif 22px #16110D; a 16px Bluebird ChevronDown, ChevronUp when open. An open row shows the hourly strip: 48px cells, the current hour on a sky-wash cell (radius 12) headed 'NOW' in mono 9.5px Bluebird (4.91:1), the rest with mono 9.5px #736657 times, 18px Bluebird icons (Moon after dark) and Instrument Serif 18px #16110D temperatures (16.12:1 on the NOW cell's wash); sunset gets its own cell: '6:31 PM' over a Bluebird Sunset and the word 'Sunset' in 11px #736657. The open row also keeps today's Droplets, Wind, Sun and Sunrise rows, in lucide in place of the emoji (kept from today's page; the artboard draws only the hourly strip). Last, on the paper, the What-to-pack line: a 36px sky-wash disc holding an 18px Bluebird Luggage, 'WHAT TO PACK' in mono 9.5px Bluebird (5.37:1) and one sentence built from the forecast in 13.5px #3A3128 (11.97:1): 'A light layer for 61° evenings, and an umbrella for Friday's light rain.'",
+   "chips": "Units only: the °F/°C segmented control in the plate. No search field and no chip row. 'TAP FOR HOURLY' in mono Bluebird (5.37:1 on whitewash) serves as the forecast sheet's caption, opposite the '7-DAY FORECAST' kicker.",
+   "cta": "One solid fill, the frame's cta: Bluebird #0F6D9A with white (5.71:1), used for the error card's 'Try again' and the 44px Back-to-top circle. On the plate, 'Change' is a white underlined link (5.71:1) and the active unit segment is white with a Bluebird label (5.71:1), cream with a #0A1219 label at night (17.50:1); those are plate colours, not the cta.",
+   "motif": "The day arc, inked and sunlit, across the top of the white now card and drawn from real data: an inline SVG dotted half-ellipse, 2px round dots on a 6px pitch (stroke-dasharray 0 6) in Bluebird, at 35% from sunrise to now and 15% for the rest of the day, over a 1px #D6E4ED horizon, with the sunrise and sunset times in mono #736657 at its feet; the dots (1.69:1 at 35%, 1.24:1 at 15%), the horizon (1.29:1) and the halo (1.10:1) are supplementary and exempt from 3:1, because the sunrise and sunset times are printed beneath, the role img label states them, and the ringed sun alone marks now; it is role img, labelled 'Day arc from sunrise at 6:55 AM to sunset at 6:31 PM, the sun past midday'. The sun at the current time is a 12px sunflower #FBDC13 disk in a 22px sunflower halo at 28%; sunflower alone is 1.36:1 on white, so its 1.5px Bluebird ring is what makes it read (5.17:1 against the 28% halo #FEF5BD around it, 4.17:1 against the disk). After sunset the disk becomes a 1.5px Bluebird crescent, and on the midnight plate the lemon italic becomes the moon. The range bars carry the same sky-to-sun scale: linear-gradient(90deg, #9CCDEC 0%, #E3F1F9 42%, #FFEFAA 64%, #FBDC13 100%) pinned to the whole 56px sky-wash #E2F0F9 track (background-size 56px, offset by the bar's start), so a cool day's bar shows sky and a warm day's shows sun, with the numbers always printed. The bar is aria-hidden and supplementary: its fill measures 1.00 to 1.46:1 on the track, exempt from 3:1 only because both numbers are printed. The plate stays flat and motif-free: the saturated sky is the statement. Crest: a Bluebird disc with a sunflower CloudSun (4.17:1).",
+   "avoid": "A gradient, texture or motif on the day plate: the flat sky is the statement. Lemon or sunflower as text on a light ground (lemon 1.23:1 and sunflower 1.36:1 on white), and white text on either. The sunflower sun without its Bluebird ring. A two-stop blue-to-yellow range bar, which muddies to khaki in the middle. Nudging Bluebird toward cyan: at HSL 199 it already sits only 24 degrees from the brand teal. The orange-to-red sunset card (white on #D4861A 2.90:1) and amber 'UV' text. Emoji weather icons. A boxed card per day. Temperatures told by colour alone."
+  },
+  {
+   "key": "phrases",
+   "page": "Phrases (src/pages/BasicPhrases.jsx)",
+   "world_name": "Pocket Phrasebook",
+   "personality": "A clothbound pocket phrasebook: mustard cloth, black ink, a thumb index cut into the fore-edge, parchment pages. The book you pull out at a market stall, organized like a proper reference. One of the set's two mid-tone plates, with ATMs' cornflower.",
+   "palette": [
+    {
+     "name": "Mustard cloth",
+     "hex": "#D9A73E",
+     "role": "anchor: the plate, thumb-index tabs, speaker buttons, crest disc"
+    },
+    {
+     "name": "Book ink",
+     "hex": "#24190A",
+     "role": "ink: all type on mustard (the italic stays ink; the shape does the work), search submit, translations, crest icon"
+    },
+    {
+     "name": "Ochre deep",
+     "hex": "#6E4C0B",
+     "role": "text-safe accent on parchment and white: kickers, pronunciation"
+    },
+    {
+     "name": "Mustard wash",
+     "hex": "#F5E6C0",
+     "role": "wash: Say it and Formal / Casual chips, skeletons, FallbackDisclaimer"
+    },
+    {
+     "name": "Stamp red",
+     "hex": "#B0472F",
+     "role": "Food allergies and Emergency tabs, the PRIORITY kicker"
+    },
+    {
+     "name": "Parchment",
+     "hex": "#FAF4E4",
+     "role": "paper: the page"
+    },
+    {
+     "name": "Page line",
+     "hex": "#EADBB5",
+     "role": "line: row borders, phrase hairlines"
+    }
+   ],
+   "pairs": [
+    {
+     "fg": "#24190A",
+     "bg": "#D9A73E",
+     "ratio": 7.84,
+     "use": "Plate title, kicker and location row; speaker icons; crest icon"
+    },
+    {
+     "fg": "#24190A",
+     "bg": "#FAF4E4",
+     "ratio": 15.7,
+     "use": "Titles on parchment"
+    },
+    {
+     "fg": "#6E4C0B",
+     "bg": "#FAF4E4",
+     "ratio": 7.08,
+     "use": "Kickers on parchment"
+    },
+    {
+     "fg": "#6E4C0B",
+     "bg": "#FFFFFF",
+     "ratio": 7.77,
+     "use": "Pronunciation mono 12px; 'ESSENTIAL' on rows"
+    },
+    {
+     "fg": "#FFFFFF",
+     "bg": "#24190A",
+     "ratio": 17.24,
+     "use": "Search submit"
+    },
+    {
+     "fg": "#6E4C0B",
+     "bg": "#F5E6C0",
+     "ratio": 6.28,
+     "use": "Say it and formality chips; FallbackDisclaimer"
+    },
+    {
+     "fg": "#B0472F",
+     "bg": "#FFFFFF",
+     "ratio": 5.54,
+     "use": "'PRIORITY' kicker"
+    },
+    {
+     "fg": "#FFFFFF",
+     "bg": "#B0472F",
+     "ratio": 5.54,
+     "use": "Priority tab icon"
+    },
+    {
+     "fg": "#24190A",
+     "bg": "#FFFFFF",
+     "ratio": 17.24,
+     "use": "Translations, serif 24px"
+    },
+    {
+     "fg": "#3A3128",
+     "bg": "#FFFFFF",
+     "ratio": 12.73,
+     "use": "English source line"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#FAF4E4",
+     "ratio": 5.08,
+     "use": "Subtitles and meta"
+    }
+   ],
+   "masthead": "Plate mustard cloth #D9A73E with a faint weave (1px #24190A lines at 4%, 3px pitch, crossed). Circles parchment #FAF4E4 with 1px #24190A and ink icons. Kicker mono #24190A (7.84:1): 'PHRASEBOOK · SPANISH'. Title Instrument Serif 32px #24190A: 'Say it in *Spanish*', the language as the italic, or 'Say it *like a local*' where the language is your own. The location row in ink with Change, which fixes today's blank 'LOCATION ,'. On parchment below: the 'Search words or phrases…' white field with an ink submit square holding a white Search (17.24:1), then the mono #6E4C0B kicker 'PHRASEBOOK' and Instrument Serif 24px 'Pick a *situation*'.",
+   "card": "Situation rows on parchment, the signature: white, radius 16, 1px #EADBB5, 72px tall, each with a thumb-index tab, a 30x48 half-round mustard tab on its left edge holding an 18px ink lucide icon (Globe, Map, CarTaxiFront, BedDouble, Wallet, ShoppingBasket, WheatOff, Siren, MapPin, Hash). Mono 9.5px #6E4C0B 'ESSENTIAL'; Instrument Serif 22px ink 'Essential basics'; 13px #736657 'Polite & general communication'; a ChevronDown in a 32px circle with a 44px hit area. Food allergies and Emergency help get a stamp-red tab with a white icon and the kicker 'PRIORITY' in stamp red. An open phrase: the English 14px #3A3128; the translation in Instrument Serif 24px #24190A; the pronunciation in mono 12px #6E4C0B, 'OO-nah KOH-pah' (7.77:1); a 44px mustard speaker button with an ink Volume2; Formal / Casual and 'Say it' as mustard-wash chips (6.28:1). Phrases are divided by hairlines, never inner boxes.",
+   "chips": "No chip row: the situation index is the navigation. Formal / Casual and 'Say it' chips live inside an open situation; the language picker is a white pill with the Languages icon.",
+   "cta": "Search submit: book ink #24190A with white (17.24:1). Speakers: mustard circles with ink icons (7.84:1). No other solid buttons.",
+   "motif": "The thumb index: the half-round tabs cut into a dictionary's fore-edge, one on every situation row, mustard for everyday and stamp red for allergies and emergencies, so the list reads like a reference you can thumb to the right page.",
+   "avoid": "The old gold #A37013 (white text 4.30:1). Yellow or mustard as text on parchment or white. Emoji situation tiles (🌎 🗺️ 🚕 🏨). Caveat or hand-lettering. Serif italic for pronunciation (pronunciation is mono). A blank location line."
+  },
+  {
+   "key": "culture",
+   "page": "Culture (src/pages/CultureInformation.jsx)",
+   "world_name": "Museum Catalogue",
+   "personality": "A museum's collection catalogue: olive cloth, brass accession tags, stone-white pages. Curious and respectful, presenting a country like a well-hung exhibition, every entry numbered, nothing shouting, never a stereotype.",
+   "palette": [
+    {
+     "name": "Olive",
+     "hex": "#3F4A22",
+     "role": "anchor: plate, kickers, DO lists, links, active chips, crest disc"
+    },
+    {
+     "name": "Brass",
+     "hex": "#D8B565",
+     "role": "accent on olive: the italic word, the crest icon"
+    },
+    {
+     "name": "Brass deep",
+     "hex": "#6E5414",
+     "role": "accession numerals on white"
+    },
+    {
+     "name": "Brass line",
+     "hex": "#A9823A",
+     "role": "accession-tag borders, decorative only (3.13:1 on stone)"
+    },
+    {
+     "name": "Stone type",
+     "hex": "#F1EEE4",
+     "role": "ink on olive: plate title"
+    },
+    {
+     "name": "Index",
+     "hex": "#CFCDB8",
+     "role": "plate kicker and section index"
+    },
+    {
+     "name": "Olive wash",
+     "hex": "#E7EAD9",
+     "role": "wash: chips, skeletons, FallbackDisclaimer"
+    },
+    {
+     "name": "Stamp red",
+     "hex": "#B0472F",
+     "role": "DON'T and SAFETY"
+    },
+    {
+     "name": "Stone",
+     "hex": "#F3F1EA",
+     "role": "paper: the page"
+    },
+    {
+     "name": "Catalogue line",
+     "hex": "#DEDBCC",
+     "role": "line: entry borders and hairlines"
+    }
+   ],
+   "pairs": [
+    {
+     "fg": "#F1EEE4",
+     "bg": "#3F4A22",
+     "ratio": 8.17,
+     "use": "Plate title"
+    },
+    {
+     "fg": "#D8B565",
+     "bg": "#3F4A22",
+     "ratio": 4.84,
+     "use": "Italic 'go' (32px); crest icon"
+    },
+    {
+     "fg": "#CFCDB8",
+     "bg": "#3F4A22",
+     "ratio": 5.91,
+     "use": "Plate kicker and section index"
+    },
+    {
+     "fg": "#3F4A22",
+     "bg": "#F3F1EA",
+     "ratio": 8.39,
+     "use": "Text on stone"
+    },
+    {
+     "fg": "#3F4A22",
+     "bg": "#FFFFFF",
+     "ratio": 9.49,
+     "use": "DO list, entry icons, links"
+    },
+    {
+     "fg": "#FFFFFF",
+     "bg": "#3F4A22",
+     "ratio": 9.49,
+     "use": "Active chip, Refresh guide"
+    },
+    {
+     "fg": "#6E5414",
+     "bg": "#FFFFFF",
+     "ratio": 7.14,
+     "use": "Accession numeral 'No. 04'"
+    },
+    {
+     "fg": "#B0472F",
+     "bg": "#FFFFFF",
+     "ratio": 5.54,
+     "use": "DON'T and SAFETY kickers"
+    },
+    {
+     "fg": "#3F4A22",
+     "bg": "#E7EAD9",
+     "ratio": 7.75,
+     "use": "Chips; FallbackDisclaimer on the wash"
+    },
+    {
+     "fg": "#3A3128",
+     "bg": "#FFFFFF",
+     "ratio": 12.73,
+     "use": "Entry body"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#F3F1EA",
+     "ratio": 4.93,
+     "use": "Meta and loading line on stone"
+    }
+   ],
+   "masthead": "Plate olive #3F4A22. Circles rgba(241,238,228,.10) with 1px rgba(241,238,228,.30) and stone icons. Kicker mono #CFCDB8 (5.91:1): 'CULTURE GUIDE · UNITED STATES'. Title Instrument Serif 32px #F1EEE4 (8.17:1): 'Know before you *go*', the italic in brass #D8B565 (4.84:1). Under it, a one-line section index in mono #CFCDB8: 'No. 01 ABOUT · 04 ETIQUETTE · 07 FOOD · 11 SAFETY', each tapping to its entry. While loading, the plate shows with three stone skeleton entries below it and 'LOADING CULTURE GUIDE…' in mono #736657 (4.93:1), instead of a lone spinner on a blank page.",
+   "card": "Each section is a catalogue entry, the signature: white, radius 16, 1px #DEDBCC, 18px padding. Header: the accession tag (mono 10.5px #6E5414 'No. 04' in a 1px #A9823A tag, radius 4; 7.14:1), Instrument Serif 22px ink 'Etiquette', an 18px olive lucide icon at right (Landmark, Languages, Handshake, Utensils, ShieldCheck, ScrollText), and a hairline beneath. Bodies by kind: key-value pairs (a mono 9.5px #736657 label over a 15px #3A3128 value); chips in olive wash with olive text (7.75:1); Do / Don't lists, 'DO' in mono olive with Check and 'DON'T' in mono stamp red with X, the words leading; dishes, heroes and festivals as 2-up white tiles with serif names; tipping as a mono two-column table; SAFETY in stamp red with scams and tips as hairline bullets; the travel advisory as outline rows naming each source (U.S. State Department, UK FCDO, Canada, Australia) with ExternalLink and 'Updated Oct 12' as text. Alternate 1-up text entries with 2-up tiles so the page never becomes a wall of identical boxes.",
+   "chips": "When scrolled, the section index sticks under the plate as chips on stone: white, 1px #DEDBCC, #3A3128; active olive with white. City | Country, where the page offers it, is a 44px two-segment control (active olive with white).",
+   "cta": "Quiet: advisory links are olive and underlined; the 'Listen' speaker for basic greetings is a 40px olive outline circle with a 44px hit area; 'Refresh guide' is olive with white (9.49:1).",
+   "motif": "Accession tags: every section opens with a small brass-bordered mono tag numbered in reading order, like objects in a catalogue, and the plate's section index uses the same numbers.",
+   "avoid": "Brown on brown (#8B5A1A today). Emoji section icons (🏛️ 🕌 🗣️ 🍽️). Flags as decoration beyond the country line. Brass #A9823A as small text. Verdict colours without the words Do and Don't. A full-screen spinner."
+  },
+  {
+   "key": "convenience",
+   "page": "Convenience / 24h stores (src/pages/ConvenienceStore.jsx)",
+   "world_name": "Night Shift",
+   "personality": "The corner store at 2 a.m.: an aubergine night sky, one lit window, crisp fluorescent white inside. Dependable and slightly nocturnal, never neon-loud: the light only comes on where the data says the store is open all night.",
+   "palette": [
+    {
+     "name": "Night",
+     "hex": "#2C1A35",
+     "role": "anchor (hue 280, kept clear of lapis): plate, Directions and search fill, 24-hour pill, card kicker, active chip, crest disc"
+    },
+    {
+     "name": "Lime",
+     "hex": "#C6E25A",
+     "role": "accent, only on night: the italic word, the kicker, the lit-window line, the Directions label, 24-hour text, crest icon (1.46:1 on white, never on light)"
+    },
+    {
+     "name": "Night white",
+     "hex": "#F3F0F7",
+     "role": "ink on night: plate title"
+    },
+    {
+     "name": "Moonlight",
+     "hex": "#C9BFD8",
+     "role": "the plate's location row"
+    },
+    {
+     "name": "Lime wash",
+     "hex": "#EEF5D6",
+     "role": "wash: the 24-hour tag on light (text #3E4F0E), skeletons, FallbackDisclaimer"
+    },
+    {
+     "name": "Fluorescent",
+     "hex": "#F4F5F1",
+     "role": "paper: the page"
+    },
+    {
+     "name": "Shelf line",
+     "hex": "#DEDCE4",
+     "role": "line: card and chip borders"
+    }
+   ],
+   "pairs": [
+    {
+     "fg": "#F3F0F7",
+     "bg": "#2C1A35",
+     "ratio": 14.25,
+     "use": "Plate title"
+    },
+    {
+     "fg": "#C6E25A",
+     "bg": "#2C1A35",
+     "ratio": 11.04,
+     "use": "Kicker, italic 'store', 'Open 24 hours' pill, Directions label, active chip label, crest icon"
+    },
+    {
+     "fg": "#C9BFD8",
+     "bg": "#2C1A35",
+     "ratio": 9.13,
+     "use": "Location row on the plate"
+    },
+    {
+     "fg": "#2C1A35",
+     "bg": "#F4F5F1",
+     "ratio": 14.68,
+     "use": "Text on the page"
+    },
+    {
+     "fg": "#2C1A35",
+     "bg": "#FFFFFF",
+     "ratio": 16.08,
+     "use": "Card kicker '7-ELEVEN', chain pill, tag icons"
+    },
+    {
+     "fg": "#2E6B4E",
+     "bg": "#FFFFFF",
+     "ratio": 6.31,
+     "use": "'Open until 11 PM' pill"
+    },
+    {
+     "fg": "#B0472F",
+     "bg": "#FFFFFF",
+     "ratio": 5.54,
+     "use": "'Closed' pill"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#FFFFFF",
+     "ratio": 5.57,
+     "use": "'Hours not listed' pill"
+    },
+    {
+     "fg": "#3E4F0E",
+     "bg": "#EEF5D6",
+     "ratio": 8.01,
+     "use": "24-hour tag on light; FallbackDisclaimer"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#F4F5F1",
+     "ratio": 5.09,
+     "use": "Meta on the page"
+    }
+   ],
+   "masthead": "Plate night #2C1A35. Circles rgba(243,240,247,.10) with 1px rgba(243,240,247,.30) and white icons. Kicker mono lime #C6E25A (11.04:1): 'CONVENIENCE · 50 NEARBY · 12 OPEN 24 HOURS', the second fragment only when known. Title Instrument Serif 32px #F3F0F7 (14.25:1): 'The corner *store*', the italic in lime. Location row in moonlight #C9BFD8 (9.13:1) with Change and MI/KM (active segment night white with night text). A 3px lime line runs along the plate's bottom edge: the lit shop window. On fluorescent below: the chips.",
+   "card": "White card on fluorescent: radius 16, 1px #DEDCE4. Photo 16:10. Stores open 24 hours get a 3px lime line along the photo's bottom edge, the card signature: the light is on. One status pill on the photo, stepped by lightness and word: 'Open 24 hours' night with lime text and Moon (11.04:1); 'Open until 11 PM' white with #2E6B4E (6.31:1); 'Closed' white with #B0472F (5.54:1); 'Hours not listed' white with #736657 (5.57:1). Number: a night serif numeral in a 28px white circle. Body: kicker mono night '7-ELEVEN' (16.08:1); Instrument Serif 24px name; one facts line '0.2 mi · ★ 3.5 Google'; up to three white outline tags with 14px night icons: ATM (Landmark), Hot food (Soup), Coffee, Pharmacy (Pill), and store specials such as Slurpee; on light paper the 24-hour tag is lime wash with #3E4F0E (8.01:1). The chain badge on the photo is a white pill with the chain's name in night ink; chain colours stay inside the photo. Actions: Directions night with a lime label, Map, Call, More.",
+   "chips": "Open now (Clock), 24 hours (Moon), Filters (ATM and Hot food live inside). White, 1px #DEDCE4, #3A3128; active night with a lime label (11.04:1).",
+   "cta": "Directions: night #2C1A35 filled, lime #C6E25A label 15px/600 (11.04:1), the lit sign; the search submit matches.",
+   "motif": "The lit window: one 3px lime line, along the plate's bottom edge and along the photo edge of every store that is open 24 hours. No glow, no neon tubes, no flicker, no dots.",
+   "avoid": "Midnight navy, which would share lapis's hue family. Glow or blur on any text. Lime as text on light. Chain colours (7-Eleven orange) in our chrome. Emoji tags (🌙 🏧 🍔). A cyan '24/7' dot."
+  },
+  {
+   "key": "shopping",
+   "page": "Shopping (src/pages/Shopping.jsx)",
+   "world_name": "The Boutique",
+   "personality": "A boutique's tissue paper and ribbon: deep plum, blush tissue, a brass eyelet on the swing tag. Treat-yourself classy, with the browse of a good market.",
+   "palette": [
+    {
+     "name": "Plum",
+     "hex": "#5A2352",
+     "role": "anchor: plate type and kicker, card kicker, Directions, active chips, tag text, crest disc"
+    },
+    {
+     "name": "Blush",
+     "hex": "#F5E1E2",
+     "role": "the plate (light); swing-tag fill; crest icon"
+    },
+    {
+     "name": "Brass deep",
+     "hex": "#7A5718",
+     "role": "the italic word"
+    },
+    {
+     "name": "Brass",
+     "hex": "#A57B33",
+     "role": "swing-tag border, eyelet and string, decorative only (3.06:1 on blush)"
+    },
+    {
+     "name": "Brass text",
+     "hex": "#6F5016",
+     "role": "small brass text on petal"
+    },
+    {
+     "name": "Blush wash",
+     "hex": "#F5E4E6",
+     "role": "wash: tags, skeletons, FallbackDisclaimer"
+    },
+    {
+     "name": "Petal",
+     "hex": "#FBF4F4",
+     "role": "paper: the page"
+    },
+    {
+     "name": "Tissue line",
+     "hex": "#EBD7DA",
+     "role": "line: card and chip borders"
+    }
+   ],
+   "pairs": [
+    {
+     "fg": "#5A2352",
+     "bg": "#F5E1E2",
+     "ratio": 9.32,
+     "use": "Plate title and kicker; swing-tag numerals"
+    },
+    {
+     "fg": "#7A5718",
+     "bg": "#F5E1E2",
+     "ratio": 5.23,
+     "use": "Italic 'markets' (32px)"
+    },
+    {
+     "fg": "#5A2352",
+     "bg": "#FBF4F4",
+     "ratio": 10.77,
+     "use": "Links on petal"
+    },
+    {
+     "fg": "#5A2352",
+     "bg": "#FFFFFF",
+     "ratio": 11.69,
+     "use": "Card kicker, category pill on the photo"
+    },
+    {
+     "fg": "#FFFFFF",
+     "bg": "#5A2352",
+     "ratio": 11.69,
+     "use": "Directions, active chip, active List | Map segment"
+    },
+    {
+     "fg": "#5A2352",
+     "bg": "#F5E4E6",
+     "ratio": 9.53,
+     "use": "Tags; FallbackDisclaimer on the wash"
+    },
+    {
+     "fg": "#6F5016",
+     "bg": "#FBF4F4",
+     "ratio": 6.82,
+     "use": "Brass text on petal"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#FBF4F4",
+     "ratio": 5.14,
+     "use": "Meta on petal"
+    },
+    {
+     "fg": "#736657",
+     "bg": "#FFFFFF",
+     "ratio": 5.57,
+     "use": "'FEW REVIEWS'"
+    },
+    {
+     "fg": "#F5E1E2",
+     "bg": "#5A2352",
+     "ratio": 9.32,
+     "use": "Crest icon"
+    }
+   ],
+   "masthead": "Plate blush #F5E1E2 (light). Circles white with 1px #EBD7DA and plum icons. Kicker mono #5A2352 (9.32:1): 'SHOPPING'. Title Instrument Serif 32px #5A2352: 'Shops & *markets*', the italic in brass deep #7A5718 (5.23:1). A swing tag hangs to the right of the title carrying the count, '30 NEARBY'. Location row with Change and MI/KM (active segment plum with white). On petal below: the chips and a List | Map segment.",
+   "card": "White card on petal: radius 16, 1px #EBD7DA. Photo 16:10, single or the split pair with a 2px white gutter. The number hangs on a swing tag at top left, the card signature. The category on the photo is a white pill with plum mono 'SOUVENIR MARKET' (11.69:1) and a lucide Gift, Store or Gem. Body: kicker mono plum; Instrument Serif 24px name, exactly as the store writes it; one facts line 'Open until 5:00 PM' #2E6B4E · '1.0 mi' · '★ 5.0 (1) Google', plus a mono 'FEW REVIEWS' in #736657 under five reviews; up to three blush-wash tags with plum text (Local crafts, Bargain / haggle, Duty free; 9.53:1); 'Luxury' is a plum outline tag with Gem. Actions: Directions solid plum, Map, Call, More.",
+   "chips": "Row 1: Open now (Clock), Luxury (Gem), Filters, and the List | Map segment. Row 2: Groceries, Shopping, Souvenirs, Bazaars, Malls, Outlets, Night markets, Crafts, Duty free. White, 1px #EBD7DA, #3A3128; active plum with white. No emoji tiles and no 'All'.",
+   "cta": "Directions: solid plum #5A2352 with white (11.69:1). List | Map uses a plum active segment.",
+   "motif": "The swing tag: each card's number hangs on a 34x22 blush price tag with a pointed left end (clip-path: polygon(8px 0, 100% 0, 100% 100%, 8px 100%, 0 50%)), a 1px #A57B33 border, a 4px punched eyelet, a 12px brass string curving to the photo corner, and a plum serif numeral (9.32:1). One larger tag on the plate carries the count.",
+   "avoid": "Electric violet #7C3AED, a cousin of the Restrooms iris. Pink-purple gradients. Emoji category tiles. Brass #A57B33 as text. Restyling all-caps store names. A '5.0' without its review count. A fourth colour for Luxury."
+  }
+ ],
+ "shared_finder_frame": "Every finder is the same page printed on a different stock; only tokens change. (1) Tokens. Add WORLD to src/components/redesign/constants.js (and colors.world in tailwind.config.js), one entry per key: paper, plate (fill or gradient), mode (dark or light), plateTitle, plateKicker, plateAccent, ink (text-safe on white and paper), accentText where it differs, cta, ctaInk, wash, washInk, line, crest, crestIcon, icon (lucide) and motif (component). Values: eat {#FAF3EC, #7A1D33, dark, #FBF1E6, #EBC98F, #E8AE4C, #7A1D33, -, #7A1D33, #FFFFFF, #F8EACB, #5E3F08, #E9D8CB, #7A1D33, #E8AE4C, UtensilsCrossed, MenuLeader}; coffee {#F5EDE2, #2B1B12, dark, #F3DFC1, #D9BE98, #E5672A, #2B1B12, #A9481B, #E5672A, #2B1B12, #F2E3CD, #2B1B12, #E6D7C3, #2B1B12, #E5672A, Coffee, CupRing}; todo {#F5F0E6, #213E8C, dark, #F7F1E3, #E8D6B0, #F2A47E, #213E8C, #A64826, #213E8C, #FFFFFF, #E3E8F4, #213E8C, #E3DBCB, #213E8C, #F2A47E, Compass, Contours}; restroom {#F7F6FB, #E6E0F5, light, #45388A, #45388A, #2F6046, #45388A, -, #45388A, #FFFFFF, #ECE8F7, #45388A, #DDD7EE, #45388A, #E6E0F5, Toilet, Tile}; atm {#F4F6FD, #7487E6, light, #15171C, #15171C, #15171C, #15171C, -, #7487E6, #15171C, #E1E6FC, #15171C, #D2D9F5, #7487E6, #15171C, CreditCard, SecurityTint}; money {#F2F5EF, #E2EEE6, light, #245A36, #245A36, #9C3A60, #245A36, -, #245A36, #FFFFFF, #DCEBDF, #245A36, #D3E2D8, #245A36, #E2EEE6, Banknote, Guilloche}; weather {#FAF8F1, #0F6D9A (night after sunset: 160deg #0E1B26 to #0A1219), dark, #FFFFFF (#FBF6EC), #DCEFFA (#BCD8EA), #FDEA53, #0F6D9A, -, #0F6D9A, #FFFFFF, #E2F0F9, #0F6D9A, #D6E4ED, #0F6D9A, #FBDC13, CloudSun, DayArc}; phrases {#FAF4E4, #D9A73E, light, #24190A, #24190A, #24190A, #24190A, #6E4C0B, #24190A, #FFFFFF, #F5E6C0, #6E4C0B, #EADBB5, #D9A73E, #24190A, Languages, ThumbIndex}; culture {#F3F1EA, #3F4A22, dark, #F1EEE4, #CFCDB8, #D8B565, #3F4A22, #6E5414, #3F4A22, #FFFFFF, #E7EAD9, #3F4A22, #DEDBCC, #3F4A22, #D8B565, Landmark, AccessionTag}; convenience {#F4F5F1, #2C1A35, dark, #F3F0F7, #C6E25A, #C6E25A, #2C1A35, -, #2C1A35, #C6E25A, #EEF5D6, #3E4F0E, #DEDCE4, #2C1A35, #C6E25A, Store, LitWindow}; shopping {#FBF4F4, #F5E1E2, light, #5A2352, #5A2352, #7A5718, #5A2352, #6F5016, #5A2352, #FFFFFF, #F5E4E6, #5A2352, #EBD7DA, #5A2352, #F5E1E2, ShoppingBag, SwingTag}. WORLD.eat replaces CAT.food; keep CAT as an alias until every page has moved. src/components/finder/FinderHeader.jsx becomes the plate and takes worldKey instead of catKey; Things to Do, Money, Weather, Phrases and Culture move onto it too. Motifs are small inline-SVG or CSS components in src/components/finder/motifs/, aria-hidden and pointer-events none. No new dependencies: lucide-react 0.475 already has every icon this bible names, and everything else is CSS gradients, masks and inline SVG. (2) Page. The world's paper is the page ground. Under the banner, a 12px mat in that paper, then the plate. (3) The plate. Inset 16px (it spans the content column on iPad), radius 22, padding 12px 16px 18px, min-height 164px, overflow hidden. Row 1, 44px: the back circle at left, the refresh circle at right (a 44px spacer when the page has no refresh). On dark plates the circles are rgba(255,255,255,.10) with a 1px rgba(255,255,255,.28) border and plateTitle icons; on light plates they are white with a 1px world line and ink icons. Row 2: the kicker, JetBrains Mono 10.5px/600 .16em uppercase in plateKicker, 'NAME · COUNT NEAR YOU', the count only once it is real (never 0, never a placeholder). Row 3: the title, Instrument Serif calc(32px*var(--fs))/1.05 in plateTitle, at most two lines and max-width 72% so the motif never sits under type, with exactly one italic word in plateAccent; a search may rewrite it with the query as the italic. Row 4: the location row, lucide MapPin 14px in plateAccent, the place 13px/600 (truncating), 'Change' 13px underlined with a 44px hit area, and the DistanceUnitToggle (MI/KM) at right as a pill (dark plates: the active segment in plateTitle with plate-colour text; light plates: the active segment in ink with white). The motif stays at 35% opacity or less and out from under the type: most sit in the right third, and those that cover the plate (tile, security tint, weave) are masked to fade under the title. City-level locations add one line under the plate, on the world wash in washInk with a lucide Info: 'Showing places across Los Angeles: {CITY_DISCLAIMER}', replacing today's weather-yellow Lightbulb callout. (4) Below the plate, on the paper, in this order: search (a 48px white field, radius 14, 1px world line, #736657 placeholder at 5.57:1, lucide Search, and a 48px submit square in cta with a ctaInk icon); chips (36px tall with 44px hit areas, radius 10; inactive white with the world line and a #3A3128 13px/600 label; active in the world's ink with white, except coffee (espresso with crema) and convenience (night with lime), plus a 12px X to clear; Open now first; when a world has more than six chips, the utility chips (Open now, Filters, any List | Map) take their own first row and the categories scroll in a second, so Filters never scrolls out of reach; a filter count lives inside its chip as mono 'FILTERS · 2' and hides at zero; no 'All' chip); then an optional mono #736657 result line. (5) The result card. White, radius 16, 1px world line, shadow 0 10px 24px -18px in the world ink at 35%, 12px apart (2-up with 16px gaps on iPad). Photo 16:10 (16:9 for Restrooms and ATMs) or the world's no-photo strip with its motif and lucide icon, never an emoji or a stock image. The number at top left: a plain serif numeral in a 28px white circle, except where the world gives it a shape (coffee's ring, ATM's chip, shopping's swing tag). Then, with 16px padding: the mono kicker (10.5px .12em, world ink); the name in Instrument Serif 24px with a two-line clamp; 'Say it · Translate' as quiet links where the page has them; ONE facts line at 13px, the open state in words ('Open until 1:30 PM' #2E6B4E at 6.31:1, or 'Closed · opens 7 AM' #B0472F at 5.54:1, worded in the place's time zone) · distance · '★ 4.5 (1,910) Google' or 'Globeskimmers' · price; the address 13px #736657; at most three tags (world wash with washInk, or white outline with #3A3128); quiet rows with 18px lucide icons in world ink (Hours, AI DETAILS with the word 'AI' kept, Website, 'Add a photo of what you ordered'); the rubber stamp; and one action row: Directions solid in cta (radius 14, 44px, flex 1), Map and Call as 44px icon buttons (white, 1px world line, world-ink icons), More. The phone number becomes the Call button, not a blue panel. The rubber stamp is identical in every world wherever the place is stampable: full width, 48px, radius 14, cream #FBF6EC, a 1.5px dashed #B0472F ring inset 3px like a stamp's perforation, a lucide Stamp, and 'I was here, get the stamp' 15px/700 #B0472F (5.15:1), with 'Only at the place, by GPS · How stamps work' 12px #736657 (5.57:1 on white) beneath. It is never a solid fill, so a card has exactly one solid button. (6) Honest states, restyled only by tokens: the FallbackDisclaimer on the world wash in washInk with a lucide Info ('Only 3 places nearby match, so we widened the search to 25 mi'); 'Updated Oct 12' as text; every rating's source named; 'Not confirmed' or 'Not listed' for unknowns; FinderEmptyState on white with a 32px lucide icon in world ink, an Instrument Serif 20px line, a 13px #3A3128 hint and one 'Expand radius' outline button in world ink that steps +5 mi up to the 25-mile ceiling; skeletons in the world wash, never blue-grey; Back-to-top a 44px circle in the world ink with a white arrow, 12px above the nav. (7) Spacing and type: 16px gutters, 12px between cards, 28px between sections, and the same three faces and sizes on all eleven pages. What varies by world: the paper, the plate, the accent, the wash, one motif, one card signature, the title words, the number's shape and the tag vocabulary. Nothing else.",
+ "banner_and_nav": "Both stay exactly as built and identical on every screen, untouched by any world, zone or cloth. BrandBanner: calc(50px + env(safe-area-inset-top)), linear-gradient(135deg, #0E8077 0%, #14B5A6 60%, #2DD4BF 100%), the white Inter Tight 800 15.5px 'Globeskimmers' wordmark and its soft teal shadow. White measures 2.56 to 2.83:1 on the mid-teal; WCAG 1.4.3 exempts logotypes, so the gradient stays (Papers & Inks' proposed regradient is not adopted) and nothing else may ever put text on it. The eyeglass text-size button sits at the banner's right on every screen, now including Home. Every page starts with a 12px mat in its own ground under the banner, so the teal never butts against Bordeaux, espresso, lapis or a cloth. FloatingNav: the dark pill rgba(22,17,13,.92) with its blur, 22px above the bottom safe area, five tabs (Home, Mailbox, Passport, Profile, Settings) as emoji plus label in #FAF7EE, the active tab on the teal gradient; finder pages highlight no tab; Mailbox keeps its unread dot (an alert, not a freshness dot). One addition: an always-on 1px rgba(251,246,236,.12) outer ring, so the pill's edge still reads when it floats over the navy or plum Home bands and the dark plates. Every page reserves calc(96px + env(safe-area-inset-bottom)) at the bottom so the last card clears the pill, and Back-to-top sits 12px above the pill, never over it."
+}

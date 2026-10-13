@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Coffee</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/globeskimmers/components/bundle.css">
+<script src="ds/globeskimmers/components/bundle.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Inter+Tight:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+:root{--fs:1;--radius:.5rem;--passport-navy:#0c2b50;--passport-gold:#d6a64a;--cream-rule:#eadfc9;--stamp:#b0472f;--font-sans:"Inter Tight",ui-sans-serif,system-ui,sans-serif;--font-serif:"Instrument Serif",Georgia,serif;--font-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;--ivory:#fffcf7;--ivory-2:#f7f4ec;--paper:#ffffff;--cream:#fbf6ec;--ink:#16110d;--ink-2:#3a3128;--ink-3:#736657;--ink-cool:#0f1419;--rule:#f0e9dc;--brand-teal:#0e7c73;--radius-chip:10px;--radius-button:14px;--radius-card:16px;--radius-tile:18px;--radius-pill:999px;--space-banner:50px;--space-grid:10px;--space-screen:16px;--shadow-banner:0 2px 14px rgba(14,124,115,.25);--shadow-nav:0 18px 40px -10px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.06) inset;--shadow-chunky:0 6px 18px -6px rgba(0,0,0,.25),0 1px 0 rgba(255,255,255,.18) inset}
+body{margin:0}
+a{color:#0e7c73}a:hover{color:#0b5f55}
+</style>
+</helmet>
+<div style="width: 390px; height: 1400px; position: relative; overflow: hidden; box-sizing: border-box; background: #f5ede2; font-family: 'Inter Tight', ui-sans-serif, system-ui, sans-serif; color: #16110d;">
+  <x-import component-from-global-scope="Globeskimmers.BrandBanner" style="display: block; width: 390px;"></x-import>
+  <button type="button" aria-label="Text size" style="position: absolute; top: 5px; right: 12px; z-index: 2; width: 40px; height: 40px; padding: 0; border-radius: 999px; background: #ffffff; border: 1px solid #f0e9dc; display: flex; align-items: center; justify-content: center;">
+    <svg width="26" height="16" viewBox="0 0 26 16" fill="none" stroke="#16110d" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6.5" cy="9" r="5.5"></circle><circle cx="19.5" cy="9" r="5.5"></circle><path d="M12 8.4c.6-.9 1.4-.9 2 0"></path></svg>
+  </button>
+
+  <main style="display: flex; flex-direction: column; padding: 12px 16px 0;">
+
+    <section aria-labelledby="coffee-title" style="position: relative; overflow: hidden; box-sizing: border-box; min-height: 164px; padding: 12px 16px 18px; border-radius: 22px; background: #2b1b12;">
+      <svg aria-hidden="true" width="150" height="150" viewBox="0 0 150 150" fill="none" style="position: absolute; left: 275px; top: -25px; opacity: .3; pointer-events: none;"><circle cx="75" cy="75" r="72" stroke="#e5672a" stroke-width="2" stroke-dasharray="389.6 62.8" transform="rotate(-5 75 75)"></circle><circle cx="75" cy="75" r="72" stroke="#e5672a" stroke-width="5" stroke-dasharray="62.8 389.6" transform="rotate(150 75 75)"></circle></svg>
+
+      <div style="position: relative; display: flex; align-items: center; justify-content: space-between; height: 44px;">
+        <button type="button" aria-label="Back" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 999px; background: rgba(243,223,193,.10); border: 1px solid rgba(243,223,193,.30);">
+          <x-import component-from-global-scope="Globeskimmers.Icons.ChevronLeft" size="{{ n20 }}" color="#f3dfc1" style="display: flex;"></x-import>
+        </button>
+        <button type="button" aria-label="Refresh" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 999px; background: rgba(243,223,193,.10); border: 1px solid rgba(243,223,193,.30);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f3dfc1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg>
+        </button>
+      </div>
+
+      <p style="position: relative; margin: 6px 0 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: calc(10.5px*var(--fs)); line-height: 14px; font-weight: 500; letter-spacing: .16em; color: #d9be98; white-space: nowrap;">COFFEE · 30 NEAR YOU</p>
+
+      <h1 id="coffee-title" style="position: relative; margin: 4px 0 0; max-width: 72%; font-family: 'Instrument Serif', Georgia, serif; font-size: calc(32px*var(--fs)); line-height: 1.05; font-weight: 400; color: #f3dfc1;">Your <em style="font-style: italic; color: #e5672a;">afternoon</em> cup</h1>
+
+      <div style="position: relative; margin-top: 8px; display: flex; align-items: center; gap: 8px; height: 32px;">
+        <x-import component-from-global-scope="Globeskimmers.Icons.MapPin" size="{{ n14 }}" color="#e5672a" style="display: flex; flex-shrink: 0;"></x-import>
+        <span style="min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: calc(13px*var(--fs)); line-height: 18px; font-weight: 600; color: #d9be98;">Downtown Los Angeles</span>
+        <a href="#" style="flex-shrink: 0; display: flex; align-items: center; height: 44px; margin: -6px 0; font-size: calc(13px*var(--fs)); line-height: 18px; color: #d9be98; text-decoration: underline; text-underline-offset: 3px;">Change</a>
+        <div role="group" aria-label="Distance unit" style="margin-left: auto; flex-shrink: 0; display: flex; align-items: center; height: 32px; box-sizing: border-box; padding: 0 2px; border-radius: 999px; border: 1px solid rgba(243,223,193,.30); background: rgba(243,223,193,.06);">
+          <button type="button" aria-pressed="true" style="display: flex; align-items: center; height: 44px; margin: -7px 0; padding: 0; background: transparent; border: 0;"><span style="display: flex; align-items: center; justify-content: center; min-width: 36px; height: 26px; box-sizing: border-box; padding: 0 9px; border-radius: 999px; background: #f3dfc1; color: #2b1b12; font-size: calc(11.5px*var(--fs)); line-height: 1; font-weight: 700; letter-spacing: .06em;">MI</span></button>
+          <button type="button" aria-pressed="false" style="display: flex; align-items: center; height: 44px; margin: -7px 0; padding: 0; background: transparent; border: 0;"><span style="display: flex; align-items: center; justify-content: center; min-width: 36px; height: 26px; box-sizing: border-box; padding: 0 9px; border-radius: 999px; color: #d9be98; font-size: calc(11.5px*var(--fs)); line-height: 1; font-weight: 700; letter-spacing: .06em;">KM</span></button>
+        </div>
+      </div>
+    </section>
+
+    <div role="search" style="margin-top: 12px; display: flex; gap: 8px;">
+      <div style="position: relative; flex: 1; min-width: 0; height: 48px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: #ffffff; border: 1px solid #e6d7c3; border-radius: 14px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a9481b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+        <label for="coffee-search" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">Search a café or a drink</label>
+        <input id="coffee-search" type="text" style="flex: 1; min-width: 0; height: 44px; padding: 0; border: 0; outline: none; background: transparent; font-family: 'Inter Tight', ui-sans-serif, system-ui, sans-serif; font-size: calc(14px*var(--fs)); color: #16110d;">
+        <span aria-hidden="true" style="position: absolute; left: 42px; right: 14px; top: 0; bottom: 0; display: flex; align-items: center; overflow: hidden; white-space: nowrap; font-size: calc(14px*var(--fs)); color: #736657; pointer-events: none;">Search a café or a drink: latte, matcha…</span>
+      </div>
+      <button type="button" aria-label="Search" style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; padding: 0; border-radius: 14px; background: #e5672a; border: 0;"><x-import component-from-global-scope="Globeskimmers.Icons.ArrowRight" size="{{ n20 }}" color="#2b1b12" style="display: flex;"></x-import></button>
+    </div>
+
+    <div style="margin-top: 8px; display: flex; gap: 8px;">
+      <button type="button" aria-pressed="false" style="flex-shrink: 0; display: flex; align-items: center; height: 44px; padding: 0; background: transparent; border: 0;"><span style="display: flex; align-items: center; gap: 6px; height: 36px; box-sizing: border-box; padding: 0 14px 0 12px; border-radius: 10px; background: #ffffff; border: 1px solid #e6d7c3; font-size: calc(13px*var(--fs)); line-height: 1; font-weight: 600; color: #3a3128; white-space: nowrap;"><x-import component-from-global-scope="Globeskimmers.Icons.Clock" size="{{ n14 }}" color="#a9481b" style="display: flex; flex-shrink: 0;"></x-import>Open now</span></button>
+      <button type="button" aria-pressed="false" style="flex-shrink: 0; display: flex; align-items: center; height: 44px; padding: 0; background: transparent; border: 0;"><span style="display: flex; align-items: center; gap: 6px; height: 36px; box-sizing: border-box; padding: 0 14px 0 12px; border-radius: 10px; background: #ffffff; border: 1px solid #e6d7c3; font-size: calc(13px*var(--fs)); line-height: 1; font-weight: 600; color: #3a3128; white-space: nowrap;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a9481b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path><path d="M20 3v4"></path><path d="M22 5h-4"></path><path d="M4 17v2"></path><path d="M5 18H3"></path></svg>Specialty</span></button>
+      <button type="button" aria-pressed="false" style="flex-shrink: 0; display: flex; align-items: center; height: 44px; padding: 0; background: transparent; border: 0;"><span style="display: flex; align-items: center; gap: 6px; height: 36px; box-sizing: border-box; padding: 0 14px 0 12px; border-radius: 10px; background: #ffffff; border: 1px solid #e6d7c3; font-size: calc(13px*var(--fs)); line-height: 1; font-weight: 600; color: #3a3128; white-space: nowrap;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a9481b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"></path></svg>Good for work</span></button>
+      <button type="button" aria-haspopup="dialog" style="flex-shrink: 0; display: flex; align-items: center; height: 44px; padding: 0; background: transparent; border: 0;"><span style="display: flex; align-items: center; gap: 6px; height: 36px; box-sizing: border-box; padding: 0 14px 0 12px; border-radius: 10px; background: #ffffff; border: 1px solid #e6d7c3; font-size: calc(13px*var(--fs)); line-height: 1; font-weight: 600; color: #3a3128; white-space: nowrap;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a9481b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><line x1="21" x2="14" y1="4" y2="4"></line><line x1="10" x2="3" y1="4" y2="4"></line><line x1="21" x2="12" y1="12" y2="12"></line><line x1="8" x2="3" y1="12" y2="12"></line><line x1="21" x2="16" y1="20" y2="20"></line><line x1="12" x2="3" y1="20" y2="20"></line><line x1="14" x2="14" y1="2" y2="6"></line><line x1="8" x2="8" y1="10" y2="14"></line><line x1="16" x2="16" y1="18" y2="22"></line></svg>Filters</span></button>
+    </div>
+
+    <p style="margin: 6px 0 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: calc(10.5px*var(--fs)); line-height: 14px; font-weight: 500; letter-spacing: .12em; color: #736657;">3 SPECIALTY · 8 OPEN</p>
+
+    <ol aria-label="Cafés near you, nearest first" style="margin: 12px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px;">
+
+      <li style="background: #ffffff; border: 1px solid #e6d7c3; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 24px -18px rgba(43,27,18,.4);">
+        <div style="position: relative; height: 96px; background: #2b1b12; display: flex; align-items: center; justify-content: center;">
+          <span aria-hidden="true" style="position: absolute; left: 12px; top: 12px; width: 30px; height: 30px; box-sizing: border-box; border-radius: 999px; background: #ffffff; border: 2px solid #a9481b; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: calc(17px*var(--fs)); line-height: 1; color: #2b1b12;">1</span>
+          <span style="position: absolute; right: 12px; top: 12px; display: inline-flex; align-items: center; gap: 5px; height: 24px; box-sizing: border-box; padding: 0 9px; border-radius: 999px; background: #2b1b12; border: 1px solid rgba(243,223,193,.4); font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: calc(10px*var(--fs)); line-height: 1; font-weight: 500; letter-spacing: .14em; color: #f3dfc1;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#e5672a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path><path d="M20 3v4"></path><path d="M22 5h-4"></path><path d="M4 17v2"></path><path d="M5 18H3"></path></svg>SPECIALTY</span>
+          <div aria-hidden="true" style="position: relative; width: 68px; height: 68px; display: flex; align-items: center; justify-content: center;">
+            <svg width="68" height="68" viewBox="0 0 68 68" fill="none" style="position: absolute; left: 0; top: 0;"><circle cx="34" cy="34" r="31.5" stroke="#e5672a" stroke-width="2" stroke-opacity=".85" stroke-dasharray="170.4 27.5" transform="rotate(-5 34 34)"></circle><circle cx="34" cy="34" r="31.5" stroke="#e5672a" stroke-width="5" stroke-opacity=".85" stroke-dasharray="27.5 170.4" transform="rotate(150 34 34)"></circle></svg>
+            <span style="position: relative; font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: calc(44px*var(--fs)); line-height: 1; color: #f3dfc1;">V</span>
+          </div>
+        </div>
+        <p style="margin: 0; height: 34px; background: #f2e3cd; display: flex; align-items: center; justify-content: center; gap: 10px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: calc(10.5px*var(--fs)); line-height: 1; font-weight: 500; letter-spacing: .14em; color: #2b1b12;">
+          <span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">Drinks: </span>
+          <span>ESPRESSO</span>
+          <span aria-hidden="true" style="width: 4px; height: 4px; border-radius: 999px; background: #e5672a;"></span>
+          <span>POUR-OVER</span>
+        </p>
+        <div style="padding: 12px 16px 16px;">
+          <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: calc(10.5px*var(--fs)); line-height: 14px; font-weight: 500; letter-spacing: .12em; color: #a9481b;">SPECIALTY COFFEE</p>
+          <h2 style="margin: 4px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: calc(24px*var(--fs)); line-height: 1.12; font-weight: 400; color: #2b1b12;">Verve Coffee Roasters</h2>
+          <p style="margin: 4px 0 0; display: flex; align-items: center; gap: 6px; font-size: calc(13px*var(--fs)); line-height: 18px; color: #3a3128; white-space: nowrap;">
+            <span style="font-weight: 600; color: #2e6b4e;">Open until 6 PM</span>
+            <span aria-hidden="true" style="color: #736657;">·</span>
+            <span>0.3 mi</span>
+            <span aria-hidden="true" style="color: #736657;">·</span>
+            <span style="display: inline-flex; align-items: center; gap: 4px;"><x-import component-from-global-scope="Globeskimmers.Icons.Star" size="{{ n12 }}" color="#e5672a" style="display: flex; flex-shrink: 0;"></x-import><span style="font-weight: 600;">4.6</span><span style="color: #736657;">Google</span></span>
+          </p>
+          <p style="margin: 0; font-size: calc(13px*var(--fs)); line-height: 18px; color: #736657;">833 S Spring St · Downtown</p>
+          <p style="margin: 8px 0 0; display: flex; align-items: center; gap: 8px; font-size: calc(13px*var(--fs)); line-height: 20px; color: #3a3128;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a9481b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"></path></svg><span>Good for working: Wi-Fi reported <span style="color: #736657;">(from reviews)</span></span></p>
+          <div style="margin-top: 12px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #e6d7c3;">
+            <button type="button" style="display: flex; align-items: center; gap: 6px; height: 44px; padding: 0; background: transparent; border: 0; font-size: calc(12.5px*var(--fs)); line-height: 1; font-weight: 600; color: #3a3128;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a9481b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path><path d="M20 3v4"></path><path d="M22 5h-4"></path><path d="M4 17v2"></path><path d="M5 18H3"></path></svg>AI details</button>
+            <button type="button" style="display: flex; align-items: center; gap: 6px; height: 44px; padding: 0; background: transparent; border: 0; font-size: calc(12.5px*var(--fs)); line-height: 1; font-weight: 600; color: #3a3128;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a9481b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>Add a photo of what you ordered</button>
+          </div>
+          <div style="margin-top: 4px; display: flex; gap: 8px;">
+            <button type="button" style="flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 12px; border-radius: 14px; background: #e5672a; border: 0; font-size: calc(15px*var(--fs)); line-height: 1; font-weight: 700; color: #2b1b12;"><x-import component-from-global-scope="Globeskimmers.Icons.Navigation" size="{{ n16 }}" color="#2b1b12" style="display: flex; flex-shrink: 0;"></x-import>Directions</button>
+            <button type="button" aria-label="Show Verve Coffee Roasters on the map" style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 14px; background: #ffffff; border: 1px solid #e6d7c3;"><x-import component-from-global-scope="Globeskimmers.Icons.Map" size="{{ n18 }}" color="#a9481b" style="display: flex;"></x-import></button>
+            <button type="button" aria-label="Call Verve Coffee Roasters" style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 14px; background: #ffffff; border: 1px solid #e6d7c3;"><x-import component-from-global-scope="Globeskimmers.Icons.Phone" size="{{ n18 }}" color="#a9481b" style="display: flex;"></x-import></button>
+            <button type="button" style="flex-shrink: 0; display: flex; align-items: center; gap: 4px; height: 44px; padding: 0 12px; border-radius: 14px; background: #ffffff; border: 1px solid #e6d7c3; font-size: calc(13px*var(--fs)); line-height: 1; font-weight: 600; color: #3a3128;">More<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a9481b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+          </div>
+        </div>
+      </li>
+
+      <li style="background: #ffffff; border: 1px solid #e6d7c3; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 24px -18px rgba(43,27,18,.4);">
+        <div style="position: relative; height: 96px; background: #2b1b12; display: flex; align-items: center; justify-content: center;">
+          <span aria-hidden="true" style="position: absolute; left: 12px; top: 12px; width: 30px; height: 30px; box-sizing: border-box; border-radius: 999px; background: #ffffff; border: 2px solid #a9481b; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: calc(17px*var(--fs)); line-height: 1; color: #2b1b12;">2</span>
+          <span style="position: absolute; right: 12px; top: 12px; display: inline-flex; align-items: center; gap: 5px; height: 24px; box-sizing: border-box; padding: 0 9px; border-radius: 999px; background: #2b1b12; border: 1px solid rgba(243,223,193,.4); font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: calc(10px*var(--fs)); line-height: 1; font-weight: 500; letter-spacing: .14em; color: #f3dfc1;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#e5672a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path><path d="M20 3v4"></path><path d="M22 5h-4"></path><path d="M4 17v2"></path><path d="M5 18H3"></path></svg>SPECIALTY</span>
+          <div aria-hidden="true" style="position: relative; width: 68px; height: 68px; display: flex; align-items: center; justify-content: center;">
+            <svg width="68" height="68" viewBox="0 0 68 68" fill="none" style="position: absolute; left: 0; top: 0;"><circle cx="34" cy="34" r="31.5" stroke="#e5672a" stroke-width="2" stroke-opacity=".85" stroke-dasharray="170.4 27.5" transform="rotate(-5 34 34)"></circle><circle cx="34" cy="34" r="31.5" stroke="#e5672a" stroke-width="5" stroke-opacity=".85" stroke-dasharray="27.5 170.4" transform="rotate(150 34 34)"></circle></svg>
+            <span style="position: relative; font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: calc(44px*var(--fs)); line-height: 1; color: #f3dfc1;">E</span>
+          </div>
+        </div>
+        <p style="margin: 0; height: 34px; background: #f2e3cd; display: flex; align-items: center; justify-content: center; gap: 10px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: calc(10.5px*var(--fs)); line-height: 1; font-weight: 500; letter-spacing: .14em; color: #2b1b12;">
+          <span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">Drinks: </span>
+          <span>ESPRESSO</span>
+          <span aria-hidden="true" style="width: 4px; height: 4px; border-radius: 999px; background: #e5672a;"></span>
+          <span>POUR-OVER</span>
+          <span aria-hidden="true" style="width: 4px; height: 4px; border-radius: 999px; background: #e5672a;"></span>
+          <span>COLD BREW</span>
+        </p>
+        <div style="padding: 12px 16px 16px;">
+          <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: calc(10.5px*var(--fs)); line-height: 14px; font-weight: 500; letter-spacing: .12em; color: #a9481b;">SPECIALTY COFFEE</p>
+          <h2 style="margin: 4px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: calc(24px*var(--fs)); line-height: 1.12; font-weight: 400; color: #2b1b12;">Endorffeine</h2>
+          <p style="margin: 4px 0 0; display: flex; align-items: center; gap: 6px; font-size: calc(13px*var(--fs)); line-height: 18px; color: #3a3128; white-space: nowrap;">
+            <span style="font-weight: 600; color: #2e6b4e;">Open until 4 PM</span>
+            <span aria-hidden="true" style="color: #736657;">·</span>
+            <span>1.1 mi</span>
+            <span aria-hidden="true" style="color: #736657;">·</span>
+            <span style="display: inline-flex; align-items: center; gap: 4px;"><x-import component-from-global-scope="Globeskimmers.Icons.Star" size="{{ n12 }}" color="#e5672a" style="display: flex; flex-shrink: 0;"></x-import><span style="font-weight: 600;">4.8</span><span style="color: #736657;">Google</span></span>
+          </p>
+          <p style="margin: 0; font-size: calc(13px*var(--fs)); line-height: 18px; color: #736657;">727 N Broadway · Chinatown</p>
+          <div style="margin-top: 12px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #e6d7c3;">
+            <button type="button" style="display: flex; align-items: center; gap: 6px; height: 44px; padding: 0; background: transparent; border: 0; font-size: calc(12.5px*var(--fs)); line-height: 1; font-weight: 600; color: #3a3128;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a9481b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path><path d="M20 3v4"></path><path d="M22 5h-4"></path><path d="M4 17v2"></path><path d="M5 18H3"></path></svg>AI details</button>
+            <button type="button" style="display: flex; align-items: center; gap: 6px; height: 44px; padding: 0; background: transparent; border: 0; font-size: calc(12.5px*var(--fs)); line-height: 1; font-weight: 600; color: #3a3128;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a9481b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>Add a photo of what you ordered</button>
+          </div>
+          <div style="margin-top: 4px; display: flex; gap: 8px;">
+            <button type="button" style="flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 12px; border-radius: 14px; background: #e5672a; border: 0; font-size: calc(15px*var(--fs)); line-height: 1; font-weight: 700; color: #2b1b12;"><x-import component-from-global-scope="Globeskimmers.Icons.Navigation" size="{{ n16 }}" color="#2b1b12" style="display: flex; flex-shrink: 0;"></x-import>Directions</button>
+            <button type="button" aria-label="Show Endorffeine on the map" style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 14px; background: #ffffff; border: 1px solid #e6d7c3;"><x-import component-from-global-scope="Globeskimmers.Icons.Map" size="{{ n18 }}" color="#a9481b" style="display: flex;"></x-import></button>
+            <button type="button" aria-label="Call Endorffeine" style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 14px; background: #ffffff; border: 1px solid #e6d7c3;"><x-import component-from-global-scope="Globeskimmers.Icons.Phone" size="{{ n18 }}" color="#a9481b" style="display: flex;"></x-import></button>
+            <button type="button" style="flex-shrink: 0; display: flex; align-items: center; gap: 4px; height: 44px; padding: 0 12px; border-radius: 14px; background: #ffffff; border: 1px solid #e6d7c3; font-size: calc(13px*var(--fs)); line-height: 1; font-weight: 600; color: #3a3128;">More<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a9481b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+          </div>
+        </div>
+      </li>
+
+      <li style="background: #ffffff; border: 1px solid #e6d7c3; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 24px -18px rgba(43,27,18,.4);">
+        <div style="position: relative; height: 96px; background: #2b1b12; display: flex; align-items: center; justify-content: center;">
+          <span aria-hidden="true" style="position: absolute; left: 12px; top: 12px; width: 30px; height: 30px; box-sizing: border-box; border-radius: 999px; background: #ffffff; border: 2px solid #a9481b; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: calc(17px*var(--fs)); line-height: 1; color: #2b1b12;">3</span>
+          <div aria-hidden="true" style="position: relative; width: 68px; height: 68px; display: flex; align-items: center; justify-content: center;">
+            <svg width="68" height="68" viewBox="0 0 68 68" fill="none" style="position: absolute; left: 0; top: 0;"><circle cx="34" cy="34" r="31.5" stroke="#e5672a" stroke-width="2" stroke-opacity=".85" stroke-dasharray="170.4 27.5" transform="rotate(-5 34 34)"></circle><circle cx="34" cy="34" r="31.5" stroke="#e5672a" stroke-width="5" stroke-opacity=".85" stroke-dasharray="27.5 170.4" transform="rotate(150 34 34)"></circle></svg>
+            <span style="position: relative; font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: calc(44px*var(--fs)); line-height: 1; color: #f3dfc1;">M</span>
+          </div>
+        </div>
+        <p style="margin: 0; height: 34px; background: #f2e3cd; display: flex; align-items: center; justify-content: center; gap: 10px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: calc(10.5px*var(--fs)); line-height: 1; font-weight: 500; letter-spacing: .14em; color: #2b1b12;">
+          <span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">Drinks: </span>
+          <span>POUR-OVER</span>
+          <span aria-hidden="true" style="width: 4px; height: 4px; border-radius: 999px; background: #e5672a;"></span>
+          <span>ESPRESSO</span>
+          <span aria-hidden="true" style="width: 4px; height: 4px; border-radius: 999px; background: #e5672a;"></span>
+          <span>MATCHA</span>
+        </p>
+        <div style="padding: 12px 16px 16px;">
+          <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: calc(10.5px*var(--fs)); line-height: 14px; font-weight: 500; letter-spacing: .12em; color: #a9481b;">CAFE</p>
+          <h2 style="margin: 4px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: calc(24px*var(--fs)); line-height: 1.12; font-weight: 400; color: #2b1b12;">Maru Coffee</h2>
+          <p style="margin: 4px 0 0; display: flex; align-items: center; gap: 6px; font-size: calc(13px*var(--fs)); line-height: 18px; color: #3a3128; white-space: nowrap;">
+            <span style="font-weight: 600; color: #2e6b4e;">Open until 5 PM</span>
+            <span aria-hidden="true" style="color: #736657;">·</span>
+            <span>1.4 mi</span>
+            <span aria-hidden="true" style="color: #736657;">·</span>
+            <span style="display: inline-flex; align-items: center; gap: 4px;"><x-import component-from-global-scope="Globeskimmers.Icons.Star" size="{{ n12 }}" color="#e5672a" style="display: flex; flex-shrink: 0;"></x-import><span style="font-weight: 600;">4.7</span><span style="color: #736657;">Google</span></span>
+          </p>
+          <p style="margin: 0; font-size: calc(13px*var(--fs)); line-height: 18px; color: #736657;">1936 E 7th St · Arts District</p>
+          <div style="margin-top: 12px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #e6d7c3;">
+            <button type="button" style="display: flex; align-items: center; gap: 6px; height: 44px; padding: 0; background: transparent; border: 0; font-size: calc(12.5px*var(--fs)); line-height: 1; font-weight: 600; color: #3a3128;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a9481b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path><path d="M20 3v4"></path><path d="M22 5h-4"></path><path d="M4 17v2"></path><path d="M5 18H3"></path></svg>AI details</button>
+            <button type="button" style="display: flex; align-items: center; gap: 6px; height: 44px; padding: 0; background: transparent; border: 0; font-size: calc(12.5px*var(--fs)); line-height: 1; font-weight: 600; color: #3a3128;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a9481b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>Add a photo of what you ordered</button>
+          </div>
+          <div style="margin-top: 4px; display: flex; gap: 8px;">
+            <button type="button" style="flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 12px; border-radius: 14px; background: #e5672a; border: 0; font-size: calc(15px*var(--fs)); line-height: 1; font-weight: 700; color: #2b1b12;"><x-import component-from-global-scope="Globeskimmers.Icons.Navigation" size="{{ n16 }}" color="#2b1b12" style="display: flex; flex-shrink: 0;"></x-import>Directions</button>
+            <button type="button" aria-label="Show Maru Coffee on the map" style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 14px; background: #ffffff; border: 1px solid #e6d7c3;"><x-import component-from-global-scope="Globeskimmers.Icons.Map" size="{{ n18 }}" color="#a9481b" style="display: flex;"></x-import></button>
+            <button type="button" aria-label="Call Maru Coffee" style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 14px; background: #ffffff; border: 1px solid #e6d7c3;"><x-import component-from-global-scope="Globeskimmers.Icons.Phone" size="{{ n18 }}" color="#a9481b" style="display: flex;"></x-import></button>
+            <button type="button" style="flex-shrink: 0; display: flex; align-items: center; gap: 4px; height: 44px; padding: 0 12px; border-radius: 14px; background: #ffffff; border: 1px solid #e6d7c3; font-size: calc(13px*var(--fs)); line-height: 1; font-weight: 600; color: #3a3128;">More<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a9481b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+          </div>
+        </div>
+      </li>
+
+      <li style="background: #ffffff; border: 1px solid #e6d7c3; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 24px -18px rgba(43,27,18,.4);">
+        <div style="position: relative; height: 96px; background: #2b1b12; display: flex; align-items: center; justify-content: center;">
+          <span aria-hidden="true" style="position: absolute; left: 12px; top: 12px; width: 30px; height: 30px; box-sizing: border-box; border-radius: 999px; background: #ffffff; border: 2px solid #a9481b; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: calc(17px*var(--fs)); line-height: 1; color: #2b1b12;">4</span>
+          <span style="position: absolute; right: 12px; top: 12px; display: inline-flex; align-items: center; gap: 5px; height: 24px; box-sizing: border-box; padding: 0 9px; border-radius: 999px; background: #2b1b12; border: 1px solid rgba(243,223,193,.4); font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: calc(10px*var(--fs)); line-height: 1; font-weight: 500; letter-spacing: .14em; color: #f3dfc1;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#e5672a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path><path d="M20 3v4"></path><path d="M22 5h-4"></path><path d="M4 17v2"></path><path d="M5 18H3"></path></svg>SPECIALTY</span>
+          <div aria-hidden="true" style="position: relative; width: 68px; height: 68px; display: flex; align-items: center; justify-content: center;">
+            <svg width="68" height="68" viewBox="0 0 68 68" fill="none" style="position: absolute; left: 0; top: 0;"><circle cx="34" cy="34" r="31.5" stroke="#e5672a" stroke-width="2" stroke-opacity=".85" stroke-dasharray="170.4 27.5" transform="rotate(-5 34 34)"></circle><circle cx="34" cy="34" r="31.5" stroke="#e5672a" stroke-width="5" stroke-opacity=".85" stroke-dasharray="27.5 170.4" transform="rotate(150 34 34)"></circle></svg>
+            <span style="position: relative; font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: calc(44px*var(--fs)); line-height: 1; color: #f3dfc1;">G</span>
+          </div>
+        </div>
+        <p style="margin: 0; height: 34px; background: #f2e3cd; display: flex; align-items: center; justify-content: center; gap: 10px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: calc(10.5px*var(--fs)); line-height: 1; font-weight: 500; letter-spacing: .14em; color: #2b1b12;">
+          <span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">Drinks: </span>
+          <span>ESPRESSO</span>
+          <span aria-hidden="true" style="width: 4px; height: 4px; border-radius: 999px; background: #e5672a;"></span>
+          <span>COLD BREW</span>
+          <span aria-hidden="true" style="width: 4px; height: 4px; border-radius: 999px; background: #e5672a;"></span>
+          <span>MATCHA</span>
+        </p>
+        <div style="padding: 12px 16px 16px;">
+          <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: calc(10.5px*var(--fs)); line-height: 14px; font-weight: 500; letter-spacing: .12em; color: #a9481b;">SPECIALTY COFFEE</p>
+          <h2 style="margin: 4px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: calc(24px*var(--fs)); line-height: 1.12; font-weight: 400; color: #2b1b12;">Go Get Em Tiger</h2>
+          <p style="margin: 4px 0 0; display: flex; align-items: center; gap: 6px; font-size: calc(13px*var(--fs)); line-height: 18px; color: #3a3128; white-space: nowrap;">
+            <span style="font-weight: 600; color: #2e6b4e;">Open until 6 PM</span>
+            <span aria-hidden="true" style="color: #736657;">·</span>
+            <span>4.8 mi</span>
+            <span aria-hidden="true" style="color: #736657;">·</span>
+            <span style="display: inline-flex; align-items: center; gap: 4px;"><x-import component-from-global-scope="Globeskimmers.Icons.Star" size="{{ n12 }}" color="#e5672a" style="display: flex; flex-shrink: 0;"></x-import><span style="font-weight: 600;">4.5</span><span style="color: #736657;">Google</span></span>
+          </p>
+          <p style="margin: 0; font-size: calc(13px*var(--fs)); line-height: 18px; color: #736657;">230 N Larchmont Blvd · Larchmont</p>
+        </div>
+      </li>
+
+    </ol>
+  </main>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 22px; display: flex; justify-content: center;">
+    <x-import component-from-global-scope="Globeskimmers.FloatingNav" unread="{{ n2 }}"></x-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1400}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { n0: 0, n1: 1, n2: 2, n12: 12, n13: 13, n14: 14, n16: 16, n18: 18, n20: 20, n22: 22, n84: 84, n96: 96, n104: 104, n112: 112, n120: 120, n150: 150 };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Your circle</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/globeskimmers/components/bundle.css">
+<script src="ds/globeskimmers/components/bundle.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Inter+Tight:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+:root{--fs:1;--radius:.5rem;--passport-navy:#0c2b50;--passport-gold:#d6a64a;--cream-rule:#eadfc9;--stamp:#b0472f;--font-sans:"Inter Tight",ui-sans-serif,system-ui,sans-serif;--font-serif:"Instrument Serif",Georgia,serif;--font-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;--ivory:#fffcf7;--ivory-2:#f7f4ec;--paper:#ffffff;--cream:#fbf6ec;--ink:#16110d;--ink-2:#3a3128;--ink-3:#736657;--ink-cool:#0f1419;--rule:#f0e9dc;--brand-teal:#0e7c73;--radius-chip:10px;--radius-button:14px;--radius-card:16px;--radius-tile:18px;--radius-pill:999px;--space-banner:50px;--space-grid:10px;--space-screen:16px;--shadow-banner:0 2px 14px rgba(14,124,115,.25);--shadow-nav:0 18px 40px -10px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.06) inset;--shadow-chunky:0 6px 18px -6px rgba(0,0,0,.25),0 1px 0 rgba(255,255,255,.18) inset}
+body{margin:0}
+a{color:#0e7c73}a:hover{color:#0b5f55}
+</style>
+</helmet>
+<div style="width: 390px; height: 1500px; position: relative; overflow: hidden; box-sizing: border-box; background: #ecf1f5; font-family: 'Inter Tight', ui-sans-serif, system-ui, sans-serif; color: #16110d;">
+  <x-import component-from-global-scope="Globeskimmers.BrandBanner" style="display: block; width: 390px;"></x-import>
+  <button type="button" aria-label="Text size" style="position: absolute; top: 5px; right: 12px; z-index: 2; width: 40px; height: 40px; padding: 0; border-radius: 999px; background: #ffffff; border: 1px solid #f0e9dc; display: flex; align-items: center; justify-content: center;">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#16110d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="14" r="4.6"></circle><circle cx="18" cy="14" r="4.6"></circle><path d="M10.6 13.4c.9-.6 1.9-.6 2.8 0"></path><path d="M1.6 13.2 3.6 7"></path><path d="M22.4 13.2 20.4 7"></path></svg>
+  </button>
+
+  <div aria-hidden="true" style="height: 12px;"></div>
+
+  <section aria-label="Your circle" style="position: relative; height: 112px; background: #284b63; overflow: hidden;">
+    <svg aria-hidden="true" width="190" height="112" viewBox="0 0 190 112" fill="none" style="position: absolute; right: 0; top: 0; pointer-events: none;">
+      <circle cx="160" cy="56" r="24" stroke="#e7c877" stroke-opacity=".34" stroke-width="1"></circle>
+      <circle cx="160" cy="56" r="46" stroke="#e7c877" stroke-opacity=".24" stroke-width="1"></circle>
+      <circle cx="160" cy="56" r="68" stroke="#e7c877" stroke-opacity=".16" stroke-width="1"></circle>
+      <circle cx="160" cy="56" r="4" fill="#e7c877" fill-opacity=".34"></circle>
+      <circle cx="139.2" cy="44" r="2.5" fill="#e7c877" fill-opacity=".4"></circle>
+      <circle cx="175.7" cy="12.8" r="2.5" fill="#e7c877" fill-opacity=".3"></circle>
+      <circle cx="130.4" cy="91.2" r="2.5" fill="#e7c877" fill-opacity=".3"></circle>
+      <circle cx="96.1" cy="32.7" r="2.5" fill="#e7c877" fill-opacity=".22"></circle>
+    </svg>
+    <div aria-hidden="true" style="position: absolute; left: 8px; top: 8px; right: 8px; bottom: 8px; border: 1px solid rgba(231,200,119,.7); pointer-events: none;"></div>
+    <div style="position: relative; height: 112px; padding: 0 22px; display: flex; align-items: center; gap: 14px;">
+      <button type="button" aria-label="Back" style="flex: none; width: 44px; height: 44px; padding: 0; border-radius: 999px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.3); display: flex; align-items: center; justify-content: center;">
+        <x-import component-from-global-scope="Globeskimmers.Icons.ChevronLeft" size="{{ n20 }}" color="#ffffff"></x-import>
+      </button>
+      <div style="min-width: 0;">
+        <div style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .2em; line-height: 14px; text-transform: uppercase; color: #e7c877;">Your circle</div>
+        <h1 style="margin: 2px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 30px; font-weight: 400; line-height: 1.05; color: #ffffff;">Your <em style="font-style: italic; color: #e7c877;">circle</em></h1>
+      </div>
+    </div>
+  </section>
+
+  <div style="margin: 16px 16px 0; background: #eef3fa; border: 1px solid #c9d6ea; border-radius: 18px; overflow: hidden;">
+    <div aria-hidden="true" style="height: 4px; background: repeating-linear-gradient(135deg, #b0472f 0 10px, #fbf6ec 10px 14px, #2b4c8c 14px 24px, #fbf6ec 24px 28px);"></div>
+    <div style="padding-top: 12px; display: flex; justify-content: center;">
+      <svg width="240" height="240" viewBox="0 0 240 240" role="img" aria-label="Your circle drawn as orbits around you: your inner circle on the nearest ring, the ones you follow on the middle ring, the ones who follow you on the outer ring" style="display: block; overflow: visible;">
+        <circle cx="120" cy="120" r="108" fill="none" stroke="#284b63" stroke-opacity=".2" stroke-width="1"></circle>
+        <circle cx="120" cy="120" r="80" fill="none" stroke="#284b63" stroke-opacity=".35" stroke-width="1"></circle>
+        <circle cx="120" cy="120" r="50" fill="none" stroke="#284b63" stroke-opacity=".55" stroke-width="1"></circle>
+        <path d="M81.14 151.47 A50 50 0 0 0 158.86 151.47" fill="none" stroke="#eef3fa" stroke-width="8"></path>
+        <path d="M83.55 191.22 A80 80 0 0 0 156.45 191.22" fill="none" stroke="#eef3fa" stroke-width="8"></path>
+        <path d="M82.88 221.42 A108 108 0 0 0 157.12 221.42" fill="none" stroke="#eef3fa" stroke-width="8"></path>
+        <path id="circ-path-in" d="M73.93 146.6 A53.2 53.2 0 0 0 166.07 146.6" fill="none"></path>
+        <path id="circ-path-mid" d="M47.95 161.6 A83.2 83.2 0 0 0 192.05 161.6" fill="none"></path>
+        <path id="circ-path-out" d="M23.7 175.6 A111.2 111.2 0 0 0 216.3 175.6" fill="none"></path>
+        <text font-family="JetBrains Mono, ui-monospace, Menlo, monospace" font-size="9" letter-spacing="1.3" fill="#2b4c8c" text-anchor="middle"><textPath href="#circ-path-in" startOffset="50%" text-anchor="middle">INNER CIRCLE</textPath></text>
+        <text font-family="JetBrains Mono, ui-monospace, Menlo, monospace" font-size="9" letter-spacing="1.3" fill="#2b4c8c" text-anchor="middle"><textPath href="#circ-path-mid" startOffset="50%" text-anchor="middle">YOU FOLLOW</textPath></text>
+        <text font-family="JetBrains Mono, ui-monospace, Menlo, monospace" font-size="9" letter-spacing="1.3" fill="#2b4c8c" text-anchor="middle"><textPath href="#circ-path-out" startOffset="50%" text-anchor="middle">FOLLOW YOU</textPath></text>
+
+        <circle cx="120" cy="120" r="30" fill="#284b63"></circle>
+        <circle cx="120" cy="120" r="28" fill="#ffffff"></circle>
+        <circle cx="120" cy="120" r="26" fill="#284b63"></circle>
+        <text x="120" y="129.6" text-anchor="middle" font-family="Instrument Serif, Georgia, serif" font-size="28" fill="#fbf6ec">M</text>
+
+        <circle cx="120" cy="70" r="15.5" fill="#6b4423"></circle>
+        <circle cx="120" cy="70" r="14" fill="#ffffff"></circle>
+        <circle cx="120" cy="70" r="12" fill="#6b4423"></circle>
+        <text x="120" y="74.5" text-anchor="middle" font-family="Instrument Serif, Georgia, serif" font-size="13" fill="#ffffff">T</text>
+
+        <circle cx="157.16" cy="86.54" r="15.5" fill="#4f2b57"></circle>
+        <circle cx="157.16" cy="86.54" r="14" fill="#ffffff"></circle>
+        <circle cx="157.16" cy="86.54" r="12" fill="#4f2b57"></circle>
+        <text x="157.16" y="91.04" text-anchor="middle" font-family="Instrument Serif, Georgia, serif" font-size="13" fill="#ffffff">A</text>
+
+        <circle cx="169.73" cy="125.23" r="15.5" fill="#284a33"></circle>
+        <circle cx="169.73" cy="125.23" r="14" fill="#ffffff"></circle>
+        <circle cx="169.73" cy="125.23" r="12" fill="#284a33"></circle>
+        <text x="169.73" y="129.73" text-anchor="middle" font-family="Instrument Serif, Georgia, serif" font-size="13" fill="#ffffff">K</text>
+
+        <circle cx="70.27" cy="125.23" r="15.5" fill="#263f86"></circle>
+        <circle cx="70.27" cy="125.23" r="14" fill="#ffffff"></circle>
+        <circle cx="70.27" cy="125.23" r="12" fill="#263f86"></circle>
+        <text x="70.27" y="129.73" text-anchor="middle" font-family="Instrument Serif, Georgia, serif" font-size="13" fill="#ffffff">L</text>
+
+        <rect x="69.84" y="78.54" width="26" height="16" rx="8" fill="#ffffff" stroke="#284b63" stroke-opacity=".35" stroke-width="1"></rect>
+        <text x="82.84" y="89.94" text-anchor="middle" font-family="JetBrains Mono, ui-monospace, Menlo, monospace" font-size="9.5" fill="#284b63">+3</text>
+
+        <circle cx="160" cy="50.72" r="15.5" fill="#6e4b0e"></circle>
+        <circle cx="160" cy="50.72" r="14" fill="#ffffff"></circle>
+        <circle cx="160" cy="50.72" r="12" fill="#6e4b0e"></circle>
+        <text x="160" y="55.22" text-anchor="middle" font-family="Instrument Serif, Georgia, serif" font-size="13" fill="#ffffff">P</text>
+
+        <circle cx="194.17" cy="149.97" r="15.5" fill="#3a4652"></circle>
+        <circle cx="194.17" cy="149.97" r="14" fill="#ffffff"></circle>
+        <circle cx="194.17" cy="149.97" r="12" fill="#3a4652"></circle>
+        <text x="194.17" y="154.47" text-anchor="middle" font-family="Instrument Serif, Georgia, serif" font-size="13" fill="#ffffff">S</text>
+
+        <circle cx="45.83" cy="149.97" r="15.5" fill="#2b2f36"></circle>
+        <circle cx="45.83" cy="149.97" r="14" fill="#ffffff"></circle>
+        <circle cx="45.83" cy="149.97" r="12" fill="#2b2f36"></circle>
+        <text x="45.83" y="154.47" text-anchor="middle" font-family="Instrument Serif, Georgia, serif" font-size="13" fill="#ffffff">G</text>
+
+        <rect x="55.58" y="50.72" width="26" height="16" rx="8" fill="#ffffff" stroke="#284b63" stroke-opacity=".35" stroke-width="1"></rect>
+        <text x="68.58" y="62.12" text-anchor="middle" font-family="JetBrains Mono, ui-monospace, Menlo, monospace" font-size="9.5" fill="#284b63">+8</text>
+
+        <circle cx="222.11" cy="84.84" r="15.5" fill="#284a33"></circle>
+        <circle cx="222.11" cy="84.84" r="14" fill="#ffffff"></circle>
+        <circle cx="222.11" cy="84.84" r="12" fill="#284a33"></circle>
+        <text x="222.11" y="89.34" text-anchor="middle" font-family="Instrument Serif, Georgia, serif" font-size="13" fill="#ffffff">R</text>
+
+        <circle cx="196.37" cy="196.37" r="15.5" fill="#6e4b0e"></circle>
+        <circle cx="196.37" cy="196.37" r="14" fill="#ffffff"></circle>
+        <circle cx="196.37" cy="196.37" r="12" fill="#6e4b0e"></circle>
+        <text x="196.37" y="200.87" text-anchor="middle" font-family="Instrument Serif, Georgia, serif" font-size="13" fill="#ffffff">J</text>
+
+        <circle cx="15.21" cy="93.87" r="15.5" fill="#4f2b57"></circle>
+        <circle cx="15.21" cy="93.87" r="14" fill="#ffffff"></circle>
+        <circle cx="15.21" cy="93.87" r="12" fill="#4f2b57"></circle>
+        <text x="15.21" y="98.37" text-anchor="middle" font-family="Instrument Serif, Georgia, serif" font-size="13" fill="#ffffff">N</text>
+
+        <rect x="94.58" y="4.41" width="32" height="16" rx="8" fill="#ffffff" stroke="#284b63" stroke-opacity=".35" stroke-width="1"></rect>
+        <text x="110.58" y="15.81" text-anchor="middle" font-family="JetBrains Mono, ui-monospace, Menlo, monospace" font-size="9.5" fill="#284b63">+13</text>
+      </svg>
+    </div>
+    <p style="margin: 8px 0 0; padding: 0 16px 14px; text-align: center; font-size: 12.5px; line-height: 16px; color: #3a3128;">Tap a face to step into their world.</p>
+  </div>
+
+  <div role="tablist" aria-label="Your circle" style="margin: 16px 16px 0; height: 44px; display: flex; background: #ffffff; border: 1px solid #284b63; border-radius: 14px; overflow: hidden;">
+    <button type="button" role="tab" aria-selected="false" style="flex: 1; height: 42px; padding: 0; display: flex; align-items: center; justify-content: center; gap: 5px; border-radius: 13px; background: transparent; font-size: 13px; font-weight: 600; color: #3a3128;">Inner circle<span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; color: #736657;">7</span></button>
+    <button type="button" role="tab" aria-selected="true" style="flex: 1; height: 42px; padding: 0; display: flex; align-items: center; justify-content: center; gap: 5px; border-radius: 13px; background: #284b63; box-shadow: inset 0 0 0 3px #ffffff; font-size: 13px; font-weight: 600; color: #ffffff;">You follow<span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; color: #ffffff;">18</span></button>
+    <button type="button" role="tab" aria-selected="false" style="flex: 1; height: 42px; padding: 0; display: flex; align-items: center; justify-content: center; gap: 5px; border-radius: 13px; background: transparent; font-size: 13px; font-weight: 600; color: #3a3128;">Follow you<span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; color: #736657;">23</span></button>
+  </div>
+
+  <div style="margin: 8px 16px 0;">
+    <label for="circle-find" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">Find someone in your circle</label>
+    <div style="height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: #ffffff; border: 1px solid #c8d3dd; border-radius: 14px;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#284b63" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+      <input id="circle-find" type="text" placeholder="Find someone in your circle" style="flex: 1; min-width: 0; height: 44px; padding: 0; border: 0; background: transparent; outline: none; font-family: 'Inter Tight', ui-sans-serif, system-ui, sans-serif; font-size: 14px; color: #736657; -webkit-text-fill-color: #736657;">
+    </div>
+  </div>
+
+  <div style="margin: 16px 16px 0; padding: 4px 0 12px; background: #ffffff; border: 1px solid #d3dce4; border-radius: 16px;">
+
+    <div style="padding: 4px 0;">
+      <div style="height: 12px; display: flex; align-items: center; gap: 10px; padding: 0 14px;">
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .2em; line-height: 12px; color: #736657;">A</span>
+        <span aria-hidden="true" style="flex: 1; height: 1px; background: #e3e9ef;"></span>
+      </div>
+      <div style="margin-top: 8px; display: flex; align-items: flex-start; gap: 12px; padding: 0 12px 0 14px;">
+        <span aria-hidden="true" style="flex: none; width: 44px; height: 44px; border-radius: 999px; border: 1.5px solid #4f2b57; padding: 2px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #4f2b57; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 19px; line-height: 1; color: #ffffff;">A</span></span>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                <a href="#" style="font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 20px; color: #16110d; text-decoration: none;">Ana Ruiz</a>
+                <span style="flex: none; display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: .06em; line-height: 12px; color: #284b63;"><svg width="20" height="12" viewBox="0 0 20 12" fill="none" stroke="#284b63" stroke-width="1.2" aria-hidden="true"><circle cx="6.6" cy="6" r="5.4"></circle><circle cx="13.4" cy="6" r="5.4"></circle></svg>BOTH WAYS</span>
+              </div>
+              <div style="margin-top: 2px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; line-height: 14px; color: #736657; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@anaruiz · MEXICO CITY</div>
+            </div>
+            <button type="button" aria-label="Following Ana Ruiz" style="flex: none; height: 44px; margin: -7px 0; padding: 0; display: flex; align-items: center; background: transparent;"><span style="display: flex; align-items: center; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid #284b63; background: #ffffff; font-size: 12px; font-weight: 600; color: #284b63;">Following</span></button>
+          </div>
+          <div style="margin-top: 4px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; line-height: 16px; color: #3a3128; white-space: nowrap;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b0472f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 22h14"></path><path d="M19.27 13.73A2.5 2.5 0 0 0 17.5 13h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-.66-.26-1.3-.73-1.77Z"></path><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-3-3c-1.66 0-3 1-3 3s1 2 1 3.5V13"></path></svg>
+            <span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">Latest stamp:</span>
+            <span>Palacio de Bellas Artes</span>
+            <span style="color: #736657;">· Oct 10</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 4px 0;">
+      <div style="height: 12px; display: flex; align-items: center; gap: 10px; padding: 0 14px;">
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .2em; line-height: 12px; color: #736657;">G</span>
+        <span aria-hidden="true" style="flex: 1; height: 1px; background: #e3e9ef;"></span>
+      </div>
+      <div style="margin-top: 8px; display: flex; align-items: flex-start; gap: 12px; padding: 0 12px 0 14px;">
+        <span aria-hidden="true" style="flex: none; width: 44px; height: 44px; border-radius: 999px; border: 1.5px solid #2b2f36; padding: 2px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #2b2f36; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 19px; line-height: 1; color: #ffffff;">G</span></span>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                <a href="#" style="font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 20px; color: #16110d; text-decoration: none;">Globeskimmers</a>
+                <x-import component-from-global-scope="Globeskimmers.OfficialSeal" tier="teal" size="{{ n14 }}"></x-import>
+              </div>
+              <div style="margin-top: 2px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; line-height: 14px; color: #736657; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@globeskimmers</div>
+            </div>
+            <button type="button" aria-label="Following Globeskimmers" style="flex: none; height: 44px; margin: -7px 0; padding: 0; display: flex; align-items: center; background: transparent;"><span style="display: flex; align-items: center; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid #284b63; background: #ffffff; font-size: 12px; font-weight: 600; color: #284b63;">Following</span></button>
+          </div>
+          <div style="margin-top: 4px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; line-height: 16px; color: #3a3128; white-space: nowrap;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#736657" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
+            <span>The house account</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 4px 0;">
+      <div style="height: 12px; display: flex; align-items: center; gap: 10px; padding: 0 14px;">
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .2em; line-height: 12px; color: #736657;">K</span>
+        <span aria-hidden="true" style="flex: 1; height: 1px; background: #e3e9ef;"></span>
+      </div>
+      <div style="margin-top: 8px; display: flex; align-items: flex-start; gap: 12px; padding: 0 12px 0 14px;">
+        <span aria-hidden="true" style="flex: none; width: 44px; height: 44px; border-radius: 999px; border: 1.5px solid #284a33; padding: 2px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #284a33; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 19px; line-height: 1; color: #ffffff;">K</span></span>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                <a href="#" style="font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 20px; color: #16110d; text-decoration: none;">Kenji Sato</a>
+                <span style="flex: none; display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: .06em; line-height: 12px; color: #284b63;"><svg width="20" height="12" viewBox="0 0 20 12" fill="none" stroke="#284b63" stroke-width="1.2" aria-hidden="true"><circle cx="6.6" cy="6" r="5.4"></circle><circle cx="13.4" cy="6" r="5.4"></circle></svg>BOTH WAYS</span>
+              </div>
+              <div style="margin-top: 2px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; line-height: 14px; color: #736657; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@kenji.eats · KYOTO</div>
+            </div>
+            <button type="button" aria-label="Following Kenji Sato" style="flex: none; height: 44px; margin: -7px 0; padding: 0; display: flex; align-items: center; background: transparent;"><span style="display: flex; align-items: center; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid #284b63; background: #ffffff; font-size: 12px; font-weight: 600; color: #284b63;">Following</span></button>
+          </div>
+          <div style="margin-top: 4px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; line-height: 16px; color: #3a3128; white-space: nowrap;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b0472f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 22h14"></path><path d="M19.27 13.73A2.5 2.5 0 0 0 17.5 13h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-.66-.26-1.3-.73-1.77Z"></path><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-3-3c-1.66 0-3 1-3 3s1 2 1 3.5V13"></path></svg>
+            <span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">Latest stamp:</span>
+            <span>Kinkaku-ji</span>
+            <span style="color: #736657;">· Oct 9</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 4px 0;">
+      <div style="height: 12px; display: flex; align-items: center; gap: 10px; padding: 0 14px;">
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .2em; line-height: 12px; color: #736657;">L</span>
+        <span aria-hidden="true" style="flex: 1; height: 1px; background: #e3e9ef;"></span>
+      </div>
+      <div style="margin-top: 8px; display: flex; align-items: flex-start; gap: 12px; padding: 0 12px 0 14px;">
+        <span aria-hidden="true" style="flex: none; width: 44px; height: 44px; border-radius: 999px; border: 1.5px solid #263f86; padding: 2px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #263f86; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 19px; line-height: 1; color: #ffffff;">L</span></span>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                <a href="#" style="font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 20px; color: #16110d; text-decoration: none;">Léa Moreau</a>
+                <x-import component-from-global-scope="Globeskimmers.OfficialSeal" tier="sunshine-star" size="{{ n14 }}"></x-import>
+                <span style="flex: none; display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: .06em; line-height: 12px; color: #284b63;"><svg width="20" height="12" viewBox="0 0 20 12" fill="none" stroke="#284b63" stroke-width="1.2" aria-hidden="true"><circle cx="6.6" cy="6" r="5.4"></circle><circle cx="13.4" cy="6" r="5.4"></circle></svg>BOTH WAYS</span>
+              </div>
+              <div style="margin-top: 2px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; line-height: 14px; color: #736657; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@lea.sketches · PARIS</div>
+            </div>
+            <button type="button" aria-label="Following Léa Moreau" style="flex: none; height: 44px; margin: -7px 0; padding: 0; display: flex; align-items: center; background: transparent;"><span style="display: flex; align-items: center; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid #284b63; background: #ffffff; font-size: 12px; font-weight: 600; color: #284b63;">Following</span></button>
+          </div>
+          <div style="margin-top: 4px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; line-height: 16px; color: #3a3128; white-space: nowrap;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b0472f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 22h14"></path><path d="M19.27 13.73A2.5 2.5 0 0 0 17.5 13h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-.66-.26-1.3-.73-1.77Z"></path><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-3-3c-1.66 0-3 1-3 3s1 2 1 3.5V13"></path></svg>
+            <span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">Latest stamp:</span>
+            <span>Eiffel Tower</span>
+            <span style="color: #736657;">· Oct 5</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 4px 0;">
+      <div style="height: 12px; display: flex; align-items: center; gap: 10px; padding: 0 14px;">
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .2em; line-height: 12px; color: #736657;">P</span>
+        <span aria-hidden="true" style="flex: 1; height: 1px; background: #e3e9ef;"></span>
+      </div>
+      <div style="margin-top: 8px; display: flex; align-items: flex-start; gap: 12px; padding: 0 12px 0 14px;">
+        <span aria-hidden="true" style="flex: none; width: 44px; height: 44px; border-radius: 999px; border: 1.5px solid #6e4b0e; padding: 2px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #6e4b0e; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 19px; line-height: 1; color: #ffffff;">P</span></span>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                <a href="#" style="font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 20px; color: #16110d; text-decoration: none;">Priya Nair</a>
+              </div>
+              <div style="margin-top: 2px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; line-height: 14px; color: #736657; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@priyaroams · JAIPUR</div>
+            </div>
+            <button type="button" aria-label="Following Priya Nair" style="flex: none; height: 44px; margin: -7px 0; padding: 0; display: flex; align-items: center; background: transparent;"><span style="display: flex; align-items: center; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid #284b63; background: #ffffff; font-size: 12px; font-weight: 600; color: #284b63;">Following</span></button>
+          </div>
+          <div style="margin-top: 4px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; line-height: 16px; color: #3a3128; white-space: nowrap;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b0472f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 22h14"></path><path d="M19.27 13.73A2.5 2.5 0 0 0 17.5 13h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-.66-.26-1.3-.73-1.77Z"></path><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-3-3c-1.66 0-3 1-3 3s1 2 1 3.5V13"></path></svg>
+            <span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">Latest stamp:</span>
+            <span>Taj Mahal</span>
+            <span style="color: #736657;">· Oct 8</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 4px 0;">
+      <div style="height: 12px; display: flex; align-items: center; gap: 10px; padding: 0 14px;">
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .2em; line-height: 12px; color: #736657;">S</span>
+        <span aria-hidden="true" style="flex: 1; height: 1px; background: #e3e9ef;"></span>
+      </div>
+      <div style="margin-top: 8px; display: flex; align-items: flex-start; gap: 12px; padding: 0 12px 0 14px;">
+        <span aria-hidden="true" style="flex: none; width: 44px; height: 44px; border-radius: 999px; border: 1.5px solid #3a4652; padding: 2px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #3a4652; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 19px; line-height: 1; color: #ffffff;">S</span></span>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                <a href="#" style="font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 20px; color: #16110d; text-decoration: none;">Sam Okafor</a>
+              </div>
+              <div style="margin-top: 2px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; line-height: 14px; color: #736657; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@samonfoot · JOSHUA TREE</div>
+            </div>
+            <button type="button" aria-label="Following Sam Okafor" style="flex: none; height: 44px; margin: -7px 0; padding: 0; display: flex; align-items: center; background: transparent;"><span style="display: flex; align-items: center; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid #284b63; background: #ffffff; font-size: 12px; font-weight: 600; color: #284b63;">Following</span></button>
+          </div>
+          <div style="margin-top: 4px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; line-height: 16px; color: #3a3128; white-space: nowrap;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b0472f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 22h14"></path><path d="M19.27 13.73A2.5 2.5 0 0 0 17.5 13h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-.66-.26-1.3-.73-1.77Z"></path><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-3-3c-1.66 0-3 1-3 3s1 2 1 3.5V13"></path></svg>
+            <span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">Latest stamp:</span>
+            <span>Joshua Tree National Park</span>
+            <span style="color: #736657;">· Oct 7</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 4px 0;">
+      <div style="height: 12px; display: flex; align-items: center; gap: 10px; padding: 0 14px;">
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .2em; line-height: 12px; color: #736657;">T</span>
+        <span aria-hidden="true" style="flex: 1; height: 1px; background: #e3e9ef;"></span>
+      </div>
+      <div style="margin-top: 8px; display: flex; align-items: flex-start; gap: 12px; padding: 0 12px 0 14px;">
+        <span aria-hidden="true" style="flex: none; width: 44px; height: 44px; border-radius: 999px; border: 1.5px solid #6b4423; padding: 2px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #6b4423; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 19px; line-height: 1; color: #ffffff;">T</span></span>
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                <a href="#" style="font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 20px; color: #16110d; text-decoration: none;">Theo Marsh</a>
+                <span style="flex: none; display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: .06em; line-height: 12px; color: #284b63;"><svg width="20" height="12" viewBox="0 0 20 12" fill="none" stroke="#284b63" stroke-width="1.2" aria-hidden="true"><circle cx="6.6" cy="6" r="5.4"></circle><circle cx="13.4" cy="6" r="5.4"></circle></svg>BOTH WAYS</span>
+              </div>
+              <div style="margin-top: 2px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; line-height: 14px; color: #736657; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@theo.walks · LISBON</div>
+            </div>
+            <button type="button" aria-label="Following Theo Marsh" style="flex: none; height: 44px; margin: -7px 0; padding: 0; display: flex; align-items: center; background: transparent;"><span style="display: flex; align-items: center; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid #284b63; background: #ffffff; font-size: 12px; font-weight: 600; color: #284b63;">Following</span></button>
+          </div>
+          <div style="margin-top: 4px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; line-height: 16px; color: #3a3128; white-space: nowrap;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b0472f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 22h14"></path><path d="M19.27 13.73A2.5 2.5 0 0 0 17.5 13h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-.66-.26-1.3-.73-1.77Z"></path><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-3-3c-1.66 0-3 1-3 3s1 2 1 3.5V13"></path></svg>
+            <span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">Latest stamp:</span>
+            <span>Torre de Belém</span>
+            <span style="color: #736657;">· Oct 11</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin: 24px 16px 0;">
+    <label for="circle-add" style="display: block; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .16em; line-height: 12px; text-transform: uppercase; color: #284b63;">Add someone to your circle</label>
+    <div style="margin-top: 8px; display: flex; gap: 8px;">
+      <div style="flex: 1; min-width: 0; height: 48px; display: flex; align-items: center; gap: 4px; padding: 0 14px; background: #ffffff; border: 1px solid #c8d3dd; border-radius: 14px;">
+        <span aria-hidden="true" style="font-size: 15px; font-weight: 700; line-height: 1; color: #736657;">@</span>
+        <input id="circle-add" type="text" placeholder="follow a friend by @username" style="flex: 1; min-width: 0; height: 44px; padding: 0 0 0 2px; border: 0; background: transparent; outline: none; font-family: 'Inter Tight', ui-sans-serif, system-ui, sans-serif; font-size: 14px; color: #736657; -webkit-text-fill-color: #736657;">
+      </div>
+      <button type="button" aria-label="Follow" style="flex: none; width: 48px; height: 48px; padding: 0; border-radius: 14px; background: #284b63; display: flex; align-items: center; justify-content: center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" x2="19" y1="8" y2="14"></line><line x1="22" x2="16" y1="11" y2="11"></line></svg>
+      </button>
+    </div>
+    <p style="margin: 16px 0 0; font-size: 13px; line-height: 16px; color: #3a3128;">Not everyone you travel with is here yet.</p>
+    <button type="button" style="margin-top: 8px; width: 100%; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 14px; border: 1px solid #284b63; background: transparent; font-size: 14px; font-weight: 600; color: #284b63;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#284b63" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>
+      Invite someone to your circle
+    </button>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 22px; display: flex; justify-content: center;">
+    <x-import component-from-global-scope="Globeskimmers.FloatingNav" active="profile" unread="{{ n2 }}"></x-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { n2: 2, n12: 12, n14: 14, n16: 16, n18: 18, n20: 20 };
+  }
+}
+</script>
+</body>
+</html>

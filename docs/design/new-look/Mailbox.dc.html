@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mailbox, where your circle has been</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/globeskimmers/components/bundle.css">
+<script src="ds/globeskimmers/components/bundle.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Inter+Tight:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+:root{--fs:1;--radius:.5rem;--passport-navy:#0c2b50;--passport-gold:#d6a64a;--cream-rule:#eadfc9;--stamp:#b0472f;--font-sans:"Inter Tight",ui-sans-serif,system-ui,sans-serif;--font-serif:"Instrument Serif",Georgia,serif;--font-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;--ivory:#fffcf7;--ivory-2:#f7f4ec;--paper:#ffffff;--cream:#fbf6ec;--ink:#16110d;--ink-2:#3a3128;--ink-3:#736657;--ink-cool:#0f1419;--rule:#f0e9dc;--brand-teal:#0e7c73;--radius-chip:10px;--radius-button:14px;--radius-card:16px;--radius-tile:18px;--radius-pill:999px;--space-banner:50px;--space-grid:10px;--space-screen:16px;--shadow-banner:0 2px 14px rgba(14,124,115,.25);--shadow-nav:0 18px 40px -10px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.06) inset;--shadow-chunky:0 6px 18px -6px rgba(0,0,0,.25),0 1px 0 rgba(255,255,255,.18) inset}
+body{margin:0}
+a{color:#0e7c73}a:hover{color:#0b5f55}
+</style>
+</helmet>
+<div style="width: 390px; height: 1500px; position: relative; overflow: hidden; box-sizing: border-box; background: #eef3fa; font-family: 'Inter Tight', ui-sans-serif, system-ui, sans-serif; color: #16110d;">
+  <x-import component-from-global-scope="Globeskimmers.BrandBanner" style="display: block; width: 390px;"></x-import>
+  <button type="button" aria-label="Text size" style="position: absolute; top: 5px; right: 12px; z-index: 2; width: 40px; height: 40px; padding: 0; border-radius: 999px; background: #ffffff; border: 1px solid #f0e9dc; display: flex; align-items: center; justify-content: center;">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#16110d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="14" r="4.6"></circle><circle cx="18" cy="14" r="4.6"></circle><path d="M10.6 13.4c.9-.6 1.9-.6 2.8 0"></path><path d="M1.6 13.2 3.6 7"></path><path d="M22.4 13.2 20.4 7"></path></svg>
+  </button>
+
+  <div aria-hidden="true" style="height: 12px;"></div>
+
+  <header style="padding: 12px 16px 12px;">
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .2em; line-height: 12px; text-transform: uppercase; color: #b0472f;">Globeskimmers · Mailbox</div>
+    <div style="margin-top: 4px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;">
+      <h1 style="margin: 0; min-width: 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 30px; font-weight: 400; line-height: 1.04; color: #16110d;">Where your <em style="font-style: italic; color: #2b4c8c;">circle</em> has been</h1>
+      <button type="button" style="flex: none; height: 44px; padding: 0 16px; display: flex; align-items: center; gap: 8px; border-radius: 999px; background: #b0472f; font-size: 13px; font-weight: 600; color: #ffffff;">
+        <x-import component-from-global-scope="Globeskimmers.Icons.Mail" size="{{ n16 }}" color="#ffffff"></x-import>
+        Postcard
+      </button>
+    </div>
+  </header>
+
+  <div aria-hidden="true" style="height: 5px; background: repeating-linear-gradient(135deg, #b0472f 0 10px, #fbf6ec 10px 14px, #2b4c8c 14px 24px, #fbf6ec 24px 28px);"></div>
+
+  <div style="margin: 16px 16px 0;">
+    <label for="mb-follow" style="display: block; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .16em; line-height: 12px; text-transform: uppercase; color: #2b4c8c;">Add someone to your circle</label>
+    <div style="margin-top: 8px; display: flex; gap: 8px;">
+      <div style="flex: 1; min-width: 0; height: 48px; display: flex; align-items: center; gap: 4px; padding: 0 14px; background: #ffffff; border: 1px solid #c9d6ea; border-radius: 14px;">
+        <span aria-hidden="true" style="font-size: 15px; font-weight: 700; line-height: 1; color: #736657;">@</span>
+        <input id="mb-follow" type="text" placeholder="follow a friend by @username" style="flex: 1; min-width: 0; height: 44px; padding: 0 0 0 2px; border: 0; background: transparent; outline: none; font-family: 'Inter Tight', ui-sans-serif, system-ui, sans-serif; font-size: 14px; color: #736657; -webkit-text-fill-color: #736657;">
+      </div>
+      <button type="button" aria-label="Follow" style="flex: none; width: 48px; height: 48px; padding: 0; border-radius: 14px; background: #2b4c8c; display: flex; align-items: center; justify-content: center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" x2="19" y1="8" y2="14"></line><line x1="22" x2="16" y1="11" y2="11"></line></svg>
+      </button>
+    </div>
+    <button type="button" style="margin-top: 8px; width: 100%; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 14px; border: 1px solid #2b4c8c; background: transparent; font-size: 14px; font-weight: 600; color: #2b4c8c;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2b4c8c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>
+      Invite someone to your circle
+    </button>
+  </div>
+
+  <section aria-label="On your passport" style="margin: 20px 16px 0;">
+    <h2 style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 500; letter-spacing: .16em; line-height: 12px; text-transform: uppercase; color: #2b4c8c;">On your passport · 2 new</h2>
+    <div style="margin-top: 8px; background: #ffffff; border: 1px solid #c9d6ea; border-radius: 16px; overflow: hidden;">
+      <a href="#" style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 14px; background: #f5f8fc; text-decoration: none;">
+        <span aria-hidden="true" style="flex: none; margin-top: 2px; width: 28px; height: 28px; border-radius: 999px; border: 1.5px solid #284a33; padding: 1.5px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #284a33; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 13px; line-height: 1; color: #ffffff;">K</span></span>
+        <span style="flex: 1; min-width: 0; font-size: 13px; line-height: 18px; color: #3a3128;"><b style="font-weight: 600; color: #16110d;">Kenji</b> stamped WOW on your Griffith Observatory page</span>
+        <span style="flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding-top: 2px;">
+          <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: .14em; line-height: 12px; color: #b0472f;">NEW</span>
+          <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .06em; line-height: 12px; color: #736657;">TODAY</span>
+        </span>
+      </a>
+      <a href="#" style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 14px; background: #f5f8fc; border-top: 1px solid #e1e8f2; text-decoration: none;">
+        <span aria-hidden="true" style="flex: none; margin-top: 2px; width: 28px; height: 28px; border-radius: 999px; border: 1.5px solid #4f2b57; padding: 1.5px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #4f2b57; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 13px; line-height: 1; color: #ffffff;">A</span></span>
+        <span style="flex: 1; min-width: 0; font-size: 13px; line-height: 18px; color: #3a3128;"><b style="font-weight: 600; color: #16110d;">Ana</b> stamped TAKE ME on your Golden Gate Bridge page</span>
+        <span style="flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding-top: 2px;">
+          <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: .14em; line-height: 12px; color: #b0472f;">NEW</span>
+          <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .06em; line-height: 12px; color: #736657;">YESTERDAY</span>
+        </span>
+      </a>
+    </div>
+  </section>
+
+  <section aria-label="Where your circle has been" style="margin: 20px 16px 0;">
+    <h2 style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 500; letter-spacing: .16em; line-height: 12px; text-transform: uppercase; color: #2b4c8c;">From your circle · newest first</h2>
+    <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 12px;">
+
+      <article style="background: #ffffff; border: 1px solid #c9d6ea; border-radius: 14px; overflow: hidden;">
+        <div aria-hidden="true" style="height: 3px; background: repeating-linear-gradient(135deg, #b0472f 0 10px, #fbf6ec 10px 14px, #2b4c8c 14px 24px, #fbf6ec 24px 28px);"></div>
+        <div style="display: flex; align-items: flex-start; gap: 16px; padding: 12px 14px;">
+          <div style="position: relative; flex: none; width: 72px; height: 72px;">
+            <div style="width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; background: #fbf6ec; border: 1px solid #eadfc9; border-radius: 4px; transform: rotate(-3deg); box-shadow: 0 6px 14px -10px rgba(22,17,13,.35);">
+              <x-import component-from-global-scope="Globeskimmers.TypographicStamp" name="Torre de Belém" city="Lisbon" country="PT" date="2026-10-11" width="{{ n64 }}" strength="{{ n2 }}" style="display: block; width: 64px; height: 64px;"></x-import>
+            </div>
+            <svg aria-hidden="true" width="48" height="20" viewBox="0 0 48 20" fill="none" stroke="#2b4c8c" stroke-opacity=".4" stroke-width="1" style="position: absolute; left: 36px; top: -6px; pointer-events: none;"><path d="M0 4Q3 1 6 4T12 4T18 4T24 4T30 4T36 4T42 4T48 4"></path><path d="M0 10Q3 7 6 10T12 10T18 10T24 10T30 10T36 10T42 10T48 10"></path><path d="M0 16Q3 13 6 16T12 16T18 16T24 16T30 16T36 16T42 16T48 16"></path></svg>
+          </div>
+          <div style="flex: 1; min-width: 0; padding-top: 2px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span aria-hidden="true" style="flex: none; width: 20px; height: 20px; border-radius: 999px; border: 1.5px solid #6b4423; padding: 1px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #6b4423; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 10px; line-height: 1; color: #ffffff;">T</span></span>
+              <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .08em; line-height: 12px; text-transform: uppercase; color: #736657;">Theo · Yesterday</span>
+            </div>
+            <p style="margin: 4px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 22px; color: #16110d;">stamped <em style="font-style: italic;">Torre de Belém</em></p>
+            <div style="margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;">
+              <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .08em; line-height: 14px; color: #736657;">LISBON · PT</span>
+              <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; line-height: 14px; color: #2e6b4e;"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="5" stroke="#2e6b4e" stroke-width="1.2" stroke-dasharray="2 1.5"></circle><path d="M3.7 6.1 5.3 7.7 8.4 4.5" stroke="#2e6b4e" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>Verified · GPS</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article style="background: #ffffff; border: 1px solid #c9d6ea; border-radius: 14px; overflow: hidden;">
+        <div aria-hidden="true" style="height: 3px; background: repeating-linear-gradient(135deg, #b0472f 0 10px, #fbf6ec 10px 14px, #2b4c8c 14px 24px, #fbf6ec 24px 28px);"></div>
+        <div style="display: flex; align-items: flex-start; gap: 16px; padding: 12px 14px;">
+          <div style="position: relative; flex: none; width: 72px; height: 72px;">
+            <div style="width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; background: #fbf6ec; border: 1px solid #eadfc9; border-radius: 4px; transform: rotate(-3deg); box-shadow: 0 6px 14px -10px rgba(22,17,13,.35);">
+              <x-import component-from-global-scope="Globeskimmers.TypographicStamp" name="Palacio de Bellas Artes" city="Mexico City" country="MX" date="2026-10-10" width="{{ n64 }}" strength="{{ n2 }}" style="display: block; width: 64px; height: 64px;"></x-import>
+            </div>
+            <svg aria-hidden="true" width="48" height="20" viewBox="0 0 48 20" fill="none" stroke="#2b4c8c" stroke-opacity=".4" stroke-width="1" style="position: absolute; left: 36px; top: -6px; pointer-events: none;"><path d="M0 4Q3 1 6 4T12 4T18 4T24 4T30 4T36 4T42 4T48 4"></path><path d="M0 10Q3 7 6 10T12 10T18 10T24 10T30 10T36 10T42 10T48 10"></path><path d="M0 16Q3 13 6 16T12 16T18 16T24 16T30 16T36 16T42 16T48 16"></path></svg>
+          </div>
+          <div style="flex: 1; min-width: 0; padding-top: 2px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span aria-hidden="true" style="flex: none; width: 20px; height: 20px; border-radius: 999px; border: 1.5px solid #4f2b57; padding: 1px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #4f2b57; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 10px; line-height: 1; color: #ffffff;">A</span></span>
+              <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .08em; line-height: 12px; text-transform: uppercase; color: #736657;">Ana · 2d ago</span>
+            </div>
+            <p style="margin: 4px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 22px; color: #16110d;">stamped <em style="font-style: italic;">Palacio de Bellas Artes</em></p>
+            <div style="margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;">
+              <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .08em; line-height: 14px; color: #736657;">MEXICO CITY · MX</span>
+              <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; line-height: 14px; color: #2e6b4e;"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="5" stroke="#2e6b4e" stroke-width="1.2" stroke-dasharray="2 1.5"></circle><path d="M3.7 6.1 5.3 7.7 8.4 4.5" stroke="#2e6b4e" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>Verified · Photo</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article style="background: #ffffff; border: 1px solid #c9d6ea; border-radius: 14px; overflow: hidden;">
+        <div aria-hidden="true" style="height: 3px; background: repeating-linear-gradient(135deg, #b0472f 0 10px, #fbf6ec 10px 14px, #2b4c8c 14px 24px, #fbf6ec 24px 28px);"></div>
+        <div style="display: flex; align-items: flex-start; gap: 16px; padding: 12px 14px;">
+          <div style="position: relative; flex: none; width: 72px; height: 72px;">
+            <div style="width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; background: #fbf6ec; border: 1px solid #eadfc9; border-radius: 4px; transform: rotate(-3deg); box-shadow: 0 6px 14px -10px rgba(22,17,13,.35);">
+              <img src="/_blob/bd56bc75b4edf2d227611dda987b35eb" alt="Kinkaku-ji stamp" style="display: block; width: 64px; height: 64px; object-fit: contain;">
+            </div>
+            <svg aria-hidden="true" width="48" height="20" viewBox="0 0 48 20" fill="none" stroke="#2b4c8c" stroke-opacity=".4" stroke-width="1" style="position: absolute; left: 36px; top: -6px; pointer-events: none;"><path d="M0 4Q3 1 6 4T12 4T18 4T24 4T30 4T36 4T42 4T48 4"></path><path d="M0 10Q3 7 6 10T12 10T18 10T24 10T30 10T36 10T42 10T48 10"></path><path d="M0 16Q3 13 6 16T12 16T18 16T24 16T30 16T36 16T42 16T48 16"></path></svg>
+          </div>
+          <div style="flex: 1; min-width: 0; padding-top: 2px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span aria-hidden="true" style="flex: none; width: 20px; height: 20px; border-radius: 999px; border: 1.5px solid #284a33; padding: 1px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #284a33; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 10px; line-height: 1; color: #ffffff;">K</span></span>
+              <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .08em; line-height: 12px; text-transform: uppercase; color: #736657;">Kenji · 3d ago</span>
+            </div>
+            <p style="margin: 4px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 22px; color: #16110d;">stamped <em style="font-style: italic;">Kinkaku-ji</em></p>
+            <div style="margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;">
+              <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .08em; line-height: 14px; color: #736657;">KYOTO · JP</span>
+              <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; line-height: 14px; color: #2e6b4e;"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="5" stroke="#2e6b4e" stroke-width="1.2" stroke-dasharray="2 1.5"></circle><path d="M3.7 6.1 5.3 7.7 8.4 4.5" stroke="#2e6b4e" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>Verified · GPS</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article style="background: #ffffff; border: 1px solid #c9d6ea; border-radius: 14px; overflow: hidden;">
+        <div aria-hidden="true" style="height: 3px; background: repeating-linear-gradient(135deg, #b0472f 0 10px, #fbf6ec 10px 14px, #2b4c8c 14px 24px, #fbf6ec 24px 28px);"></div>
+        <div style="display: flex; align-items: flex-start; gap: 16px; padding: 12px 14px;">
+          <div style="position: relative; flex: none; width: 72px; height: 72px;">
+            <div style="width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; background: #fbf6ec; border: 1px solid #eadfc9; border-radius: 4px; transform: rotate(-3deg); box-shadow: 0 6px 14px -10px rgba(22,17,13,.35);">
+              <img src="/_blob/b1275c07235250ec32ee2996669fe4c4" alt="Taj Mahal stamp" style="display: block; width: 64px; height: 64px; object-fit: contain;">
+            </div>
+            <svg aria-hidden="true" width="48" height="20" viewBox="0 0 48 20" fill="none" stroke="#2b4c8c" stroke-opacity=".4" stroke-width="1" style="position: absolute; left: 36px; top: -6px; pointer-events: none;"><path d="M0 4Q3 1 6 4T12 4T18 4T24 4T30 4T36 4T42 4T48 4"></path><path d="M0 10Q3 7 6 10T12 10T18 10T24 10T30 10T36 10T42 10T48 10"></path><path d="M0 16Q3 13 6 16T12 16T18 16T24 16T30 16T36 16T42 16T48 16"></path></svg>
+          </div>
+          <div style="flex: 1; min-width: 0; padding-top: 2px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span aria-hidden="true" style="flex: none; width: 20px; height: 20px; border-radius: 999px; border: 1.5px solid #6e4b0e; padding: 1px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #6e4b0e; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 10px; line-height: 1; color: #ffffff;">P</span></span>
+              <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .08em; line-height: 12px; text-transform: uppercase; color: #736657;">Priya · 4d ago</span>
+            </div>
+            <p style="margin: 4px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-size: 18px; line-height: 22px; color: #16110d;">stamped <em style="font-style: italic;">Taj Mahal</em></p>
+            <div style="margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px;">
+              <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .08em; line-height: 14px; color: #736657;">AGRA · IN</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article aria-label="Postcard from Léa" style="background: #fbf6ec; border: 1px solid #c9d6ea; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 22px -18px rgba(22,17,13,.45);">
+        <div style="position: relative; margin: 8px 8px 0; height: 227px; border-radius: 8px; overflow: hidden; background: linear-gradient(165deg, #34578f 0%, #2b4c8c 50%, #1f3a6e 100%);">
+          <div aria-hidden="true" style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: repeating-linear-gradient(100deg, rgba(251,246,236,.12) 0 1px, transparent 1px 11px);"></div>
+          <div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fbf6ec" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M16 14v6"></path><path d="M8 14v6"></path><path d="M12 16v6"></path></svg>
+            <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .18em; line-height: 12px; text-transform: uppercase; color: #fbf6ec;">Léa’s photo · Paris</span>
+          </div>
+        </div>
+        <div style="padding: 12px 16px;">
+          <div style="display: flex; align-items: stretch; gap: 14px;">
+            <p style="flex: 1; min-width: 0; margin: 0; font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: 17px; line-height: 22px; color: #16110d;">&ldquo;Paris in the rain is still Paris. Save me a seat at Griffith.&rdquo;</p>
+            <div aria-hidden="true" style="flex: none; width: 1px; background: #eadfc9;"></div>
+            <div style="flex: none; width: 112px;">
+              <div style="position: relative; height: 48px;">
+                <div style="position: absolute; right: 4px; top: 1px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: #fbf6ec; border: 1px dashed #cdbb98; border-radius: 2px; transform: rotate(3deg);">
+                  <img src="/_blob/349685708a55cf7eb0a278d0cbc80de1" alt="Eiffel Tower stamp" style="display: block; width: 36px; height: 36px; object-fit: contain;">
+                </div>
+                <div aria-hidden="true" style="position: absolute; left: 18px; top: 4px; width: 40px; height: 40px; border: 1px solid #736657; border-radius: 999px; transform: rotate(-12deg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 8px; letter-spacing: .04em; line-height: 9px; color: #736657;"><span>PARIS</span><span>OCT 5</span></div>
+                <svg aria-hidden="true" width="44" height="14" viewBox="0 0 44 14" fill="none" stroke="#736657" stroke-opacity=".55" stroke-width="1" style="position: absolute; left: 56px; top: 17px; pointer-events: none;"><path d="M0 3Q2.75 1 5.5 3T11 3T16.5 3T22 3T27.5 3T33 3T38.5 3T44 3"></path><path d="M0 7Q2.75 5 5.5 7T11 7T16.5 7T22 7T27.5 7T33 7T38.5 7T44 7"></path><path d="M0 11Q2.75 9 5.5 11T11 11T16.5 11T22 11T27.5 11T33 11T38.5 11T44 11"></path></svg>
+              </div>
+              <div style="margin-top: 8px; border-bottom: 1px solid #ddd0b4; font-family: 'Instrument Serif', Georgia, serif; font-size: 17px; line-height: 22px; color: #16110d;">Margaret</div>
+              <div style="margin-top: 4px; border-bottom: 1px solid #ddd0b4; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; line-height: 16px; color: #736657;">@margaret.la</div>
+            </div>
+          </div>
+          <div style="margin-top: 8px; display: flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: .08em; line-height: 12px; text-transform: uppercase; color: #736657;">
+            <span>From Léa</span>
+            <x-import component-from-global-scope="Globeskimmers.OfficialSeal" tier="sunshine-star" size="{{ n12 }}"></x-import>
+            <span>· To you</span>
+            <span style="margin-left: auto;">Oct 5</span>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <a href="#" style="margin: 16px 16px 0; height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 12px 0 16px; background: #ffffff; border: 1px solid #c9d6ea; border-radius: 16px; text-decoration: none;">
+    <span style="flex: 1; min-width: 0; font-size: 15px; font-weight: 600; line-height: 20px; color: #16110d;">Your circle <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: .06em; color: #736657;">· 18</span></span>
+    <span aria-hidden="true" style="flex: none; display: flex; align-items: center;">
+      <span style="width: 24px; height: 24px; border-radius: 999px; border: 1.5px solid #6b4423; padding: 1.5px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #6b4423; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 11px; line-height: 1; color: #ffffff;">T</span></span>
+      <span style="margin-left: -7px; width: 24px; height: 24px; border-radius: 999px; border: 1.5px solid #4f2b57; padding: 1.5px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #4f2b57; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 11px; line-height: 1; color: #ffffff;">A</span></span>
+      <span style="margin-left: -7px; width: 24px; height: 24px; border-radius: 999px; border: 1.5px solid #284a33; padding: 1.5px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #284a33; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 11px; line-height: 1; color: #ffffff;">K</span></span>
+      <span style="margin-left: -7px; width: 24px; height: 24px; border-radius: 999px; border: 1.5px solid #6e4b0e; padding: 1.5px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #6e4b0e; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 11px; line-height: 1; color: #ffffff;">P</span></span>
+      <span style="margin-left: -7px; width: 24px; height: 24px; border-radius: 999px; border: 1.5px solid #263f86; padding: 1.5px; background: #ffffff; display: flex;"><span style="flex: 1; border-radius: 999px; background: #263f86; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 11px; line-height: 1; color: #ffffff;">L</span></span>
+    </span>
+    <x-import component-from-global-scope="Globeskimmers.Icons.ChevronRight" size="{{ n18 }}" color="#2b4c8c"></x-import>
+  </a>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 22px; display: flex; justify-content: center;">
+    <x-import component-from-global-scope="Globeskimmers.FloatingNav" active="mailbox" unread="{{ n2 }}"></x-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { n2: 2, n12: 12, n16: 16, n18: 18, n64: 64 };
+  }
+}
+</script>
+</body>
+</html>

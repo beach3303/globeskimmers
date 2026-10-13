@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ATMs · Carbon Copy</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/globeskimmers/components/bundle.css">
+<script src="ds/globeskimmers/components/bundle.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Inter+Tight:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+:root{--fs:1;--radius:.5rem;--passport-navy:#0c2b50;--passport-gold:#d6a64a;--cream-rule:#eadfc9;--stamp:#b0472f;--font-sans:"Inter Tight",ui-sans-serif,system-ui,sans-serif;--font-serif:"Instrument Serif",Georgia,serif;--font-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;--ivory:#fffcf7;--ivory-2:#f7f4ec;--paper:#ffffff;--cream:#fbf6ec;--ink:#16110d;--ink-2:#3a3128;--ink-3:#736657;--ink-cool:#0f1419;--rule:#f0e9dc;--brand-teal:#0e7c73;--radius-chip:10px;--radius-button:14px;--radius-card:16px;--radius-tile:18px;--radius-pill:999px;--space-banner:50px;--space-grid:10px;--space-screen:16px;--shadow-banner:0 2px 14px rgba(14,124,115,.25);--shadow-nav:0 18px 40px -10px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.06) inset;--shadow-chunky:0 6px 18px -6px rgba(0,0,0,.25),0 1px 0 rgba(255,255,255,.18) inset}
+body{margin:0}
+a{color:#0e7c73}a:hover{color:#0b5f55}
+</style>
+</helmet>
+<div style="width: 390px; height: 1400px; position: relative; overflow: hidden; box-sizing: border-box; background: #F4F6FD; font-family: 'Inter Tight', ui-sans-serif, system-ui, sans-serif; color: #16110d;">
+  <x-import component-from-global-scope="Globeskimmers.BrandBanner" style="display: block; width: 390px;"></x-import>
+  <button type="button" aria-label="Text size" style="position: absolute; top: 5px; right: 12px; z-index: 2; width: 40px; height: 40px; border-radius: 999px; background: #ffffff; border: 1px solid #f0e9dc; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;">
+    <svg width="24" height="24" viewBox="0 0 28 28" fill="none" stroke="#16110d" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="16" r="6"></circle><circle cx="20.5" cy="16" r="6"></circle><path d="M13.5 15.2h1"></path><path d="M1.8 14 4.2 7.5"></path><path d="M26.2 14 23.8 7.5"></path></svg>
+  </button>
+
+  <div style="height: 12px;"></div>
+
+  <section aria-label="ATMs" style="position: relative; margin: 0 16px; padding: 12px 16px 18px; border-radius: 22px; background: #7487E6; overflow: hidden; box-sizing: border-box; min-height: 164px;">
+    <div aria-hidden="true" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; opacity: 0.1; background-image: repeating-linear-gradient(45deg, #15171C 0px, #15171C 1px, transparent 1px, transparent 5px), repeating-linear-gradient(-45deg, #15171C 0px, #15171C 1px, transparent 1px, transparent 5px); -webkit-mask-image: linear-gradient(90deg, transparent 0%, transparent 38%, #000000 84%); mask-image: linear-gradient(90deg, transparent 0%, transparent 38%, #000000 84%);"></div>
+
+    <div style="position: relative; display: flex; align-items: center; justify-content: space-between; height: 44px;">
+      <button type="button" aria-label="Back" style="width: 44px; height: 44px; padding: 0; border-radius: 999px; background: #FFFFFF; border: 1px solid #D2D9F5; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+        <x-import component-from-global-scope="Globeskimmers.Icons.ChevronLeft" size="{{ n20 }}" color="#15171C" style="display: block; width: 20px; height: 20px;"></x-import>
+      </button>
+      <button type="button" aria-label="Refresh" style="width: 44px; height: 44px; padding: 0; border-radius: 999px; background: #FFFFFF; border: 1px solid #D2D9F5; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#15171C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg>
+      </button>
+    </div>
+
+    <p style="position: relative; margin: 8px 0 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 13px; letter-spacing: 0.16em; color: #15171C;">ATMS · 40 NEAR YOU · 27 OPEN NOW</p>
+    <h1 style="position: relative; margin: 6px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 32px; line-height: 1.05; color: #15171C; white-space: nowrap;">Cash, <em style="font-style: italic; color: #15171C;">nearby</em></h1>
+
+    <div style="position: relative; display: flex; align-items: center; gap: 6px; height: 44px; margin-top: 6px;">
+      <x-import component-from-global-scope="Globeskimmers.Icons.MapPin" size="{{ n14 }}" color="#15171C" style="display: block; width: 14px; height: 14px; flex-shrink: 0;"></x-import>
+      <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: #15171C;">Downtown Los Angeles</span>
+      <a href="#" style="display: inline-flex; align-items: center; height: 44px; padding: 0 4px; flex-shrink: 0; font-size: 13px; font-weight: 500; color: #15171C; text-decoration: underline; text-underline-offset: 3px;">Change</a>
+      <div role="group" aria-label="Distance unit" style="margin-left: auto; flex-shrink: 0; display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D2D9F5;">
+        <button type="button" aria-pressed="true" style="width: 40px; height: 30px; padding: 0; border: 0; border-radius: 999px; background: #15171C; color: #FFFFFF; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; cursor: pointer;">MI</button>
+        <button type="button" aria-pressed="false" style="width: 40px; height: 30px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: #3A3128; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; cursor: pointer;">KM</button>
+      </div>
+    </div>
+  </section>
+
+  <div role="group" aria-label="Filters" style="display: flex; gap: 8px; margin: 14px 0 0 16px;">
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #D2D9F5; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <x-import component-from-global-scope="Globeskimmers.Icons.Clock" size="{{ n16 }}" color="#15171C" style="display: block; width: 16px; height: 16px;"></x-import>
+      Open only
+    </button>
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #D2D9F5; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#15171C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>
+      Open 24 hours
+    </button>
+    <button type="button" aria-haspopup="dialog" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 10px 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #D2D9F5; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <x-import component-from-global-scope="Globeskimmers.Icons.Landmark" size="{{ n16 }}" color="#15171C" style="display: block; width: 16px; height: 16px;"></x-import>
+      Banks
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3A3128" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+    </button>
+  </div>
+
+  <div role="group" aria-label="Fees and card networks" style="display: flex; gap: 8px; margin: 8px 0 0 16px;">
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #D2D9F5; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#15171C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"></path><path d="m9 12 2 2 4-4"></path></svg>
+      No-fee for my bank
+    </button>
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #D2D9F5; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <x-import component-from-global-scope="Globeskimmers.Icons.CreditCard" size="{{ n16 }}" color="#15171C" style="display: block; width: 16px; height: 16px;"></x-import>
+      Visa Plus
+    </button>
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #D2D9F5; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <x-import component-from-global-scope="Globeskimmers.Icons.CreditCard" size="{{ n16 }}" color="#15171C" style="display: block; width: 16px; height: 16px;"></x-import>
+      Mastercard Cirrus
+    </button>
+  </div>
+
+  <div role="note" style="display: flex; align-items: center; gap: 8px; margin: 12px 16px 0; padding: 10px 12px; border-radius: 12px; background: #E1E6FC; font-size: 12.5px; line-height: 17px; color: #15171C;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#15171C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+    <span>Fees vary by your bank — check before you withdraw.</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px; margin: 12px 16px 0;">
+
+    <article aria-label="1. Chase ATM" style="background: #FFFFFF; border: 1px solid #D2D9F5; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 24px -18px rgba(21,23,28,0.35);">
+      <div style="position: relative; height: 52px; background-color: #C7D0F8; background-image: repeating-linear-gradient(45deg, rgba(21,23,28,0.08) 0px, rgba(21,23,28,0.08) 1px, transparent 1px, transparent 5px), repeating-linear-gradient(-45deg, rgba(21,23,28,0.08) 0px, rgba(21,23,28,0.08) 1px, transparent 1px, transparent 5px);">
+        <span style="position: absolute; top: 14px; left: 12px; width: 30px; height: 24px; box-sizing: border-box; border-radius: 5px; border: 1px solid #15171C; background-color: #FFFFFF; background-image: linear-gradient(#15171C, #15171C), linear-gradient(#15171C, #15171C); background-size: 1px 100%, 1px 100%; background-position: 5px 0, 22px 0; background-repeat: no-repeat; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 16px; line-height: 1; color: #15171C;">1</span>
+        <x-import component-from-global-scope="Globeskimmers.Icons.CreditCard" size="{{ n22 }}" color="#15171C" style="position: absolute; top: 15px; left: 54px; display: block; width: 22px; height: 22px;"></x-import>
+        <span style="position: absolute; top: 15px; right: 12px; display: flex; gap: 6px;">
+          <span style="display: flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D2D9F5; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #15171C;">PLUS</span>
+          <span style="display: flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D2D9F5; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #15171C;">CIRRUS</span>
+        </span>
+      </div>
+      <div style="padding: 12px 16px 14px;">
+        <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 13px; letter-spacing: 0.12em; color: #15171C;">BANK BRANCH · 7TH &amp; FLOWER</p>
+        <h2 style="margin: 3px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 26px; color: #15171C;">Chase ATM</h2>
+        <p style="margin: 5px 0 0; font-size: 13px; line-height: 18px; color: #3A3128;"><span style="color: #2E6B4E; font-weight: 600;">Open 24 hours</span> · 0.2 mi</p>
+        <div style="position: relative; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #F7F8FE;">
+          <div aria-hidden="true" style="position: absolute; top: 0; left: 10px; right: 10px; border-top: 1px dashed #7487E6;"></div>
+          <div style="display: flex; gap: 8px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11.5px; line-height: 16px;">
+            <span style="width: 52px; flex-shrink: 0; letter-spacing: 0.08em; color: #736657;">FEES</span>
+            <span style="color: #15171C;">Free with Chase cards<br>Others ~$3 + your bank's fee</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button type="button" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 12px; border: 0; border-radius: 14px; background: #7487E6; color: #15171C; font-size: 15px; font-weight: 600; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Navigation" size="{{ n16 }}" color="#15171C" style="display: block; width: 16px; height: 16px;"></x-import>
+            Directions
+          </button>
+          <button type="button" aria-label="Chase ATM on the map" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D2D9F5; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Map" size="{{ n18 }}" color="#15171C" style="display: block; width: 18px; height: 18px;"></x-import>
+          </button>
+          <button type="button" aria-label="Call the Chase branch" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D2D9F5; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Phone" size="{{ n18 }}" color="#15171C" style="display: block; width: 18px; height: 18px;"></x-import>
+          </button>
+          <button type="button" aria-label="More about Chase ATM" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D2D9F5; cursor: pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#15171C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+          </button>
+        </div>
+      </div>
+    </article>
+
+    <article aria-label="2. Bank of America ATM" style="background: #FFFFFF; border: 1px solid #D2D9F5; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 24px -18px rgba(21,23,28,0.35);">
+      <div style="position: relative; height: 52px; background-color: #C7D0F8; background-image: repeating-linear-gradient(45deg, rgba(21,23,28,0.08) 0px, rgba(21,23,28,0.08) 1px, transparent 1px, transparent 5px), repeating-linear-gradient(-45deg, rgba(21,23,28,0.08) 0px, rgba(21,23,28,0.08) 1px, transparent 1px, transparent 5px);">
+        <span style="position: absolute; top: 14px; left: 12px; width: 30px; height: 24px; box-sizing: border-box; border-radius: 5px; border: 1px solid #15171C; background-color: #FFFFFF; background-image: linear-gradient(#15171C, #15171C), linear-gradient(#15171C, #15171C); background-size: 1px 100%, 1px 100%; background-position: 5px 0, 22px 0; background-repeat: no-repeat; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 16px; line-height: 1; color: #15171C;">2</span>
+        <x-import component-from-global-scope="Globeskimmers.Icons.CreditCard" size="{{ n22 }}" color="#15171C" style="position: absolute; top: 15px; left: 54px; display: block; width: 22px; height: 22px;"></x-import>
+        <span style="position: absolute; top: 15px; right: 12px; display: flex; gap: 6px;">
+          <span style="display: flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D2D9F5; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #15171C;">PLUS</span>
+          <span style="display: flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D2D9F5; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #15171C;">CIRRUS</span>
+        </span>
+      </div>
+      <div style="padding: 12px 16px 14px;">
+        <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 13px; letter-spacing: 0.12em; color: #15171C;">BANK BRANCH</p>
+        <h2 style="margin: 3px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 26px; color: #15171C;">Bank of America ATM</h2>
+        <p style="margin: 5px 0 0; font-size: 13px; line-height: 18px; color: #3A3128;"><span style="color: #736657;">Hours not listed</span> · 0.3 mi</p>
+        <div style="position: relative; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #F7F8FE;">
+          <div aria-hidden="true" style="position: absolute; top: 0; left: 10px; right: 10px; border-top: 1px dashed #7487E6;"></div>
+          <div style="display: flex; gap: 8px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11.5px; line-height: 16px;">
+            <span style="width: 52px; flex-shrink: 0; letter-spacing: 0.08em; color: #736657;">FEES</span>
+            <span style="color: #15171C;">Not listed: ask your bank</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button type="button" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 12px; border: 0; border-radius: 14px; background: #7487E6; color: #15171C; font-size: 15px; font-weight: 600; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Navigation" size="{{ n16 }}" color="#15171C" style="display: block; width: 16px; height: 16px;"></x-import>
+            Directions
+          </button>
+          <button type="button" aria-label="Bank of America ATM on the map" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D2D9F5; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Map" size="{{ n18 }}" color="#15171C" style="display: block; width: 18px; height: 18px;"></x-import>
+          </button>
+          <button type="button" aria-label="Call the Bank of America branch" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D2D9F5; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Phone" size="{{ n18 }}" color="#15171C" style="display: block; width: 18px; height: 18px;"></x-import>
+          </button>
+          <button type="button" aria-label="More about Bank of America ATM" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D2D9F5; cursor: pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#15171C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+          </button>
+        </div>
+      </div>
+    </article>
+
+    <article aria-label="3. Wells Fargo ATM" style="background: #FFFFFF; border: 1px solid #D2D9F5; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 24px -18px rgba(21,23,28,0.35);">
+      <div style="position: relative; height: 52px; background-color: #C7D0F8; background-image: repeating-linear-gradient(45deg, rgba(21,23,28,0.08) 0px, rgba(21,23,28,0.08) 1px, transparent 1px, transparent 5px), repeating-linear-gradient(-45deg, rgba(21,23,28,0.08) 0px, rgba(21,23,28,0.08) 1px, transparent 1px, transparent 5px);">
+        <span style="position: absolute; top: 14px; left: 12px; width: 30px; height: 24px; box-sizing: border-box; border-radius: 5px; border: 1px solid #15171C; background-color: #FFFFFF; background-image: linear-gradient(#15171C, #15171C), linear-gradient(#15171C, #15171C); background-size: 1px 100%, 1px 100%; background-position: 5px 0, 22px 0; background-repeat: no-repeat; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 16px; line-height: 1; color: #15171C;">3</span>
+        <x-import component-from-global-scope="Globeskimmers.Icons.CreditCard" size="{{ n22 }}" color="#15171C" style="position: absolute; top: 15px; left: 54px; display: block; width: 22px; height: 22px;"></x-import>
+        <span style="position: absolute; top: 15px; right: 12px; display: flex; gap: 6px;">
+          <span style="display: flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D2D9F5; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #15171C;">PLUS</span>
+          <span style="display: flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D2D9F5; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #15171C;">CIRRUS</span>
+        </span>
+      </div>
+      <div style="padding: 12px 16px 14px;">
+        <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 13px; letter-spacing: 0.12em; color: #15171C;">BANK BRANCH</p>
+        <h2 style="margin: 3px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 26px; color: #15171C;">Wells Fargo ATM</h2>
+        <p style="margin: 5px 0 0; font-size: 13px; line-height: 18px; color: #3A3128;"><span style="color: #736657;">Hours not listed</span> · 0.4 mi</p>
+        <div style="position: relative; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #F7F8FE;">
+          <div aria-hidden="true" style="position: absolute; top: 0; left: 10px; right: 10px; border-top: 1px dashed #7487E6;"></div>
+          <div style="display: flex; gap: 8px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11.5px; line-height: 16px;">
+            <span style="width: 52px; flex-shrink: 0; letter-spacing: 0.08em; color: #736657;">FEES</span>
+            <span style="color: #15171C;">Not listed: ask your bank</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button type="button" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 12px; border: 0; border-radius: 14px; background: #7487E6; color: #15171C; font-size: 15px; font-weight: 600; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Navigation" size="{{ n16 }}" color="#15171C" style="display: block; width: 16px; height: 16px;"></x-import>
+            Directions
+          </button>
+          <button type="button" aria-label="Wells Fargo ATM on the map" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D2D9F5; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Map" size="{{ n18 }}" color="#15171C" style="display: block; width: 18px; height: 18px;"></x-import>
+          </button>
+          <button type="button" aria-label="Call the Wells Fargo branch" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D2D9F5; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Phone" size="{{ n18 }}" color="#15171C" style="display: block; width: 18px; height: 18px;"></x-import>
+          </button>
+          <button type="button" aria-label="More about Wells Fargo ATM" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D2D9F5; cursor: pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#15171C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+          </button>
+        </div>
+      </div>
+    </article>
+
+    <article aria-label="4. Citi ATM" style="background: #FFFFFF; border: 1px solid #D2D9F5; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 24px -18px rgba(21,23,28,0.35);">
+      <div style="position: relative; height: 52px; background-color: #C7D0F8; background-image: repeating-linear-gradient(45deg, rgba(21,23,28,0.08) 0px, rgba(21,23,28,0.08) 1px, transparent 1px, transparent 5px), repeating-linear-gradient(-45deg, rgba(21,23,28,0.08) 0px, rgba(21,23,28,0.08) 1px, transparent 1px, transparent 5px);">
+        <span style="position: absolute; top: 14px; left: 12px; width: 30px; height: 24px; box-sizing: border-box; border-radius: 5px; border: 1px solid #15171C; background-color: #FFFFFF; background-image: linear-gradient(#15171C, #15171C), linear-gradient(#15171C, #15171C); background-size: 1px 100%, 1px 100%; background-position: 5px 0, 22px 0; background-repeat: no-repeat; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 16px; line-height: 1; color: #15171C;">4</span>
+        <x-import component-from-global-scope="Globeskimmers.Icons.CreditCard" size="{{ n22 }}" color="#15171C" style="position: absolute; top: 15px; left: 54px; display: block; width: 22px; height: 22px;"></x-import>
+        <span style="position: absolute; top: 15px; right: 12px; display: flex; gap: 6px;">
+          <span style="display: flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D2D9F5; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #15171C;">PLUS</span>
+          <span style="display: flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: #FFFFFF; border: 1px solid #D2D9F5; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: #15171C;">CIRRUS</span>
+        </span>
+      </div>
+      <div style="padding: 12px 16px 14px;">
+        <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 13px; letter-spacing: 0.12em; color: #15171C;">STANDALONE ATM</p>
+        <h2 style="margin: 3px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 26px; color: #15171C;">Citi ATM</h2>
+        <p style="margin: 5px 0 0; font-size: 13px; line-height: 18px; color: #3A3128;"><span style="color: #736657;">Hours not listed</span> · 0.6 mi</p>
+        <div style="position: relative; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #F7F8FE;">
+          <div aria-hidden="true" style="position: absolute; top: 0; left: 10px; right: 10px; border-top: 1px dashed #7487E6;"></div>
+          <div style="display: flex; gap: 8px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11.5px; line-height: 16px;">
+            <span style="width: 52px; flex-shrink: 0; letter-spacing: 0.08em; color: #736657;">FEES</span>
+            <span style="color: #15171C;">Not listed: ask your bank</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button type="button" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 12px; border: 0; border-radius: 14px; background: #7487E6; color: #15171C; font-size: 15px; font-weight: 600; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Navigation" size="{{ n16 }}" color="#15171C" style="display: block; width: 16px; height: 16px;"></x-import>
+            Directions
+          </button>
+          <button type="button" aria-label="Citi ATM on the map" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D2D9F5; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Map" size="{{ n18 }}" color="#15171C" style="display: block; width: 18px; height: 18px;"></x-import>
+          </button>
+          <button type="button" aria-label="More about Citi ATM" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #D2D9F5; cursor: pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#15171C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+          </button>
+        </div>
+      </div>
+    </article>
+
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 22px; display: flex; justify-content: center;">
+    <x-import component-from-global-scope="Globeskimmers.FloatingNav" unread="{{ n2 }}"></x-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1400}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { n2: 2, n14: 14, n16: 16, n18: 18, n20: 20, n22: 22 };
+  }
+}
+</script>
+</body>
+</html>

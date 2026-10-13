@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Restrooms</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/globeskimmers/components/bundle.css">
+<script src="ds/globeskimmers/components/bundle.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Inter+Tight:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+:root{--fs:1;--radius:.5rem;--passport-navy:#0c2b50;--passport-gold:#d6a64a;--cream-rule:#eadfc9;--stamp:#b0472f;--font-sans:"Inter Tight",ui-sans-serif,system-ui,sans-serif;--font-serif:"Instrument Serif",Georgia,serif;--font-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;--ivory:#fffcf7;--ivory-2:#f7f4ec;--paper:#ffffff;--cream:#fbf6ec;--ink:#16110d;--ink-2:#3a3128;--ink-3:#736657;--ink-cool:#0f1419;--rule:#f0e9dc;--brand-teal:#0e7c73;--radius-chip:10px;--radius-button:14px;--radius-card:16px;--radius-tile:18px;--radius-pill:999px;--space-banner:50px;--space-grid:10px;--space-screen:16px;--shadow-banner:0 2px 14px rgba(14,124,115,.25);--shadow-nav:0 18px 40px -10px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.06) inset;--shadow-chunky:0 6px 18px -6px rgba(0,0,0,.25),0 1px 0 rgba(255,255,255,.18) inset}
+body{margin:0}
+a{color:#0e7c73}a:hover{color:#0b5f55}
+</style>
+</helmet>
+<div style="width: 390px; height: 1400px; position: relative; overflow: hidden; box-sizing: border-box; background: #F7F6FB; font-family: 'Inter Tight', ui-sans-serif, system-ui, sans-serif; color: #16110d;">
+  <x-import component-from-global-scope="Globeskimmers.BrandBanner" style="display: block; width: 390px;"></x-import>
+  <button type="button" aria-label="Text size" style="position: absolute; top: 5px; right: 12px; z-index: 2; width: 40px; height: 40px; border-radius: 999px; background: #ffffff; border: 1px solid #f0e9dc; display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;">
+    <svg width="24" height="24" viewBox="0 0 28 28" fill="none" stroke="#16110d" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="16" r="6"></circle><circle cx="20.5" cy="16" r="6"></circle><path d="M13.5 15.2h1"></path><path d="M1.8 14 4.2 7.5"></path><path d="M26.2 14 23.8 7.5"></path></svg>
+  </button>
+
+  <div style="height: 12px;"></div>
+
+  <section aria-label="Restrooms" style="position: relative; margin: 0 16px; padding: 12px 16px 18px; border-radius: 22px; background: #E6E0F5; overflow: hidden; box-sizing: border-box; min-height: 164px;">
+    <div aria-hidden="true" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; background-image: repeating-linear-gradient(0deg, rgba(69,56,138,0.07) 0px, rgba(69,56,138,0.07) 1px, transparent 1px, transparent 14px), repeating-linear-gradient(90deg, rgba(69,56,138,0.07) 0px, rgba(69,56,138,0.07) 1px, transparent 1px, transparent 14px); -webkit-mask-image: linear-gradient(100deg, transparent 0%, transparent 44%, #000000 82%); mask-image: linear-gradient(100deg, transparent 0%, transparent 44%, #000000 82%);"></div>
+
+    <div style="position: relative; display: flex; align-items: center; justify-content: space-between; height: 44px;">
+      <button type="button" aria-label="Back" style="width: 44px; height: 44px; padding: 0; border-radius: 999px; background: #FFFFFF; border: 1px solid #DDD7EE; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+        <x-import component-from-global-scope="Globeskimmers.Icons.ChevronLeft" size="{{ n20 }}" color="#45388A" style="display: block; width: 20px; height: 20px;"></x-import>
+      </button>
+      <button type="button" aria-label="Refresh" style="width: 44px; height: 44px; padding: 0; border-radius: 999px; background: #FFFFFF; border: 1px solid #DDD7EE; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#45388A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg>
+      </button>
+    </div>
+
+    <p style="position: relative; margin: 8px 0 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 13px; letter-spacing: 0.16em; color: #45388A;">RESTROOMS · 30 NEAR YOU</p>
+    <h1 style="position: relative; margin: 6px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 32px; line-height: 1.05; color: #45388A; white-space: nowrap;">The nearest <em style="font-style: italic; color: #2F6046;">restroom</em></h1>
+
+    <div style="position: relative; display: flex; align-items: center; gap: 6px; height: 44px; margin-top: 6px;">
+      <x-import component-from-global-scope="Globeskimmers.Icons.MapPin" size="{{ n14 }}" color="#2F6046" style="display: block; width: 14px; height: 14px; flex-shrink: 0;"></x-import>
+      <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: #45388A;">Downtown Los Angeles</span>
+      <a href="#" style="display: inline-flex; align-items: center; height: 44px; padding: 0 4px; flex-shrink: 0; font-size: 13px; font-weight: 500; color: #45388A; text-decoration: underline; text-underline-offset: 3px;">Change</a>
+      <div role="group" aria-label="Distance unit" style="margin-left: auto; flex-shrink: 0; display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: #FFFFFF; border: 1px solid #DDD7EE;">
+        <button type="button" aria-pressed="true" style="width: 40px; height: 30px; padding: 0; border: 0; border-radius: 999px; background: #45388A; color: #FFFFFF; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; cursor: pointer;">MI</button>
+        <button type="button" aria-pressed="false" style="width: 40px; height: 30px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: #3A3128; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; cursor: pointer;">KM</button>
+      </div>
+    </div>
+  </section>
+
+  <button type="button" style="display: flex; align-items: center; gap: 12px; width: 358px; height: 52px; margin: 12px 0 0 16px; padding: 0 16px; box-sizing: border-box; border: 0; border-radius: 14px; background: #45388A; color: #FFFFFF; text-align: left; cursor: pointer; box-shadow: 0 12px 24px -16px rgba(69,56,138,0.7);">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10"></circle><path d="M22 12h-4"></path><path d="M6 12H2"></path><path d="M12 6V2"></path><path d="M12 22v-4"></path></svg>
+    <span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;">
+      <span style="font-size: 15px; font-weight: 600; line-height: 18px; color: #FFFFFF;">Nearest open restroom</span>
+      <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; font-weight: 500; line-height: 12px; letter-spacing: 0.12em; color: rgba(255,255,255,0.82); white-space: nowrap;">NEAREST NOW · FROM YOUR EXACT SPOT</span>
+    </span>
+    <x-import component-from-global-scope="Globeskimmers.Icons.ArrowRight" size="{{ n18 }}" color="#FFFFFF" style="display: block; width: 18px; height: 18px; flex-shrink: 0;"></x-import>
+  </button>
+
+  <div role="group" aria-label="Filters" style="display: flex; gap: 8px; margin: 12px 0 0 16px;">
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #DDD7EE; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <x-import component-from-global-scope="Globeskimmers.Icons.Clock" size="{{ n16 }}" color="#45388A" style="display: block; width: 16px; height: 16px;"></x-import>
+      Open now
+    </button>
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #DDD7EE; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#45388A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+      Free
+    </button>
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #DDD7EE; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#45388A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="16" cy="4" r="1"></circle><path d="m18 19 1-7-6 1"></path><path d="m5 8 3-3 5.5 3-2.36 3.5"></path><path d="M4.24 14.5a5 5 0 0 0 6.88 6"></path><path d="M13.76 17.5a5 5 0 0 0-6.88-6"></path></svg>
+      Accessible
+    </button>
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #DDD7EE; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#45388A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12h.01"></path><path d="M15 12h.01"></path><path d="M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5"></path><path d="M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1"></path></svg>
+      Baby changing
+    </button>
+  </div>
+
+  <div role="group" aria-label="Place types" style="display: flex; gap: 8px; margin: 8px 0 0 16px;">
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #DDD7EE; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <x-import component-from-global-scope="Globeskimmers.Icons.Landmark" size="{{ n16 }}" color="#45388A" style="display: block; width: 16px; height: 16px;"></x-import>
+      Public
+    </button>
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #DDD7EE; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#45388A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3.1V7a4 4 0 0 0 8 0V3.1"></path><path d="m9 15-1-1"></path><path d="m15 15 1-1"></path><path d="M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z"></path><path d="m8 19-2 3"></path><path d="m16 19 2 3"></path></svg>
+      Transit
+    </button>
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #DDD7EE; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <x-import component-from-global-scope="Globeskimmers.Icons.Coffee" size="{{ n16 }}" color="#45388A" style="display: block; width: 16px; height: 16px;"></x-import>
+      Coffee &amp; food
+    </button>
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #DDD7EE; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <x-import component-from-global-scope="Globeskimmers.Icons.ShoppingBag" size="{{ n16 }}" color="#45388A" style="display: block; width: 16px; height: 16px;"></x-import>
+      Shopping
+    </button>
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #DDD7EE; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#45388A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h4a1 1 0 0 1 1 1v4a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-4a1 1 0 0 1 1-1h4a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2h-4a1 1 0 0 1-1-1V4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4a1 1 0 0 1-1 1z"></path></svg>
+      Medical
+    </button>
+    <button type="button" aria-pressed="false" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid #DDD7EE; font-size: 13px; font-weight: 600; color: #3A3128; white-space: nowrap; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#45388A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 10v.2A3 3 0 0 1 8.9 16H5a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z"></path><path d="M7 16v6"></path><path d="M13 19v3"></path><path d="M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .8-1.7L13 3l-1.4 1.5"></path></svg>
+      Parks
+    </button>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px; margin: 12px 16px 0;">
+
+    <article aria-label="1. Pershing Square" style="background: #FFFFFF; border: 1px solid #DDD7EE; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 24px -18px rgba(69,56,138,0.35);">
+      <div style="position: relative; height: 72px; background-color: #E6E0F5; background-image: repeating-linear-gradient(0deg, rgba(69,56,138,0.10) 0px, rgba(69,56,138,0.10) 1px, transparent 1px, transparent 14px), repeating-linear-gradient(90deg, rgba(69,56,138,0.10) 0px, rgba(69,56,138,0.10) 1px, transparent 1px, transparent 14px);">
+        <span style="position: absolute; top: 22px; left: 12px; width: 28px; height: 28px; box-sizing: border-box; border-radius: 999px; background: #FFFFFF; border: 1px solid #DDD7EE; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 17px; line-height: 1; color: #45388A;">1</span>
+        <x-import component-from-global-scope="Globeskimmers.Icons.Toilet" size="{{ n22 }}" color="#45388A" style="position: absolute; top: 25px; left: 54px; display: block; width: 22px; height: 22px;"></x-import>
+        <span style="position: absolute; top: 23px; right: 12px; display: flex; height: 26px; box-sizing: border-box; border: 1px solid #2F6046; border-radius: 6px; overflow: hidden;">
+          <span style="display: flex; align-items: center; gap: 5px; padding: 0 8px; background: #2F6046; color: #FFFFFF; font-size: 12px; font-weight: 600; white-space: nowrap;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>Free restroom</span>
+          <span style="display: flex; align-items: center; padding: 0 7px; background: #FFFFFF; color: #6A4A12; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; font-weight: 500; letter-spacing: 0.1em;">LIKELY</span>
+        </span>
+      </div>
+      <div style="padding: 12px 16px 14px;">
+        <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 13px; letter-spacing: 0.12em; color: #45388A;">PUBLIC PARK</p>
+        <h2 style="margin: 3px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 26px; color: #16110D;">Pershing Square</h2>
+        <p style="margin: 5px 0 0; font-size: 13px; line-height: 18px; color: #3A3128;"><span style="color: #736657;">Hours not confirmed</span> · 0.1 mi · ★ 4.1 · Google</p>
+        <p style="display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 12px; line-height: 18px; color: #736657;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#45388A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          From Skimmer reports. Accessible: not confirmed.
+        </p>
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button type="button" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 12px; border: 0; border-radius: 14px; background: #45388A; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Navigation" size="{{ n16 }}" color="#FFFFFF" style="display: block; width: 16px; height: 16px;"></x-import>
+            Directions
+          </button>
+          <button type="button" aria-label="Pershing Square on the map" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #DDD7EE; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Map" size="{{ n18 }}" color="#45388A" style="display: block; width: 18px; height: 18px;"></x-import>
+          </button>
+          <button type="button" aria-label="More about Pershing Square" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #DDD7EE; cursor: pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#45388A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+          </button>
+        </div>
+      </div>
+    </article>
+
+    <article aria-label="2. LA Central Library" style="background: #FFFFFF; border: 1px solid #DDD7EE; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 24px -18px rgba(69,56,138,0.35);">
+      <div style="position: relative; height: 72px; background-color: #E6E0F5; background-image: repeating-linear-gradient(0deg, rgba(69,56,138,0.10) 0px, rgba(69,56,138,0.10) 1px, transparent 1px, transparent 14px), repeating-linear-gradient(90deg, rgba(69,56,138,0.10) 0px, rgba(69,56,138,0.10) 1px, transparent 1px, transparent 14px);">
+        <span style="position: absolute; top: 22px; left: 12px; width: 28px; height: 28px; box-sizing: border-box; border-radius: 999px; background: #FFFFFF; border: 1px solid #DDD7EE; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 17px; line-height: 1; color: #45388A;">2</span>
+        <x-import component-from-global-scope="Globeskimmers.Icons.Toilet" size="{{ n22 }}" color="#45388A" style="position: absolute; top: 25px; left: 54px; display: block; width: 22px; height: 22px;"></x-import>
+        <span style="position: absolute; top: 23px; right: 12px; display: flex; height: 26px; box-sizing: border-box; border: 1px solid #2F6046; border-radius: 6px; overflow: hidden;">
+          <span style="display: flex; align-items: center; gap: 5px; padding: 0 8px; background: #2F6046; color: #FFFFFF; font-size: 12px; font-weight: 600; white-space: nowrap;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>Free restroom</span>
+          <span style="display: flex; align-items: center; padding: 0 7px; background: #FFFFFF; color: #2F6046; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; font-weight: 500; letter-spacing: 0.1em;">CONFIRMED</span>
+        </span>
+      </div>
+      <div style="padding: 12px 16px 14px;">
+        <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 13px; letter-spacing: 0.12em; color: #45388A;">PUBLIC LIBRARY</p>
+        <h2 style="margin: 3px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 26px; color: #16110D;">LA Central Library</h2>
+        <p style="margin: 5px 0 0; font-size: 13px; line-height: 18px; color: #3A3128;"><span style="color: #2E6B4E; font-weight: 600;">Open until 8 PM</span> · 0.2 mi · ★ 4.7 · Google</p>
+        <div style="display: flex; gap: 6px; margin-top: 10px;">
+          <span style="display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border-radius: 8px; background: #ECE8F7; color: #45388A; font-size: 12.5px; font-weight: 600; white-space: nowrap;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#45388A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="16" cy="4" r="1"></circle><path d="m18 19 1-7-6 1"></path><path d="m5 8 3-3 5.5 3-2.36 3.5"></path><path d="M4.24 14.5a5 5 0 0 0 6.88 6"></path><path d="M13.76 17.5a5 5 0 0 0-6.88-6"></path></svg>
+            Accessible
+          </span>
+          <span style="display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border-radius: 8px; background: #ECE8F7; color: #45388A; font-size: 12.5px; font-weight: 600; white-space: nowrap;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#45388A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12h.01"></path><path d="M15 12h.01"></path><path d="M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5"></path><path d="M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1"></path></svg>
+            Baby changing
+          </span>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button type="button" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 12px; border: 0; border-radius: 14px; background: #45388A; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Navigation" size="{{ n16 }}" color="#FFFFFF" style="display: block; width: 16px; height: 16px;"></x-import>
+            Directions
+          </button>
+          <button type="button" aria-label="LA Central Library on the map" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #DDD7EE; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Map" size="{{ n18 }}" color="#45388A" style="display: block; width: 18px; height: 18px;"></x-import>
+          </button>
+          <button type="button" aria-label="Call LA Central Library" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #DDD7EE; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Phone" size="{{ n18 }}" color="#45388A" style="display: block; width: 18px; height: 18px;"></x-import>
+          </button>
+          <button type="button" aria-label="More about LA Central Library" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #DDD7EE; cursor: pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#45388A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+          </button>
+        </div>
+      </div>
+    </article>
+
+    <article aria-label="3. Grand Central Market" style="background: #FFFFFF; border: 1px solid #DDD7EE; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 24px -18px rgba(69,56,138,0.35);">
+      <div style="position: relative; height: 72px; background-color: #E6E0F5; background-image: repeating-linear-gradient(0deg, rgba(69,56,138,0.10) 0px, rgba(69,56,138,0.10) 1px, transparent 1px, transparent 14px), repeating-linear-gradient(90deg, rgba(69,56,138,0.10) 0px, rgba(69,56,138,0.10) 1px, transparent 1px, transparent 14px);">
+        <span style="position: absolute; top: 22px; left: 12px; width: 28px; height: 28px; box-sizing: border-box; border-radius: 999px; background: #FFFFFF; border: 1px solid #DDD7EE; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 17px; line-height: 1; color: #45388A;">3</span>
+        <x-import component-from-global-scope="Globeskimmers.Icons.Toilet" size="{{ n22 }}" color="#45388A" style="position: absolute; top: 25px; left: 54px; display: block; width: 22px; height: 22px;"></x-import>
+        <span style="position: absolute; top: 23px; right: 12px; display: flex; height: 26px; box-sizing: border-box; border: 1px solid rgba(106,74,18,0.45); border-radius: 6px; overflow: hidden;">
+          <span style="display: flex; align-items: center; gap: 5px; padding: 0 8px; background: #F6EBD2; color: #6A4A12; font-size: 12px; font-weight: 600; white-space: nowrap;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.ShoppingBag" size="{{ n12 }}" color="#6A4A12" style="display: block; width: 12px; height: 12px;"></x-import>
+            Customers only
+          </span>
+          <span style="display: flex; align-items: center; padding: 0 7px; background: #FFFFFF; color: #6A4A12; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; font-weight: 500; letter-spacing: 0.1em;">LIKELY</span>
+        </span>
+      </div>
+      <div style="padding: 12px 16px 14px;">
+        <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 13px; letter-spacing: 0.12em; color: #45388A;">FOOD HALL</p>
+        <h2 style="margin: 3px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 26px; color: #16110D;">Grand Central Market</h2>
+        <p style="margin: 5px 0 0; font-size: 13px; line-height: 18px; color: #3A3128;"><span style="color: #736657;">Hours not listed</span> · 0.3 mi · ★ 4.7 · Google</p>
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button type="button" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 12px; border: 0; border-radius: 14px; background: #45388A; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Navigation" size="{{ n16 }}" color="#FFFFFF" style="display: block; width: 16px; height: 16px;"></x-import>
+            Directions
+          </button>
+          <button type="button" aria-label="Grand Central Market on the map" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #DDD7EE; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Map" size="{{ n18 }}" color="#45388A" style="display: block; width: 18px; height: 18px;"></x-import>
+          </button>
+          <button type="button" aria-label="Call Grand Central Market" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #DDD7EE; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Phone" size="{{ n18 }}" color="#45388A" style="display: block; width: 18px; height: 18px;"></x-import>
+          </button>
+          <button type="button" aria-label="More about Grand Central Market" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #DDD7EE; cursor: pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#45388A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+          </button>
+        </div>
+      </div>
+    </article>
+
+    <article aria-label="4. Union Station" style="background: #FFFFFF; border: 1px solid #DDD7EE; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 24px -18px rgba(69,56,138,0.35);">
+      <div style="position: relative; height: 72px; background-color: #E6E0F5; background-image: repeating-linear-gradient(0deg, rgba(69,56,138,0.10) 0px, rgba(69,56,138,0.10) 1px, transparent 1px, transparent 14px), repeating-linear-gradient(90deg, rgba(69,56,138,0.10) 0px, rgba(69,56,138,0.10) 1px, transparent 1px, transparent 14px);">
+        <span style="position: absolute; top: 22px; left: 12px; width: 28px; height: 28px; box-sizing: border-box; border-radius: 999px; background: #FFFFFF; border: 1px solid #DDD7EE; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', Georgia, serif; font-size: 17px; line-height: 1; color: #45388A;">4</span>
+        <x-import component-from-global-scope="Globeskimmers.Icons.Toilet" size="{{ n22 }}" color="#45388A" style="position: absolute; top: 25px; left: 54px; display: block; width: 22px; height: 22px;"></x-import>
+        <span style="position: absolute; top: 23px; right: 12px; display: flex; height: 26px; box-sizing: border-box; border: 1px solid #2F6046; border-radius: 6px; overflow: hidden;">
+          <span style="display: flex; align-items: center; gap: 5px; padding: 0 8px; background: #2F6046; color: #FFFFFF; font-size: 12px; font-weight: 600; white-space: nowrap;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>Free restroom</span>
+          <span style="display: flex; align-items: center; padding: 0 7px; background: #FFFFFF; color: #2F6046; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 9.5px; font-weight: 500; letter-spacing: 0.1em;">CONFIRMED</span>
+        </span>
+      </div>
+      <div style="padding: 12px 16px 14px;">
+        <p style="margin: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 500; line-height: 13px; letter-spacing: 0.12em; color: #45388A;">TRAIN STATION</p>
+        <h2 style="margin: 3px 0 0; font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 26px; color: #16110D;">Union Station</h2>
+        <p style="margin: 5px 0 0; font-size: 13px; line-height: 18px; color: #3A3128;"><span style="color: #2E6B4E; font-weight: 600;">Open 24 hours</span> · 0.9 mi · ★ 4.6 · Google</p>
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button type="button" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 12px; border: 0; border-radius: 14px; background: #45388A; color: #FFFFFF; font-size: 15px; font-weight: 600; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Navigation" size="{{ n16 }}" color="#FFFFFF" style="display: block; width: 16px; height: 16px;"></x-import>
+            Directions
+          </button>
+          <button type="button" aria-label="Union Station on the map" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #DDD7EE; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Map" size="{{ n18 }}" color="#45388A" style="display: block; width: 18px; height: 18px;"></x-import>
+          </button>
+          <button type="button" aria-label="Call Union Station" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #DDD7EE; cursor: pointer;">
+            <x-import component-from-global-scope="Globeskimmers.Icons.Phone" size="{{ n18 }}" color="#45388A" style="display: block; width: 18px; height: 18px;"></x-import>
+          </button>
+          <button type="button" aria-label="More about Union Station" style="flex-shrink: 0; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #FFFFFF; border: 1px solid #DDD7EE; cursor: pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#45388A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+          </button>
+        </div>
+      </div>
+    </article>
+
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 22px; display: flex; justify-content: center;">
+    <x-import component-from-global-scope="Globeskimmers.FloatingNav" unread="{{ n2 }}"></x-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1400}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { n2: 2, n12: 12, n14: 14, n16: 16, n18: 18, n20: 20, n22: 22 };
+  }
+}
+</script>
+</body>
+</html>
