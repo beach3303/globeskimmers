@@ -1725,3 +1725,16 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   screens captured with mocked routes.
 - **Activate:** after Apple approves — merge stamping-v2 into main (worker + site deploy), check
   /places/suggestions answers 200 with `places`, then `npm run ota`. No SQL to run.
+
+## 2026-10-13 — Website: new-look landing page + the business card's QR pages LIVE (main)
+- Founder chose landing version 1 ("Folders") under version 2's passport cover; previews were private artifacts.
+- Pushed to main (website only, no worker or migration paths): c702dcb landing page, 93c295a /get + /card
+  (cherry-pick of 0e22f4f), f616eaa /get copy ("Free on iPhone, and soon on Android": the Play listing is
+  still not public, HTTP 404). Deploy website run 38467081923 succeeded; no worker deploy ran.
+- Verified live: globeskimmers.io and www serve the new page; /card → /card/ → /get?src=card → /get/?src=card
+  (the query survives the trailing-slash 307); iPhone/iPad open the App Store, Android opens Google Play with
+  referrer utm_source=card&utm_medium=print, desktop shows both buttons. app-ads.txt still 200.
+- stamping-v2 carries the same three site files (d9aae38, 926a5ff), so the later merge is clean there.
+- **Activate:** when Android goes public on Play, change /get's line back to "Free on iPhone and Android" and the
+  landing page's "Coming soon on Android" boxes to a Google Play badge. Optional: paste the App Store Connect
+  campaign provider token into APPLE_PT in site/get/index.html to count card downloads.
