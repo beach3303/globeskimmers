@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { useIsTablet } from '@/lib/useIsTablet';
 import { socialUnread } from '@/lib/passport';
+import { NEUTRAL, rgba } from '@/components/redesign/constants';
 
 // Floating pill nav — fixed, centered, 22px above bottom safe area.
 // 5 anchors: Home, Mailbox, Passport, Profile, Settings (Mailbox carries the
@@ -11,8 +12,12 @@ import { socialUnread } from '@/lib/passport';
 // action moved to Settings ("Refresh app data").
 //
 // Active state is derived from useLocation().pathname so Layout can render
-// <FloatingNav /> without prop wiring. Pass `dark` over dark/map surfaces
-// for higher contrast.
+// <FloatingNav /> without prop wiring. Your circle (/Circle) lights Profile,
+// since it opens from there; someone else's page (/Traveler) and the finders
+// light no tab. Pass `dark` over dark/map surfaces for higher contrast.
+//
+// An always-on 1px cream outer ring keeps the pill's edge readable where it
+// floats over dark ground (the navy and plum Home bands, the dark plates).
 //
 // Props:
 //   dark:   pass `true` over dark/map surfaces to lift contrast.
@@ -62,7 +67,8 @@ export default function FloatingNav({ active, dark = false }) {
     if (path.includes('mailbox')) return 'mailbox';
     if (path.includes('settings')) return 'settings';
     if (path === '/' || path.includes('home')) return 'home';
-    return null;  // any other finder/page -> no tab highlighted
+    if (path.includes('circle')) return 'profile';  // your circle opens from Profile
+    return null;  // any other finder/page (and /Traveler) -> no tab highlighted
   };
   const activeTab = detectActive();
 
@@ -101,7 +107,7 @@ export default function FloatingNav({ active, dark = false }) {
         backdropFilter: 'blur(20px) saturate(160%)',
         WebkitBackdropFilter: 'blur(20px) saturate(160%)',
         boxShadow:
-          '0 18px 40px -10px rgba(0,0,0,.3), 0 0 0 1px rgba(255,255,255,.06) inset',
+          `0 18px 40px -10px rgba(0,0,0,.3), 0 0 0 1px rgba(255,255,255,.06) inset, 0 0 0 1px ${rgba(NEUTRAL.cream, 0.12)}`,
         zIndex: 40,
       }}
     >
