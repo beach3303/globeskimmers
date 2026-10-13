@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-10-08
+Last updated: 2026-10-13
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -826,7 +826,11 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   download within 8 seconds (`autoSplashscreenTimeout`), otherwise on the next launch. The next binary (build 14)
   must be built from code that has 3a73df2, so the fix is inside the app itself.
 
-- **New look, 2026-10-12: pick a direction.** Founder asks the same day: more contrast and a different
+- **New look — APPROVED by the founder 2026-10-13** ("now this design is phenomenal … I say approve on
+  this design"; "your circle" approved with it — it is in the approved screens). Building it into the app
+  on branch `new-look` (off stamping-v2); nothing ships until stamping-v2 has merged and the founder says
+  go (OTA). Still open: **Home A or B** — both are built behind one switch, default B (recommended).
+  Original ask and mockups, 2026-10-12: Founder asks the same day: more contrast and a different
   background or bordered box for each section without clutter (Home and Profile); followers/following
   shown creatively, the profile feeling like someone's personal world; every finder its own two- or
   three-colour world (coffee energetic, personal and sophisticated); a kinder word than "people" that
