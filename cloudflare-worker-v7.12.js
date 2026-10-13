@@ -1234,14 +1234,24 @@ async function handleLogEvent(request, env) {
 // Requires the Worker secret SUPABASE_SERVICE_ROLE_KEY (`wrangler secret put`).
 // Everything a traveler created, removed: guestbook notes anonymized and
 // their photos down, stamps + memory photos + R2 objects, tags, share link,
-// postcards they sent (and their photos), follow edges both ways, their
-// "I'm here" reports, and their place suggestions (and photos) and likes.
-// Shared by account deletion and the under-age freeze (keepAccount: the auth
-// user stays so an appeal can restore ACCESS). A failing step never stops the
-// next; the result says which steps failed ({ ok, failed }) so the freeze
-// sweep can retry. Photos come down BEFORE the rows that name them, and a
-// row group whose photos failed is kept, so a retry can still find them.
-async function gbPurgeUserContent(env, userId) {
+// postcards they sent or received (and their photos), follow edges both
+// ways, their "I'm here" reports, their place suggestions (and photos) and
+// likes, dish and drink posts (and photos), messages to place owners,
+// signatures, doodles, reactions and co-signs (theirs, and everyone's on
+// their own pages), the profile photo, luggage, virtual items, saved places
+// and username/Seal requests (founder, 2026-10-13: deletion removes what the
+// privacy policy promises). The social profile: account deletion removes the
+// row (with the birthday) and the blocks both ways; the under-13 freeze
+// (keepAccount: the auth user stays so an appeal can restore ACCESS) clears
+// the profile but keeps the age record — birth year, month/day, tier and
+// gate country — so the account stays frozen and the appeal has something
+// to correct. Content reports a traveler filed are safety records and stay.
+// A failing step never stops the next; the result says which steps failed
+// ({ ok, failed }) so the sweeps retry. Photos come down BEFORE the rows that
+// name them, and a row group whose photos failed is kept, so a retry can
+// still find them.
+async function gbPurgeUserContent(env, userId, opts = {}) {
+  const keepAccount = !!opts.keepAccount;
   const failed = [];
   const SUPABASE_URL = env.SUPABASE_URL || 'https://bkaxadiyehddzkiuheea.supabase.co';
   const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY;
@@ -1278,6 +1288,23 @@ async function gbPurgeUserContent(env, userId) {
       return true;
     } catch { failed.push(step); return false; }
   };
+  // Everything under a per-user R2 prefix (pp/<uid>/, dish/<uid>/, bl/<uid>/)
+  // — catches objects whose rows went first (an older delete, a failed insert).
+  const r2Prefix = async (step, prefix) => {
+    if (!env.MEDIA || typeof env.MEDIA.list !== 'function') return true;
+    try {
+      let cursor;
+      for (let i = 0; i < 50; i++) {
+        const page = await env.MEDIA.list({ prefix, cursor, limit: 1000 });
+        const keys = (page.objects || []).map((o) => o.key).filter(Boolean);
+        if (keys.length) await env.MEDIA.delete(keys);
+        if (!page.truncated) break;
+        cursor = page.cursor;
+      }
+      return true;
+    } catch { failed.push(step); return false; }
+  };
+  const uidOk = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(userId));
 
   // 1b) Anonymize their PUBLIC guestbook notes (keep the tip, drop the identity —
   //     Apple 5.1.1 / GDPR; the photos come DOWN) + remove their PRIVATE visit records.
@@ -1296,6 +1323,7 @@ async function gbPurgeUserContent(env, userId) {
   if (ppPhotos && await r2('passport_photos_r2', ppPhotos.map((r) => r.photo_key))) {
     await del('passport_stamps', `passport_stamps?user_id=eq.${userId}`);   // cascades the photo rows
   }
+  if (uidOk) await r2Prefix('passport_photos_prefix', `pp/${userId}/`);
   await del('passport_tags', `passport_tags?or=(from_user_id.eq.${userId},to_user_id.eq.${userId})`);
   await del('passport_shares', `passport_shares?user_id=eq.${userId}`);
 
@@ -1309,14 +1337,65 @@ async function gbPurgeUserContent(env, userId) {
     }
   } catch { failed.push('stamp_reports'); }
 
-  // 1e) Postcards they sent (+ their R2 photos) and follow edges both ways.
+  // 1e) Postcards they sent or received (+ their R2 photos) and follow edges both ways.
   const pcSent = await rows('postcards_sent', `postcards?sender_id=eq.${userId}&select=photo_key`);
   if (pcSent && await r2('postcards_sent_r2', pcSent.map((r) => r.photo_key))) {
     await del('postcards_sent', `postcards?sender_id=eq.${userId}`);
   }
+  const pcGot = await rows('postcards_received', `postcards?to_user_id=eq.${userId}&select=photo_key`);
+  if (pcGot && await r2('postcards_received_r2', pcGot.map((r) => r.photo_key))) {
+    await del('postcards_received', `postcards?to_user_id=eq.${userId}`);
+  }
   await del('user_follows', `user_follows?or=(follower_id.eq.${userId},followee_id.eq.${userId})`);
 
-  // 1f) Their place suggestions (+ their photos in R2), likes, reports and
+  // 1f) Dish and drink posts (+ photos), and messages to place owners.
+  const dishes = await rows('dish_posts', `place_dishes?user_id=eq.${userId}&select=photo_key`);
+  if (dishes && await r2('dish_photos_r2', dishes.map((r) => r.photo_key))) {
+    await del('dish_posts', `place_dishes?user_id=eq.${userId}`);
+  }
+  if (uidOk) await r2Prefix('dish_photos_prefix', `dish/${userId}/`);
+  await del('owner_notes', `owner_notes?user_id=eq.${userId}`);
+
+  // 1g) The Blotter: signatures and doodles they left (co-signs under them
+  //     cascade), their reactions and co-signs, and everything left on their
+  //     own pages (those pages are gone with the stamps).
+  const signed = await rows('blotter_signed', `blotter_entries?author_user_id=eq.${userId}&select=doodle_key`);
+  if (signed && await r2('blotter_signed_r2', signed.map((r) => r.doodle_key))) {
+    await del('blotter_signed', `blotter_entries?author_user_id=eq.${userId}`);
+  }
+  await del('blotter_marks', `blotter_marks?user_id=eq.${userId}`);
+  await del('blotter_cosigns', `blotter_cosigns?user_id=eq.${userId}`);
+  const onMine = await rows('blotter_on_mine', `blotter_entries?owner_user_id=eq.${userId}&select=doodle_key`);
+  if (onMine && await r2('blotter_on_mine_r2', onMine.map((r) => r.doodle_key))) {
+    await del('blotter_on_mine', `blotter_entries?owner_user_id=eq.${userId}`);
+  }
+  await del('blotter_marks_on_mine', `blotter_marks?owner_user_id=eq.${userId}`);
+  if (uidOk) await r2Prefix('blotter_doodles_prefix', `bl/${userId}/`);
+
+  // 1h) Luggage, virtual items, saved places, username/Seal requests.
+  await del('luggage_state', `luggage_state?user_id=eq.${userId}`);
+  await del('profile_gear', `profile_gear?user_id=eq.${userId}`);
+  await del('user_saves', `user_saves?user_id=eq.${userId}`);
+  await del('handle_requests', `handle_requests?user_id=eq.${userId}`);
+
+  // 1i) The social profile and its photo. A freeze keeps only the age record.
+  const prof = await rows('social_profile', `social_profiles?user_id=eq.${userId}&select=avatar_key`);
+  if (prof && await r2('avatar_r2', prof.map((r) => r.avatar_key))) {
+    if (keepAccount) {
+      if (prof.length) {
+        await call('social_profile', `social_profiles?user_id=eq.${userId}`, {
+          method: 'PATCH', headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({ display_name: null, bio: null, website: null, favorites: null, dreams: null, avatar_key: null, mailbox_seen_at: null, updated_at: new Date().toISOString() }),
+        });
+      }
+    } else {
+      await del('social_profile', `social_profiles?user_id=eq.${userId}`);
+    }
+  }
+  // Blocks are safety settings: they go with the account, never with a freeze.
+  if (!keepAccount) await del('user_blocks', `user_blocks?or=(user_id.eq.${userId},blocked_user_id.eq.${userId})`);
+
+  // 1j) Their place suggestions (+ their photos in R2), likes, reports and
   //     daily counts (events D1). A place only they had suggested goes too —
   //     its name and pin were theirs — unless the founder already decided it
   //     (an approved place has other people's stamps; a declined or removed
@@ -1373,7 +1452,12 @@ async function handleDeleteAccount(request, env) {
     const userId = who?.id;
     if (!userId) return jsonResponse({ error: 'Could not identify account' }, 401);
 
-    await gbPurgeUserContent(env, userId);
+    // A step that failed is retried by the daily cron (purge:<uid>), so the
+    // account is never left half-deleted for good.
+    const purge = await gbPurgeUserContent(env, userId);
+    if (!purge.ok && env.GLOBESKIMMERS_KV) {
+      await env.GLOBESKIMMERS_KV.put(`purge:${userId}`, JSON.stringify({ at: new Date().toISOString(), failed_steps: purge.failed.slice(0, 12) })).catch(() => {});
+    }
 
     // 2) Hard-delete the auth user (cascades profiles + login_events).
     const delRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
@@ -1390,7 +1474,10 @@ async function handleDeleteAccount(request, env) {
     try {
       if (env.DB) await env.DB.prepare('DELETE FROM member_numbers WHERE user_id = ?1').bind(String(userId).toLowerCase()).run();
     } catch { /* no table yet, or D1 down */ }
-    if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.delete(`bell:user:${userId}`).catch(() => {});
+    if (env.GLOBESKIMMERS_KV) {
+      await env.GLOBESKIMMERS_KV.delete(`bell:user:${userId}`).catch(() => {});
+      await env.GLOBESKIMMERS_KV.delete(`freeze:${userId}`).catch(() => {});   // nothing left to purge
+    }
 
     return jsonResponse({ ok: true });
   } catch (e) {
@@ -16086,7 +16173,7 @@ const GB_TIER_COLS = 'social_tier,birth_year,birth_md,country_at_gate';
 // under-13 (on the stored birthday) ever gets one. The exact deletion window
 // is pending counsel (brief question 2); 7 days is the placeholder.
 const FREEZE_PURGE_DAYS = 7;
-const FREEZE_SWEEP_MAX = 5;        // purges per daily run (~40 subrequests each); the rest wait a day
+const FREEZE_SWEEP_MAX = 5;        // purges per daily run (~60 subrequests each); the rest wait a day
 const gbUnderAge = (sp) => sp?.social_tier === 'blocked';
 const gbUnderAgeResp = () => jsonResponse({ error: "GlobeSkimmers isn't available on this account", code: 'under_age' }, 403);
 async function gbMarkFrozen(env, userId) {
@@ -16151,6 +16238,34 @@ async function freezeSweep(env, now = new Date()) {
         await kv.put(name, JSON.stringify({ ...rec, purged_at: now.toISOString() })).catch(() => {});
         out.purged++;
         await gbLogEvent(env, 'age_frozen_purged', {}).catch(() => {});
+      } catch { out.failed++; /* one account never stops the sweep */ }
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  return out;
+}
+// Daily: finish the deletion of accounts whose purge had a failed step
+// (handleDeleteAccount queues purge:<uid>). The auth user is already gone,
+// so there is no age to check — only the leftovers to remove.
+async function purgeRetrySweep(env, now = new Date()) {
+  const out = { done: 0, failed: 0 };
+  const kv = env.GLOBESKIMMERS_KV; if (!kv) return out;
+  let cursor, attempts = 0;
+  do {
+    const page = await kv.list({ prefix: 'purge:', cursor });
+    for (const { name } of page.keys) {
+      if (attempts >= FREEZE_SWEEP_MAX) return out;
+      try {
+        const userId = name.slice('purge:'.length);
+        if (!BL_UUID.test(userId)) { await kv.delete(name).catch(() => {}); continue; }
+        const rec = (await kv.get(name, { type: 'json' }).catch(() => null)) || {};
+        attempts++;
+        const res = await gbPurgeUserContent(env, userId);
+        if (res.ok) { await kv.delete(name).catch(() => {}); out.done++; continue; }
+        out.failed++;
+        const tries = (Number(rec.tries) || 0) + 1;
+        await kv.put(name, JSON.stringify({ ...rec, tries, last_try: now.toISOString(), failed_steps: res.failed.slice(0, 12) })).catch(() => {});
+        if (tries === 3) await founderAlert(env, `⚠️ A deleted account's clean-up has failed 3 days running (steps: ${res.failed.slice(0, 6).join(', ')}). It retries daily — check the worker's SUPABASE_SERVICE_ROLE_KEY and R2.`, 'bell').catch(() => {});
       } catch { out.failed++; /* one account never stops the sweep */ }
     }
     cursor = page.list_complete ? null : page.cursor;
@@ -23493,6 +23608,8 @@ export default {
     }
     // Under-age freeze: delete content of accounts frozen past the window.
     try { await freezeSweep(env); } catch (_e) { /* tomorrow's cron tries again */ }
+    // Deleted accounts whose clean-up had a failed step: finish it.
+    try { await purgeRetrySweep(env); } catch (_e) { /* tomorrow's cron tries again */ }
   }
 };
 // CI test Mon May 11 06:28:51 PDT 2026
