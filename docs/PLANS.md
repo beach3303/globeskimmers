@@ -826,6 +826,20 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   download within 8 seconds (`autoSplashscreenTimeout`), otherwise on the next launch. The next binary (build 14)
   must be built from code that has 3a73df2, so the fix is inside the app itself.
 
+- **New look, 2026-10-12: pick a direction.** Founder asks the same day: more contrast and a different
+  background or bordered box for each section without clutter (Home and Profile); followers/following
+  shown creatively, the profile feeling like someone's personal world; every finder its own two- or
+  three-colour world (coffee energetic, personal and sophisticated); a kinder word than "people" that
+  still means friends and followers. Mockups (18 screens, no app code changed) on the design canvas
+  https://claude.ai/artifact/AArKJHwntKyYgLj5mfYsmn: Home as **A** (each zone a full-width colour band)
+  or **B** (each zone a bordered box with a folder tab); your profile and a friend's (cover in the
+  owner's chosen colour, trunk on top, the circle drawn as orbits); a Your circle screen; the Mailbox;
+  a colour sheet; all eleven finders (Eat Bordeaux + saffron, Coffee espresso + ember, Things to Do
+  lapis + terracotta, Restrooms iris, ATMs graphite + gold, Money banknote green + rose, Weather storm
+  + apricot, Phrases mustard, Culture olive + brass, Convenience night + lime, Shopping plum + blush).
+  Word proposal: **"your circle"** ("Where your *circle* has been", "Travel is better with your
+  *circle*"). Waiting on: A or B, any colour to change, and a yes on "circle".
+
 - globeskimmers.com (M1): never ours. The founder owns globeskimmers.io only (confirmed 2026-09-14). The .com sits in the registry redemption period at Domain Esta Aqui, LLC (Network Solutions / SnapNames group) and likely deletes around 2026-09-20. Decide whether to backorder it at a drop-catch service (DropCatch, SnapNames, GoDaddy) before then, or let it go. Nothing in the app, website or store listing depends on it.
 - Approve "Mobility needs" and its choices (G110).
 - Flights (N9): **approved in principle 2026-09-24** — founder: "let's allow flight booking." Founder's hard requirements, same day: **GlobeSkimmers must earn on every flight** (so "at cost" is out), the traveler gets a **confirmation email** from bookings@globeskimmers.io, and the booking **lands in My Trips** with cancel — "mimic hotel booking". **Brief delivered the same day (Claude memory: flights-in-app-brief): recommended supplier is Nuitée's flights product** — Nuitée is merchant of record and charges the card through the same Stripe SDK as hotels, the markup is set in the dashboard (Flights → Commission; start 3–5%, not 12%, penalties 0), fees are 1% of ticket value (min €2, max €10) plus €25 per voluntary change, and the email, My Trips row and cancel copy the hotel lane. Duffel is out for now: its card path forbids any markup, needs pre-approval plus a written fraud procedure, puts chargebacks on us and asks for a deposit. Awaiting the founder: confirm Nuitée + the markup %, submit "Request Flights API Access" (sandbox and production, answers drafted), decide the support model (First Line recommended) and the seller-of-travel question. Build ≈ 15 working days, sandbox first. No flight booking code exists yet; the Duffel test token on the worker is unused.
@@ -883,6 +897,8 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 - The Passport Standard: https://claude.ai/code/artifact/d501e554-4e86-4b1a-be4c-ae5f43c97328
 - Landing page preview: https://claude.ai/code/artifact/a8854364-b319-4e45-bdf7-2fb96c874a86
 - Home, simplified (the Home proposal, 2026-09-21): https://claude.ai/code/artifact/cd56623a-c57f-42a2-a291-36541dace4cd
+- Design review of today's app (what Claude Design built, and what to improve; 2026-10-12): https://claude.ai/artifact/Y555D69mYw2HVDz8yAN447
+- New look canvas (zoned Home A/B, personal-world profile, finder colour worlds; 2026-10-12): https://claude.ai/artifact/AArKJHwntKyYgLj5mfYsmn
 - Founder kit for Launchhouse Atlanta (pitches, prep-app answers, LinkedIn; fact-checked): docs/FOUNDER_KIT_2026-09.md
 - Traveler scenarios, what real trips demand: docs/TRAVELER_SCENARIOS.md
 - Shipped receipts: the bottom of docs/BUILD_TEST_CHECKLIST.md
