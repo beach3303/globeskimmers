@@ -1236,83 +1236,85 @@ async function handleLogEvent(request, env) {
 // their photos down, stamps + memory photos + R2 objects, tags, share link,
 // postcards they sent (and their photos), follow edges both ways, their
 // "I'm here" reports, and their place suggestions (and photos) and likes.
-// Shared by account deletion and the under-age freeze
-// (which keeps the auth user so an appeal can restore ACCESS). Best-effort
-// throughout: a failure in one block never stops the next.
+// Shared by account deletion and the under-age freeze (keepAccount: the auth
+// user stays so an appeal can restore ACCESS). A failing step never stops the
+// next; the result says which steps failed ({ ok, failed }) so the freeze
+// sweep can retry. Photos come down BEFORE the rows that name them, and a
+// row group whose photos failed is kept, so a retry can still find them.
 async function gbPurgeUserContent(env, userId) {
+  const failed = [];
   const SUPABASE_URL = env.SUPABASE_URL || 'https://bkaxadiyehddzkiuheea.supabase.co';
-  const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!SERVICE_KEY || !userId) return;
-  // 1b) Anonymize their PUBLIC guestbook notes (keep the tip, drop the identity —
-  //     Apple 5.1.1 / GDPR) + remove their PRIVATE visit records. Best-effort.
-  try {
-    // Purge their uploaded photos from R2 first (the tips stay, anonymized; the
-    // photos come DOWN — honoring deletion, not just anonymizing).
+  const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY;
+  if (!SERVICE_KEY || !userId) return { ok: false, failed: ['config'] };
+  // One PostgREST call; null (and the step noted as failed) unless it answered 2xx.
+  const call = async (step, path, init = {}) => {
     try {
-      const pr = await fetch(`${SUPABASE_URL}/rest/v1/guestbook_entries?user_id=eq.${userId}&photo_key=not.is.null&select=photo_key`, {
-        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-      });
-      if (pr.ok && env.MEDIA) {
-        const withPhotos = await pr.json();
-        await Promise.all((withPhotos || []).map((r) => env.MEDIA.delete(r.photo_key).catch(() => {})));
-      }
-    } catch { /* R2 purge best-effort */ }
-    await fetch(`${SUPABASE_URL}/rest/v1/guestbook_entries?user_id=eq.${userId}`, {
-      method: 'PATCH',
-      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { ...init, headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json', ...(init.headers || {}) } });
+      if (!r.ok) { failed.push(step); return null; }
+      return r;
+    } catch { failed.push(step); return null; }
+  };
+  // Every row (pages of 1000 — PostgREST's cap), or null when a page failed.
+  const rows = async (step, path) => {
+    const out = [];
+    for (let off = 0; off < 50000; off += 1000) {
+      const r = await call(step, `${path}&limit=1000&offset=${off}`);
+      if (!r) return null;
+      let page;
+      try { page = (await r.json()) || []; } catch { failed.push(step); return null; }
+      out.push(...page);
+      if (page.length < 1000) break;
+    }
+    return out;
+  };
+  const del = (step, path) => call(step, path, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+  // R2 objects (≤1000 per call); true when every key is gone.
+  const r2 = async (step, keys) => {
+    const list = [...new Set((keys || []).filter((k) => typeof k === 'string' && k))];
+    if (!list.length) return true;
+    if (!env.MEDIA) { failed.push(step); return false; }
+    try {
+      for (let i = 0; i < list.length; i += 1000) await env.MEDIA.delete(list.slice(i, i + 1000));
+      return true;
+    } catch { failed.push(step); return false; }
+  };
+
+  // 1b) Anonymize their PUBLIC guestbook notes (keep the tip, drop the identity —
+  //     Apple 5.1.1 / GDPR; the photos come DOWN) + remove their PRIVATE visit records.
+  const gbPhotos = await rows('guestbook_photos', `guestbook_entries?user_id=eq.${userId}&photo_key=not.is.null&select=photo_key`);
+  if (gbPhotos && await r2('guestbook_photos_r2', gbPhotos.map((r) => r.photo_key))) {
+    await call('guestbook_entries', `guestbook_entries?user_id=eq.${userId}`, {
+      method: 'PATCH', headers: { Prefer: 'return=minimal' },
       body: JSON.stringify({ user_id: null, display_name: 'A traveler', home_city: null, photo_key: null, photo_url: null }),
     });
-    await fetch(`${SUPABASE_URL}/rest/v1/guestbook_visits?user_id=eq.${userId}`, {
-      method: 'DELETE',
-      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-    });
-  } catch { /* anonymization is best-effort; still delete the account */ }
+  }
+  await del('guestbook_visits', `guestbook_visits?user_id=eq.${userId}`);
 
   // 1c) Passport is PRIVATE (not public UGC) → fully DELETE the user's stamps +
-  //     memory photos + their R2 objects. Best-effort.
-  try {
-    try {
-      const pr = await fetch(`${SUPABASE_URL}/rest/v1/passport_stamp_photos?user_id=eq.${userId}&select=photo_key`, {
-        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-      });
-      if (pr.ok && env.MEDIA) {
-        const rows = await pr.json();
-        await Promise.all((rows || []).map((r) => env.MEDIA.delete(r.photo_key).catch(() => {})));
-      }
-    } catch { /* R2 purge best-effort */ }
-    // Delete stamps (cascades photo rows via FK).
-    await fetch(`${SUPABASE_URL}/rest/v1/passport_stamps?user_id=eq.${userId}`, {
-      method: 'DELETE',
-      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-    });
-    // Remove buddy-tags they sent or received + their share link.
-    await fetch(`${SUPABASE_URL}/rest/v1/passport_tags?or=(from_user_id.eq.${userId},to_user_id.eq.${userId})`, {
-      method: 'DELETE',
-      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-    });
-    await fetch(`${SUPABASE_URL}/rest/v1/passport_shares?user_id=eq.${userId}`, {
-      method: 'DELETE',
-      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-    });
-  } catch { /* passport purge best-effort; still delete the account */ }
+  //     memory photos + their R2 objects, tags both ways, and their share link.
+  const ppPhotos = await rows('passport_photos', `passport_stamp_photos?user_id=eq.${userId}&select=photo_key`);
+  if (ppPhotos && await r2('passport_photos_r2', ppPhotos.map((r) => r.photo_key))) {
+    await del('passport_stamps', `passport_stamps?user_id=eq.${userId}`);   // cascades the photo rows
+  }
+  await del('passport_tags', `passport_tags?or=(from_user_id.eq.${userId},to_user_id.eq.${userId})`);
+  await del('passport_shares', `passport_shares?user_id=eq.${userId}`);
 
   // 1d) Their "I'm here, but the app is saying I'm not" reports (events D1,
-  //     keyed by the same anonymous code the report used). Best-effort.
+  //     keyed by the same anonymous code the report used).
   try {
     if (env.DB) {
       await env.DB.prepare(STAMP_REPORT_SQL).run();
       const code = (await sha256Hex(`${userId}:stamp-report`)).slice(0, 8);
       await env.DB.prepare('DELETE FROM stamp_reports WHERE user_code = ?').bind(code).run();
     }
-  } catch { /* report purge best-effort; still delete the account */ }
+  } catch { failed.push('stamp_reports'); }
 
   // 1e) Postcards they sent (+ their R2 photos) and follow edges both ways.
-  try {
-    const pq = await fetch(`${SUPABASE_URL}/rest/v1/postcards?sender_id=eq.${userId}&select=photo_key`, { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Accept-Profile': 'api' } });
-    if (pq.ok && env.MEDIA) await Promise.all(((await pq.json()) || []).map((r) => r.photo_key && env.MEDIA.delete(r.photo_key).catch(() => {})));
-    await gbRest(env, `postcards?sender_id=eq.${userId}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
-    await gbRest(env, `user_follows?or=(follower_id.eq.${userId},followee_id.eq.${userId})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
-  } catch { /* best-effort */ }
+  const pcSent = await rows('postcards_sent', `postcards?sender_id=eq.${userId}&select=photo_key`);
+  if (pcSent && await r2('postcards_sent_r2', pcSent.map((r) => r.photo_key))) {
+    await del('postcards_sent', `postcards?sender_id=eq.${userId}`);
+  }
+  await del('user_follows', `user_follows?or=(follower_id.eq.${userId},followee_id.eq.${userId})`);
 
   // 1f) Their place suggestions (+ their photos in R2), likes, reports and
   //     daily counts (events D1). A place only they had suggested goes too —
@@ -1323,29 +1325,32 @@ async function gbPurgeUserContent(env, userId) {
     if (env.DB) {
       await psEnsure(env);
       const { results } = await env.DB.prepare('SELECT place_id, photo_key FROM ps_votes WHERE user_id = ?').bind(userId).all();
-      if (env.MEDIA) await Promise.all((results || []).filter((r) => r.photo_key).map((r) => env.MEDIA.delete(r.photo_key).catch(() => {})));
-      await env.DB.batch([
-        env.DB.prepare('DELETE FROM ps_votes WHERE user_id = ?').bind(userId),
-        env.DB.prepare('DELETE FROM ps_likes WHERE user_id = ?').bind(userId),
-        env.DB.prepare('DELETE FROM ps_reports WHERE user_id = ?').bind(userId),
-        env.DB.prepare('DELETE FROM ps_rate WHERE user_id = ?').bind(userId),
-      ]);
-      const ids = [...new Set((results || []).map((r) => r.place_id))];
-      for (let i = 0; i < ids.length; i += 90) {   // D1 binds at most 100 values a query
-        const chunk = ids.slice(i, i + 90);
-        const { results: gone } = await env.DB.prepare(`SELECT id FROM ps_places WHERE id IN (${chunk.map(() => '?').join(',')})
-            AND status IN ('open', 'held') AND NOT EXISTS (SELECT 1 FROM ps_votes v WHERE v.place_id = ps_places.id)`).bind(...chunk).all();
-        const g = (gone || []).map((r) => r.id);
-        if (!g.length) continue;
-        const qs = g.map(() => '?').join(',');
+      if (await r2('suggestion_photos_r2', (results || []).map((r) => r.photo_key))) {
         await env.DB.batch([
-          env.DB.prepare(`DELETE FROM ps_likes WHERE place_id IN (${qs})`).bind(...g),
-          env.DB.prepare(`DELETE FROM ps_reports WHERE place_id IN (${qs})`).bind(...g),
-          env.DB.prepare(`DELETE FROM ps_places WHERE id IN (${qs})`).bind(...g),
+          env.DB.prepare('DELETE FROM ps_votes WHERE user_id = ?').bind(userId),
+          env.DB.prepare('DELETE FROM ps_likes WHERE user_id = ?').bind(userId),
+          env.DB.prepare('DELETE FROM ps_reports WHERE user_id = ?').bind(userId),
+          env.DB.prepare('DELETE FROM ps_rate WHERE user_id = ?').bind(userId),
         ]);
+        const ids = [...new Set((results || []).map((r) => r.place_id))];
+        for (let i = 0; i < ids.length; i += 90) {   // D1 binds at most 100 values a query
+          const chunk = ids.slice(i, i + 90);
+          const { results: gone } = await env.DB.prepare(`SELECT id FROM ps_places WHERE id IN (${chunk.map(() => '?').join(',')})
+              AND status IN ('open', 'held') AND NOT EXISTS (SELECT 1 FROM ps_votes v WHERE v.place_id = ps_places.id)`).bind(...chunk).all();
+          const g = (gone || []).map((r) => r.id);
+          if (!g.length) continue;
+          const qs = g.map(() => '?').join(',');
+          await env.DB.batch([
+            env.DB.prepare(`DELETE FROM ps_likes WHERE place_id IN (${qs})`).bind(...g),
+            env.DB.prepare(`DELETE FROM ps_reports WHERE place_id IN (${qs})`).bind(...g),
+            env.DB.prepare(`DELETE FROM ps_places WHERE id IN (${qs})`).bind(...g),
+          ]);
+        }
       }
     }
-  } catch { /* suggestion purge best-effort; still delete the account */ }
+  } catch { failed.push('suggestions'); }
+
+  return { ok: failed.length === 0, failed };
 }
 
 async function handleDeleteAccount(request, env) {
@@ -13901,6 +13906,7 @@ async function handlePassportStamp(request, env, ctx) {
     // Kept for the report's age check and the founder's alert below.
     const stamperSp = await gbSocialProfile(env, user.id).catch(() => null);
     if (gbUnderAge(stamperSp)) return gbUnderAgeResp();
+    if (gbNeedsConfirm(stamperSp)) return gbConfirmResp();
     const b = await request.json().catch(() => ({}));
     let name = String(b.name || '').trim();   // a Local favorite takes its approved name below
     if (!name) return jsonResponse({ error: 'name required' }, 400);
@@ -14308,7 +14314,7 @@ async function handlePassportShare(request, env) {
         const sp = await gbSocialProfile(env, user.id);
         if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
         if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Sharing isn\'t available on this account' }, 403);
-    if (gbTeenHold(sp)) return gbTeenHoldResp();
+    if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
         if (sp.social_tier === 'teen') return jsonResponse({ error: 'Public passports open at age 18 — you\'ll be able to share with friends soon' }, 403);
         // Fail-closed photo moderation the moment the journal becomes public:
         // unchecked photos get reviewed in the background; the public
@@ -14519,7 +14525,9 @@ async function handlePassportPhotoUpload(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in to add a photo' }, 401);
-    if (gbUnderAge(await gbSocialProfile(env, user.id).catch(() => null))) return gbUnderAgeResp();
+    const upSp = await gbSocialProfile(env, user.id).catch(() => null);
+    if (gbUnderAge(upSp)) return gbUnderAgeResp();
+    if (gbNeedsConfirm(upSp)) return gbConfirmResp();
     if (!env.MEDIA) return jsonResponse({ error: 'Photo storage not configured' }, 500);
     const b = await request.json().catch(() => ({}));
     const stampId = String(b.stamp_id || '');
@@ -14876,7 +14884,7 @@ async function handlePlaceDishAdd(request, env, ctx) {
     // birthday gate is the age check, and it must hold at every posting door.
     if (!sp?.birth_year) return jsonResponse({ error: 'Add your birthday in Settings to share photos', code: 'age_required' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Sharing isn\'t available on this account' }, 403);
-    if (gbTeenHold(sp)) return gbTeenHoldResp();
+    if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
 
     // Where the place is: Google's location from the details cache when we have
     // it, otherwise the coordinates the finder listed it at.
@@ -15221,7 +15229,7 @@ async function handlePlaceSuggestCheck(request, env) {
     if (!user) return jsonResponse({ error: 'Sign in to suggest a place' }, 401);
     const sp = await gbSocialProfile(env, user.id).catch(() => null);
     if (gbUnderAge(sp)) return gbUnderAgeResp();
-    if (gbTeenHold(sp)) return gbTeenHoldResp();
+    if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
     const b = await request.json().catch(() => ({}));
     const pt = psPoint(b);
     if (!pt) return jsonResponse({ error: 'Set where the place is first' }, 400);
@@ -15243,7 +15251,7 @@ async function handlePlaceSuggest(request, env, ctx) {
     const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
     if (sp === undefined) return jsonResponse({ error: 'Couldn’t check your account — try again' }, 503);
     if (gbUnderAge(sp)) return gbUnderAgeResp();
-    if (gbTeenHold(sp)) return gbTeenHoldResp();
+    if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
     if (!sp?.birth_year) return jsonResponse({ error: 'Add your birthday in Settings to suggest a place', code: 'age_required' }, 428);
     const b = await request.json().catch(() => ({}));
     const pt = psPoint(b);
@@ -15442,7 +15450,9 @@ async function handlePlaceLike(request, env) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in to like a place' }, 401);
-    if (gbUnderAge(await gbSocialProfile(env, user.id).catch(() => null))) return gbUnderAgeResp();
+    const likeSp = await gbSocialProfile(env, user.id).catch(() => null);
+    if (gbUnderAge(likeSp)) return gbUnderAgeResp();
+    if (gbNeedsConfirm(likeSp)) return gbConfirmResp();
     if (!env.DB) return jsonResponse({ error: 'DB not configured' }, 500);
     const b = await request.json().catch(() => ({}));
     const id = psId(b.id);
@@ -15721,7 +15731,7 @@ async function handleOwnerNote(request, env, ctx) {
     if (sp === undefined) return jsonResponse({ error: 'Couldn’t check your account — try again' }, 503);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required', message: 'Add your birth year in Settings to send messages.' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Messages aren’t available on this account' }, 403);
-    if (gbTeenHold(sp)) return gbTeenHoldResp();
+    if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
     if (env.GLOBESKIMMERS_KV) {
       const ck = `ownernote:${user.id}:${new Date().toISOString().slice(0, 10)}`;
       const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
@@ -15951,25 +15961,52 @@ async function handlePassportPhotoDelete(request, env, ctx) {
 const PP_PLAY_URL = 'https://play.google.com/store/apps/details?id=com.globeskimmers.app';
 const PP_IOS_URL = 'https://apps.apple.com/us/app/globeskimmers/id6753154199';
 // ── Social P1 (2026-09-30): age gate, profile v1, visibility, reports ──────
-// The tiers: under-13 never gets social (no handle, no public); 13–17 gets no
-// PUBLIC passport (friends comes with P2) and stricter defaults; Australians
-// under 16 get no social at all (their law is live). Birth year locks after
-// the first write — age-up edits go through support.
-function socialTierFor(year, country, md) {
+// The tiers come from the birthday alone (founder decisions, 2026-10-13):
+//   'blocked'  under 13: frozen, and its content deleted (freezeSweep).
+//   'confirm'  a legacy year-only birthday that could be 12 or 13 (born in
+//              currentYear-13): no stamping or posting and no purge clock
+//              until the month and day are given once (POST /social/age
+//              { birth_md }), which recomputes the tier.
+//   'teen'     13–17: the teen hold below; travel tools + a private passport.
+//   'adult'    18+.
+// The country never makes anyone 'blocked': a country's social minimum
+// (Australia under 16) holds social features only — socialCountryHold. The
+// birthday locks after the first write; age-up edits go through support.
+// `now` is a parameter only so the boundaries can be tested.
+function socialAgeOf(year, md, now = new Date()) {
   const y = Math.round(Number(year));
-  if (!(y >= 1900 && y <= new Date().getFullYear())) return null;
-  // EXACT age from the full birthday (founder, 2026-10-05: year alone let a
-  // December-born 17-year-old count as 18 all year). Month/day unknown =
-  // assume the birthday hasn't happened yet — conservative, never older.
-  const now = new Date();
-  let age = now.getUTCFullYear() - y;
+  const cy = now.getUTCFullYear();
+  if (!(y >= 1900 && y <= cy)) return null;
   const m = /^(\d{2})-(\d{2})$/.exec(String(md || ''));
-  const passed = m ? (now.getUTCMonth() + 1 > Number(m[1]) || (now.getUTCMonth() + 1 === Number(m[1]) && now.getUTCDate() >= Number(m[2]))) : false;
-  if (!passed) age -= 1;
-  if (age < 13) return 'blocked';
-  if (age < 16 && String(country || '').toUpperCase() === 'AU') return 'blocked';
-  if (age < 18) return 'teen';
+  const mo = m ? Number(m[1]) : 0, d = m ? Number(m[2]) : 0;
+  if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+    // EXACT age from the full birthday (founder, 2026-10-05: year alone let a
+    // December-born 17-year-old count as 18 all year).
+    const nm = now.getUTCMonth() + 1, nd = now.getUTCDate();
+    const age = cy - y - (nm > mo || (nm === mo && nd >= d) ? 0 : 1);
+    return { min: age, max: age };
+  }
+  // Year only: anywhere from (cy - y - 1) to (cy - y).
+  return { min: cy - y - 1, max: cy - y };
+}
+function socialTierFor(year, _country, md, now = new Date()) {
+  const a = socialAgeOf(year, md, now);
+  if (!a) return null;
+  if (a.max < 13) return 'blocked';   // under 13 whatever the month and day
+  if (a.min < 13) return 'confirm';   // 12 or 13: ask for the month and day once
+  if (a.min < 18) return 'teen';      // year only: the birthday counts as not yet had
   return 'adult';
+}
+// Country minimums for social features (teens plan §1, AU law since
+// 2025-12-10). Under one, a 13+ account is held like a teen — travel tools
+// and a private passport stay — and the hold outlives TEEN_SOCIAL_ENABLED.
+// The country is the one seen at the age gate.
+const SOCIAL_COUNTRY_MIN_AGE = { AU: 16 };
+function socialCountryHold(sp, now = new Date()) {
+  const min = SOCIAL_COUNTRY_MIN_AGE[String(sp?.country_at_gate || '').toUpperCase()];
+  if (!min) return false;
+  const a = socialAgeOf(sp.birth_year, sp.birth_md, now);
+  return !a || a.min < min;
 }
 // Teen hold (founder, 2026-10-11): every social and publishing feature is
 // OFF for 13–17 until the teen-safety stack ships and counsel blesses the
@@ -15977,16 +16014,24 @@ function socialTierFor(year, country, md) {
 // passport stay. The teen rails built throughout this file remain intact —
 // flip TEEN_SOCIAL_ENABLED to true to restore them exactly as designed.
 const TEEN_SOCIAL_ENABLED = false;
-const gbTeenHold = (sp) => !TEEN_SOCIAL_ENABLED && sp?.social_tier === 'teen';
+const gbTeenHold = (sp) => sp?.social_tier === 'teen' && (!TEEN_SOCIAL_ENABLED || socialCountryHold(sp));
 const gbTeenHoldResp = () => jsonResponse({ error: 'Social features open at age 18 — your passport stays yours, private', code: 'teen_hold' }, 403);
+// 'confirm': nothing is stamped or posted until the month and day are in.
+const gbNeedsConfirm = (sp) => sp?.social_tier === 'confirm';
+const gbConfirmResp = () => jsonResponse({ error: 'confirm_birthday', code: 'confirm_birthday', message: 'Add the month and day of your birthday in Settings first' }, 403);
+// The social doors' one check: a held teen, or a birth year still to confirm.
+const gbAgeHeld = (sp) => gbNeedsConfirm(sp) || gbTeenHold(sp);
+const gbAgeHeldResp = (sp) => (gbNeedsConfirm(sp) ? gbConfirmResp() : gbTeenHoldResp());
 
-// Under-minimum-age FREEZE (founder decision 2026-10-11, teens plan §3): a
-// birthday under the minimum age freezes the account at once — no stamps,
-// photos or social — its content is deleted after FREEZE_PURGE_DAYS by the
-// daily cron, and an appeal (admin, /admin/age-appeal) restores ACCESS only,
-// never deleted content. The exact deletion window is pending counsel
-// (brief question 2); 7 days is the placeholder.
+// Under-13 FREEZE (founder decisions 2026-10-11 and 2026-10-13, teens plan
+// §3): an under-13 birthday freezes the account at once — no stamps, photos
+// or social — and its content is deleted after FREEZE_PURGE_DAYS by the daily
+// cron; an appeal (admin, /admin/age-appeal) restores ACCESS only, never
+// deleted content. The marker freeze:<uid> is the purge clock; only a true
+// under-13 (on the stored birthday) ever gets one. The exact deletion window
+// is pending counsel (brief question 2); 7 days is the placeholder.
 const FREEZE_PURGE_DAYS = 7;
+const FREEZE_SWEEP_MAX = 5;        // purges per daily run (~40 subrequests each); the rest wait a day
 const gbUnderAge = (sp) => sp?.social_tier === 'blocked';
 const gbUnderAgeResp = () => jsonResponse({ error: "GlobeSkimmers isn't available on this account", code: 'under_age' }, 403);
 async function gbMarkFrozen(env, userId) {
@@ -15996,57 +16041,107 @@ async function gbMarkFrozen(env, userId) {
   await kv.put(k, JSON.stringify({ at: new Date().toISOString() })).catch(() => {});
   await gbLogEvent(env, 'age_frozen', {}).catch(() => {});
 }
+// The birthday no longer says under 13 (a 12-year-old has turned 13, the
+// month and day were completed, an appeal): the purge clock stops.
+async function gbClearFrozen(env, userId) {
+  const kv = env.GLOBESKIMMERS_KV; if (!kv || !userId) return;
+  const k = `freeze:${userId}`;
+  const rec = await kv.get(k).catch(() => null);
+  if (!rec) return;
+  await kv.delete(k).catch(() => {});
+  await gbLogEvent(env, 'age_frozen_cleared', {}).catch(() => {});
+}
 // Daily: delete the content of accounts frozen longer than FREEZE_PURGE_DAYS.
-async function freezeSweep(env) {
-  const kv = env.GLOBESKIMMERS_KV; if (!kv) return;
-  const cutoff = Date.now() - FREEZE_PURGE_DAYS * 86400000;
-  let cursor;
+// Right before deleting, the age is checked AGAIN from the stored birthday;
+// an account that is no longer under 13 loses its marker instead. If the
+// check can't be made, nothing is deleted today. A purge with any failed step
+// keeps its marker and is tried again tomorrow — purged_at is written only
+// when every step succeeded (the founder hears about a third failed day).
+async function freezeSweep(env, now = new Date()) {
+  const out = { purged: 0, cleared: 0, failed: 0 };
+  const kv = env.GLOBESKIMMERS_KV; if (!kv) return out;
+  const cutoff = now.getTime() - FREEZE_PURGE_DAYS * 86400000;
+  let cursor, attempts = 0;
   do {
     const page = await kv.list({ prefix: 'freeze:', cursor });
     for (const { name } of page.keys) {
-      const rec = await kv.get(name, { type: 'json' }).catch(() => null);
-      if (!rec || rec.purged_at || Date.parse(rec.at || 0) > cutoff) continue;
-      const userId = name.slice('freeze:'.length);
-      await gbPurgeUserContent(env, userId);
-      await kv.put(name, JSON.stringify({ ...rec, purged_at: new Date().toISOString() })).catch(() => {});
-      await gbLogEvent(env, 'age_frozen_purged', {}).catch(() => {});
+      if (attempts >= FREEZE_SWEEP_MAX) return out;
+      try {
+        const rec = await kv.get(name, { type: 'json' }).catch(() => null);
+        if (!rec || rec.purged_at || !(Date.parse(rec.at || '') <= cutoff)) continue;
+        const userId = name.slice('freeze:'.length);
+        if (!BL_UUID.test(userId)) continue;
+        let row;
+        try {
+          const q = await gbRest(env, `social_profiles?user_id=eq.${userId}&select=birth_year,birth_md`, {});
+          if (!q.ok) throw new Error(String(q.status));
+          row = (await q.json())[0] || null;
+        } catch { out.failed++; continue; }   // couldn't check the age: no delete today
+        if (socialTierFor(row?.birth_year, null, row?.birth_md, now) !== 'blocked') {
+          await kv.delete(name).catch(() => {});
+          out.cleared++;
+          await gbLogEvent(env, 'age_frozen_cleared', {}).catch(() => {});
+          continue;
+        }
+        attempts++;
+        const res = await gbPurgeUserContent(env, userId, { keepAccount: true });
+        if (!res.ok) {
+          out.failed++;
+          const tries = (Number(rec.tries) || 0) + 1;
+          await kv.put(name, JSON.stringify({ ...rec, tries, last_try: now.toISOString(), failed_steps: res.failed.slice(0, 12) })).catch(() => {});
+          await gbLogEvent(env, 'age_frozen_purge_failed', { tries, steps: res.failed.slice(0, 12) }).catch(() => {});
+          if (tries === 3) await founderAlert(env, `⚠️ An under-13 clean-up has failed 3 days running (steps: ${res.failed.slice(0, 6).join(', ')}). It retries daily — check the worker's SUPABASE_SERVICE_ROLE_KEY and R2.`, 'bell').catch(() => {});
+          continue;
+        }
+        await kv.put(name, JSON.stringify({ ...rec, purged_at: now.toISOString() })).catch(() => {});
+        out.purged++;
+        await gbLogEvent(env, 'age_frozen_purged', {}).catch(() => {});
+      } catch { out.failed++; /* one account never stops the sweep */ }
     }
     cursor = page.list_complete ? null : page.cursor;
   } while (cursor);
+  return out;
 }
 // POST /admin/age-appeal { user_id, birth_year, birth_md } — an adult who
-// mistyped: the corrected birthday recomputes the tier and lifts the freeze.
-// Deleted content does not come back.
+// mistyped: the corrected birthday recomputes the tier and lifts the freeze
+// (a birthday that is still under 13 keeps it). Deleted content does not
+// come back.
 async function handleAdminAgeAppeal(request, env, ctx) {
   const denied = await requireAdmin(request, env);
   if (denied) return denied;
   try {
     const b = await request.json().catch(() => ({}));
     const uid = String(b.user_id || '').replace(/[^0-9a-f-]/gi, '');
-    const md = /^\d{2}-\d{2}$/.test(String(b.birth_md || '')) ? String(b.birth_md) : null;
-    const tier = uid && md ? socialTierFor(b.birth_year, String(b.country || ''), md) : null;
+    const md = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(String(b.birth_md || '')) ? String(b.birth_md) : null;
+    const tier = uid && md ? socialTierFor(b.birth_year, null, md) : null;
     if (!tier) return jsonResponse({ error: 'user_id, birth_year and birth_md (MM-DD) required' }, 400);
     const now = new Date().toISOString();
-    const w = await gbRest(env, `social_profiles?user_id=eq.${uid}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ birth_year: Math.round(Number(b.birth_year)), birth_md: md, birth_year_at: now, social_tier: tier, updated_at: now }) });
+    const w = await gbRest(env, `social_profiles?user_id=eq.${uid}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ birth_year: Math.round(Number(b.birth_year)), birth_md: md, birth_year_at: now, social_tier: tier, updated_at: now }) });
     if (!w.ok) return jsonResponse({ error: 'Could not update' }, 502);
-    if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.delete(`freeze:${uid}`).catch(() => {});
+    if (!((await w.json().catch(() => [])) || []).length) return jsonResponse({ error: 'No age record for that user_id' }, 404);
+    if (tier === 'blocked') await gbMarkFrozen(env, uid);
+    else await gbClearFrozen(env, uid);
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'age_appeal', { tier }));
     return jsonResponse({ ok: true, tier });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// The one profile read behind every age door. The tier is DERIVED from the
+// birthday on every read, never trusted stale: a teen turns adult ON their
+// 18th birthday, an under-13 turns teen at 13, a stored 'blocked' the
+// birthday no longer supports (an Australian 13–15, a year-only 2013) is
+// corrected, and a true under-13 always carries the freeze marker — accounts
+// frozen before the marker existed included (never backfilled by the stored
+// tier). The stored copy is refreshed lazily so bulk readers catch up too.
 async function gbSocialProfile(env, userId) {
   const q = await gbRest(env, `social_profiles?user_id=eq.${userId}&select=*`, {});
   const row = (q.ok ? await q.json() : [])[0] || null;
-  // The tier is DERIVED from the birthday, never trusted stale: a teen turns
-  // adult ON their 18th birthday, an under-13 turns teen at 13, and a row
-  // without month/day counts as not-yet-had (conservative). The stored copy
-  // is refreshed lazily so bulk readers (feed, mailbox) catch up too.
   if (row?.birth_year) {
     const t = socialTierFor(row.birth_year, row.country_at_gate, row.birth_md);
+    if (t === 'blocked') await gbMarkFrozen(env, userId);
+    else if (t && row.social_tier === 'blocked') await gbClearFrozen(env, userId);
     if (t && t !== row.social_tier) {
       row.social_tier = t;
-      if (t === 'blocked') await gbMarkFrozen(env, userId);
       try { await gbRest(env, `social_profiles?user_id=eq.${userId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ social_tier: t, updated_at: new Date().toISOString() }) }); } catch { /* derived value still used this request */ }
     }
   }
@@ -16064,18 +16159,25 @@ async function handleSocialAge(request, env, ctx) {
     // birth_md ('MM-DD') is part of the AGE now (founder, 2026-10-05: full
     // birthday, not just the year — a December-born 17-year-old must not
     // count as 18 all year). It writes ONCE: completing a legacy year-only
-    // row recomputes the tier exactly, then it locks with the year.
-    if (b.birth_md !== undefined && b.birth_year === undefined) {
+    // row recomputes the tier exactly, then it locks with the year. This is
+    // how a 'confirm' account answers (founder, 2026-10-13); a request that
+    // repeats the stored year alongside the month and day completes it too.
+    const completing = b.birth_md !== undefined && (b.birth_year === undefined
+      || (!!mine?.birth_year && !mine?.birth_md && Math.round(Number(b.birth_year)) === Number(mine.birth_year)));
+    if (completing) {
       const md = MD_RE.test(String(b.birth_md)) ? String(b.birth_md) : null;
       if (!md) return jsonResponse({ error: 'Use MM-DD' }, 400);
       if (mine?.birth_md) return jsonResponse({ set: !!mine?.birth_year, tier: mine?.social_tier || null, birth_md: mine.birth_md, locked: true });
       const patch = { birth_md: md, updated_at: new Date().toISOString() };
-      if (mine?.birth_year) patch.social_tier = socialTierFor(mine.birth_year, mine.country_at_gate || request.headers.get('cf-ipcountry') || '', md) || mine.social_tier;
-      if (patch.social_tier === 'blocked') await gbMarkFrozen(env, user.id);
+      if (mine?.birth_year) patch.social_tier = socialTierFor(mine.birth_year, mine.country_at_gate, md) || mine.social_tier;
       const w = mine
         ? await gbRest(env, `social_profiles?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) })
         : await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, birth_md: md }) });
       if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
+      // Only a true under-13 starts the purge clock; anything else stops it.
+      if (patch.social_tier === 'blocked') await gbMarkFrozen(env, user.id);
+      else if (mine?.birth_year) await gbClearFrozen(env, user.id);
+      if (ctx && mine?.birth_year) ctx.waitUntil(gbLogEvent(env, 'social_age_completed', { tier: patch.social_tier || null }));
       return jsonResponse({ set: !!mine?.birth_year, tier: patch.social_tier || mine?.social_tier || null, birth_md: md });
     }
     if (b.birth_year === undefined) return jsonResponse({ set: !!mine?.birth_year, tier: mine?.social_tier || null, birth_md: mine?.birth_md || null, need_birthday: !!(mine?.birth_year && !mine?.birth_md) });
@@ -16110,7 +16212,7 @@ async function handleSocialProfile(request, env, ctx) {
     if (b.display_name === undefined && b.bio === undefined && b.favorites === undefined && b.dreams === undefined) {
       return jsonResponse({ profile: pick(mine) || null });
     }
-    if (gbTeenHold(mine)) return gbTeenHoldResp();
+    if (gbAgeHeld(mine)) return gbAgeHeldResp(mine);
     const clean = (v, n) => (v == null ? null : String(v).replace(/https?:\S+/gi, '').replace(/\s+/g, ' ').trim().slice(0, n) || null);
     // Free-form places (2026-09-30): anything, up to 50, strings or the old
     // {name} objects — stored uniformly as [{name}].
@@ -16238,7 +16340,7 @@ async function handlePostcardSend(request, env, ctx) {
     const sp = await gbSocialProfile(env, user.id);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Postcards aren\'t available on this account' }, 403);
-    if (gbTeenHold(sp)) return gbTeenHoldResp();
+    if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
 
     // Address it.
     let toUser = null;
@@ -16258,9 +16360,10 @@ async function handlePostcardSend(request, env, ctx) {
       // Recipient rails (teens plan, 2026-10-10): a teen receives postcards
       // only from mutual friends — whoever the sender is (the audit found an
       // adult could postcard a teen without a follow-back). An under-13
-      // account receives nothing, silently, exactly like a block.
+      // account — or one whose birth year could still be 12 — receives
+      // nothing, silently, exactly like a block.
       const rsp = await gbSocialProfile(env, t.user_id).catch(() => null);
-      if (rsp?.social_tier === 'blocked' || gbTeenHold(rsp)) return jsonResponse({ ok: true, muted: true });
+      if (rsp?.social_tier === 'blocked' || gbAgeHeld(rsp)) return jsonResponse({ ok: true, muted: true });
       if (rsp?.social_tier === 'teen' && !(await gbMutualFriends(env, user.id, t.user_id))) {
         return jsonResponse({ error: 'You two need to follow each other to exchange postcards' }, 403);
       }
@@ -16499,6 +16602,7 @@ async function blGate(env, user, share, opts) {
   if (opts && opts.identity) {
     const sp = await gbSocialProfile(env, user.id);
     if (sp?.social_tier === 'blocked') return 'Not available';
+    if (gbNeedsConfirm(sp)) return 'confirm_birthday';
     if (gbTeenHold(sp)) return 'Social features open at age 18 — your passport stays yours, private';
     if (sp?.social_tier === 'teen') {
       const f = await gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${share.user_id}&status=eq.accepted&select=follower_id&limit=1`, {});
@@ -16881,7 +16985,7 @@ async function handleSocialFollow(request, env, ctx) {
 
     if (op === 'follow') {
       const meSp = await gbSocialProfile(env, user.id).catch(() => null);
-      if (gbTeenHold(meSp)) return gbTeenHoldResp();
+      if (gbAgeHeld(meSp)) return gbAgeHeldResp(meSp);
       const target = b.handle ? await gbHandleToUser(env, b.handle) : null;
       if (!target) return jsonResponse({ error: 'No traveler with that username' }, 404);
       if (target.user_id === user.id) return jsonResponse({ error: "That's you 🙂" }, 400);
@@ -16905,7 +17009,7 @@ async function handleSocialFollow(request, env, ctx) {
       if (!fid) return jsonResponse({ error: 'user_id required' }, 400);
       if (op === 'accept') {
         const meSp = await gbSocialProfile(env, user.id).catch(() => null);
-        if (gbTeenHold(meSp)) return gbTeenHoldResp();
+        if (gbAgeHeld(meSp)) return gbAgeHeldResp(meSp);
         await gbRest(env, `user_follows?follower_id=eq.${fid}&followee_id=eq.${user.id}&status=eq.pending`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'accepted', responded_at: new Date().toISOString() }) });
       } else {
         await gbRest(env, `user_follows?follower_id=eq.${fid}&followee_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
@@ -17216,7 +17320,7 @@ async function handleSocialHandle(request, env, ctx) {
     const sp = await gbSocialProfile(env, user.id);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Usernames aren\'t available on this account' }, 403);
-    if (gbTeenHold(sp)) return gbTeenHoldResp();
+    if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
     const held = await gbHeld(env, want);
     const myEmail = String(user.email || '').toLowerCase();
     const heldEmail = String(held?.email || '').toLowerCase();
@@ -17609,7 +17713,7 @@ async function handlePassportTag(request, env, ctx) {
       // and a teen tags only friends they follow each other with.
       const sp = await gbSocialProfile(env, user.id);
       if (sp?.social_tier === 'blocked') return jsonResponse({ error: "Tagging isn't available on this account" }, 403);
-      if (gbTeenHold(sp)) return gbTeenHoldResp();
+      if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
       if (sp?.social_tier === 'teen' && !(await gbMutualFriends(env, user.id, t.user_id))) {
         return jsonResponse({ error: 'You can tag friends you follow each other with' }, 403);
       }
@@ -21863,7 +21967,7 @@ async function handleGuestbookSign(request, env, ctx) {
     if (sp === undefined) return jsonResponse({ error: 'Couldn\u2019t check your account \u2014 try again' }, 503);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required', message: 'Add your birth year in Settings to sign guestbooks.' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Guestbooks aren\u2019t available on this account' }, 403);
-    if (gbTeenHold(sp)) return gbTeenHoldResp();
+    if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
     if (env.GLOBESKIMMERS_KV) {
       const ck = `gb:sign:${user.id}:${new Date().toISOString().slice(0, 10)}`;
       const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
@@ -21944,7 +22048,7 @@ async function handleGuestbookEdit(request, env, ctx) {
     if (sp === undefined) return jsonResponse({ error: 'Couldn\u2019t check your account \u2014 try again' }, 503);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required', message: 'Add your birth year in Settings to edit guestbook notes.' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Guestbooks aren\u2019t available on this account' }, 403);
-    if (gbTeenHold(sp)) return gbTeenHoldResp();
+    if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
     if (env.GLOBESKIMMERS_KV) {
       const ck = `gb:edit:${user.id}:${new Date().toISOString().slice(0, 10)}`;
       const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
