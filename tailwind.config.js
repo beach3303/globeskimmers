@@ -1,3 +1,15 @@
+// The new look's colours come from the same table the app reads at runtime
+// (src/components/redesign/worlds.json, wrapped by constants.js), so a class such as
+// bg-world-eat-plate and WORLD.eat.plate can never disagree. Tailwind loads this file
+// through jiti, which accepts a CommonJS require of JSON.
+const T = require('./src/components/redesign/worlds.json');
+
+// Only solid hex values become Tailwind colours; gradients, rgba lines, numbers and
+// nested tables (tiers, plaques, the night plate) stay JS-only.
+const isHex = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+const solid = (row) => Object.fromEntries(Object.entries(row).filter(([, v]) => isHex(v)));
+const solidRows = (table) => Object.fromEntries(Object.entries(table).map(([k, row]) => [k, solid(row)]));
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
     darkMode: ["class"],
@@ -16,30 +28,28 @@ module.exports = {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		colors: {
-  			// Redesign palette: warm-ivory surfaces + per-category color worlds
-  			// Each category has ink (saturated), bg (soft tint), soft (mid tint).
+  			// Warm-ivory surfaces and the shared inks. ink is the new look's warm black;
+  			// ink.cool is the old cool near-black. No class used the old ink.3 / ink.4 or
+  			// colors.cat (the frozen CAT palette lives on in constants.js only).
   			ivory: { DEFAULT: '#FFFCF7', 2: '#F7F4EC' },
-  			ink: { DEFAULT: '#0F1419', 2: '#3A3128', 3: '#475569', 4: '#94A3B8' },
+  			ink: { DEFAULT: T.neutral.ink, 2: T.neutral.ink2, 3: T.neutral.ink3, cool: T.neutral.inkCool },
   			rule: { DEFAULT: '#F0E9DC', strong: '#E5DDC8' },
   			brand: {
   				teal: '#0E7C73',
   				'teal-mid': '#14B5A6',
   				'teal-light': '#2DD4BF',
   			},
-  			cat: {
-  				food: { ink: '#E63946', bg: '#FFE4E0', soft: '#FFCFC5' },
-  				money: { ink: '#0F9A6B', bg: '#D8F4E5', soft: '#A8E5C4' },
-  				coffee: { ink: '#A85A2E', bg: '#F2DDC4', soft: '#E6BC96' },
-  				transit: { ink: '#3F49D4', bg: '#DFE2FA', soft: '#BBC2F4' },
-  				restroom: { ink: '#0F8A82', bg: '#D2EFEC', soft: '#A7DDD7' },
-  				atm: { ink: '#1F5BD6', bg: '#DCE6FB', soft: '#B3C7F4' },
-  				weather: { ink: '#D4861A', bg: '#FCEAC9', soft: '#F4D597' },
-  				todo: { ink: '#C5197A', bg: '#FBDEEB', soft: '#F2B0D0' },
-  				shopping: { ink: '#7C3AED', bg: '#EAE0FA', soft: '#D0B6F4' },
-  				culture: { ink: '#8B5A1A', bg: '#F3E2C7', soft: '#E5CA98' },
-  				phrases: { ink: '#A37013', bg: '#F8ECC4', soft: '#EED890' },
-  				convenience: { ink: '#15803D', bg: '#D4F0DA', soft: '#A4DCB0' },
-  			},
+  			// The new look: world-<finder>-<token> (e.g. bg-world-eat-plate),
+  			// zone-<zone>-<token>, cloth-<cloth> with -paper, -line and -field, and
+  			// cream, stamp and open.
+  			world: solidRows(T.world),
+  			zone: solidRows(T.zone),
+  			cloth: Object.fromEntries(Object.entries(T.cloth).map(([k, c]) => [
+  				k, { DEFAULT: c.cloth, paper: c.paper, line: c.line, field: c.fieldLine },
+  			])),
+  			cream: T.neutral.cream,
+  			stamp: T.neutral.stamp,
+  			open: T.neutral.open,
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {
