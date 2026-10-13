@@ -17,8 +17,9 @@ import { exportCsv, saveCsvText } from '@/lib/adminExport';
 import { callWorker } from '@/lib/callWorker';
 import { openPartner } from '@/lib/openPartner';
 import { createPageUrl } from '@/utils';
-import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap, Users, UserCheck, Mail, MapPin, MapPinPlus } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap, Users, UserCheck, Mail, MapPin, MapPinPlus, Cake } from 'lucide-react';
 import { isAdminEmail } from '@/lib/admins';
+import { ageOnDate } from '@/lib/ageGate';
 import { adminPlaceSuggestions, REPORT_REASONS, REVIEW_AT } from '@/lib/suggestions';
 import { showToast } from '@/components/Toast';
 import { PhotoView } from '@/components/home/SuggestPlaceSection';
@@ -472,6 +473,85 @@ function NewestMembers({ focus, refreshKey }) {
           style={{ marginTop: 10, fontSize: 12, fontWeight: 600, color: COLORS.accent, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
           {showAll ? `Show the newest ${MEMBERS_FIRST}` : `Show all ${st.members.length}`}
         </button>
+      )}
+    </Section>
+  );
+}
+
+// Age appeal (go-live decision 8, 2026-10-13). A birthday under 13 freezes an
+// account, and the daily clean-up deletes its content after 7 days. An adult
+// who mistyped writes to founder@ from the frozen screen; that mail carries
+// the account id. Paste it here with the corrected birthday: the worker
+// (/admin/age-appeal, admin only) recomputes the tier from it and lifts the
+// freeze. It restores access only: anything already deleted stays deleted.
+// A birthday that is still under 13 is refused here, before anything is sent.
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const APPEAL_TIER = {
+  adult: 'Access restored · adult',
+  teen: 'Access restored · teen hold: travel tools and a private passport, no social until 18',
+  blocked: 'Still under 13 · the account stays frozen',
+  confirm: 'Saved · the app will ask for the month and day',
+};
+const longDate = (y, md) => new Date(Date.UTC(y, Number(md.slice(0, 2)) - 1, Number(md.slice(3, 5)))).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+function AgeAppealDesk() {
+  const [idText, setIdText] = React.useState('');
+  const [dob, setDob] = React.useState('');          // 'YYYY-MM-DD' from the date field
+  const [asking, setAsking] = React.useState(false); // the confirm step is showing
+  const [busy, setBusy] = React.useState(false);
+  const [res, setRes] = React.useState(null);        // { tier, id } | { error }
+  const id = (UUID_RE.exec(idText) || [''])[0].toLowerCase(); // a pasted "Account ID: …" line works too
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob);
+  const year = parts ? Number(parts[1]) : null;
+  const md = parts ? `${parts[2]}-${parts[3]}` : null;
+  const age = parts ? ageOnDate(year, md) : null;
+  const tooYoung = age != null && age < 13;
+  const ready = !!id && age != null && !tooYoung && !busy;
+  const edit = (fn) => (e) => { fn(e.target.value); setAsking(false); setRes(null); };
+  const send = async () => {
+    if (!ready) return;
+    setBusy(true); setRes(null);
+    const { data, error } = await callWorker('admin/age-appeal', { user_id: id, birth_year: year, birth_md: md });
+    setBusy(false); setAsking(false);
+    const err = error || data?.error || (data?.ok ? null : 'No answer came back');
+    if (err) { setRes({ error: err }); return; }
+    setRes({ tier: data.tier || null, id });
+    setIdText(''); setDob('');
+  };
+  const field = { minHeight: 44, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '8px 10px', fontSize: 13, fontFamily: 'inherit', color: COLORS.dark, background: '#fff' };
+  const primary = { minHeight: 44, borderRadius: 8, padding: '8px 14px', fontWeight: 600, fontSize: 13, background: COLORS.dark, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit' };
+  return (
+    <Section title="🎂 Age appeal" icon={Cake}>
+      <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10, lineHeight: 1.5 }}>
+        For an adult who mistyped a birthday under 13 and wrote in from the frozen screen. Paste the account ID from their mail and the corrected birthday.
+        This lifts the freeze and restores access only: anything the 7-day clean-up already deleted stays deleted.
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <input value={idText} onChange={edit(setIdText)} placeholder="Account ID" aria-label="Account ID from the appeal mail" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+          style={{ ...field, flex: '1 1 220px', minWidth: 0, fontFamily: 'ui-monospace, Menlo, monospace' }} />
+        <input type="date" value={dob} onChange={edit(setDob)} aria-label="Corrected birthday" min="1900-01-01" max={today()}
+          style={{ ...field, flex: '0 1 170px' }} />
+        {!asking && (
+          <button type="button" onClick={() => setAsking(true)} disabled={!ready} style={{ ...primary, opacity: ready ? 1 : 0.5, cursor: ready ? 'pointer' : 'default' }}>Review</button>
+        )}
+      </div>
+      {idText.trim() && !id && <div role="alert" style={{ fontSize: 12, color: COLORS.red, marginTop: 6 }}>That isn&rsquo;t an account ID. It looks like 8-4-4-4-12 letters and digits.</div>}
+      {tooYoung && <div role="alert" style={{ fontSize: 12, color: COLORS.red, marginTop: 6 }}>That birthday is under 13 too, so an appeal can&rsquo;t restore access. The account stays frozen.</div>}
+      {asking && ready && (
+        <div role="group" aria-label="Confirm the appeal" style={{ marginTop: 10, padding: 12, borderRadius: 10, background: `${COLORS.accent}0D`, border: `1px solid ${COLORS.accent}33` }}>
+          <div style={{ fontSize: 13, color: COLORS.dark, lineHeight: 1.5 }}>
+            Restore access for <code style={{ fontSize: 12 }}>{id}</code>, born {longDate(year, md)} (age {age}{age < 18 ? ': teen hold' : ''})?
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button type="button" onClick={send} disabled={busy} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>{busy ? 'Restoring…' : 'Yes, restore access'}</button>
+            <button type="button" onClick={() => setAsking(false)} disabled={busy} style={{ ...xbtn, minHeight: 44, padding: '8px 14px', fontSize: 13 }}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {res?.error && <div role="alert" style={{ fontSize: 12.5, color: COLORS.red, marginTop: 8 }}>Couldn&rsquo;t send the appeal: {res.error}</div>}
+      {res?.tier !== undefined && !res?.error && (
+        <div role="status" style={{ fontSize: 12.5, color: res.tier === 'blocked' ? COLORS.red : COLORS.green, marginTop: 8, fontWeight: 600 }}>
+          {APPEAL_TIER[res.tier] || `Saved · tier ${res.tier || 'unknown'}`} <span style={{ color: COLORS.gray, fontWeight: 400 }}>({res.id})</span>
+        </div>
       )}
     </Section>
   );
@@ -1186,6 +1266,8 @@ export default function AdminAnalytics() {
             not waiting on the analytics, so an alert's tap shows the person
             at once and nothing arriving above it moves the row it scrolls to. */}
         {isAdminEmail(authUser?.email) && <NewestMembers focus={memberFocus} refreshKey={refreshTick} />}
+        {/* Time-bound (the 7-day clean-up), so it doesn't wait on the analytics either. */}
+        {isAdminEmail(authUser?.email) && <AgeAppealDesk />}
 
         {error && (
           <div style={{ padding: 14, background: '#FEF2F2', color: '#B91C1C', borderRadius: 12, marginBottom: 12, fontSize: 13, fontWeight: 600 }}>

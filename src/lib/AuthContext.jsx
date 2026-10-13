@@ -12,7 +12,7 @@
 //   - append a login_events row on each real sign-in (CRM audit log)
 //   - complete native OAuth: catch globeskimmers://auth/callback and exchange code
 import React, {
-  createContext, useContext, useState, useEffect, useCallback, useMemo,
+  createContext, useContext, useState, useEffect, useCallback, useMemo, useRef,
 } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
@@ -32,6 +32,7 @@ import {
   OAUTH_REDIRECT_TO,
 } from '@/lib/nativeAuth';
 import { callWorker } from '@/lib/callWorker';
+import { AGE_GATE_EVENT } from '@/lib/ageGate';
 
 // sessionStorage flag set the moment the USER initiates a sign-in/sign-up, so we
 // can tell a fresh sign-in from a plain app-launch session restore. sessionStorage
@@ -289,21 +290,44 @@ export const AuthProvider = ({ children }) => {
   }, [user, session]);
 
   // Social tier from the worker's age gate: 'adult' | 'teen' | 'blocked' |
-  // null (no birthday yet). 'blocked' (under 13) freezes the whole app
-  // (App.jsx shows FrozenScreen); 'teen' holds the social doors until 18
-  // (founder, 2026-10-11). Re-read after the birthday is entered.
+  // 'confirm' | null (no birthday yet). 'blocked' (under 13) freezes the whole
+  // app (App.jsx shows FrozenScreen); 'teen' holds the social doors until 18
+  // (founder, 2026-10-11); 'confirm' (a birth year that could be either side
+  // of a birthday that matters, with no month or day) holds stamping and
+  // posting until the month and day are given — App.jsx's ConfirmBirthday
+  // asks for them (go-live decision 2, 2026-10-13). Re-read after a birthday
+  // is entered and after any age refusal (src/lib/ageGate.js). A read that
+  // fails keeps the tier we had: a network blip must never unfreeze an
+  // account or lift a hold.
   const [socialTier, setSocialTier] = useState(null);
+  const tierRef = useRef(null);
+  tierRef.current = socialTier;
   const refreshSocialTier = useCallback(async () => {
     try {
-      const { data } = await callWorker('social/age', {});
-      const t = data?.tier || null;
+      const { data, error } = await callWorker('social/age', {});
+      if (error || !data || data.error) return tierRef.current;
+      const t = data.tier || null;
       setSocialTier(t);
       return t;
-    } catch { return null; }
+    } catch { return tierRef.current; }
   }, []);
   useEffect(() => {
     if (!user?.id) { setSocialTier(null); return; }
     refreshSocialTier();
+  }, [user?.id, refreshSocialTier]);
+  // An age refusal anywhere (callWorker announces it) or a saved birthday
+  // re-reads the tier, so the screen matches the server at once: a frozen
+  // account gets FrozenScreen, a held teen the hold notes. A burst of
+  // refusals costs one read.
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    let timer = null;
+    const onAgeGate = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { refreshSocialTier(); }, 300);
+    };
+    window.addEventListener(AGE_GATE_EVENT, onAgeGate);
+    return () => { clearTimeout(timer); window.removeEventListener(AGE_GATE_EVENT, onAgeGate); };
   }, [user?.id, refreshSocialTier]);
 
   // canRefresh = admin email (always) OR an email an admin granted in the

@@ -38,7 +38,8 @@ export default function FriendsTravels({ wide = false }) {
     return () => { gone = true; };
   }, []);
 
-  if (rows === null || socialTier === "teen") return null; // social is held until 18 — no invite, no feed
+  // Social is held until 18, or until a 'confirm' birthday is complete: no invite, no feed.
+  if (rows === null || socialTier === "teen" || socialTier === "confirm") return null;
   const pad = wide ? "pb-3" : "px-4 pb-3";
   const box = wide ? "" : "max-w-md mx-auto";
   const toMailbox = () => navigate(createPageUrl("Mailbox"));

@@ -12,17 +12,22 @@ const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const INK = '#16110D', INK2 = '#3A3128', INK3 = '#736657', RULE = 'rgba(22,17,13,.12)';
 const IVORY = '#FFFCF7', STAMP = '#B0472F';
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
-const APPEAL_TO = 'support@globeskimmers.io';
+// The founder's own mailbox (go-live decision 8, 2026-10-13): it exists and is
+// read; support@ may not be. The appeal is decided in the Admin portal's Age
+// appeal form, which takes the account id this mail carries.
+const APPEAL_TO = 'founder@globeskimmers.io';
 
 export default function FrozenScreen() {
   const { user, deleteAccount, logout } = useAuth();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
-  // The only address this screen shows is the support one (founder, 2026-10-11).
-  // The account's own address rides in the unseen mail body so an appeal can be
-  // matched to its account whatever address it is sent from.
+  // The only address this screen shows is the appeal one (founder, 2026-10-11).
+  // The account's own address and id ride in the unseen mail body so an appeal
+  // can be matched to its account whatever address it is sent from; the id is
+  // what the Admin portal's Age appeal form takes.
   const email = user?.email || '';
-  const appealHref = `mailto:${APPEAL_TO}?subject=${encodeURIComponent('Age appeal')}${email ? `&body=${encodeURIComponent(`GlobeSkimmers account: ${email}`)}` : ''}`;
+  const body = [email && `GlobeSkimmers account: ${email}`, user?.id && `Account ID: ${user.id}`].filter(Boolean).join('\n');
+  const appealHref = `mailto:${APPEAL_TO}?subject=${encodeURIComponent('Age appeal')}${body ? `&body=${encodeURIComponent(body)}` : ''}`;
 
   const erase = async () => {
     if (!confirming) { setConfirming(true); return; }
@@ -46,7 +51,7 @@ export default function FrozenScreen() {
           {busy ? 'Deleting…' : confirming ? 'Yes, delete everything now' : 'Delete my account now'}
         </button>
         {confirming && !busy && (
-          <button type="button" onClick={() => setConfirming(false)} className="mt-2 w-full py-2" style={{ fontSize: fs(13), color: INK3 }}>Keep it for now</button>
+          <button type="button" onClick={() => setConfirming(false)} className="mt-2 w-full py-2" style={{ minHeight: 44, fontSize: fs(13), color: INK3 }}>Keep it for now</button>
         )}
         <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${RULE}` }}>
           <p style={{ fontSize: fs(13), lineHeight: 1.5, color: INK2 }}>
@@ -54,7 +59,7 @@ export default function FrozenScreen() {
             An appeal can only restore access &mdash; nothing else about the account changes.
           </p>
         </div>
-        <button type="button" onClick={() => logout()} className="mt-4 w-full py-2" style={{ fontSize: fs(13.5), color: INK3, textDecoration: 'underline' }}>Sign out</button>
+        <button type="button" onClick={() => logout()} className="mt-4 w-full py-2" style={{ minHeight: 44, fontSize: fs(13.5), color: INK3, textDecoration: 'underline' }}>Sign out</button>
       </div>
     </div>
   );

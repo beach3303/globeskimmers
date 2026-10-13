@@ -13,6 +13,7 @@ import { X, Undo2, Eraser, PencilLine } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { blotterMark, blotterSign, blotterCosign, blotterSweep } from "@/lib/passport";
 import { useDismissable } from "@/lib/dismissStack";
+import TravelerSheet from "@/components/social/TravelerSheet";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -182,6 +183,9 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
   const [bigDoodle, setBigDoodle] = useState(null); // enlarged doodle URL
   const [editing, setEditing] = useState(null);     // { id, text }
   const [whoOpen, setWhoOpen] = useState(null);     // entry id with signers shown
+  // Report (and Block, where the worker allows it) for someone else's entry —
+  // go-live decision 6; until now a visitor couldn't report a signature.
+  const [aboutEntry, setAboutEntry] = useState(null);
 
   const sign = async (doodle) => {
     const body = { slug, target: lead, text: text.trim() || undefined, doodle };
@@ -274,6 +278,10 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
                   {e.mine && !e.doodle && <button onClick={() => setEditing({ id: e.id, text: e.body || "" })} style={{ textDecoration: "underline", textUnderlineOffset: 2 }}>edit</button>}
                   {e.mine && <button onClick={() => peel(e.id)} style={{ textDecoration: "underline", textUnderlineOffset: 2 }}>peel</button>}
                   {ownerView && !e.mine && <button onClick={() => sweep(e.id)} style={{ textDecoration: "underline", textUnderlineOffset: 2, color: "#B0472F" }}>sweep</button>}
+                  {!e.mine && (
+                    <button type="button" onClick={() => setAboutEntry(e)} aria-haspopup="dialog" aria-label={`Report ${e.handle ? "@" + e.handle : e.name || "this traveler"}'s ${forPhoto ? "comment" : "signature"}`}
+                      style={{ textDecoration: "underline", textUnderlineOffset: 2, padding: "16px 6px", margin: "-16px -6px" }}>report</button>
+                  )}
                 </span>
               </div>
               {whoOpen === e.id && (
@@ -306,6 +314,11 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
       </div>
 
       {pad && <DoodlePad onClose={() => setPad(false)} onPost={(dataUrl) => sign(dataUrl)} busy={busy} />}
+      {aboutEntry && (
+        <TravelerSheet person={{ user_id: aboutEntry.user_id || null, handle: aboutEntry.handle, name: aboutEntry.name }}
+          report={{ kind: "signature", slug, ref: `bl:${aboutEntry.id}`, note: `${forPhoto ? "Photo comment" : "Guestbook signature"}${aboutEntry.doodle ? " (a doodle)" : ""}${aboutEntry.body ? `: "${String(aboutEntry.body).slice(0, 300)}"` : ""}` }}
+          onClose={() => setAboutEntry(null)} onChanged={() => { setAboutEntry(null); onChanged?.(); }} />
+      )}
 
       {/* Tap a doodle → it grows to full width; tap again → back to the margin. */}
       {bigDoodle && (

@@ -1,10 +1,14 @@
 // Mailbox — the feed (Social P2+). Friends' stamps AND postcards, newest
 // first, reverse-chronological only (never ranked), never coordinates. Plus
 // the follow controls: follow by @handle, and the teen-approval requests.
+// Every person here — a postcard's sender, a stamp, an activity line, a
+// request, a follower, someone you follow — has a ⋯ (or a tap) that opens
+// TravelerSheet: Report, Unfollow, and "Block this traveler" once the worker
+// advertises block_v2 (go-live decision 6, 2026-10-13; Apple 1.2).
 // (The old "postcards arrive later" note here outlived the postcard launch
 // and misled a 2026-10-10 bug hunt — postcards render below at ~222.)
 import React, { useEffect, useState } from "react";
-import { Loader2, UserPlus } from "lucide-react";
+import { Loader2, UserPlus, MoreHorizontal } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import OfficialSeal from "@/components/passport/OfficialSeal";
 import { socialFollow, socialFeed, getHandle, setHandle, setAgeGate, splitDob, socialUnread } from "@/lib/passport";
@@ -15,6 +19,8 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
+import TravelerSheet from "@/components/social/TravelerSheet";
+import ConfirmBirthdayNote from "@/components/social/ConfirmBirthdayNote";
 
 // One line per thing that happened to you — the activity the dot announces.
 function activityLine(a) {
@@ -38,6 +44,19 @@ const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657", RULE = "rgba(22,17,13
 const TEAL = "#0E7C86", STAMP = "#B0472F", IVORY = "#FFFCF7", SOFT = "#F6F0E4", GREEN = "#2E6B4E";
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 
+// The ⋯ beside a person: a 44px target that opens their TravelerSheet.
+function MoreBtn({ label, onClick, className = "" }) {
+  return (
+    <button type="button" onClick={onClick} aria-label={`Options for ${label}`} aria-haspopup="dialog"
+      className={`flex-none w-11 h-11 rounded-full flex items-center justify-center ${className}`} style={{ color: INK3 }}>
+      <MoreHorizontal size={18} aria-hidden="true" />
+    </button>
+  );
+}
+// What a report from an activity line is about (the report queue's kinds).
+const ACTIVITY_KIND = { follow_request: "profile", follow: "profile", postcard: "postcard", reaction: "profile", signature: "signature", tag: "tag" };
+const clip = (t, n) => { const v = String(t || "").replace(/\s+/g, " ").trim(); return v.length > n ? `${v.slice(0, n - 1)}…` : v; };
+
 const when = (iso) => {
   const d = new Date(iso); const days = Math.floor((Date.now() - d.getTime()) / 864e5);
   if (days <= 0) return "today"; if (days === 1) return "yesterday"; if (days < 7) return `${days}d ago`;
@@ -50,7 +69,11 @@ export default function MailboxPage() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [me, setMe] = useState(null);           // my handle (null until claimed)
-  const [lists, setLists] = useState({ followers: [], following: [], requests: [] });
+  // social/follow op:'list' as it came: followers, requests, following,
+  // blocked, and features (block_v2 turns Block on).
+  const [lists, setLists] = useState({ followers: [], following: [], requests: [], blocked: [], features: [] });
+  const [traveler, setTraveler] = useState(null); // { person, report } in the TravelerSheet
+  const openTraveler = (person, report = null) => setTraveler({ person: person || {}, report });
   const [handleDraft, setHandleDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [compose, setCompose] = useState(false);
@@ -90,7 +113,7 @@ export default function MailboxPage() {
   const load = async () => {
     const [f, l, h, u] = await Promise.all([socialFeed(), socialFollow("list"), getHandle(), socialUnread({ mark: true })]);
     setRows(f.rows); setMe(h.handle); setActivity(u.activity || []);
-    if (l.data) setLists({ followers: l.data.followers || [], following: l.data.following || [], requests: l.data.requests || [] });
+    if (l.data) setLists({ followers: l.data.followers || [], following: l.data.following || [], requests: l.data.requests || [], blocked: l.data.blocked || [], features: Array.isArray(l.data.features) ? l.data.features : [] });
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -107,16 +130,17 @@ export default function MailboxPage() {
     load();
   };
   const respond = async (user_id, op) => { await socialFollow(op, { user_id }); load(); };
-  const unfollow = async (user_id) => { await socialFollow("unfollow", { user_id }); load(); };
 
   // 13–17: the whole social page is the hold note (founder, 2026-10-11).
-  if (socialTier === "teen") {
+  // An account whose birthday isn't complete ('confirm') gets the same
+  // treatment with a way to finish it: the worker holds the same doors.
+  if (socialTier === "teen" || socialTier === "confirm") {
     return (
       <div className="min-h-screen pb-28" style={{ background: IVORY }}>
         <div className="max-w-md md:max-w-2xl mx-auto px-4 pt-6">
           <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: STAMP }}>Globeskimmers · Mailbox</div>
           <h1 style={{ fontFamily: SERIF, fontSize: fs(28), color: INK, lineHeight: 1.05, marginTop: 4 }}>Where your people went</h1>
-          <TeenHoldNote className="mt-4" />
+          {socialTier === "confirm" ? <ConfirmBirthdayNote className="mt-4" /> : <TeenHoldNote className="mt-4" />}
         </div>
       </div>
     );
@@ -198,15 +222,18 @@ export default function MailboxPage() {
                 const { who, text } = activityLine(a);
                 const goes = a.type === "reaction" || a.type === "signature" || a.type === "tag";
                 return (
-                  <button key={i} type="button" onClick={goes ? () => navigate(createPageUrl("Passport")) : undefined} disabled={!goes}
-                    className="w-full text-left flex items-start gap-2.5 px-3.5 py-2.5"
-                    style={{ borderTop: i ? `1px solid ${RULE}` : "none", background: a.unread ? "#FFFBF0" : "#fff", cursor: goes ? "pointer" : "default" }}>
-                    <span aria-label={a.unread ? "new" : undefined} className="flex-none rounded-full" style={{ width: 8, height: 8, marginTop: 6, background: a.unread ? "#E0533C" : "transparent" }} />
-                    <span className="flex-1" style={{ fontSize: fs(13), color: INK2, lineHeight: 1.4 }}>
-                      <b style={{ color: INK }}>{who}</b>{a.by.verified ? <OfficialSeal size={11} tier={a.by.seal || "burgundy"} /> : null} {text}
-                    </span>
-                    <span className="flex-none" style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, marginTop: 2 }}>{when(a.at)}</span>
-                  </button>
+                  <div key={i} className="flex items-start" style={{ borderTop: i ? `1px solid ${RULE}` : "none", background: a.unread ? "#FFFBF0" : "#fff" }}>
+                    <button type="button" onClick={goes ? () => navigate(createPageUrl("Passport")) : undefined} disabled={!goes}
+                      className="flex-1 min-w-0 text-left flex items-start gap-2.5 pl-3.5 pr-1 py-2.5"
+                      style={{ background: "transparent", cursor: goes ? "pointer" : "default" }}>
+                      <span aria-label={a.unread ? "new" : undefined} className="flex-none rounded-full" style={{ width: 8, height: 8, marginTop: 6, background: a.unread ? "#E0533C" : "transparent" }} />
+                      <span className="flex-1" style={{ fontSize: fs(13), color: INK2, lineHeight: 1.4 }}>
+                        <b style={{ color: INK }}>{who}</b>{a.by.verified ? <OfficialSeal size={11} tier={a.by.seal || "burgundy"} /> : null} {text}
+                      </span>
+                      <span className="flex-none" style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, marginTop: 2 }}>{when(a.at)}</span>
+                    </button>
+                    <MoreBtn label={who} className="mt-0.5 mr-1" onClick={() => openTraveler(a.by, { kind: ACTIVITY_KIND[a.type] || "profile", note: clip(`Mailbox, ${when(a.at)}: ${who} ${text}`, 480) })} />
+                  </div>
                 );
               })}
             </div>
@@ -222,6 +249,7 @@ export default function MailboxPage() {
                 <span className="flex-1 truncate" style={{ fontSize: fs(13.5), color: INK, fontWeight: 600 }}>{r.name || (r.handle ? `@${r.handle}` : "A traveler")}{r.verified ? <OfficialSeal size={12} tier={r.seal || "burgundy"} /> : null}</span>
                 <button type="button" onClick={() => respond(r.user_id, "accept")} className="rounded-lg px-3 py-1.5 font-semibold" style={{ background: GREEN, color: "#fff", fontSize: fs(12) }}>Allow</button>
                 <button type="button" onClick={() => respond(r.user_id, "decline")} className="rounded-lg px-3 py-1.5 font-semibold" style={{ background: SOFT, color: INK2, fontSize: fs(12) }}>Not now</button>
+                <MoreBtn label={r.name || (r.handle ? `@${r.handle}` : "this traveler")} className="-mr-1.5 -my-1" onClick={() => openTraveler(r, { kind: "profile", note: "Asked to follow me" })} />
               </div>
             ))}
           </div>
@@ -250,19 +278,23 @@ export default function MailboxPage() {
                       {r.dish ? <b>{r.dish}</b> : null}{r.dish && r.place ? " · " : ""}{r.place || ""}
                     </div>
                   )}
-                  <div className="flex items-baseline gap-2 mt-2">
-                    <span style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, letterSpacing: ".04em" }}>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="min-w-0" style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, letterSpacing: ".04em" }}>
                       FROM {r.by.name || (r.by.handle ? `@${r.by.handle}` : "A TRAVELER")}{r.city ? ` · ${String(r.city).toUpperCase()}` : ""}{r.to_me ? " · TO YOU" : ""}
                     </span>
                     <span className="ml-auto flex-none" style={{ fontFamily: MONO, fontSize: fs(10), color: INK3 }}>{when(r.created_at)}</span>
+                    <MoreBtn label={r.by.name || (r.by.handle ? `@${r.by.handle}` : "the sender")} className="-mr-2"
+                      onClick={() => openTraveler({ ...r.by, postcard_id: r.id || null }, { kind: "postcard", ...(r.id ? { ref: `pc:${r.id}` } : {}), note: clip(`Postcard${r.place ? ` from ${r.place}` : ""}, ${when(r.created_at)}${r.message ? `: "${r.message}"` : ""}`, 480) })} />
                   </div>
                 </div>
               </div>
             ) : (
               <div key={i} className="rounded-[16px] px-4 py-3 mt-2 first:mt-0" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
-                <div className="flex items-baseline gap-2">
+                <div className="flex items-center gap-2 -mt-1.5 -mb-1">
                   <span className="truncate" style={{ fontWeight: 700, fontSize: fs(13.5), color: INK }}>{r.by.name || (r.by.handle ? `@${r.by.handle}` : "A traveler")}</span>
                   <span className="flex-none ml-auto" style={{ fontFamily: MONO, fontSize: fs(10), color: INK3 }}>{when(r.created_at)}</span>
+                  <MoreBtn label={r.by.name || (r.by.handle ? `@${r.by.handle}` : "this traveler")} className="-mr-2.5"
+                    onClick={() => openTraveler(r.by, { kind: "stamp", note: clip(`Stamp in my Mailbox, ${when(r.created_at)}: ${r.name}${r.city ? `, ${r.city}` : ""}`, 480) })} />
                 </div>
                 <div style={{ fontFamily: SERIF, fontSize: fs(18), color: INK, lineHeight: 1.2, marginTop: 3 }}>
                   {r.kind === "airport" ? "landed at " : "stamped "}<b>{r.name}</b>
@@ -280,18 +312,36 @@ export default function MailboxPage() {
         {/* Following list */}
         <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={load} following={lists.following} followerCount={lists.followers.length} />
 
+        {/* Following and followers: tap a name for Unfollow, Report and Block. */}
         {lists.following.length > 0 && (
           <div className="mt-7">
             <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".16em", color: "#8A5410" }}>Following · {lists.following.length}</div>
             <div className="flex gap-1.5 flex-wrap mt-2">
               {lists.following.map((f) => (
-                <button key={f.user_id} type="button" onClick={() => unfollow(f.user_id)} title="Tap to unfollow"
-                  className="rounded-full px-3 py-1.5" style={{ background: SOFT, border: `1px solid ${RULE}`, fontSize: fs(12), color: INK2, fontWeight: 600 }}>
+                <button key={f.user_id} type="button" onClick={() => openTraveler(f, { kind: "profile", note: "Someone I follow" })} aria-haspopup="dialog"
+                  className="rounded-full px-3" style={{ minHeight: 44, background: SOFT, border: `1px solid ${RULE}`, fontSize: fs(12), color: INK2, fontWeight: 600 }}>
                   {f.name || (f.handle ? `@${f.handle}` : "traveler")}{f.verified ? <OfficialSeal size={12} tier={f.seal || "burgundy"} /> : null}{f.status === "pending" ? " · pending" : ""}
                 </button>
               ))}
             </div>
           </div>
+        )}
+        {lists.followers.length > 0 && (
+          <div className="mt-5">
+            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".16em", color: "#8A5410" }}>Followers · {lists.followers.length}</div>
+            <div className="flex gap-1.5 flex-wrap mt-2">
+              {lists.followers.map((f) => (
+                <button key={f.user_id} type="button" onClick={() => openTraveler(f, { kind: "profile", note: "Follows me" })} aria-haspopup="dialog"
+                  className="rounded-full px-3" style={{ minHeight: 44, background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(12), color: INK2, fontWeight: 600 }}>
+                  {f.name || (f.handle ? `@${f.handle}` : "traveler")}{f.verified ? <OfficialSeal size={12} tier={f.seal || "burgundy"} /> : null}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {traveler && (
+          <TravelerSheet person={traveler.person} list={lists} report={traveler.report}
+            onClose={() => setTraveler(null)} onChanged={load} />
         )}
       </div>
     </div>
