@@ -1616,8 +1616,11 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Transports: ntfy push (free, instant) when NTFY_TOPIC is set; Twilio SMS too when
   TWILIO_SID/TWILIO_TOKEN/TWILIO_FROM/FOUNDER_PHONE are set.
 - **Activate (founder, two steps):**
-  1. `npx wrangler secret put NTFY_TOPIC` → paste: gs-bell-8eb3166e0b96b7ba
-  2. Install the "ntfy" app (App Store), + → Subscribe to topic → gs-bell-8eb3166e0b96b7ba
+  1. `npx wrangler secret put NTFY_TOPIC` → paste <your private topic> (make one with
+     `echo gs-bell-$(openssl rand -hex 16)`). The topic name is all anyone needs to read the
+     alerts and this repo is public: never write it here. (Redacted 2026-10-13; the topic
+     first written here must be retired.)
+  2. Install the "ntfy" app (App Store), + → Subscribe to topic → <your private topic>
   (For literal SMS later: make a twilio.com account, buy a number, complete US A2P
   registration, then set the four TWILIO_* secrets the same way.)
 - Daily true-download digest from App Store Connect / Play Console is possible as a
