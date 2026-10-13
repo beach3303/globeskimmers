@@ -7,3 +7,11 @@
 // ways to CREATE a tag in the app. Flip to true to bring it all back;
 // nothing else needs changing.
 export const TAGGING_ENABLED = false;
+
+// HOME_ZONE_STYLE (founder, 2026-10-13): Home's zones print as boxed folders,
+// option B in docs/design/new-look/Home-Boxes.dc.html, for everyone. Option A,
+// full-width colour bands (Main.dc.html), is built behind the same switch only
+// as a preview: an admin-only row in Settings stores a per-device override, and
+// ?zones=bands selects it on the web for the screenshot rig (useHomeZoneStyle
+// in components/redesign/Zone.jsx reads both). Nothing else may select it.
+export const HOME_ZONE_STYLE = 'boxes'; // 'bands' = option A, admin-only preview
