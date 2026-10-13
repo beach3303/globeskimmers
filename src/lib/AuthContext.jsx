@@ -52,6 +52,9 @@ export const AuthProvider = ({ children }) => {
   // Bumps once per FRESH (user-initiated) sign-in / sign-up — never on a plain
   // app-launch session restore. Home watches this to show the welcome splash.
   const [signInTick, setSignInTick] = useState(0);
+  // A team-alert link waiting for the session: set by the admin/members branch
+  // in appUrlOpen, pushed by the effect that follows the listener's effect.
+  const [pendingRoute, setPendingRoute] = useState(null);
 
   const loadProfile = useCallback(async (userId) => {
     if (!userId) { setProfile(null); return null; }
@@ -185,6 +188,14 @@ export const AuthProvider = ({ children }) => {
           } catch { /* ignore malformed deep link */ }
           return;
         }
+        // A team alert (founder, 2026-10-13): globeskimmers://admin/members?m=57
+        // → the Admin page with member #57 picked out. Pushed once the session
+        // is in (the effect below), or a cold start would lose it.
+        if (url && url.startsWith('globeskimmers://admin/members')) {
+          const m = (url.split(/[?&]m=/)[1] || '').split(/[&#]/)[0];
+          if (/^\d{1,9}$/.test(m) && Number(m) > 0) setPendingRoute(`/AdminAnalytics?member=${Number(m)}`);
+          return;
+        }
         if (!url || !url.startsWith(OAUTH_REDIRECT_TO)) return;
         try { await Browser.close(); } catch { /* no-op on Android */ }
         try {
@@ -202,6 +213,21 @@ export const AuthProvider = ({ children }) => {
       appListener?.remove?.();
     };
   }, [loadProfile]);
+
+  // Push a waiting team-alert link once the session is in. An alert's tap
+  // usually starts a closed app: Capacitor hands the link over as soon as the
+  // listener above is added, often while the stored session is still being
+  // restored (an expired token waits on a network refresh) — and App.jsx
+  // sends each restored session to Home once, which would replace a route
+  // pushed earlier. This effect runs after that redirect in the same commit
+  // (a child's effects run before its parent's), so the link lands on top.
+  const signedIn = !!session?.user;
+  useEffect(() => {
+    if (!pendingRoute || isLoadingAuth || !signedIn) return;
+    setPendingRoute(null);
+    window.history.pushState({}, '', pendingRoute);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, [pendingRoute, isLoadingAuth, signedIn]);
 
   // --- Auth actions (wrap nativeAuth; set/clear error for the gate UI) -------
   const signInWithProvider = useCallback(async (provider) => {

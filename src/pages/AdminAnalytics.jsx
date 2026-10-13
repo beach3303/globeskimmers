@@ -11,7 +11,7 @@
  * (page views, search queries, zero-result rates, dish gallery usage).
  */
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { exportCsv, saveCsvText } from '@/lib/adminExport';
 import { callWorker } from '@/lib/callWorker';
@@ -276,6 +276,18 @@ function VirtualItemsReport() {
 
 // One traveler's activity record, pulled on demand (founder, 2026-10-05) —
 // for legal requests and audits only. Computed when asked; nothing is stored.
+// The record and its spreadsheet are shared with the Newest members rows.
+function travelerCsv(res) {
+  const vi = res.virtual_items;
+  const viRows = vi ? [
+    ...(vi.laptop ? [['', 'virtual item', 'laptop', `${vi.laptop.color} · ${vi.laptop.stickers} stickers`]] : []),
+    ...(vi.drink ? [['', 'virtual item', vi.drink.variant, `${vi.drink.color} · ${vi.drink.stickers} stickers`]] : []),
+    ...(vi.buddies || []).map((bd) => ['', 'travel buddy', `${bd.species}/${bd.breed}`, bd.coat || '']),
+  ] : [];
+  exportCsv(`globeskimmers-traveler-${(res.handle || res.user_id).replace(/[^a-z0-9_-]/gi, '')}-${today()}.csv`,
+    ['date', 'activity', 'place', 'detail'], [...(res.timeline || []).map((t) => [t.date, t.type, t.name, t.detail]), ...viRows]);
+}
+
 function TravelerPull() {
   const [q, setQ] = React.useState('');
   const [busy, setBusy] = React.useState(false);
@@ -287,7 +299,6 @@ function TravelerPull() {
     setBusy(false);
     setRes(error || data?.error ? { error: error || data.error } : data);
   };
-  const years = res && !res.error ? [...new Set(Object.values(res.byYear).flatMap((o) => Object.keys(o)))].sort() : [];
   return (
     <Section title="🔎 Traveler activity — audit pull" icon={Eye}>
       <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>On-demand only (legal requests, audits). Handle or user id; nothing is saved from this view.</div>
@@ -296,47 +307,171 @@ function TravelerPull() {
           style={{ flex: 1, border: `1px solid ${COLORS.border || '#ddd'}`, borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
         <button type="button" onClick={pull} disabled={busy || !q.trim()} style={{ borderRadius: 8, padding: '8px 14px', fontWeight: 600, fontSize: 13, background: COLORS.dark, color: '#fff', border: 'none', opacity: busy ? 0.6 : 1 }}>{busy ? 'Pulling…' : 'Pull'}</button>
         {res && !res.error && (
-          <button type="button" style={xbtn} onClick={() => {
-            const vi = res.virtual_items;
-            const viRows = vi ? [
-              ...(vi.laptop ? [['', 'virtual item', 'laptop', `${vi.laptop.color} · ${vi.laptop.stickers} stickers`]] : []),
-              ...(vi.drink ? [['', 'virtual item', vi.drink.variant, `${vi.drink.color} · ${vi.drink.stickers} stickers`]] : []),
-              ...(vi.buddies || []).map((bd) => ['', 'travel buddy', `${bd.species}/${bd.breed}`, bd.coat || '']),
-            ] : [];
-            exportCsv(`globeskimmers-traveler-${(res.handle || res.user_id).replace(/[^a-z0-9_-]/gi, '')}-${today()}.csv`,
-              ['date', 'activity', 'place', 'detail'], [...(res.timeline || []).map((t) => [t.date, t.type, t.name, t.detail]), ...viRows]);
-          }}>⬇ CSV</button>
+          <button type="button" style={xbtn} onClick={() => travelerCsv(res)}>⬇ CSV</button>
         )}
       </div>
       {res?.error && <div style={{ color: '#B0472F', fontSize: 13, marginTop: 8 }}>{res.error}</div>}
-      {res && !res.error && (
-        <div style={{ marginTop: 10, fontSize: 13, color: COLORS.dark }}>
-          <div style={{ fontWeight: 700 }}>{res.handle ? `@${res.handle}` : res.user_id}</div>
-          <table style={{ marginTop: 6, borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums' }}>
-            <thead><tr><th style={{ textAlign: 'left', paddingRight: 14 }}></th>{years.map((y) => <th key={y} style={{ textAlign: 'right', paddingRight: 14 }}>{y}</th>)}<th style={{ textAlign: 'right' }}>All</th></tr></thead>
-            <tbody>
-              {[['Stamps', 'stamps'], ['Guestbook notes', 'guestbook_notes'], ['Dish photos', 'dish_photos'], ['Owner messages', 'owner_messages']].map(([label, k]) => (
-                <tr key={k}><td style={{ paddingRight: 14, color: COLORS.gray }}>{label}</td>{years.map((y) => <td key={y} style={{ textAlign: 'right', paddingRight: 14 }}>{res.byYear[k]?.[y] || 0}</td>)}<td style={{ textAlign: 'right', fontWeight: 700 }}>{res.totals[k === 'stamps' ? 'stamps' : k]}</td></tr>
-              ))}
-            </tbody>
-          </table>
-          {res.virtual_items && (
-            <div style={{ marginTop: 8, fontSize: 12.5 }}>
-              <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>Virtual items</div>
-              {res.virtual_items.laptop && <span>💻 {res.virtual_items.laptop.color} laptop ({res.virtual_items.laptop.stickers} stickers) &nbsp;</span>}
-              {res.virtual_items.drink && <span>🥤 {res.virtual_items.drink.color} {res.virtual_items.drink.variant} ({res.virtual_items.drink.stickers} stickers) &nbsp;</span>}
-              {(res.virtual_items.buddies || []).length > 0 && <span>🐾 {res.virtual_items.buddies.map((bd) => `${bd.breed || bd.species}${bd.coat ? ` (${bd.coat})` : ''}`).join(', ')}</span>}
-            </div>
-          )}
-          {res.airport_sequence?.length > 0 && (
-            <div style={{ marginTop: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>Airport sequence</div>
-              <div style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12.5, lineHeight: 1.7 }}>
-                {res.airport_sequence.map((a, i) => <span key={i}>{a.date} {a.iata}{a.direction ? (a.direction === 'departure' ? ' ⬈ out' : ' ⬊ in') : ''}{a.verified === 'gps' ? ' ✓' : ''}{i < res.airport_sequence.length - 1 ? '  →  ' : ''}</span>)}
-              </div>
-            </div>
-          )}
+      {res && !res.error && <TravelerRecord res={res} title={res.handle ? `@${res.handle}` : res.user_id} />}
+    </Section>
+  );
+}
+
+// The per-year counts, virtual items and airport sequence of one pulled record.
+function TravelerRecord({ res, title, style }) {
+  const years = [...new Set(Object.values(res.byYear).flatMap((o) => Object.keys(o)))].sort();
+  return (
+    <div style={{ marginTop: 10, fontSize: 13, color: COLORS.dark, ...style }}>
+      {title && <div style={{ fontWeight: 700 }}>{title}</div>}
+      <table style={{ marginTop: 6, borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums' }}>
+        <thead><tr><th style={{ textAlign: 'left', paddingRight: 14 }}></th>{years.map((y) => <th key={y} style={{ textAlign: 'right', paddingRight: 14 }}>{y}</th>)}<th style={{ textAlign: 'right' }}>All</th></tr></thead>
+        <tbody>
+          {[['Stamps', 'stamps'], ['Guestbook notes', 'guestbook_notes'], ['Dish photos', 'dish_photos'], ['Owner messages', 'owner_messages']].map(([label, k]) => (
+            <tr key={k}><td style={{ paddingRight: 14, color: COLORS.gray }}>{label}</td>{years.map((y) => <td key={y} style={{ textAlign: 'right', paddingRight: 14 }}>{res.byYear[k]?.[y] || 0}</td>)}<td style={{ textAlign: 'right', fontWeight: 700 }}>{res.totals[k === 'stamps' ? 'stamps' : k]}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      {res.virtual_items && (
+        <div style={{ marginTop: 8, fontSize: 12.5 }}>
+          <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>Virtual items</div>
+          {res.virtual_items.laptop && <span>💻 {res.virtual_items.laptop.color} laptop ({res.virtual_items.laptop.stickers} stickers) &nbsp;</span>}
+          {res.virtual_items.drink && <span>🥤 {res.virtual_items.drink.color} {res.virtual_items.drink.variant} ({res.virtual_items.drink.stickers} stickers) &nbsp;</span>}
+          {(res.virtual_items.buddies || []).length > 0 && <span>🐾 {res.virtual_items.buddies.map((bd) => `${bd.breed || bd.species}${bd.coat ? ` (${bd.coat})` : ''}`).join(', ')}</span>}
         </div>
+      )}
+      {res.airport_sequence?.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>Airport sequence</div>
+          <div style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12.5, lineHeight: 1.7 }}>
+            {res.airport_sequence.map((a, i) => <span key={i}>{a.date} {a.iata}{a.direction ? (a.direction === 'departure' ? ' ⬈ out' : ' ⬊ in') : ''}{a.verified === 'gps' ? ' ✓' : ''}{i < res.airport_sequence.length - 1 ? '  →  ' : ''}</span>)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Newest members (founder, 2026-10-13). The team's alerts carry a member
+// number, never a name (privacy policy §2): this card is where the number
+// becomes a person. An alert's tap opens this page at ?member=<n>, and that
+// member's row is highlighted and scrolled to; a member older than the newest
+// 50 is fetched by number and shown first. Their activity opens only when the
+// row itself is tapped: it is the audit pull's record (private stamps
+// included), for support, safety or legal requests, never on a routine alert.
+// The worker numbers members in sign-up order (#1 first), never gives a
+// number to anyone else, and sends no emails here.
+const MEMBER_PROVIDER = { apple: 'Apple', google: 'Google', email: 'Email', facebook: 'Facebook' };
+const MEMBERS_FIRST = 10;   // rows shown before "Show all"
+const memberProvider = (p) => {
+  const k = String(p || '').trim();
+  return MEMBER_PROVIDER[k.toLowerCase()] || (k && k[0].toUpperCase() + k.slice(1));
+};
+// "Oct 13, 9:41 AM" in the phone's own time; the year only when it isn't this one.
+const memberJoined = (iso) => {
+  const d = new Date(iso || '');
+  if (Number.isNaN(d.getTime())) return '';
+  const year = d.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' };
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', ...year, hour: 'numeric', minute: '2-digit' });
+};
+function NewestMembers({ focus, refreshKey }) {
+  // A failed load keeps the rows that were there and says so. older = the
+  // alert's member when they aren't among the newest; numbered = false when
+  // the worker can't give numbers right now.
+  const [st, setSt] = React.useState({ members: [], older: null, numbered: true, error: null, loaded: false });
+  const [showAll, setShowAll] = React.useState(false);
+  const [open, setOpen] = React.useState(null);          // { id, busy } | { id, res }: the row showing its activity
+  const [scrollTo, setScrollTo] = React.useState(null);  // a row to bring into view once it's on screen
+  const pullSeq = React.useRef(0);
+  const rowEls = React.useRef({});
+  const picked = React.useRef(null);                     // the ?member= already picked out
+  const pull = async (m) => {
+    const my = ++pullSeq.current;
+    setOpen({ id: m.user_id, busy: true });
+    const { data, error } = await callWorker('admin/user-activity', { q: m.user_id });
+    if (my !== pullSeq.current) return; // another row was tapped, or this one was closed
+    const err = error || data?.error || (data ? null : 'No record came back');
+    setOpen({ id: m.user_id, res: err ? { error: err } : data });
+  };
+  const toggle = (m) => {
+    if (open?.id === m.user_id) { pullSeq.current += 1; setOpen(null); return; }
+    pull(m);
+  };
+  // Loads on open, on the page's Refresh, and when an alert brings a new
+  // ?member= while the page is already open (that member may be newer than
+  // the rows on screen). The worker is asked for that member by number, so
+  // one older than the newest 50 comes back too. Each ?member= is picked out
+  // once — a Refresh doesn't scroll back to it.
+  React.useEffect(() => {
+    let live = true;
+    (async () => {
+      const { data, error } = await callWorker('admin/members', focus != null ? { n: focus } : {});
+      if (!live) return;
+      const err = error || data?.error || null;
+      if (err) { setSt((s) => ({ ...s, error: err, loaded: true })); return; }
+      const members = Array.isArray(data?.members) ? data.members : [];
+      const older = data?.focus?.user_id && !members.some((m) => m.user_id === data.focus.user_id) ? data.focus : null;
+      setSt({ members, older, numbered: data?.numbered !== false, error: null, loaded: true });
+      if (focus == null || picked.current === focus) return;
+      picked.current = focus;
+      const i = members.findIndex((m) => Number(m.n) === focus);
+      if (i >= MEMBERS_FIRST) setShowAll(true);
+      const target = i >= 0 ? members[i] : older && Number(older.n) === focus ? older : null;
+      if (target) setScrollTo(target.user_id);
+    })();
+    return () => { live = false; };
+  }, [focus, refreshKey]);
+  React.useEffect(() => {
+    const el = scrollTo && rowEls.current[scrollTo];
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setScrollTo(null);
+  }, [scrollTo, showAll, st.members, st.older]);
+  const shown = showAll ? st.members : st.members.slice(0, MEMBERS_FIRST);
+  const found = st.members.some((m) => Number(m.n) === focus) || Number(st.older?.n) === focus;
+  const missing = focus != null && st.loaded && !st.error && st.members.length > 0 && !found;
+  const row = (m, note) => {
+    const hit = focus != null && Number(m.n) === focus;
+    const isOpen = open?.id === m.user_id;
+    const joined = memberJoined(m.joined);
+    const more = [m.handle ? `@${String(m.handle).replace(/^@/, '')}` : null, memberProvider(m.provider), m.country, joined && `joined ${joined}`].filter(Boolean);
+    return (
+      <div key={m.user_id} ref={(el) => { rowEls.current[m.user_id] = el; }}
+        style={{ margin: '0 -8px', padding: '0 8px', borderTop: `1px solid ${COLORS.border}`, background: hit ? `${COLORS.accent}15` : 'transparent', boxShadow: hit ? `inset 3px 0 0 ${COLORS.accent}` : 'none' }}>
+        {note && <div style={{ paddingTop: 8, fontSize: 11, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.accent }}>{note}</div>}
+        <button type="button" onClick={() => toggle(m)} aria-expanded={isOpen}
+          style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: note ? '4px 0 10px' : '10px 0', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.45, color: COLORS.gray }}>
+          <span style={{ fontWeight: 700, color: COLORS.dark }}>{m.n != null ? `#${m.n} · ` : ''}{m.name || 'No name yet'}</span>
+          {more.map((x) => ` · ${x}`).join('')}
+        </button>
+        {isOpen && (
+          <div style={{ paddingBottom: 12 }}>
+            {open.busy && <div style={{ fontSize: 12.5, color: COLORS.gray }}>Pulling…</div>}
+            {open.res?.error && <div style={{ fontSize: 12.5, color: COLORS.red }}>{open.res.error}</div>}
+            {open.res && !open.res.error && (
+              <>
+                <TravelerRecord res={open.res} style={{ marginTop: 0 }} />
+                <button type="button" style={{ ...xbtn, marginTop: 8 }} onClick={() => travelerCsv(open.res)}>⬇ CSV</button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+  return (
+    <Section title="🆕 Newest members" icon={Users}>
+      <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>Your alerts show a member number, never a name. Here&rsquo;s who each number is. Tap a row to pull their activity, for support, safety or legal requests only.</div>
+      {st.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>Couldn&rsquo;t load members: {st.error}</div>}
+      {st.loaded && !st.error && !st.numbered && <div style={{ fontSize: 12, color: COLORS.amber, marginBottom: 8 }}>Member numbers aren&rsquo;t available right now. Tap Refresh to try again.</div>}
+      {missing && st.numbered && <div style={{ fontSize: 12, color: COLORS.amber, marginBottom: 8 }}>No account has member #{focus} now. It may have been deleted.</div>}
+      {!st.loaded && <div style={{ fontSize: 13, color: COLORS.gray, padding: '12px 0' }}>Loading…</div>}
+      {st.loaded && !st.error && st.members.length === 0 && <div style={{ fontSize: 13, color: COLORS.gray, padding: '12px 0' }}>No members yet.</div>}
+      {st.older && row(st.older, `From your alert · not among the newest ${st.members.length}`)}
+      {shown.map((m) => row(m))}
+      {st.members.length > MEMBERS_FIRST && (
+        <button type="button" onClick={() => setShowAll((v) => !v)}
+          style={{ marginTop: 10, fontSize: 12, fontWeight: 600, color: COLORS.accent, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+          {showAll ? `Show the newest ${MEMBERS_FIRST}` : `Show all ${st.members.length}`}
+        </button>
       )}
     </Section>
   );
@@ -732,12 +867,20 @@ function Section({ title, icon: Icon, children, empty }) {
 
 export default function AdminAnalytics() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user: authUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
   const [userStats, setUserStats] = useState(null); // real Supabase-profiles aggregates
   const [generatedAt, setGeneratedAt] = useState(null);
+  // A team alert's tap lands here as ?member=<n> (AuthContext's appUrlOpen).
+  const memberParam = new URLSearchParams(location.search).get('member') || '';
+  const memberFocus = /^\d{1,9}$/.test(memberParam) && Number(memberParam) > 0 ? Number(memberParam) : null;
+  // Bumped by the Refresh button only: Newest members loads on its own when
+  // the page opens, and reloads on a refresh — not again when the first
+  // analytics load finishes.
+  const [refreshTick, setRefreshTick] = useState(0);
   // Messages sent from the website's contact form (worker /admin/contact).
   const [inbox, setInbox] = useState({ messages: [], open: 0, total: 0, error: null });
   // Social safety reports (Apple 1.2 queue). minor_safety rows carry the 24h
@@ -1022,7 +1165,7 @@ export default function AdminAnalytics() {
             </div>
           </div>
           <button
-            onClick={load}
+            onClick={() => { setRefreshTick((t) => t + 1); load(); }}
             disabled={loading}
             style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 10, padding: '8px 14px', cursor: loading ? 'wait' : 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600 }}
           >
@@ -1039,6 +1182,11 @@ export default function AdminAnalytics() {
       </div>
 
       <div style={{ padding: 14 }}>
+        {/* Who is behind each alert's member number. First on the page and
+            not waiting on the analytics, so an alert's tap shows the person
+            at once and nothing arriving above it moves the row it scrolls to. */}
+        {isAdminEmail(authUser?.email) && <NewestMembers focus={memberFocus} refreshKey={refreshTick} />}
+
         {error && (
           <div style={{ padding: 14, background: '#FEF2F2', color: '#B91C1C', borderRadius: 12, marginBottom: 12, fontSize: 13, fontWeight: 600 }}>
             {error}
