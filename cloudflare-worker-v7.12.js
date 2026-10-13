@@ -7274,7 +7274,12 @@ function wvGuard(text, facts, { maxChars, minWords, maxWords, noRules }) {
 
 // POST /attractions/why-visit { id } → { why_visit, story, can_do, checked_at }.
 // { id, report: true } is "Something's wrong?": clears the saved text so the
-// next open rewrites it, and logs wv_reported for the admin.
+// next open rewrites it, and logs wv_reported for the admin. That includes
+// the copy in our own row (D1 attractions.why_visit) when the ENGINE wrote
+// it: the engine marks every line it writes there (KV wv:eng:<id> = the exact
+// line, no expiry — no new column, no SQL to run), and a report empties the
+// column only while it still holds that exact line. A line a person wrote or
+// approved carries no mark and stays (founder, 2026-10-13).
 async function handleAttractionWhyVisit(request, env, ctx) {
   try {
     const b = await request.json().catch(() => ({}));
@@ -7282,11 +7287,23 @@ async function handleAttractionWhyVisit(request, env, ctx) {
     if (!id || id.length > 200) return jsonResponse({ error: 'id required' }, 400);
     const kv = env.GLOBESKIMMERS_KV;
     const cacheKey = `wv:${WV_VERSION}:${id}`;
+    const engKey = `wv:eng:${id}`;
     const user = await gbUser(request, env);
     if (b.report === true) {
       if (!user) return jsonResponse({ error: 'sign_in' }, 401);
       if (kv) await kv.delete(cacheKey).catch(() => {});
-      if (ctx) ctx.waitUntil(gbLogEvent(env, 'wv_reported', { id }));
+      let lineCleared = false;
+      if (kv && env.ATTRACTIONS_DB && ttdIdKind(id) === 'd1') {
+        const eng = await kv.get(engKey).catch(() => null);
+        if (eng) {
+          const res = await env.ATTRACTIONS_DB.prepare("UPDATE attractions SET why_visit = '' WHERE id = ?1 AND why_visit = ?2").bind(id, eng).run().catch(() => null);
+          if (res) {
+            lineCleared = Number(res.meta?.changes || 0) > 0;
+            await kv.delete(engKey).catch(() => {});
+          }
+        }
+      }
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'wv_reported', { id, line_cleared: lineCleared }));
       return jsonResponse({ ok: true, cleared: true });
     }
     const cached = kv ? await kv.get(cacheKey, { type: 'json' }).catch(() => null) : null;
@@ -7346,6 +7363,9 @@ async function handleAttractionWhyVisit(request, env, ctx) {
       if (kv && (out.why_visit || story || canDo.length)) await kv.put(cacheKey, JSON.stringify(out)).catch(() => {}); // no expiry: ours, forever
       if (kv) await kv.delete(`wv:lock:${id}`).catch(() => {});
       if (!existing && why && env.ATTRACTIONS_DB && ttdIdKind(id) === 'd1') {
+        // The mark goes first: a stale mark is harmless (a report clears only
+        // a column that still holds exactly this line), a missing one is not.
+        if (kv) await kv.put(engKey, why).catch(() => {});
         await env.ATTRACTIONS_DB.prepare("UPDATE attractions SET why_visit = ?1 WHERE id = ?2 AND (why_visit IS NULL OR why_visit = '')").bind(why, id).run().catch(() => {});
       }
       await gbLogEvent(env, 'wv_written', { id, enough, why: !!out.why_visit, story: !!story, can_do: canDo.length, extract: !!facts.extract, google: !!facts.google, in_tok: usage?.input_tokens || 0, out_tok: usage?.output_tokens || 0 }).catch(() => {});
