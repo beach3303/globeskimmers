@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
 import { getHandle, setHandle, setAgeGate, splitDob, getAgeInfo, setBirthday, socialRequest, socialFollow } from "@/lib/passport";
 import { blockReady } from "@/lib/blocks";
+import { openConfirmBirthday } from "@/lib/ageGate";
 import BlockedTravelers from "@/components/social/BlockedTravelers";
 import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import { useIsTablet } from "@/lib/useIsTablet";
@@ -421,7 +422,6 @@ export default function SettingsPage() {
   // complete theirs here and their tier is recomputed exactly.
   const [bMonth, setBMonth] = useState(""); const [bDay, setBDay] = useState("");
   const [bLocked, setBLocked] = useState(false);
-  useEffect(() => { (async () => { const { birth_md } = await getAgeInfo(); if (birth_md) { setBMonth(birth_md.slice(0, 2)); setBDay(birth_md.slice(3, 5)); setBLocked(true); } })(); }, []);
   const saveBirthday = async () => {
     if (!bMonth || !bDay || bLocked) return;
     const { error } = await setBirthday(`${bMonth}-${bDay}`);
@@ -485,7 +485,11 @@ export default function SettingsPage() {
     showToast(`You're @${h}`, "success");
   };
 
-  const { logout, deleteAccount, profile, user: authUser, refreshProfile, canRefresh } = useAuth(); // Supabase
+  const { logout, deleteAccount, profile, user: authUser, refreshProfile, canRefresh, socialTier } = useAuth(); // Supabase
+  // The saved birthday (month and day), read again when the tier changes: a
+  // 'confirm' account that finishes it in the sheet comes back to this row
+  // locked, not empty.
+  useEffect(() => { (async () => { const { birth_md } = await getAgeInfo(); if (birth_md) { setBMonth(birth_md.slice(0, 2)); setBDay(birth_md.slice(3, 5)); setBLocked(true); } })(); }, [socialTier]);
   const countryBoxRef = useRef(null);
   const [countryOpen, setCountryOpen] = useState(false);
   const [countryQuery, setCountryQuery] = useState("");
@@ -924,7 +928,13 @@ export default function SettingsPage() {
               last={false}
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={Check} iconBg={CAT.todo.ink} title="My birthday" desc={bLocked ? "Private — never shown. Saved once; changes go through support." : "Private — never shown. It keeps GlobeSkimmers age-appropriate. Saved once, like the year."}
-              control={{ below: true, node: (
+              control={{ below: true, node: socialTier === "confirm" && !bLocked ? (
+                // A 'confirm' account's answer decides its tier, so it goes
+                // through the sheet's one neutral check (go-live decision 2).
+                <button type="button" onClick={openConfirmBirthday} aria-haspopup="dialog" className="h-12 px-4 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 14 }}>
+                  Confirm your birthday
+                </button>
+              ) : (
                 <div className="flex gap-2 items-center">
                   <select value={bMonth} onChange={(e) => setBMonth(e.target.value)} disabled={bLocked} aria-label="Birthday month" className="h-12 rounded-xl px-2 disabled:opacity-60" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 14 }}>
                     <option value="">Month</option>

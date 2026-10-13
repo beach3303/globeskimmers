@@ -708,7 +708,7 @@ function PassportInner() {
   const navigate = useNavigate();
   const isTablet = useIsTablet();
   const colWrap = isTablet ? "max-w-[820px]" : "max-w-md";
-  const { isAuthenticated, profile, user } = useAuth();
+  const { isAuthenticated, profile, user, socialTier } = useAuth();
   const isDev = isAdminEmail(user?.email); // sample-passport preview is admin-only
   const [loading, setLoading] = useState(true);
   const [stamps, setStamps] = useState([]);
@@ -1036,7 +1036,8 @@ function PassportInner() {
           </div>
         )}
         {!readOnly && !preview && <HeldHandleClaim fs={fs} />}
-        {!readOnly && !preview && bdayAsk && (
+        {/* A 'confirm' account answers in the one-time sheet instead (its neutral check matters there). */}
+        {!readOnly && !preview && bdayAsk && socialTier !== "confirm" && (
           <div className="mb-4 rounded-[16px] p-3.5" style={{ background: "#FFFBF0", border: "1px solid #EAD9AE" }}>
             <p style={{ color: INK, fontSize: fs(14), fontWeight: 700 }}>🎂 When&rsquo;s your birthday?</p>
             <p style={{ color: INK2, fontSize: fs(12.5), lineHeight: 1.45, marginTop: 2 }}>
