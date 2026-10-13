@@ -829,7 +829,8 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 - **New look — APPROVED by the founder 2026-10-13** ("now this design is phenomenal … I say approve on
   this design"; "your circle" approved with it — it is in the approved screens). Building it into the app
   on branch `new-look` (off stamping-v2); nothing ships until stamping-v2 has merged and the founder says
-  go (OTA). Still open: **Home A or B** — both are built behind one switch, default B (recommended).
+  go (OTA). **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
+  — option A (full-width bands) is not built.
   Original ask and mockups, 2026-10-12: Founder asks the same day: more contrast and a different
   background or bordered box for each section without clutter (Home and Profile); followers/following
   shown creatively, the profile feeling like someone's personal world; every finder its own two- or
