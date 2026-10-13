@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get Globeskimmers</title>
+<meta name="robots" content="noindex">
+<meta name="description" content="Collect the world, one stamp at a time. Globeskimmers is free on iPhone and Android.">
+<link rel="icon" href="/img/icon-64.png" sizes="64x64">
+<link rel="apple-touch-icon" href="/img/icon-192.png">
+<!-- Safari's Smart App Banner, for an iPhone that stays on this page. -->
+<meta name="apple-itunes-app" content="app-id=6753154199">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root { color-scheme: light; --ground: #FFFCF7; --ink: #16110D; --ink-3: #736657; --rule: rgba(22,17,13,.12); --teal: #0E7C73; --teal-deep: #0B645D; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--ground); color: var(--ink); font-family: "Inter Tight", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+main { max-width: 440px; margin: 0 auto; padding: max(48px, env(safe-area-inset-top)) 20px 44px; text-align: center; }
+.wordmark { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 22px; }
+h1 { font-family: "Instrument Serif", "Iowan Old Style", Georgia, serif; font-weight: 400; font-size: 34px; letter-spacing: -.01em; line-height: 1.1; margin: 0 0 10px; }
+h1 em { font-style: italic; color: var(--teal); }
+p { font-size: 15.5px; line-height: 1.5; color: var(--ink-3); margin: 0 0 8px; }
+.btn { display: block; width: 100%; margin: 22px auto 0; padding: 16px 18px; min-height: 54px; border-radius: 14px; text-decoration: none; font-weight: 700; font-size: 17px; background: var(--teal); color: #fff; }
+.btn:active { background: var(--teal-deep); }
+.btn.store { background: #fff; color: var(--ink); border: 1px solid var(--rule); margin-top: 10px; font-weight: 600; font-size: 16px; }
+.hint { font-size: 13px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="wordmark">Globeskimmers</p>
+  <h1>Collect the world, one stamp <em>at a time</em></h1>
+  <p>Free on iPhone and Android.</p>
+  <a class="btn" id="ios" href="https://apps.apple.com/us/app/globeskimmers/id6753154199">Download on the App Store</a>
+  <a class="btn store" id="play" href="https://play.google.com/store/apps/details?id=com.globeskimmers.app">Get it on Google Play</a>
+  <p class="hint">On a phone, this page opens the right store by itself.</p>
+</main>
+<script>
+(function () {
+  // Where the visitor came from: /card (the printed business card) arrives
+  // here as ?src=card. A strict character check keeps it a plain label.
+  var m = /[?&]src=([A-Za-z0-9_-]{1,32})/.exec(location.search);
+  var src = m ? m[1] : "";
+  // App Store campaign link: paste the provider token (pt) from App Store
+  // Connect → App Analytics → Campaigns to see downloads per source.
+  var APPLE_PT = "";
+  var ios = APPLE_PT && src
+    ? "https://apps.apple.com/app/apple-store/id6753154199?pt=" + APPLE_PT + "&ct=" + encodeURIComponent(src) + "&mt=8"
+    : "https://apps.apple.com/us/app/globeskimmers/id6753154199";
+  // Google Play reads the referrer into Play Console's acquisition reports.
+  var play = "https://play.google.com/store/apps/details?id=com.globeskimmers.app"
+    + (src ? "&referrer=" + encodeURIComponent("utm_source=" + src + "&utm_medium=print") : "");
+  document.getElementById("ios").setAttribute("href", ios);
+  document.getElementById("play").setAttribute("href", play);
+  var ua = navigator.userAgent || "";
+  // iPadOS reports itself as a Mac; a touch screen gives it away.
+  var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  var isAndroid = /Android/i.test(ua);
+  if (isIOS) location.replace(ios);
+  else if (isAndroid) location.replace(play);
+})();
+</script>
+</body>
+</html>
