@@ -861,7 +861,13 @@ async function handleRestaurantSearch(request, env, ctx) {
 // subscribes to the secret topic) and/or a Twilio SMS when TWILIO_SID,
 // TWILIO_TOKEN, TWILIO_FROM and FOUNDER_PHONE are set. Capped at 400/day so a
 // busy day can never flood a phone or a bill; never blocks the request.
-async function founderAlert(env, text, tag = 'bell') {
+// opts.click (2026-10-13): where tapping the ntfy alert goes (ntfy's Click
+// header), e.g. an app deep link. SMS has no tap target, so Twilio ignores it.
+// A topic name on ntfy.sh is all anyone needs to read its alerts, so it is a
+// secret: never write it into this (public) repo. NTFY_TOKEN, when set, is an
+// ntfy.sh access token for a reserved topic that denies anonymous access; the
+// alert then carries it, and knowing the topic name is no longer enough.
+async function founderAlert(env, text, tag = 'bell', opts = {}) {
   try {
     if (!env.NTFY_TOPIC && !env.TWILIO_SID) return;
     if (env.GLOBESKIMMERS_KV) {
@@ -872,9 +878,15 @@ async function founderAlert(env, text, tag = 'bell') {
     }
     const jobs = [];
     if (env.NTFY_TOPIC) {
+      // Only a plain printable-ASCII link can ride in a header; anything else is dropped, never the alert.
+      const click = typeof opts?.click === 'string' && /^[\x21-\x7e]{1,500}$/.test(opts.click) ? opts.click : null;
       jobs.push(fetch(`https://ntfy.sh/${env.NTFY_TOPIC}`, {
         method: 'POST', body: text,
-        headers: { Title: 'GlobeSkimmers', Tags: tag === 'new' ? 'tada' : 'round_pushpin', Priority: tag === 'new' ? '4' : '3' },
+        headers: {
+          Title: 'GlobeSkimmers', Tags: tag === 'new' ? 'tada' : 'round_pushpin', Priority: tag === 'new' ? '4' : '3',
+          ...(click ? { Click: click } : {}),
+          ...(env.NTFY_TOKEN ? { Authorization: `Bearer ${env.NTFY_TOKEN}` } : {}),
+        },
       }));
     }
     if (env.TWILIO_SID && env.TWILIO_TOKEN && env.TWILIO_FROM && env.FOUNDER_PHONE) {
@@ -886,6 +898,179 @@ async function founderAlert(env, text, tag = 'bell') {
     }
     await Promise.allSettled(jobs);
   } catch { /* the bell never breaks the app */ }
+}
+
+// ── Member numbers (founder, 2026-10-13) ────────────────────────────────────
+// The privacy policy keeps names out of every alert (§2: "a member number
+// instead of your name"), so the bell says WHO by number. Tapping the alert
+// opens Admin → Newest members (gbMemberLink), where the founder sees the name.
+// A number belongs to one account for good. member_numbers (events D1) hands
+// them out: AUTOINCREMENT never hands a number out twice, even after its row
+// is deleted, and D1 runs writes one at a time, so two accounts can't share
+// one. (A count of profiles could not promise that: every deleted account
+// lowered the count, and the next sign-up got a number someone already had.)
+// The table's first use numbers every existing account, oldest first by
+// (profiles.created_at, id): the id breaks ties, since the rows of the
+// one-time profiles backfill share one created_at. After that an account gets
+// the next number the first time it is seen: its new-member alert, a stamp
+// alert, or the admin list, which numbers the members it shows that have none,
+// oldest first. Deleting an account deletes its row (handleDeleteAccount).
+const gbMemberLink = (n) => `globeskimmers://admin/members?m=${n}`;
+const MEMBER_NUMBERS_SQL = `CREATE TABLE IF NOT EXISTS member_numbers (
+  n INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL UNIQUE,
+  belled_at TEXT
+)`;
+// Numbers each id in the JSON array ?1 that has none yet, in array order.
+// NOT EXISTS rather than INSERT OR IGNORE: an ignored insert still uses up an
+// AUTOINCREMENT number and leaves a gap. The ids must be distinct.
+const MEMBER_NUMBER_NEW_SQL = `INSERT INTO member_numbers (user_id)
+  SELECT j.value FROM json_each(?1) j
+  WHERE NOT EXISTS (SELECT 1 FROM member_numbers m WHERE m.user_id = j.value)
+  ORDER BY j.key`;
+const gbMemberN = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
+// True once this isolate has seen member_numbers exist and seeded; a failure
+// leaves it false for the next call to retry. A flag, like psEnsure's, not a
+// shared promise: a promise awaited across requests is tied to the request
+// that made it.
+let GB_MEMBERS_READY = false;
+async function gbMembersReady(env) {
+  if (GB_MEMBERS_READY) return true;
+  if (!env.DB) return false;
+  try { GB_MEMBERS_READY = (await gbMembersSeed(env)) === true; } catch { GB_MEMBERS_READY = false; }
+  return GB_MEMBERS_READY;
+}
+// An empty table is seeded with every account, oldest first, in one batch
+// (a D1 batch is one transaction): all or nothing, so a failed read can never
+// number a later account ahead of an earlier one. Two isolates seeding at once
+// is harmless: the second batch finds every row already there.
+async function gbMembersSeed(env) {
+  await env.DB.prepare(MEMBER_NUMBERS_SQL).run();
+  if (await env.DB.prepare('SELECT 1 AS x FROM member_numbers LIMIT 1').first()) return true;
+  const ids = [];
+  for (let off = 0, pages = 0; ; pages++) {
+    if (pages >= 200) return false;
+    const q = await gbRest(env, `profiles?select=id&order=created_at.asc,id.asc&offset=${off}&limit=1000`, { headers: { 'Accept-Profile': 'public' } });
+    const page = q.ok ? await q.json().catch(() => null) : null;
+    if (!Array.isArray(page)) return false;
+    if (!page.length) break;
+    for (const r of page) { const id = String(r?.id || '').toLowerCase(); if (BL_UUID.test(id)) ids.push(id); }
+    off += page.length;
+  }
+  const uniq = [...new Set(ids)];
+  if (!uniq.length) return true;
+  const stmts = [];
+  for (let i = 0; i < uniq.length; i += 500) stmts.push(env.DB.prepare(MEMBER_NUMBER_NEW_SQL).bind(JSON.stringify(uniq.slice(i, i + 500))));
+  await env.DB.batch(stmts);
+  return true;
+}
+// A member's number, handed out the first time it's asked for. null on any
+// failure; callers then leave the number out and never wait on a retry.
+async function gbMemberNumber(env, userId) {
+  try {
+    const id = String(userId || '').toLowerCase();
+    if (!BL_UUID.test(id) || !(await gbMembersReady(env))) return null;
+    const had = await env.DB.prepare('SELECT n FROM member_numbers WHERE user_id = ?1').bind(id).first();
+    if (had) return gbMemberN(had.n);
+    const [, got] = await env.DB.batch([
+      env.DB.prepare(MEMBER_NUMBER_NEW_SQL).bind(JSON.stringify([id])),
+      env.DB.prepare('SELECT n FROM member_numbers WHERE user_id = ?1').bind(id),
+    ]);
+    return gbMemberN(got?.results?.[0]?.n);
+  } catch { return null; }
+}
+// Claims a numbered member's one new-member alert. A single UPDATE, so exactly
+// one caller ever gets true; false = already sent; null = D1 couldn't say.
+async function gbMemberBellOnce(env, userId) {
+  try {
+    const r = await env.DB.prepare('UPDATE member_numbers SET belled_at = ?2 WHERE user_id = ?1 AND belled_at IS NULL')
+      .bind(String(userId || '').toLowerCase(), new Date().toISOString()).run();
+    return Number(r?.meta?.changes) === 1;
+  } catch { return null; }
+}
+const GB_PROVIDER_LABEL = new Map([['apple', 'Sign in with Apple'], ['google', 'Google'], ['facebook', 'Facebook'], ['email', 'email']]);
+function gbProviderLabel(p) {
+  const k = String(p || '').trim().toLowerCase();
+  return GB_PROVIDER_LABEL.get(k) || (k ? k.slice(0, 20) : null);
+}
+// What sent the request. The iOS app's native HTTP (CapacitorHttp → URLSession)
+// sends "App/14 CFNetwork/… Darwin/…", which names no model, so an iPhone and
+// an iPad read the same; Android's sends "Dalvik/… (Linux; U; Android …)".
+// Every browser sends "Mozilla/…": that is the web app, on any device.
+function gbDeviceLabel(ua) {
+  const s = String(ua || '');
+  if (/Mozilla\//.test(s)) return 'web';
+  if (/Android|Dalvik|okhttp/i.test(s)) return 'Android';
+  if (/iPad/.test(s)) return 'iPad';
+  if (/iPhone|iPod/.test(s)) return 'iPhone';
+  if (/CFNetwork|Darwin/.test(s)) return 'iPhone/iPad';
+  return null;
+}
+// Where the request's internet connection is, by Cloudflare's country code:
+// "in United States" ("in" because it isn't the member's home country, which
+// Admin shows); the code when ICU has no name; "via Tor" for T1; nothing for
+// unknown (XX).
+function gbConnectionPlace(request) {
+  const c = String(request.cf?.country || request.headers.get('CF-IPCountry') || '').trim().toUpperCase();
+  if (c === 'T1') return 'via Tor';
+  if (!/^[A-Z]{2}$/.test(c) || c === 'XX') return null;
+  let name = c;
+  try { const n = new Intl.DisplayNames(['en'], { type: 'region' }).of(c); if (n && n !== c) name = n; } catch { /* no ICU */ }
+  return `in ${name}`;
+}
+// "Oct 9", on the founder's own (Pacific) calendar.
+function gbDayLabel(ms) {
+  try { return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Los_Angeles' }); }
+  catch { return new Date(ms).toISOString().slice(5, 10); }
+}
+
+// ── The new-member bell (founder, 2026-10-13) ───────────────────────────────
+// One alert per account, the first time a brand-new account (made in the last
+// 7 days) reaches gbUser: "🎉 New member #57 · Google · Android · in United
+// States", plus "(joined Oct 9)" when the account is over an hour old (an
+// email sign-up that confirmed later). Nothing is awaited in the request: the
+// checks before the hand-off are in memory, and the rest runs in waitUntil,
+// on the ctx fetch() files under the request in GB_REQ_CTX. Older accounts
+// cost one date comparison. A per-isolate Set absorbs the burst of parallel
+// calls an app launch makes, and the KV mark (bell:user:<id>) cheaply stops
+// repeats everywhere else. D1 decides who actually sends it
+// (gbMemberBellOnce): KV has no compare-and-set, so two isolates of one
+// launch burst could both read "not sent" and both send it. Without a D1
+// verdict the KV mark alone decides, written BEFORE the alert so a failed
+// write sends nothing.
+const GB_REQ_CTX = new WeakMap();   // request → ctx, set at the top of fetch()
+const GB_BELL_SEEN = new Set();     // user ids this isolate has already handled
+function gbBellNewMember(request, env, u) {
+  try {
+    if (!env.NTFY_TOPIC && !env.TWILIO_SID) return;
+    const kv = env.GLOBESKIMMERS_KV;
+    const ctx = GB_REQ_CTX.get(request);
+    if (!kv || !ctx || !u?.id) return;
+    const born = Date.parse(u.created_at || '');
+    const age = Date.now() - born;
+    if (!(age < 7 * 86400000)) return;   // a week or older, or no date: nothing at all
+    if (GB_BELL_SEEN.has(u.id)) return;
+    if (GB_BELL_SEEN.size >= 5000) GB_BELL_SEEN.clear();
+    GB_BELL_SEEN.add(u.id);
+    const parts = [
+      gbProviderLabel(u.app_metadata?.provider),
+      gbDeviceLabel(request.headers.get('User-Agent')),
+      gbConnectionPlace(request),
+    ].filter(Boolean);
+    const joined = age > 3600000 ? ` (joined ${gbDayLabel(born)})` : '';
+    ctx.waitUntil((async () => {
+      const key = `bell:user:${u.id}`;
+      if (await kv.get(key)) return;
+      const n = await gbMemberNumber(env, u.id);
+      const won = n ? await gbMemberBellOnce(env, u.id) : null;
+      if (won === null) await kv.put(key, '1');
+      else {
+        await kv.put(key, '1').catch(() => {});
+        if (!won) return;
+      }
+      await founderAlert(env, `🎉 New member${n ? ` #${n}` : ''}${parts.map((p) => ` · ${p}`).join('')}${joined}`, 'new', n ? { click: gbMemberLink(n) } : {});
+    })().catch(() => {}));
+  } catch { /* the bell never touches sign-in */ }
 }
 
 // ── The morning digest (founder, 2026-10-05): yesterday's OFFICIAL store
@@ -1194,6 +1379,13 @@ async function handleDeleteAccount(request, env) {
       const detail = await delRes.text().catch(() => '');
       return jsonResponse({ error: `Deletion failed (${delRes.status})`, detail: detail.slice(0, 300) }, 502);
     }
+
+    // 3) Their member number and new-member mark go with the account
+    //    (best-effort). AUTOINCREMENT never gives the number to anyone else.
+    try {
+      if (env.DB) await env.DB.prepare('DELETE FROM member_numbers WHERE user_id = ?1').bind(String(userId).toLowerCase()).run();
+    } catch { /* no table yet, or D1 down */ }
+    if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.delete(`bell:user:${userId}`).catch(() => {});
 
     return jsonResponse({ ok: true });
   } catch (e) {
@@ -13322,7 +13514,9 @@ async function gbUser(request, env) {
     const r = await fetch(`${GB_URL(env)}/auth/v1/user`, { headers: { apikey: GB_KEY(env), Authorization: `Bearer ${token}` } });
     if (!r.ok) return null;
     const u = await r.json();
-    return u && u.id ? u : null;
+    if (!(u && u.id)) return null;
+    gbBellNewMember(request, env, u);   // in-memory checks, then waitUntil; never awaited, never throws
+    return u;
   } catch { return null; }
 }
 // Server-side events. events.session_id is NOT NULL with no default, and this
@@ -13704,7 +13898,9 @@ async function handlePassportStamp(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in to stamp your passport' }, 401);
-    if (gbUnderAge(await gbSocialProfile(env, user.id).catch(() => null))) return gbUnderAgeResp();
+    // Kept for the report's age check and the founder's alert below.
+    const stamperSp = await gbSocialProfile(env, user.id).catch(() => null);
+    if (gbUnderAge(stamperSp)) return gbUnderAgeResp();
     const b = await request.json().catch(() => ({}));
     let name = String(b.name || '').trim();   // a Local favorite takes its approved name below
     if (!name) return jsonResponse({ error: 'name required' }, 400);
@@ -13917,8 +14113,7 @@ async function handlePassportStamp(request, env, ctx) {
       const userCode = (await sha256Hex(`${user.id}:stamp-report`)).slice(0, 8);
       // A minor's report keeps no spot at all, only the distance (teens & minors
       // plan, 2026-10-10). Unknown age counts as a minor.
-      const sp = await gbSocialProfile(env, user.id).catch(() => null);
-      const spotOk = sp?.social_tier === 'adult';
+      const spotOk = stamperSp?.social_tier === 'adult';
       ctx.waitUntil(ppFileStampReport(env, {
         name, entity_id: reportEntity, city: b.city ? String(b.city).slice(0, 120) : null, country: b.country ? String(b.country).slice(0, 120) : null,
         fix: spotOk ? fix : { acc: fix?.acc }, meters, reach, refusal, outcome,
@@ -13992,8 +14187,21 @@ async function handlePassportStamp(request, env, ctx) {
     // Stamps are airport-arrival + iconic-attraction only — we do NOT auto-stamp cities.
     const localHour = Number.isFinite(+b.local_hour) && +b.local_hour >= 0 && +b.local_hour <= 23 ? Math.floor(+b.local_hour) : null;
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, country: row.country, city: row.city, name: row.name, verified: result.verified, updated: !!result.updated, local_hour: localHour, zone: presence?.zone || null }));
-    // Private stamps (every sensitive place starts private) never reach the alert.
-    if (ctx && result.created && !row.hidden) ctx.waitUntil(founderAlert(env, `📍 ${row.name}${row.city ? ` · ${row.city}` : ''}${row.country ? `, ${row.country}` : ''} — ${kind} stamp${result.verified === 'gps' ? ' ✓' : ''}${result.verified === 'reported' ? ' (reported: "I’m here, but the app is saying I’m not")' : ''}${direction ? ` (${direction === 'departure' ? 'exit' : 'entry'})` : ''}`));
+    // Private stamps (every sensitive place starts private) never reach the alert,
+    // and neither does any stamp of a 13–17 traveler: their whole passport is
+    // private to them (privacy policy §9), and a member number leads to a name.
+    // Who stamped (founder, 2026-10-13): a member number, never a name, and a
+    // tap opens that member in Admin; an admin's own stamp reads "You stamped".
+    if (ctx && result.created && !row.hidden && stamperSp?.social_tier !== 'teen') {
+      const where = [row.city, row.country].filter(Boolean).join(', ');
+      const what = `${row.name}${where ? ` · ${where}` : ''} — ${kind} stamp${result.verified === 'gps' ? ' ✓' : ''}${result.verified === 'reported' ? ' (reported: "I’m here, but the app is saying I’m not")' : ''}${direction ? ` (${direction === 'departure' ? 'exit' : 'entry'})` : ''}`;
+      const mine = ADMIN_EMAILS_WORKER.includes(String(user.email || '').trim().toLowerCase());
+      ctx.waitUntil((async () => {
+        const n = mine ? null : await gbMemberNumber(env, user.id);
+        const who = mine ? 'You' : n ? `Member #${n}` : 'A member';
+        await founderAlert(env, `📍 ${who} stamped ${what}`, 'bell', n ? { click: gbMemberLink(n) } : {});
+      })().catch(() => {}));
+    }
     return jsonResponse({ id: result.id, created: !!result.created, updated: !!result.updated, verified: result.verified, reported: reporting, private: !!(result.created && startPrivate) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -22036,6 +22244,101 @@ async function handleAdminUserActivity(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// POST /admin/members { n? } (founder, 2026-10-13) — Admin → Newest members,
+// where a bell alert's member number becomes a name. The newest 50 members,
+// newest first, plus member n as `focus` when an alert asks for one who isn't
+// among them: { members: [...], focus: {...} | null, numbered }, each member
+// { n, user_id, name, handle, provider, country, joined }. Never an email.
+// provider is the raw auth provider ('apple' | 'google' | 'email' …), handle
+// has no @, joined is the profile's created_at (ISO). Numbers are
+// gbMemberNumber's (member_numbers); a member shown without one is numbered
+// here, oldest first. numbered is false when D1 can't give numbers right now
+// (every n is then null); focus is null when no account holds number n now.
+async function handleAdminMembers(request, env) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+  try {
+    const b = await request.json().catch(() => ({}));
+    const want = /^\d{1,9}$/.test(String(b?.n ?? '')) ? gbMemberN(b.n) : null;
+    const COLS = 'id,created_at,home_country,first_name';
+    const pq = await gbRest(env, `profiles?select=${COLS}&order=created_at.desc,id.desc&limit=50`, { headers: { 'Accept-Profile': 'public' } });
+    if (!pq.ok) return jsonResponse({ error: `profiles read failed (${pq.status})` }, 502);
+    const rows = await pq.json().then((r) => (Array.isArray(r) ? r : [])).catch(() => []);
+    const idOf = (r) => String(r?.id || '').toLowerCase();
+    const nums = new Map();   // user id → member number
+    let numbered = false;
+    try {
+      if (await gbMembersReady(env)) {
+        const readNums = async (list) => {
+          if (!list.length) return;
+          const { results } = await env.DB.prepare('SELECT user_id, n FROM member_numbers WHERE user_id IN (SELECT value FROM json_each(?1))').bind(JSON.stringify(list)).all();
+          for (const r of results || []) { const n = gbMemberN(r.n); if (n) nums.set(String(r.user_id), n); }
+        };
+        const shownIds = [...new Set(rows.map(idOf).filter((id) => BL_UUID.test(id)))];
+        await readNums(shownIds);
+        const fresh = shownIds.filter((id) => !nums.has(id)).reverse();   // rows are newest first
+        if (fresh.length) {
+          await env.DB.prepare(MEMBER_NUMBER_NEW_SQL).bind(JSON.stringify(fresh)).run();
+          await readNums(fresh);
+        }
+        numbered = true;
+      }
+    } catch { nums.clear(); numbered = false; }
+    // The member an alert asked for, when they aren't among the newest.
+    let focusRow = null;
+    if (want && numbered && ![...nums.values()].includes(want)) {
+      try {
+        const hit = await env.DB.prepare('SELECT user_id FROM member_numbers WHERE n = ?1').bind(want).first();
+        const uid = String(hit?.user_id || '').toLowerCase();
+        if (BL_UUID.test(uid)) {
+          const fq = await gbRest(env, `profiles?id=eq.${uid}&select=${COLS}`, { headers: { 'Accept-Profile': 'public' } });
+          focusRow = fq.ok ? (await fq.json().catch(() => []))[0] || null : null;
+          if (focusRow) nums.set(uid, want);
+        }
+      } catch { focusRow = null; }
+    }
+    const all = focusRow ? [...rows, focusRow] : rows;
+    if (!all.length) return jsonResponse({ members: [], focus: null, numbered });
+    const ids = all.map(idOf);
+    const inList = `(${ids.filter((id) => BL_UUID.test(id)).join(',')})`;
+    const authHeaders = { apikey: GB_KEY(env), Authorization: `Bearer ${GB_KEY(env)}` };
+    const json = async (req) => { try { const r = await req; return r && r.ok ? await r.json() : null; } catch { return null; } };
+    const [spRows, shRows, auPage] = await Promise.all([
+      json(gbRest(env, `social_profiles?user_id=in.${inList}&select=user_id,display_name`, {})),
+      json(gbRest(env, `passport_shares?user_id=in.${inList}&select=user_id,handle`, {})),
+      json(fetch(`${GB_URL(env)}/auth/v1/admin/users?page=1&per_page=60&sort=created_at%20desc`, { headers: authHeaders })),
+    ]);
+    const byId = (list, key) => new Map((Array.isArray(list) ? list : []).filter((x) => x && x[key]).map((x) => [String(x[key]).toLowerCase(), x]));
+    const sp = byId(spRows, 'user_id'), sh = byId(shRows, 'user_id'), au = byId(auPage?.users, 'id');
+    // The newest accounts are normally all on that one admin page; any it
+    // missed (at most the 50 rows and the focus) are read one by one.
+    const missing = ids.filter((id) => !au.has(id) && BL_UUID.test(id));
+    if (missing.length) {
+      const got = await Promise.all(missing.map((id) => json(fetch(`${GB_URL(env)}/auth/v1/admin/users/${id}`, { headers: authHeaders }))));
+      for (const u of got) if (u?.id) au.set(String(u.id).toLowerCase(), u);
+    }
+    const clean = (v, max = 80) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+    const build = (r) => {
+      const id = idOf(r);
+      const u = au.get(id) || {};
+      const meta = u.user_metadata || {};
+      const provider = clean(u.app_metadata?.provider, 20).toLowerCase() || null;
+      // Email sign-ups carry only first_name (sign-up form, onboarding), never full_name/name.
+      const name = [sp.get(id)?.display_name, meta.full_name, meta.name, r.first_name, meta.first_name].map((v) => clean(v)).find(Boolean);
+      return {
+        n: nums.get(id) || null,
+        user_id: id,
+        name: name || 'No name yet',
+        handle: clean(sh.get(id)?.handle, 40).replace(/^@/, '') || null,
+        provider,
+        country: clean(r.home_country, 60) || null,
+        joined: r.created_at || u.created_at || null,
+      };
+    };
+    return jsonResponse({ members: rows.map(build), focus: focusRow ? build(focusRow) : null, numbered });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleAdminGuestbook(request, env) {
   const denied = await requireAdmin(request, env);
   if (denied) return denied;
@@ -22648,6 +22951,7 @@ async function handleDealsSweepManual(request, env, ctx) {
 
 export default {
   async fetch(request, env, ctx) {
+    GB_REQ_CTX.set(request, ctx);   // lets gbUser hand the new-member bell to waitUntil
     const url = new URL(request.url);
     const pathname = url.pathname;
 
@@ -22783,6 +23087,7 @@ export default {
       if (pathname === '/admin/handle-requests' && request.method === 'POST') return await handleAdminHandleRequests(request, env);
       if (pathname === '/admin/guestbook' && request.method === 'POST') return await handleAdminGuestbook(request, env);
       if (pathname === '/admin/user-activity' && request.method === 'POST') return await handleAdminUserActivity(request, env);
+      if (pathname === '/admin/members' && request.method === 'POST') return await handleAdminMembers(request, env);
       if (pathname === '/admin/activity-overview' && request.method === 'POST') return await handleAdminActivityOverview(request, env);
       if (pathname === '/admin/gear-report' && request.method === 'POST') return await handleAdminGearReport(request, env);
       if (pathname === '/passport/sets' && request.method === 'POST') return await handlePassportSets(request, env);
