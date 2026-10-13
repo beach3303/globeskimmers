@@ -144,6 +144,82 @@
   --gs-money-gradient: linear-gradient(135deg, #16A34A 0%, #22C55E 100%);
 }
 
+/* ============================================================================
+   THE NEW LOOK: world defaults, focus ring, perforation, band seam, shimmer
+   ("Papers & Inks, filed", approved 2026-10-13; spec in docs/design/new-look/).
+   Every colour here mirrors a token in src/components/redesign/worlds.json.
+   ============================================================================ */
+
+/* World variables. A surface printed in a world sets these on its root from
+   WORLD (src/components/redesign/constants.js); anywhere else they are the
+   neutral journal: ivory paper, ink, the ivory-2 wash and the rule hairline. */
+:root {
+  --w-paper: #FFFCF7;
+  --w-ink: #16110D;
+  --w-wash: #F7F4EC;
+  --w-line: #F0E9DC;
+}
+
+/* One keyboard focus ring for the whole app. Its colour comes from --gs-focus,
+   which dark plates, zones and cloth covers set for their own subtree; unset,
+   it is #0B5F55 (teal ink). In the base layer, so components that remove the
+   outline (Tailwind outline-none, focus-visible:outline-none on the ui kit)
+   still win, and an inline outline: none still wins. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--gs-focus, #0B5F55);
+    outline-offset: 2px;
+  }
+}
+
+/* Perforated top edge (the stamps band): 4px half-holes every 12px, cut by a
+   mask so whatever sits behind the band shows through them. */
+.gs-perf {
+  -webkit-mask: radial-gradient(circle 4px at 6px 0, transparent 98%, #000) 0 0 / 12px 100% repeat-x;
+  mask: radial-gradient(circle 4px at 6px 0, transparent 98%, #000) 0 0 / 12px 100% repeat-x;
+}
+
+/* Home option A (full-width bands, the admin preview): two neighbouring bands of
+   the same lightness step get a 6px seam of the page ground between them. A
+   hidden zone renders nothing, so bands that become neighbours are caught too.
+   HomeZone sections must be direct siblings for this to apply. */
+[data-zone-variant="bands"][data-zone-step="dark"] + [data-zone-variant="bands"][data-zone-step="dark"],
+[data-zone-variant="bands"][data-zone-step="light"] + [data-zone-variant="bands"][data-zone-step="light"],
+[data-zone-variant="bands"][data-zone-step="mid"] + [data-zone-variant="bands"][data-zone-step="mid"] {
+  margin-top: 6px;
+}
+
+/* Loading shimmer: the world wash with a soft light sweeping left to right.
+   The resting frame (background-position 200%) has the light off the element,
+   so with reduced motion it is a flat wash. Same keyframes as the older
+   ThingsToDo skeleton, which defines its own .gs-shimmer inline for now. */
+@keyframes gs-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.gs-shimmer {
+  background-color: var(--w-wash, #F7F4EC);
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0) 25%, rgba(255, 255, 255, 0.6) 50%, rgba(255, 255, 255, 0) 75%);
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  background-position: 200% 0;
+  animation: gs-shimmer 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root .gs-shimmer {
+    animation: none;
+  }
+}
+
+/* A scroller with no visible scrollbar (chip rows, shelves). */
+.gs-noscroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.gs-noscroll::-webkit-scrollbar {
+  display: none;
+}
+
 /* Smooth theme transitions */
 body,
 .theme-transition {
