@@ -5,7 +5,7 @@ import { searchHomeCities, resolveHomePlace } from "@/lib/homePlace";
 import { searchCountries, countryCode } from "@/lib/countries";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2 } from "lucide-react";
+import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2, UserX } from "lucide-react";
 import ContactUsModal from "../components/ContactUsModal";
 import RefreshAccessModal from "../components/RefreshAccessModal";
 import { ADMIN_EMAILS } from "@/lib/admins";
@@ -13,7 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
-import { getHandle, setHandle, setAgeGate, splitDob, getAgeInfo, setBirthday, socialRequest } from "@/lib/passport";
+import { getHandle, setHandle, setAgeGate, splitDob, getAgeInfo, setBirthday, socialRequest, socialFollow } from "@/lib/passport";
+import { blockReady } from "@/lib/blocks";
+import BlockedTravelers from "@/components/social/BlockedTravelers";
 import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
@@ -426,6 +428,15 @@ export default function SettingsPage() {
     if (!error) setBLocked(true);
     showToast(error || "Saved privately 🎂", error ? "error" : "success");
   };
+  // Blocked travelers (go-live decision 6): the list from social/follow
+  // op:'list', shown under Privacy only when the worker advertises block_v2.
+  const [social, setSocial] = useState(null);
+  const [socialTick, setSocialTick] = useState(0);
+  useEffect(() => {
+    let gone = false;
+    (async () => { const { data } = await socialFollow("list"); if (!gone) setSocial(data || null); })();
+    return () => { gone = true; };
+  }, [socialTick]);
   // The worker answers 'age_required' until the birth year is set (it locks
   // after the first write; under-13 and AU-under-16 accounts get no social).
   const [needYear, setNeedYear] = useState(false);
@@ -932,6 +943,13 @@ export default function SettingsPage() {
 
           {/* Privacy — the promise, in the app where it belongs */}
           <EdGroup kicker="Privacy" isTablet={isTablet}>
+            {blockReady(social) && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={UserX} iconBg={CAT.food.ink} title="Blocked travelers"
+                desc="They can't follow you, see your passport or send you postcards, and they aren't told."
+                control={{ below: true, node: <BlockedTravelers blocked={social.blocked} onChanged={() => setSocialTick((t) => t + 1)} /> }}
+                last={false}
+              />
+            )}
             <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.culture.ink} title="Our promise" desc="Your stamps and photos are yours. We never sell your photos or your location history, and we never show ads to kids. Shared passports never reveal exact locations, and photos only appear to others after review."
               control={{ below: true, node: (
                 <div className="flex gap-2">

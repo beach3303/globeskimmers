@@ -35,6 +35,8 @@ import Luggage from "@/components/passport/Luggage";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import HeldHandleClaim from "@/components/passport/HeldHandleClaim";
 import PhotoFooter from "@/components/passport/PhotoFooter";
+import TravelerSheet from "@/components/social/TravelerSheet";
+import { blockTarget } from "@/lib/blocks";
 
 
 // ============================================================================
@@ -728,6 +730,9 @@ function PassportInner() {
   });
   const readOnly = !!viewSlug;
   const [viewHolder, setViewHolder] = useState(null);
+  // Who owns the viewed passport, when the worker says (owner_id; today's
+  // /passport/public sends only the holder's first name).
+  const [viewOwner, setViewOwner] = useState(null);
   // Consume the slug once so it doesn't leak into the user's OWN passport later.
   useEffect(() => { try { sessionStorage.removeItem("pp_view_slug"); } catch { /* ignore */ } }, []);
 
@@ -737,6 +742,7 @@ function PassportInner() {
       const { data } = await getPublicPassport(viewSlug);
       if (data && !data.private) { setStamps(data.stamps || []); setStats(data.stats || {}); setViewHolder(data.holder || "A traveler"); }
       else { setStamps([]); setStats({}); setViewHolder(null); }
+      setViewOwner(data?.owner_id || data?.user_id || null);
       setTags([]); setLoading(false); return;
     }
     const [pp, tg] = await Promise.all([listPassport(), listTags()]);
@@ -889,6 +895,20 @@ function PassportInner() {
     showToast(error || "Thank you — we review every report", error ? "error" : "success");
   };
   const exitView = () => { try { sessionStorage.removeItem("pp_view_slug"); } catch { /* ignore */ } window.location.assign(createPageUrl("Passport")); };
+  // Friend view: "Block this traveler" beside Report (go-live decision 6).
+  // Shown only when the worker advertises block_v2; the share link itself
+  // (slug) names the owner, or owner_id when the worker sends one
+  // (src/lib/blocks.js). After a block, back to your own passport.
+  const [viewList, setViewList] = useState(null);
+  const [blockingView, setBlockingView] = useState(false);
+  useEffect(() => {
+    if (!readOnly || !isAuthenticated) return undefined;
+    let gone = false;
+    (async () => { const { data } = await socialFollow("list"); if (!gone) setViewList(data || null); })();
+    return () => { gone = true; };
+  }, [readOnly, isAuthenticated]);
+  const viewPerson = readOnly ? { user_id: viewOwner, slug: viewSlug, name: viewHolder } : null;
+  const canBlockView = !!(viewPerson && viewList && blockTarget(viewPerson, viewList));
 
   // Booklet view: one swipeable page per country (like a real passport).
   const [openStampId, setOpenStampId] = useState(null);
@@ -1245,13 +1265,22 @@ function PassportInner() {
       {/* Stamp a place — manual city/spot visit stamp */}
       {showStampPlace && <StampPlaceModal preset={stampPreset} onClose={() => { setShowStampPlace(false); setStampPreset(null); }} onDone={() => { setShowStampPlace(false); setStampPreset(null); load(); }} />}
 
-      {/* Friend view: the quiet report door (and the sheet of reasons) */}
+      {/* Friend view: the quiet report door (and the sheet of reasons), and Block */}
       {readOnly && (
-        <div className="text-center mt-6 mb-2">
-          <button type="button" onClick={() => setReporting(true)} style={{ background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
+        <div className="flex justify-center gap-4 mt-6 mb-2">
+          <button type="button" onClick={() => setReporting(true)} aria-haspopup="dialog" style={{ minHeight: 44, padding: "0 6px", background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
             Report this passport
           </button>
+          {canBlockView && (
+            <button type="button" onClick={() => setBlockingView(true)} aria-haspopup="dialog" style={{ minHeight: 44, padding: "0 6px", background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
+              Block this traveler
+            </button>
+          )}
         </div>
+      )}
+      {blockingView && viewPerson && (
+        <TravelerSheet person={viewPerson} list={viewList} start="block" report={{ kind: "passport", slug: viewSlug }}
+          onClose={() => setBlockingView(false)} onChanged={() => exitView()} />
       )}
       {reporting && (
         <div className="fixed inset-0 z-[9998] flex items-end justify-center" role="dialog" aria-modal="true" aria-label="Report this passport" style={{ background: "rgba(22,17,13,.45)" }} onClick={() => setReporting(false)}>

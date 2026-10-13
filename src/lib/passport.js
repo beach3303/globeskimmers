@@ -136,6 +136,20 @@ export async function blockTagger(token) {
   const { data, error } = await callWorker('social/block', { token });
   return { data, error };
 }
+// Block a traveler (go-live decision 6; offered only when op:'list' lists
+// 'block_v2', see src/lib/blocks.js). target: one of { user_id }, { postcard_id },
+// { slug } or { handle }. Silent to them; both follows end. Unblock deletes
+// only my own block row, and the follows don't come back.
+export async function blockTraveler(target) {
+  const { data, error } = await callWorker('social/block', target || {});
+  const err = error || data?.error || null;
+  return { ok: !err && data?.ok === true, error: err || (data?.ok === true ? null : 'Couldn’t block right now') };
+}
+export async function unblockTraveler(user_id) {
+  const { data, error } = await callWorker('social/follow', { op: 'unblock', user_id });
+  const err = error || data?.error || null;
+  return { ok: !err && data?.ok === true, error: err || (data?.ok === true ? null : 'Couldn’t unblock right now') };
+}
 // Username: read (no args) or claim/change. 3–20 [a-z0-9_], 2 changes/30 days.
 export async function getHandle() {
   const { data, error } = await callWorker('social/handle', {});
