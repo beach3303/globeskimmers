@@ -52,3 +52,20 @@ export function refusal(status, body) {
   announceAgeGate(code);
   return { data: { ...body, code }, error: ageErrorText(body, code) };
 }
+
+// Exact age in whole years on `now` (UTC, like the worker) for a full
+// birthday: year + 'MM-DD'. null when either part isn't a real date. Used by
+// the Admin portal's Age appeal form to label (and refuse) a correction
+// before it is sent; the worker decides the tier.
+export function ageOnDate(year, md, now = new Date()) {
+  const y = Math.round(Number(year));
+  const m = /^(\d{2})-(\d{2})$/.exec(String(md || ''));
+  if (!m || !(y >= 1900)) return null;
+  const mo = Number(m[1]), d = Number(m[2]);
+  const born = new Date(Date.UTC(y, mo - 1, d));
+  if (born.getUTCFullYear() !== y || born.getUTCMonth() !== mo - 1 || born.getUTCDate() !== d) return null;
+  if (born.getTime() > now.getTime()) return null;
+  const nm = now.getUTCMonth() + 1, nd = now.getUTCDate();
+  const had = nm > mo || (nm === mo && nd >= d);
+  return now.getUTCFullYear() - y - (had ? 0 : 1);
+}
