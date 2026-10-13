@@ -11,6 +11,7 @@
 //     envelope, so call sites change by ~one token.
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { supabase } from '@/lib/supabaseClient';
+import { refusal } from '@/lib/ageGate';
 
 const WORKER_BASE = 'https://globeskimmers-api.maizasimeon.workers.dev';
 const isNative = Capacitor.isNativePlatform();
@@ -41,7 +42,7 @@ export async function callWorker(path, body = {}, opts = {}) {
       // CapacitorHttp parses JSON and bypasses WebView CORS. connect/readTimeout
       // are in ms; the native layer rejects on timeout so it can't hang.
       const res = await CapacitorHttp.post({ url, headers, data: body, connectTimeout: timeoutMs, readTimeout: timeoutMs });
-      if (res.status >= 400) return { data: res.data ?? null, error: res.data?.error || `HTTP ${res.status}` }; // keep the body — e.g. username suggestions on a 409
+      if (res.status >= 400) return refusal(res.status, res.data); // keeps the body; age refusals are announced (src/lib/ageGate.js)
       return { data: res.data, error: null };
     }
     const controller = new AbortController();
@@ -49,7 +50,7 @@ export async function callWorker(path, body = {}, opts = {}) {
     try {
       const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) return { data: json ?? null, error: json?.error || `HTTP ${res.status}` }; // keep the body — e.g. username suggestions on a 409
+      if (!res.ok) return refusal(res.status, json); // keeps the body; age refusals are announced (src/lib/ageGate.js)
       return { data: json, error: null };
     } finally {
       clearTimeout(timer);
