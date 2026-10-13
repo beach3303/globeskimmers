@@ -830,7 +830,12 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   this design"; "your circle" confirmed by the founder the same day: "yes on my circle"). Building it into the app
   on branch `new-look` (off stamping-v2); nothing ships until stamping-v2 has merged and the founder says
   go (OTA). **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
-  — option A (full-width bands) is not built.
+  — option A (full-width bands) is not built. **Weather: Bluebird. ATMs: Carbon Copy** (founder,
+  2026-10-13, picking from two new options each after saying "i don't like the color of weather and atm":
+  "i choose the ones inside red circle"). Bluebird is a flat clear-sky blue plate (#0F6D9A) with white type,
+  a lemon italic (#FDEA53) and a sunflower sun. Carbon Copy is a cornflower plate (#7487E6) with carbon type
+  (#15171C) and the receipt card. They replace "storm + apricot" and "graphite + gold" below. The canvas
+  finders row now shows them; the options not chosen sit in their own row.
   Original ask and mockups, 2026-10-12: Founder asks the same day: more contrast and a different
   background or bordered box for each section without clutter (Home and Profile); followers/following
   shown creatively, the profile feeling like someone's personal world; every finder its own two- or
@@ -843,7 +848,7 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   lapis + terracotta, Restrooms iris, ATMs graphite + gold, Money banknote green + rose, Weather storm
   + apricot, Phrases mustard, Culture olive + brass, Convenience night + lime, Shopping plum + blush).
   Word proposal: **"your circle"** ("Where your *circle* has been", "Travel is better with your
-  *circle*"). Waiting on: A or B, any colour to change, and a yes on "circle".
+  *circle*"). All three answered 2026-10-13: B, Weather and ATMs recoloured, yes on "circle".
 
 - globeskimmers.com (M1): never ours. The founder owns globeskimmers.io only (confirmed 2026-09-14). The .com sits in the registry redemption period at Domain Esta Aqui, LLC (Network Solutions / SnapNames group) and likely deletes around 2026-09-20. Decide whether to backorder it at a drop-catch service (DropCatch, SnapNames, GoDaddy) before then, or let it go. Nothing in the app, website or store listing depends on it.
 - Approve "Mobility needs" and its choices (G110).
