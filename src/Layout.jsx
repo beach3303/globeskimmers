@@ -36,22 +36,22 @@ const BOTTOM_RESERVE = "calc(96px + env(safe-area-inset-bottom))";
 // before the cloth loads.
 const HARBOUR = CLOTH[DEFAULT_CLOTH];
 const FINDER_PAGES = Object.entries(WORLD_BY_PAGE); // [page key, world key]
-const PAGE_GROUND = new Map([
-  ...FINDER_PAGES.map(([page, key]) => [page, WORLD[key].paper]),
-  ["Mailbox", NEUTRAL.airmail],
-  ["Profile", HARBOUR.paper],
-  ["Circle", HARBOUR.paper],
-  ["Traveler", HARBOUR.paper],
-]);
+const PAGE_GROUND = new Map(Object.entries({
+  ...Object.fromEntries(FINDER_PAGES.map(([page, key]) => [page, WORLD[key].paper])),
+  Mailbox: NEUTRAL.airmail,
+  Profile: HARBOUR.paper,
+  Circle: HARBOUR.paper,
+  Traveler: HARBOUR.paper,
+}));
 
 // The ink of the shared chrome over a page (Back-to-top): the world ink on a finder,
 // airmail blue on Mailbox, the owner's cloth on Circle (the page sets it through
 // usePageGround; Harbour until then), the neutral ink elsewhere.
-const PAGE_INK = new Map([
-  ...FINDER_PAGES.map(([page, key]) => [page, WORLD[key].ink]),
-  ["Mailbox", NEUTRAL.airmailBlue],
-  ["Circle", HARBOUR.cloth],
-]);
+const PAGE_INK = new Map(Object.entries({
+  ...Object.fromEntries(FINDER_PAGES.map(([page, key]) => [page, WORLD[key].ink])),
+  Mailbox: NEUTRAL.airmailBlue,
+  Circle: HARBOUR.cloth,
+}));
 
 
 // Track event helper. Now writes to the LIVE Cloudflare D1 events table via

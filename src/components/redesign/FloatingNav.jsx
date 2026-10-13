@@ -92,7 +92,8 @@ export default function FloatingNav({ active, dark = false }) {
 
   return (
     <div
-      style={{
+      // Cast: React's CSSProperties type has no CSS custom properties (--gs-focus).
+      style={/** @type {import('react').CSSProperties} */ ({
         position: 'fixed',
         // env(safe-area-inset-bottom) keeps the pill above the home indicator
         // now that viewport-fit=cover makes the WebView extend edge-to-edge.
@@ -112,7 +113,7 @@ export default function FloatingNav({ active, dark = false }) {
           `0 18px 40px -10px rgba(0,0,0,.3), 0 0 0 1px rgba(255,255,255,.06) inset, 0 0 0 1px ${rgba(NEUTRAL.cream, 0.12)}`,
         '--gs-focus': NEUTRAL.cream,
         zIndex: 40,
-      }}
+      })}
     >
       {items.map((it) => {
         const isActive = activeTab === it.id;

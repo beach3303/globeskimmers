@@ -49,6 +49,7 @@ const hit = {
   justifyContent: "center",
   lineHeight: 1,
 };
+/** @param {number} size @returns {import('react').CSSProperties} */
 const disc = (size) => ({
   width: size,
   height: size,
