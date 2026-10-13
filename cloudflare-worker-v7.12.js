@@ -14371,10 +14371,13 @@ async function handlePassportPublic(request, env) {
     // even through a share link minted before the hold.
     const ownerSp = await gbSocialProfile(env, share.user_id).catch(() => undefined);
     if (gbOffSocial(ownerSp)) return jsonResponse({ private: true });
+    // A block hides the pair both ways (block_v2, 2026-10-13): a blocked
+    // viewer gets the same answer as any private passport, public or not.
+    const viewer = await gbUser(request, env).catch(() => null);
+    if (viewer && viewer.id !== share.user_id && await gbBlockedEither(env, viewer.id, share.user_id, { failClosed: true })) return jsonResponse({ private: true });
     if (!share.is_public) {
-      const viewer = await gbUser(request, env).catch(() => null);
       const friend = viewer && viewer.id !== share.user_id
-        ? (!(await gbBlockedEither(env, viewer.id, share.user_id)) && await gbMutualFriends(env, viewer.id, share.user_id))
+        ? await gbMutualFriends(env, viewer.id, share.user_id)
         : !!viewer; // the owner always sees their own
       if (!friend) return jsonResponse({ private: true });
     }
@@ -16277,13 +16280,15 @@ async function handleSocialProfile(request, env, ctx) {
 
 // POST /social/report { slug?, kind, ref?, reason, note? } — Apple 1.2's
 // report door. minor_safety reports carry a 24h triage SLA (admin queue).
+// Report sits next to Block everywhere (2026-10-13), so a profile, a
+// postcard, a signature or a stamp keeps its own kind in the queue.
 async function handleSocialReport(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
     const reason = ['minor_safety', 'nudity', 'harassment', 'spam', 'other'].includes(b.reason) ? b.reason : 'other';
-    const kind = ['passport', 'photo', 'tag', 'handle'].includes(b.kind) ? b.kind : 'passport';
+    const kind = ['passport', 'photo', 'tag', 'handle', 'profile', 'postcard', 'signature', 'stamp'].includes(b.kind) ? b.kind : 'passport';
     const row = {
       reporter_id: user.id, kind, reason,
       subject_slug: b.slug ? String(b.slug).replace(/[^a-z0-9]/gi, '').slice(0, 24) : null,
@@ -16881,6 +16886,10 @@ async function handleBlotterRead(request, env) {
     if (!share.is_public && !isOwner) return jsonResponse({ targets: {}, entries: [] });
     // A minor's page (held, frozen, unconfirmed — or unknown) reads empty.
     if (!isOwner && gbOffSocial(await gbSocialProfile(env, share.user_id).catch(() => undefined))) return jsonResponse({ targets: {}, entries: [] });
+    // Blocks hide the pair both ways (block_v2); a visitor whose blocks can't
+    // be read sees nothing rather than everything.
+    const blockSet = user ? await gbBlockSet(env, user.id) : new Set();
+    if (!isOwner && (!blockSet || blockSet.has(share.user_id))) return jsonResponse({ targets: {}, entries: [] });
     const owner = share.user_id;
     const [mq, eq2] = await Promise.all([
       gbRest(env, `blotter_marks?owner_user_id=eq.${owner}&select=target,kind,user_id&limit=4000`, {}),
@@ -16912,11 +16921,7 @@ async function handleBlotterRead(request, env) {
       marks = marks.filter((m) => visible(String(m.target || '')));
       entries = entries.filter((e) => visible(String(e.target || '')));
     }
-    const hiddenIds = new Set();
-    if (user) {
-      const bq = await gbRest(env, `user_blocks?or=(user_id.eq.${user.id},blocked_user_id.eq.${user.id})&select=user_id,blocked_user_id`, {});
-      for (const r of (bq.ok ? await bq.json() : [])) hiddenIds.add(r.user_id === user.id ? r.blocked_user_id : r.user_id);
-    }
+    const hiddenIds = blockSet || new Set();
     entries = entries.filter((e) => !hiddenIds.has(e.author_user_id));
     const targets = {};
     for (const m of marks) {
@@ -17030,6 +17035,10 @@ async function handleSocialFollow(request, env, ctx) {
         requests: followers.filter((r) => r.status === 'pending').map((r) => shape(r, 'follower_id')),
         following: following.map((r) => shape(r, 'followee_id')),
         blocked: blocks.map((r) => shape({ ...r, status: 'blocked' }, 'blocked_user_id')),
+        // block_v2 (2026-10-13): POST /social/block ends follows both ways and
+        // hides the pair from each other everywhere; the app shows Block only
+        // when this is present.
+        features: ['block_v2'],
       });
     }
 
@@ -17112,8 +17121,12 @@ async function handleSocialFeed(request, env) {
     if (mySp === undefined) return jsonResponse({ rows: [], error: 'Couldn’t check your account — try again', code: 'age_unknown' }, 503);
     if (gbUnderAge(mySp)) return jsonResponse({ rows: [], held: 'blocked' });
     if (gbAgeHeld(mySp)) return jsonResponse({ rows: [], held: gbNeedsConfirm(mySp) ? 'confirm' : 'teen' });
+    // Blocks hide the pair both ways (block_v2, 2026-10-13) — including edges
+    // and cards from before the block; unreadable blocks show nothing.
+    const blocked = await gbBlockSet(env, user.id);
+    if (!blocked) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
     const gq = await gbRest(env, `user_follows?follower_id=eq.${user.id}&status=eq.accepted&select=followee_id`, {});
-    const ids = (gq.ok ? await gq.json() : []).map((r) => r.followee_id).slice(0, 100);
+    const ids = (gq.ok ? await gq.json() : []).map((r) => r.followee_id).filter((id) => !blocked.has(id)).slice(0, 100);
     // No early return: a postcard addressed to ME arrives even with zero follows.
     const [shq, spq, backq] = ids.length ? await Promise.all([
       gbRest(env, `passport_shares?user_id=in.(${ids.join(',')})&select=user_id,handle,visibility,is_public`, {}),
@@ -17162,9 +17175,9 @@ async function handleSocialFeed(request, env) {
       for (const r of (h2.ok ? await h2.json() : [])) share[r.user_id] = { ...(share[r.user_id] || {}), handle: r.handle };
       for (const r of (p2.ok ? await p2.json() : [])) prof[r.user_id] = { ...(prof[r.user_id] || {}), ...gbTierRow(r) };
     }
-    pcs = pcs.filter((p) => (ids.includes(p.sender_id) ? profOk : pcProfOk) && !minor(p.sender_id));
+    pcs = pcs.filter((p) => !blocked.has(p.sender_id) && (ids.includes(p.sender_id) ? profOk : pcProfOk) && !minor(p.sender_id));
     const cardRows = pcs.map((p) => ({
-      type: 'postcard', created_at: p.created_at,
+      type: 'postcard', id: p.id, created_at: p.created_at,
       photo: `${origin}/pc-photo/${p.photo_key}`,
       message: p.message, place: p.place_name, city: p.city, country: p.country,
       dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
@@ -17236,12 +17249,16 @@ async function handlePassportSets(request, env) {
 }
 
 // ── Social P0 (2026-09-29): blocks + usernames ──────────────────────────────
-async function gbBlockedEither(env, a, b) {
+// failClosed: a read that fails counts as blocked (for what a viewer may SEE;
+// sends stay fail-open so a blip never silently drops a postcard).
+async function gbBlockedEither(env, a, b, opts) {
   if (!a || !b) return false;
+  const failClosed = !!(opts && opts.failClosed);
   try {
     const q = await gbRest(env, `user_blocks?or=(and(user_id.eq.${a},blocked_user_id.eq.${b}),and(user_id.eq.${b},blocked_user_id.eq.${a}))&select=user_id&limit=1`, {});
-    return q.ok && (await q.json()).length > 0;
-  } catch { return false; }
+    if (!q.ok) return failClosed;
+    return (await q.json()).length > 0;
+  } catch { return failClosed; }
 }
 
 // Friends = MUTUAL accepted follows (founder, 2026-10-05: "private is with self
@@ -17258,8 +17275,26 @@ async function gbMutualFriends(env, a, b) {
   } catch { return false; }
 }
 
-// POST /social/block { token } — block the tagger behind an invite. Silent:
-// their pending invites to you die as "expired"; they are never told.
+// Everyone I block or who blocks me — the set every feed and list filters
+// by (a block hides BOTH ways). null when the read fails, so callers can
+// fail closed.
+async function gbBlockSet(env, userId) {
+  try {
+    const q = await gbRest(env, `user_blocks?or=(user_id.eq.${userId},blocked_user_id.eq.${userId})&select=user_id,blocked_user_id&limit=1000`, {});
+    if (!q.ok) return null;
+    return new Set((await q.json()).map((r) => (r.user_id === userId ? r.blocked_user_id : r.user_id)));
+  } catch { return null; }
+}
+
+// POST /social/block { user_id | handle | slug | postcard_id | token } —
+// block a traveler (Apple 1.2, founder 2026-10-13: blocking really blocks;
+// the follow list advertises it as features: ['block_v2']). Silent: they are
+// never told. It ends the follow edges BOTH ways (requests too), and their
+// pending tag invites to me — and mine to them — die as "expired". From then
+// on, both ways: no follows, postcards, tags or blotter acts; neither sees
+// the other in feeds or the Mailbox; and the blocked side gets the generic
+// private answer on the blocker's passport. POST /social/follow
+// { op: 'unblock', user_id } undoes it (follows don't come back).
 async function handleSocialBlock(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -17267,14 +17302,28 @@ async function handleSocialBlock(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const token = String(b.token || '').replace(/[^a-f0-9]/gi, '');
     let target = String(b.user_id || '').replace(/[^0-9a-f-]/gi, '') || null;
+    if (!target && b.handle) target = (await gbHandleToUser(env, String(b.handle).replace(/^@/, '')))?.user_id || null;
+    if (!target && b.slug) target = (await blShare(env, b.slug))?.user_id || null;
+    if (!target && b.postcard_id && BL_UUID.test(String(b.postcard_id))) {
+      // A card addressed to me, or broadcast to everyone (blocking a sender is
+      // never a way to learn who sent other people's cards).
+      const q = await gbRest(env, `postcards?id=eq.${b.postcard_id}&or=(to_user_id.eq.${user.id},to_user_id.is.null)&select=sender_id`, {});
+      target = (q.ok ? await q.json() : [])[0]?.sender_id || null;
+    }
     if (!target && token) {
       const q = await gbRest(env, `passport_tags?token=eq.${token}&select=from_user_id`, {});
       target = (q.ok ? await q.json() : [])[0]?.from_user_id || null;
     }
-    if (!target || target === user.id) return jsonResponse({ error: 'Nothing to block' }, 400);
-    await gbRest(env, 'user_blocks', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ user_id: user.id, blocked_user_id: target }) });
-    // Their pending invites to me die quietly.
-    await gbRest(env, `passport_tags?from_user_id=eq.${target}&to_user_id=eq.${user.id}&status=eq.pending`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'declined', revoked_at: new Date().toISOString() }) });
+    if (!target || !BL_UUID.test(target) || target === user.id) return jsonResponse({ error: 'Nothing to block' }, 400);
+    const w = await gbRest(env, 'user_blocks', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ user_id: user.id, blocked_user_id: target }) });
+    if (!w.ok) return jsonResponse({ error: 'Could not block right now — try again' }, 502);
+    const now = new Date().toISOString();
+    await Promise.all([
+      // The follow edges end both ways — accepted or still a request.
+      gbRest(env, `user_follows?or=(and(follower_id.eq.${user.id},followee_id.eq.${target}),and(follower_id.eq.${target},followee_id.eq.${user.id}))`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
+      // Pending invites die quietly, theirs to me and mine to them.
+      gbRest(env, `passport_tags?or=(and(from_user_id.eq.${target},to_user_id.eq.${user.id}),and(from_user_id.eq.${user.id},to_user_id.eq.${target}))&status=eq.pending`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'declined', revoked_at: now }) }),
+    ]);
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_block', {}));
     return jsonResponse({ ok: true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
@@ -17579,7 +17628,11 @@ async function handleSocialUnread(request, env) {
       gbRest(env, `blotter_entries?owner_user_id=eq.${me}&author_user_id=neq.${me}&created_at=gte.${floor}&select=target,author_user_id,body,doodle_key,created_at&order=created_at.desc&limit=50`, {}).then(j),
       gbRest(env, `passport_tags?to_user_id=eq.${me}&status=eq.pending&created_at=gte.${floor}&select=from_user_id,name,created_at&order=created_at.desc&limit=50`, {}).then(j),
     ]);
-    const fIds = following.map((r) => r.followee_id).filter(Boolean);
+    // Blocks hide the pair both ways (block_v2, 2026-10-13), activity from
+    // before the block included; unreadable blocks count nothing.
+    const blocked = await gbBlockSet(env, me);
+    if (!blocked) return jsonResponse({ total: 0, activity: b.mark === true || b.activity === true ? [] : undefined });
+    const fIds = following.map((r) => r.followee_id).filter((id) => id && !blocked.has(id));
     const broadcasts = fIds.length
       ? await gbRest(env, `postcards?to_user_id=is.null&sender_id=in.(${fIds.join(',')})&created_at=gte.${floor}&select=sender_id,place_name,created_at&order=created_at.desc&limit=50`, {}).then(j)
       : [];
@@ -17600,6 +17653,7 @@ async function handleSocialUnread(request, env) {
     for (const r of entries) items.push({ type: 'signature', uid: r.author_user_id, target: r.target, body: r.body ? String(r.body).slice(0, 90) : null, doodle: !!r.doodle_key, at: r.created_at });
     for (const r of tags) items.push({ type: 'tag', uid: r.from_user_id, place: r.name || null, at: r.created_at });
 
+    for (let i = items.length - 1; i >= 0; i--) if (blocked.has(items[i].uid)) items.splice(i, 1);
     const uids = [...new Set(items.map((i) => i.uid).filter(Boolean))].slice(0, 200);
     const photoIds = [...new Set(items.map((i) => (i.target || '').startsWith('ph:') ? i.target.slice(3) : null).filter(Boolean))].slice(0, 200);
     const photoStamp = {};
