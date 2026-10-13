@@ -11,15 +11,46 @@ import BrandBanner from "@/components/redesign/BrandBanner";
 import FloatingNav from "@/components/redesign/FloatingNav";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
 import BackToTop from "@/components/BackToTop";
+import { PageGroundProvider, usePageGroundValue, usePageInk } from "@/components/redesign/PageGround";
 import { logEvent } from "@/lib/analytics";
 import "@/lib/cloudSync"; // starts Wishlist/Saved → account sync on sign-in (side-effect)
-import { IVORY } from "@/components/redesign/constants";
+import { IVORY, NEUTRAL, WORLD, WORLD_BY_PAGE, CLOTH, DEFAULT_CLOTH, rgba } from "@/components/redesign/constants";
 
 // Long, scrollable content/list pages that get the floating "back to top" button.
 const BACK_TO_TOP_PAGES = new Set([
   "PlacesToEat", "CoffeeFinder", "ATMFinder", "RestroomFinder",
-  "ConvenienceStore", "ThingsToDo", "Shopping",
+  "ConvenienceStore", "ThingsToDo", "Shopping", "MoneyExchange",
   "CultureInformation", "BasicPhrases", "Weather",
+  "Mailbox", "Circle",
+]);
+
+// The bottom reserve under every page except Onboarding: the nav pill sits 22px above
+// the safe area and is about 62px tall, so 96px keeps the last card (and Back-to-top)
+// 12px clear of it.
+const BOTTOM_RESERVE = "calc(96px + env(safe-area-inset-bottom))";
+
+// Each page's ground (the paper it is printed on), painted all the way down. A page can
+// override it with usePageGround (Profile, Circle and Traveler set the owner's cloth
+// paper); every other page uses this default, and pages not listed here stay ivory.
+// Profile, Circle and Traveler start on Harbour paper so there is no ivory flash
+// before the cloth loads.
+const HARBOUR = CLOTH[DEFAULT_CLOTH];
+const FINDER_PAGES = Object.entries(WORLD_BY_PAGE); // [page key, world key]
+const PAGE_GROUND = new Map([
+  ...FINDER_PAGES.map(([page, key]) => [page, WORLD[key].paper]),
+  ["Mailbox", NEUTRAL.airmail],
+  ["Profile", HARBOUR.paper],
+  ["Circle", HARBOUR.paper],
+  ["Traveler", HARBOUR.paper],
+]);
+
+// The ink of the shared chrome over a page (Back-to-top): the world ink on a finder,
+// airmail blue on Mailbox, the owner's cloth on Circle (the page sets it through
+// usePageGround; Harbour until then), the neutral ink elsewhere.
+const PAGE_INK = new Map([
+  ...FINDER_PAGES.map(([page, key]) => [page, WORLD[key].ink]),
+  ["Mailbox", NEUTRAL.airmailBlue],
+  ["Circle", HARBOUR.cloth],
 ]);
 
 
@@ -43,27 +74,16 @@ export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
   const { profile, user, isAuthenticated, isLoadingAuth } = useAuth();
 
-  // Whether the current page should show the bottom banner (finder pages).
-  // Drives the banner mount, the FloatingNav lift, and extra bottom padding so
-  // the last card / radius row clears the overlay.
-
   // Swipe-down gesture: close the frontmost overlay (photo, form, location
   // picker) via the dismiss stack. Page-level swipe-to-exit was REMOVED per user
   // request — a downward swipe no longer navigates back or to Home; it only
   // closes an open overlay. Passing no callback disables the page-exit path.
   useSwipeDownDismiss();
   // Onboarding fills the screen itself (each step sizes to viewport − banner and
-  // pins its own footer), so it must NOT get the FloatingNav bottom padding —
-  // that extra 96px pushes the step taller than the viewport and scrolls the
-  // icon/Back up under the banner.
+  // pins its own footer), so it must NOT get the bottom reserve — that extra
+  // 96px pushes the step taller than the viewport and scrolls the icon/Back up
+  // under the banner.
   const isOnboarding = currentPageName === "Onboarding";
-
-  // Global text-size (glasses) control in the banner — available on every page
-  // so the user can resize text from ANYWHERE (the size is global + persisted).
-  // Home has its own glasses inside the hello card.
-  const showGlobalFontBtn =
-    !isOnboarding &&
-    currentPageName !== "Home";
 
   // Account-tied onboarding gate. Drives off the Supabase profile flag, which
   // is set once-ever when onboarding completes (survives reinstall / 2nd
@@ -126,48 +146,80 @@ export default function Layout({ children, currentPageName }) {
     <>
       <PWASetup />
       <LocationProvider>
-        <div className="min-h-screen font-sans gs-app-bg" style={{ background: IVORY }}>
-          {/* Brand banner — teal gradient (redesign primitive). Fixed top
-              so it stays above scrolled content; content offset by pt-[50px]
-              below to clear it. The gs-app-banner class lets the native camera
-              hide it (it would otherwise block the camera preview behind the
-              transparent webview). */}
-          <div className="fixed top-0 left-0 right-0 z-50 gs-app-banner">
-            <BrandBanner />
-          </div>
-
-          {/* Global text-size (glasses) control, pinned in the banner's right
-              side so text can be resized from any page. */}
-          {showGlobalFontBtn && (
-            <div style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 9px)', right: 12, zIndex: 60 }}>
-              <FontScaleButton />
-            </div>
-          )}
-
-          {/* App Content — offset by banner height (50px + status-bar safe
-              area, so content clears the now-safe-area-aware BrandBanner) +
-              floating nav clearance (pb-24). */}
-          <div
-            className={`w-full max-w-full overflow-x-clip min-h-screen ${isOnboarding ? "" : "pb-24"}`}
-            style={{ paddingTop: 'calc(50px + env(safe-area-inset-top))' }}
-          >
+        <PageGroundProvider fallback={PAGE_GROUND.get(currentPageName) || IVORY}>
+          <PageShell currentPageName={currentPageName} isOnboarding={isOnboarding}>
             {children}
-          </div>
-
-          {/* Floating "back to top" on long content/list pages. */}
-          {BACK_TO_TOP_PAGES.has(currentPageName) && <BackToTop bottom={96} />}
-
-          {/* Floating pill nav — 3 anchors (Home / Saved / Settings). */}
-          <FloatingNav />
-
-          {/* Global location nudges — mounted here (not in Home) so they catch
-              their events on ANY page after foreground: the "you appear to be in
-              <city>" travel nudge, and the one-time "auto-follow?" offer. */}
-          <LocationMismatchSheet />
-          <LocationAutoFollowOffer />
-        </div>
+          </PageShell>
+        </PageGroundProvider>
       </LocationProvider>
     </>
+  );
+}
+
+// The chrome around every page, painted in the page's ground. A child of the
+// PageGroundProvider so it sees a page's usePageGround override.
+function PageShell({ currentPageName, isOnboarding, children }) {
+  const ground = usePageGroundValue();
+  const pageInk = usePageInk();
+
+  // Paint <body> as well: iOS shows the body's colour in the rubber-band overscroll
+  // above and below the page, so the ground has to be there too. Cleared when Layout
+  // unmounts (the sign-in gate and the frozen screen paint their own).
+  useEffect(() => {
+    const { style } = document.body;
+    style.backgroundColor = ground;
+    return () => { style.backgroundColor = ""; };
+  }, [ground]);
+
+  const backToTopColor = rgba(pageInk || PAGE_INK.get(currentPageName) || NEUTRAL.ink, 0.82);
+
+  return (
+    <div className="min-h-screen font-sans gs-app-bg" style={{ background: ground }}>
+      {/* Brand banner — teal gradient (redesign primitive). Fixed top
+          so it stays above scrolled content; content offset by pt-[50px]
+          below to clear it. The gs-app-banner class lets the native camera
+          hide it (it would otherwise block the camera preview behind the
+          transparent webview). */}
+      <div className="fixed top-0 left-0 right-0 z-50 gs-app-banner">
+        <BrandBanner />
+      </div>
+
+      {/* Global text-size (glasses) control at the banner's right, on every
+          page but Onboarding (Home included), so text can be resized from
+          anywhere. The artboard puts the 40px disc 5px below the safe area and
+          12px from the edge; its 44px hit area reaches 2px further each way,
+          hence 3px and 10px here. */}
+      {!isOnboarding && (
+        <div style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 3px)', right: 10, zIndex: 60 }}>
+          <FontScaleButton />
+        </div>
+      )}
+
+      {/* App Content — offset by banner height (50px + status-bar safe
+          area, so content clears the now-safe-area-aware BrandBanner) and
+          ending in the bottom reserve that clears the floating nav. */}
+      <div
+        className="w-full max-w-full overflow-x-clip min-h-screen"
+        style={{
+          paddingTop: 'calc(50px + env(safe-area-inset-top))',
+          paddingBottom: isOnboarding ? undefined : BOTTOM_RESERVE,
+        }}
+      >
+        {children}
+      </div>
+
+      {/* Floating "back to top" on long content/list pages, in the page's ink. */}
+      {BACK_TO_TOP_PAGES.has(currentPageName) && <BackToTop color={backToTopColor} />}
+
+      {/* Floating pill nav — 5 anchors (Home / Mailbox / Passport / Profile / Settings). */}
+      <FloatingNav />
+
+      {/* Global location nudges — mounted here (not in Home) so they catch
+          their events on ANY page after foreground: the "you appear to be in
+          <city>" travel nudge, and the one-time "auto-follow?" offer. */}
+      <LocationMismatchSheet />
+      <LocationAutoFollowOffer />
+    </div>
   );
 }
 
