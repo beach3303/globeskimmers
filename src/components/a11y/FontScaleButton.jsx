@@ -3,12 +3,12 @@ import { useFontScale } from "./FontScaleContext";
 import { NEUTRAL } from "@/components/redesign/constants";
 
 // The text-size control: a pair of line-drawn glasses on a white disc (the
-// artboard glyph, docs/design/new-look/Home-Boxes.dc.html L22-23). The 👓 emoji
-// it replaces was chosen because it reads wider and clearer than lucide's
-// outline glasses; this glyph is just as wide (28 x 16) and keeps the surface
-// emoji-free. Starts as ONE button (larger text); once enlarged, a smaller twin
-// (smaller text) appears beside it. Both have 44px hit areas, and the control is
-// a FIXED size (it is not scaled by --fs).
+// artboard glyph, docs/design/new-look/Home-Boxes.dc.html L22-23). The
+// eyeglasses emoji it replaces was chosen because it reads wider and clearer
+// than lucide's outline glasses; this glyph is just as wide (28 x 16) and keeps
+// the surface emoji-free. Starts as ONE button (larger text); once enlarged, a
+// smaller twin (smaller text) appears beside it. Both have 44px hit areas, and
+// the control is a FIXED size (it is not scaled by --fs).
 //
 // It only sets the shared step in FontScaleContext, which drives the global
 // `--fs` multiplier — so pressing it from ANY page changes text size everywhere
