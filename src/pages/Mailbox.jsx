@@ -20,6 +20,7 @@ import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
 import TravelerSheet from "@/components/social/TravelerSheet";
+import ConfirmBirthdayNote from "@/components/social/ConfirmBirthdayNote";
 
 // One line per thing that happened to you — the activity the dot announces.
 function activityLine(a) {
@@ -131,13 +132,15 @@ export default function MailboxPage() {
   const respond = async (user_id, op) => { await socialFollow(op, { user_id }); load(); };
 
   // 13–17: the whole social page is the hold note (founder, 2026-10-11).
-  if (socialTier === "teen") {
+  // An account whose birthday isn't complete ('confirm') gets the same
+  // treatment with a way to finish it: the worker holds the same doors.
+  if (socialTier === "teen" || socialTier === "confirm") {
     return (
       <div className="min-h-screen pb-28" style={{ background: IVORY }}>
         <div className="max-w-md md:max-w-2xl mx-auto px-4 pt-6">
           <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: STAMP }}>Globeskimmers · Mailbox</div>
           <h1 style={{ fontFamily: SERIF, fontSize: fs(28), color: INK, lineHeight: 1.05, marginTop: 4 }}>Where your people went</h1>
-          <TeenHoldNote className="mt-4" />
+          {socialTier === "confirm" ? <ConfirmBirthdayNote className="mt-4" /> : <TeenHoldNote className="mt-4" />}
         </div>
       </div>
     );

@@ -69,3 +69,6 @@ export function ageOnDate(year, md, now = new Date()) {
   const had = nm > mo || (nm === mo && nd >= d);
   return now.getUTCFullYear() - y - (had ? 0 : 1);
 }
+
+// Open the confirm-birthday sheet from a button (as a refused stamp would).
+export const openConfirmBirthday = () => announceAgeGate('confirm_birthday');
