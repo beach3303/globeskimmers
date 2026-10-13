@@ -18,6 +18,8 @@ import { NEUTRAL, rgba } from '@/components/redesign/constants';
 //
 // An always-on 1px cream outer ring keeps the pill's edge readable where it
 // floats over dark ground (the navy and plum Home bands, the dark plates).
+// Keyboard focus rings on the tabs are cream too (--gs-focus): the app-wide
+// teal ring measures about 2:1 on the dark pill, cream about 14:1.
 //
 // Props:
 //   dark:   pass `true` over dark/map surfaces to lift contrast.
@@ -108,6 +110,7 @@ export default function FloatingNav({ active, dark = false }) {
         WebkitBackdropFilter: 'blur(20px) saturate(160%)',
         boxShadow:
           `0 18px 40px -10px rgba(0,0,0,.3), 0 0 0 1px rgba(255,255,255,.06) inset, 0 0 0 1px ${rgba(NEUTRAL.cream, 0.12)}`,
+        '--gs-focus': NEUTRAL.cream,
         zIndex: 40,
       }}
     >
