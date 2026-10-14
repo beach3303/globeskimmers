@@ -798,7 +798,7 @@ export default function SettingsPage() {
             <EdRow isTablet={isTablet} step={fontStep} icon={User} iconBg={CAT.culture.ink} title="First Name" desc="Used to greet you across the app"
               control={{ below: true, node: <Input type="text" value={firstName} onFocus={() => { firstNameFocused.current = true; }} onBlur={() => { firstNameFocused.current = false; const v = firstName.trim(); if (v !== (profile?.first_name || "")) persist({ first_name: v }); }} onChange={(e) => setFirstName(e.target.value)} placeholder="Enter your first name" className="h-12 rounded-xl" style={{ borderColor: ED_RULE }} /> }}
             />
-            <EdRow isTablet={isTablet} step={fontStep} icon={AtSign} iconBg={CAT.culture.ink} title="Username" desc="How friends find you, follow you, and send you postcards. Letters, numbers and underscore; you can change it twice a month."
+            <EdRow isTablet={isTablet} step={fontStep} icon={AtSign} iconBg={CAT.culture.ink} title="Username" desc="How your circle finds you, follows you, and sends you postcards. Letters, numbers and underscore; you can change it twice a month."
               control={{ below: true, node: ( <>
                 <div className="flex gap-2 items-center">
                   <div className="flex-1 min-w-0 flex items-center rounded-xl px-3 h-12" style={{ border: `1px solid ${ED_RULE}`, background: '#fff' }}>

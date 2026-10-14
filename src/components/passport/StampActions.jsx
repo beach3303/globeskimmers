@@ -77,7 +77,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
     setVisBusy(false);
     if (r.error) { showToast(r.error, "error"); return; }
     setOnlyMe(r.hidden);
-    showToast(r.hidden ? "Only you can see this stamp 🔒" : "On your passport for friends to see 🌍", "success");
+    showToast(r.hidden ? "Only you can see this stamp" : "On your passport for your circle to see", "success");
     onChanged?.();
   };
   const [noteEdit, setNoteEdit] = useState(false);
@@ -90,7 +90,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
     setNoteBusy(false);
     if (error) { showToast(error, "error"); return; }
     setNoteEdit(false);
-    showToast(noteDraft.trim() ? (notePublic ? "Note shared on your passport 🌍" : "Saved privately 🔒") : "Note removed", "success");
+    showToast(noteDraft.trim() ? (notePublic ? "Note shared on your passport" : "Saved privately") : "Note removed", "success");
     onChanged?.();
   };
   const [compose, setCompose] = useState(false);
@@ -494,7 +494,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
           )}
           {!readOnly && (
             TAGGING_ENABLED
-              ? <Row icon={PencilLine} label="Details, date & tag a friend" sub="Set the real visit date, invite who you were with" onClick={onDetails} />
+              ? <Row icon={PencilLine} label="Details, date & who you were with" sub="Set the real visit date, invite who you were with" onClick={onDetails} />
               : <Row icon={PencilLine} label="Details & visit date" sub="Set the real visit date" onClick={onDetails} />
           )}
           {!readOnly && !confirmDel && (

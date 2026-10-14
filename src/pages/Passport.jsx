@@ -169,8 +169,8 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
     const text = `I tagged you at ${stamp.name} on Globeskimmers 🛂 — add it to your Virtual Passport:`;
     try {
       if (navigator.share) { await navigator.share({ title: "Globeskimmers", text, url: data.url }); showToast("Invite shared 📨", "success"); }
-      else if (navigator.clipboard) { await navigator.clipboard.writeText(`${text} ${data.url}`); showToast("Invite link copied — paste it to your friend", "success"); }
-      else showToast("Invite link created — your friend gets it only if you send it to them", "error");
+      else if (navigator.clipboard) { await navigator.clipboard.writeText(`${text} ${data.url}`); showToast("Invite link copied — paste it to them", "success"); }
+      else showToast("Invite link created — it only reaches them if you send it", "error");
     } catch { showToast("Invite not sent", "error"); } // share sheet dismissed
   };
   const place = [stamp.city, stamp.region, stamp.country].filter(Boolean).join(", ");
@@ -405,7 +405,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
         <div className="mt-2 rounded-xl p-3" style={{ background: IVORY_2, border: `1px solid ${RULE}` }}>
           {friends === null ? (
             <div className="flex items-center gap-2" style={{ color: INK2, fontSize: fs(12.5) }}>
-              <Loader2 size={14} className="animate-spin" /> Loading your friends…
+              <Loader2 size={14} className="animate-spin" /> Loading your circle…
             </div>
           ) : (<>
             {friends.length > 0 ? (
@@ -419,7 +419,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
                 ))}
               </div>
             ) : (
-              <p style={{ color: INK2, fontSize: fs(12.5), margin: 0 }}>No friends with a @username yet — share an invite link instead.</p>
+              <p style={{ color: INK2, fontSize: fs(12.5), margin: 0 }}>No one in your circle has a @username yet — share an invite link instead.</p>
             )}
             <button onClick={shareInvite} disabled={tagBusy} className="mt-2 w-full rounded-lg py-2"
               style={{ background: "#fff", color: INK2, border: `1px dashed ${RULE}`, fontSize: fs(12.5), fontWeight: 600 }}>
@@ -893,7 +893,7 @@ function PassportInner() {
   // Booklet view: one swipeable page per country (like a real passport).
   const [openStampId, setOpenStampId] = useState(null);
   // Tapping a stamp opens its OPTIONS sheet (photos, own page, delete…); the
-  // detail card behind "Details, date & tag a friend" is the old modal.
+  // detail card behind "Details, date & who you were with" is the old modal.
   const [actionsId, setActionsId] = useState(null);
   // Nearby-stamp sensing switch (founder, 2026-09-27): same key as Settings →
   // Virtual Passport, so either place turns the pop-up off. Flipping it on
@@ -1074,7 +1074,7 @@ function PassportInner() {
                     <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.4, marginTop: 6, wordBreak: "break-all" }}>{share.url}</p>
                   </>
                 )}
-                <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.45, marginTop: 6 }}>Friends open the link → download the app → view your booklet. Switch back to Private anytime.</p>
+                <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.45, marginTop: 6 }}>Whoever you send it to opens the link → downloads the app → views your booklet (while private, only your inner circle can). Switch back to Private anytime.</p>
                 <button onClick={() => setShareOpen(false)} style={{ color: INK3, fontSize: fs(11.5), marginTop: 6 }}>Close</button>
               </div>
             )}
@@ -1086,7 +1086,7 @@ function PassportInner() {
           <div className="mb-4 rounded-[18px] p-4" style={{ boxShadow: SHADOW_CARD_SOFT, border: "2px solid #EAD9AE", background: "#FFFBF0" }}>
             <p className="uppercase font-semibold" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", color: STAMP }}>🙌 You were tagged</p>
             <p style={{ color: INK, fontSize: fs(15), lineHeight: 1.4, marginTop: 4 }}>
-              <b>{claim.tag.from_name || "A friend"}</b> tagged you at <b>{claim.tag.name}</b>
+              <b>{claim.tag.from_name || "A traveler"}</b> tagged you at <b>{claim.tag.name}</b>
               {[claim.tag.city, claim.tag.country].filter(Boolean).length ? ` · ${[claim.tag.city, claim.tag.country].filter(Boolean).join(", ")}` : ""}
             </p>
             {claimPresence === null ? (<>
