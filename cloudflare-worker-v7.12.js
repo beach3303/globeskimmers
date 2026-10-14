@@ -18385,6 +18385,71 @@ async function handleSocialFeed(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// ── The postcard box (2026-10-14): every postcard sent to me, kept ─────────
+// The Mailbox feed shows only the newest 20 cards addressed to me; the box
+// pages back through all of them, newest first, PC_BOX_PAGE at a time.
+// `before` is the created_at of the last card the client holds, passed back
+// exactly as this route sent it. The feed's rails apply to every card: a held,
+// frozen or unconfirmed reader reads nothing; blocks hide the pair both ways;
+// a sender who is (or turned out to be) a minor is dropped; a teen reader
+// keeps cards from mutual friends only; a deleted sender awaiting clean-up
+// isn't named. Reads only.
+const PC_BOX_PAGE = 24;
+async function handlePostcardBox(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const mySp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (mySp === undefined) return jsonResponse({ rows: [], error: 'Couldn’t check your account — try again', code: 'age_unknown' }, 503);
+    if (gbUnderAge(mySp)) return jsonResponse({ rows: [], held: 'blocked' });
+    if (gbAgeHeld(mySp)) return jsonResponse({ rows: [], held: gbNeedsConfirm(mySp) ? 'confirm' : 'teen' });
+    const blocked = await gbBlockSet(env, user.id);
+    if (!blocked) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
+    const body = await request.json().catch(() => ({}));
+    const before = typeof body?.before === 'string' && /^\d{4}-\d{2}-\d{2}T[0-9:.]+(Z|[+-]\d{2}:?\d{2})$/.test(body.before) ? body.before : null;
+    const q = await gbRest(env, `postcards?to_user_id=eq.${user.id}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {});
+    if (!q.ok) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
+    const got = await q.json();
+    const page = got.slice(0, PC_BOX_PAGE);
+    const next = got.length > PC_BOX_PAGE ? page[page.length - 1].created_at : null;
+    const teenMe = mySp?.social_tier === 'teen';
+    const senders = [...new Set(page.map((p) => p.sender_id))].filter((id) => !blocked.has(id));
+    let share = {}, prof = {}, mutual = new Set();
+    if (senders.length) {
+      const inList = senders.join(',');
+      const [h2, p2, f2, b2] = await Promise.all([
+        gbRest(env, `passport_shares?user_id=in.(${inList})&select=user_id,handle`, {}),
+        gbRest(env, `social_profiles?user_id=in.(${inList})&select=user_id,display_name,${GB_TIER_COLS}`, {}),
+        teenMe ? gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=in.(${inList})&status=eq.accepted&select=followee_id`, {}) : null,
+        teenMe ? gbRest(env, `user_follows?follower_id=in.(${inList})&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, {}) : null,
+      ]);
+      // Ages (or a teen's friendships) unreadable: show nothing rather than a
+      // card that may be a minor's, and let the client offer Try again.
+      if (!p2.ok || (teenMe && (!f2.ok || !b2.ok))) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
+      share = Object.fromEntries((h2.ok ? await h2.json() : []).map((r) => [r.user_id, r]));
+      prof = Object.fromEntries((await p2.json()).map((r) => [r.user_id, gbTierRow(r)]));
+      if (teenMe) {
+        const iFollow = new Set((await f2.json()).map((r) => r.followee_id));
+        mutual = new Set((await b2.json()).map((r) => r.follower_id).filter((id) => iFollow.has(id)));
+      }
+    }
+    const minor = (id) => { const r = prof[id]; return !!r && (gbUnderAge(r) || gbAgeHeld(r)); };
+    const kept = page.filter((p) => !blocked.has(p.sender_id) && !minor(p.sender_id) && (!teenMe || mutual.has(p.sender_id)));
+    const gone = await gbPurgeQueued(env, senders.filter((id) => !share[id]?.handle && prof[id]?.display_name));
+    const nameOf = (id) => (gone.has(id) ? null : prof[id]?.display_name || null);
+    const origin = new URL(request.url).origin;
+    const rows = kept.map((p) => ({
+      type: 'postcard', id: p.id, created_at: p.created_at,
+      photo: `${origin}/pc-photo/${p.photo_key}`,
+      message: p.message, place: p.place_name, city: p.city, country: p.country,
+      dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
+      to_me: true,
+      by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id) },
+    }));
+    return jsonResponse({ rows, next });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 // ── City sets (2026-09-30): "7 of 10 Atlanta icons" ────────────────────────
 // Collection joy without streaks: for each city the traveler has stamped, how
 // many of its STAMPABLE icons (the same rule Stamps-near-you uses) they hold.
@@ -24882,6 +24947,7 @@ export default {
       if (pathname === '/social/unread' && request.method === 'POST') return await handleSocialUnread(request, env);
       if (pathname === '/social/feed' && request.method === 'POST') return await handleSocialFeed(request, env);
       if (pathname === '/postcards/send' && request.method === 'POST') return await handlePostcardSend(request, env, ctx);
+      if (pathname === '/postcards/box' && request.method === 'POST') return await handlePostcardBox(request, env);
       if (pathname === '/social/avatar' && request.method === 'POST') return await handleSocialAvatar(request, env, ctx);
       if (pathname === '/blotter/read' && request.method === 'POST') return await handleBlotterRead(request, env);
       if (pathname === '/blotter/mark' && request.method === 'POST') return await handleBlotterMark(request, env, ctx);
