@@ -16943,33 +16943,22 @@ async function handlePostcardSend(request, env, ctx) {
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Postcards aren\'t available on this account' }, 403);
     if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
 
-    // Address it.
+    // Address it. An @handle's owner passes the recipient's rails only
+    // after the photo is checked (below).
     let toUser = null;
+    let to = null;
     if (b.to_handle) {
-      const t = await gbHandleToUser(env, b.to_handle);
-      if (!t) return jsonResponse({ error: 'No traveler with that username' }, 404);
-      if (t.user_id === user.id) return jsonResponse({ error: 'A postcard to yourself? Frame it instead 🙂' }, 400);
-      if (await gbBlockedEither(env, user.id, t.user_id)) return jsonResponse({ ok: true, muted: true });
+      to = await gbHandleToUser(env, b.to_handle);
+      if (!to) return jsonResponse({ error: 'No traveler with that username' }, 404);
+      if (to.user_id === user.id) return jsonResponse({ error: 'A postcard to yourself? Frame it instead 🙂' }, 400);
       if (sp.social_tier === 'teen') {
         const [a, bq] = await Promise.all([
-          gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${t.user_id}&status=eq.accepted&select=follower_id`, {}),
-          gbRest(env, `user_follows?follower_id=eq.${t.user_id}&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, {}),
+          gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${to.user_id}&status=eq.accepted&select=follower_id`, {}),
+          gbRest(env, `user_follows?follower_id=eq.${to.user_id}&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, {}),
         ]);
         const mutual = a.ok && bq.ok && (await a.json()).length && (await bq.json()).length;
         if (!mutual) return jsonResponse({ error: 'You can send postcards to friends you follow each other with' }, 403);
       }
-      // Recipient rails (teens plan, 2026-10-10): a teen receives postcards
-      // only from mutual friends — whoever the sender is (the audit found an
-      // adult could postcard a teen without a follow-back). An under-13
-      // account — or one whose birth year could still be 12 — receives
-      // nothing, silently, exactly like a block.
-      const rsp = await gbSocialProfile(env, t.user_id).catch(() => undefined);
-      if (rsp === undefined) return jsonResponse({ error: 'Couldn’t send right now — try again' }, 503);
-      if (rsp?.social_tier === 'blocked' || gbAgeHeld(rsp)) return jsonResponse({ ok: true, muted: true });
-      if (rsp?.social_tier === 'teen' && !(await gbMutualFriends(env, user.id, t.user_id))) {
-        return jsonResponse({ error: 'You two need to follow each other to exchange postcards' }, 403);
-      }
-      toUser = t.user_id;
     } else if (sp.social_tier === 'teen') {
       return jsonResponse({ error: 'Address your postcard to a friend — broadcast opens at age 18' }, 403);
     } else {
@@ -16990,6 +16979,26 @@ async function handlePostcardSend(request, env, ctx) {
     if (bytes.length < 500) return jsonResponse({ error: 'That image is too small' }, 400);
     const verdict = await gbModeratePhoto(env, ppBytesToB64(bytes), mediaType);
     if (!verdict || !verdict.allow) return jsonResponse({ error: "This photo can't go on a postcard" }, 422);
+
+    // The recipient's rails, AFTER the photo (go-live round 3: answered
+    // first, a card with no photo was a free test of an @handle — "needs its
+    // photo" for an adult, ok + muted for a minor). A blocked pair passes
+    // nothing, and a frozen account or one whose birth year could still be
+    // 12 or a held teen receives nothing (teens plan, 2026-10-10): such a
+    // card is stored nowhere and answered exactly like one that was sent.
+    // A teen whose social features are open receives postcards only from
+    // mutual friends, whoever the sender is (the audit found an adult could
+    // postcard a teen without a follow-back).
+    if (to) {
+      if (await gbBlockedEither(env, user.id, to.user_id)) return jsonResponse({ ok: true });
+      const rsp = await gbSocialProfile(env, to.user_id).catch(() => undefined);
+      if (rsp === undefined) return jsonResponse({ error: 'Couldn’t send right now — try again' }, 503);
+      if (rsp?.social_tier === 'blocked' || gbAgeHeld(rsp)) return jsonResponse({ ok: true });
+      if (rsp?.social_tier === 'teen' && !(await gbMutualFriends(env, user.id, to.user_id))) {
+        return jsonResponse({ error: 'You two need to follow each other to exchange postcards' }, 403);
+      }
+      toUser = to.user_id;
+    }
     const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
     const key = `pc/${crypto.randomUUID()}.${ext}`;
     await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: mediaType, cacheControl: 'public, max-age=31536000, immutable' } });
