@@ -1429,8 +1429,27 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
   //     the child had deleted themselves too (a soft delete kept the text),
   //     once the photos the notes name are gone; then every file under
   //     gb/<place>/<uid>/ goes, uploads that never became a note included.
-  const child = keepAccount || opts.child === true;
-  const gbPhotos = await rows('guestbook_photos', `guestbook_entries?user_id=eq.${userId}&photo_key=not.is.null&select=photo_key`);
+  //     Who is a child (go-live round 3): the under-13 clean-up, a record
+  //     that says so (opts.child), or a stored birthday that is under 13 —
+  //     read here, before anything is deleted, so an account whose freeze
+  //     marker couldn't be read, or an orphan of a deletion from before
+  //     go-live (no marker, no flag), still gets the child clean-up. When the
+  //     birthday can't be read, nothing is guessed: the notes are neither
+  //     deleted nor anonymized and the social profile (the birthday) stays,
+  //     so the retry decides (step 'age_read'). A child found by its
+  //     birthday is in the result (child: true), so a retry record keeps it
+  //     once the profile is gone.
+  let child = keepAccount || opts.child === true;
+  const told = child;
+  let ageKnown = true;
+  if (!child) {
+    const aq = await call('age_read', `social_profiles?user_id=eq.${userId}&select=birth_year,birth_md,country_at_gate`);
+    let row = null;
+    if (!aq) ageKnown = false;
+    else { try { row = ((await aq.json()) || [])[0] || null; } catch { ageKnown = false; failed.push('age_read'); } }
+    if (row?.birth_year && socialTierFor(row.birth_year, row.country_at_gate, row.birth_md) === 'blocked') child = true;
+  }
+  const gbPhotos = ageKnown ? await rows('guestbook_photos', `guestbook_entries?user_id=eq.${userId}&photo_key=not.is.null&select=photo_key`) : null;
   if (gbPhotos && await r2('guestbook_photos_r2', gbPhotos.map((r) => r.photo_key))) {
     if (child) await del('guestbook_entries', `guestbook_entries?user_id=eq.${userId}`);
     else {
@@ -1504,8 +1523,9 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
   await del('user_saves', `user_saves?user_id=eq.${userId}`);
   await del('handle_requests', `handle_requests?user_id=eq.${userId}`);
 
-  // 1i) The social profile and its photo. A freeze keeps only the age record.
-  const prof = await rows('social_profile', `social_profiles?user_id=eq.${userId}&select=avatar_key`);
+  // 1i) The social profile and its photo. A freeze keeps only the age record;
+  //     a birthday that couldn't be read (step 1b) stays for the retry.
+  const prof = ageKnown ? await rows('social_profile', `social_profiles?user_id=eq.${userId}&select=avatar_key`) : null;
   if (prof && await r2('avatar_r2', prof.map((r) => r.avatar_key))) {
     if (keepAccount) {
       if (prof.length) {
@@ -1593,7 +1613,7 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
     }
   } catch { failed.push('suggestions'); }
 
-  return { ok: failed.length === 0, failed };
+  return { ok: failed.length === 0, failed, ...(child && !told ? { child: true } : {}) };
 }
 
 async function handleDeleteAccount(request, env) {
@@ -1618,12 +1638,25 @@ async function handleDeleteAccount(request, env) {
 
     // 1b) An intent record first: if this request dies after the auth delete,
     //     the daily cron (purgeRetrySweep) still finishes the clean-up.
-    //     A frozen account (its under-13 purge clock, freeze:<uid>, is set)
-    //     deleted at once from its frozen screen loses its guestbook notes
-    //     too, as the 7-day clean-up would have deleted them (go-live round
-    //     2): child rides in the record, so a retry deletes them as well.
+    //     A frozen account deleted at once from its frozen screen loses its
+    //     guestbook notes too, as the 7-day clean-up would have deleted them
+    //     (go-live round 2): child rides in the record, so a retry deletes
+    //     them as well. A child is a stored birthday under 13, or an under-13
+    //     purge clock (freeze:<uid>) still running for one who has turned 13
+    //     since. Both are read before anything is deleted, failing closed
+    //     (go-live round 3: a marker read that failed counted as "not a
+    //     child", and the notes stayed up as "A traveler" for good): when the
+    //     answer can't be read, nothing is deleted and the person is asked to
+    //     try again.
     const kv = env.GLOBESKIMMERS_KV;
-    const child = !!(kv && await kv.get(`freeze:${userId}`).catch(() => null));
+    const sp = await gbSocialProfile(env, userId).catch(() => undefined);
+    if (sp === undefined) return jsonResponse({ error: 'Couldn’t check your account — try again', code: 'age_unknown' }, 503);
+    let child = gbUnderAge(sp);
+    if (!child && kv) {
+      let marker;
+      try { marker = await kv.get(`freeze:${userId}`); } catch { return jsonResponse({ error: 'Couldn’t check your account — try again', code: 'age_unknown' }, 503); }
+      child = !!marker;
+    }
     const tagChild = child ? { child: true } : {};
     if (kv) await kv.put(`purge:${userId}`, JSON.stringify({ at: new Date().toISOString(), failed_steps: ['pending'], ...tagChild })).catch(() => {});
 
@@ -16579,7 +16612,8 @@ async function purgeRetrySweep(env, now = new Date()) {
       if (res.ok) { await kv.delete(name).catch(() => {}); out.done++; continue; }
       out.failed++;
       const tries = (Number(rec.tries) || 0) + 1;
-      await kv.put(name, JSON.stringify({ ...rec, tries, last_try: now.toISOString(), failed_steps: res.failed.slice(0, 12) })).catch(() => {});
+      // A child found by the purge (its stored birthday) stays one for the retries.
+      await kv.put(name, JSON.stringify({ ...rec, tries, last_try: now.toISOString(), failed_steps: res.failed.slice(0, 12), ...(res.child ? { child: true } : {}) })).catch(() => {});
       if (tries === 3) await founderAlert(env, `⚠️ A deleted account's clean-up has failed 3 daily tries (steps: ${res.failed.slice(0, 6).join(', ')}). It keeps retrying — check the worker's SUPABASE_SERVICE_ROLE_KEY and R2.`, 'ops').catch(() => {});
     } catch { out.failed++; /* one account never stops the sweep */ }
   }
