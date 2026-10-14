@@ -832,11 +832,16 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   go (OTA). **2026-10-14: built and integrated.** All slices S1–S19 are on `new-look`, with stamping-v2
   merged in (d642f95) and checked: the gates pass and iOS 27 launches on iPad and iPhone. Nothing is
   pushed. It waits on (1) iOS 1.0.4, and Play 1.0.8 if submitted, leaving review, (2) the founder's go,
-  then the worker deploy and probe before the OTA, and (3) approving the `postcard_keeps` migration run
-  that the same push starts. **Decided 2026-10-14:** Home's circle shelf is B, the stamp on a cream
-  plate (founder: "B it is then"). **New 2026-10-14, built on new-look:** the postcard box keeps every
-  postcard sent to you (founder: "i want to keep the postcards sent to me"), and Keep saves a card sent
-  to everyone into it (founder: "yes thank you"). Review page:
+  then the worker deploy and probe before the OTA, and (3) approving the one migrations run that the
+  same push starts (postcard keeps, profile cloth, city board). **Decided 2026-10-14:** Home's circle
+  shelf is B, the stamp on a cream plate (founder: "B it is then"). **New 2026-10-14, built on
+  new-look:** the postcard box keeps every postcard sent to you (founder: "i want to keep the postcards
+  sent to me"), and Keep saves a card sent to everyone into it (founder: "yes thank you"); then, on
+  "all of them": **Cloth** (your cloth saved, B1; faces carry cloth and photo, B2), **Visits** (someone's
+  whole world, B3, with B4 and B5), and **City Board** (postcards to a city's public board, only with a
+  verified stamp in that city; Home's "Postcards from Lisbon" row). **Open:** what a visitor sees about
+  where someone lives: A country only (today's default), B city and country, or C only if they turn
+  it on; Claude recommends A plus a switch for the city (mockups sent 2026-10-14). Review page:
   https://claude.ai/artifact/JeXKJshqiT2BJ9BSPARA2G; status: `docs/design/new-look/BUILD_STATUS.md` on new-look.
   **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
   — option A (full-width bands) is not built. **Weather: Bluebird. ATMs: Carbon Copy** (founder,
