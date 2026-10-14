@@ -1,62 +1,23 @@
-// AllServicesSheet — the "everything" drawer behind the finder chip row on
-// phone Home (Phase-1a-lite). Lists EVERY destination the two retired Home tile
-// grids offered, grouped under small mono headers, so nothing the grids reached
-// is lost. Navigation stays centralized: each row calls onAction(label) — the
-// exact handleQuickAction labels the old tiles used — then closes the sheet.
-// Structure + accessibility mirror MapAppSelector's bottom sheet (backdrop tap
-// and the global swipe-down via useDismissable both dismiss); z-indexes sit
-// BELOW the location sheets (9997+) so a location prompt can still cover this.
+// AllServicesSheet — the "everything" drawer behind Home's "All services" chip.
+// All eleven finders as one 3-column grid of crest tiles in FINDER_ORDER, each in
+// its own world's colours (the colour you tap is the colour the page opens in). No
+// groups, subtitles or Passport row: the passport has its own zone and tab.
+// Navigation stays centralized: each tile calls onAction(label) — the exact
+// handleQuickAction labels — after the sheet closes. Backdrop tap and the global
+// swipe-down (useDismissable) both dismiss; z-indexes sit BELOW the location sheets
+// (9997+) so a location prompt can still cover this.
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  X, ChevronRight, Utensils, Coffee, DollarSign, CreditCard, Compass, ShoppingBag, Globe, Store, Toilet, CloudSun, Languages, Landmark,
-} from 'lucide-react';
+import { X } from 'lucide-react';
 import { useDismissable } from '@/lib/dismissStack';
-import { IVORY, IVORY_2, TEAL_DEEP } from '@/components/redesign/constants';
-
-// Every destination from the old 9-tile finder grid + 10-tile Explore grid,
-// under the doctrine's five group headers. Subtitles carry over from the old
-// tiles (tablet FEATURES/GRADS wording where the phone tile had none).
-const GROUPS = [
-  {
-    header: 'Eat & drink',
-    items: [
-      { icon: Utensils, title: 'Nearby Restaurants', sub: 'Where locals eat', action: 'Places to Eat' },
-      { icon: Coffee, title: 'Coffee Finder', sub: 'Cafés near you', action: 'Coffee' },
-    ],
-  },
-  {
-    header: 'Money',
-    items: [
-      { icon: DollarSign, title: 'Money Exchange', sub: 'Compare rates near you', action: 'Money Exchange' },
-      { icon: CreditCard, title: 'ATM Finder', sub: 'Skip the fees', action: 'ATM' },
-    ],
-  },
-  {
-    header: 'Explore',
-    items: [
-      { icon: Compass, title: 'Things to do', sub: 'Sights · attractions', action: 'Things to Do' },
-      { icon: ShoppingBag, title: 'Shopping', sub: 'Markets · malls', action: 'Shopping' },
-      { icon: Globe, title: 'Virtual Passport', sub: 'Stamps · memories', action: 'Passport' },
-    ],
-  },
-  {
-    header: 'Essentials',
-    items: [
-      { icon: Store, title: 'Convenience', sub: '24/7 essentials', action: 'Convenience Store' },
-      { icon: Toilet, title: 'Restroom Finder', sub: 'Clean & rated', action: 'Restroom' },
-      { icon: CloudSun, title: 'Weather', sub: 'Local forecast', action: 'Weather' },
-      { icon: Languages, title: 'Phrases', sub: '50 essentials', action: 'Basic Phrases' },
-      { icon: Landmark, title: 'Cultural Info', sub: 'Museums · sights', action: 'Culture Information' },
-    ],
-  },
-];
+import { ServiceTile } from '@/components/redesign/Crest';
+import { FINDER_ORDER, IVORY, NEUTRAL, WORLD, fs } from '@/components/redesign/constants';
 
 export default function AllServicesSheet({ isOpen, onClose, onAction }) {
   useDismissable(isOpen, onClose);
 
-  // Close first, then navigate — same order the old tiles' single-tap flow had
-  // (the sheet must not linger over the destination page's mount).
+  // Close first, then navigate (the sheet must not linger over the destination
+  // page's mount).
   const go = (action) => {
     onClose();
     onAction?.(action);
@@ -76,54 +37,28 @@ export default function AllServicesSheet({ isOpen, onClose, onAction }) {
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             role="dialog"
             aria-modal="true"
-            aria-label="All services"
+            aria-labelledby="all-services-title"
             className="fixed bottom-0 left-0 right-0 z-[9996] rounded-t-[24px] shadow-2xl max-w-[600px] mx-auto max-h-[85vh] overflow-y-auto"
             style={{ background: IVORY }}
           >
-            {/* Header */}
-            <div className="sticky top-0 flex items-center justify-between px-5 py-4 border-b" style={{ background: IVORY, borderColor: '#E6DFD0' }}>
-              <h3 className="font-serif text-[20px] tracking-tight" style={{ color: '#16110D' }}>All services</h3>
+            <div className="sticky top-0 flex items-center justify-between" style={{ background: IVORY, borderBottom: `1px solid ${NEUTRAL.lobbyLine}`, padding: '8px 8px 8px 20px', zIndex: 1 }}>
+              <h2 id="all-services-title" className="font-serif m-0" style={{ fontSize: fs(22), lineHeight: 1.15, color: NEUTRAL.ink }}>
+                All <em style={{ color: NEUTRAL.brandTeal }}>services</em>
+              </h2>
               <button
+                type="button"
                 onClick={onClose}
-                aria-label="Close"
-                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
-                style={{ background: IVORY_2 }}
+                aria-label="Close all services"
+                className="flex-none flex items-center justify-center rounded-full"
+                style={{ width: 44, height: 44, background: 'transparent', border: 0, color: NEUTRAL.ink3, cursor: 'pointer' }}
               >
-                <X className="w-5 h-5" style={{ color: '#736657' }} />
+                <X size={20} strokeWidth={2} aria-hidden="true" />
               </button>
             </div>
 
-            {/* Grouped destinations */}
-            <div className="px-5 pt-3 pb-4">
-              {GROUPS.map((g) => (
-                <div key={g.header} className="pt-2 pb-1">
-                  <div className="font-mono uppercase tracking-[0.08em] text-[10.5px] font-semibold mb-1" style={{ color: '#736657' }}>
-                    {g.header}
-                  </div>
-                  {g.items.map((it) => {
-                    const Icon = it.icon;
-                    return (
-                      <button
-                        key={it.title}
-                        onClick={() => go(it.action)}
-                        className="w-full flex items-center gap-3 py-2.5 text-left border-b last:border-b-0"
-                        style={{ borderColor: '#EFE9DC' }}
-                      >
-                        <div
-                          className="flex items-center justify-center flex-none"
-                          style={{ width: 34, height: 34, borderRadius: 10, background: IVORY_2 }}
-                        >
-                          <Icon size={17} color={TEAL_DEEP} strokeWidth={2} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[calc(14px*var(--fs))] font-semibold truncate" style={{ color: '#16110D' }}>{it.title}</p>
-                          <p className="text-[calc(11.5px*var(--fs))] truncate" style={{ color: '#71827D' }}>{it.sub}</p>
-                        </div>
-                        <ChevronRight className="w-4 h-4 flex-none" style={{ color: '#B9AE9C' }} />
-                      </button>
-                    );
-                  })}
-                </div>
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, padding: '16px 16px 12px' }}>
+              {FINDER_ORDER.map((k) => (
+                <ServiceTile key={k} world={k} onClick={() => go(WORLD[k].action)} />
               ))}
             </div>
 
