@@ -18148,13 +18148,14 @@ async function handleSocialFollow(request, env, ctx) {
           const row = shape(r.status === 'muted' ? { ...r, status: 'accepted' } : r, 'followee_id');
           return r.status === 'accepted' && followsMe.has(r.followee_id) ? row : { ...row, name: null, verified: false, seal: null };
         }),
-        // My blocked list names no one (go-live final check: a name there told
-        // an adult from a minor): each row is the @handle I already knew them
-        // by (gbBlockNote), or nothing.
-        blocked: blocks.map((r) => ({
-          user_id: r.blocked_user_id, status: 'blocked', since: r.created_at,
+        // My blocked list names no one and gives out no account id (go-live
+        // final check: a name there told an adult from a minor): each row is
+        // the @handle I already knew them by (gbBlockNote), or nothing, and
+        // Unblock's id is a sealed token made fresh on every read (gbBlockToken).
+        blocked: await Promise.all(blocks.map(async (r) => ({
+          user_id: await gbBlockToken(env, user.id, r.blocked_user_id), status: 'blocked', since: r.created_at,
           handle: notes[r.blocked_user_id] || null, name: null, verified: false, seal: null,
-        })),
+        }))),
         // block_v2 (2026-10-13): POST /social/block ends follows both ways and
         // hides the pair from each other everywhere; the app shows Block only
         // when this is present.
@@ -18163,8 +18164,13 @@ async function handleSocialFollow(request, env, ctx) {
     }
 
     if (op === 'unblock') {
-      // Deletes only MY block row — never the other direction's.
-      const target = b.handle ? await gbHandleToUser(env, b.handle) : (b.user_id ? { user_id: String(b.user_id).replace(/[^0-9a-f-]/gi, '') } : null);
+      // Deletes only MY block row — never the other direction's. The id is
+      // my blocked list's sealed token (gbBlockOpen), or an account id or
+      // @handle the app already had.
+      const raw = String(b.user_id || '');
+      const target = b.handle ? await gbHandleToUser(env, b.handle)
+        : raw.startsWith(BLK_TOKEN_PREFIX) ? { user_id: await gbBlockOpen(env, user.id, raw) }
+          : (raw ? { user_id: raw.replace(/[^0-9a-f-]/gi, '') } : null);
       if (!target?.user_id || !BL_UUID.test(target.user_id)) return jsonResponse({ error: 'Who?' }, 400);
       const d = await gbRest(env, `user_blocks?user_id=eq.${user.id}&blocked_user_id=eq.${target.user_id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => null);
       // A delete that failed says so, in words the app shows (go-live round 2:
@@ -18453,6 +18459,58 @@ async function gbBlockSets(env, userId) {
 // minor from an adult. KV blkh:<blocker>:<blocked> = handle, with the reverse
 // marker blkr:<blocked>:<blocker> so either account's deletion finds it by
 // prefix. Both go with an unblock and with either account.
+// Unblock's id in my blocked list (go-live final check): never the account
+// id, which let a stranger link a child's anonymous notes (block one, read
+// the list, unblock, block the next: the same id came back). Each read seals
+// (blocker, blocked) afresh with AES-GCM and a random IV, so one block reads
+// differently every time, and only the worker can open the token, for the
+// blocker it was made for. /social/follow op 'unblock' takes it in user_id,
+// so builds already on phones keep working.
+const BLK_TOKEN_PREFIX = 'bt1.';
+let BLK_TOKEN_KEY = null; // { secret, key }, made once per isolate
+async function gbBlockTokenKey(env) {
+  const secret = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY;
+  if (!secret) return null;
+  if (BLK_TOKEN_KEY && BLK_TOKEN_KEY.secret === secret) return BLK_TOKEN_KEY.key;
+  const raw = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`gs-block-token:${secret}`));
+  const key = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+  BLK_TOKEN_KEY = { secret, key };
+  return key;
+}
+const gbUuidBytes = (id) => Uint8Array.from(String(id).replace(/-/g, '').match(/../g).map((h) => parseInt(h, 16)));
+const gbBytesUuid = (b) => {
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+};
+async function gbBlockToken(env, blocker, blocked) {
+  try {
+    const key = await gbBlockTokenKey(env);
+    if (!key || !BL_UUID.test(String(blocker)) || !BL_UUID.test(String(blocked))) return null;
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const pt = new Uint8Array(32);
+    pt.set(gbUuidBytes(blocker), 0);
+    pt.set(gbUuidBytes(blocked), 16);
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, pt));
+    const all = new Uint8Array(iv.length + ct.length);
+    all.set(iv, 0);
+    all.set(ct, iv.length);
+    return BLK_TOKEN_PREFIX + b64url(all);
+  } catch { return null; }
+}
+// The account a token names, when it was made for this blocker; else null.
+async function gbBlockOpen(env, blocker, token) {
+  try {
+    const key = await gbBlockTokenKey(env);
+    if (!key) return null;
+    const b64 = String(token).slice(BLK_TOKEN_PREFIX.length).replace(/-/g, '+').replace(/_/g, '/');
+    const all = Uint8Array.from(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0));
+    if (all.length !== 12 + 32 + 16) return null;
+    const pt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: all.slice(0, 12) }, key, all.slice(12)));
+    if (gbBytesUuid(pt.slice(0, 16)) !== String(blocker).toLowerCase()) return null;
+    return gbBytesUuid(pt.slice(16));
+  } catch { return null; }
+}
+
 const gbBlockNoteKey = (blocker, blocked) => `blkh:${String(blocker).toLowerCase()}:${String(blocked).toLowerCase()}`;
 const gbBlockNoteRevKey = (blocker, blocked) => `blkr:${String(blocked).toLowerCase()}:${String(blocker).toLowerCase()}`;
 async function gbBlockNotePut(env, blocker, blocked, handle) {
@@ -18504,7 +18562,10 @@ async function handleSocialBlock(request, env, ctx) {
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
     const token = String(b.token || '').replace(/[^a-f0-9]/gi, '');
-    let target = String(b.user_id || '').replace(/[^0-9a-f-]/gi, '') || null;
+    // An id from my blocked list is a sealed token (gbBlockToken); one that
+    // won't open for me names no one.
+    const rawId = String(b.user_id || '');
+    let target = rawId.startsWith(BLK_TOKEN_PREFIX) ? await gbBlockOpen(env, user.id, rawId) : (rawId.replace(/[^0-9a-f-]/gi, '') || null);
     let typedHandle = null;
     let via = target ? 'user_id' : null; // the door that named them (the blocked list's note)
     if (!target && b.handle) {
