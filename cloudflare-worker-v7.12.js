@@ -16409,19 +16409,47 @@ async function purgeRetrySweep(env, now = new Date()) {
   } while (cursor);
   return out;
 }
-// POST /admin/age-appeal { user_id, birth_year, birth_md } — an adult who
-// mistyped: the corrected birthday recomputes the tier and lifts the freeze
-// (a birthday that is still under 13 keeps it). Deleted content does not
-// come back.
+// POST /admin/age-appeal { user_id, birth_year, birth_md, override? } — an
+// adult who mistyped: the corrected birthday recomputes the tier and lifts
+// the freeze (a birthday that is still under 13 keeps it). Deleted content
+// does not come back. The appeal mail's account id can be edited by its
+// sender, and account ids aren't secret, so a correction goes only to an
+// account that is frozen, has a purge clock or has a birth year to confirm;
+// anything else (an adult who mistyped a teen birthday) needs override:true
+// (409 not_frozen otherwise).
+// POST /admin/age-appeal { user_id, lookup: true } — what the desk shows
+// first: { ok, user_id, email, tier, birth_year, birth_md, country,
+// frozen_at, purged_at }; 404 when the account has no age record.
 async function handleAdminAgeAppeal(request, env, ctx) {
   const denied = await requireAdmin(request, env);
   if (denied) return denied;
   try {
     const b = await request.json().catch(() => ({}));
     const uid = String(b.user_id || '').replace(/[^0-9a-f-]/gi, '');
+    const kv = env.GLOBESKIMMERS_KV;
+    const clock = async () => (kv && BL_UUID.test(uid) ? await kv.get(`freeze:${uid}`, { type: 'json' }).catch(() => null) : null);
+    if (b.lookup === true) {
+      if (!BL_UUID.test(uid)) return jsonResponse({ error: 'user_id required' }, 400);
+      const sp = await gbSocialProfile(env, uid).catch(() => undefined);
+      if (sp === undefined) return jsonResponse({ error: 'Couldn’t read the age record — try again' }, 503);
+      if (!sp || !(sp.birth_year || sp.birth_md)) return jsonResponse({ error: 'No age record for that user_id' }, 404);
+      let email = null;
+      try {
+        const au = await fetch(`${GB_URL(env)}/auth/v1/admin/users/${uid}`, { headers: { apikey: GB_KEY(env), Authorization: `Bearer ${GB_KEY(env)}` } });
+        if (au.ok) email = String((await au.json())?.email || '').toLowerCase() || null;
+      } catch { /* the desk says the email couldn't be read */ }
+      const rec = await clock();
+      return jsonResponse({ ok: true, user_id: uid, email, tier: sp.social_tier || null, birth_year: sp.birth_year ?? null, birth_md: sp.birth_md ?? null, country: sp.country_at_gate || null, frozen_at: rec?.at || null, purged_at: rec?.purged_at || null });
+    }
     const md = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(String(b.birth_md || '')) ? String(b.birth_md) : null;
     const tier = uid && md ? socialTierFor(b.birth_year, null, md) : null;
     if (!tier) return jsonResponse({ error: 'user_id, birth_year and birth_md (MM-DD) required' }, 400);
+    if (b.override !== true) {
+      const sp = await gbSocialProfile(env, uid).catch(() => undefined);
+      if (sp === undefined) return jsonResponse({ error: 'Couldn’t read the age record — try again' }, 503);
+      if (!sp) return jsonResponse({ error: 'No age record for that user_id' }, 404);
+      if (!(gbUnderAge(sp) || gbNeedsConfirm(sp) || await clock())) return jsonResponse({ error: 'This account isn’t frozen. Tick “correct it anyway” to change its birthday.', code: 'not_frozen', tier: sp.social_tier || null }, 409);
+    }
     const now = new Date().toISOString();
     const w = await gbRest(env, `social_profiles?user_id=eq.${uid}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ birth_year: Math.round(Number(b.birth_year)), birth_md: md, birth_year_at: now, social_tier: tier, updated_at: now }) });
     if (!w.ok) return jsonResponse({ error: 'Could not update' }, 502);
