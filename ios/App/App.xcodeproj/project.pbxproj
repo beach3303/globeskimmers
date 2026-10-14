@@ -17,6 +17,7 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		BAB63653306D3B690083F3D5 /* AgeRangePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAB63652306D3B690083F3D5 /* AgeRangePlugin.swift */; };
+		BAB63655306D3B690083F3D5 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAB63654306D3B690083F3D5 /* MainViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +34,7 @@
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		BAB63651306D3AF90083F3D5 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		BAB63652306D3B690083F3D5 /* AgeRangePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgeRangePlugin.swift; sourceTree = "<group>"; };
+		BAB63654306D3B690083F3D5 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,7 +52,6 @@
 		504EC2FB1FED79650016851F = {
 			isa = PBXGroup;
 			children = (
-				BAB63652306D3B690083F3D5 /* AgeRangePlugin.swift */,
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
 				504EC3051FED79650016851F /* Products */,
@@ -72,6 +73,8 @@
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				5CE11A0B2EA5F00100D1E001 /* SceneDelegate.swift */,
+				BAB63652306D3B690083F3D5 /* AgeRangePlugin.swift */,
+				BAB63654306D3B690083F3D5 /* MainViewController.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -166,6 +169,7 @@
 				BAB63653306D3B690083F3D5 /* AgeRangePlugin.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				5CE11A0A2EA5F00100D1E001 /* SceneDelegate.swift in Sources */,
+				BAB63655306D3B690083F3D5 /* MainViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -320,6 +324,10 @@
 					"$(inherited)",
 					"-weak_framework",
 					DeclaredAgeRange,
+					"-weak_framework",
+					PermissionKit,
+					"-weak_framework",
+					_PermissionKit_UIKit,
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = com.globeskimmers.app;
@@ -349,6 +357,10 @@
 					"$(inherited)",
 					"-weak_framework",
 					DeclaredAgeRange,
+					"-weak_framework",
+					PermissionKit,
+					"-weak_framework",
+					_PermissionKit_UIKit,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.globeskimmers.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
