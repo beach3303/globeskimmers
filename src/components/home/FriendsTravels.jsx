@@ -34,9 +34,10 @@ export default function FriendsTravels({ wide = false }) {
   const [traveler, setTraveler] = useState(null); // the card whose ⋯ is open
   const [dismissed, setDismissed] = useState(() => { try { return localStorage.getItem(DISMISS_KEY) === "1"; } catch { return false; } });
 
-  const load = useCallback(async (isGone = () => false) => {
+  // isGone (optional): true once the row has unmounted, so a late answer is dropped.
+  const load = useCallback(async (isGone) => {
     const [f, l] = await Promise.all([socialFeed(), socialFollow("list")]);
-    if (isGone()) return;
+    if (isGone && isGone()) return;
     setRows(f.error ? [] : (f.rows || []).slice(0, 10));
     setList(l.data || null);
     setFollowing((l.data?.following || []).filter((x) => x.status === "accepted").length);

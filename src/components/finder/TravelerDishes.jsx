@@ -130,7 +130,7 @@ function DishPhotoReport({ photo, dish }) {
   const send = async (reason) => {
     if (busy) return;
     setBusy(true);
-    const { error } = await reportShared({ kind: "photo", ref: `dish:${photo.id}`, reason, note: dish ? `Traveler dish photo: ${dish}` : undefined });
+    const { error } = await reportShared({ slug: undefined, kind: "photo", ref: `dish:${photo.id}`, reason, note: dish ? `Traveler dish photo: ${dish}` : undefined });
     setBusy(false);
     if (error) { showToast(error, "error"); return; }
     setOpen(false); setSent(true);
