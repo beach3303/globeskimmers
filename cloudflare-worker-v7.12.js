@@ -18573,9 +18573,21 @@ async function handlePassportTag(request, env, ctx) {
         if (r.ok) { const v = await r.json(); toUserId = (typeof v === 'string' ? v : (Array.isArray(v) ? v[0] : v?.user_id)) || null; }
       } catch { /* best-effort */ }
     }
+    // Who the invite says it's from is the server's to say (go-live round 3:
+    // b.from_name, unchecked, let anyone put "GlobeSkimmers Support: call …"
+    // into an adult's Mailbox and onto the public /t/ page): the tagger's
+    // display name from their social profile — the name §8 says appears next
+    // to what they send — else their @handle, else "A traveler". What the
+    // app sends is ignored.
+    let fromName = String(sp?.display_name || '').replace(/\s+/g, ' ').trim().slice(0, 60) || null;
+    if (!fromName) {
+      const hq = await gbRest(env, `passport_shares?user_id=eq.${user.id}&select=handle`, {}).catch(() => null);
+      const h = hq && hq.ok ? ((await hq.json().catch(() => []))[0] || {}).handle : null;
+      fromName = h ? `@${h}` : 'A traveler';
+    }
     const token = crypto.randomUUID().replace(/-/g, '');
     const row = {
-      from_user_id: user.id, from_name: b.from_name ? String(b.from_name).slice(0, 60) : null,
+      from_user_id: user.id, from_name: fromName,
       to_user_id: toUserId, to_email: email, token,
       kind: stamp.kind, tier: stamp.tier, entity_type: stamp.entity_type, entity_id: stamp.entity_id,
       name: stamp.name, city: stamp.city, region: stamp.region, country: stamp.country,
