@@ -36,6 +36,7 @@ import {
   Navigation as NavigationIcon,
   Plane,
   Search,
+  SearchX,
   ShoppingBag,
   TrainFront,
   Trees,
@@ -283,11 +284,13 @@ function Row({ icon: Icon, title, sub = '', kicker = '', kickerColor = NEUTRAL.i
 }
 
 // A note on white (plan-authored; never red or orange): the icon in umber, the words in
-// ink-2. role=alert, so it is read out as it appears.
-function Note({ text, style = undefined }) {
+// ink-2. kind 'error' (CircleAlert) is role=alert, read out as it appears; kind 'empty'
+// (SearchX, no results) is read by the search page's status line instead.
+function Note({ kind = 'error', text, style = undefined }) {
+  const Icon = kind === 'error' ? CircleAlert : SearchX;
   return (
     <div
-      role="alert"
+      role={kind === 'error' ? 'alert' : undefined}
       style={{
         display: 'flex',
         alignItems: 'flex-start',
@@ -299,7 +302,7 @@ function Note({ text, style = undefined }) {
         ...style,
       }}
     >
-      <CircleAlert size={18} color={K.accent} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flex: 'none' }} />
+      <Icon size={18} color={K.accent} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flex: 'none' }} />
       <p style={{ margin: 0, minWidth: 0, fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2, overflowWrap: 'anywhere' }}>{text}</p>
     </div>
   );
@@ -322,7 +325,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
   const [savedLocations, setSavedLocations] = useState([]);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState(''); // shown on the select page, above the button
-  const [errorMessage, setErrorMessage] = useState('');
+  const [note, setNote] = useState(null); // the search page's { kind: 'empty'|'error', text }
   const [picked, setPicked] = useState(null); // the search result "Now exploring" names
 
   // Only the newest search may show its reply: a reply for a query that has since changed,
@@ -345,7 +348,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
       setSearchQuery('');
       setSearchResults([]);
       setSearching(false);
-      setErrorMessage('');
+      setNote(null);
       setGpsError('');
       setPicked(null);
     }
@@ -361,7 +364,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
     searchSeq.current += 1;
     setSearchResults([]);
     setSearching(false);
-    setErrorMessage('');
+    setNote(null);
     return undefined;
   }, [searchQuery]);
 
@@ -397,29 +400,38 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
     setSavedLocations(Array.isArray(list) ? list.filter(isEntry) : []);
   };
 
+  // An outage is never shown as "no results": callWorker doesn't throw, it returns
+  // { error } on a timeout, a network failure or a non-2xx reply (whose body may be HTML),
+  // and the worker answers HTTP 200 { error, results: [] } when Google can't search. Only a
+  // clean reply without results is "no results", in the worker's own words when it sends any.
   const performSearch = async (query) => {
     const seq = ++searchSeq.current;
     setSearching(true);
-    setErrorMessage('');
+    setNote(null);
 
     try {
-      const { data } = await callWorker(ROUTE.searchLocation, {
+      const { data, error } = await callWorker(ROUTE.searchLocation, {
         query: query,
       });
       if (seq !== searchSeq.current) return;
 
-      if (data.results && data.results.length > 0) {
-        setSearchResults(data.results.filter(isEntry));
-        setErrorMessage('');
+      const rows = isEntry(data) && Array.isArray(data.results) ? data.results.filter(isEntry) : [];
+      if (error || !isEntry(data) || data.error) {
+        console.error('Error searching locations:', error || data?.error || data);
+        setSearchResults([]);
+        setNote({ kind: 'error', text: SEARCH_ERROR });
+      } else if (rows.length > 0) {
+        setSearchResults(rows);
+        setNote(null);
       } else {
         setSearchResults([]);
-        setErrorMessage(data.message || NO_RESULTS);
+        setNote({ kind: 'empty', text: str(data.message) || NO_RESULTS });
       }
     } catch (error) {
       if (seq !== searchSeq.current) return;
       console.error('Error searching locations:', error);
       setSearchResults([]);
-      setErrorMessage(SEARCH_ERROR);
+      setNote({ kind: 'error', text: SEARCH_ERROR });
     } finally {
       if (seq === searchSeq.current) setSearching(false);
     }
@@ -672,7 +684,9 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
     described = undefined;
     const showHint = !searchable(searchQuery);
     const n = searchResults.length;
-    const status = searching ? 'Searching…' : n > 0 ? `${n} ${n === 1 ? 'result' : 'results'}` : '';
+    // The persistent status line reads the outcome: searching, the count, or the
+    // no-results words (an error note is role=alert and reads itself).
+    const status = searching ? 'Searching…' : n > 0 ? `${n} ${n === 1 ? 'result' : 'results'}` : note?.kind === 'empty' ? note.text : '';
     header = (
       <div style={{ flex: 'none' }}>
         {backAndClose(<>Choose a <em style={EM}>destination</em></>)}
@@ -738,7 +752,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
     );
     body = (
       <div style={{ ...bodyStyle, paddingTop: 12 }}>
-        {errorMessage ? <Note text={errorMessage} style={{ marginBottom: n > 0 ? 12 : 0 }} /> : null}
+        {note ? <Note kind={note.kind} text={note.text} style={{ marginBottom: n > 0 ? 12 : 0 }} /> : null}
         {n > 0 ? (
           <>
             <h3
