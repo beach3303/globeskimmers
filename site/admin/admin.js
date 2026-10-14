@@ -136,6 +136,16 @@ function utcNote() {
   const at = midnight.toLocaleTimeString(undefined, { hour: 'numeric', minute: midnight.getMinutes() ? '2-digit' : undefined });
   return `Day charts use UTC days, which start at ${at} your time.`;
 }
+// When a UTC day ("2026-10-14") or UTC month ("2026-10") began, in the viewer's
+// own time: "Tue 5:00 PM", or "Sep 30, 5:00 PM" for a month (always with the
+// minutes: a 24-hour locale would print a bare "Tue, 17"). Null where UTC days
+// are the viewer's own days right now (as utcNote says), so "today" is exact.
+function utcSince(key) {
+  if (new Date().getTimezoneOffset() === 0) return null;
+  const month = key.length === 7;
+  const d = new Date(key + (month ? '-01' : '') + 'T00:00:00Z');
+  return d.toLocaleString(undefined, month ? { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' } : { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+}
 let REGION = null, LANG = null;
 try { REGION = new Intl.DisplayNames(undefined, { type: 'region' }); } catch { /* names fall back to codes */ }
 try { LANG = new Intl.DisplayNames(undefined, { type: 'language' }); } catch { /* names fall back to codes */ }
@@ -198,18 +208,23 @@ const session = {
     const s = readJSON(store('local'), KEY_SESSION);
     return this.valid(s) ? s : null;
   },
-  save(t, remember) {
+  // The stored session may belong to another tab, so only an explicit act
+  // removes it: a fresh sign-in without "Keep me signed in" (fresh), or Sign
+  // out (clear(true)). A tab that isn't remembered never removes it on a token
+  // refresh or when its own sign-in ends, which would sign the other tab out.
+  save(t, remember, fresh) {
     if (!t || typeof t.access_token !== 'string' || typeof t.refresh_token !== 'string') throw new Error('Supabase didn’t send a session.');
     const now = Math.floor(Date.now() / 1000);
     const expires_at = Number.isFinite(Number(t.expires_at)) && Number(t.expires_at) > now ? Number(t.expires_at) : now + (Number(t.expires_in) || 3600);
     const email = String(t.user?.email || this.cur?.email || '');
     this.cur = { access_token: t.access_token, refresh_token: t.refresh_token, expires_at, email, remember: !!remember };
     if (remember) writeJSON(store('local'), KEY_SESSION, { access_token: t.access_token, refresh_token: t.refresh_token, expires_at, email });
-    else drop(store('local'), KEY_SESSION);
+    else if (fresh) drop(store('local'), KEY_SESSION);
   },
-  clear() {
+  clear(all) {
+    const mine = !!this.cur?.remember;
     this.cur = null;
-    drop(store('local'), KEY_SESSION);
+    if (all || mine) drop(store('local'), KEY_SESSION);
     drop(store('session'), KEY_SESSION);
   },
 };
@@ -461,16 +476,20 @@ const warn = (text) => el('p', { class: 'warn' }, icon('alert'), el('span', { te
 
 // ─── building blocks ────────────────────────────────────────────────────────
 let uid = 0;
+// A subtitle that setMeta fills with counts goes back to its starting text when
+// its load fails (resetMeta) and at sign-out (wipe() reads data-initial): old
+// counts never sit over an error, or stay in the page for the next account.
 function card(parent, { title, meta, def, wide, chart }) {
   const id = 'card-' + (++uid);
-  const metaEl = meta ? el('p', { class: 'meta', text: meta }) : null;
+  const metaEl = meta ? el('p', { class: 'meta', 'data-initial': meta, text: meta }) : null;
   const body = el('div', { class: 'body' });
   const node = el('article', { class: 'card' + (wide ? ' span-all' : '') + (chart ? ' card-chart' : ''), 'aria-labelledby': id },
     el('div', { class: 'card-head' }, el('div', null, el('h3', { id, tabindex: '-1', text: title }), metaEl)),
     def && el('p', { class: 'def', text: def }),
     body);
   parent.append(node);
-  return { node, body, setMeta: (t) => { if (metaEl) metaEl.textContent = t; } };
+  const setMeta = (t) => { if (metaEl) metaEl.textContent = t; };
+  return { node, body, setMeta, resetMeta: () => setMeta(meta) };
 }
 
 // A KPI tile. Its definition opens on hover (mouse) or tap/click/keyboard.
@@ -588,7 +607,7 @@ function barChart({ name, unit, points, colHead }) {
     });
     g.append(sv('line', { x1: left, x2: W - right, y1: baseY + 0.5, y2: baseY + 0.5, class: 'baseline' }));
     // Numbers printed on the chart: every bar's where there's room; otherwise
-    // the peak (the latest one when tied) and the last bar (today, or this
+    // the peak (the latest one when tied) and the last bar (the UTC day or
     // month so far). The tooltip and "Show the numbers" carry the rest.
     const xOf = (i) => Math.min(W - right - 12, Math.max(left + 12, left + (i + 0.5) * slot));
     // Mono digits are 0.6em wide: 6.6px for the 11px peak, 6.3px for the 10.5px others.
@@ -699,7 +718,9 @@ function partialLegend(what) {
 }
 // Fill a rolling N-day window with every UTC day in it: a day the server
 // didn't return had none (the read itself succeeded). The first day is only
-// partly inside the window, and today is still running.
+// partly inside the window, and the last is the UTC day still running. That
+// isn't the viewer's "today" (in California it began at 5 PM the day before),
+// so it's labelled "UTC day so far" and todayText names when it began.
 function dailyPoints(rows, days, dayKey, valueKey) {
   const now = Date.now();
   const first = utcDay(now - days * 86400000), today = utcDay(now);
@@ -714,7 +735,7 @@ function dailyPoints(rows, days, dayKey, valueKey) {
   const out = [];
   for (let d = from; d <= to; d = addDays(d, 1)) {
     const partial = d === first || d === today;
-    out.push({ key: d, label: dayLabel(d), value: byDay.get(d) || 0, partial, note: d === today ? 'today so far' : partial ? 'partial day' : '' });
+    out.push({ key: d, label: dayLabel(d), value: byDay.get(d) || 0, partial, today: d === today, note: d === today ? 'UTC day so far' : partial ? 'partial day' : '' });
     if (out.length > 400) break;
   }
   return out;
@@ -735,11 +756,15 @@ function peakText(points, unit) {
   const p = points[points.map((q) => q.value).lastIndexOf(max)];
   return `Busiest: ${p.label} (${fmt(max)})`;
 }
-// " · today so far: N", from the UTC day still running (nothing when the window
-// doesn't reach it, or when the whole window is empty and already says so).
+// " · since Tue 5:00 PM your time (this UTC day): N", from the UTC day still
+// running; " · today so far: N" where that is the viewer's own day. Nothing
+// when the window doesn't reach it, or when the whole window is empty and
+// already says so.
 function todayText(points) {
-  const p = points.find((q) => q.note === 'today so far');
-  return p && points.some((q) => q.value > 0) ? ` · today so far: ${fmt(p.value)}` : '';
+  const p = points.find((q) => q.today);
+  if (!p || !points.some((q) => q.value > 0)) return '';
+  const since = utcSince(p.key);
+  return since ? ` · since ${since} your time (this UTC day): ${fmt(p.value)}` : ` · today so far: ${fmt(p.value)}`;
 }
 
 // /admin-user-stats reads profiles (and age-gate records) in one unordered
@@ -789,7 +814,7 @@ function build() {
     const n = num(s.onboardingCompleted, 'the onboarded count'), t = num(s.totalUsers, 'the user count');
     const p = pctOf(n, t);
     if (p == null) return kpi(fmt(n), 'no accounts yet');
-    return t >= 1000 ? kpi(`${fmt(n)}+`, `${p}% of the first 1,000 read`) : kpi(fmt(n), `${p}% of accounts`);
+    return t >= 1000 ? kpi(`${fmt(n)}+`, `${p}% of the 1,000 accounts read (in no set order)`) : kpi(fmt(n), `${p}% of accounts`);
   });
   const activeTile = (label, def, render) => panel(tile(k, { label, def }), [D.active], (d) => render(rowsOf(d, 'the active-user counts')[0] || {}), { compact: true });
   // Plain names on the tiles; the app's own terms (DAU, Stickiness, Day 1…)
@@ -812,7 +837,7 @@ function build() {
   // "Came back (ever)" is the app's own label for this field. It is not the
   // app's "Return rate (7d)" tile, which reads 0% whatever happens.
   cohortTile('Came back (ever)', 'Of the devices first seen in the last 90 days, the share that opened the app again more than 24 hours after their first visit (the app’s “Came back (ever)”). Devices first seen in the last 24 hours can’t have come back yet but still count, so this reads a little low. This is not the app’s “Return rate (7d)”: that server query is broken and always shows 0%.', 'ever_returned');
-  cohortTile('Back next day', 'Of the devices first seen in the last 90 days, the share that came back 24 to 48 hours after their first visit (the app’s “Day 1”). Devices first seen in the last 2 days can’t have yet but still count, so this reads a little low.', 'd1');
+  cohortTile('Back next day', 'Of the devices first seen in the last 90 days, the share that came back 24 to 48 hours after their first visit (the app’s “Day 1”). Devices first seen in the last 2 days may not have had the chance yet but still count, so this reads a little low.', 'd1');
   cohortTile('Back on day 7', 'Of the devices first seen in the last 90 days, the share that came back on day 7 exactly, 7 to 8 days after their first visit (the app’s “Week 1 (D7)”). Devices first seen in the last 8 days still count, so this reads low.', 'd7');
   cohortTile('Back after 30+ days', 'Of the devices first seen in the last 90 days, the share that came back 30 or more days after their first visit (the app’s “Day 30+”). Devices first seen in the last 30 days still count, so this reads low.', 'd30_plus');
   const totalsTile = (label, def, field, what, sub) => panel(tile(k, { label, def }), [D.totals], (d) => {
@@ -905,7 +930,7 @@ function build() {
     ages.setMeta(known >= CAP ? '1,000+ gave a birth year' : known ? `${fmt(known)} gave a birth year` : 'No birth years came back');
     return [rankTable({ caption: 'Age mix', head: ['Age', 'People'], rows, label: (r) => String(r.label), value: (r) => r.count, empty: 'No birth years yet, or the server couldn’t read them (it doesn’t say which).' }),
       (known >= CAP || usersCapped(s)) && warn(CAP_AGE_WARN)];
-  }, { soon: soonStats });
+  }, { soon: soonStats, onFail: () => ages.resetMeta() });
 
   // Searches
   const s = $('searches-grid');
@@ -958,10 +983,13 @@ function build() {
     const points = [];
     for (let mo = since; mo <= now && points.length < 24; mo = addMonths(mo, 1)) {
       // The axis says "Oct", or "Jan 2027" where a year begins; the tooltip and table say "Oct 2026".
-      points.push({ key: mo, label: monthLabel(mo), axis: mo.endsWith('-01') ? monthLabel(mo) : monthLabel(mo).replace(/\s*\d{4}\s*$/, ''), value: by.get(mo) || 0, partial: mo === now, note: mo === now ? 'this month so far' : '' });
+      points.push({ key: mo, label: monthLabel(mo), axis: mo.endsWith('-01') ? monthLabel(mo) : monthLabel(mo).replace(/\s*\d{4}\s*$/, ''), value: by.get(mo) || 0, partial: mo === now, note: mo === now ? 'UTC month so far' : '' });
     }
     const total = num(pm.total, 'the 12-month total');
-    return [summary(fmt(total) + (total >= 50000 ? '+' : ''), `${plural(total, 'stamp', 'stamps')} in 12 months · this month so far: ${fmt(points.length ? points[points.length - 1].value : 0)}`),
+    // In California the UTC month began at 5 PM on the last day of the month before.
+    const began = utcSince(now);
+    const soFar = began ? `since ${began} your time (this UTC month)` : 'this month so far';
+    return [summary(fmt(total) + (total >= 50000 ? '+' : ''), `${plural(total, 'stamp', 'stamps')} in 12 months · ${soFar}: ${fmt(points.length ? points[points.length - 1].value : 0)}`),
       chartBlock({ name: 'Stamps per month, last 12 months', unit: ['stamp', 'stamps'], points, colHead: 'Month (UTC)', valueHead: 'Stamps', partialWord: 'month' }),
       total >= 50000 && warn('The server stops counting at 50,000 stamps, so these months are a floor.')];
   });
@@ -1046,11 +1074,13 @@ function build() {
     for (const r of items) put(gearName(r.item), String(r.k), r.n);
     for (const r of buds) put('Buddies added', String(r.k), r.n);
     const rows = [...grid.keys()].sort((a, b) => (a === 'Buddies added') - (b === 'Buddies added') || a.localeCompare(b));
+    // The starred month is the UTC month still running (see Stamps per month).
+    const began = utcSince(now);
     return el('div', { class: 'scroll-x' }, el('table', { class: 'tbl tbl-matrix' },
       el('caption', { class: 'sr', text: 'Picks per month, last 5 UTC months' }),
       el('thead', null, el('tr', null, el('th', { scope: 'col', text: 'Item' }), months.map((mo) => el('th', { scope: 'col', class: 'n', text: monthLabel(mo).replace(/ \d{4}$/, '') + (mo === now ? '*' : '') })))),
       el('tbody', null, rows.map((row) => el('tr', null, el('th', { scope: 'row', text: row }), months.map((mo) => el('td', { class: 'n', text: fmt(grid.get(row).get(mo) || 0) }))))),
-    ), el('p', { class: 'legend', text: '* this month so far' }));
+    ), el('p', { class: 'legend', text: began ? `* UTC month so far (since ${began} your time)` : '* this month so far' }));
   });
 
   // Messages
@@ -1074,7 +1104,7 @@ function build() {
       x.page && el('p', { class: 'msg-page', text: `Sent from ${from(x.page)}` })))),
     // The server sends the newest 50 by default; the count covers them all.
     open > list.length && warn(`Showing the newest ${fmt(list.length)} of ${fmt(open)} open messages.`)];
-  }, { onFail: () => setMessageCount(null) });
+  }, { onFail: () => { setMessageCount(null); msg.resetMeta(); } });
 }
 function mailLink(v) {
   const s = String(v || '').trim();
@@ -1124,6 +1154,7 @@ function wipe() {
     host.classList.remove('busy');
     host.removeAttribute('aria-busy');
   }
+  for (const m of document.querySelectorAll('.card .meta[data-initial]')) m.textContent = m.dataset.initial;
   cache.clear();
   explained.clear();
   loadedAt = null;
@@ -1193,7 +1224,7 @@ function deniedView(r) {
 
 async function signOut() {
   const cur = session.cur;
-  session.clear();
+  session.clear(true);   // Sign out leaves no stored session on this computer, whichever tab kept it
   signInView('You’re signed out.', true);
   if (!cur) return;
   // End this browser's session on the server too (scope=local: the app on
@@ -1249,7 +1280,7 @@ async function finishRedirect(params) {
   bootText('Finishing sign-in…');
   const r = await authPost('token?grant_type=pkce', { auth_code: params.get('code'), code_verifier: pending.verifier });
   if (!r.ok) { signInView(r.message); return false; }
-  try { session.save(r.data, !!pending.remember); } catch (e) { signInView(e.message); return false; }
+  try { session.save(r.data, !!pending.remember, true); } catch (e) { signInView(e.message); return false; }
   return true;
 }
 
@@ -1267,7 +1298,7 @@ async function start() {
     submit.textContent = 'Sign in';
     if (!r.ok) { signInView(r.message); $('password').focus(); return; }
     $('password').value = '';
-    try { session.save(r.data, $('remember').checked); } catch (err) { signInView(err.message); return; }
+    try { session.save(r.data, $('remember').checked, true); } catch (err) { signInView(err.message); return; }
     bootText('Checking your access…');
     refreshAll();
   });
