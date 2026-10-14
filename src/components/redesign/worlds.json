@@ -208,7 +208,7 @@
       "line": "#D3E2D8",
       "crest": "#245A36",
       "crestIcon": "#E2EEE6",
-      "titleMax": "none",
+      "titleMax": "72%",
       "rose": "#9C3A60",
       "roseTint": "#F5E3EA",
       "roseInk": "#7E2A4B"
@@ -278,7 +278,7 @@
       "line": "#EADBB5",
       "crest": "#D9A73E",
       "crestIcon": "#24190A",
-      "titleMax": "none"
+      "titleMax": "72%"
     },
     "culture": {
       "paper": "#F3F1EA",
