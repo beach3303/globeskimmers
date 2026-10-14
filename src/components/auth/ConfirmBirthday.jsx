@@ -4,9 +4,12 @@
 // matters, so the worker can't place the age: stamping and posting wait
 // (403 confirm_birthday) and nothing on the account is deleted. This asks
 // for the month and day once (never the year again, never a hint of which
-// age matters), shows one neutral check ("Is your birthday March 14?", teens
-// plan section 3), and saves. The worker recomputes the tier from the full
-// birthday; AuthContext re-reads it and App.jsx shows what that tier gets.
+// age matters), shows one neutral check of the WHOLE date ("Is your birthday
+// March 14, 2013?", teens plan section 3) so a typo in the stored year can be
+// caught, and saves. "The year is wrong" writes to us instead of saving (a
+// correction to the year goes through support). The worker recomputes the
+// tier from the full birthday; AuthContext re-reads it and App.jsx shows what
+// that tier gets.
 // "Not now" is a real choice: the travel tools keep working, the sheet stays
 // away for the rest of the session, and it comes back only when a stamp or a
 // post needs it (callWorker announces the refusal, src/lib/ageGate.js).
@@ -28,11 +31,13 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 // Days a month can have. February keeps the 29th: the year isn't asked again.
 const daysIn = (m) => (m === 2 ? 29 : [4, 6, 9, 11].includes(m) ? 30 : 31);
 const LATER_KEY = "gs_bday_confirm_later";
+// Where a wrong stored year goes (the founder's mailbox, as on FrozenScreen).
+const CORRECT_TO = "founder@globeskimmers.io";
 const laterThisSession = () => { try { return sessionStorage.getItem(LATER_KEY) === "1"; } catch { return false; } };
 const rememberLater = () => { try { sessionStorage.setItem(LATER_KEY, "1"); } catch { /* asks again next open */ } };
 
 export default function ConfirmBirthday() {
-  const { socialTier, refreshSocialTier } = useAuth();
+  const { user, socialTier, refreshSocialTier } = useAuth();
   const [asked, setAsked] = useState(false);          // a refused stamp or post needs it now
   const [later, setLater] = useState(laterThisSession); // "Not now", this session
   const open = asked || (socialTier === "confirm" && !later);
@@ -54,15 +59,16 @@ export default function ConfirmBirthday() {
   const nothingToAsk = () => { putAway(); refreshSocialTier(); };
 
   if (!open) return null;
-  return <ConfirmSheet onLater={putAway} onSaved={saved} onNothingToAsk={nothingToAsk} />;
+  return <ConfirmSheet onLater={putAway} onSaved={saved} onNothingToAsk={nothingToAsk} account={user} />;
 }
 
-function ConfirmSheet({ onLater, onSaved, onNothingToAsk }) {
+function ConfirmSheet({ onLater, onSaved, onNothingToAsk, account }) {
   const [phase, setPhase] = useState("loading"); // loading | ask | check | saving
   const [needYear, setNeedYear] = useState(false); // no birth year either: ask the full date
   const [month, setMonth] = useState("");
   const [day, setDay] = useState("");
   const [dob, setDob] = useState("");               // 'YYYY-MM-DD', only when needYear
+  const [storedYear, setStoredYear] = useState(null); // the year on the account, read back in the check
   const [err, setErr] = useState(null);
   const panel = useRef(null);
   const head = useRef(null);
@@ -84,6 +90,7 @@ function ConfirmSheet({ onLater, onSaved, onNothingToAsk }) {
       if (gone) return;
       if (!info.error && info.birth_md) { onNothingToAsk(); return; }
       setNeedYear(!info.error && !info.set);
+      setStoredYear(info.birth_year || null);
       setPhase("ask");
     })();
     return () => { gone = true; };
@@ -93,8 +100,12 @@ function ConfirmSheet({ onLater, onSaved, onNothingToAsk }) {
   const m = Number(month);
   const full = splitDob(dob);
   const ready = needYear ? !!full : !!(month && day);
-  const pick = needYear && full ? { m: Number(full.md.slice(0, 2)), d: Number(full.md.slice(3, 5)), y: full.year } : { m, d: Number(day), y: null };
+  const pick = needYear && full ? { m: Number(full.md.slice(0, 2)), d: Number(full.md.slice(3, 5)), y: full.year } : { m, d: Number(day), y: storedYear };
   const spoken = `${MONTHS[pick.m - 1] || ""} ${pick.d || ""}${pick.y ? `, ${pick.y}` : ""}`;
+  // "The year is wrong": a mail to us with the account in it (unseen body),
+  // and the sheet goes away for this session without saving anything.
+  const mailBody = [account?.email && `GlobeSkimmers account: ${account.email}`, account?.id && `Account ID: ${account.id}`, storedYear && `The year on my account (${storedYear}) is wrong. My birthday is: `].filter(Boolean).join("\n");
+  const correctHref = `mailto:${CORRECT_TO}?subject=${encodeURIComponent("Birthday correction")}${mailBody ? `&body=${encodeURIComponent(mailBody)}` : ""}`;
 
   const chooseMonth = (v) => {
     setMonth(v); setErr(null);
@@ -186,6 +197,12 @@ function ConfirmSheet({ onLater, onSaved, onNothingToAsk }) {
                 {phase === "saving" ? "Saving…" : "Yes, save it"}
               </button>
             </div>
+            {!needYear && storedYear && phase !== "saving" && (
+              <a href={correctHref} onClick={() => onLater()} className="mt-2 flex items-center justify-center underline underline-offset-2"
+                style={{ minHeight: 44, fontSize: fs(13), color: INK3 }}>
+                The year is wrong
+              </a>
+            )}
           </>
         )}
       </div>

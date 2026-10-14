@@ -249,9 +249,11 @@ export async function setBirthday(birth_md) {
   if (!err) announceAgeGate(BIRTHDAY_SAVED);
   return { birth_md: data?.birth_md ?? null, tier: data?.tier || null, locked: data?.locked === true, error: err };
 }
+// birth_year is the account's own stored year (a worker from before the
+// go-live fixes doesn't send it: null).
 export async function getAgeInfo() {
   const { data, error } = await callWorker('social/age', {});
-  return { set: !!data?.set, tier: data?.tier || null, birth_md: data?.birth_md || null, error };
+  return { set: !!data?.set, tier: data?.tier || null, birth_year: data?.birth_year || null, birth_md: data?.birth_md || null, error };
 }
 // Send a postcard: image (data URL from resizePhoto), message, the place
 // line, optional dish meta, and either to_handle or nothing (= followers).
