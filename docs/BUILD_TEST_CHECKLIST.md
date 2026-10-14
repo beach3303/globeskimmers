@@ -1738,3 +1738,24 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - **Activate:** when Android goes public on Play, change /get's line back to "Free on iPhone and Android" and the
   landing page's "Coming soon on Android" boxes to a Google Play badge. Optional: paste the App Store Connect
   campaign provider token into APPLE_PT in site/get/index.html to count card downloads.
+
+## 2026-10-13 — Go-live: the safety bundle, place suggestions and the admin dashboard (stamping-v2 → main)
+- Ships the worker and the website; no migration, wrangler or .github paths. stamping-v2 carries the place
+  suggestions and Local favorites (entries above), the buddy's standing pose (f198a12), the read-only admin
+  dashboard at globeskimmers.io/admin (e198b65; the founder added its Supabase redirect URL) and golive-fixes
+  (merge 8dcc347): age doors on every social door, the under-13 freeze and its clean-up, account deletion that
+  finishes and is retried by the daily cron (one 900-operation KV/R2 allowance per run), block_v2 with
+  Settings → Blocked travelers, capped alerts and safety records; follow and block lists that don't show which
+  @handles are adults', a sealed token instead of an account id in the Blocked list, one 30-a-day allowance
+  across every report door; and privacy, Terms and delete-account pages that say exactly what the code does.
+  The Terms' drafting note is gone (902a327, the founder's call).
+- Tests against the merged tree: the go-live suites 481/481, round 4 19/19 and the final verifier's 12 probes;
+  gates: node --check, eslint, NOUNDEF=0, build 0, boot-check ✅.
+- Founder checks 2026-10-13: api.user_follows.status is text with no CHECK (muted follows store);
+  0 profiles left from deleted accounts and 0 possibly under 13; Supabase's own auth audit log holds 299 rows
+  about deleted accounts (privacy names that log; clearing it is optional); Cloudflare is on Workers Paid
+  (the cron's few hundred subrequests fit).
+- **Activate:** after the push, watch deploy-workers and deploy-site and probe the API, /legal/terms (no
+  note) and /admin; then `npm run ota` (iOS and Android; one Capgo bundle). Then build 14 (`npm run cap:all`,
+  scripts/ios-launch-check.sh; it must carry 3a73df2's official Sign in with Apple logo). After the first cron
+  (15:00 UTC): KV gbidx:done is set and the purge: queue is small. No SQL to run.
