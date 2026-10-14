@@ -17581,6 +17581,8 @@ async function handlePostcardSend(request, env, ctx) {
     const w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
     if (!w.ok) { if (ctx) ctx.waitUntil(env.MEDIA.delete(key).catch(() => {})); return jsonResponse({ error: 'Could not send' }, 502); }
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: !!toUser, city: !!toCity, has_dish: !!(b.meta && b.meta.dish) }));
+    // A new board card shows in the City Boards list at once, not after its five minutes.
+    if (toCity && env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.delete('cityboards:v1').catch(() => {});
     return jsonResponse({ ok: true, ...(toCity ? { board: toCity } : {}) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -18618,6 +18620,46 @@ async function handleCityBoard(request, env) {
       by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
     }));
     return jsonResponse({ rows, next, can_post: there && mySp?.social_tier !== 'teen', city, country });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// Every city board with postcards (founder, 2026-10-14: "A City Boards page. Every city whose
+// board has postcards, busiest first, each with its newest photo as the cover and a count").
+// { q? } → { boards: [{ city, country, count, recent, last_at, cover }] }, busiest first (the
+// last 30 days, then all time). q narrows by city or country, accents ignored. Counts are
+// adults' cards, as a board shows; the cover is the newest whose sender the viewer hasn't
+// blocked (none if all were). The list without q is the same for everyone, so it is kept for
+// five minutes. Same doors as a board: teens and held accounts get the hold. Before the
+// migration the answer is { boards: [], unavailable: true }.
+const PC_BOARDS_TTL = 300;
+async function handleCityBoards(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const mySp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (mySp === undefined) return jsonResponse({ boards: [], error: 'Couldn’t check your account — try again', code: 'age_unknown' }, 503);
+    if (gbOffSocial(mySp)) return jsonResponse({ boards: [], code: 'teen_hold', held: gbNeedsConfirm(mySp) ? 'confirm' : 'teen' }, 403);
+    const b = await request.json().catch(() => ({}));
+    // The board key's own spelling (pcCityKey): unaccented, lowercase, single spaces.
+    const q = String(b.q || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 40);
+    const kv = q ? null : env.GLOBESKIMMERS_KV;
+    let list = null;
+    if (kv) { try { list = JSON.parse((await kv.get('cityboards:v1')) || 'null'); } catch { list = null; } }
+    if (!Array.isArray(list)) {
+      const r = await gbRest(env, 'rpc/city_boards', { method: 'POST', body: JSON.stringify({ p_q: q || null, p_limit: q ? 20 : 60 }) });
+      if (r.status === 404) return jsonResponse({ boards: [], unavailable: true });
+      if (!r.ok) return jsonResponse({ boards: [], error: 'Couldn’t load right now — try again' }, 503);
+      list = await r.json();
+      if (kv) await kv.put('cityboards:v1', JSON.stringify(list), { expirationTtl: PC_BOARDS_TTL }).catch(() => {});
+    }
+    const blocked = await gbBlockSet(env, user.id);
+    if (!blocked) return jsonResponse({ boards: [], error: 'Couldn’t load right now — try again' }, 503);
+    const origin = new URL(request.url).origin;
+    const boards = list.filter((x) => x && x.city && x.country && Number(x.total) > 0).map((x) => {
+      const cover = (Array.isArray(x.covers) ? x.covers : []).find((c) => c && c.photo_key && !blocked.has(c.sender_id));
+      return { city: x.city, country: x.country, count: Number(x.total), recent: Number(x.recent) || 0, last_at: x.last_at || null, cover: cover ? `${origin}/pc-photo/${cover.photo_key}` : null };
+    });
+    return jsonResponse({ boards });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -25349,6 +25391,7 @@ export default {
       if (pathname === '/postcards/keep' && request.method === 'POST') return await handlePostcardKeep(request, env);
       if (pathname === '/social/world' && request.method === 'POST') return await handleSocialWorld(request, env);
       if (pathname === '/city/board' && request.method === 'POST') return await handleCityBoard(request, env);
+      if (pathname === '/city/boards' && request.method === 'POST') return await handleCityBoards(request, env);
       if (pathname === '/social/avatar' && request.method === 'POST') return await handleSocialAvatar(request, env, ctx);
       if (pathname === '/blotter/read' && request.method === 'POST') return await handleBlotterRead(request, env);
       if (pathname === '/blotter/mark' && request.method === 'POST') return await handleBlotterMark(request, env, ctx);
