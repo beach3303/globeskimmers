@@ -177,14 +177,14 @@ export const AuthProvider = ({ children }) => {
           } catch { /* ignore malformed deep link */ }
           return;
         }
-        // Read-only friend view: globeskimmers://passport/view?u=<slug>
+        // A shared passport: globeskimmers://passport/view?u=<slug> opens the
+        // visit page. Pushed once the session is in (the effect below), the
+        // same way as a team alert: a full reload would land on Home and
+        // lose the slug.
         if (url && url.includes('passport/view')) {
           try {
             const slug = (url.split(/[?&]u=/)[1] || '').split(/[&#]/)[0];
-            if (slug) {
-              try { sessionStorage.setItem('pp_view_slug', decodeURIComponent(slug)); } catch { /* ignore */ }
-              window.location.assign('/Passport'); // full reload so the view slug is picked up on mount
-            }
+            if (slug) setPendingRoute(`/Traveler?slug=${encodeURIComponent(decodeURIComponent(slug))}`);
           } catch { /* ignore malformed deep link */ }
           return;
         }
