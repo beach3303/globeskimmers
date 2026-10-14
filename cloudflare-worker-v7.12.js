@@ -1747,7 +1747,7 @@ async function handleDeleteAccount(request, env) {
       child = !!marker;
     }
     const tagChild = child ? { child: true } : {};
-    if (kv) await kv.put(`purge:${userId}`, JSON.stringify({ at: new Date().toISOString(), failed_steps: ['pending'], ...tagChild })).catch(() => {});
+    if (kv) await gbPurgeRecordPut(kv, userId, { at: new Date().toISOString(), failed_steps: ['pending'], ...tagChild }).catch(() => {});
 
     // 2) Hard-delete the auth user FIRST (cascades profiles + login_events). If
     //    it fails, nothing is purged: the age record and the blocks stay, so a
@@ -1761,6 +1761,11 @@ async function handleDeleteAccount(request, env) {
       headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
     }).catch(() => null);
     if (!delRes || ![200, 204, 404].includes(delRes.status)) {
+      // A definite refusal (4xx) means the account is still there: its
+      // pending record goes now, so others' pages don't show it as deleted
+      // until the cron gets to it (go-live round 3). A 5xx or no answer
+      // keeps it: the delete may have landed.
+      if (kv && delRes && delRes.status >= 400 && delRes.status < 500) await kv.delete(`purge:${userId}`).catch(() => {});
       const detail = delRes ? await delRes.text().catch(() => '') : 'no answer';
       return jsonResponse({ error: `Deletion failed (${delRes ? delRes.status : 'network'})`, detail: detail.slice(0, 300) }, 502);
     }
@@ -1770,7 +1775,7 @@ async function handleDeleteAccount(request, env) {
     const purge = await gbPurgeUserContent(env, userId, { child });
     if (kv) {
       if (purge.ok) await kv.delete(`purge:${userId}`).catch(() => {});
-      else await kv.put(`purge:${userId}`, JSON.stringify({ at: new Date().toISOString(), failed_steps: purge.failed.slice(0, 12), ...tagChild })).catch(() => {});
+      else await gbPurgeRecordPut(kv, userId, { at: new Date().toISOString(), failed_steps: purge.failed.slice(0, 12), ...tagChild, ...(purge.child ? { child: true } : {}) }).catch(() => {});
     }
 
     // 3) Their member number went in the purge (step 1l, retried with the
@@ -16738,39 +16743,102 @@ async function freezeScan(env, now = new Date()) {
   }
   return out;
 }
+// A purge record (go-live round 3): purge:<uid> = { at, failed_steps,
+// child?, src?, tries?, last_try? }, written with KV metadata { k, c?, p?,
+// at } — k 'orphan' for an orphan the daily pass queued (src: 'orphan') and
+// 'del' for a real deletion (a child's is always 'del'), p for a deletion
+// still pending — so the sweeps can order their work from one listing,
+// without a read per record.
+async function gbPurgeRecordPut(kv, userId, rec) {
+  const steps = Array.isArray(rec.failed_steps) ? rec.failed_steps : [];
+  const meta = { k: rec.child === true ? 'del' : rec.src === 'orphan' ? 'orphan' : 'del', ...(rec.child === true ? { c: 1 } : {}), ...(steps.includes('pending') ? { p: 1 } : {}), at: String(rec.at || '').slice(0, 32) };
+  await kv.put(`purge:${userId}`, JSON.stringify(rec), { metadata: meta });
+}
+// What a listed record is: its metadata, or — for a record written without
+// it — read from the record itself (one KV read).
+function gbPurgeMeta(rec) {
+  const steps = Array.isArray(rec?.failed_steps) ? rec.failed_steps : [];
+  return { k: rec?.child === true ? 'del' : rec?.src === 'orphan' || steps.includes('orphan') ? 'orphan' : 'del', ...(steps.includes('pending') ? { p: 1 } : {}), at: rec?.at };
+}
+// What is left of the daily run's KV + R2 allowance (see scheduled()); a
+// sweep run outside the cron has no limit here.
+const gbBudgetLeft = (env) => (env && env.__budget ? env.__budget.max - env.__budget.used : Infinity);
+const PURGE_VISIT_MAX = 50;          // records read or looked up a run
+const PURGE_LOOKUP_FAILS_MAX = 3;    // GoTrue answering nothing useful this many times in a row: try tomorrow
+const PURGE_KV_R2_COST = 60;         // what one purge may need of the run's KV + R2 allowance
 // Daily: finish the deletion of accounts whose purge had a failed step, or
 // whose request ended before its purge did (handleDeleteAccount queues
 // purge:<uid> before it deletes the sign-in). Only a DELETED account is ever
 // cleaned up here: the sign-in is checked first, and while it is still alive
 // (its delete failed) the record is dropped and nothing is touched — the age
-// record and the blocks stay. A check that can't be made waits a day. Turns
-// are fair (gbSweepOrder): a record whose purge keeps failing never starves
-// the ones after it.
+// record and the blocks stay. A check that can't be made waits a day.
+// Order (go-live round 3: an orphan backlog made a real retry wait days, a
+// frozen child's included): a pending deletion older than an hour first (a
+// lookup, no purge: a live account drops its record, so it is no longer
+// shown as deleted), then real deletions, then orphans with whatever is left
+// of the FREEZE_SWEEP_MAX purges. Turns are fair inside each group (they
+// start after the last record tried, wrapping around), so a record whose
+// purge keeps failing never starves the ones after it. Bounded: at most
+// PURGE_VISIT_MAX records read or looked up, and a GoTrue outage stops the
+// run after PURGE_LOOKUP_FAILS_MAX failed lookups in a row.
 async function purgeRetrySweep(env, now = new Date()) {
   const out = { done: 0, failed: 0 };
   const kv = env.GLOBESKIMMERS_KV; if (!kv) return out;
   const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY;
-  let attempts = 0, last = null;
-  for (const name of await gbSweepOrder(kv, 'purge:', 'sweep:purge')) {
-    if (attempts >= FREEZE_SWEEP_MAX) break;
+  const listed = [];
+  let cursor;
+  do {
+    const page = await kv.list({ prefix: 'purge:', cursor });
+    for (const k of page.keys || []) listed.push(k);
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  listed.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  const after = await kv.get('sweep:purge').catch(() => null);
+  const i0 = after ? listed.findIndex((k) => k.name > after) : -1;
+  const turn = i0 > 0 ? [...listed.slice(i0), ...listed.slice(0, i0)] : listed;
+  let visits = 0;
+  const items = [];
+  for (const k of turn) {
+    const id = k.name.slice('purge:'.length);
+    if (!BL_UUID.test(id)) { await kv.delete(k.name).catch(() => {}); continue; }
+    let meta = k.metadata && k.metadata.k ? k.metadata : null;
+    let rec = null;
+    if (!meta) {
+      if (visits >= PURGE_VISIT_MAX || gbBudgetLeft(env) < 5) continue;   // its turn comes on a later run
+      visits++;
+      rec = (await kv.get(k.name, { type: 'json' }).catch(() => null)) || {};
+      meta = gbPurgeMeta(rec);
+    }
+    items.push({ name: k.name, id, meta, rec });
+  }
+  const rank = (it) => (it.meta.k === 'orphan' ? 2 : it.meta.p ? 0 : 1);
+  items.sort((a, b) => rank(a) - rank(b));   // stable: the turn order stays inside each group
+  let attempts = 0, last = null, lookupFails = 0;
+  for (const it of items) {
+    if (attempts >= FREEZE_SWEEP_MAX || visits >= PURGE_VISIT_MAX || gbBudgetLeft(env) < 5) break;
     try {
-      const userId = name.slice('purge:'.length);
-      if (!BL_UUID.test(userId)) { await kv.delete(name).catch(() => {}); continue; }
-      const rec = (await kv.get(name, { type: 'json' }).catch(() => null)) || {};
       // A deletion that is running right now finishes (or re-queues) itself.
-      if (Array.isArray(rec.failed_steps) && rec.failed_steps.includes('pending') && now.getTime() - Date.parse(rec.at || 0) < 3600000) continue;
+      if (it.meta.p && now.getTime() - Date.parse(it.meta.at || 0) < 3600000) continue;
       if (!key) { out.failed++; continue; }
-      const au = await fetch(`${GB_URL(env)}/auth/v1/admin/users/${userId}`, { headers: { apikey: key, Authorization: `Bearer ${key}` } }).catch(() => null);
-      if (au && au.ok) { await kv.delete(name).catch(() => {}); continue; }   // still alive: its delete never happened
-      if (!au || au.status !== 404) { out.failed++; continue; }              // couldn't tell: try tomorrow
-      attempts++; last = name;
+      visits++;
+      const au = await fetch(`${GB_URL(env)}/auth/v1/admin/users/${it.id}`, { headers: { apikey: key, Authorization: `Bearer ${key}` } }).catch(() => null);
+      if (au && au.ok) { await kv.delete(it.name).catch(() => {}); lookupFails = 0; continue; }   // still alive: its delete never happened
+      if (!au || au.status !== 404) {                                                            // couldn't tell: try tomorrow
+        out.failed++;
+        if (++lookupFails >= PURGE_LOOKUP_FAILS_MAX) break;
+        continue;
+      }
+      lookupFails = 0;
+      if (gbBudgetLeft(env) < PURGE_KV_R2_COST) break;
+      const rec = it.rec || (await kv.get(it.name, { type: 'json' }).catch(() => null)) || {};
+      attempts++; last = it.name;
       // A frozen account deleted from its frozen screen keeps its child flag.
-      const res = await gbPurgeUserContent(env, userId, { child: rec.child === true });
-      if (res.ok) { await kv.delete(name).catch(() => {}); out.done++; continue; }
+      const res = await gbPurgeUserContent(env, it.id, { child: rec.child === true });
+      if (res.ok) { await kv.delete(it.name).catch(() => {}); out.done++; continue; }
       out.failed++;
       const tries = (Number(rec.tries) || 0) + 1;
       // A child found by the purge (its stored birthday) stays one for the retries.
-      await kv.put(name, JSON.stringify({ ...rec, tries, last_try: now.toISOString(), failed_steps: res.failed.slice(0, 12), ...(res.child ? { child: true } : {}) })).catch(() => {});
+      await gbPurgeRecordPut(kv, it.id, { ...rec, tries, last_try: now.toISOString(), failed_steps: res.failed.slice(0, 12), ...(res.child ? { child: true } : {}) }).catch(() => {});
       if (tries === 3) await founderAlert(env, `⚠️ A deleted account's clean-up has failed 3 daily tries (steps: ${res.failed.slice(0, 6).join(', ')}). It keeps retrying — check the worker's SUPABASE_SERVICE_ROLE_KEY and R2.`, 'ops').catch(() => {});
     } catch { out.failed++; /* one account never stops the sweep */ }
   }
@@ -16864,7 +16932,7 @@ async function orphanScan(env, now = new Date()) {
             const had = await kv.get(`purge:${id}`).catch(() => 'unknown');
             if (!had) {
               spent++;
-              await kv.put(`purge:${id}`, JSON.stringify({ at: now.toISOString(), failed_steps: ['orphan'] }));
+              await gbPurgeRecordPut(kv, id, { at: now.toISOString(), failed_steps: ['orphan'], src: 'orphan' });
               out.queued++;
             }
             queued.add(id);
