@@ -14506,10 +14506,15 @@ async function handlePassportPublic(request, env) {
     // coordinates of every visit (privacy audit 2026-09-29: select=* leaked
     // full-precision lat/lng of the owner's whole history to anyone with the
     // slug). City + country stay; the numbers go.
+    // Nor where the stamper stood (founder, 2026-10-13; privacy §1: the
+    // stamp's rough zone "only our team sees"): meta.presence and the old
+    // birthday flag stay on the server, and so do account ids — the owner's
+    // and a tagger's (the booklet shows the tagger by tagged_by_name/_handle).
     const shared = stamps
       .filter((st) => !st.hidden)
-      .map(({ lat, lng, note, note_public, ...rest }) => ({
+      .map(({ lat, lng, note, note_public, meta, tagged_by, user_id, ...rest }) => ({
         ...rest,
+        ...(meta && typeof meta === 'object' ? { meta: (({ presence, birthday, ...m }) => m)(meta) } : {}),
         // A trip note is private unless its owner chose to share it.
         ...(note_public && note ? { note, note_public: true } : {}),
         // Fail-closed: another viewer sees only photos that PASSED moderation.
