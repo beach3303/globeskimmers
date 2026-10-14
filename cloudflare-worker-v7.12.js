@@ -8604,7 +8604,6 @@ async function handleMoneyExchange(request, env, ctx) {
       }).catch(() => []);
     }
 
-    const today = new Date().getDay();
     const locations = [];
     for (const place of places) {
       const lat = place.location?.latitude;
@@ -8614,19 +8613,33 @@ async function handleMoneyExchange(request, env, ctx) {
       const distance = rrCalcDist(latitude, longitude, lat, lng) * 0.621371; // km → miles
       if (distance > radiusMiles) continue;
 
-      const isOpen = place.currentOpeningHours?.openNow ?? place.regularOpeningHours?.openNow ?? place.isOpen ?? false;
+      const weekday = place.currentOpeningHours?.weekdayDescriptions
+        || place.regularOpeningHours?.weekdayDescriptions
+        || place.hours || [];
+      // The place's own clock. With it, open-now comes from the weekly hours (the
+      // cached openNow flag is however old the cache is) and today's line is found by
+      // the place's weekday NAME: Google lists Monday first, so the old index from
+      // getDay() named tomorrow.
+      const offset = Number.isFinite(place.utcOffsetMinutes) ? place.utcOffsetMinutes : null;
+      const live = offset == null ? null : gsOpenNow(weekday, offset);
+      const isOpen = live ?? place.currentOpeningHours?.openNow ?? place.regularOpeningHours?.openNow ?? place.isOpen ?? false;
       if (openOnly && !isOpen) continue;
+      const day = offset == null ? null : GS_WEEKDAYS[new Date(Date.now() + offset * 60000).getUTCDay()];
+      const hoursToday = day ? (weekday.find((h) => String(h).startsWith(day)) || null) : null;
 
       // No per-office rate: we don't know any office's real rate, and a
       // randomized one dressed up as theirs is a lie (Honest UX). The page
       // shows the real market rate on its own; offices show none.
       const rate = null;
 
-      const weekday = place.currentOpeningHours?.weekdayDescriptions
-        || place.regularOpeningHours?.weekdayDescriptions
-        || place.hours || [];
-
       locations.push({
+        // The place's id, clock, short address and type ride along for the page (open
+        // words at the place's clock, Say it / Translate under the name).
+        id: place.id || null,
+        placeId: place.id || null,
+        utcOffsetMinutes: offset,
+        shortAddress: place.shortFormattedAddress || '',
+        primaryType: place.primaryType || null,
         name: place.displayName?.text || place.name || 'Currency Exchange',
         address: place.formattedAddress || place.address || '',
         phone: place.nationalPhoneNumber || place.phone || null,
@@ -8635,7 +8648,7 @@ async function handleMoneyExchange(request, env, ctx) {
         distance_miles: distance,
         exchange_rate: rate,
         type: 'Currency Exchange',
-        hours_today: weekday[today] || null,
+        hours_today: hoursToday,
         hours: weekday,
         website: place.websiteUri || place.website || null,
         is_open: isOpen,
