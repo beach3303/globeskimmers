@@ -17456,6 +17456,25 @@ async function handleAvatarServe(request, env) {
   } catch { return new Response('Error', { status: 500 }); }
 }
 
+// City Board keys (2026-10-14): 'lisbon|portugal', the city and its country without
+// accents, case or extra spaces, matched against the city and country on stamps.
+const pcCityKey = (city, country) => {
+  const n = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const c = n(city);
+  const k = n(country);
+  return c && k ? `${c}|${k}`.slice(0, 140) : null;
+};
+const PC_CITY_DAILY = 5;
+// Was this traveler really in that city? A verified stamp of theirs there; false
+// when the stamps can't be read, so a board fails closed.
+async function pcWasThere(env, userId, key) {
+  try {
+    const q = await gbRest(env, `passport_stamps?user_id=eq.${userId}&hidden=eq.false&verified=in.(gps,photo_loc,photo_ai)&select=city,country&limit=2000`, {});
+    if (!q.ok) return false;
+    return (await q.json()).some((st) => pcCityKey(st.city, st.country) === key);
+  } catch { return false; }
+}
+
 // ── Postcards (2026-09-30): sent, not posted ────────────────────────────────
 // The photo is moderated SYNCHRONOUSLY at send (a postcard is shared by
 // definition — fail-closed, no unreviewed image ever leaves the sender).
@@ -17479,6 +17498,9 @@ async function handlePostcardSend(request, env, ctx) {
     // after the photo is checked (below).
     let toUser = null;
     let to = null;
+    let toCity = null;
+    let boardCity = null;
+    let boardCountry = null;
     if (b.to_handle) {
       to = await gbHandleToUser(env, b.to_handle);
       if (!to) return jsonResponse({ error: 'No traveler with that username' }, 404);
@@ -17491,6 +17513,20 @@ async function handlePostcardSend(request, env, ctx) {
         const mutual = a.ok && bq.ok && (await a.json()).length && (await bq.json()).length;
         if (!mutual) return jsonResponse({ error: 'You can send postcards to friends you follow each other with' }, 403);
       }
+    } else if (b.to_city && typeof b.to_city === 'object') {
+      // A city's board (City Board, 2026-10-14): public, so never from a teen, and
+      // only from someone who was really there: a verified stamp of theirs in that
+      // city (GPS, the photo's place or the photo itself). No proof, no post. Its
+      // words are checked first, and five boards a day is plenty.
+      if (sp.social_tier === 'teen') return jsonResponse({ error: 'City boards open at age 18' }, 403);
+      boardCity = clean(b.to_city.city, 60);
+      boardCountry = clean(b.to_city.country, 60);
+      toCity = pcCityKey(boardCity, boardCountry);
+      if (!toCity) return jsonResponse({ error: 'Which city?' }, 400);
+      if (!(await pcWasThere(env, user.id, toCity))) return jsonResponse({ error: 'Only travelers who were really there can post here. Stamp it first, verified.', code: 'not_there' }, 403);
+      if (msg && !(await gbModerate(env, msg)).allow) return jsonResponse({ error: 'Let’s keep the board kind. Try different words.' }, 422);
+      const n = await gbDayCount(env, `pcb:${user.id}`);
+      if (n != null && n > PC_CITY_DAILY) return jsonResponse({ error: 'That’s five postcards to city boards today. Try again tomorrow.' }, 429);
     } else if (sp.social_tier === 'teen') {
       return jsonResponse({ error: 'Address your postcard to a friend — broadcast opens at age 18' }, 403);
     } else {
@@ -17539,11 +17575,13 @@ async function handlePostcardSend(request, env, ctx) {
       sender_id: user.id, to_user_id: toUser, photo_key: key, message: msg,
       place_name: clean(b.place_name, 80), city: clean(b.city, 60), country: clean(b.country, 60),
       ...(b.meta && typeof b.meta === 'object' ? { meta: { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60) } } : {}),
+      // A board card carries the board's city and country.
+      ...(toCity ? { to_city: toCity, city: boardCity, country: boardCountry } : {}),
     };
     const w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
     if (!w.ok) { if (ctx) ctx.waitUntil(env.MEDIA.delete(key).catch(() => {})); return jsonResponse({ error: 'Could not send' }, 502); }
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: !!toUser, has_dish: !!(b.meta && b.meta.dish) }));
-    return jsonResponse({ ok: true });
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: !!toUser, city: !!toCity, has_dish: !!(b.meta && b.meta.dish) }));
+    return jsonResponse({ ok: true, ...(toCity ? { board: toCity } : {}) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -18386,6 +18424,8 @@ async function handleSocialFeed(request, env) {
       bcastFrom.length ? gbRest(env, `postcards?sender_id=in.(${bcastFrom.join(',')})&to_user_id=is.null&order=created_at.desc&limit=20&select=*`, {}) : Promise.resolve({ ok: false }),
     ]);
     let pcs = [...(pcTo.ok ? await pcTo.json() : []), ...(pcBroadcast.ok ? await pcBroadcast.json() : [])];
+    // A card to a city's board belongs to the board, not to followers' feeds.
+    pcs = pcs.filter((p) => !p.to_city);
     if (teenMe) pcs = pcs.filter((pcrow) => pcrow.to_user_id !== user.id || mutual.has(pcrow.sender_id));
     // Senders I don't follow: their handle, name and age (a card from an
     // account that has since turned out to be a minor is dropped too).
@@ -18516,6 +18556,68 @@ async function handlePostcardBox(request, env) {
       by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
     }));
     return jsonResponse({ rows, next });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// ── City Board (2026-10-14): postcards from travelers who were really there ───
+// POST /city/board { city, country, before? } → that city's board, newest first,
+// PC_BOX_PAGE at a time: { rows, next, can_post, city, country }. A public
+// surface: a held viewer reads nothing (403 teen_hold); cards from anyone blocked
+// either way, from a minor or from an unreadable age never show; a deleted sender
+// isn't named. can_post: the viewer is an adult with a verified stamp in that
+// city. Before the board's column exists PostgREST answers 400: { unavailable }.
+async function handleCityBoard(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const mySp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (mySp === undefined) return jsonResponse({ rows: [], error: 'Couldn’t check your account — try again', code: 'age_unknown' }, 503);
+    if (gbOffSocial(mySp)) return jsonResponse({ rows: [], code: 'teen_hold', held: gbNeedsConfirm(mySp) ? 'confirm' : 'teen' }, 403);
+    const b = await request.json().catch(() => ({}));
+    const city = String(b.city || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const country = String(b.country || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const key = pcCityKey(city, country);
+    if (!key) return jsonResponse({ rows: [], error: 'Which city?' }, 400);
+    const before = typeof b.before === 'string' && /^\d{4}-\d{2}-\d{2}T[0-9:.]+(Z|[+-]\d{2}:?\d{2})$/.test(b.before) ? b.before : null;
+    const blocked = await gbBlockSet(env, user.id);
+    if (!blocked) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
+    const [q, there] = await Promise.all([
+      gbRest(env, `postcards?to_city=eq.${encodeURIComponent(key)}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {}),
+      pcWasThere(env, user.id, key),
+    ]);
+    if (q.status === 400) return jsonResponse({ rows: [], unavailable: true });
+    if (!q.ok) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
+    const got = await q.json();
+    const page = got.slice(0, PC_BOX_PAGE);
+    const next = got.length > PC_BOX_PAGE ? page[page.length - 1].created_at : null;
+    const senders = [...new Set(page.map((p) => p.sender_id))].filter((id) => !blocked.has(id));
+    let share = {};
+    let prof = {};
+    if (senders.length) {
+      const inList = senders.join(',');
+      const [h2, p2] = await Promise.all([
+        gbRest(env, `passport_shares?user_id=in.(${inList})&select=user_id,handle`, {}),
+        gbRest(env, `social_profiles?user_id=in.(${inList})&select=user_id,display_name,${GB_TIER_COLS}`, {}),
+      ]);
+      if (!p2.ok) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
+      share = Object.fromEntries((h2.ok ? await h2.json() : []).map((r) => [r.user_id, r]));
+      prof = Object.fromEntries((await p2.json()).map((r) => [r.user_id, gbTierRow(r)]));
+    }
+    // An adult's card only: never a minor's, never one whose sender's age can't be read.
+    const adult = (id) => { const r = prof[id]; return !!r && !gbUnderAge(r) && !gbAgeHeld(r); };
+    const shown = page.filter((p) => !blocked.has(p.sender_id) && adult(p.sender_id));
+    const gone = await gbPurgeQueued(env, senders.filter((id) => !share[id]?.handle && prof[id]?.display_name));
+    const nameOf = (id) => (gone.has(id) ? null : prof[id]?.display_name || null);
+    const origin = new URL(request.url).origin;
+    const faces = await gbFaces(env, senders.filter((id) => !gone.has(id) && adult(id)), origin);
+    const rows = shown.map((p) => ({
+      type: 'postcard', id: p.id, created_at: p.created_at,
+      photo: `${origin}/pc-photo/${p.photo_key}`,
+      message: p.message, place: p.place_name, city: p.city, country: p.country,
+      dish: p.meta?.dish || null, to_me: false, board: true,
+      by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
+    }));
+    return jsonResponse({ rows, next, can_post: there && mySp?.social_tier !== 'teen', city, country });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -19375,7 +19477,8 @@ async function handleSocialUnread(request, env) {
     const blocked = blk.either;
     const fIds = following.map((r) => r.followee_id).filter((id) => id && !blocked.has(id));
     const broadcasts = fIds.length
-      ? await gbRest(env, `postcards?to_user_id=is.null&sender_id=in.(${fIds.join(',')})&created_at=gte.${floor}&select=sender_id,place_name,created_at&order=created_at.desc&limit=50`, {}).then(j)
+      // select=* so a board card (to_city, City Board) can be left out without naming the column.
+      ? (await gbRest(env, `postcards?to_user_id=is.null&sender_id=in.(${fIds.join(',')})&created_at=gte.${floor}&select=*&order=created_at.desc&limit=50`, {}).then(j)).filter((r) => !r.to_city)
       : [];
 
     const items = [];
@@ -25236,6 +25339,7 @@ export default {
       if (pathname === '/postcards/box' && request.method === 'POST') return await handlePostcardBox(request, env);
       if (pathname === '/postcards/keep' && request.method === 'POST') return await handlePostcardKeep(request, env);
       if (pathname === '/social/world' && request.method === 'POST') return await handleSocialWorld(request, env);
+      if (pathname === '/city/board' && request.method === 'POST') return await handleCityBoard(request, env);
       if (pathname === '/social/avatar' && request.method === 'POST') return await handleSocialAvatar(request, env, ctx);
       if (pathname === '/blotter/read' && request.method === 'POST') return await handleBlotterRead(request, env);
       if (pathname === '/blotter/mark' && request.method === 'POST') return await handleBlotterMark(request, env, ctx);
