@@ -41,7 +41,8 @@ import LuggageLabel from "@/components/passport/LuggageLabel";
 import { GEAR_SHAPES, GEAR_COLORS, DRINK_VARIANTS, GEAR_BOUNDS, colorOf } from "@/components/profile/gearShapes";
 import { PET_SHAPES, POSES } from "@/components/profile/petShapes";
 import { SPECIES, BREEDS, breedName } from "@/lib/petCatalog";
-import { coatsFor, coatFor } from "@/lib/petCoats";
+import { BREED_COATS, coatFor } from "@/lib/petCoats";
+import { hasPetArt } from "@/lib/petArt";
 import { Folder } from "@/components/redesign/Zone";
 import { NEUTRAL, ZONE, fs } from "@/components/redesign/constants";
 
@@ -124,26 +125,46 @@ function GearArt({ kind, item, width, stickersBySid, edit = false, selected = nu
 }
 
 // A pet: the uploaded breed render when R2 has one, else the drawn chibi.
-export function PetArt({ buddy, width, alt = "" }) {
+//   onArt(true | false)  which one showed: the buddy sheet adds a buddy only on a real picture.
+//   fallback             shown instead of the chibi when given.
+export function PetArt({ buddy, width, alt = "", onArt = undefined, fallback = undefined }) {
   // Render ladder: coat render in this pose → breed render in this pose → the
   // coat's sitting render (most coats shipped sitting-only) → breed sitting →
+  // the breed's first rendered coat, sitting (a Siamese has only its points) →
   // the drawn chibi. The chibi has no standing drawing, so it maps to sitting.
   const [step, setStep] = useState(0);
   const base = `${PETS_BASE}/${buddy.species}/${buddy.breed || "any"}`;
+  const firstCoat = BREED_COATS[`${buddy.species}/${buddy.breed}`]?.[0]?.key;
   const urls = [...new Set([
     buddy.coat ? `${base}/${buddy.coat}/${buddy.pose}.webp` : null,
     `${base}/${buddy.pose}.webp`,
     buddy.coat ? `${base}/${buddy.coat}/sitting.webp` : null,
     `${base}/sitting.webp`,
+    firstCoat ? `${base}/${firstCoat}/sitting.webp` : null,
   ].filter(Boolean))];
   useEffect(() => { setStep(0); }, [buddy.species, buddy.breed, buddy.coat, buddy.pose]);
-  if (step < urls.length) {
-    return <img src={urls[step]} alt={alt} onError={() => setStep(step + 1)} style={{ width, height: width, objectFit: "contain", display: "block" }} />;
+  const failed = step >= urls.length;
+  const onArtRef = useRef(onArt);
+  onArtRef.current = onArt;
+  useEffect(() => { if (failed) onArtRef.current?.(false); }, [failed]);
+  if (!failed) {
+    return <img src={urls[step]} alt={alt} onLoad={() => onArt?.(true)} onError={() => setStep(step + 1)} style={{ width, height: width, objectFit: "contain", display: "block" }} />;
   }
+  if (fallback !== undefined) return fallback;
   const fn = PET_SHAPES[buddy.species] || PET_SHAPES.dog;
   const pose = buddy.pose === "standing" ? "sitting" : buddy.pose;
   return <svg viewBox="0 0 340 340" width={width} height={width} style={{ display: "block" }} role={alt ? "img" : undefined} aria-label={alt || undefined} aria-hidden={alt ? undefined : "true"}
     dangerouslySetInnerHTML={{ __html: fn(pose, coatFor(buddy.species, buddy.breed, buddy.coat)) }} />;
+}
+
+// The buddy sheet's picture spot for a breed that isn't drawn yet.
+function ComingSoonArt({ width }) {
+  return (
+    <div role="img" aria-label="Coming soon"
+      style={{ width, height: width, boxSizing: "border-box", padding: 12, borderRadius: Math.round(width * 0.12), border: "1.5px dashed rgba(22,17,13,.3)", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: SERIF, fontStyle: "italic", fontSize: fs(20), color: INK3 }}>
+      Coming soon
+    </div>
+  );
 }
 
 // ── The enlarge / edit sheet for one item ───────────────────────────────────
@@ -298,9 +319,22 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
   const [coat, setCoat] = useState(buddy?.coat || null);
   const [name, setName] = useState(buddy?.name || "");
   const [q, setQ] = useState("");
-  const breeds = species ? (BREEDS[species] || []).filter((b) => !q || b.name.toLowerCase().includes(q.toLowerCase())) : [];
-  const ready = species && breed && name.trim().length > 0;
+  const found = species ? (BREEDS[species] || []).filter((b) => !q || b.name.toLowerCase().includes(q.toLowerCase())) : [];
+  // Breeds with the founder's picture come first; the rest are coming soon (founder,
+  // 2026-10-14), shown only when searched for.
+  const breeds = found.filter((b) => hasPetArt(species, b.key));
+  const soon = found.filter((b) => !hasPetArt(species, b.key));
+  // A buddy is added only once its picture has loaded. Keyed, so a new breed or coat starts over.
+  const artKey = `${species}/${breed}/${coat || ""}`;
+  const [art, setArt] = useState({ key: "", ok: null });
+  const artOk = art.key === artKey ? art.ok : null;
+  // An existing buddy keeps a breed from before this rule (rename it, or say goodbye).
+  const kept = !isNew && breed === buddy?.breed && (coat || "") === (buddy?.coat || "");
+  const comingSoon = !!breed && artOk === false && !kept;
+  const ready = species && breed && name.trim().length > 0 && (artOk === true || kept);
   const preview = species ? { species, breed: breed || "any", coat, pose: "sitting" } : null;
+  // Only coats with a picture; a breed drawn in one coat offers no swatches.
+  const coats = breed ? BREED_COATS[`${species}/${breed}`] || [] : [];
   return (
     <div className="fixed inset-0 z-[10010] flex items-end sm:items-center justify-center p-3" role="dialog" aria-modal="true" aria-label={isNew ? "Add a travel buddy" : "Your travel buddy"}
       style={{ background: "rgba(22,17,13,.6)", backdropFilter: "blur(3px)" }} onClick={onClose}>
@@ -313,7 +347,20 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
           <CloseButton onClick={onClose} />
         </div>
 
-        {preview && <div className="flex justify-center my-1"><PetArt key={`${species}-${breed}-${coat}`} buddy={preview} width={150} /></div>}
+        {preview && (
+          <div className="flex flex-col items-center my-1">
+            <PetArt key={artKey} buddy={preview} width={150}
+              onArt={breed ? (ok) => setArt({ key: artKey, ok }) : undefined}
+              fallback={breed && !kept ? <ComingSoonArt width={150} /> : undefined} />
+            {comingSoon && (
+              <p role="status" className="text-center" style={{ fontSize: fs(12.5), lineHeight: 1.4, color: INK2, margin: "6px 0 10px", maxWidth: 300 }}>
+                {hasPetArt(species, breed)
+                  ? "We couldn’t load this picture. Check your connection and try again."
+                  : `The ${breedName(species, breed)} is coming soon. We’re still drawing it.`}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-1.5 mt-1" role="radiogroup" aria-label="Species">
           {SPECIES.map((s) => (
@@ -327,24 +374,41 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
 
         {species && (
           <>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${breeds.length || (BREEDS[species] || []).length} breeds…`} aria-label="Search breeds"
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${(BREEDS[species] || []).length} breeds…`} aria-label="Search breeds"
               className="w-full mt-2.5 rounded-xl px-3 outline-none" style={{ height: 44, background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(14), color: INK }} />
             <div className="flex flex-wrap gap-1.5 mt-2" style={{ maxHeight: 196, overflowY: "auto" }}>
-              {breeds.slice(0, 60).map((b) => (
+              {breeds.map((b) => (
                 <button key={b.key} type="button" onClick={() => { setBreed(b.key); setCoat(null); }} aria-pressed={breed === b.key}
                   className="rounded-full px-3" style={{ minHeight: 44, background: breed === b.key ? INK : "#fff", color: breed === b.key ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(11.5), fontFamily: "inherit" }}>
                   {b.name}
                 </button>
               ))}
+              {q && soon.length > 0 && (
+                <>
+                  <div className="w-full" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".12em", textTransform: "uppercase", color: INK3, marginTop: breeds.length ? 4 : 0 }}>Coming soon</div>
+                  {soon.slice(0, 40).map((b) => (
+                    <button key={b.key} type="button" onClick={() => { setBreed(b.key); setCoat(null); }} aria-pressed={breed === b.key}
+                      className="rounded-full px-3" style={{ minHeight: 44, background: breed === b.key ? "rgba(22,17,13,.08)" : "transparent", color: INK3, border: "1px dashed rgba(22,17,13,.32)", fontSize: fs(11.5), fontFamily: "inherit" }}>
+                      {b.name}
+                    </button>
+                  ))}
+                </>
+              )}
+              {q && !found.length && <div style={{ fontSize: fs(12.5), color: INK3, padding: "6px 2px" }}>No breed by that name.</div>}
             </div>
+            {!q && soon.length > 0 && (
+              <div style={{ fontSize: fs(11.5), lineHeight: 1.4, color: INK3, marginTop: 6 }}>
+                {soon.length} more {soon.length === 1 ? "breed is" : "breeds are"} coming soon. Search to check yours.
+              </div>
+            )}
             {/* Coats are per-breed where the founder rendered them (a cavalier offers
-                Ruby, a great dane Harlequin); other breeds show the species palette. */}
-            {breed && (
+                Ruby, a great dane Harlequin). */}
+            {coats.length > 0 && (
               <div className="flex flex-wrap items-center mt-2.5" role="radiogroup" aria-label="Coat color">
-                {coatsFor(species, breed).map((c) => (
+                {coats.map((c) => (
                   <Swatch key={c.key} color={c.body} name={c.name} on={coat === c.key} onClick={() => setCoat(c.key)} size={26} />
                 ))}
-                {coat && <span style={{ fontSize: fs(11), color: INK3, marginLeft: 4 }}>{coatsFor(species, breed).find((c) => c.key === coat)?.name}</span>}
+                {coat && <span style={{ fontSize: fs(11), color: INK3, marginLeft: 4 }}>{coats.find((c) => c.key === coat)?.name}</span>}
               </div>
             )}
             {/* The name is the identity (founder, 2026-10-05) — the breed is just a pick. */}
@@ -364,7 +428,7 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
           <button type="button" disabled={!ready}
             onClick={() => onSave({ id: buddy?.id, species, breed, coat: coat || "", name: name.trim(), pose: buddy?.pose || "sitting" })}
             className="flex-1 rounded-xl py-3 font-semibold disabled:opacity-50" style={{ background: INK, color: "#fff", fontSize: fs(14) }}>
-            {isNew ? "Add buddy" : "Save"}
+            {comingSoon ? "Coming soon" : isNew ? "Add buddy" : "Save"}
           </button>
         </div>
       </div>
