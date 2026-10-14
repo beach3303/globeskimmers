@@ -16803,6 +16803,7 @@ const gbBudgetLeft = (env) => (env && env.__budget ? env.__budget.max - env.__bu
 const PURGE_VISIT_MAX = 50;          // records read or looked up a run
 const PURGE_LOOKUP_FAILS_MAX = 3;    // GoTrue answering nothing useful this many times in a row: try tomorrow
 const PURGE_KV_R2_COST = 60;         // what one purge may need of the run's KV + R2 allowance
+const PURGE_QUEUE_ALERT = 35;        // real deletions waiting: more than a week of 5-a-day retries
 // Daily: finish the deletion of accounts whose purge had a failed step, or
 // whose request ended before its purge did (handleDeleteAccount queues
 // purge:<uid> before it deletes the sign-in). Only a DELETED account is ever
@@ -16840,6 +16841,13 @@ async function purgeRetrySweep(env, now = new Date()) {
   }
   const rank = (it) => (it.meta.k === 'orphan' ? 2 : it.meta.p ? 0 : 1);
   items.sort((a, b) => rank(a) - rank(b));   // stable: the turn order stays inside each group
+  // More real deletions waiting than a week of retries can clear: said once
+  // a week (go-live round 3), so the queue never grows quietly.
+  const waiting = items.filter((it) => it.meta.k !== 'orphan').length;
+  if (waiting > PURGE_QUEUE_ALERT && !(await kv.get('sweepalert:purge').catch(() => 'unknown'))) {
+    await kv.put('sweepalert:purge', now.toISOString(), { expirationTtl: 7 * 86400 }).catch(() => {});
+    await founderAlert(env, `⚠️ ${waiting} deleted accounts are waiting for their clean-up retry — more than a week of retries at ${FREEZE_SWEEP_MAX} a day. Check the worker's SUPABASE_SERVICE_ROLE_KEY and R2.`, 'ops').catch(() => {});
+  }
   let attempts = 0, last = null, lookupFails = 0;
   for (const it of items) {
     if (attempts >= FREEZE_SWEEP_MAX || visits >= PURGE_VISIT_MAX || gbBudgetLeft(env) < 5) break;
