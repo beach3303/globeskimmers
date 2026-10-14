@@ -12,7 +12,7 @@
 //   - append a login_events row on each real sign-in (CRM audit log)
 //   - complete native OAuth: catch globeskimmers://auth/callback and exchange code
 import React, {
-  createContext, useContext, useState, useEffect, useCallback, useMemo,
+  createContext, useContext, useState, useEffect, useCallback, useMemo, useRef,
 } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
@@ -292,17 +292,29 @@ export const AuthProvider = ({ children }) => {
   // null (no birthday yet). 'blocked' (under 13) freezes the whole app
   // (App.jsx shows FrozenScreen); 'teen' holds the social doors until 18
   // (founder, 2026-10-11). Re-read after the birthday is entered.
+  // socialTierReady is false from a user change (and while signed out) until
+  // that user's age read settles, success or failure. Social surfaces wait for
+  // it, so a teen never glimpses social UI before the hold applies. A read
+  // that started for an earlier user, or before a newer read, is dropped.
   const [socialTier, setSocialTier] = useState(null);
+  const [socialTierReady, setSocialTierReady] = useState(false);
+  const tierRead = useRef(0);
   const refreshSocialTier = useCallback(async () => {
+    const n = ++tierRead.current;
     try {
       const { data } = await callWorker('social/age', {});
       const t = data?.tier || null;
-      setSocialTier(t);
+      if (n === tierRead.current) setSocialTier(t);
       return t;
-    } catch { return null; }
+    } catch { return null; } finally {
+      if (n === tierRead.current) setSocialTierReady(true);
+    }
   }, []);
   useEffect(() => {
-    if (!user?.id) { setSocialTier(null); return; }
+    tierRead.current += 1;
+    setSocialTier(null);
+    setSocialTierReady(false);
+    if (!user?.id) return;
     refreshSocialTier();
   }, [user?.id, refreshSocialTier]);
 
@@ -335,6 +347,7 @@ export const AuthProvider = ({ children }) => {
     canRefresh,
     signInTick,
     socialTier,
+    socialTierReady,
     // actions
     refreshSocialTier,
     signInWithProvider,
@@ -353,7 +366,7 @@ export const AuthProvider = ({ children }) => {
     checkUserAuth: refreshProfile,
     navigateToLogin: () => {}, // gate is rendered by App.jsx now; no redirect
   }), [
-    session, user, profile, isLoadingAuth, authError, canRefresh, signInTick, socialTier, refreshSocialTier,
+    session, user, profile, isLoadingAuth, authError, canRefresh, signInTick, socialTier, socialTierReady, refreshSocialTier,
     signInWithProvider, signInApple, signInWithEmail, signUpWithEmail,
     verifyEmailOtp, refreshProfile, bumpWelcomeSplashCount, logout, deleteAccount,
   ]);
