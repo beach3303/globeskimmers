@@ -4,6 +4,7 @@
 // docs/PASSPORT_MEANING_MODEL.md.
 import { callWorker } from '@/lib/callWorker';
 import { appInfo } from '@/lib/appInfo';
+import { announceAgeGate, BIRTHDAY_SAVED } from '@/lib/ageGate';
 
 // Great-circle metres between two coords (for GPS-verify: am I really here?).
 export function metersBetween(aLat, aLng, bLat, bLng) {
@@ -135,6 +136,20 @@ export async function blockTagger(token) {
   const { data, error } = await callWorker('social/block', { token });
   return { data, error };
 }
+// Block a traveler (go-live decision 6; offered only when op:'list' lists
+// 'block_v2', see src/lib/blocks.js). target: one of { user_id }, { postcard_id },
+// { slug } or { handle }. Silent to them; both follows end. Unblock deletes
+// only my own block row, and the follows don't come back.
+export async function blockTraveler(target) {
+  const { data, error } = await callWorker('social/block', target || {});
+  const err = error || data?.error || null;
+  return { ok: !err && data?.ok === true, error: err || (data?.ok === true ? null : 'Couldn’t block right now') };
+}
+export async function unblockTraveler(user_id) {
+  const { data, error } = await callWorker('social/follow', { op: 'unblock', user_id });
+  const err = error || data?.error || null;
+  return { ok: !err && data?.ok === true, error: err || (data?.ok === true ? null : 'Couldn’t unblock right now') };
+}
 // Username: read (no args) or claim/change. 3–20 [a-z0-9_], 2 changes/30 days.
 export async function getHandle() {
   const { data, error } = await callWorker('social/handle', {});
@@ -183,9 +198,12 @@ export async function getAgeGate() {
 }
 // The gate takes the FULL birthday (founder, 2026-10-05): year + 'MM-DD'.
 // Both lock after the first write — age-up happens on the real birthday.
+// A saved birthday is announced so the app re-reads the tier at once.
 export async function setAgeGate(birth_year, birth_md) {
   const { data, error } = await callWorker('social/age', { birth_year, birth_md });
-  return { set: !!data?.set, tier: data?.tier || null, error: error || data?.error || null };
+  const err = error || data?.error || null;
+  if (!err) announceAgeGate(BIRTHDAY_SAVED);
+  return { set: !!data?.set, tier: data?.tier || null, error: err };
 }
 // 'YYYY-MM-DD' (a date input's value) → setAgeGate args, or null if not a date.
 export const splitDob = (s) => {
@@ -220,15 +238,22 @@ export async function socialFeed() {
 }
 // Birthday (MM-DD): read via getAgeGate's birth_md; set here ONCE — it is part
 // of the age now, so it locks like the year (founder, 2026-10-05). Completing
-// a legacy year-only account recomputes the tier exactly. The Passport mints
-// the birthday stamp on the day.
+// a legacy year-only account recomputes the tier exactly (it is how a 'confirm'
+// account — a year that could be either side of a birthday that matters —
+// gets its real tier, go-live decision 2). Resolves the recomputed tier;
+// locked = the month and day were already saved. The Passport mints the
+// birthday stamp on the day.
 export async function setBirthday(birth_md) {
   const { data, error } = await callWorker('social/age', { birth_md });
-  return { birth_md: data?.birth_md ?? null, error: error || data?.error || null };
+  const err = error || data?.error || null;
+  if (!err) announceAgeGate(BIRTHDAY_SAVED);
+  return { birth_md: data?.birth_md ?? null, tier: data?.tier || null, locked: data?.locked === true, error: err };
 }
+// birth_year is the account's own stored year (a worker from before the
+// go-live fixes doesn't send it: null).
 export async function getAgeInfo() {
   const { data, error } = await callWorker('social/age', {});
-  return { set: !!data?.set, tier: data?.tier || null, birth_md: data?.birth_md || null, error };
+  return { set: !!data?.set, tier: data?.tier || null, birth_year: data?.birth_year || null, birth_md: data?.birth_md || null, error };
 }
 // Send a postcard: image (data URL from resizePhoto), message, the place
 // line, optional dish meta, and either to_handle or nothing (= followers).

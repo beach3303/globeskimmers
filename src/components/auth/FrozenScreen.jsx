@@ -1,9 +1,16 @@
 // FrozenScreen — the whole app for an account whose birthday is under 13
 // (founder, 2026-10-11: freeze at once, purge after 7 days, access-only
 // appeal). Rendered by App.jsx in place of every route while the worker's age
-// gate answers tier 'blocked'. Nothing on the account is shown to anyone; the
-// worker's freezeSweep deletes it after FREEZE_PURGE_DAYS, or the person
-// deletes it now. The appeal restores access only — it changes nothing else.
+// gate answers tier 'blocked'. Its words match the worker (go-live, 2026-10-13;
+// round 2): the passport is hidden and every stamp, post and send is refused.
+// Until the clean-up, the guestbook notes show without a name. After
+// FREEZE_PURGE_DAYS the worker's freezeSweep runs gbPurgeUserContent with
+// keepAccount: the content goes, every guestbook note (deleted ones too) and
+// every guestbook upload included; the sign-in account, the age record and the
+// blocks stay, so an appeal can restore access, and the App's settings are left
+// as they were. "Delete my account now" deletes the whole account at once
+// (handleDeleteAccount), the guestbook notes and uploads too. An appeal corrects
+// the birthday and restores access only: nothing deleted comes back.
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { showToast } from '@/components/Toast';
@@ -12,17 +19,22 @@ const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const INK = '#16110D', INK2 = '#3A3128', INK3 = '#736657', RULE = 'rgba(22,17,13,.12)';
 const IVORY = '#FFFCF7', STAMP = '#B0472F';
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
-const APPEAL_TO = 'support@globeskimmers.io';
+// The founder's own mailbox (go-live decision 8, 2026-10-13): it exists and is
+// read; support@ may not be. The appeal is decided in the Admin portal's Age
+// appeal form, which takes the account id this mail carries.
+const APPEAL_TO = 'founder@globeskimmers.io';
 
 export default function FrozenScreen() {
   const { user, deleteAccount, logout } = useAuth();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
-  // The only address this screen shows is the support one (founder, 2026-10-11).
-  // The account's own address rides in the unseen mail body so an appeal can be
-  // matched to its account whatever address it is sent from.
+  // The only address this screen shows is the appeal one (founder, 2026-10-11).
+  // The account's own address and id ride in the unseen mail body so an appeal
+  // can be matched to its account whatever address it is sent from; the id is
+  // what the Admin portal's Age appeal form takes.
   const email = user?.email || '';
-  const appealHref = `mailto:${APPEAL_TO}?subject=${encodeURIComponent('Age appeal')}${email ? `&body=${encodeURIComponent(`GlobeSkimmers account: ${email}`)}` : ''}`;
+  const body = [email && `GlobeSkimmers account: ${email}`, user?.id && `Account ID: ${user.id}`].filter(Boolean).join('\n');
+  const appealHref = `mailto:${APPEAL_TO}?subject=${encodeURIComponent('Age appeal')}${body ? `&body=${encodeURIComponent(body)}` : ''}`;
 
   const erase = async () => {
     if (!confirming) { setConfirming(true); return; }
@@ -37,8 +49,8 @@ export default function FrozenScreen() {
         <div className="uppercase" style={{ fontSize: fs(10), letterSpacing: '.2em', color: STAMP, fontWeight: 700 }}>Globeskimmers</div>
         <h1 style={{ fontFamily: SERIF, fontSize: fs(26), lineHeight: 1.1, color: INK, marginTop: 6 }}>GlobeSkimmers isn&rsquo;t available on this account</h1>
         <p style={{ fontSize: fs(14.5), lineHeight: 1.5, color: INK2, marginTop: 12 }}>
-          The birthday on this account is under 13, so the account is frozen. Nothing on it is shown to anyone.
-          In 7 days everything on it &mdash; stamps, photos, notes &mdash; is deleted for good. You can delete it now instead.
+          The birthday on this account is under 13, so the account is frozen: its passport is hidden, and nothing can be stamped, posted or sent.
+          After 7 days, its stamps, photos, postcards, posts and guestbook notes are deleted for good. You can delete the account now instead.
         </p>
         <button type="button" onClick={erase} disabled={busy}
           className="mt-5 w-full rounded-xl py-3 font-semibold disabled:opacity-60"
@@ -46,15 +58,15 @@ export default function FrozenScreen() {
           {busy ? 'Deleting…' : confirming ? 'Yes, delete everything now' : 'Delete my account now'}
         </button>
         {confirming && !busy && (
-          <button type="button" onClick={() => setConfirming(false)} className="mt-2 w-full py-2" style={{ fontSize: fs(13), color: INK3 }}>Keep it for now</button>
+          <button type="button" onClick={() => setConfirming(false)} className="mt-2 w-full py-2" style={{ minHeight: 44, fontSize: fs(13), color: INK3 }}>Keep it for now</button>
         )}
         <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${RULE}` }}>
           <p style={{ fontSize: fs(13), lineHeight: 1.5, color: INK2 }}>
             Entered the wrong birthday? Email <a href={appealHref} style={{ color: STAMP, textDecoration: 'underline' }}>{APPEAL_TO}</a> with the subject &ldquo;Age appeal&rdquo;.
-            An appeal can only restore access &mdash; nothing else about the account changes.
+            An appeal can only restore access &mdash; anything already deleted stays deleted.
           </p>
         </div>
-        <button type="button" onClick={() => logout()} className="mt-4 w-full py-2" style={{ fontSize: fs(13.5), color: INK3, textDecoration: 'underline' }}>Sign out</button>
+        <button type="button" onClick={() => logout()} className="mt-4 w-full py-2" style={{ minHeight: 44, fontSize: fs(13.5), color: INK3, textDecoration: 'underline' }}>Sign out</button>
       </div>
     </div>
   );

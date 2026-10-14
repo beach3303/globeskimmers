@@ -35,6 +35,8 @@ import Luggage from "@/components/passport/Luggage";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import HeldHandleClaim from "@/components/passport/HeldHandleClaim";
 import PhotoFooter from "@/components/passport/PhotoFooter";
+import TravelerSheet from "@/components/social/TravelerSheet";
+import { blockTarget, blockReady } from "@/lib/blocks";
 
 
 // ============================================================================
@@ -706,7 +708,7 @@ function PassportInner() {
   const navigate = useNavigate();
   const isTablet = useIsTablet();
   const colWrap = isTablet ? "max-w-[820px]" : "max-w-md";
-  const { isAuthenticated, profile, user } = useAuth();
+  const { isAuthenticated, profile, user, socialTier } = useAuth();
   const isDev = isAdminEmail(user?.email); // sample-passport preview is admin-only
   const [loading, setLoading] = useState(true);
   const [stamps, setStamps] = useState([]);
@@ -728,6 +730,9 @@ function PassportInner() {
   });
   const readOnly = !!viewSlug;
   const [viewHolder, setViewHolder] = useState(null);
+  // Who owns the viewed passport, when the worker says (owner_id; today's
+  // /passport/public sends only the holder's first name).
+  const [viewOwner, setViewOwner] = useState(null);
   // Consume the slug once so it doesn't leak into the user's OWN passport later.
   useEffect(() => { try { sessionStorage.removeItem("pp_view_slug"); } catch { /* ignore */ } }, []);
 
@@ -737,6 +742,7 @@ function PassportInner() {
       const { data } = await getPublicPassport(viewSlug);
       if (data && !data.private) { setStamps(data.stamps || []); setStats(data.stats || {}); setViewHolder(data.holder || "A traveler"); }
       else { setStamps([]); setStats({}); setViewHolder(null); }
+      setViewOwner(data?.owner_id || data?.user_id || null);
       setTags([]); setLoading(false); return;
     }
     const [pp, tg] = await Promise.all([listPassport(), listTags()]);
@@ -871,12 +877,33 @@ function PassportInner() {
     } else showToast(action === "accept" ? "You already have this stamp 🛂" : presence ? "Noted — no stamp added" : "Declined", "success");
     load();
   };
-  const blockClaim = async () => {
-    if (!claim) return;
-    const { error } = await blockTagger(claim.token);
+  // "Don't know them? Block this person" (go-live decision 6): with a
+  // block_v2 worker the invite's token is a full block — follows end both
+  // ways and each passport looks private to the other — so it opens the
+  // same TravelerSheet question that says exactly that, never one tap.
+  // An older worker's block only stops tags: one tap, an honest toast.
+  const [claimList, setClaimList] = useState(null);
+  const [blockingClaim, setBlockingClaim] = useState(false);
+  useEffect(() => {
+    if (!claim || claimList) return undefined;
+    let gone = false;
+    (async () => { const { data } = await socialFollow("list"); if (!gone) setClaimList(data || {}); })();
+    return () => { gone = true; };
+  }, [claim, claimList]);
+  const claimDone = () => {
     try { sessionStorage.removeItem("pp_claim_token"); } catch { /* ignore */ }
     setClaim(null); setClaimPresence(null);
-    showToast(error || "Blocked — they can't tag you again", error ? "error" : "success");
+  };
+  const blockClaim = async () => {
+    if (!claim) return;
+    // Tapped before the list arrived: read it now, so a block_v2 worker never
+    // gets the one-tap block (and its tags-only toast) by accident.
+    let list = claimList;
+    if (!list) { list = (await socialFollow("list")).data || {}; setClaimList(list); }
+    if (blockReady(list)) { setBlockingClaim(true); return; }
+    const { error } = await blockTagger(claim.token);
+    claimDone();
+    showToast(error || "Blocked. They can't tag you again.", error ? "error" : "success");
   };
 
   const holder = readOnly ? (viewHolder || "A traveler") : (profile?.first_name || profile?.display_name || "Traveler");
@@ -889,6 +916,20 @@ function PassportInner() {
     showToast(error || "Thank you — we review every report", error ? "error" : "success");
   };
   const exitView = () => { try { sessionStorage.removeItem("pp_view_slug"); } catch { /* ignore */ } window.location.assign(createPageUrl("Passport")); };
+  // Friend view: "Block this traveler" beside Report (go-live decision 6).
+  // Shown only when the worker advertises block_v2; the share link itself
+  // (slug) names the owner, or owner_id when the worker sends one
+  // (src/lib/blocks.js). After a block, back to your own passport.
+  const [viewList, setViewList] = useState(null);
+  const [blockingView, setBlockingView] = useState(false);
+  useEffect(() => {
+    if (!readOnly || !isAuthenticated) return undefined;
+    let gone = false;
+    (async () => { const { data } = await socialFollow("list"); if (!gone) setViewList(data || null); })();
+    return () => { gone = true; };
+  }, [readOnly, isAuthenticated]);
+  const viewPerson = readOnly ? { user_id: viewOwner, slug: viewSlug, name: viewHolder } : null;
+  const canBlockView = !!(viewPerson && viewList && blockTarget(viewPerson, viewList));
 
   // Booklet view: one swipeable page per country (like a real passport).
   const [openStampId, setOpenStampId] = useState(null);
@@ -1016,7 +1057,8 @@ function PassportInner() {
           </div>
         )}
         {!readOnly && !preview && <HeldHandleClaim fs={fs} />}
-        {!readOnly && !preview && bdayAsk && (
+        {/* A 'confirm' account answers in the one-time sheet instead (its neutral check matters there). */}
+        {!readOnly && !preview && bdayAsk && socialTier !== "confirm" && (
           <div className="mb-4 rounded-[16px] p-3.5" style={{ background: "#FFFBF0", border: "1px solid #EAD9AE" }}>
             <p style={{ color: INK, fontSize: fs(14), fontWeight: 700 }}>🎂 When&rsquo;s your birthday?</p>
             <p style={{ color: INK2, fontSize: fs(12.5), lineHeight: 1.45, marginTop: 2 }}>
@@ -1102,10 +1144,16 @@ function PassportInner() {
                 <button onClick={() => respondClaim("accept", true)} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>Prove it with a photo ✓</button>
               </div>
             </>)}
-            <button onClick={blockClaim} className="w-full text-center mt-2.5" style={{ background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
+            <button type="button" onClick={blockClaim} aria-haspopup={blockReady(claimList) ? "dialog" : undefined} className="w-full text-center mt-1" style={{ minHeight: 44, background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
               Don&apos;t know them? Block this person
             </button>
           </div>
+        )}
+        {claim && blockingClaim && (
+          <TravelerSheet person={{ token: claim.token, name: claim.tag.from_name || null }} list={claimList} start="block"
+            report={{ kind: "tag", note: `Tag invite${claim.tag.name ? ` at ${claim.tag.name}` : ""}${claim.tag.from_name ? ` from "${claim.tag.from_name}"` : ""}` }}
+            onClose={() => setBlockingClaim(false)}
+            onChanged={() => { setBlockingClaim(false); claimDone(); load(); }} />
         )}
 
         {/* Tagged-you inbox — someone said you were with them */}
@@ -1245,13 +1293,22 @@ function PassportInner() {
       {/* Stamp a place — manual city/spot visit stamp */}
       {showStampPlace && <StampPlaceModal preset={stampPreset} onClose={() => { setShowStampPlace(false); setStampPreset(null); }} onDone={() => { setShowStampPlace(false); setStampPreset(null); load(); }} />}
 
-      {/* Friend view: the quiet report door (and the sheet of reasons) */}
+      {/* Friend view: the quiet report door (and the sheet of reasons), and Block */}
       {readOnly && (
-        <div className="text-center mt-6 mb-2">
-          <button type="button" onClick={() => setReporting(true)} style={{ background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
+        <div className="flex justify-center gap-4 mt-6 mb-2">
+          <button type="button" onClick={() => setReporting(true)} aria-haspopup="dialog" style={{ minHeight: 44, padding: "0 6px", background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
             Report this passport
           </button>
+          {canBlockView && (
+            <button type="button" onClick={() => setBlockingView(true)} aria-haspopup="dialog" style={{ minHeight: 44, padding: "0 6px", background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
+              Block this traveler
+            </button>
+          )}
         </div>
+      )}
+      {blockingView && viewPerson && (
+        <TravelerSheet person={viewPerson} list={viewList} start="block" report={{ kind: "passport", slug: viewSlug }}
+          onClose={() => setBlockingView(false)} onChanged={() => exitView()} />
       )}
       {reporting && (
         <div className="fixed inset-0 z-[9998] flex items-end justify-center" role="dialog" aria-modal="true" aria-label="Report this passport" style={{ background: "rgba(22,17,13,.45)" }} onClick={() => setReporting(false)}>

@@ -312,6 +312,14 @@ export default function AuthGate() {
             {isSignup ? 'Sign in' : 'Sign up'}
           </button>
         </p>
+
+        {/* Apple 1.2: people agree to the Terms (no objectionable content, no
+            abuse) before they can post anything. Every way in passes here. */}
+        <p className="text-center text-[12.5px] leading-snug text-black/50 mt-5">
+          By continuing you agree to our{' '}
+          <a href="https://globeskimmers.io/legal/terms" target="_blank" rel="noreferrer" className="underline underline-offset-2 text-black/60">Terms</a>
+          : no objectionable content or abusive behavior. We remove it and the accounts that post it.
+        </p>
       </div>
     </div>
   );

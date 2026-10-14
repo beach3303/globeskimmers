@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AuthGate from '@/components/auth/AuthGate';
 import { ToastContainer } from '@/components/Toast';
 import FrozenScreen from '@/components/auth/FrozenScreen';
+import ConfirmBirthday from '@/components/auth/ConfirmBirthday';
 import { FontScaleProvider } from '@/components/a11y/FontScaleContext';
 
 const { Pages, Layout, mainPage } = pagesConfig;
@@ -63,7 +64,11 @@ const AuthenticatedApp = () => {
   }
 
   // Authenticated → render the app. Onboarding gating happens in Layout.
+  // ConfirmBirthday sits over every route: an account whose birth year can't
+  // be placed without the month and day ('confirm') is asked for them once,
+  // and again whenever a stamp or post is refused for that reason.
   return (
+    <>
     <Routes>
       <Route path="/" element={
         <LayoutWrapper currentPageName={mainPageKey}>
@@ -83,6 +88,8 @@ const AuthenticatedApp = () => {
       ))}
       <Route path="*" element={<PageNotFound />} />
     </Routes>
+    <ConfirmBirthday />
+    </>
   );
 };
 
