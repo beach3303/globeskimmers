@@ -16930,6 +16930,15 @@ async function handleBlotterSign(request, env, ctx) {
         if (ctx) ctx.waitUntil(gbLogEvent(env, 'blotter_unsign', {}));
         return jsonResponse({ ok: true });
       }
+      // Rewriting a signature publishes new words under the author's name, so
+      // it passes the same age doors as signing (founder, 2026-10-13): a frozen
+      // account, an unconfirmed birth year or a held teen can't edit — only
+      // peel, which the policy promises — and an age that can't be checked
+      // refuses.
+      const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+      if (sp === undefined) return gbAgeUnknownResp();
+      if (gbUnderAge(sp)) return gbUnderAgeResp();
+      if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
       const text = String(b.text || '').trim().slice(0, 280);
       if (!text) return jsonResponse({ error: 'Write something first' }, 400);
       const mod = await gbModerate(env, text);
