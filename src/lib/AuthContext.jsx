@@ -12,7 +12,7 @@
 //   - append a login_events row on each real sign-in (CRM audit log)
 //   - complete native OAuth: catch globeskimmers://auth/callback and exchange code
 import React, {
-  createContext, useContext, useState, useEffect, useCallback, useMemo,
+  createContext, useContext, useState, useEffect, useCallback, useMemo, useRef,
 } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
@@ -32,6 +32,7 @@ import {
   OAUTH_REDIRECT_TO,
 } from '@/lib/nativeAuth';
 import { callWorker } from '@/lib/callWorker';
+import { AGE_GATE_EVENT } from '@/lib/ageGate';
 
 // sessionStorage flag set the moment the USER initiates a sign-in/sign-up, so we
 // can tell a fresh sign-in from a plain app-launch session restore. sessionStorage
@@ -52,6 +53,9 @@ export const AuthProvider = ({ children }) => {
   // Bumps once per FRESH (user-initiated) sign-in / sign-up — never on a plain
   // app-launch session restore. Home watches this to show the welcome splash.
   const [signInTick, setSignInTick] = useState(0);
+  // A team-alert link waiting for the session: set by the admin/members branch
+  // in appUrlOpen, pushed by the effect that follows the listener's effect.
+  const [pendingRoute, setPendingRoute] = useState(null);
 
   const loadProfile = useCallback(async (userId) => {
     if (!userId) { setProfile(null); return null; }
@@ -185,6 +189,14 @@ export const AuthProvider = ({ children }) => {
           } catch { /* ignore malformed deep link */ }
           return;
         }
+        // A team alert (founder, 2026-10-13): globeskimmers://admin/members?m=57
+        // → the Admin page with member #57 picked out. Pushed once the session
+        // is in (the effect below), or a cold start would lose it.
+        if (url && url.startsWith('globeskimmers://admin/members')) {
+          const m = (url.split(/[?&]m=/)[1] || '').split(/[&#]/)[0];
+          if (/^\d{1,9}$/.test(m) && Number(m) > 0) setPendingRoute(`/AdminAnalytics?member=${Number(m)}`);
+          return;
+        }
         if (!url || !url.startsWith(OAUTH_REDIRECT_TO)) return;
         try { await Browser.close(); } catch { /* no-op on Android */ }
         try {
@@ -202,6 +214,21 @@ export const AuthProvider = ({ children }) => {
       appListener?.remove?.();
     };
   }, [loadProfile]);
+
+  // Push a waiting team-alert link once the session is in. An alert's tap
+  // usually starts a closed app: Capacitor hands the link over as soon as the
+  // listener above is added, often while the stored session is still being
+  // restored (an expired token waits on a network refresh) — and App.jsx
+  // sends each restored session to Home once, which would replace a route
+  // pushed earlier. This effect runs after that redirect in the same commit
+  // (a child's effects run before its parent's), so the link lands on top.
+  const signedIn = !!session?.user;
+  useEffect(() => {
+    if (!pendingRoute || isLoadingAuth || !signedIn) return;
+    setPendingRoute(null);
+    window.history.pushState({}, '', pendingRoute);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, [pendingRoute, isLoadingAuth, signedIn]);
 
   // --- Auth actions (wrap nativeAuth; set/clear error for the gate UI) -------
   const signInWithProvider = useCallback(async (provider) => {
@@ -262,6 +289,47 @@ export const AuthProvider = ({ children }) => {
     setSession(null); setUser(null); setProfile(null); setCanRefresh(false);
   }, [user, session]);
 
+  // Social tier from the worker's age gate: 'adult' | 'teen' | 'blocked' |
+  // 'confirm' | null (no birthday yet). 'blocked' (under 13) freezes the whole
+  // app (App.jsx shows FrozenScreen); 'teen' holds the social doors until 18
+  // (founder, 2026-10-11); 'confirm' (a birth year that could be either side
+  // of a birthday that matters, with no month or day) holds stamping and
+  // posting until the month and day are given — App.jsx's ConfirmBirthday
+  // asks for them (go-live decision 2, 2026-10-13). Re-read after a birthday
+  // is entered and after any age refusal (src/lib/ageGate.js). A read that
+  // fails keeps the tier we had: a network blip must never unfreeze an
+  // account or lift a hold.
+  const [socialTier, setSocialTier] = useState(null);
+  const tierRef = useRef(null);
+  tierRef.current = socialTier;
+  const refreshSocialTier = useCallback(async () => {
+    try {
+      const { data, error } = await callWorker('social/age', {});
+      if (error || !data || data.error) return tierRef.current;
+      const t = data.tier || null;
+      setSocialTier(t);
+      return t;
+    } catch { return tierRef.current; }
+  }, []);
+  useEffect(() => {
+    if (!user?.id) { setSocialTier(null); return; }
+    refreshSocialTier();
+  }, [user?.id, refreshSocialTier]);
+  // An age refusal anywhere (callWorker announces it) or a saved birthday
+  // re-reads the tier, so the screen matches the server at once: a frozen
+  // account gets FrozenScreen, a held teen the hold notes. A burst of
+  // refusals costs one read.
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    let timer = null;
+    const onAgeGate = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { refreshSocialTier(); }, 300);
+    };
+    window.addEventListener(AGE_GATE_EVENT, onAgeGate);
+    return () => { clearTimeout(timer); window.removeEventListener(AGE_GATE_EVENT, onAgeGate); };
+  }, [user?.id, refreshSocialTier]);
+
   // canRefresh = admin email (always) OR an email an admin granted in the
   // Supabase `refresh_access` table. Re-evaluated whenever the user changes, so
   // revoking access takes effect on the user's next sign-in.
@@ -290,7 +358,9 @@ export const AuthProvider = ({ children }) => {
     authError,
     canRefresh,
     signInTick,
+    socialTier,
     // actions
+    refreshSocialTier,
     signInWithProvider,
     signInWithApple: signInApple,
     signInWithEmail,
@@ -307,7 +377,7 @@ export const AuthProvider = ({ children }) => {
     checkUserAuth: refreshProfile,
     navigateToLogin: () => {}, // gate is rendered by App.jsx now; no redirect
   }), [
-    session, user, profile, isLoadingAuth, authError, canRefresh, signInTick,
+    session, user, profile, isLoadingAuth, authError, canRefresh, signInTick, socialTier, refreshSocialTier,
     signInWithProvider, signInApple, signInWithEmail, signUpWithEmail,
     verifyEmailOtp, refreshProfile, bumpWelcomeSplashCount, logout, deleteAccount,
   ]);

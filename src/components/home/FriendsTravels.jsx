@@ -1,11 +1,17 @@
 // FriendsTravels — the Home row that shows other humans (audit P1 #7: Home
 // was "socially silent"). Your people's newest verified stamps and postcards,
 // reverse-chronological, never ranked — the same feed Mailbox reads. Taps go
-// to Mailbox. At zero friends it becomes a small, dismissible invite.
-import React, { useEffect, useState } from "react";
+// to Mailbox. At zero friends it becomes a small, dismissible invite. Each
+// card has a ⋯ (44px) that opens the person's TravelerSheet — Report, and
+// Block once the worker advertises block_v2 — as in the Mailbox (go-live
+// decision 6: wherever another person's postcard shows).
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { MoreHorizontal } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { socialFeed, socialFollow } from "@/lib/passport";
+import { useAuth } from "@/lib/AuthContext";
+import TravelerSheet from "@/components/social/TravelerSheet";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -21,22 +27,29 @@ const when = (iso) => {
 
 export default function FriendsTravels({ wide = false }) {
   const navigate = useNavigate();
+  const { socialTier } = useAuth();
   const [rows, setRows] = useState(null);       // null = loading
   const [following, setFollowing] = useState(0);
+  const [list, setList] = useState(null);       // social/follow op:'list' (block_v2, who's who)
+  const [traveler, setTraveler] = useState(null); // the card whose ⋯ is open
   const [dismissed, setDismissed] = useState(() => { try { return localStorage.getItem(DISMISS_KEY) === "1"; } catch { return false; } });
 
+  // isGone (optional): true once the row has unmounted, so a late answer is dropped.
+  const load = useCallback(async (isGone) => {
+    const [f, l] = await Promise.all([socialFeed(), socialFollow("list")]);
+    if (isGone && isGone()) return;
+    setRows(f.error ? [] : (f.rows || []).slice(0, 10));
+    setList(l.data || null);
+    setFollowing((l.data?.following || []).filter((x) => x.status === "accepted").length);
+  }, []);
   useEffect(() => {
     let gone = false;
-    (async () => {
-      const [f, l] = await Promise.all([socialFeed(), socialFollow("list")]);
-      if (gone) return;
-      setRows(f.error ? [] : (f.rows || []).slice(0, 10));
-      setFollowing((l.data?.following || []).filter((x) => x.status === "accepted").length);
-    })();
+    load(() => gone);
     return () => { gone = true; };
-  }, []);
+  }, [load]);
 
-  if (rows === null) return null;
+  // Social is held until 18, or until a 'confirm' birthday is complete: no invite, no feed.
+  if (rows === null || socialTier === "teen" || socialTier === "confirm") return null;
   const pad = wide ? "pb-3" : "px-4 pb-3";
   const box = wide ? "" : "max-w-md mx-auto";
   const toMailbox = () => navigate(createPageUrl("Mailbox"));
@@ -76,37 +89,59 @@ export default function FriendsTravels({ wide = false }) {
         <div className="flex gap-3 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "none" }}>
           {rows.map((r, i) => {
             const who = r.by?.name || (r.by?.handle ? `@${r.by.handle}` : "A traveler");
+            const card = r.type === "postcard" && r.photo;
             return (
-              <button key={i} type="button" onClick={toMailbox} className="flex-none text-left rounded-[14px] overflow-hidden"
-                style={{ width: "calc(190px*var(--fs))", background: "#fff", border: "1px solid rgba(22,17,13,.12)" }}>
-                {r.type === "postcard" && r.photo && (
-                  <img src={r.photo} alt="" loading="lazy" style={{ width: "100%", aspectRatio: "3 / 2", objectFit: "cover", display: "block" }} />
-                )}
-                <div className="px-3 py-2.5">
-                  <div className="truncate" style={{ fontFamily: MONO, fontSize: "calc(9.5px*var(--fs))", letterSpacing: ".06em", color: INK3, textTransform: "uppercase" }}>
-                    {who} · {when(r.created_at)}
+              <div key={i} className="flex-none relative" style={{ width: "calc(190px*var(--fs))" }}>
+                <button type="button" onClick={toMailbox} className="w-full h-full text-left rounded-[14px] overflow-hidden"
+                  style={{ background: "#fff", border: "1px solid rgba(22,17,13,.12)" }}>
+                  {card && (
+                    <img src={r.photo} alt="" loading="lazy" style={{ width: "100%", aspectRatio: "3 / 2", objectFit: "cover", display: "block" }} />
+                  )}
+                  <div className="px-3 py-2.5">
+                    <div className="truncate" style={{ fontFamily: MONO, fontSize: "calc(9.5px*var(--fs))", letterSpacing: ".06em", color: INK3, textTransform: "uppercase", paddingRight: card ? 0 : 26 }}>
+                      {who} · {when(r.created_at)}
+                    </div>
+                    {r.type === "postcard" ? (
+                      <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: "calc(15px*var(--fs))", color: INK, lineHeight: 1.25, marginTop: 3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                        {r.message ? `“${r.message}”` : `A postcard${r.place ? ` from ${r.place}` : ""}`}
+                      </div>
+                    ) : (
+                      <div style={{ fontFamily: SERIF, fontSize: "calc(16px*var(--fs))", color: INK, lineHeight: 1.2, marginTop: 3 }}>
+                        {r.kind === "airport" ? "landed at " : "stamped "}<b>{r.name}</b>
+                        {r.verified && <span title="Verified visit" style={{ color: GREEN, marginLeft: 5 }}>✓</span>}
+                      </div>
+                    )}
+                    {(r.city || r.country) && (
+                      <div className="truncate" style={{ fontFamily: MONO, fontSize: "calc(9.5px*var(--fs))", color: INK3, marginTop: 4, letterSpacing: ".04em" }}>
+                        {[r.city, r.country].filter(Boolean).join(", ").toUpperCase()}
+                      </div>
+                    )}
                   </div>
-                  {r.type === "postcard" ? (
-                    <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: "calc(15px*var(--fs))", color: INK, lineHeight: 1.25, marginTop: 3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                      {r.message ? `“${r.message}”` : `A postcard${r.place ? ` from ${r.place}` : ""}`}
-                    </div>
-                  ) : (
-                    <div style={{ fontFamily: SERIF, fontSize: "calc(16px*var(--fs))", color: INK, lineHeight: 1.2, marginTop: 3 }}>
-                      {r.kind === "airport" ? "landed at " : "stamped "}<b>{r.name}</b>
-                      {r.verified && <span title="Verified visit" style={{ color: GREEN, marginLeft: 5 }}>✓</span>}
-                    </div>
-                  )}
-                  {(r.city || r.country) && (
-                    <div className="truncate" style={{ fontFamily: MONO, fontSize: "calc(9.5px*var(--fs))", color: INK3, marginTop: 4, letterSpacing: ".04em" }}>
-                      {[r.city, r.country].filter(Boolean).join(", ").toUpperCase()}
-                    </div>
-                  )}
-                </div>
-              </button>
+                </button>
+                <button type="button" onClick={() => setTraveler(r)} aria-label={`Options for ${who}`} aria-haspopup="dialog"
+                  className="absolute top-0 right-0 w-11 h-11 flex items-center justify-center">
+                  <span className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,.92)", border: "1px solid rgba(22,17,13,.12)", color: INK3 }}>
+                    <MoreHorizontal size={15} aria-hidden="true" />
+                  </span>
+                </button>
+              </div>
             );
           })}
         </div>
       </div>
+      {traveler && (
+        <TravelerSheet
+          person={{ ...(traveler.by || {}), postcard_id: traveler.type === "postcard" ? traveler.id || null : null }}
+          list={list}
+          report={{
+            kind: traveler.type === "postcard" ? "postcard" : "stamp",
+            ...(traveler.type === "postcard" && traveler.id ? { ref: `pc:${traveler.id}` } : {}),
+            note: traveler.type === "postcard"
+              ? `Postcard on Home${traveler.place ? ` from ${traveler.place}` : ""}${traveler.message ? `: "${String(traveler.message).slice(0, 300)}"` : ""}`
+              : `Stamp on Home: ${traveler.name || ""}${traveler.city ? `, ${traveler.city}` : ""}`,
+          }}
+          onClose={() => setTraveler(null)} onChanged={() => { setTraveler(null); load(); }} />
+      )}
     </div>
   );
 }

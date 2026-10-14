@@ -1616,8 +1616,11 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Transports: ntfy push (free, instant) when NTFY_TOPIC is set; Twilio SMS too when
   TWILIO_SID/TWILIO_TOKEN/TWILIO_FROM/FOUNDER_PHONE are set.
 - **Activate (founder, two steps):**
-  1. `npx wrangler secret put NTFY_TOPIC` → paste: gs-bell-8eb3166e0b96b7ba
-  2. Install the "ntfy" app (App Store), + → Subscribe to topic → gs-bell-8eb3166e0b96b7ba
+  1. `npx wrangler secret put NTFY_TOPIC` → paste <your private topic> (make one with
+     `echo gs-bell-$(openssl rand -hex 16)`). The topic name is all anyone needs to read the
+     alerts and this repo is public: never write it here. (Redacted 2026-10-13; the topic
+     first written here must be retired.)
+  2. Install the "ntfy" app (App Store), + → Subscribe to topic → <your private topic>
   (For literal SMS later: make a twilio.com account, buy a number, complete US A2P
   registration, then set the four TWILIO_* secrets the same way.)
 - Daily true-download digest from App Store Connect / Play Console is possible as a
@@ -1683,3 +1686,76 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Gates: node --check, eslint, no-undef 0, build 0, boot-check ✅.
 - **Activate (founder):** `npx wrangler d1 execute globeskimmers-attractions --remote --file=scripts/institutions/data/load_institutions.sql`
   then push (worker deploys) and `npm run ota`.
+
+## 2026-10-12 — Suggest a Place to Stamp: crowd-sourced Local favorites (branch stamping-v2)
+- Founder: "Next in the queue is Suggest a Place to Stamp-- let's do this"; approved the 6-screen mockup
+  (https://claude.ai/artifact/7Q5HTErHgpe6eV1dgsArQu). Decisions: docs/PLANS.md (2026-10-10 + item (8)).
+- Worker: D1 tables ps_places / ps_votes / ps_likes in globeskimmers-events, created on first use (no SQL).
+  Routes /places/suggest/check, /places/suggest, /places/suggestions (near · liked · new · mine),
+  /places/suggestion, /places/like, /admin/place-suggestions (list · decide · csv), GET /ps-photo/<key>.
+  lf:<id> stamps: 150 m GPS circle at the approved pin, entity_type local_favorite, meta.local_favorite.count.
+  Purge block 1f (votes, R2 photos, likes). Side fix: the anti-spoof home-country read sends Accept-Profile.
+- App: Home section (phone + iPad) with a one-time "Your suggestion is now a stamp" note; Suggest form + thanks;
+  Suggested places; Local favorite page; Admin → Place suggestions with Excel; Local favorite stamp in the
+  booklet and its card; "See this place" on an lf stamp opens its page.
+- Fix (own commit): the passport booklet threw for every kind 'country' stamp — on main since 4285ad7.
+- Founder 2026-10-12: the Dream shelf row "Local favorites" is renamed "Customer favorites" (the worker's
+  /dream/shelf title), so "Local favorite" only ever means the crowd-sourced stamp. Live with the worker deploy.
+- Site: privacy policy + delete-account page cover suggestions (deploy with the merge to main).
+- Review (71 agents) fixes: /places/report + ps_reports (3 reports hide a place: status 'held'); admin
+  Reported tab with Remove ('removed') / Keep at any count; town derived server-side (psGeoAt, the
+  revgeoP_ cache); D1 daily counter ps_rate; lf stamps take the approved row's name/town/pin and start
+  private when sensitive; a forged entity_type local_favorite is cleared; purge removes places only that
+  person suggested; toasts are announced to screen readers.
+- Second review (52 agents) fixes: /ps-photo/ serves only open/approved places (1-day cache) and Remove deletes
+  the R2 photos; approve/decline only from 'open' (409 'stale'); public summaries round an open place's pin to 3
+  decimals and drop the locals/visitors split (admin keeps both + up to 6 photos); report insert + count in one
+  batch; a report on a no-longer-approved lf: stamp is filed (409 'not_listed'); PP_SENSITIVE_NAME gains
+  cathedral/basilica/shrine/masjid/gurdwara/mandir/monastery/abbey/pagoda/wat… plus CJK words.
+- Third round: the desk's photo links carry a one-hour signature so a held/declined place's photos show there
+  (private, no-store); "Add your home city" opens an on-page picker (the draft stays); Tab stays inside the report
+  sheet and photo viewers; a vanished place's like says so; StampActions shows the disclosure; CJK brackets break
+  cleanly; the share-story disclosure stays one line (~24 px of 1080).
+- Final verification (24 agents) fixes: PP_SENSITIVE_NOT back to HEAD's list + PP_LANDMARK_PHRASE (phrase-only
+  exceptions); PP_SENSITIVE_INTL (es/fr/de/it/pt) and more CJK/Thai words; psPubPin drives the shown pin, distance,
+  the near list's 60 km cut-off, its order and the SQL pre-cut; "Pin the centre" on the pin map; latest home pick wins.
+- Gates: node --check, eslint clean, no-undef (only the 5 pre-existing), build 0, boot-check ✅; worker harness
+  181/181 + real router; browser harnesses 143/143 (shared), 444/444 (form), 293/293 (lists); stamp layout: all
+  3,050 previously-fitting names unchanged, 72 overflows now fit, 0 kinsoku violations in 8,000 fuzzed layouts;
+  screens captured with mocked routes.
+- **Activate:** after Apple approves — merge stamping-v2 into main (worker + site deploy), check
+  /places/suggestions answers 200 with `places`, then `npm run ota`. No SQL to run.
+
+## 2026-10-13 — Website: new-look landing page + the business card's QR pages LIVE (main)
+- Founder chose landing version 1 ("Folders") under version 2's passport cover; previews were private artifacts.
+- Pushed to main (website only, no worker or migration paths): c702dcb landing page, 93c295a /get + /card
+  (cherry-pick of 0e22f4f), f616eaa /get copy ("Free on iPhone, and soon on Android": the Play listing is
+  still not public, HTTP 404). Deploy website run 38467081923 succeeded; no worker deploy ran.
+- Verified live: globeskimmers.io and www serve the new page; /card → /card/ → /get?src=card → /get/?src=card
+  (the query survives the trailing-slash 307); iPhone/iPad open the App Store, Android opens Google Play with
+  referrer utm_source=card&utm_medium=print, desktop shows both buttons. app-ads.txt still 200.
+- stamping-v2 carries the same three site files (d9aae38, 926a5ff), so the later merge is clean there.
+- **Activate:** when Android goes public on Play, change /get's line back to "Free on iPhone and Android" and the
+  landing page's "Coming soon on Android" boxes to a Google Play badge. Optional: paste the App Store Connect
+  campaign provider token into APPLE_PT in site/get/index.html to count card downloads.
+
+## 2026-10-13 — Go-live: the safety bundle, place suggestions and the admin dashboard (stamping-v2 → main)
+- Ships the worker and the website; no migration, wrangler or .github paths. stamping-v2 carries the place
+  suggestions and Local favorites (entries above), the buddy's standing pose (f198a12), the read-only admin
+  dashboard at globeskimmers.io/admin (e198b65; the founder added its Supabase redirect URL) and golive-fixes
+  (merge 8dcc347): age doors on every social door, the under-13 freeze and its clean-up, account deletion that
+  finishes and is retried by the daily cron (one 900-operation KV/R2 allowance per run), block_v2 with
+  Settings → Blocked travelers, capped alerts and safety records; follow and block lists that don't show which
+  @handles are adults', a sealed token instead of an account id in the Blocked list, one 30-a-day allowance
+  across every report door; and privacy, Terms and delete-account pages that say exactly what the code does.
+  The Terms' drafting note is gone (902a327, the founder's call).
+- Tests against the merged tree: the go-live suites 481/481, round 4 19/19 and the final verifier's 12 probes;
+  gates: node --check, eslint, NOUNDEF=0, build 0, boot-check ✅.
+- Founder checks 2026-10-13: api.user_follows.status is text with no CHECK (muted follows store);
+  0 profiles left from deleted accounts and 0 possibly under 13; Supabase's own auth audit log holds 299 rows
+  about deleted accounts (privacy names that log; clearing it is optional); Cloudflare is on Workers Paid
+  (the cron's few hundred subrequests fit).
+- **Activate:** after the push, watch deploy-workers and deploy-site and probe the API, /legal/terms (no
+  note) and /admin; then `npm run ota` (iOS and Android; one Capgo bundle). Then build 14 (`npm run cap:all`,
+  scripts/ios-launch-check.sh; it must carry 3a73df2's official Sign in with Apple logo). After the first cron
+  (15:00 UTC): KV gbidx:done is set and the purge: queue is small. No SQL to run.

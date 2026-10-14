@@ -10,7 +10,7 @@
 // Deliberately different from StampsNearYou:
 //   - NO includeSecrets — secrets are found by being there, never dreamed;
 //   - the REGION, not a circle around you (founder, 2026-10-08): three rows —
-//     Icons of <region>, Local favorites, Worth a day trip — the same from
+//     Icons of <region>, Customer favorites, Worth a day trip — the same from
 //     every suburb; DISTANCE under every card from where you are, in the
 //     traveler's unit (miles in mile countries, km elsewhere, Settings
 //     override wins). Water in between gets an honest ⛴ FERRY tag.
@@ -65,7 +65,7 @@ function DreamCard({ item, collected, sub, onOpen }) {
         onClick={onOpen}
         className="flex-none w-[150px] rounded-2xl overflow-hidden bg-white text-left border"
         style={{ borderColor: EDGE, boxShadow: "0 8px 20px -16px rgba(22,17,13,.4)" }}
-        aria-label={`Dream stamp: ${item.name}`}
+        aria-label={`Stamp shelf: ${item.name}`}
       >
         <div className="relative w-full" style={{ aspectRatio: "4 / 3", background: IVORY_2 }}>
           <img src={item.photoUrl} alt="" loading="lazy" onError={() => setPhotoFail(true)} className="w-full h-full object-cover" />
@@ -86,7 +86,7 @@ function DreamCard({ item, collected, sub, onOpen }) {
 
   const size = 104;
   return (
-    <button onClick={onOpen} className="flex-none text-center w-[150px]" aria-label={`Dream stamp: ${item.name}`}>
+    <button onClick={onOpen} className="flex-none text-center w-[150px]" aria-label={`Stamp shelf: ${item.name}`}>
       <div
         className="mx-auto flex items-center justify-center"
         style={{
@@ -133,8 +133,9 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
       try {
         // The REGION's shelf (founder, 2026-10-08): from Arcadia, Santa Clarita
         // or Van Nuys alike — Icons of Los Angeles (Disneyland to Six Flags),
-        // Local favorites (LACMA, the Original Farmers Market), Worth a day trip
-        // (San Diego Zoo, Legoland). No secrets: those are found by being there.
+        // Customer favorites (LACMA, the Original Farmers Market), Worth a day
+        // trip (San Diego Zoo, Legoland). The worker names the rows. No secrets:
+        // those are found by being there.
         // /passport/list marks what's collected (signed-out it's empty, never an error).
         const [shelf, pass] = await Promise.all([
           callWorker("dream/shelf", { latitude, longitude, cityName: cityName || "" }),
@@ -198,13 +199,16 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
   };
 
   return (
-    <div className="px-4 pb-3">
-      <div className="max-w-md mx-auto">
+    // md: overrides (2026-10-10): on the iPad Home the shelf now mounts too
+    // (HomeTablet), where the phone's max-w-md left it a narrow centered strip
+    // — let it fill the tablet container; phones are untouched.
+    <div className="px-4 md:px-0 pb-3">
+      <div className="max-w-md md:max-w-none mx-auto">
         <div className="mb-2 px-0.5">
           <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))]" style={{ color: MUTED }}>
             {city ? `${city} · ` : ""}{earned} of {all.length}
           </div>
-          <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1] mt-0.5" style={{ color: INK }}>Dream shelf</div>
+          <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1] mt-0.5" style={{ color: INK }}>Stamp shelf</div>
           {dataLine && (
             <div className="font-mono uppercase tracking-[0.08em] text-[calc(10px*var(--fs))] mt-1" style={{ color: MUTED }}>
               {dataLine}

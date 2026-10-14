@@ -30,6 +30,15 @@ const _store = {
 // Base44/Supabase round-trip (the old base44.auth.me() restore is dead on native).
 // First-time users with nothing saved fall through to the welcome / location-
 // picker flow on Home.
+// This app run. A GPS location carries the run it was read in, so one restored
+// from storage (an earlier run) is never mistaken for where the phone is now.
+const GPS_SESSION = Math.random().toString(36).slice(2);
+// True when `loc` is a GPS reading taken in this app run within `maxAgeMs`:
+// the only kind of location a crossing, airport or "you're here" prompt may
+// act on (founder, 2026-10-11 — never a picked place, never an old fix).
+export const isLiveFix = (loc, maxAgeMs = 30 * 60 * 1000) =>
+  !!loc && loc.session === GPS_SESSION && Number.isFinite(loc.fixedAt) && Date.now() - loc.fixedAt <= maxAgeMs;
+
 const LAST_LOC_KEY = 'gs_last_location_v1';
 const readLastLocation = () => { try { const r = localStorage.getItem(LAST_LOC_KEY); return r ? JSON.parse(r) : null; } catch { return null; } };
 const writeLastLocation = (loc) => { try { if (loc?.coordinates) localStorage.setItem(LAST_LOC_KEY, JSON.stringify(loc)); } catch { /* ignore */ } };
@@ -101,7 +110,10 @@ export function LocationProvider({ children }) {
       timeout: 10000,
       maximumAge: 0,
     });
-    const { latitude, longitude } = position.coords;
+    const { latitude, longitude, accuracy } = position.coords;
+    // When the phone took the reading (a network fallback can be minutes old),
+    // never later than now.
+    const readAt = Number.isFinite(position.timestamp) && position.timestamp > 0 ? Math.min(Date.now(), position.timestamp) : Date.now();
 
     let data = {};
     try {
@@ -120,12 +132,20 @@ export function LocationProvider({ children }) {
         // Region/state when the geocoder gives a distinct country (e.g. US:
         // state_or_country='California', country='United States'). Disambiguates
         // same-named cities (Arcadia CA vs Arcadia FL) for AI-content surfaces.
-        state: (data.country && data.state_or_country && data.state_or_country !== data.country) ? data.state_or_country : '',
+        // In the UK the region is the home nation (England, Scotland, Wales,
+        // Northern Ireland) — what the crossing prompt compares.
+        state: data.country === 'United Kingdom' && data.region ? data.region
+          : (data.country && data.state_or_country && data.state_or_country !== data.country) ? data.state_or_country : '',
         postalCode: '',
         country: data.country || data.state_or_country || '',
       },
-      coordinates: { latitude, longitude },
+      coordinates: { latitude, longitude, ...(Number.isFinite(accuracy) ? { accuracy } : {}) },
       placeType: 'current_location',
+      // A LIVE reading: taken at `fixedAt`, in this app session. The crossing,
+      // airport and "you're here" prompts act only on one (isLiveFix) — never
+      // on a restored last location (another session) or a picked place.
+      fixedAt: readAt,
+      session: GPS_SESSION,
     };
 
     setCurrentGpsLocation(gpsLocation);

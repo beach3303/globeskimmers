@@ -61,6 +61,10 @@ export async function resolveHomePlace(result) {
 
   return {
     city: city || country,
+    // The state or region, so two same-named cities read differently
+    // ("Pasadena, TX" vs "Pasadena, California") where a pick is named
+    // (2026-10-12). Callers store only the fields they name.
+    state: result?.address?.state || result?.address?.region || '',
     country,
     latitude,
     longitude,

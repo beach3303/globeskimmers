@@ -11,13 +11,18 @@
  * (page views, search queries, zero-result rates, dish gallery usage).
  */
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
-import { exportCsv } from '@/lib/adminExport';
+import { exportCsv, saveCsvText } from '@/lib/adminExport';
 import { callWorker } from '@/lib/callWorker';
+import { openPartner } from '@/lib/openPartner';
 import { createPageUrl } from '@/utils';
-import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap, Users, UserCheck, Mail } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Activity, Eye, Search, AlertTriangle, Sparkles, DollarSign, Zap, Users, UserCheck, Mail, MapPin, MapPinPlus, Cake } from 'lucide-react';
 import { isAdminEmail } from '@/lib/admins';
+import { ageOnDate } from '@/lib/ageGate';
+import { adminPlaceSuggestions, REPORT_REASONS, REVIEW_AT } from '@/lib/suggestions';
+import { showToast } from '@/components/Toast';
+import { PhotoView } from '@/components/home/SuggestPlaceSection';
 import OfficialSeal from '@/components/passport/OfficialSeal';
 
 const SEAL_TIER_LABEL = { gold: 'Gold · Honored', burgundy: 'Burgundy · Official', teal: 'Teal · GlobeSkimmers team', 'sunshine-heart': 'Sunshine ♥ · Friends & Family', 'sunshine-star': 'Sunshine ★ · Friends & Family' };
@@ -272,6 +277,18 @@ function VirtualItemsReport() {
 
 // One traveler's activity record, pulled on demand (founder, 2026-10-05) —
 // for legal requests and audits only. Computed when asked; nothing is stored.
+// The record and its spreadsheet are shared with the Newest members rows.
+function travelerCsv(res) {
+  const vi = res.virtual_items;
+  const viRows = vi ? [
+    ...(vi.laptop ? [['', 'virtual item', 'laptop', `${vi.laptop.color} · ${vi.laptop.stickers} stickers`]] : []),
+    ...(vi.drink ? [['', 'virtual item', vi.drink.variant, `${vi.drink.color} · ${vi.drink.stickers} stickers`]] : []),
+    ...(vi.buddies || []).map((bd) => ['', 'travel buddy', `${bd.species}/${bd.breed}`, bd.coat || '']),
+  ] : [];
+  exportCsv(`globeskimmers-traveler-${(res.handle || res.user_id).replace(/[^a-z0-9_-]/gi, '')}-${today()}.csv`,
+    ['date', 'activity', 'place', 'detail'], [...(res.timeline || []).map((t) => [t.date, t.type, t.name, t.detail]), ...viRows]);
+}
+
 function TravelerPull() {
   const [q, setQ] = React.useState('');
   const [busy, setBusy] = React.useState(false);
@@ -283,7 +300,6 @@ function TravelerPull() {
     setBusy(false);
     setRes(error || data?.error ? { error: error || data.error } : data);
   };
-  const years = res && !res.error ? [...new Set(Object.values(res.byYear).flatMap((o) => Object.keys(o)))].sort() : [];
   return (
     <Section title="🔎 Traveler activity — audit pull" icon={Eye}>
       <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>On-demand only (legal requests, audits). Handle or user id; nothing is saved from this view.</div>
@@ -292,48 +308,671 @@ function TravelerPull() {
           style={{ flex: 1, border: `1px solid ${COLORS.border || '#ddd'}`, borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
         <button type="button" onClick={pull} disabled={busy || !q.trim()} style={{ borderRadius: 8, padding: '8px 14px', fontWeight: 600, fontSize: 13, background: COLORS.dark, color: '#fff', border: 'none', opacity: busy ? 0.6 : 1 }}>{busy ? 'Pulling…' : 'Pull'}</button>
         {res && !res.error && (
-          <button type="button" style={xbtn} onClick={() => {
-            const vi = res.virtual_items;
-            const viRows = vi ? [
-              ...(vi.laptop ? [['', 'virtual item', 'laptop', `${vi.laptop.color} · ${vi.laptop.stickers} stickers`]] : []),
-              ...(vi.drink ? [['', 'virtual item', vi.drink.variant, `${vi.drink.color} · ${vi.drink.stickers} stickers`]] : []),
-              ...(vi.buddies || []).map((bd) => ['', 'travel buddy', `${bd.species}/${bd.breed}`, bd.coat || '']),
-            ] : [];
-            exportCsv(`globeskimmers-traveler-${(res.handle || res.user_id).replace(/[^a-z0-9_-]/gi, '')}-${today()}.csv`,
-              ['date', 'activity', 'place', 'detail'], [...(res.timeline || []).map((t) => [t.date, t.type, t.name, t.detail]), ...viRows]);
-          }}>⬇ CSV</button>
+          <button type="button" style={xbtn} onClick={() => travelerCsv(res)}>⬇ CSV</button>
         )}
       </div>
       {res?.error && <div style={{ color: '#B0472F', fontSize: 13, marginTop: 8 }}>{res.error}</div>}
-      {res && !res.error && (
-        <div style={{ marginTop: 10, fontSize: 13, color: COLORS.dark }}>
-          <div style={{ fontWeight: 700 }}>{res.handle ? `@${res.handle}` : res.user_id}</div>
-          <table style={{ marginTop: 6, borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums' }}>
-            <thead><tr><th style={{ textAlign: 'left', paddingRight: 14 }}></th>{years.map((y) => <th key={y} style={{ textAlign: 'right', paddingRight: 14 }}>{y}</th>)}<th style={{ textAlign: 'right' }}>All</th></tr></thead>
-            <tbody>
-              {[['Stamps', 'stamps'], ['Guestbook notes', 'guestbook_notes'], ['Dish photos', 'dish_photos'], ['Owner messages', 'owner_messages']].map(([label, k]) => (
-                <tr key={k}><td style={{ paddingRight: 14, color: COLORS.gray }}>{label}</td>{years.map((y) => <td key={y} style={{ textAlign: 'right', paddingRight: 14 }}>{res.byYear[k]?.[y] || 0}</td>)}<td style={{ textAlign: 'right', fontWeight: 700 }}>{res.totals[k === 'stamps' ? 'stamps' : k]}</td></tr>
-              ))}
-            </tbody>
-          </table>
-          {res.virtual_items && (
-            <div style={{ marginTop: 8, fontSize: 12.5 }}>
-              <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>Virtual items</div>
-              {res.virtual_items.laptop && <span>💻 {res.virtual_items.laptop.color} laptop ({res.virtual_items.laptop.stickers} stickers) &nbsp;</span>}
-              {res.virtual_items.drink && <span>🥤 {res.virtual_items.drink.color} {res.virtual_items.drink.variant} ({res.virtual_items.drink.stickers} stickers) &nbsp;</span>}
-              {(res.virtual_items.buddies || []).length > 0 && <span>🐾 {res.virtual_items.buddies.map((bd) => `${bd.breed || bd.species}${bd.coat ? ` (${bd.coat})` : ''}`).join(', ')}</span>}
-            </div>
-          )}
-          {res.airport_sequence?.length > 0 && (
-            <div style={{ marginTop: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>Airport sequence</div>
-              <div style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12.5, lineHeight: 1.7 }}>
-                {res.airport_sequence.map((a, i) => <span key={i}>{a.date} {a.iata}{a.direction ? (a.direction === 'departure' ? ' ⬈ out' : ' ⬊ in') : ''}{a.verified === 'gps' ? ' ✓' : ''}{i < res.airport_sequence.length - 1 ? '  →  ' : ''}</span>)}
-              </div>
-            </div>
-          )}
+      {res && !res.error && <TravelerRecord res={res} title={res.handle ? `@${res.handle}` : res.user_id} />}
+    </Section>
+  );
+}
+
+// The per-year counts, virtual items and airport sequence of one pulled record.
+function TravelerRecord({ res, title, style }) {
+  const years = [...new Set(Object.values(res.byYear).flatMap((o) => Object.keys(o)))].sort();
+  return (
+    <div style={{ marginTop: 10, fontSize: 13, color: COLORS.dark, ...style }}>
+      {title && <div style={{ fontWeight: 700 }}>{title}</div>}
+      <table style={{ marginTop: 6, borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums' }}>
+        <thead><tr><th style={{ textAlign: 'left', paddingRight: 14 }}></th>{years.map((y) => <th key={y} style={{ textAlign: 'right', paddingRight: 14 }}>{y}</th>)}<th style={{ textAlign: 'right' }}>All</th></tr></thead>
+        <tbody>
+          {[['Stamps', 'stamps'], ['Guestbook notes', 'guestbook_notes'], ['Dish photos', 'dish_photos'], ['Owner messages', 'owner_messages']].map(([label, k]) => (
+            <tr key={k}><td style={{ paddingRight: 14, color: COLORS.gray }}>{label}</td>{years.map((y) => <td key={y} style={{ textAlign: 'right', paddingRight: 14 }}>{res.byYear[k]?.[y] || 0}</td>)}<td style={{ textAlign: 'right', fontWeight: 700 }}>{res.totals[k === 'stamps' ? 'stamps' : k]}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      {res.virtual_items && (
+        <div style={{ marginTop: 8, fontSize: 12.5 }}>
+          <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>Virtual items</div>
+          {res.virtual_items.laptop && <span>💻 {res.virtual_items.laptop.color} laptop ({res.virtual_items.laptop.stickers} stickers) &nbsp;</span>}
+          {res.virtual_items.drink && <span>🥤 {res.virtual_items.drink.color} {res.virtual_items.drink.variant} ({res.virtual_items.drink.stickers} stickers) &nbsp;</span>}
+          {(res.virtual_items.buddies || []).length > 0 && <span>🐾 {res.virtual_items.buddies.map((bd) => `${bd.breed || bd.species}${bd.coat ? ` (${bd.coat})` : ''}`).join(', ')}</span>}
         </div>
       )}
+      {res.airport_sequence?.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>Airport sequence</div>
+          <div style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12.5, lineHeight: 1.7 }}>
+            {res.airport_sequence.map((a, i) => <span key={i}>{a.date} {a.iata}{a.direction ? (a.direction === 'departure' ? ' ⬈ out' : ' ⬊ in') : ''}{a.verified === 'gps' ? ' ✓' : ''}{i < res.airport_sequence.length - 1 ? '  →  ' : ''}</span>)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Newest members (founder, 2026-10-13). The team's alerts carry a member
+// number, never a name (privacy policy §2): this card is where the number
+// becomes a person. An alert's tap opens this page at ?member=<n>, and that
+// member's row is highlighted and scrolled to; a member older than the newest
+// 50 is fetched by number and shown first. Their activity opens only when the
+// row itself is tapped: it is the audit pull's record (private stamps
+// included), for support, safety or legal requests, never on a routine alert.
+// The worker numbers members in sign-up order (#1 first), never gives a
+// number to anyone else, and sends no emails here.
+const MEMBER_PROVIDER = { apple: 'Apple', google: 'Google', email: 'Email', facebook: 'Facebook' };
+const MEMBERS_FIRST = 10;   // rows shown before "Show all"
+const memberProvider = (p) => {
+  const k = String(p || '').trim();
+  return MEMBER_PROVIDER[k.toLowerCase()] || (k && k[0].toUpperCase() + k.slice(1));
+};
+// "Oct 13, 9:41 AM" in the phone's own time; the year only when it isn't this one.
+const memberJoined = (iso) => {
+  const d = new Date(iso || '');
+  if (Number.isNaN(d.getTime())) return '';
+  const year = d.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' };
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', ...year, hour: 'numeric', minute: '2-digit' });
+};
+function NewestMembers({ focus, refreshKey }) {
+  // A failed load keeps the rows that were there and says so. older = the
+  // alert's member when they aren't among the newest; numbered = false when
+  // the worker can't give numbers right now.
+  const [st, setSt] = React.useState({ members: [], older: null, numbered: true, error: null, loaded: false });
+  const [showAll, setShowAll] = React.useState(false);
+  const [open, setOpen] = React.useState(null);          // { id, busy } | { id, res }: the row showing its activity
+  const [scrollTo, setScrollTo] = React.useState(null);  // a row to bring into view once it's on screen
+  const pullSeq = React.useRef(0);
+  const rowEls = React.useRef({});
+  const picked = React.useRef(null);                     // the ?member= already picked out
+  const pull = async (m) => {
+    const my = ++pullSeq.current;
+    setOpen({ id: m.user_id, busy: true });
+    const { data, error } = await callWorker('admin/user-activity', { q: m.user_id });
+    if (my !== pullSeq.current) return; // another row was tapped, or this one was closed
+    const err = error || data?.error || (data ? null : 'No record came back');
+    setOpen({ id: m.user_id, res: err ? { error: err } : data });
+  };
+  const toggle = (m) => {
+    if (open?.id === m.user_id) { pullSeq.current += 1; setOpen(null); return; }
+    pull(m);
+  };
+  // Loads on open, on the page's Refresh, and when an alert brings a new
+  // ?member= while the page is already open (that member may be newer than
+  // the rows on screen). The worker is asked for that member by number, so
+  // one older than the newest 50 comes back too. Each ?member= is picked out
+  // once — a Refresh doesn't scroll back to it.
+  React.useEffect(() => {
+    let live = true;
+    (async () => {
+      const { data, error } = await callWorker('admin/members', focus != null ? { n: focus } : {});
+      if (!live) return;
+      const err = error || data?.error || null;
+      if (err) { setSt((s) => ({ ...s, error: err, loaded: true })); return; }
+      const members = Array.isArray(data?.members) ? data.members : [];
+      const older = data?.focus?.user_id && !members.some((m) => m.user_id === data.focus.user_id) ? data.focus : null;
+      setSt({ members, older, numbered: data?.numbered !== false, error: null, loaded: true });
+      if (focus == null || picked.current === focus) return;
+      picked.current = focus;
+      const i = members.findIndex((m) => Number(m.n) === focus);
+      if (i >= MEMBERS_FIRST) setShowAll(true);
+      const target = i >= 0 ? members[i] : older && Number(older.n) === focus ? older : null;
+      if (target) setScrollTo(target.user_id);
+    })();
+    return () => { live = false; };
+  }, [focus, refreshKey]);
+  React.useEffect(() => {
+    const el = scrollTo && rowEls.current[scrollTo];
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setScrollTo(null);
+  }, [scrollTo, showAll, st.members, st.older]);
+  const shown = showAll ? st.members : st.members.slice(0, MEMBERS_FIRST);
+  const found = st.members.some((m) => Number(m.n) === focus) || Number(st.older?.n) === focus;
+  const missing = focus != null && st.loaded && !st.error && st.members.length > 0 && !found;
+  const row = (m, note) => {
+    const hit = focus != null && Number(m.n) === focus;
+    const isOpen = open?.id === m.user_id;
+    const joined = memberJoined(m.joined);
+    const more = [m.handle ? `@${String(m.handle).replace(/^@/, '')}` : null, memberProvider(m.provider), m.country, joined && `joined ${joined}`].filter(Boolean);
+    return (
+      <div key={m.user_id} ref={(el) => { rowEls.current[m.user_id] = el; }}
+        style={{ margin: '0 -8px', padding: '0 8px', borderTop: `1px solid ${COLORS.border}`, background: hit ? `${COLORS.accent}15` : 'transparent', boxShadow: hit ? `inset 3px 0 0 ${COLORS.accent}` : 'none' }}>
+        {note && <div style={{ paddingTop: 8, fontSize: 11, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.accent }}>{note}</div>}
+        <button type="button" onClick={() => toggle(m)} aria-expanded={isOpen}
+          style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: note ? '4px 0 10px' : '10px 0', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.45, color: COLORS.gray }}>
+          <span style={{ fontWeight: 700, color: COLORS.dark }}>{m.n != null ? `#${m.n} · ` : ''}{m.name || 'No name yet'}</span>
+          {more.map((x) => ` · ${x}`).join('')}
+        </button>
+        {isOpen && (
+          <div style={{ paddingBottom: 12 }}>
+            {open.busy && <div style={{ fontSize: 12.5, color: COLORS.gray }}>Pulling…</div>}
+            {open.res?.error && <div style={{ fontSize: 12.5, color: COLORS.red }}>{open.res.error}</div>}
+            {open.res && !open.res.error && (
+              <>
+                <TravelerRecord res={open.res} style={{ marginTop: 0 }} />
+                <button type="button" style={{ ...xbtn, marginTop: 8 }} onClick={() => travelerCsv(open.res)}>⬇ CSV</button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+  return (
+    <Section title="🆕 Newest members" icon={Users}>
+      <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>Your alerts show a member number, never a name. Here&rsquo;s who each number is. Tap a row to pull their activity, for support, safety or legal requests only.</div>
+      {st.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>Couldn&rsquo;t load members: {st.error}</div>}
+      {st.loaded && !st.error && !st.numbered && <div style={{ fontSize: 12, color: COLORS.amber, marginBottom: 8 }}>Member numbers aren&rsquo;t available right now. Tap Refresh to try again.</div>}
+      {missing && st.numbered && <div style={{ fontSize: 12, color: COLORS.amber, marginBottom: 8 }}>No account has member #{focus} now. It may have been deleted.</div>}
+      {!st.loaded && <div style={{ fontSize: 13, color: COLORS.gray, padding: '12px 0' }}>Loading…</div>}
+      {st.loaded && !st.error && st.members.length === 0 && <div style={{ fontSize: 13, color: COLORS.gray, padding: '12px 0' }}>No members yet.</div>}
+      {st.older && row(st.older, `From your alert · not among the newest ${st.members.length}`)}
+      {shown.map((m) => row(m))}
+      {st.members.length > MEMBERS_FIRST && (
+        <button type="button" onClick={() => setShowAll((v) => !v)}
+          style={{ marginTop: 10, fontSize: 12, fontWeight: 600, color: COLORS.accent, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+          {showAll ? `Show the newest ${MEMBERS_FIRST}` : `Show all ${st.members.length}`}
+        </button>
+      )}
+    </Section>
+  );
+}
+
+// Age appeal (go-live decision 8, 2026-10-13). A birthday under 13 freezes an
+// account, and the daily clean-up deletes its content after 7 days. An adult
+// who mistyped writes to founder@ from the frozen screen; that mail carries
+// the account id. Paste it here with the corrected birthday: the worker
+// (/admin/age-appeal, admin only) recomputes the tier from it and lifts the
+// freeze. It restores access only: anything already deleted stays deleted.
+// A birthday that is still under 13 is refused here, before anything is sent.
+// The mail's body can be edited by its sender and account ids aren't secret,
+// so Review first looks the account up (lookup: true — its email, stored
+// birthday, tier, frozen since) and Restore waits for a tick that the mail
+// came from that address. The worker corrects only a frozen or unconfirmed
+// account unless "correct it anyway" is ticked (override: an adult who
+// mistyped a teen birthday).
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const APPEAL_TIER = {
+  adult: 'Access restored · adult',
+  teen: 'Access restored · teen hold: travel tools and a private passport, no social until 18',
+  blocked: 'Still under 13 · the account stays frozen',
+  confirm: 'Saved · the app will ask for the month and day',
+};
+const longDate = (y, md) => new Date(Date.UTC(y, Number(md.slice(0, 2)) - 1, Number(md.slice(3, 5)))).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+const shortDay = (iso) => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null; };
+function AgeAppealDesk() {
+  const [idText, setIdText] = React.useState('');
+  const [dob, setDob] = React.useState('');          // 'YYYY-MM-DD' from the date field
+  const [asking, setAsking] = React.useState(false); // the confirm step is showing
+  const [busy, setBusy] = React.useState(false);
+  const [res, setRes] = React.useState(null);        // { tier, id } | { error }
+  const [look, setLook] = React.useState(null);      // the lookup: { email, tier, birth_year, birth_md, frozen_at, purged_at } | { error }
+  const [fromThem, setFromThem] = React.useState(false); // "The appeal mail came from this address"
+  const [anyway, setAnyway] = React.useState(false);     // "correct it anyway" (override) for an account that isn't frozen
+  const id = (UUID_RE.exec(idText) || [''])[0].toLowerCase(); // a pasted "Account ID: …" line works too
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob);
+  const year = parts ? Number(parts[1]) : null;
+  const md = parts ? `${parts[2]}-${parts[3]}` : null;
+  const age = parts ? ageOnDate(year, md) : null;
+  const tooYoung = age != null && age < 13;
+  const ready = !!id && age != null && !tooYoung && !busy;
+  const edit = (fn) => (e) => { fn(e.target.value); setAsking(false); setRes(null); setLook(null); setFromThem(false); setAnyway(false); };
+  // An appeal is for a frozen account (or one with a birth year to confirm);
+  // anything else is changed only on purpose.
+  const frozenNow = !!look && !look.error && (look.tier === 'blocked' || look.tier === 'confirm' || !!look.frozen_at);
+  const canRestore = !!look && !look.error && fromThem && (frozenNow || anyway) && !busy;
+  const review = async () => {
+    if (!ready) return;
+    setBusy(true); setRes(null); setLook(null); setFromThem(false); setAnyway(false);
+    const { data, error } = await callWorker('admin/age-appeal', { user_id: id, lookup: true });
+    setBusy(false);
+    const err = error || data?.error || (data?.ok ? null : 'No answer came back');
+    setLook(err ? { error: err } : data);
+    setAsking(true);
+  };
+  const send = async () => {
+    if (!ready || !canRestore) return;
+    setBusy(true); setRes(null);
+    const { data, error } = await callWorker('admin/age-appeal', { user_id: id, birth_year: year, birth_md: md, ...(frozenNow ? {} : { override: true }) });
+    setBusy(false); setAsking(false); setLook(null); setFromThem(false); setAnyway(false);
+    const err = error || data?.error || (data?.ok ? null : 'No answer came back');
+    if (err) { setRes({ error: err }); return; }
+    setRes({ tier: data.tier || null, id });
+    setIdText(''); setDob('');
+  };
+  const field = { minHeight: 44, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '8px 10px', fontSize: 13, fontFamily: 'inherit', color: COLORS.dark, background: '#fff' };
+  const primary = { minHeight: 44, borderRadius: 8, padding: '8px 14px', fontWeight: 600, fontSize: 13, background: COLORS.dark, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit' };
+  return (
+    <Section title="🎂 Age appeal" icon={Cake}>
+      <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10, lineHeight: 1.5 }}>
+        For an adult who mistyped a birthday under 13 and wrote in from the frozen screen. Paste the account ID from their mail and the corrected birthday.
+        This lifts the freeze and restores access only: anything the 7-day clean-up already deleted stays deleted.
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <input value={idText} onChange={edit(setIdText)} placeholder="Account ID" aria-label="Account ID from the appeal mail" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+          style={{ ...field, flex: '1 1 220px', minWidth: 0, fontFamily: 'ui-monospace, Menlo, monospace' }} />
+        <input type="date" value={dob} onChange={edit(setDob)} aria-label="Corrected birthday" min="1900-01-01" max={today()}
+          style={{ ...field, flex: '0 1 170px' }} />
+        {!asking && (
+          <button type="button" onClick={review} disabled={!ready} style={{ ...primary, opacity: ready ? 1 : 0.5, cursor: ready ? 'pointer' : 'default' }}>{busy ? 'Looking up…' : 'Review'}</button>
+        )}
+      </div>
+      {idText.trim() && !id && <div role="alert" style={{ fontSize: 12, color: COLORS.red, marginTop: 6 }}>That isn&rsquo;t an account ID. It looks like 8-4-4-4-12 letters and digits.</div>}
+      {tooYoung && <div role="alert" style={{ fontSize: 12, color: COLORS.red, marginTop: 6 }}>That birthday is under 13 too, so an appeal can&rsquo;t restore access. The account stays frozen.</div>}
+      {asking && ready && look?.error && (
+        <div role="alert" style={{ marginTop: 10, fontSize: 12.5, color: COLORS.red }}>
+          Couldn&rsquo;t look that account up: {look.error}{' '}
+          <button type="button" onClick={() => { setAsking(false); setLook(null); }} style={{ ...xbtn, minHeight: 44, padding: '8px 14px', fontSize: 13, marginLeft: 6 }}>Back</button>
+        </div>
+      )}
+      {asking && ready && look && !look.error && (
+        <div role="group" aria-label="Confirm the appeal" style={{ marginTop: 10, padding: 12, borderRadius: 10, background: `${COLORS.accent}0D`, border: `1px solid ${COLORS.accent}33` }}>
+          <div style={{ fontSize: 12.5, color: COLORS.gray, lineHeight: 1.5 }}>
+            <b style={{ color: COLORS.dark }}>{look.email || 'No email on the account'}</b>
+            {' · stored birthday '}{look.birth_year || '????'}-{look.birth_md || '??-??'}
+            {' · '}{look.tier === 'blocked' ? 'frozen (under 13)' : look.tier === 'confirm' ? 'birth year to confirm' : look.tier || 'no tier'}
+            {look.frozen_at ? ` · frozen since ${shortDay(look.frozen_at)}` : ''}
+            {look.purged_at ? ` · content deleted ${shortDay(look.purged_at)}` : ''}
+          </div>
+          <div style={{ fontSize: 13, color: COLORS.dark, lineHeight: 1.5, marginTop: 6 }}>
+            Restore access for <code style={{ fontSize: 12 }}>{id}</code>, born {longDate(year, md)} (age {age}{age < 18 ? ': teen hold' : ''})?
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 44, fontSize: 13, color: COLORS.dark, cursor: 'pointer' }}>
+            <input type="checkbox" checked={fromThem} onChange={(e) => setFromThem(e.target.checked)} style={{ width: 18, height: 18 }} />
+            The appeal mail came from this address
+          </label>
+          {!frozenNow && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 44, fontSize: 13, color: COLORS.red, cursor: 'pointer' }}>
+              <input type="checkbox" checked={anyway} onChange={(e) => setAnyway(e.target.checked)} style={{ width: 18, height: 18 }} />
+              This account isn&rsquo;t frozen. Correct its birthday anyway
+            </label>
+          )}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button type="button" onClick={send} disabled={!canRestore} style={{ ...primary, opacity: canRestore ? 1 : 0.5, cursor: canRestore ? 'pointer' : 'default' }}>{busy ? 'Restoring…' : frozenNow ? 'Yes, restore access' : 'Yes, correct the birthday'}</button>
+            <button type="button" onClick={() => { setAsking(false); setLook(null); setFromThem(false); setAnyway(false); }} disabled={busy} style={{ ...xbtn, minHeight: 44, padding: '8px 14px', fontSize: 13 }}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {res?.error && <div role="alert" style={{ fontSize: 12.5, color: COLORS.red, marginTop: 8 }}>Couldn&rsquo;t send the appeal: {res.error}</div>}
+      {res?.tier !== undefined && !res?.error && (
+        <div role="status" style={{ fontSize: 12.5, color: res.tier === 'blocked' ? COLORS.red : COLORS.green, marginTop: 8, fontWeight: 600 }}>
+          {APPEAL_TIER[res.tier] || `Saved · tier ${res.tier || 'unknown'}`} <span style={{ color: COLORS.gray, fontWeight: 400 }}>({res.id})</span>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// "I'm here, but the app is saying I'm not" (founder, 2026-10-10): every tap,
+// newest first — the place, how far GPS put the traveler from our pin and the
+// allowed distance, GPS accuracy, the spot rounded to about a city block (none
+// for minors), phone and app version, an anonymous user code — with a status
+// to work the list down (the stamp was granted either way). Under it, the
+// quiet refusals per place (30 days, no positions), and an Excel download.
+const SR_WHY = { not_here: 'Outside our map for this place', other_variant: 'At another park or rim of this place', proof_needed: 'No GPS reading', unlocatable: 'Place not on our map', unconfirmed: 'GPS not trusted (VPN or travel speed)' };
+const SR_TONE = { new: COLORS.amber, fixed: COLORS.green, ignored: COLORS.gray };
+function StampReportsDesk({ refreshKey }) {
+  const [openOnly, setOpenOnly] = React.useState(true);
+  // ok: the numbers on screen came from a successful load (a failed one keeps
+  // what was there and says so — never "0 new").
+  const [st, setSt] = React.useState({ reports: [], total: 0, open: 0, refusals: [], error: null, loaded: false, ok: false });
+  const [csvBusy, setCsvBusy] = React.useState(false);
+  const [statusBusy, setStatusBusy] = React.useState(null);
+  const [actionError, setActionError] = React.useState(null);   // an export or status change that failed
+  const [note, setNote] = React.useState(null);
+  const seq = React.useRef(0);
+  const openRef = React.useRef(openOnly);
+  openRef.current = openOnly;
+  const load = async () => {
+    const my = ++seq.current;
+    const { data, error } = await callWorker('admin/stamp-reports', { op: 'list', open: openRef.current, limit: 200 });
+    if (my !== seq.current) return; // a newer load (the other filter, a refresh) owns the screen
+    const err = error || data?.error || null;
+    if (err) { setSt((s) => ({ ...s, error: err, loaded: true })); return; }
+    setSt({ reports: data?.reports || [], total: data?.total || 0, open: data?.open || 0, refusals: data?.refusals_30d || [], error: null, loaded: true, ok: true });
+  };
+  React.useEffect(() => { load(); }, [openOnly, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Switching the filter clears the list until the new one arrives, so the
+  // other filter's rows (or a false "No reports yet") never show under it.
+  const showOpen = (v) => {
+    if (v === openOnly) return;
+    setSt((s) => ({ ...s, reports: [], loaded: false }));
+    setOpenOnly(v);
+  };
+  const setStatus = async (id, status) => {
+    setStatusBusy(id); setActionError(null);
+    const { data, error } = await callWorker('admin/stamp-reports', { op: 'status', id, status });
+    setStatusBusy(null);
+    if (error || data?.error) { setActionError(`Couldn’t update that report: ${error || data.error}`); return; }
+    load();
+  };
+  const download = async () => {
+    if (csvBusy) return;
+    setCsvBusy(true); setNote(null); setActionError(null);
+    const { data, error } = await callWorker('admin/stamp-reports', { op: 'csv', as: 'json' }, { timeoutMs: 60000 });
+    if (error || !data?.csv) { setCsvBusy(false); setActionError(`Couldn’t export: ${error || data?.error || 'no file came back'}`); return; }
+    if (data.truncated) setNote(`The file holds the newest ${data.rows} reports — there are more than that.`);
+    try { await saveCsvText(data.filename || `stamp-reports-${today()}.csv`, data.csv); }
+    catch (e) { setActionError(`Couldn’t save the file: ${e?.message || e}`); }
+    finally { setCsvBusy(false); }
+  };
+  const when = (iso) => String(iso || '').slice(0, 16).replace('T', ' ');
+  const link = { fontSize: 12, background: 'none', border: 'none', padding: 0, cursor: 'pointer' };
+  const placeTotal = (q) => (q.refusals || 0) + (q.reported || 0);
+  const maxQuiet = Math.max(1, ...st.refusals.map(placeTotal));
+  return (
+    <Section title={`📍 “I’m here, but the app is saying I’m not” — ${st.ok ? st.open : '—'} new`} icon={MapPin}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <button type="button" style={{ ...xbtn, background: openOnly ? COLORS.dark : '#fff', color: openOnly ? '#fff' : '#3A3128' }} onClick={() => showOpen(true)}>New only</button>
+        <button type="button" style={{ ...xbtn, background: !openOnly ? COLORS.dark : '#fff', color: !openOnly ? '#fff' : '#3A3128' }} onClick={() => showOpen(false)}>All{st.ok ? ` ${st.total}` : ''}</button>
+        <button type="button" style={xbtn} onClick={load} aria-label="Reload the list">↻</button>
+        <button type="button" style={{ ...xbtn, marginLeft: 'auto' }} onClick={download} disabled={csvBusy}>{csvBusy ? 'Preparing…' : '⬇ Excel (CSV)'}</button>
+      </div>
+      <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>Every tap is here — the stamp was granted either way. Fix the place&rsquo;s map, then mark it fixed.</div>
+      {st.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>Couldn&rsquo;t load the latest: {st.error}</div>}
+      {actionError && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{actionError}</div>}
+      {note && <div style={{ fontSize: 12, color: COLORS.amber, marginBottom: 8 }}>{note}</div>}
+      {!st.loaded && !st.error && <div style={{ fontSize: 13, color: COLORS.gray, padding: '12px 0' }}>Loading…</div>}
+      {st.loaded && st.ok && !st.error && st.reports.length === 0 && (
+        <div style={{ fontSize: 13, color: COLORS.gray, padding: '12px 0' }}>
+          {openOnly && st.total > 0 ? `Nothing new — all ${st.total} handled.` : 'No reports yet. When GPS refuses a stamp and the traveler taps “I’m here, but the app is saying I’m not”, it lands here.'}
+        </div>
+      )}
+      {st.reports.map((r) => (
+        <div key={r.id} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border}` }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', fontSize: 13 }}>
+            <span style={{ fontWeight: 700, color: COLORS.dark }}>{r.place_name}</span>
+            <span style={{ color: COLORS.gray, fontSize: 12 }}>{[r.city, r.country].filter(Boolean).join(', ')}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: SR_TONE[r.status] || COLORS.gray }}>{r.status}</span>
+            <span style={{ color: COLORS.gray, marginLeft: 'auto', fontSize: 12 }}>{when(r.created_at)} UTC</span>
+          </div>
+          <div style={{ fontSize: 12.5, color: COLORS.dark, marginTop: 4 }}>
+            {SR_WHY[r.refusal] || r.refusal || 'GPS passed on retry'}
+            {r.distance_m != null ? ` · ${r.distance_m} m from our pin` : ''}
+            {r.radius_m != null ? ` (allowed ${r.radius_m} m)` : ''}
+            {r.accuracy_m != null ? ` · GPS ±${r.accuracy_m} m` : ''}
+          </div>
+          <div style={{ fontSize: 12, color: COLORS.gray, marginTop: 2 }}>
+            {[r.outcome, [r.platform, r.app_version].filter(Boolean).join(' '), r.user_code ? `user ${r.user_code}` : null, r.entity_id].filter(Boolean).join(' · ')}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 6 }}>
+            {r.spot_lat != null && r.spot_lng != null && (
+              <button type="button" style={{ ...link, color: COLORS.accent }} onClick={() => openPartner(`https://www.google.com/maps/search/?api=1&query=${r.spot_lat},${r.spot_lng}`)}>Spot on the map (≈1 block)</button>
+            )}
+            {r.status !== 'fixed' && <button type="button" disabled={statusBusy === r.id} style={{ ...link, color: COLORS.green }} onClick={() => setStatus(r.id, 'fixed')}>Fixed</button>}
+            {r.status !== 'ignored' && <button type="button" disabled={statusBusy === r.id} style={{ ...link, color: COLORS.gray }} onClick={() => setStatus(r.id, 'ignored')}>Ignore</button>}
+            {r.status !== 'new' && <button type="button" disabled={statusBusy === r.id} style={{ ...link, color: COLORS.amber }} onClick={() => setStatus(r.id, 'new')}>Reopen</button>}
+          </div>
+        </div>
+      ))}
+      {st.refusals.length > 0 && (
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
+          <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray, marginBottom: 8 }}>Refusals per place · 30 days · no positions kept</div>
+          {st.refusals.map((q, i) => (
+            <BarRow key={q.entity_id || `${q.name}-${i}`} label={`${q.name || q.entity_id || 'Unknown place'} · ${q.refusals || 0} refused${q.reported ? `, ${q.reported} reported` : ''}`} count={placeTotal(q)} max={maxQuiet} color={COLORS.amber} />
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// Suggest a Place to Stamp (founder decisions 2026-10-10): the review desk.
+// Only places with 5 or more suggestions show here, and the count keeps going.
+// Approve makes the place a Local favorite stamp — nothing goes live without
+// it; Decline takes it off every list. Each card: where (and the map), the
+// count, locals vs visitors, likes, the top reasons and the "Other" texts,
+// and (2026-10-12) its photos — up to 6, each opens full screen — so nothing
+// is approved or kept unseen; an approved place's name opens its page.
+// Reported (2026-10-12): places people reported, at any count — three
+// reports hide an open place until it's decided here. Remove takes it down
+// for everyone; Keep clears the reports and puts a hidden place back.
+// Excel export: every place with 5+, whatever its status.
+const PSD_TABS = [['ready', 'Ready'], ['approved', 'Approved'], ['declined', 'Declined'], ['reported', 'Reported']];
+const PSD_DONE = {
+  approved: { text: 'Approved: now a Local favorite stamp', background: '#E8F4F2', color: '#0A5F58' },
+  declined: { text: 'Declined', background: '#EFEBE2', color: '#3D4550' },
+  removed: { text: 'Removed', background: '#EFEBE2', color: '#3D4550' },
+  keep: { text: 'Kept — reports cleared', background: '#E8F4F2', color: '#0A5F58' },
+};
+const PSD_VERB = { approved: 'approve', declined: 'decline', removed: 'remove', keep: 'keep' };
+const PSD_EMPTY = {
+  ready: 'Nothing to review. A place shows here once 5 people suggest it.',
+  approved: 'No Local favorites yet.',
+  declined: 'Nothing declined.',
+  reported: 'No reports. A place shows here when someone reports it, whatever its count.',
+};
+const PSD_NOTE = {
+  review: 'Only places with 5 or more suggestions show here. Counts keep going after 5. Approve makes it a Local favorite stamp — nothing goes live without it.',
+  reported: 'Places people reported, at any count. Three reports hide an open place until you decide; an approved stamp stays up and is only flagged. Remove takes it off every list; Keep clears the reports.',
+};
+// Where a reported place stands, when it isn't simply open.
+const PSD_STATUS = {
+  held: { text: 'Hidden until you decide', background: '#FFF3DC', color: '#8A5A00' },
+  approved: { text: 'Approved stamp', background: '#E8F4F2', color: '#0A5F58' },
+};
+const psdCount = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const psdDay = (iso) => (iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '');
+// "3 reports: Offensive or unkind (2), Spam or advertising (1)" — most first.
+const psdReports = (r) => {
+  const parts = REPORT_REASONS.map((x) => ({ label: x.label, n: Number(r?.reasons?.[x.key]) || 0 })).filter((x) => x.n > 0).sort((a, b) => b.n - a.n);
+  return `${psdCount(r?.n || 0, 'report', 'reports')}${parts.length ? `: ${parts.map((x) => `${x.label} (${x.n})`).join(', ')}` : ''}`;
+};
+// The tab counts after a decision made here, so they move at once (the next
+// load brings the server's own). Ready = open with 5+; Reported = held, or
+// open or approved with reports left; a decline leaves Reported, a removal
+// leaves everything, and Keep puts a hidden place with 5+ back in Ready.
+function psdCountsAfter(c, p, decision) {
+  const next = { ...c };
+  const move = (k, d) => { next[k] = Math.max(0, (next[k] || 0) + d); };
+  const ready = p.status === 'review' || (p.status === 'open' && p.count >= REVIEW_AT);
+  const reported = p.status === 'held' || (p.reports?.n || 0) > 0;
+  if (decision === 'approved' || decision === 'declined') {
+    if (ready) move('ready', -1);
+    move(decision, 1);
+    if (decision === 'declined' && reported) move('reported', -1);
+  } else if (decision === 'removed') {
+    if (ready) move('ready', -1);
+    if (p.status === 'approved') move('approved', -1);
+    if (reported) move('reported', -1);
+  } else if (decision === 'keep') {
+    if (reported) move('reported', -1);
+    if (p.status === 'held' && p.count >= REVIEW_AT) move('ready', 1);
+  }
+  return next;
+}
+function PlaceSuggestionsDesk({ refreshKey }) {
+  const [tab, setTab] = React.useState('ready');
+  // ok: the counts on screen came from a successful load (a failed one keeps
+  // what was there and says so — never "0 ready").
+  const [st, setSt] = React.useState({ places: [], counts: null, error: null, loaded: false, ok: false });
+  const [decided, setDecided] = React.useState({});     // id → the decision made on this screen
+  const [busyId, setBusyId] = React.useState(null);
+  const [csvBusy, setCsvBusy] = React.useState(false);
+  const [actionError, setActionError] = React.useState(null);   // a decision or export that failed
+  const [allTexts, setAllTexts] = React.useState({});   // id → every "Other" text shown
+  const [photo, setPhoto] = React.useState(null);       // { src, name }: the photo open full screen
+  const [broken, setBroken] = React.useState({});       // photo url → it didn't load (tried again on the next load)
+  const seq = React.useRef(0);
+  const listing = React.useRef(false);   // the newest list request is still on its way
+  const tabRef = React.useRef(tab);
+  tabRef.current = tab;
+  const load = async () => {
+    const my = ++seq.current;
+    listing.current = true;
+    const { data, error } = await adminPlaceSuggestions({ op: 'list', tab: tabRef.current });
+    if (my !== seq.current) return; // a newer load (another tab, a refresh) or a decision owns the screen
+    listing.current = false;
+    if (error) { setSt((s) => ({ ...s, error, loaded: true })); return; }
+    setDecided({});
+    setBroken({});
+    setSt({ places: data?.places || [], counts: data?.counts || null, error: null, loaded: true, ok: true });
+  };
+  React.useEffect(() => { load(); }, [tab, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Switching tabs clears the list until the new one arrives, so the other
+  // tab's places (or a false "Nothing to review") never show under it.
+  const showTab = (t) => {
+    if (t === tab) return;
+    setSt((s) => ({ ...s, places: [], loaded: false }));
+    setTab(t);
+  };
+  const decide = async (p, decision) => {
+    if (busyId) return;
+    if (decision === 'removed' && !window.confirm('Remove this place for everyone?')) return;
+    setBusyId(p.id); setActionError(null);
+    const { data, error } = await adminPlaceSuggestions({ op: 'decide', id: p.id, decision });
+    setBusyId(null);
+    // Approve / Decline on a card that went stale — reports hid the place, or
+    // it was decided on another device (2026-10-12): nothing was changed, so
+    // the tab loads again to show where it stands (a newer load still wins).
+    if (data?.code === 'stale') {
+      showToast('This place changed since the list loaded — here’s where it stands now.', 'info');
+      load();
+      return;
+    }
+    if (error) { setActionError(`Couldn’t ${PSD_VERB[decision]} ${p.name}: ${error}`); return; }
+    // A list asked for before this decision landed would put the card back
+    // undecided, and the counts with it: it no longer owns the screen. One
+    // still on its way is asked again — the new answer has the decision in it.
+    const again = listing.current;
+    seq.current += 1;
+    listing.current = false;
+    // The card keeps its place with the decision on it; the tab counts move now.
+    setDecided((d) => ({ ...d, [p.id]: decision }));
+    setSt((s) => (s.counts ? { ...s, counts: psdCountsAfter(s.counts, p, decision) } : s));
+    if (again) load();
+  };
+  const download = async () => {
+    if (csvBusy) return;
+    setCsvBusy(true); setActionError(null);
+    const { data, error } = await adminPlaceSuggestions({ op: 'csv', as: 'json' }, { timeoutMs: 60000 });
+    if (error || !data?.csv) { setCsvBusy(false); setActionError(`Couldn’t export: ${error || 'no file came back'}`); return; }
+    try { await saveCsvText(data.filename || `place-suggestions-${today()}.csv`, data.csv); }
+    catch (e) { setActionError(`Couldn’t save the file: ${e?.message || e}`); }
+    finally { setCsvBusy(false); }
+  };
+  const link = { fontSize: 12, background: 'none', border: 'none', padding: 0, cursor: 'pointer' };
+  const counts = st.ok ? st.counts : null;
+  const reportedTab = tab === 'reported';
+  const pill = { display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: 11.5, fontWeight: 700 };
+  const act = (dim) => ({ flex: 1, minHeight: 42, borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: dim ? 0.6 : 1 });
+  const thumb = { width: 56, height: 56, flex: 'none', borderRadius: 8, background: '#EFEBE2' };
+  return (
+    <Section title={`⭐ Place suggestions — ${counts ? counts.ready : '—'} ready${counts?.reported ? ` · ${counts.reported} reported` : ''}`} icon={MapPinPlus}>
+      {photo && <PhotoView src={photo.src} alt={`A photo of ${photo.name}`} onClose={() => setPhoto(null)} />}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        {PSD_TABS.map(([k, label]) => (
+          <button key={k} type="button" style={{ ...xbtn, background: tab === k ? COLORS.dark : '#fff', color: tab === k ? '#fff' : '#3A3128' }} onClick={() => showTab(k)}>
+            {label} · {counts ? counts[k] || 0 : '—'}
+          </button>
+        ))}
+        <button type="button" style={xbtn} onClick={load} aria-label="Reload the list">↻</button>
+        <button type="button" style={{ ...xbtn, marginLeft: 'auto' }} onClick={download} disabled={csvBusy}>{csvBusy ? 'Preparing…' : '⬇ Excel (CSV)'}</button>
+      </div>
+      <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>{reportedTab ? PSD_NOTE.reported : PSD_NOTE.review}</div>
+      {st.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>Couldn&rsquo;t load the latest: {st.error}</div>}
+      {actionError && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{actionError}</div>}
+      {!st.loaded && !st.error && <div style={{ fontSize: 13, color: COLORS.gray, padding: '12px 0' }}>Loading…</div>}
+      {st.loaded && st.ok && !st.error && st.places.length === 0 && (
+        <div style={{ fontSize: 13, color: COLORS.gray, padding: '12px 0' }}>{PSD_EMPTY[tab]}</div>
+      )}
+      {st.places.map((p) => {
+        // On Reported, an approved place is still waiting on Remove or Keep.
+        const done = decided[p.id] || (!reportedTab && (p.status === 'approved' || p.status === 'declined') ? p.status : null);
+        const look = done ? PSD_DONE[done] : null;
+        const stands = reportedTab && !decided[p.id] ? PSD_STATUS[p.status] : null;
+        const where = [p.city, p.region, p.country].filter(Boolean).join(', ');
+        const texts = Array.isArray(p.other_texts) ? p.other_texts : [];
+        const shown = allTexts[p.id] ? texts : texts.slice(0, 3);
+        const busy = busyId === p.id;
+        // Where it stands now, a decision made here included (Keep leaves the
+        // status as it was): an approved place's name opens its Local
+        // favorite page; a removed place's photos were deleted with it.
+        const now = decided[p.id] && decided[p.id] !== 'keep' ? decided[p.id] : p.status;
+        const photos = now !== 'removed' && Array.isArray(p.photos) ? p.photos.filter(Boolean).slice(0, 6) : [];
+        return (
+          <div key={p.id} style={{ padding: '12px 0', borderTop: `1px solid ${COLORS.border}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.dark, overflowWrap: 'anywhere' }}>
+                  {now === 'approved' ? (
+                    <Link to={`${createPageUrl('LocalFavorite')}?id=${encodeURIComponent(p.id)}`} style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 2 }}>{p.name}</Link>
+                  ) : p.name}
+                </div>
+                <div style={{ fontSize: 12.5, color: COLORS.gray, marginTop: 2 }}>
+                  {where || 'No town on record'} · <button type="button" style={{ ...link, fontSize: 12.5, fontWeight: 600, color: COLORS.accent }}
+                    onClick={() => openPartner(p.map_url || `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`)}>map</button>
+                </div>
+              </div>
+              <div style={{ flex: 'none', textAlign: 'right' }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.dark, lineHeight: 1.1 }}>{p.count}</div>
+                <div style={{ fontSize: 11.5, color: COLORS.gray }}>{p.count === 1 ? 'suggestion' : 'suggestions'}</div>
+              </div>
+            </div>
+            {((p.reports?.n || 0) > 0 || stands) && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 6 }}>
+                {(p.reports?.n || 0) > 0 && <span style={{ fontSize: 12.5, fontWeight: 600, color: '#9A3412', lineHeight: 1.4 }}>{psdReports(p.reports)}</span>}
+                {stands && <span style={{ ...pill, background: stands.background, color: stands.color }}>{stands.text}</span>}
+              </div>
+            )}
+            <div style={{ fontSize: 12.5, color: '#3D4550', marginTop: 6 }}>
+              {psdCount(p.locals || 0, 'local', 'locals')}, {psdCount(p.visitors || 0, 'visitor', 'visitors')} · {psdCount(p.likes || 0, 'like', 'likes')}
+            </div>
+            {p.reasons?.length > 0 && (
+              <div style={{ fontSize: 12.5, color: '#3D4550', marginTop: 4, lineHeight: 1.4 }}>Top reasons: {p.reasons.map((r) => `${r.short} (${r.n})`).join(', ')}</div>
+            )}
+            {shown.map((t, i) => (
+              <div key={i} style={{ fontSize: 12.5, color: COLORS.gray, fontStyle: 'italic', lineHeight: 1.4, marginTop: 4 }}>&ldquo;{t}&rdquo;</div>
+            ))}
+            {texts.length > shown.length && (
+              <button type="button" style={{ ...link, color: COLORS.accent, marginTop: 4 }} onClick={() => setAllTexts((a) => ({ ...a, [p.id]: true }))}>All {texts.length} in their own words</button>
+            )}
+            {photos.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {photos.map((src, i) => (broken[src] ? (
+                  <div key={src} style={{ ...thumb, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4, fontSize: 10.5, lineHeight: 1.2, color: COLORS.gray, textAlign: 'center' }}>
+                    Couldn&rsquo;t load
+                  </div>
+                ) : (
+                  <button key={src} type="button" onClick={() => setPhoto({ src, name: p.name })} aria-label={`Open photo ${i + 1} of ${photos.length}: ${p.name}`}
+                    style={{ ...thumb, padding: 0, border: 'none', overflow: 'hidden', cursor: 'pointer' }}>
+                    <img src={src} alt="" loading="lazy" onError={() => setBroken((b) => ({ ...b, [src]: true }))}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  </button>
+                )))}
+              </div>
+            )}
+            <div style={{ fontSize: 11.5, color: COLORS.gray, marginTop: 4 }}>
+              First suggested {psdDay(p.created_at)}{p.decided_at ? ` · decided ${psdDay(p.decided_at)}` : ''}
+            </div>
+            {look ? (
+              <div style={{ marginTop: 9, minHeight: 40, borderRadius: 10, background: look.background, color: look.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13.5, fontWeight: 600 }}>{look.text}</div>
+            ) : reportedTab ? (
+              <div style={{ display: 'flex', gap: 8, marginTop: 9 }}>
+                <button type="button" disabled={busy} onClick={() => decide(p, 'removed')}
+                  style={{ ...act(busy), border: '1px solid #E4C3BC', background: '#fff', color: '#B42318' }}>
+                  Remove
+                </button>
+                <button type="button" disabled={busy} onClick={() => decide(p, 'keep')}
+                  style={{ ...act(busy), border: '1px solid #d8d2c6', background: '#fff', color: COLORS.dark }}>
+                  Keep
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, marginTop: 9 }}>
+                <button type="button" disabled={busy} onClick={() => decide(p, 'approved')}
+                  style={{ flex: 1, minHeight: 42, borderRadius: 10, border: 'none', background: '#0E7C73', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
+                  Approve as Local favorite
+                </button>
+                <button type="button" disabled={busy} onClick={() => decide(p, 'declined')}
+                  style={{ flex: 'none', minHeight: 42, padding: '0 14px', borderRadius: 10, border: '1px solid #d8d2c6', background: '#fff', color: COLORS.dark, fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
+                  Decline
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </Section>
   );
 }
@@ -354,21 +993,40 @@ function Section({ title, icon: Icon, children, empty }) {
 
 export default function AdminAnalytics() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user: authUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
   const [userStats, setUserStats] = useState(null); // real Supabase-profiles aggregates
   const [generatedAt, setGeneratedAt] = useState(null);
+  // A team alert's tap lands here as ?member=<n> (AuthContext's appUrlOpen).
+  const memberParam = new URLSearchParams(location.search).get('member') || '';
+  const memberFocus = /^\d{1,9}$/.test(memberParam) && Number(memberParam) > 0 ? Number(memberParam) : null;
+  // Bumped by the Refresh button only: Newest members loads on its own when
+  // the page opens, and reloads on a refresh — not again when the first
+  // analytics load finishes.
+  const [refreshTick, setRefreshTick] = useState(0);
   // Messages sent from the website's contact form (worker /admin/contact).
   const [inbox, setInbox] = useState({ messages: [], open: 0, total: 0, error: null });
   // Social safety reports (Apple 1.2 queue). minor_safety rows carry the 24h
-  // triage SLA — they sort first and show an age tag.
-  const [reports, setReports] = useState({ rows: [], error: null });
+  // triage SLA — they sort first and show an age tag. The worker sends every
+  // open child-safety report first, the rest 100 at a time (go-live round 3):
+  // total counts them all, and next loads the older ones.
+  const [reports, setReports] = useState({ rows: [], error: null, total: null, next: null });
+  const sortReports = (rows) => rows.slice().sort((a, b) => (a.reason === 'minor_safety' ? -1 : 0) - (b.reason === 'minor_safety' ? -1 : 0) || String(b.created_at).localeCompare(String(a.created_at)));
   const loadReports = async () => {
     const { data, error } = await callWorker('admin/reports', { status: 'open' });
-    const rows = (data?.reports || []).slice().sort((a, b) => (a.reason === 'minor_safety' ? -1 : 0) - (b.reason === 'minor_safety' ? -1 : 0) || String(b.created_at).localeCompare(String(a.created_at)));
-    setReports({ rows, error: error || data?.error || null });
+    setReports({ rows: sortReports(data?.reports || []), error: error || data?.error || null, total: typeof data?.total === 'number' ? data.total : null, next: data?.next || null });
+  };
+  const loadOlderReports = async () => {
+    if (!reports.next) return;
+    const { data, error } = await callWorker('admin/reports', { status: 'open', before: reports.next });
+    if (error || data?.error) { setReports((v) => ({ ...v, error: error || data.error })); return; }
+    setReports((v) => {
+      const seen = new Set(v.rows.map((r) => r.id));
+      return { ...v, rows: sortReports([...v.rows, ...(data?.reports || []).filter((r) => !seen.has(r.id))]), next: data?.next || null };
+    });
   };
   const resolveReport = async (id, resolve) => {
     await callWorker('admin/reports', { id, resolve });
@@ -644,7 +1302,7 @@ export default function AdminAnalytics() {
             </div>
           </div>
           <button
-            onClick={load}
+            onClick={() => { setRefreshTick((t) => t + 1); load(); }}
             disabled={loading}
             style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 10, padding: '8px 14px', cursor: loading ? 'wait' : 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600 }}
           >
@@ -661,6 +1319,13 @@ export default function AdminAnalytics() {
       </div>
 
       <div style={{ padding: 14 }}>
+        {/* Who is behind each alert's member number. First on the page and
+            not waiting on the analytics, so an alert's tap shows the person
+            at once and nothing arriving above it moves the row it scrolls to. */}
+        {isAdminEmail(authUser?.email) && <NewestMembers focus={memberFocus} refreshKey={refreshTick} />}
+        {/* Time-bound (the 7-day clean-up), so it doesn't wait on the analytics either. */}
+        {isAdminEmail(authUser?.email) && <AgeAppealDesk />}
+
         {error && (
           <div style={{ padding: 14, background: '#FEF2F2', color: '#B91C1C', borderRadius: 12, marginBottom: 12, fontSize: 13, fontWeight: 600 }}>
             {error}
@@ -759,11 +1424,15 @@ export default function AdminAnalytics() {
 
             <TravelerPull />
 
-            <Section title={`🛡️ Safety reports — ${reports.rows.length} open`} icon={Mail} empty={reports.error ? `Couldn't load reports: ${reports.error}` : reports.rows.length === 0 ? 'No open reports. Shared-passport reports land here; a child-safety reason gets 24h triage.' : null}>
+            <StampReportsDesk refreshKey={generatedAt} />
+
+            <PlaceSuggestionsDesk refreshKey={generatedAt} />
+
+            <Section title={`🛡️ Safety reports — ${reports.total ?? reports.rows.length} open`} icon={Mail} empty={reports.error ? `Couldn't load reports: ${reports.error}` : reports.rows.length === 0 ? 'No open reports. Every report from the app lands here, and so does every block (with what the person was looking at). Each one also rings your phone; a child-safety report gets 24h triage.' : null}>
               {reports.rows.map((r) => (
                 <div key={r.id} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border || '#eee'}` }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', fontSize: 13 }}>
-                    <span style={{ fontWeight: 700, color: r.reason === 'minor_safety' ? '#B0472F' : COLORS.dark, textTransform: 'uppercase', fontSize: 11, letterSpacing: '.06em' }}>{r.reason === 'minor_safety' ? '⚠️ CHILD SAFETY — 24H' : r.reason}</span>
+                    <span style={{ fontWeight: 700, color: r.reason === 'minor_safety' ? '#B0472F' : COLORS.dark, textTransform: 'uppercase', fontSize: 11, letterSpacing: '.06em' }}>{r.reason === 'minor_safety' ? '⚠️ CHILD SAFETY — 24H' : r.kind === 'block' ? '🚫 A block' : r.reason}</span>
                     <span style={{ color: COLORS.gray, fontSize: 12 }}>{r.kind}{r.subject_slug ? ` · /p/${r.subject_slug}` : ''}{r.ref ? ` · ${r.ref}` : ''}</span>
                     <span style={{ color: COLORS.gray, marginLeft: 'auto', fontSize: 12 }}>{String(r.created_at || '').slice(0, 16).replace('T', ' ')}</span>
                   </div>
@@ -774,6 +1443,11 @@ export default function AdminAnalytics() {
                   </div>
                 </div>
               ))}
+              {reports.next && (
+                <button type="button" onClick={loadOlderReports} style={{ marginTop: 8, fontSize: 12, color: COLORS.accent, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                  Showing {reports.rows.length} of {reports.total ?? '…'} — load older reports
+                </button>
+              )}
             </Section>
 
             <Section title={`✉️ Website messages — ${inbox.open} open`} icon={Mail} empty={inbox.error ? `Couldn't load messages: ${inbox.error}` : inbox.messages.length === 0 ? 'No messages from globeskimmers.io yet. The contact form stores them here.' : null}>

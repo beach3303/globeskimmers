@@ -5,7 +5,7 @@ import { searchHomeCities, resolveHomePlace } from "@/lib/homePlace";
 import { searchCountries, countryCode } from "@/lib/countries";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2 } from "lucide-react";
+import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2, UserX } from "lucide-react";
 import ContactUsModal from "../components/ContactUsModal";
 import RefreshAccessModal from "../components/RefreshAccessModal";
 import { ADMIN_EMAILS } from "@/lib/admins";
@@ -13,12 +13,16 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
-import { getHandle, setHandle, setAgeGate, splitDob, getAgeInfo, setBirthday, socialRequest } from "@/lib/passport";
+import { getHandle, setHandle, setAgeGate, splitDob, getAgeInfo, setBirthday, socialRequest, socialFollow } from "@/lib/passport";
+import { blockReady } from "@/lib/blocks";
+import { openConfirmBirthday } from "@/lib/ageGate";
+import BlockedTravelers from "@/components/social/BlockedTravelers";
 import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
 import { useLocation, readOpenBehavior, writeOpenBehavior } from "@/components/location/LocationContext";
 import { clearAppCache } from "@/lib/clearAppCache";
+import { showToast } from "@/components/Toast";   // the stub that swallowed this page's 9 messages is gone (2026-10-11)
 
 // ADMIN_EMAILS now imported from @/lib/admins (single source of truth, 4 admins).
 
@@ -396,11 +400,6 @@ const LANGUAGES = [
   { code: "zu", name: "Zulu", flag: "🇿🇦" },
 ].sort((a, b) => a.name.localeCompare(b.name));
 
-const showToast = (message, type) => {
-  // Toast surface intentionally no-op pending a real toast system.
-  void message; void type;
-};
-
 export default function SettingsPage() {
   const navigate = useNavigate();
   const isTablet = useIsTablet(); // gates the iPad editorial layout; phone untouched
@@ -423,13 +422,21 @@ export default function SettingsPage() {
   // complete theirs here and their tier is recomputed exactly.
   const [bMonth, setBMonth] = useState(""); const [bDay, setBDay] = useState("");
   const [bLocked, setBLocked] = useState(false);
-  useEffect(() => { (async () => { const { birth_md } = await getAgeInfo(); if (birth_md) { setBMonth(birth_md.slice(0, 2)); setBDay(birth_md.slice(3, 5)); setBLocked(true); } })(); }, []);
   const saveBirthday = async () => {
     if (!bMonth || !bDay || bLocked) return;
     const { error } = await setBirthday(`${bMonth}-${bDay}`);
     if (!error) setBLocked(true);
     showToast(error || "Saved privately 🎂", error ? "error" : "success");
   };
+  // Blocked travelers (go-live decision 6): the list from social/follow
+  // op:'list', shown under Privacy only when the worker advertises block_v2.
+  const [social, setSocial] = useState(null);
+  const [socialTick, setSocialTick] = useState(0);
+  useEffect(() => {
+    let gone = false;
+    (async () => { const { data } = await socialFollow("list"); if (!gone) setSocial(data || null); })();
+    return () => { gone = true; };
+  }, [socialTick]);
   // The worker answers 'age_required' until the birth year is set (it locks
   // after the first write; under-13 and AU-under-16 accounts get no social).
   const [needYear, setNeedYear] = useState(false);
@@ -478,7 +485,11 @@ export default function SettingsPage() {
     showToast(`You're @${h}`, "success");
   };
 
-  const { logout, deleteAccount, profile, user: authUser, refreshProfile, canRefresh } = useAuth(); // Supabase
+  const { logout, deleteAccount, profile, user: authUser, refreshProfile, canRefresh, socialTier } = useAuth(); // Supabase
+  // The saved birthday (month and day), read again when the tier changes: a
+  // 'confirm' account that finishes it in the sheet comes back to this row
+  // locked, not empty.
+  useEffect(() => { (async () => { const { birth_md } = await getAgeInfo(); if (birth_md) { setBMonth(birth_md.slice(0, 2)); setBDay(birth_md.slice(3, 5)); setBLocked(true); } })(); }, [socialTier]);
   const countryBoxRef = useRef(null);
   const [countryOpen, setCountryOpen] = useState(false);
   const [countryQuery, setCountryQuery] = useState("");
@@ -837,7 +848,10 @@ export default function SettingsPage() {
                     ))}
                   </div>
                 )}
-                <div style={{ marginTop: 10 }}>
+                {/* A username or Seal request is a social act: not for a frozen
+                    account, a birth year to confirm or a held teen (the worker
+                    refuses them too, go-live round 3). */}
+                {!["blocked", "confirm", "teen"].includes(socialTier) && <div style={{ marginTop: 10 }}>
                   {!reqOpen ? (
                     <button type="button" onClick={() => setReqOpen(true)}
                       style={{ background: 'none', border: 0, padding: 0, color: ED_INK3, fontSize: 12, textDecoration: 'underline', textUnderlineOffset: 2 }}>
@@ -870,7 +884,7 @@ export default function SettingsPage() {
                       </div>
                     </div>
                   )}
-                </div>
+                </div>}
               </> ) }}
               last={false}
             />
@@ -917,7 +931,13 @@ export default function SettingsPage() {
               last={false}
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={Check} iconBg={CAT.todo.ink} title="My birthday" desc={bLocked ? "Private — never shown. Saved once; changes go through support." : "Private — never shown. It keeps GlobeSkimmers age-appropriate. Saved once, like the year."}
-              control={{ below: true, node: (
+              control={{ below: true, node: socialTier === "confirm" && !bLocked ? (
+                // A 'confirm' account's answer decides its tier, so it goes
+                // through the sheet's one neutral check (go-live decision 2).
+                <button type="button" onClick={openConfirmBirthday} aria-haspopup="dialog" className="h-12 px-4 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 14 }}>
+                  Confirm your birthday
+                </button>
+              ) : (
                 <div className="flex gap-2 items-center">
                   <select value={bMonth} onChange={(e) => setBMonth(e.target.value)} disabled={bLocked} aria-label="Birthday month" className="h-12 rounded-xl px-2 disabled:opacity-60" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 14 }}>
                     <option value="">Month</option>
@@ -936,6 +956,13 @@ export default function SettingsPage() {
 
           {/* Privacy — the promise, in the app where it belongs */}
           <EdGroup kicker="Privacy" isTablet={isTablet}>
+            {blockReady(social) && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={UserX} iconBg={CAT.food.ink} title="Blocked travelers"
+                desc="In the app they can't follow you, see your passport or send you postcards. They aren't told."
+                control={{ below: true, node: <BlockedTravelers blocked={social.blocked} onChanged={() => setSocialTick((t) => t + 1)} /> }}
+                last={false}
+              />
+            )}
             <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.culture.ink} title="Our promise" desc="Your stamps and photos are yours. We never sell your photos or your location history, and we never show ads to kids. Shared passports never reveal exact locations, and photos only appear to others after review."
               control={{ below: true, node: (
                 <div className="flex gap-2">

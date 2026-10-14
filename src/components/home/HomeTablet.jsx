@@ -5,8 +5,10 @@ import { CAT, TEAL_DEEP } from '@/components/redesign/constants';
 import FontScaleButton from '@/components/a11y/FontScaleButton';
 import HomeRows from '@/components/home/HomeRows';
 import StampsNearYou from '@/components/home/StampsNearYou';
+import DreamShelf from '@/components/home/DreamShelf';
 import PassportHero from '@/components/home/PassportHero';
 import FriendsTravels from '@/components/home/FriendsTravels';
+import SuggestPlaceSection from '@/components/home/SuggestPlaceSection';
 import SmartSearchBar from '@/components/search/SmartSearchBar';
 import SmartSearchOverlay from '@/components/search/SmartSearchOverlay';
 import DestinationStrip from '@/components/search/DestinationStrip';
@@ -49,6 +51,7 @@ export default function HomeTablet({
   flagActive, homeFlagUrl, onLocation, onAction, clockRows = [], journeyMode = "discovery",
   destinationSearch = null, onDismissDestination,
   passportTotal = null, nearestStamp = null,
+  dreamShelf = null,
 }) {
   const ORDER = {
     home: ["rows", "stamps"], discovery: ["rows", "stamps"],
@@ -204,6 +207,23 @@ export default function HomeTablet({
       <div className="mt-9">
         {discoverOrder.map((k) => SEC[k])}
       </div>
+
+      {/* ── DREAM SHELF — the region's icons. Added 2026-10-10: the phone Home
+             got the Dream shelf but the iPad Home never did, so iPad users
+             (and Apple's 13" screenshots) had no shelf at all. Same component,
+             same props, same dream-stack gate — Home passes `dreamShelf` only
+             when the phone would render it. ───────────────────────────── */}
+      {dreamShelf && (
+        <div className="mt-9">
+          <DreamShelf {...dreamShelf} />
+        </div>
+      )}
+
+      {/* ── SUGGEST A PLACE — on the phone it sits below the Dream shelf
+             (founder decisions 2026-10-10); the iPad gets it in the same
+             place. It brings its own top margin and renders nothing while it
+             loads or has nothing to show. ─────────────────────────────── */}
+      <SuggestPlaceSection wide />
 
       {/* ── EXPLORE MORE — 3-col gradient cards ───────────────────────── */}
       <div className="mt-9">

@@ -9,6 +9,7 @@ import LocationModePicker from "../components/location/LocationModePicker";
 import StampsNearYou from "../components/home/StampsNearYou";
 import DreamShelf from "../components/home/DreamShelf";
 import WanderlustLine from "../components/home/WanderlustLine";
+import SuggestPlaceSection from "../components/home/SuggestPlaceSection";
 // CLUTTER CUT (founder, 2026-09-20): HomeRows (Near you now / Around the
 // city today / In the city), ExperiencesRow ("Worth the drive"), EscapesRow
 // ("Trips & escapes") and the YOUR TRIP zone (StayAnchor, MyTripCard,
@@ -480,7 +481,7 @@ export default function HomePage() {
   // Dream-shelf tap → the attraction's Things to Do card.
   const openDreamActivity = (item) => {
     trackEvent("dream_shelf_open_detail", { place_id: item.id, place_name: item.name });
-    if (!openAttraction(navigate, item, "From your dream shelf")) handleQuickAction("Things to Do");
+    if (!openAttraction(navigate, item, "From your stamp shelf")) handleQuickAction("Things to Do");
   };
 
 
@@ -650,6 +651,13 @@ export default function HomePage() {
           journeyMode={journeyMode}
           passportTotal={passportTotal}
           nearestStamp={nearestStamp}
+          dreamShelf={isDreamStack ? {
+            latitude: activeLocation?.coordinates?.latitude,
+            longitude: activeLocation?.coordinates?.longitude,
+            cityName,
+            cityTempF: weatherInfo?.fahrenheit ?? null,
+            onOpenActivity: openDreamActivity,
+          } : null}
           destinationSearch={destSearch && !destDismissed ? destSearch : null}
           onDismissDestination={() => setDestDismissed(true)}
         />
@@ -819,6 +827,11 @@ export default function HomePage() {
           onOpenActivity={openDreamActivity}
         />
       )}
+
+      {/* SUGGEST A PLACE TO STAMP (founder, 2026-10-10): "Know a spot worth a
+          visit?" — locals and people who've been suggest a place; at 5 it is
+          reviewed for a Local favorite stamp. Just above the quotes. */}
+      <SuggestPlaceSection />
 
       {/* A quiet daily travel quote to close the scroll — encouragement, never
           a sales line. Copyright-safe (public-domain authors + originals). */}

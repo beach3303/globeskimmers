@@ -9,20 +9,21 @@
 // footprint — checked here, then again by the worker against its own
 // coordinates (the fix rides along for that check and is never stored).
 import React, { useEffect, useState } from "react";
-import { DollarSign, MapPin } from "lucide-react";
+import { BookOpen, ClipboardList, DollarSign, MapPin } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
-import { addStamp, metersBetween, setStampNote, setStampArt } from "@/lib/passport";
+import { addStamp, reportStamp, STAMP_REFUSALS, metersBetween, setStampNote, setStampArt } from "@/lib/passport";
 import { respectPlaceFor } from "@/lib/respectPlaces";
 import RespectPlaceSheet from "@/components/passport/RespectPlaceSheet";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { resolveStampVariant } from "@/lib/stampVariants";
 import { countryCode } from "@/lib/countries";
 import { localISODate } from "@/lib/localDate";
-import { getCurrentPositionSmart } from "@/lib/geolocation";
+import { getStampFix } from "@/lib/geolocation";
 import { showToast } from "@/components/Toast";
 import { openPartner } from "@/lib/openPartner";
 import Guestbook from "@/components/Guestbook";
-import { useLocation } from "@/components/location/LocationContext";
+import { useLocation, isLiveFix } from "@/components/location/LocationContext";
+import { useDistanceUnit } from "@/components/location/distanceUnit";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -67,11 +68,24 @@ export function useAttractionLink(a) {
   return link;
 }
 
-export function StampHereButton({ a, link: resolved, formatDistance, isTablet }) {
+// localFavorite (founder, 2026-10-10): an approved suggestion's lf:<id> stamp —
+// its own hint line, and never a landmark variant, whose official art a
+// Local favorite must not wear ("Niagara Falls overlook" is not Niagara Falls).
+export function StampHereButton({ a, link: resolved, formatDistance, isTablet, localFavorite = false }) {
   const link = resolved?.stamp || null;
   const [busy, setBusy] = useState(false);
   const [stamped, setStamped] = useState(false);
-  const [notHere, setNotHere] = useState(null); // null | { meters } | { noFix: true } | { message }
+  // A refusal (founder, 2026-10-10) — what the phone or the worker said, with
+  // the request itself so "I'm here, but the app is saying I'm not" can resend
+  // it as a report: null | { why, meters?, message?, req }.
+  const [refused, setRefused] = useState(null);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [wasReported, setWasReported] = useState(false);
+  const [wasHeld, setWasHeld] = useState(false);   // the stamp was already in the passport
+  // Distances in the traveler's mi/km (cafés and restaurants pass no formatter).
+  const { activeLocation } = useLocation();
+  const units = useDistanceUnit(activeLocation);
+  const fmtDist = formatDistance || units.formatDistance;
   const [stampedId, setStampedId] = useState(null);
   const [startedPrivate, setStartedPrivate] = useState(false);
   const [memory, setMemory] = useState("");
@@ -100,74 +114,127 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
   const kind = idKind(pid);
   const iconic = !!link;
 
-  const stamp = async () => {
-    if (busy || stamped) return;
-    setBusy(true); setNotHere(null);
-    const placeLat = Number(link?.lat ?? a.lat), placeLng = Number(link?.lng ?? a.lng);
-    let fix = null, meters = null;
-    try {
-      const pos = await getCurrentPositionSmart({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
-      fix = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy ?? null };
-      meters = metersBetween(fix.lat, fix.lng, placeLat, placeLng);
-    } catch { /* no fix → can't verify right now */ }
-    if (!fix || !Number.isFinite(meters)) { setBusy(false); setNotHere({ noFix: true }); return; }
-    const radius = stampRadiusFor(iconic
-      ? { footprint_radius_m: link.footprint_radius_m, category: link.category }
-      : { types: a.types, category: a.activityCategory });
-    if (meters > radius + Math.min(fix.acc || 0, 100)) { setBusy(false); setNotHere({ meters }); return; }
-
-    const parts = placeParts(a.formattedAddress);
-    const country = link?.country || parts.country || null;
-    const variant = iconic ? resolveStampVariant({ name: link.name, lat: fix.lat, lng: fix.lng, country, verified: "gps" }) : null;
-    const gid = resolved?.gid || (kind === "google" ? pid : null);
-    const entityId = variant ? variant.entity_id
-      : iconic ? link.id
-      : gid ? `places:${gid}`
-      : kind === "owned" ? `owned:${pid}`
-      : pid;
-    const stampName = variant ? variant.name : (link?.name || name);
-    const { data, error } = await addStamp({
-      kind: "attraction",
-      entity_type: variant ? "landmark" : "place",
-      entity_id: entityId,
-      name: stampName,
-      city: link?.city || parts.city,
-      region: parts.region,
-      country,
-      cc: countryCode(country) || (/^[A-Za-z]{2}$/.test(country || "") ? country.toUpperCase() : undefined),
-      lat: Number.isFinite(placeLat) ? placeLat : null,
-      lng: Number.isFinite(placeLng) ? placeLng : null,
-      visited_on: localISODate(),
-      local_hour: new Date().getHours(),
-      verified: "gps",
-      category: (link?.category || a.activityCategory || (a.types || [])[0]) || undefined,
-      ...(variant && link?.id ? { parent_id: link.id } : {}),   // the worker measures a variant from its parent
-      fix,
-    });
-    setBusy(false);
-    if (data?.code === "not_here" && Number.isFinite(data.distance_m)) { setNotHere({ meters: data.distance_m }); return; }
-    if (data?.code === "not_here" || data?.code === "unlocatable" || data?.code === "proof_needed") { setNotHere({ message: data.error || null }); return; }
-    if (error) { showToast(/sign in/i.test(error) ? "Sign in to stamp your Virtual Passport" : error, "error"); return; }
+  // A grant, from GPS or from a report: the stamp is in either way. A report
+  // never says ✓ — the worker answers with the stamp's strongest proof ever,
+  // which can be an older GPS visit, not what this tap proved.
+  const granted = (data, req, viaReport) => {
     setStamped(true);
+    setRefused(null);
     setStampedId(data?.id || null);
     setStartedPrivate(data?.private === true);
-    showToast(iconic ? "✓ Verified — added to your Virtual Passport 🛂" : "✓ “I was here” — added to your Virtual Passport 🛂", "success");
+    setWasReported(!!viaReport);
+    setWasHeld(!!data?.updated);
+    showToast(viaReport
+      ? (data?.updated ? "Already in your Virtual Passport — thanks for telling us" : "Stamped — added to your Virtual Passport 🛂")
+      : data?.verified === "gps"
+        ? (iconic ? "✓ Verified — added to your Virtual Passport 🛂" : "✓ “I was here” — added to your Virtual Passport 🛂")
+        : "Stamped — added to your Virtual Passport 🛂", "success");
     // A place of respect (founder, 2026-10-04): its message first; a memorial also asks illustrated or text only.
-    const place = respectPlaceFor({ kind: "attraction", name: stampName });
-    if (place && data?.id) setRespect({ place, stamp: { id: data.id, name: stampName, city: link?.city || parts.city, country, entity_id: entityId } });
+    const place = respectPlaceFor({ kind: "attraction", name: req.stampName });
+    if (place && data?.id) setRespect({ place, stamp: { id: data.id, name: req.stampName, city: req.city, country: req.country, entity_id: req.entityId } });
   };
+
+  const stamp = async () => {
+    if (busy || stamped || reportBusy) return;
+    setBusy(true); setRefused(null);
+    const placeLat = Number(link?.lat ?? a.lat), placeLng = Number(link?.lng ?? a.lng);
+    // The best of 2–3 fresh readings. The worker, not the phone, decides
+    // whether that's inside the place — its map has the street shapes and
+    // footprints (founder, 2026-10-10: the Walk of Fame refused a stamp under
+    // the Dolby Theatre because the phone measured to a single pin).
+    let fix = null, noFix = null;
+    try { fix = await getStampFix(); }
+    catch (e) { noFix = e?.code === 1 ? "denied" : "no_fix"; }
+    const parts = placeParts(a.formattedAddress);
+    const country = link?.country || parts.country || null;
+    const gid = resolved?.gid || (kind === "google" ? pid : null);
+    const city = link?.city || parts.city;
+    // One request per variant choice. A park within a resort (Disney,
+    // Universal, the Grand Canyon rims) is picked by where GPS puts you; a
+    // report — sent exactly when GPS is wrong — takes the card's own place
+    // instead (its pin: a single park resolves to itself, a resort keeps the
+    // resort stamp), so it never grants the park nearest a bad reading.
+    const build = (variant) => {
+      const entityId = variant ? variant.entity_id
+        : iconic ? link.id
+        : gid ? `places:${gid}`
+        : kind === "owned" ? `owned:${pid}`
+        : pid;
+      const stampName = variant ? variant.name : (link?.name || name);
+      const payload = {
+        kind: "attraction",
+        entity_type: variant ? "landmark" : "place",
+        entity_id: entityId,
+        name: stampName,
+        city,
+        region: parts.region,
+        country,
+        cc: countryCode(country) || (/^[A-Za-z]{2}$/.test(country || "") ? country.toUpperCase() : undefined),
+        lat: Number.isFinite(placeLat) ? placeLat : null,
+        lng: Number.isFinite(placeLng) ? placeLng : null,
+        visited_on: localISODate(),
+        local_hour: new Date().getHours(),
+        verified: "gps",
+        category: (link?.category || a.activityCategory || (a.types || [])[0]) || undefined,
+        ...(variant && link?.id ? { parent_id: link.id } : {}),   // the worker measures a variant from its parent
+        ...(fix ? { fix: { lat: fix.lat, lng: fix.lng, ...(Number.isFinite(fix.acc) ? { acc: fix.acc } : {}) } } : {}),
+      };
+      return { payload, stampName, city, country, entityId };
+    };
+    const variants = iconic && !localFavorite;
+    const pinVariant = variants ? resolveStampVariant({ name: link.name, lat: placeLat, lng: placeLng, country, verified: "self" }) : null;
+    const reportReq = build(pinVariant);
+    if (!fix) { setBusy(false); setRefused({ why: noFix, req: reportReq }); return; }
+    const req = build(variants ? resolveStampVariant({ name: link.name, lat: fix.lat, lng: fix.lng, country, verified: "gps" }) : null);
+    const { data, error } = await addStamp(req.payload);
+    setBusy(false);
+    if (STAMP_REFUSALS.includes(data?.code)) {
+      // proof_needed WITH a fix: the worker measured you inside but didn't
+      // trust the reading (a VPN, or impossible travel since your last stamp).
+      setRefused({ why: data.code === "proof_needed" ? "unconfirmed" : data.code, meters: Number.isFinite(data.distance_m) ? data.distance_m : null, message: data.error || null, req: reportReq });
+      return;
+    }
+    if (error) { showToast(/sign in/i.test(error) ? "Sign in to stamp your Virtual Passport" : error, "error"); return; }
+    // A GPS claim that comes back without GPS means the worker measured you
+    // inside but didn't trust the reading (a VPN, or impossible travel) on a
+    // stamp you already hold — a refusal like any other, so the report button.
+    if (data?.verified !== "gps") { setRefused({ why: "unconfirmed", meters: null, message: null, req: reportReq }); return; }
+    granted(data, req, false);
+  };
+
+  // "I'm here, but the app is saying I'm not" — always grants, always files.
+  const report = async () => {
+    if (!refused || reportBusy || stamped) return;
+    setReportBusy(true);
+    const { data, error } = await reportStamp(refused.req.payload);
+    setReportBusy(false);
+    if (error || !data?.id) { showToast(/sign in/i.test(error || "") ? "Sign in to stamp your Virtual Passport" : (error || "Couldn’t send that — try again"), "error"); return; }
+    granted(data, refused.req, true);
+  };
+  const away = (m) => fmtDist(m / 1609.34);
+  const refusalText = (r) => (
+    r.why === "denied" ? "Location is off for GlobeSkimmers — turn it on in Settings, then tap Stamp again."
+      : r.why === "no_fix" ? "We couldn’t get a GPS reading just now — step outside or give it a moment, then tap Stamp again."
+      : r.why === "unlocatable" ? "We can’t place this attraction on our map yet."
+      : r.why === "unconfirmed" ? "We couldn’t confirm your GPS reading — a VPN, or a long trip today, can cause this."
+      : Number.isFinite(r.meters) ? `Your GPS puts you about ${away(r.meters)} from ${name} on our map.`
+      : r.message || "Your GPS doesn’t show you at this place yet."
+  );
 
   return (
     <div>
       {respect && <RespectPlaceSheet stamp={respect.stamp} place={respect.place} onChoose={chooseArt} onLater={() => setRespect(null)} />}
-      <button type="button" onClick={stamp} disabled={busy || stamped}
+      <button type="button" onClick={stamp} disabled={busy || stamped || reportBusy}
         style={{ width: "100%", borderRadius: isTablet ? 16 : 14, padding: fs(isTablet ? 15 : 12), border: "none", cursor: "pointer", fontFamily: "inherit",
-          fontSize: fs(isTablet ? 18 : 14.5), fontWeight: 700, background: stamped ? "#E7F3EA" : STAMP, color: stamped ? "#266A3B" : "#fff" }}>
-        {busy ? "Checking you are here…" : stamped ? "✓ In your Virtual Passport" : iconic ? "📍 Stamp it — I'm here" : "📍 I was here — get the stamp"}
+          fontSize: fs(isTablet ? 18 : 14.5), fontWeight: 700, background: stamped ? (wasReported ? "#F3EEE3" : "#E7F3EA") : STAMP, color: stamped ? (wasReported ? INK : "#266A3B") : "#fff" }}>
+        {busy ? "Checking you are here…" : stamped ? (wasReported ? "In your Virtual Passport" : "✓ In your Virtual Passport") : iconic ? "📍 Stamp it — I'm here" : "📍 I was here — get the stamp"}
       </button>
-      {!stamped && !notHere && (
+      {stamped && wasReported && (
+        <p style={{ marginTop: 6, fontSize: fs(12.5), color: INK3, textAlign: "center" }}>Thanks for telling us — we&rsquo;ll check our map for {name}.</p>
+      )}
+      {!stamped && !refused && (
         <p style={{ fontSize: fs(11.5), color: INK3, textAlign: "center", marginTop: 5 }}>
-          {iconic ? "An official GlobeSkimmers stamp" : "A typographic “I was here” stamp"} · only at the place, by GPS ·{" "}
+          {localFavorite ? "A Local favorite stamp" : iconic ? "An official GlobeSkimmers stamp" : "A typographic “I was here” stamp"} · only at the place, by GPS ·{" "}
           <button type="button" onClick={() => setHowOpen((v) => !v)} style={{ textDecoration: "underline", color: "inherit" }}>How stamps work</button>
         </p>
       )}
@@ -184,7 +251,8 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
           This may be a sensitive place ❤️ — this stamp starts private, so only you can see it. You can share it from your Passport anytime.
         </p>
       )}
-      {stamped && stampedId && !memSaved && (
+      {/* Not for a stamp already held: saving would replace its note, which this page never showed. */}
+      {stamped && stampedId && !memSaved && !wasHeld && (
         <div style={{ marginTop: 10, borderRadius: 14, border: `1px solid ${RULE}`, background: "#fff", padding: "12px 12px 10px" }}>
           <div style={{ fontFamily: SERIF, fontSize: fs(18), color: INK, lineHeight: 1.2 }}>Want to remember something about this moment?</div>
           <div style={{ fontSize: fs(12), color: INK3, marginTop: 2 }}>🔒 Optional, and only you can see it — share it on your passport later if you like.</div>
@@ -198,13 +266,15 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
           </div>
         </div>
       )}
-      {notHere && (
-        <p style={{ marginTop: 8, borderRadius: 12, border: "1px solid #FCD9A8", background: "#FFF8EC", padding: "10px 12px", fontSize: fs(13), color: "#7A4A0C" }}>
-          {notHere.noFix
-            ? "We need your location to stamp this — turn on Location for Globeskimmers, then tap again."
-            : notHere.message ? notHere.message
-            : `This stamp is earned at the place${Number.isFinite(notHere.meters) ? ` — you're about ${formatDistance ? formatDistance(notHere.meters / 1609.34) : `${(notHere.meters / 1000).toFixed(1)} km`} away` : ""}. Tap again when you're here.`}
-        </p>
+      {refused && !stamped && (
+        <div style={{ marginTop: 8, borderRadius: 12, border: "1px solid #FCD9A8", background: "#FFF8EC", padding: "10px 12px" }}>
+          <p style={{ fontSize: fs(13), color: "#7A4A0C" }}>{refusalText(refused)}</p>
+          <button type="button" onClick={report} disabled={reportBusy}
+            style={{ marginTop: 8, width: "100%", borderRadius: 10, padding: fs(9), border: `1.5px solid ${STAMP}`, background: "#fff", color: STAMP, fontWeight: 700, fontSize: fs(13.5), fontFamily: "inherit", cursor: "pointer" }}>
+            {reportBusy ? "Sending…" : "I’m here, but the app is saying I’m not"}
+          </button>
+          <p style={{ marginTop: 5, fontSize: fs(11.5), color: "#7A4A0C", textAlign: "center" }}>You&rsquo;ll get the stamp, and we&rsquo;ll check our map for this place.</p>
+        </div>
       )}
     </div>
   );
@@ -215,7 +285,8 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet })
 // the place; the worker re-checks against Google's location.
 export function HereStamp({ place, formatDistance }) {
   const { currentGpsLocation } = useLocation();
-  const g = currentGpsLocation?.coordinates;
+  // A reading from this app run only — never yesterday's café, restored.
+  const g = isLiveFix(currentGpsLocation, 60 * 60 * 1000) ? currentGpsLocation.coordinates : null;
   const lat = Number(place?.lat), lng = Number(place?.lng);
   if (!g || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   if (metersBetween(g.latitude, g.longitude, lat, lng) > stampRadiusFor({ types: place.types }) + 50) return null;
@@ -358,6 +429,162 @@ export function ParkingCard({ visit, website }) {
   );
 }
 
+// One polling hook for the on-open lookups (why-visit, before-you-go): the
+// worker answers { pending } while another open is writing the same place.
+function useOnOpenLookup(route, id, timeoutMs) {
+  const [out, setOut] = useState(id ? "loading" : null);
+  useEffect(() => {
+    if (!id) { setOut(null); return undefined; }
+    let gone = false;
+    setOut("loading");
+    (async () => {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const { data, error } = await callWorker(route, { id }, { timeoutMs });
+        if (gone) return;
+        if (data?.pending) { await new Promise((r) => setTimeout(r, 8000)); if (gone) return; continue; }
+        setOut(data && data.ok ? data : { ok: false, busy: data?.error === "busy" || error === "busy", official_site: data?.official_site || null });
+        return;
+      }
+      if (!gone) setOut({ ok: false });
+    })();
+    return () => { gone = true; };
+  }, [route, id, timeoutMs]);
+  return out;
+}
+export const useWhyVisit = (id) => useOnOpenLookup("attractions/why-visit", id, 60000);
+export const useBeforeYouGo = (id) => useOnOpenLookup("attractions/before-you-go", id, 90000);
+
+// "Something's wrong?" — clears the saved text/facts so the next open redoes
+// the lookup, and lands on the admin's event list. One tap per card per open.
+function ReportLine({ route, id, children }) {
+  const [sent, setSent] = useState(false);
+  if (!id) return null;
+  if (sent) return <p style={{ marginTop: 8, fontSize: fs(12), color: INK3 }}>Thanks — we&rsquo;ll look at this place again.</p>;
+  return (
+    <button type="button" onClick={async () => { setSent(true); await callWorker(route, { id, report: true }); showToast("Thanks — we'll recheck this place", "success"); }}
+      style={{ marginTop: 8, fontSize: fs(12), color: INK3, textDecoration: "underline", textAlign: "left" }}>{children}</button>
+  );
+}
+
+// Why visit (top of the page, above the stamp) + what you can do + the story.
+// Everything here is ours, written once from public records and kept; a line
+// the guards rejected is simply absent, so an empty card never renders.
+export function WhyVisitCard({ wv, id, firstLine }) {
+  const [open, setOpen] = useState(false);
+  const why = (wv && wv !== "loading" && wv.ok && wv.why_visit) || firstLine || null;
+  const canDo = wv && wv !== "loading" && wv.ok && Array.isArray(wv.can_do) ? wv.can_do : [];
+  const story = wv && wv !== "loading" && wv.ok && wv.story ? String(wv.story).split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean) : [];
+  if (wv === "loading" && !why) {
+    return (
+      <div style={{ background: "#fff", border: `1px solid ${RULE}`, borderRadius: 16, padding: "14px 16px" }}>
+        {[88, 70].map((w) => <div key={w} aria-hidden="true" className="animate-pulse" style={{ height: 12, width: `${w}%`, borderRadius: 6, background: "#ECE6D8", marginTop: w === 88 ? 2 : 8 }} />)}
+      </div>
+    );
+  }
+  if (!why && !canDo.length && !story.length) return null;
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${RULE}`, borderRadius: 16, padding: "14px 16px" }}>
+      {why && (
+        <>
+          <div style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".14em", textTransform: "uppercase", color: STAMP, marginBottom: 6 }}>Why visit</div>
+          <p style={{ fontFamily: SERIF, fontSize: fs(18), lineHeight: 1.28, color: INK }}>{why}</p>
+        </>
+      )}
+      {canDo.length > 0 && (
+        <ul style={{ marginTop: why ? 10 : 0 }}>
+          {canDo.map((l, i) => <li key={i} style={{ display: "flex", gap: 8, fontSize: fs(13.5), color: INK, padding: "3px 0" }}><span style={{ color: STAMP }}>·</span><span>{l}</span></li>)}
+        </ul>
+      )}
+      {story.length > 0 && (
+        <div style={{ marginTop: 10, borderTop: `1px solid ${RULE}`, paddingTop: 8 }}>
+          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: fs(13.5), fontWeight: 600, color: "#6D28D9" }}>
+            <BookOpen size={15} /> {open ? "Hide the story ▴" : "Read the story ▾"}
+          </button>
+          {open && story.map((p, i) => <p key={i} style={{ marginTop: 8, fontSize: fs(14), lineHeight: 1.5, color: INK }}>{p}</p>)}
+        </div>
+      )}
+      {wv && wv !== "loading" && wv.ok && <ReportLine route="attractions/why-visit" id={id}>Something&rsquo;s off?</ReportLine>}
+    </div>
+  );
+}
+
+// Before you go — the place's own published visiting rules, each line backed
+// by a quote from the official site. Nothing here is inferred: a rule we
+// couldn't find is "unknown", and the card says so.
+const BYG_LIMITS = { faith: "some areas are for worshippers only", gender: "some areas are separated by gender", age: "age limits apply", tour_only: "entry is by guided tour only", permit: "a permit is needed", dress_enforced: "dress rules are enforced at the door", other: "see the rule below" };
+const BYG_DRESS = { cover_shoulders: "Cover your shoulders", cover_knees: "Cover your knees", women_cover_hair: "Women cover their hair", men_cover_head: "Men cover their heads", remove_shoes: "Remove your shoes", wraps_provided: "Wraps are provided at the door", other: "" };
+const BYG_SECURITY = { bag_check: "Bag check at the entrance", no_large_bags: "No large bags", lockers: "Lockers are available", id_required: "Bring ID", other: "" };
+const BYG_CLOSURE = { prayer: "Prayer times", service: "Services", ceremony: "Ceremonies", weekly: "Weekly closure", seasonal: "Seasonal closure", other: "Closure" };
+const minutesText = (m) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${m} min`);
+function BygRow({ icon, head, text, quote, tone }) {
+  const [open, setOpen] = useState(false);
+  const color = tone === "amber" ? "#8A5A00" : tone === "red" ? "#B3261E" : tone === "green" ? "#2E7D46" : INK;
+  return (
+    <div style={{ padding: "8px 0", borderTop: `1px solid ${RULE}` }}>
+      <p style={{ fontSize: fs(14), fontWeight: 600, color, display: "flex", gap: 8 }}><span aria-hidden="true">{icon}</span><span>{head}</span></p>
+      {text && text !== head && <p style={{ fontSize: fs(13.5), color: INK, marginTop: 2, paddingLeft: 26 }}>{text}</p>}
+      {quote && (
+        <div style={{ paddingLeft: 26 }}>
+          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} style={{ marginTop: 3, fontSize: fs(12), color: INK3, textDecoration: "underline" }}>{open ? "Hide what the site says" : "What the official site says"}</button>
+          {open && <p style={{ marginTop: 4, fontSize: fs(12.5), lineHeight: 1.45, color: INK3, fontStyle: "italic" }}>&ldquo;{quote}&rdquo;</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+export function BeforeYouGoCard({ byg, id, website }) {
+  const icon = <ClipboardList size={18} color="#8A5A00" />;
+  if (!byg) return null;
+  if (byg === "loading") {
+    return (
+      <Card icon={icon} title="Before you go">
+        <p style={{ fontSize: fs(13), color: INK3, marginBottom: 8 }}>Reading the official site for visiting rules…</p>
+        {[70, 58].map((w) => <div key={w} aria-hidden="true" className="animate-pulse" style={{ height: 12, width: `${w}%`, borderRadius: 6, background: "#ECE6D8", marginTop: 6 }} />)}
+      </Card>
+    );
+  }
+  const official = byg.official_site || website || null;
+  if (!byg.ok || !byg.found) {
+    return (
+      <Card icon={icon} title="Before you go">
+        <p style={{ fontSize: fs(13.5), color: INK }}>{byg.busy ? "Rule lookups are paused for today." : "We couldn't find published visiting rules for this place."} Check the official site before you go.</p>
+        <div style={{ marginTop: 6 }}><OfficialLink url={official} label="Visiting information on the official site" /></div>
+      </Card>
+    );
+  }
+  const rows = [];
+  const e = byg.entry;
+  if (e?.value === "open_to_all") rows.push({ icon: "🚪", head: "Open to all visitors", text: e.text, quote: e.quote, tone: "green", src: e.source_url });
+  if (e?.value === "restricted") rows.push({ icon: "🚪", head: `Entry is limited — ${(e.limits || []).map((l) => BYG_LIMITS[l]).filter(Boolean).join("; ") || "see below"}`, text: e.text, quote: e.quote, tone: "amber", src: e.source_url });
+  if (e?.value === "closed_to_visitors") rows.push({ icon: "🚪", head: "Not open to visitors", text: e.text, quote: e.quote, tone: "red", src: e.source_url });
+  const d = byg.dress;
+  if (d?.value === "stated") rows.push({ icon: "👕", head: (d.items || []).map((x) => BYG_DRESS[x]).filter(Boolean).join(" · ") || "Dress rules apply", text: d.text, quote: d.quote, tone: "amber", src: d.source_url });
+  const r = byg.reservation;
+  if (r?.value) rows.push({ icon: "🎟️", head: r.value === "required" ? "Book ahead — required" : r.value === "recommended" ? "Booking ahead is recommended" : "No booking needed", text: r.text, quote: r.quote, tone: r.value === "required" ? "amber" : "ink", src: r.source_url });
+  const t = byg.time_needed;
+  if (Number.isFinite(+t?.value)) rows.push({ icon: "⏱️", head: `Plan about ${minutesText(+t.value)}`, text: t.text, quote: t.quote, tone: "ink", src: t.source_url });
+  for (const c of (byg.closures?.items || [])) rows.push({ icon: "🕰️", head: BYG_CLOSURE[c.kind] || "Closure", text: c.text, quote: c.quote, tone: "amber", src: c.source_url });
+  const p = byg.photography;
+  if (p?.value) rows.push({ icon: "📷", head: p.value === "allowed" ? "Photos are allowed" : p.value === "restricted" ? "Photos are limited in places" : "No photos inside", text: p.text, quote: p.quote, tone: p.value === "allowed" ? "green" : "amber", src: p.source_url });
+  const s = byg.security;
+  if (s?.value === "stated") rows.push({ icon: "🎒", head: (s.items || []).map((x) => BYG_SECURITY[x]).filter(Boolean).join(" · ") || "Security checks", text: s.text, quote: s.quote, tone: "ink", src: s.source_url });
+  const a = byg.accessibility;
+  if (a?.value === "stated") rows.push({ icon: "♿", head: "Accessibility", text: a.text, quote: a.quote, tone: "ink", src: a.source_url });
+  for (const o of (byg.other_rules || [])) rows.push({ icon: "ℹ️", head: o.text, text: null, quote: o.quote, tone: "ink", src: o.source_url });
+  const firstSrc = rows.find((x) => x.src)?.src || null;
+  return (
+    <Card icon={icon} title="Before you go">
+      <div style={{ marginTop: -8 }}>{rows.map((row, i) => <BygRow key={i} {...row} />)}</div>
+      <p style={{ marginTop: 10, fontSize: fs(11.5), color: INK3 }}>
+        From <button type="button" onClick={() => openPartner(firstSrc || official)} style={{ textDecoration: "underline", color: "inherit" }}>{hostOf(firstSrc || official) || "the official site"}</button>
+        {byg.checked_at ? ` · checked ${checkedOn(byg.checked_at)}` : ""} · rules can change
+      </p>
+      <VerifyLink url={verifyUrlFor(firstSrc, official)} label="Confirm on the official website" />
+      <ReportLine route="attractions/before-you-go" id={id}>Something&rsquo;s wrong?</ReportLine>
+    </Card>
+  );
+}
+
 // Everything above, for one attraction card. children: the card's own details
 // (hours, AI, website) — they sit above the guestbook, which comes last.
 export default function AttractionExtras({ a, formatDistance, isTablet, children }) {
@@ -368,12 +595,18 @@ export default function AttractionExtras({ a, formatDistance, isTablet, children
   // taps), else on the Google place (owned places resolve to theirs).
   const visitId = link === undefined ? null : (link.stamp?.id || link.gid || (kind === "d1" ? pid : null));
   const visit = useVisitInfo(visitId);
+  // Why-visit and the visiting rules key the same way (founder, 2026-10-11:
+  // written on open, kept forever; no prefill).
+  const wv = useWhyVisit(visitId);
+  const byg = useBeforeYouGo(visitId);
   const name = a.displayName?.text || a.name || "";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
+      <WhyVisitCard wv={wv} id={visitId} firstLine={a.whyVisit || null} />
       {link !== undefined && <StampHereButton a={a} link={link} formatDistance={formatDistance} isTablet={isTablet} />}
       <TicketsCard visit={visit} website={a.websiteUri} />
       <ParkingCard visit={visit} website={a.websiteUri} />
+      <BeforeYouGoCard byg={byg} id={visitId} website={a.websiteUri} />
       {children}
       <div>
         <div style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".12em", textTransform: "uppercase", color: INK3, margin: "6px 2px 8px" }}>📖 Guestbook</div>

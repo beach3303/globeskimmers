@@ -16,6 +16,7 @@ import { calmEdge } from "@/lib/photoEdge";
 import AirportStamp from "@/components/passport/AirportStamp";
 import LandStamp from "@/components/passport/LandStamp";
 import TypographicStamp from "@/components/passport/TypographicStamp";
+import LocalFavoriteStamp, { isLocalFavorite, localFavoriteLine } from "@/components/passport/LocalFavoriteStamp";
 
 // ============================================================================
 // PassportBook — the Virtual Passport rendered as a real booklet you open and
@@ -44,8 +45,20 @@ const CITY_INKS = ["#1F6E6A", "#2B4A7E", "#3E5AA8", "#0E7C86", "#2E6B4E", "#5B4B
 const STAMP_INKS = ["#B0472F", "#2B4A7E", "#2E6B4E", "#5B4B8A", "#6D3A6E", "#0E7C86", "#8A3B2F"];
 const hashStr = (s) => { let h = 0; const str = String(s || ""); for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0; return h; };
 const PAPER = "#FBF6EC", PAPER_EDGE = "#EADFC9";
+// The Local favorite's deep teal: its disclosure line reads at caption size on the paper.
+const LF_INK = "#0A5F58";
 const NAVY = "#0C2B50", NAVY_DEEP = "#071B33", GOLD = "#D6A64A";
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
+// The Local favorite line's size where a page is shared (2026-10-12). A story
+// draws the page 647.5 px wide (story_meta, src/lib/shareCanvas.js), so the
+// booklet's 10px put it at ~18 px of a 1080-px story on a 390-pt iPhone, ~15 on
+// an iPad. Sized off the page instead: the biggest that keeps "Recommended by
+// 9,999 people who’ve been there" (23.4 em in Inter Tight 600; 1,112 is 22.7)
+// on one line inside a photo-first page's caption (the page less 46px), ≈24 px
+// in the story on every phone and iPad. The share floor (30 px) can't be had on
+// one line: there the line runs 1.05× the whole page width. The reader's text
+// size wins when it's bigger (fs(10), as before), so it never wraps where it didn't.
+const lfShareSize = (frameW) => `max(${+((frameW - 46) / 23.6).toFixed(2)}px, ${fs(10)})`;
 // Stamp width as a share of the page width. The 2026-09-28 "Updated B" sizing
 // (0.76, one stamp per page) existed only because the SHARED image was drawn
 // from the page. 2026-09-29 the share renderer decoupled: a share can render
@@ -166,7 +179,7 @@ export function packBookPages(stamps, pageW, fsScale = 1) {
 // constant fraction across phones (lets pagination fit each page with no scroll).
 // Airport ≈ ⅓ page; iconic ≈ ½ page with "I was here!", a big ink date, and up
 // to 4 memory photos in a 2×2 grid.
-function StampToken({ stamp, idx, onOpen, pageW, compact = false }) {
+function StampToken({ stamp, idx, onOpen, pageW, frameW = pageW, compact = false }) {
   const [artFail, setArtFail] = useState(false);
   // In the booklet each stamp keeps its own tilt (its half of the page places
   // it); on a shared page the tilt and nudge follow its order on the page.
@@ -174,16 +187,21 @@ function StampToken({ stamp, idx, onOpen, pageW, compact = false }) {
   const rot = compact ? (h % 9) - 4 : ((idx * 47 + 3) % 9) - 4;   // deterministic -4..+4°
   const nudge = compact ? 0 : ((idx * 53) % 26) - 13;            // deterministic -13..+12px horizontal
   const t = compact ? BOOK.text : 1;                              // caption type scale
+  // What kind of stamp this is comes first: `flag` below reads isLand, and
+  // reading it before its declaration threw for every country stamp.
+  const isAirport = stamp.kind === "airport";
+  const isLand = isLandCrossing(stamp);
+  const isCity = stamp.kind === "city";
+  // A Local favorite (founder, 2026-10-12) prints its own teal stamp, never
+  // the icon art or the typographic stamp, sized like an attraction's.
+  const isLocalFav = isLocalFavorite(stamp);
   // A memorial stamp its owner chose to keep as text only prints typographic.
-  const art = stamp.kind === "country" || isPlainArt(stamp) ? null : stampArtUrl(stamp.name, { entityId: stamp.entity_id, country: stamp.country });
+  const art = isLocalFav || stamp.kind === "country" || isPlainArt(stamp) ? null : stampArtUrl(stamp.name, { entityId: stamp.entity_id, country: stamp.country });
   const showArt = !!art && !artFail;
   const flag = stamp.kind === "country" && !isLand ? flagFor(stamp.country || stamp.name) : null;
   // No bespoke art and not a country -> the typographic stamp carries its own
   // date and "I was here!" strike, so the duplicate lines below are suppressed.
   const showTypo = !showArt && !flag;
-  const isAirport = stamp.kind === "airport";
-  const isLand = isLandCrossing(stamp);
-  const isCity = stamp.kind === "city";
   const venue = isCity && stamp.name && stamp.name !== stamp.city ? stamp.name : null;
   const cityInk = CITY_INKS[hashStr(stamp.id || stamp.entity_id || stamp.name) % CITY_INKS.length];
   const placeInk = STAMP_INKS[hashStr(stamp.id || stamp.entity_id || stamp.name) % STAMP_INKS.length];
@@ -196,6 +214,13 @@ function StampToken({ stamp, idx, onOpen, pageW, compact = false }) {
   const badgeW = Math.round((compact ? 0.36 : 0.5) * pageW);
   const airportW = Math.round((compact ? BOOK.airport : 0.82) * pageW);
   const thumbW = Math.round((compact ? BOOK.thumb : 0.185) * pageW);
+  // The ✓ sits on the stamp itself, never on the photos (founder,
+  // 2026-09-28), top-left so it never covers the red "I was here!".
+  // Earned by GPS at the place, a photo's own location, or the place
+  // recognised in a photo.
+  const tick = (stamp.verified === "gps" || stamp.verified === "photo_loc" || stamp.verified === "photo_ai") && (
+    <span className="absolute" title={stamp.verified === "gps" ? "Verified visit" : "Verified by photo"} style={{ top: -6, left: isAirport ? 10 : 14, background: "#2E6B4E", color: "#fff", fontSize: 14, fontWeight: 700, width: 26, height: 26, borderRadius: 999, display: "grid", placeItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }}>✓</span>
+  );
   return (
     <button
       onClick={() => onOpen(stamp)}
@@ -212,6 +237,28 @@ function StampToken({ stamp, idx, onOpen, pageW, compact = false }) {
           {stamp.kind === "state"
             ? <LandStamp template="state" name={stamp.region || stamp.name} date={stamp.visited_on} direction={stamp.meta?.direction || null} width={airportW} />
             : <LandStamp template="country" name={String(stamp.name || "").split(" · ")[0]} countryCode={String(stamp.entity_id || "").split(":")[0]} date={stamp.visited_on} direction={stamp.meta?.direction || null} width={airportW} />}
+        </div>
+      ) : isLocalFav ? (
+        // The stamp carries its own name, place and date. Under it, the one
+        // line every Local favorite discloses (founder, 2026-10-12): who
+        // recommended it. A shared image carries it too, and it sits in the
+        // caption room compactH already keeps for a place stamp, so pages
+        // pack as before. It can run wider than the stamp, so the ✓ rides on
+        // the stamp itself. A share prints it bigger (lfShareSize; frameW is
+        // the shared page's width, which the hero's scaled-up pageW is not).
+        <div className="flex flex-col items-center text-center">
+          <div className="relative">
+            <LocalFavoriteStamp name={stamp.name} city={stamp.city} country={stamp.country} date={stamp.visited_on} width={artW} strength={STAMP_INK_STRENGTH} />
+            {tick}
+          </div>
+          <div style={{ fontFamily: SANS, fontWeight: 600, color: LF_INK, fontSize: compact ? fs(10 * t) : lfShareSize(frameW), letterSpacing: ".01em", lineHeight: 1.25, marginTop: 6 * t }}>
+            {localFavoriteLine(stamp)}
+          </div>
+          {(stamp.tagged_by_name || stamp.tagged_by_handle) && (
+            <div style={{ fontFamily: MONO, fontSize: fs(10 * t), color: "#2E6B4E", letterSpacing: ".06em", marginTop: 6 * t, textTransform: "uppercase" }}>
+              WITH {(stamp.tagged_by_name || `@${stamp.tagged_by_handle}`).toUpperCase()}
+            </div>
+          )}
         </div>
       ) : isCity ? (
         // A city / place visit (everything minted by "Stamp a place"). This
@@ -303,13 +350,8 @@ function StampToken({ stamp, idx, onOpen, pageW, compact = false }) {
         </div>
       )}
 
-      {/* The ✓ sits on the stamp itself, never on the photos (founder,
-          2026-09-28), top-left so it never covers the red "I was here!".
-          Earned by GPS at the place, a photo's own location, or the place
-          recognised in a photo. */}
-      {(stamp.verified === "gps" || stamp.verified === "photo_loc" || stamp.verified === "photo_ai") && (
-        <span className="absolute" title={stamp.verified === "gps" ? "Verified visit" : "Verified by photo"} style={{ top: -6, left: isAirport ? 10 : 14, background: "#2E6B4E", color: "#fff", fontSize: 14, fontWeight: 700, width: 26, height: 26, borderRadius: 999, display: "grid", placeItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }}>✓</span>
-      )}
+      {/* The ✓ (tick, above). A Local favorite carries it on its stamp. */}
+      {!isLocalFav && tick}
     </button>
   );
 }
@@ -368,8 +410,10 @@ function PhotoFirstToken({ stamp, onOpen, pageW }) {
       <div aria-hidden style={{ position: "absolute", inset: "6%", borderRadius: "50%", background: "rgba(251,246,236,.45)" }} />
       <div aria-hidden style={{ position: "absolute", inset: "15%", borderRadius: "50%", background: "rgba(251,246,236,.6)" }} />
       <div style={{ position: "relative" }}>
-        <TypographicStamp name={stamp.name} city={stamp.city} region={stamp.region} country={stamp.country} date={stamp.visited_on}
-          entityId={stamp.entity_id || stamp.id} width={stampW} overprint strength={STAMP_INK_STRENGTH} film={stamp.meta?.film || null} />
+        {isLocalFavorite(stamp)
+          ? <LocalFavoriteStamp name={stamp.name} city={stamp.city} country={stamp.country} date={stamp.visited_on} width={stampW} strength={STAMP_INK_STRENGTH} />
+          : <TypographicStamp name={stamp.name} city={stamp.city} region={stamp.region} country={stamp.country} date={stamp.visited_on}
+              entityId={stamp.entity_id || stamp.id} width={stampW} overprint strength={STAMP_INK_STRENGTH} film={stamp.meta?.film || null} />}
       </div>
       {verified && (
         <span title={stamp.verified === "gps" ? "Verified visit" : "Verified by photo"} style={{ position: "absolute", top: 4, left: 4, background: "#2E6B4E", color: "#fff", fontSize: 13, fontWeight: 700, width: 26, height: 26, borderRadius: 999, display: "grid", placeItems: "center", border: "2px solid #fff" }}>✓</span>
@@ -382,6 +426,9 @@ function PhotoFirstToken({ stamp, onOpen, pageW }) {
       style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", height: "100%", cursor: "pointer" }}>
       {pos === "top" ? <>{stampEl}{photo}</> : <>{photo}{stampEl}</>}
       <div style={{ textAlign: "center", padding: "6px 4px 0", maxWidth: "100%", flex: "none" }}>
+        {isLocalFavorite(stamp) && (
+          <div style={{ fontFamily: SANS, fontWeight: 600, color: LF_INK, fontSize: lfShareSize(pageW), letterSpacing: ".01em", lineHeight: 1.25, marginBottom: 4 }}>{localFavoriteLine(stamp)}</div>
+        )}
         {film.title && (
           <div style={{ fontFamily: SERIF, fontSize: fs(21), color: INK, lineHeight: 1.1 }}>
             The scene from <i>{film.title}</i>{film.year ? ` (${film.year})` : ""}
@@ -902,7 +949,7 @@ export default function PassportBook({
             typography lands identically. */}
         {heroStamp && (
           <div ref={heroRef} aria-hidden style={{ position: "absolute", left: -10000, top: 0, width: pageW, height: pageW * 1.6, background: PAPER, border: `1px solid ${PAPER_EDGE}`, borderRadius: 16, padding: 18, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-            <StampToken stamp={heroStamp} idx={0} onOpen={() => {}} pageW={heroStamp.kind === "airport" ? pageW : pageW * (HERO_FRAC / ART_FRAC)} />
+            <StampToken stamp={heroStamp} idx={0} onOpen={() => {}} pageW={heroStamp.kind === "airport" ? pageW : pageW * (HERO_FRAC / ART_FRAC)} frameW={pageW} />
           </div>
         )}
 

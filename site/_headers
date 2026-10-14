@@ -9,3 +9,9 @@
 /app-ads.txt
   Cache-Control: public, max-age=3600
   Content-Type: text/plain; charset=utf-8
+/admin/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src https://globeskimmers-api.maizasimeon.workers.dev https://bkaxadiyehddzkiuheea.supabase.co; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; require-trusted-types-for 'script'; trusted-types 'none'
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Referrer-Policy: no-referrer
+  Cross-Origin-Opener-Policy: same-origin
+  Cache-Control: no-store

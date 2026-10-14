@@ -6,9 +6,10 @@ import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesi
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead } from "@/lib/passport";
+import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead, socialFollow } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
+import { TAGGING_ENABLED } from "@/lib/flags";
 import { respectPlaceFor, needsRespectNote, isPlainArt } from "@/lib/respectPlaces";
 import RespectPlaceSheet from "@/components/passport/RespectPlaceSheet";
 import { setStampArt } from "@/lib/passport";
@@ -16,13 +17,15 @@ import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
 import TypographicStamp from "@/components/passport/TypographicStamp";
 import AirportStamp from "@/components/passport/AirportStamp";
 import LandStamp from "@/components/passport/LandStamp";
-import { useLocation } from "@/components/location/LocationContext";
+import LocalFavoriteStamp, { isLocalFavorite, localFavoriteLine } from "@/components/passport/LocalFavoriteStamp";
+import { useLocation, isLiveFix } from "@/components/location/LocationContext";
 import PassportBook, { packBookPages, readFontScale, fitsTogether } from "@/components/passport/PassportBook";
 import BlotterStrip from "@/components/passport/Blotter";
 import { isAdminEmail } from "@/lib/admins";
 import { countryCode } from "@/lib/countries";
 import { localISODate } from "@/lib/localDate";
 import { stampRadiusFor } from "@/lib/stampRadius";
+import { getStampFix } from "@/lib/geolocation";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { readPhotoExif } from "@/lib/photoExif";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
@@ -32,6 +35,8 @@ import Luggage from "@/components/passport/Luggage";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import HeldHandleClaim from "@/components/passport/HeldHandleClaim";
 import PhotoFooter from "@/components/passport/PhotoFooter";
+import TravelerSheet from "@/components/social/TravelerSheet";
+import { blockTarget, blockReady } from "@/lib/blocks";
 
 
 // ============================================================================
@@ -75,6 +80,13 @@ function VerifiedBadge({ verified }) {
 function Chip({ children, bg, color }) {
   return <span style={{ background: bg, color, fontSize: fs(10.5), fontFamily: SANS, fontWeight: 600 }} className="px-2 py-0.5 rounded-full leading-tight inline-block">{children}</span>;
 }
+// A Local favorite always says who vouched for it (founder, 2026-10-12), in
+// the words the booklet prints under the stamp: how many people who've been
+// there had recommended the place when this stamp was earned.
+function LocalFavoriteChip({ stamp }) {
+  const line = localFavoriteLine(stamp);
+  return <Chip bg="#E8F4F2" color="#0A5F58">Local favorite · {line.charAt(0).toLowerCase() + line.slice(1)}</Chip>;
+}
 
 function Stat({ n, label }) {
   return (
@@ -105,22 +117,52 @@ function TripNote({ stamp, readOnly }) {
 function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }) {
   const isHome = stamp.kind === "city" && homeCity && String(stamp.city || "").toLowerCase() === String(homeCity).toLowerCase();
   const k = KIND[stamp.kind] || KIND.attraction;
+  // A Local favorite (founder, 2026-10-12) prints its own teal stamp: never
+  // the icon art, never the typographic stamp.
+  const localFav = isLocalFavorite(stamp);
   // Bespoke landmark stamp art (falls back to the category emoji if none exists).
   // Country stamps use the flag, not bespoke art.
-  const artUrl = stamp.kind === "country" || isPlainArt(stamp) ? null : stampArtUrl(stamp.name, { entityId: stamp.entity_id, country: stamp.country });
+  const artUrl = localFav || stamp.kind === "country" || isPlainArt(stamp) ? null : stampArtUrl(stamp.name, { entityId: stamp.entity_id, country: stamp.country });
   const [artFailed, setArtFailed] = useState(false);
   const showArt = !!artUrl && !artFailed;
   // Country stamps keep the flag; every other kind falls back to a typographic
   // stamp instead of the category emoji, so no stamp ever looks unfinished.
-  const showTypo = stamp.kind !== "country" && !showArt;
+  const showTypo = stamp.kind !== "country" && !showArt && !localFav;
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [showDate, setShowDate] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [dateVal, setDateVal] = useState(stamp.visited_on || "");
   const [tagBusy, setTagBusy] = useState(false);
-  // Create a share-link invite → hand it to the native share sheet so the user
-  // sends it via WhatsApp / iMessage / whatever they use. No app-sent email.
+  // Tag a friend (founder bug, 2026-10-10): the old flow ONLY minted a share
+  // link, so an in-app tag never had a recipient and the friend's Mailbox
+  // "tagged you" card never fired. Now: pick a friend by @username (the tag
+  // lands in their Mailbox to Allow/Decline), with the share link kept as the
+  // fallback for friends not on the app yet.
+  const [tagOpen, setTagOpen] = useState(false);
+  const [friends, setFriends] = useState(null); // null = not loaded yet
+  const openTagPicker = async () => {
+    if (tagOpen) { setTagOpen(false); return; }
+    setTagOpen(true);
+    if (friends === null) {
+      const { data } = await socialFollow("list");
+      const mine = []; const seen = new Set();
+      for (const f of [...(data?.following || []), ...(data?.followers || [])]) {
+        if (f.handle && f.status === "accepted" && !seen.has(f.user_id)) { seen.add(f.user_id); mine.push(f); }
+      }
+      setFriends(mine);
+    }
+  };
+  const tagFriend = async (h) => {
+    setTagBusy(true);
+    const { data, error } = await createTagInvite({ stamp_id: stamp.id, from_name: fromName, to_handle: h });
+    setTagBusy(false);
+    if (error) { showToast(error, "error"); return; }
+    setTagOpen(false);
+    showToast(`Tagged @${data?.to_handle || h} — it's waiting in their Mailbox 🛂`, "success");
+  };
+  // Share-link fallback — honest about delivery: the friend only gets it if
+  // the share sheet actually sends it (a dismissed sheet is NOT a sent invite).
   const shareInvite = async () => {
     setTagBusy(true);
     const { data, error } = await createTagInvite({ stamp_id: stamp.id, from_name: fromName });
@@ -128,10 +170,10 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
     if (error || !data?.url) { showToast(error || "Couldn't create invite", "error"); return; }
     const text = `I tagged you at ${stamp.name} on Globeskimmers 🛂 — add it to your Virtual Passport:`;
     try {
-      if (navigator.share) await navigator.share({ title: "Globeskimmers", text, url: data.url });
+      if (navigator.share) { await navigator.share({ title: "Globeskimmers", text, url: data.url }); showToast("Invite shared 📨", "success"); }
       else if (navigator.clipboard) { await navigator.clipboard.writeText(`${text} ${data.url}`); showToast("Invite link copied — paste it to your friend", "success"); }
-      else showToast("Invite ready", "success");
-    } catch { /* user dismissed the share sheet — no-op */ }
+      else showToast("Invite link created — your friend gets it only if you send it to them", "error");
+    } catch { showToast("Invite not sent", "error"); } // share sheet dismissed
   };
   const place = [stamp.city, stamp.region, stamp.country].filter(Boolean).join(", ");
   const photos = stamp.photos || [];
@@ -241,6 +283,11 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
 
   return (
     <div className="bg-white rounded-[20px] p-4" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
+      {localFav && (
+        <div className="flex justify-center mb-3">
+          <LocalFavoriteStamp name={stamp.name} city={stamp.city} country={stamp.country} date={stamp.visited_on} width={150} strength={STAMP_INK_STRENGTH} />
+        </div>
+      )}
       {showTypo && (
         <div className="flex justify-center mb-3">
           <TypographicStamp
@@ -259,7 +306,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
       )}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2.5 min-w-0">
-          {!showArt && !showTypo && <div className="shrink-0 rounded-xl flex items-center justify-center" style={{ width: 42, height: 42, background: IVORY_2, fontSize: 22 }}>{k.icon}</div>}
+          {!showArt && !showTypo && !localFav && <div className="shrink-0 rounded-xl flex items-center justify-center" style={{ width: 42, height: 42, background: IVORY_2, fontSize: 22 }}>{k.icon}</div>}
           <div className="min-w-0">
             <p className="truncate" style={{ fontFamily: SERIF, fontSize: fs(19), color: INK, lineHeight: 1.15 }}>{stamp.name}</p>
             {place && <p className="truncate" style={{ color: INK3, fontSize: fs(12), fontFamily: MONO }}>{place}</p>}
@@ -298,6 +345,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
 
       <div className="flex items-center gap-2 flex-wrap mt-2.5">
         {isHome && <Chip bg="#F3E2C7" color={STAMP}>🏠 Home</Chip>}
+        {localFav && <LocalFavoriteChip stamp={stamp} />}
         <VerifiedBadge verified={stamp.verified} />
         {readOnly ? (
           stamp.visited_on && <span className="inline-flex items-center gap-1" style={{ color: INK3, fontSize: fs(12) }}><Calendar size={12} color={INK3} /> {fmtDate(stamp.visited_on)}</span>
@@ -346,12 +394,43 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
       </button>
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
 
-      {/* Tag who you were with — share a link (their app of choice); they
-          Allow/Decline the stamp on their own Virtual Passport */}
-      <button onClick={shareInvite} disabled={tagBusy} className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl py-2.5"
+      {/* Tag who you were with — pick a friend (@username → their Mailbox,
+          Allow/Decline on their own Virtual Passport), or share a link for
+          friends not on the app yet. Hidden while TAGGING_ENABLED is false
+          (founder, 2026-10-10: parked until thousands of users). */}
+      {TAGGING_ENABLED && (<>
+      <button onClick={openTagPicker} disabled={tagBusy} className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl py-2.5"
         style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13), fontWeight: 600 }}>
-        <UserPlus size={15} strokeWidth={2.2} /> {tagBusy ? "Preparing…" : "Tag who you were with"}
+        <UserPlus size={15} strokeWidth={2.2} /> {tagBusy ? "Tagging…" : "Tag who you were with"}
       </button>
+      {tagOpen && (
+        <div className="mt-2 rounded-xl p-3" style={{ background: IVORY_2, border: `1px solid ${RULE}` }}>
+          {friends === null ? (
+            <div className="flex items-center gap-2" style={{ color: INK2, fontSize: fs(12.5) }}>
+              <Loader2 size={14} className="animate-spin" /> Loading your friends…
+            </div>
+          ) : (<>
+            {friends.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {friends.slice(0, 12).map((f) => (
+                  <button key={f.user_id} onClick={() => tagFriend(f.handle)} disabled={tagBusy}
+                    className="rounded-full px-3 py-1.5"
+                    style={{ background: "#fff", color: TEAL_DEEP, border: `1px solid ${TEAL_DEEP}`, fontSize: fs(12), fontWeight: 600 }}>
+                    @{f.handle}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: INK2, fontSize: fs(12.5), margin: 0 }}>No friends with a @username yet — share an invite link instead.</p>
+            )}
+            <button onClick={shareInvite} disabled={tagBusy} className="mt-2 w-full rounded-lg py-2"
+              style={{ background: "#fff", color: INK2, border: `1px dashed ${RULE}`, fontSize: fs(12.5), fontWeight: 600 }}>
+              Share an invite link instead
+            </button>
+          </>)}
+        </div>
+      )}
+      </>)}
       </>)}
     </div>
   );
@@ -418,11 +497,19 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
   // No preset → start from where GPS says you are (founder, 2026-10-05:
   // "provide them the city where they currently are"). The city field is
   // filled, not locked — the GPS check at submit is what verifies the stamp.
-  const { activeLocation } = useLocation();
-  const sensed = !preset && activeLocation?.address?.city ? {
-    city: activeLocation.address.city,
-    country: activeLocation.address.country || "",
-    lat: activeLocation.coordinates?.latitude, lng: activeLocation.coordinates?.longitude,
+  // The sensed point is only ever kept to about a city block (3 decimals,
+  // the founder's own rough-zone size, 2026-10-10): with no spot picked it
+  // becomes the stamp's location — never the exact spot — while staying close
+  // enough for the 400 m photo-location proof and Verify I'm here.
+  // "Where you are" is a live GPS reading from this app run — never the place
+  // you are browsing or an old restored fix (founder, 2026-10-11).
+  const { currentGpsLocation } = useLocation();
+  const rough = (v) => (Number.isFinite(+v) ? Math.round(+v * 1000) / 1000 : null);
+  const live = isLiveFix(currentGpsLocation, 60 * 60 * 1000) ? currentGpsLocation : null;
+  const sensed = !preset && live?.address?.city ? {
+    city: live.address.city,
+    country: live.address.country || "",
+    lat: rough(live.coordinates?.latitude), lng: rough(live.coordinates?.longitude),
   } : null;
   const [cityQ, setCityQ] = useState(preset?.city || sensed?.city || "");
   const [city, setCity] = useState(preset?.city || sensed?.city || "");
@@ -458,6 +545,13 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
   const onPickPhotos = (e) => { const f = [...(e.target.files || [])]; e.target.value = ""; setPhotos((p) => [...p, ...f].slice(0, 4)); };
   const submit = async () => {
     const cityName = (city || cityQ).trim();
+    // The sensed spot and country belong to where you are: they anchor the
+    // stamp only while the city still names that place (accents, case and a
+    // ", Country" tail don't count as a change). A city typed in elsewhere
+    // keeps no anchor, so a photo taken here can't prove it.
+    const sameCity = (x, y) => { const n = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(",")[0].trim().toLowerCase(); return !!n(x) && n(x) === n(y); };
+    const sensedOnly = !!sensed && !!coords && coords.lat === sensed.lat && coords.lng === sensed.lng;
+    const dropSensed = sensedOnly && !sameCity(cityName, sensed.city);
     if (!cityName) { showToast("Add a city first", "error"); return; }
     setBusy(true);
     // No stamp without proof (founder, 2026-10-03): being there now (GPS at the
@@ -472,11 +566,11 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     let verified = "self";
     const spot = venueSpot || null;
     if (spot && dateVal === localISODate()) {
-      const pos = await new Promise((res) => {
-        if (!navigator.geolocation) return res(null);
-        navigator.geolocation.getCurrentPosition(res, () => res(null), { enableHighAccuracy: true, timeout: 7000, maximumAge: 60000 });
-      });
-      if (pos && metersBetween(pos.coords.latitude, pos.coords.longitude, spot.lat, spot.lng) <= stampRadiusFor({ name: venue, category: spot.category })) verified = "gps";
+      // The native GPS, best of 2–3 readings (founder, 2026-10-10). Visits have
+      // no map on the worker, so the phone measures, with the same accuracy
+      // allowance the worker gives (capped at 100 m).
+      const fix = await getStampFix().catch(() => null);
+      if (fix && metersBetween(fix.lat, fix.lng, spot.lat, spot.lng) <= stampRadiusFor({ name: venue, category: spot.category }) + Math.min(fix.acc ?? 0, 100)) verified = "gps";
     }
     if (verified !== "gps" && photos.length === 0) {
       setBusy(false);
@@ -486,10 +580,12 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     const { data, error } = await addStamp({
       kind: "city", entity_type: "visit", entity_id,
       name: venue.trim() || cityName, city: cityName, region: null,
-      country: country || null, cc: cc || undefined,
-      lat: spot?.lat ?? coords?.lat ?? null, lng: spot?.lng ?? coords?.lng ?? null,
+      country: (dropSensed && country === sensed.country ? null : country) || null, cc: cc || undefined,
+      lat: spot?.lat ?? (dropSensed ? null : coords?.lat) ?? null, lng: spot?.lng ?? (dropSensed ? null : coords?.lng) ?? null,
       visited_on: dateVal, local_hour: new Date().getHours(), verified,
-      ...(verified !== "gps" ? { await_proof: true } : {}),
+      // Photos attached → the photo path too, so a GPS claim the worker
+      // distrusts (a VPN, a travel eSIM) still gets its photos tried as proof.
+      ...(verified !== "gps" || photos.length ? { await_proof: true } : {}),
     });
     if (error || !data?.id) { setBusy(false); showToast(error || "Could not add stamp", "error"); return; }
     if (data.private) showToast("This may be a sensitive place ❤️ — the stamp starts private. Share it from the stamp anytime.", "success");
@@ -612,7 +708,7 @@ function PassportInner() {
   const navigate = useNavigate();
   const isTablet = useIsTablet();
   const colWrap = isTablet ? "max-w-[820px]" : "max-w-md";
-  const { isAuthenticated, profile, user } = useAuth();
+  const { isAuthenticated, profile, user, socialTier } = useAuth();
   const isDev = isAdminEmail(user?.email); // sample-passport preview is admin-only
   const [loading, setLoading] = useState(true);
   const [stamps, setStamps] = useState([]);
@@ -634,6 +730,9 @@ function PassportInner() {
   });
   const readOnly = !!viewSlug;
   const [viewHolder, setViewHolder] = useState(null);
+  // Who owns the viewed passport, when the worker says (owner_id; today's
+  // /passport/public sends only the holder's first name).
+  const [viewOwner, setViewOwner] = useState(null);
   // Consume the slug once so it doesn't leak into the user's OWN passport later.
   useEffect(() => { try { sessionStorage.removeItem("pp_view_slug"); } catch { /* ignore */ } }, []);
 
@@ -643,6 +742,7 @@ function PassportInner() {
       const { data } = await getPublicPassport(viewSlug);
       if (data && !data.private) { setStamps(data.stamps || []); setStats(data.stats || {}); setViewHolder(data.holder || "A traveler"); }
       else { setStamps([]); setStats({}); setViewHolder(null); }
+      setViewOwner(data?.owner_id || data?.user_id || null);
       setTags([]); setLoading(false); return;
     }
     const [pp, tg] = await Promise.all([listPassport(), listTags()]);
@@ -777,12 +877,33 @@ function PassportInner() {
     } else showToast(action === "accept" ? "You already have this stamp 🛂" : presence ? "Noted — no stamp added" : "Declined", "success");
     load();
   };
-  const blockClaim = async () => {
-    if (!claim) return;
-    const { error } = await blockTagger(claim.token);
+  // "Don't know them? Block this person" (go-live decision 6): with a
+  // block_v2 worker the invite's token is a full block — follows end both
+  // ways and each passport looks private to the other — so it opens the
+  // same TravelerSheet question that says exactly that, never one tap.
+  // An older worker's block only stops tags: one tap, an honest toast.
+  const [claimList, setClaimList] = useState(null);
+  const [blockingClaim, setBlockingClaim] = useState(false);
+  useEffect(() => {
+    if (!claim || claimList) return undefined;
+    let gone = false;
+    (async () => { const { data } = await socialFollow("list"); if (!gone) setClaimList(data || {}); })();
+    return () => { gone = true; };
+  }, [claim, claimList]);
+  const claimDone = () => {
     try { sessionStorage.removeItem("pp_claim_token"); } catch { /* ignore */ }
     setClaim(null); setClaimPresence(null);
-    showToast(error || "Blocked — they can't tag you again", error ? "error" : "success");
+  };
+  const blockClaim = async () => {
+    if (!claim) return;
+    // Tapped before the list arrived: read it now, so a block_v2 worker never
+    // gets the one-tap block (and its tags-only toast) by accident.
+    let list = claimList;
+    if (!list) { list = (await socialFollow("list")).data || {}; setClaimList(list); }
+    if (blockReady(list)) { setBlockingClaim(true); return; }
+    const { error } = await blockTagger(claim.token);
+    claimDone();
+    showToast(error || "Blocked. They can't tag you again.", error ? "error" : "success");
   };
 
   const holder = readOnly ? (viewHolder || "A traveler") : (profile?.first_name || profile?.display_name || "Traveler");
@@ -795,6 +916,20 @@ function PassportInner() {
     showToast(error || "Thank you — we review every report", error ? "error" : "success");
   };
   const exitView = () => { try { sessionStorage.removeItem("pp_view_slug"); } catch { /* ignore */ } window.location.assign(createPageUrl("Passport")); };
+  // Friend view: "Block this traveler" beside Report (go-live decision 6).
+  // Shown only when the worker advertises block_v2; the share link itself
+  // (slug) names the owner, or owner_id when the worker sends one
+  // (src/lib/blocks.js). After a block, back to your own passport.
+  const [viewList, setViewList] = useState(null);
+  const [blockingView, setBlockingView] = useState(false);
+  useEffect(() => {
+    if (!readOnly || !isAuthenticated) return undefined;
+    let gone = false;
+    (async () => { const { data } = await socialFollow("list"); if (!gone) setViewList(data || null); })();
+    return () => { gone = true; };
+  }, [readOnly, isAuthenticated]);
+  const viewPerson = readOnly ? { user_id: viewOwner, slug: viewSlug, name: viewHolder } : null;
+  const canBlockView = !!(viewPerson && viewList && blockTarget(viewPerson, viewList));
 
   // Booklet view: one swipeable page per country (like a real passport).
   const [openStampId, setOpenStampId] = useState(null);
@@ -922,7 +1057,8 @@ function PassportInner() {
           </div>
         )}
         {!readOnly && !preview && <HeldHandleClaim fs={fs} />}
-        {!readOnly && !preview && bdayAsk && (
+        {/* A 'confirm' account answers in the one-time sheet instead (its neutral check matters there). */}
+        {!readOnly && !preview && bdayAsk && socialTier !== "confirm" && (
           <div className="mb-4 rounded-[16px] p-3.5" style={{ background: "#FFFBF0", border: "1px solid #EAD9AE" }}>
             <p style={{ color: INK, fontSize: fs(14), fontWeight: 700 }}>🎂 When&rsquo;s your birthday?</p>
             <p style={{ color: INK2, fontSize: fs(12.5), lineHeight: 1.45, marginTop: 2 }}>
@@ -1008,10 +1144,16 @@ function PassportInner() {
                 <button onClick={() => respondClaim("accept", true)} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>Prove it with a photo ✓</button>
               </div>
             </>)}
-            <button onClick={blockClaim} className="w-full text-center mt-2.5" style={{ background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
+            <button type="button" onClick={blockClaim} aria-haspopup={blockReady(claimList) ? "dialog" : undefined} className="w-full text-center mt-1" style={{ minHeight: 44, background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
               Don&apos;t know them? Block this person
             </button>
           </div>
+        )}
+        {claim && blockingClaim && (
+          <TravelerSheet person={{ token: claim.token, name: claim.tag.from_name || null }} list={claimList} start="block"
+            report={{ kind: "tag", note: `Tag invite${claim.tag.name ? ` at ${claim.tag.name}` : ""}${claim.tag.from_name ? ` from "${claim.tag.from_name}"` : ""}` }}
+            onClose={() => setBlockingClaim(false)}
+            onChanged={() => { setBlockingClaim(false); claimDone(); load(); }} />
         )}
 
         {/* Tagged-you inbox — someone said you were with them */}
@@ -1151,13 +1293,22 @@ function PassportInner() {
       {/* Stamp a place — manual city/spot visit stamp */}
       {showStampPlace && <StampPlaceModal preset={stampPreset} onClose={() => { setShowStampPlace(false); setStampPreset(null); }} onDone={() => { setShowStampPlace(false); setStampPreset(null); load(); }} />}
 
-      {/* Friend view: the quiet report door (and the sheet of reasons) */}
+      {/* Friend view: the quiet report door (and the sheet of reasons), and Block */}
       {readOnly && (
-        <div className="text-center mt-6 mb-2">
-          <button type="button" onClick={() => setReporting(true)} style={{ background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
+        <div className="flex justify-center gap-4 mt-6 mb-2">
+          <button type="button" onClick={() => setReporting(true)} aria-haspopup="dialog" style={{ minHeight: 44, padding: "0 6px", background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
             Report this passport
           </button>
+          {canBlockView && (
+            <button type="button" onClick={() => setBlockingView(true)} aria-haspopup="dialog" style={{ minHeight: 44, padding: "0 6px", background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
+              Block this traveler
+            </button>
+          )}
         </div>
+      )}
+      {blockingView && viewPerson && (
+        <TravelerSheet person={viewPerson} list={viewList} start="block" report={{ kind: "passport", slug: viewSlug }}
+          onClose={() => setBlockingView(false)} onChanged={() => exitView()} />
       )}
       {reporting && (
         <div className="fixed inset-0 z-[9998] flex items-end justify-center" role="dialog" aria-modal="true" aria-label="Report this passport" style={{ background: "rgba(22,17,13,.45)" }} onClick={() => setReporting(false)}>

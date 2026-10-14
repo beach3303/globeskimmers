@@ -11,6 +11,7 @@ import { Globe, Loader2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 import { IVORY, TEAL_DEEP, TEAL_GRADIENT } from '@/components/redesign/constants';
+import siwaLogo from './siwa-logo-left-white-medium.svg';
 
 function GoogleIcon() {
   return (
@@ -22,12 +23,16 @@ function GoogleIcon() {
     </svg>
   );
 }
-function AppleIcon() {
-  return (
-    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M16.37 1.43c.04 1.06-.37 2.1-1.06 2.86-.72.79-1.9 1.4-3 1.32-.05-1.05.42-2.13 1.07-2.83.72-.78 1.97-1.36 2.99-1.35zM20.5 17.2c-.55 1.27-.81 1.83-1.52 2.95-.99 1.56-2.39 3.5-4.12 3.51-1.54.02-1.93-1-4.02-.99-2.09.01-2.52 1.01-4.06.99-1.73-.02-3.05-1.77-4.04-3.33C-.02 16.95-.32 12-1 9.9c-1.05-3.07.46-5.83 1.92-6.65 1.04-.6 2.36-.6 3.34-.6 1.18 0 1.92.65 3.07.65 1.11 0 1.79-.65 3.15-.65 1.03 0 2.12.28 2.9.77-2.55 1.4-2.13 5.04.62 6.13-.46 1.05-.7 1.55-1.5 2.45z" transform="translate(2.5 .8)"/>
-    </svg>
-  );
+// Sign in with Apple: App Review rejected build 13 (Guideline 4, 2026-10-10)
+// because the old hand-drawn logo wasn't Apple's artwork. The file is Apple's
+// "Logo - SIWA - Left-aligned - White - Medium" from Apple Design Resources,
+// byte-for-byte: never redraw, crop or recolor it. Apple's custom-button rules:
+// the logo file's height equals the button height (44pt is this file's native
+// size), white logo and white title on black, and a title 43% of the button
+// height (44px button → 19px title). The file carries its own padding, so the
+// Apple button's gap is smaller to line its logo up with Google and Facebook.
+function AppleLogo() {
+  return <img src={siwaLogo} alt="" aria-hidden="true" width={31} height={44} className="h-11 w-auto shrink-0" />;
 }
 function FacebookIcon() {
   return (
@@ -121,6 +126,12 @@ export default function AuthGate() {
 
   const errorMsg = localError || authError?.message;
 
+  // The three sign-in buttons share Apple's proportions (see AppleLogo): 44px
+  // tall, a 19px system-font title, so none is smaller than the Apple button.
+  const socialCls =
+    'w-full h-11 rounded-xl flex items-center justify-center overflow-hidden ' +
+    'font-semibold text-[19px] [font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif] ' +
+    'disabled:opacity-50 active:scale-[.99] transition';
   const inputCls =
     'w-full h-12 px-4 rounded-xl border border-black/10 bg-white text-[15px] text-[#0F1419] ' +
     'placeholder:text-black/35 outline-none focus:border-[#0E7C73] focus:ring-2 focus:ring-[#0E7C73]/20 transition';
@@ -210,23 +221,25 @@ export default function AuthGate() {
         <div className="space-y-3">
           <button
             type="button" onClick={() => runProvider('google')} disabled={disabled}
-            className="w-full h-12 rounded-xl bg-white border border-black/10 flex items-center justify-center gap-3 font-semibold text-[#0F1419] disabled:opacity-50 active:scale-[.99] transition"
+            className={`${socialCls} bg-white border border-black/10 gap-3 text-[#0F1419]`}
           >
             {busy === 'google' ? <Loader2 className="w-5 h-5 animate-spin" /> : <GoogleIcon />}
             Continue with Google
           </button>
           <button
             type="button" onClick={() => runProvider('facebook')} disabled={disabled}
-            className="w-full h-12 rounded-xl bg-white border border-black/10 flex items-center justify-center gap-3 font-semibold text-[#0F1419] disabled:opacity-50 active:scale-[.99] transition"
+            className={`${socialCls} bg-white border border-black/10 gap-3 text-[#0F1419]`}
           >
             {busy === 'facebook' ? <Loader2 className="w-5 h-5 animate-spin" /> : <FacebookIcon />}
             Continue with Facebook
           </button>
           <button
             type="button" onClick={() => runProvider('apple')} disabled={disabled}
-            className="w-full h-12 rounded-xl bg-black text-white flex items-center justify-center gap-3 font-semibold disabled:opacity-50 active:scale-[.99] transition"
+            className={`${socialCls} bg-black gap-1 text-white`}
           >
-            {busy === 'apple' ? <Loader2 className="w-5 h-5 animate-spin" /> : <AppleIcon />}
+            {busy === 'apple'
+              ? <span className="w-[31px] h-11 shrink-0 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin" /></span>
+              : <AppleLogo />}
             Continue with Apple
           </button>
         </div>
@@ -298,6 +311,14 @@ export default function AuthGate() {
           >
             {isSignup ? 'Sign in' : 'Sign up'}
           </button>
+        </p>
+
+        {/* Apple 1.2: people agree to the Terms (no objectionable content, no
+            abuse) before they can post anything. Every way in passes here. */}
+        <p className="text-center text-[12.5px] leading-snug text-black/50 mt-5">
+          By continuing you agree to our{' '}
+          <a href="https://globeskimmers.io/legal/terms" target="_blank" rel="noreferrer" className="underline underline-offset-2 text-black/60">Terms</a>
+          : no objectionable content or abusive behavior. We remove it and the accounts that post it.
         </p>
       </div>
     </div>

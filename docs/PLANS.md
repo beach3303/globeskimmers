@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-10-08
+Last updated: 2026-10-13
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -143,7 +143,216 @@ and the Blotter; (3) last, public place videos on attraction pages ("what it loo
 opt-in, place not people, verified visit only. Same fail-closed moderation as photos on sampled frames
 plus the audio (speech-to-text), report + block on every video (Apple UGC rules); teens: no public
 videos, friends only with the 24-hour delay. Storage/playback via a video service that converts
-iPhone formats and streams (Cloudflare Stream is the likely pick — confirm pricing first). **Safety and privacy fixes — FIRST after Apple approval (privacy audit 2026-10-08; the policy now
+iPhone formats and streams (Cloudflare Stream is the likely pick — confirm pricing first). **App Store 1.0.3 → 1.0.4 (2026-10-10):**
+build 13 was rejected for the Sign in with Apple logo (Guideline 4) and for outdated 6.5-inch iPhone and
+13-inch iPad screenshots (2.3.3). Both issues are bug-fix eligible, so the founder replies asking Apple to
+approve 1.0.3 as it is. Google, Apple and Facebook sign-in were verified on build 13 through TestFlight.
+When it's approved, an OTA ships the official Apple button (3a73df2). 1.0.4 must carry real screenshots
+of the current app, signed in, at 1284×2778 and 2064×2752. Claude makes them from the simulators, so no
+iPad is needed. They show the passport, the Dream shelf and a finder with results; no marketing frames,
+splash or login screens. Before submitting 1.0.4, run `scripts/ios-launch-check.sh` and a TestFlight
+sign-in check (internal group "Lobster"). **GPS stamping redesign (founder decisions 2026-10-10):**
+the founder's real-world test found that the Walk of Fame refused a stamp under the Dolby Theatre. Its
+only pin sits at the La Brea end with a 250 m circle; the Dolby is 421 m away and the app's limit is
+350 m. 62% of the 25,250 stamp places use that default circle, and ~400 famous stadiums are filed
+as landmarks. ChatGPT and Grok were consulted. Decisions:
+(1) **Same stamp for everyone.** Whether someone was inside or only on-site is recorded privately for
+the founder's analytics, never shown on the stamp.
+(2) **Venues (stadiums, theme parks, malls) stamp anywhere on the property**: gates, entrance plaza,
+outside walls, its own parking. A nearby freeway or hotel doesn't count.
+(3) **A refused stamp shows "I'm here, but the app is saying I'm not"** (founder's wording). Tapping it ALWAYS grants the stamp,
+from anywhere (founder's choice after the cheating risk was raised). That stamp is marked "reported"
+internally, below GPS/photo, and looks identical. Proof-gated features (City Board etc.) still need
+GPS or photo. The tap also files an admin report titled "I'm here, but the app is saying I'm not" with: place
+name and id, city, date and time, the user's spot rounded to ~1 city block with a map link, distance
+from our pin, GPS accuracy, phone platform, an anonymous user code, and a status. Admin can export the
+list to Excel (CSV) and fix the map later. EVERY tap is logged; no report is ever dropped or merged
+away. Refusals where the user didn't tap are also counted per place, with no position kept, so a
+place that fails silently still shows up.
+(4) **A stamp keeps only a rough zone**: inside / on-site / nearby, plus a distance band. Never the
+exact spot.
+Claude's technical calls:
+- famous long places get real shapes, the Walk of Fame first (Hollywood Blvd from La Brea to Gower,
+  plus Vine from Sunset to Yucca);
+- the server, not the phone, decides;
+- GPS takes 2–3 readings and keeps the best;
+- quick data fixes: stadium and theme-park sizes, duplicates, the broken "Verify I'm here", and the
+  impossible-travel check that reads updated_at.
+Privacy policy and store forms are updated the day it ships. The client half ships by OTA after Apple
+approves 1.0.3.
+**Suggest a Place to Stamp (founder decisions 2026-10-10)**, crowd-sourced Local favorites. Mockup:
+https://claude.ai/artifact/7Q5HTErHgpe6eV1dgsArQu (6 screens).
+- **Where it sits:** a section at the bottom of Home, just above the quotes. Headline: "Know a spot
+  worth a visit?"
+- **Who can suggest:** locals (their home city) and people with a GPS-verified stamp nearby.
+- **The form:** place name, use my location or pin it on the map, an optional photo, and a "Why do you
+  recommend it?" dropdown with 5 reasons plus Other (free text). The reasons:
+  - breathtaking views or a great photo spot;
+  - a fun walk, hike or place to explore;
+  - local history or culture;
+  - great for families and kids;
+  - a hidden gem locals love.
+  A duplicate suggestion (same name, close by) adds to the existing place's count.
+- **Everyone sees every suggestion,** with its count ("3 of 5"). Users tell people "we review a place
+  once 5 people suggest it". The count keeps going past 5.
+- **Likes have no limit.** People can keep liking the place and each reason ("I agree"), and the
+  totals are for bragging ("418 people love this").
+- **Admin sees only places with 5 or more suggestions,** each with Approve / Decline and an Excel
+  export, plus the split of locals vs visitors, the top reasons and the Other texts. Nothing goes live
+  without the founder's approval.
+- **An approved place becomes a "Local favorite" stamp,** a distinct style that always discloses
+  "recommended by N people who've been there". It never uses the official icon art, so the fame bar
+  for icons stands.
+- **Still to decide:** suggestion rate limits, a "Local Scout" badge for suggesters, and moderating the
+  free text (it goes through gbModerate).
+**Built 2026-10-11 on the branch, ships in the post-approval wave:** (1) the **Before-you-go engine**
+(POST /attractions/before-you-go — quote-backed facts or unknown, allowed sources only, batched support
+check, byg:v1 90d/30d, caps, report flag); the app cards, the Why-visit batch writer and the 30-place
+hand-check still follow. (2) The **under-13 freeze**: freeze:<uid> marker at the age gate, no stamps or
+photos while frozen (403 under_age), daily cron purge after FREEZE_PURGE_DAYS = 7 (placeholder pending
+counsel) via gbPurgeUserContent (now shared with account deletion and extended with postcards + follow
+edges), POST /admin/age-appeal restores access with a corrected birthday. Still missing from the purge:
+dish posts and their photos (Phase 1 item 6). (3) The **Why-visit engine** (POST /attractions/why-visit —
+on open, never prefilled: encyclopedia summary by Wikidata id or a name match within 1 km, Google's
+editorial one-liner only when already cached, our row; Sonnet writes the Why-visit line + a two-paragraph
+story + up to 5 "what you can do" lines; code guards drop any number or proper name not in the inputs, an
+8-word copy, prices/hours/rules words, marketing words, "wiki"; KV wv:v1 with NO expiry, why_visit also
+written to D1; caps 300/day, 30/user, admin exempt; report flag) **and the attraction-page cards**: Why
+visit on top above the stamp button (line, can-do bullets, "Read the story"), Before you go after Parking
+(one row per rule with "What the official site says", source + checked date, Confirm link, "Something's
+wrong?"). Mocked-data captures checked on 2026-10-11; real-traffic results wait for the deploy and the
+30-place hand-check. (4) The **app side of the age tiers**: AuthContext reads the tier once per sign-in
+(social/age) and after a birthday is entered; tier 'blocked' renders FrozenScreen in place of every route
+(frozen notice, two-tap delete-now, access-only appeal to support@globeskimmers.io, sign out); tier 'teen'
+shows TeenHoldNote instead of Mailbox, the Profile visibility switch and @username claim, the guestbook
+sign/doodle/owner-message doors, and hides the Home friends invite. (5) **The stamping client half**
+(GPS redesign decisions above): the phone no longer refuses by distance — the worker decides with its
+shapes and footprints; GPS is the best of 2–3 fresh native readings (`getStampFix`); every refused
+attraction stamp (attraction page, the Passport's nearby prompt, Verify I'm here) shows "I’m here, but the
+app is saying I’m not", which resends the same request with `report:true` — always granted as 'reported',
+always filed — and a report's park within a resort comes from the card's own pin, never the bad reading;
+Verify I'm here is fixed (it never sent a reading, so it always failed on attractions since 10-03); admin
+page "📍 I’m here, but…" desk with status, per-place refusals and an Excel (CSV) download. Worker fixes
+found by the multi-agent review: EPCOT's one-word slug, variant stamps keep their parent (meta.parent_id),
+a report never moves an existing stamp's date, the place check runs on the claim (far = not_here with
+distance), Verify moves an "I was here" stamp onto its official id instead of duplicating it, refusal
+counts no longer double-count reports. Second review round: a report from the general Grand Canyon card keeps
+the Grand Canyon stamp (no rim from its pin); Verify refuses when the reading is at a different park or rim of
+the same place ("Your GPS puts you at Grand Canyon North Rim — this stamp is …"); older variant stamps find
+their parent by name near their pin; an untrusted reading on a stamp you already hold shows the report
+button; after a report the button reads "In your Virtual Passport" with no ✓; iPhone GPS keeps retrying
+while it warms up; Stamp a place keeps a city-block anchor. Also: toasts were off-centre and clipped on every
+phone (fixed). (6) **Crossing and airport prompts: live GPS only** (founder bug, 2026-10-11 — in Azusa,
+switching from a picked NYC back to "Explore where I am" asked to stamp a crossing into California). Both
+prompts — and the "You're here — stamp it" chips — now act only on a LIVE fix (`isLiveFix`: read in this
+app run, ≤ 30 min; ≤ 60 for the chips) — never a picked place, a manual switch or a restored last location.
+A state/country crossing needs the previous live fix to be in another state or country, within 8 h, at
+ground speed (≤ 300 km/h over less than an hour of readings, else ≤ 130 for a state, ≤ 250 for a country);
+not a flight (the fix is outside every airport fence, and no live reading was inside one since); and
+confirmed — both ends looked up again at street-block resolution (the everyday lookup shares one answer per
+~11 km tile) with a fresh best-of-readings fix. Unconfirmable = no prompt. UK England/Scotland/Wales/NI
+crossings now work (the lookup returns the nation). Border and airport stamps use the local date and a
+city-block spot. Trade-off: a crossing with no app use for 8 h on either side gets no prompt. Toasts: one
+container for the whole app (Settings' 9 messages and the frozen screen's now show), unique ids, stacked. (7) **Profile — one tap enlarges a virtual item or
+a travel buddy** (founder, 2026-10-11): the big picture with × (or a tap outside) to collapse; inside it,
+"Customize color & stickers" (items) or Sitting / Standing + "Rename or say goodbye" (buddies) open the
+editors that a tap used to open. Swiping a buddy still changes its pose, on the shelf and in the big view.
+(8) **Suggest a Place to Stamp — built 2026-10-12** (founder: "let's do this", "i love the mockup"), as the
+decisions above and the 6-screen mockup say. Server: D1 tables ps_places / ps_votes / ps_likes in the events
+database, made on first use (no SQL to run); suggest, check, everyone's list (near / most liked / newest /
+mine), one place, likes, the admin desk (Ready / Approved / Declined, Approve / Decline, Excel), photos at
+/ps-photo/. Locals = home pin within 50 km (or the same home city when no pin); visitors = a GPS- or
+photo-proven stamp within 25 km. The same name within 1 km is the same place. Suggesting needs an adult
+birthday (teens held, may like). Name, "Other" text and photos are moderated (photos fail closed). Choices
+made in the build: a place you DECLINED refuses new suggestions with "We've already reviewed this place, and
+it won't become a stamp" (nothing kept); Home tells a suggester once when their place becomes a stamp ("We'll
+let you know" on the thanks screen is real); photo links carry no account id; account deletion removes votes,
+photos and likes. The Local favorite stamp: id lf:<n>, the approved pin with a 150 m GPS circle, its own teal
+stamp (never icon art) and "recommended by N people who've been there" on the stamp's card. Also on iPad
+Home. Fix riding along, its own commit: the booklet crashed for every kind 'country' stamp (on main since
+2026-10-05). The privacy policy and delete-account page now cover suggestions; they deploy with the merge.
+A 71-agent review then changed four things: (a) a suggestion is user content shown from its first vote, so
+every one has a **Report** button (an App Store rule for user content); 3 reports hide a place until you
+decide, and the desk's new **Reported** tab offers Remove / Keep at any count (your bell rings on a first
+report); (b) the server works out the town from the pin and never stores what a phone sends; (c) a Local
+favorite stamp takes the approved place's own name, town and pin, starts private when the place is
+sensitive (a chapel, a clinic), and no other stamp can wear the look; (d) deleting an account removes a
+place only that person suggested. Also: an atomic daily limit, Android back closes the map and photo views,
+screen readers now hear every toast in the app. A second review (52 agents) then tightened the takedown and
+privacy: a hidden or removed place's photos are no longer served and Remove deletes them; Approve / Decline only
+act on a place that is still open (a card loaded before reports hid it says "This place changed"); until a place
+is approved, others see its pin only to about 100 m (a "Use my location" pin may be someone's home), and the
+form says the pin is where you're standing; the locals/visitors split is admin-only; cathedrals, shrines,
+mosques, gurdwaras, temples and the like now start private as visits and Local favorites (official icon stamps
+are unchanged); a report on a removed Local favorite is still filed; the
+desk shows each place's photos (even a hidden one, through one-hour signed links); each message is spoken once
+to screen readers. "Add your home city" now picks it on the Suggest page (the draft stays) and says it is saved to
+the profile. The shared-story disclosure under a Local favorite stays one line at about 24 px of a 1080-px story
+(30 px would need two lines). A final verification (24 agents) caught that the landmark exceptions had made
+"Canyon Ridge Hospital"-style names start public: the exception is now an exact phrase ("Cathedral Rock",
+"Shrine Auditorium") and places of worship are also recognized in Spanish, French, German, Italian, Portuguese,
+Thai, Chinese and Japanese; the near list now cuts off and orders by the same ~100 m pin it shows; keyboard users
+can pin the map's centre; the newest home-city pick wins.
+**Decided (founder, 2026-10-12):** the Dream shelf's row of official regional stamps (LACMA, Christ
+Cathedral, the Getty Villa) is now **"Customer favorites"** — "Local favorite" belongs to the crowd-sourced
+stamp. The worker names the rows, so it changes with the worker deploy (no OTA needed).
+**Decided (founder, 2026-10-12):** the daily limit stays at 10 suggestions per person; no "Local Scout"
+badge. Cost per suggestion: a Google map lookup (about half a cent, cached per ~110 m spot) and a Claude Haiku
+safety check of the words (a small fraction of a cent), plus one for a photo — about a cent at most, so ten a day
+caps one person at roughly 10 cents a day; likes, reports and browsing cost nothing extra.
+**Still to decide (founder):** whether the admin desk may reverse a decision (asked 2026-10-12); the stamp's bottom line "RECOMMENDED BY
+LOCALS" (from the mockup) is printed even when every recommender was a visitor — keep it, or require at
+least one local before Approve.
+**Ship order:** the worker must deploy BEFORE the OTA that carries this client — the deployed worker has
+no report path, so on the old worker the report button would only show an error. Check that /passport/stamp
+answers `report:true` with 200 `verified:'reported'`, and that /places/suggestions answers 200 with
+`places`, then run the OTA.
+**TEEN HOLD (founder, 2026-10-11): all social OFF for 13–17, effective with the next worker deploy.**
+Teens keep every travel tool and a PRIVATE passport; every social/publishing door returns
+"Social features open at age 18 — your passport stays yours, private" (code teen_hold, 403). Doors held:
+public share, dish/coffee/store photos, owner notes, profile writes (name/bio/website/favorites/dreams),
+postcards (send; teen recipients drop silently like blocks), signing friends' pages/blotter, follow +
+accept (decline/unfollow/list/block stay, for safety), the feed (empty with held:'teen'), usernames,
+tag-by-handle, both guestbook doors. One switch restores the built rails: TEEN_SOCIAL_ENABLED in the
+worker. Privacy policy ¶minors rewritten to say this (dated Oct 11); the counsel brief now states the
+posture and asks the lawyer to bless the re-enable plan. App-side "opens at age 18" empty states ride a
+later OTA; until then teens see the server message.
+**Teens §9 decided (founder, 2026-10-11):** under-13 = freeze + prompt delete + access-only appeal;
+teen gallery photos = anonymous + 24h delay; birthday kept as FULL date after 18 (founder's call, against
+the rec — policy wording + counsel question 3 cover it); lawyer = yes, one focused consult. The brief
+(9 questions, attachments list, out-of-scope) is docs/legal/lawyer-brief-2026-10.md, published for
+sharing at https://claude.ai/artifact/BbJ8D95J16cARThHMptV8e. Remaining §9 items default to (a).
+**Teens plan Phase 0, first slab built 2026-10-11 (branch stamping-v2, deploys after 1.0.3 clears):**
+dish/coffee/store photos refuse accounts with no birthday (unknown age may not post); a teen receives
+postcards only from mutual friends whoever the sender is, an under-13 account receives none (send side
+AND feed read side); handle lookups are exact (ilike's `_` wildcard could match the wrong account, even
+in the admin Seal writes). The demo account got an adult birthday so reviewers can post dish photos.
+Still needing the founder's answers: the 8 decisions in docs/plans/teens-and-minors.md §9 (under-13
+freeze handling first — it gates the required-birthday step).
+**"Dream shelf" is renamed "Stamp shelf" (founder, 2026-10-10** — "people might not be dreaming to
+go there"). Visible strings and the App Store caption label only; internal names (DreamShelf.jsx, the
+/dream/shelf route, DREAM_VENUE, analytics event names) deliberately keep their dream names.
+**Tag a person PARKED (founder, 2026-10-10): "remove tag a person function until we have thousands
+of users."** The UI entries are hidden behind `TAGGING_ENABLED = false` in src/lib/flags.js (the stamp
+sheet row now reads "Details & visit date"); the worker's to_handle lane, unblock, the Mailbox card,
+and old /t/<token> claim links all stay built and working, so flipping the flag brings it back whole.
+Screenshot 2 of the 1.0.4 set (was TAG A FRIEND) is now the border/state-line stamp page
+("BORDER CROSSINGS — Crossed a border? / stamp it on the way"; founder picked it 2026-10-10). Suggest a Place to Stamp is NOT affected: it stays queued (it needs no friend
+graph).
+**Tag a friend + the lost postcard (founder's real-world test, 2026-10-10; fixed on stamping-v2):**
+diagnosis confirmed in code. (1) Tag a friend never carried a recipient — the app only minted share
+links, so the built "tagged you" Mailbox card never fired for an in-app tag. Fixed: the worker's
+passport/tag accepts to_handle (postcard rails: teens mutual-only, blocked tier refused, muted
+response never reveals a block), and the Passport tag flow now opens a friend picker with @username
+chips; the share link stays as the fallback and its toasts are honest about delivery. (2) A block in
+EITHER direction silently eats postcards and tags while telling the sender "sent" (by design), but
+blocks were write-only: invisible and irreversible. Fixed: social/follow op:list returns blocked[],
+op:unblock removes the caller's own block row. The founder's lost postcard is most likely a stray
+block row — check in Supabase SQL editor: `select * from api.user_blocks;` and
+`select created_at, sender_id, to_user_id, place_name from api.postcards order by created_at desc
+limit 20;` — delete the block row (both directions) and have the friend resend. Still open (optional):
+a "your tag was accepted" notice for the sender, and an Unblock button in Settings/Profile (the
+worker op exists; the UI rides a later OTA). **Safety and privacy fixes — FIRST after Apple approval (privacy audit 2026-10-08; the policy now
 states today's behavior honestly and gets stronger as each ships):** (1) account deletion removes
 everything — social profile + avatar, follows, blocks, postcards + photos, Blotter rows + doodles, dish
 posts + photos, owner notes, luggage/gear, handle requests, D1 events (Apple 5.1.1(v)); (2) Block and
@@ -171,6 +380,49 @@ events and get attendance reports — totals and age bands only, never individua
 suppressed, minors only inside totals. **The day organizer reports ship:** add the age-band purpose
 (Analytics, or Advertising or marketing if sold as promotion) to date of birth in Google Play Data safety
 and App Store App Privacy, and a privacy-policy line that anonymous age-band reports go to event partners.
+
+**"Why visit" + "Before you go" — founder decisions 2026-10-11:** PREFILL DECIDED (founder, 2026-10-11, revised the same day):
+**no prefill — on-open only, $0 upfront.** Demand leads: the admin stream already shows what people
+actually stamp (founderAlert pings each new stamp; analytics counts stamps and page opens by place),
+so pages fill exactly where real interest lands. The first opener of any place sees a brief
+"gathering the story…" state for a few seconds — the build must make that state pretty. The top-200
+prefill script stays written and ready: run it once (~$30) right before any marketing push, so icon
+pages are full when strangers arrive. The rest stands: and the
+cost envelope (~$50–80/month at 100 daily users, ceiling ~$1,900/month at full catalog) is APPROVED on
+one condition: cache and keep everything we can forever. Doctrine: OUR layer (Why-visit lines, history,
+what-you-can-do, AI-details permanent cache, traveler photos, guestbook) is kept FOREVER; only the
+perishable facts refresh on schedule (Google data 30 days — their terms cap caching; official-site
+facts re-checked every 90 days so closures and price changes never linger). On-open works worldwide:
+the first traveler to open any uncached place (Lahore, Mumbai, Paris alike) triggers the lookups and
+the card fills in seconds, then it's free for everyone after. Claude reads official sites in any
+language and writes the lines in English. separate official-site lookup (not
+folded into prices); the worship fallback line YES; "Why visit" sits at the TOP of the page, above the
+Stamp button. Prefill scale still open — the founder asked for mockups first: 5 researched examples
+(Statue of Liberty tickets/steps, Top of the Rock history/photo spots, Color Factory what's-inside,
+Blue Mosque rules/respect, Griffith free/parking) are at https://claude.ai/artifact/Jxm11wEpu5756VyUxRDtdK,
+every fact wearing a source chip (green = free: Wikipedia/Wikidata/OSM/our words; amber = paid: the
+one-time ~13¢ official-site read, Google reviews 3.2¢/page-load). Ownership stance recorded: facts are
+free, OUR summary sentences are ours forever, official-site quotes stay short + attributed. The
+founder's 2026-10-11 question list (what is it, who built it, what's inside, steps, ticket strategy,
+best photo spot, crowd windows — the Color Factory / Pedestal / Rockefeller standard) is the
+acceptance bar for this layer. Shared traveler photos additionally get an optional "what's this spot
+called?" label (e.g. "From the cable car"); the traveler always owns their photo (we display under
+license, delete anytime).
+**Traveler photos on place pages (founder, 2026-10-10; after the 1.0.4 screenshots).**
+1. **Dish, drink and store photos join the place's gallery.** "Add a photo of what you ordered" or
+   "got here" photos go into the place's photo gallery after Google's 1-3 photos, in Places to Eat,
+   Coffee and convenience stores. Like Yelp: tap any photo to open a full-screen viewer that swipes
+   left and right with a thumbnail strip and a close button. Every photo is labelled by source
+   ("Google" vs "From travelers"), and every traveler photo has Report.
+2. **Things to Do takes traveler photos too**, to show what's inside a place and its favourite spots.
+   The prompt: "Help other travelers see what's inside: add your photo." The same proof as dish photos
+   applies (GPS at the place, or the photo's own location tag). The place is the subject, not people.
+3. **Sharing memory photos to a place, to save taps:** after adding memory photos to a stamp, the user
+   is offered "Share some of these on <place>'s page to help other travelers?" with per-photo
+   checkboxes, none ticked by default (private by default). Shared photos show without the user's
+   name. The user can delete any shared photo at any time, from the photo or from a "My shared photos"
+   list. Deleting the stamp or the account removes them.
+All of these run through gbModeratePhoto (fail-closed) and follow the teens & minors plan (in progress).
 
 **Reactions & guestbook (founder ask, 2026-09-30): mockup delivered, build awaits a yes.**
 The Blotter — BUILT + DEPLOYED 2026-09-30 (e282fb6; founder said yes to mockup v3
@@ -566,6 +818,44 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 
 ## Waiting on the founder
 
+- **Apple, 2026-10-12: reply to App Review to take the bug-fix approval.** Build 13 (1.0.3) was rejected again
+  under Guideline 4 for the Sign in with Apple logo, but Apple marked it eligible for a "Bug Fix Submission": reply
+  that the build includes bug fixes (the iPadOS launch crash fix) and ask them to approve it now; the Sign in with
+  Apple fix then goes in the next update. Why the reviewer still saw the old logo: build 13's own screens predate
+  the 2026-10-10 fix (3a73df2), and the over-the-air update only applies on a cold start that finishes the
+  download within 8 seconds (`autoSplashscreenTimeout`), otherwise on the next launch. The next binary (build 14)
+  must be built from code that has 3a73df2, so the fix is inside the app itself.
+
+- **New look — APPROVED by the founder 2026-10-13** ("now this design is phenomenal … I say approve on
+  this design"; "your circle" confirmed by the founder the same day: "yes on my circle"). Building it into the app
+  on branch `new-look` (off stamping-v2); nothing ships until stamping-v2 has merged and the founder says
+  go (OTA). **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
+  — option A (full-width bands) is not built. **Weather: Bluebird. ATMs: Carbon Copy** (founder,
+  2026-10-13, picking from two new options each after saying "i don't like the color of weather and atm":
+  "i choose the ones inside red circle"). Bluebird is a flat clear-sky blue plate (#0F6D9A) with white type,
+  a lemon italic (#FDEA53) and a sunflower sun. Carbon Copy is a cornflower plate (#7487E6) with carbon type
+  (#15171C) and the receipt card. They replace "storm + apricot" and "graphite + gold" below. The canvas
+  finders row now shows them; the options not chosen sit in their own row.
+  **Location chooser: B, the Kraft Folder** (founder, 2026-10-13: "I choose attached - B", after asking
+  "can we fix this design as well? can we remove coordinates in the app"). A kraft folder with a WHERE TO
+  tab rises from the bottom, with your places on one white sheet (teal icons) and the umber "Explore
+  where I am" as the one solid button under the thumb. Option A (Boarding Pass) is not built. It is
+  new-look slice S19 and ships with the new look. The manual coordinates entry is already gone on
+  stamping-v2 (cc1d5b2) and reaches phones with the next OTA.
+  Original ask and mockups, 2026-10-12: Founder asks the same day: more contrast and a different
+  background or bordered box for each section without clutter (Home and Profile); followers/following
+  shown creatively, the profile feeling like someone's personal world; every finder its own two- or
+  three-colour world (coffee energetic, personal and sophisticated); a kinder word than "people" that
+  still means friends and followers. Mockups (18 screens, no app code changed) on the design canvas
+  https://claude.ai/artifact/AArKJHwntKyYgLj5mfYsmn: Home as **A** (each zone a full-width colour band)
+  or **B** (each zone a bordered box with a folder tab); your profile and a friend's (cover in the
+  owner's chosen colour, trunk on top, the circle drawn as orbits); a Your circle screen; the Mailbox;
+  a colour sheet; all eleven finders (Eat Bordeaux + saffron, Coffee espresso + ember, Things to Do
+  lapis + terracotta, Restrooms iris, ATMs graphite + gold, Money banknote green + rose, Weather storm
+  + apricot, Phrases mustard, Culture olive + brass, Convenience night + lime, Shopping plum + blush).
+  Word proposal: **"your circle"** ("Where your *circle* has been", "Travel is better with your
+  *circle*"). All three answered 2026-10-13: B, Weather and ATMs recoloured, yes on "circle".
+
 - globeskimmers.com (M1): never ours. The founder owns globeskimmers.io only (confirmed 2026-09-14). The .com sits in the registry redemption period at Domain Esta Aqui, LLC (Network Solutions / SnapNames group) and likely deletes around 2026-09-20. Decide whether to backorder it at a drop-catch service (DropCatch, SnapNames, GoDaddy) before then, or let it go. Nothing in the app, website or store listing depends on it.
 - Approve "Mobility needs" and its choices (G110).
 - Flights (N9): **approved in principle 2026-09-24** — founder: "let's allow flight booking." Founder's hard requirements, same day: **GlobeSkimmers must earn on every flight** (so "at cost" is out), the traveler gets a **confirmation email** from bookings@globeskimmers.io, and the booking **lands in My Trips** with cancel — "mimic hotel booking". **Brief delivered the same day (Claude memory: flights-in-app-brief): recommended supplier is Nuitée's flights product** — Nuitée is merchant of record and charges the card through the same Stripe SDK as hotels, the markup is set in the dashboard (Flights → Commission; start 3–5%, not 12%, penalties 0), fees are 1% of ticket value (min €2, max €10) plus €25 per voluntary change, and the email, My Trips row and cancel copy the hotel lane. Duffel is out for now: its card path forbids any markup, needs pre-approval plus a written fraud procedure, puts chargebacks on us and asks for a deposit. Awaiting the founder: confirm Nuitée + the markup %, submit "Request Flights API Access" (sandbox and production, answers drafted), decide the support model (First Line recommended) and the seller-of-travel question. Build ≈ 15 working days, sandbox first. No flight booking code exists yet; the Duffel test token on the worker is unused.
@@ -623,6 +913,8 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 - The Passport Standard: https://claude.ai/code/artifact/d501e554-4e86-4b1a-be4c-ae5f43c97328
 - Landing page preview: https://claude.ai/code/artifact/a8854364-b319-4e45-bdf7-2fb96c874a86
 - Home, simplified (the Home proposal, 2026-09-21): https://claude.ai/code/artifact/cd56623a-c57f-42a2-a291-36541dace4cd
+- Design review of today's app (what Claude Design built, and what to improve; 2026-10-12): https://claude.ai/artifact/Y555D69mYw2HVDz8yAN447
+- New look canvas (zoned Home A/B, personal-world profile, finder colour worlds; 2026-10-12): https://claude.ai/artifact/AArKJHwntKyYgLj5mfYsmn
 - Founder kit for Launchhouse Atlanta (pitches, prep-app answers, LinkedIn; fact-checked): docs/FOUNDER_KIT_2026-09.md
 - Traveler scenarios, what real trips demand: docs/TRAVELER_SCENARIOS.md
 - Shipped receipts: the bottom of docs/BUILD_TEST_CHECKLIST.md

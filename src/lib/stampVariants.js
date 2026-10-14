@@ -101,7 +101,10 @@ const asVariant = (v) => ({ key: v.key, name: v.name, slug: v.slug, entity_id: v
 // traveler never claimed, whose entity_id a later genuine visit then upserts
 // into. So an umbrella name resolves to a park ONLY when a live GPS fix says
 // which one (verified === "gps"); otherwise the caller keeps the umbrella stamp.
-const UMBRELLA = /\bresort\b|walt\s*disney\s*world|universal\s*orlando/i;
+// The bare canyon ("Grand Canyon", "Grand Canyon National Park") is an
+// umbrella too (2026-10-11): its pin sits between the rims, so without GPS it
+// keeps its own Grand Canyon stamp instead of whichever rim is nearest the pin.
+const UMBRELLA = /\bresort\b|walt\s*disney\s*world|universal\s*orlando|^\s*grand\s*canyon(\s*national\s*park)?\s*$/i;
 
 // Given a stamp candidate, return the resolved variant or null (not a
 // multi-viewpoint landmark, too far from any known viewpoint, or an umbrella

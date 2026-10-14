@@ -4,6 +4,11 @@
 import { createPageUrl } from "@/utils";
 
 export function attractionUrl(id) {
+  // A Local favorite (lf:<id>, founder 2026-10-12) is a suggested place the
+  // founder approved: it has its own page (who recommends it, and why), not
+  // a Things to Do card.
+  const lf = /^lf:(\d{1,12})$/.exec(String(id));
+  if (lf) return `${createPageUrl("LocalFavorite")}?id=${lf[1]}`;
   return `${createPageUrl("ThingsToDo")}?focus=${encodeURIComponent(String(id))}`;
 }
 

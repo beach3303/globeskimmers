@@ -342,6 +342,9 @@ export default function VirtualItems({ stamps }) {
   const [open, setOpen] = useState(null);             // 'laptop' | 'drink'
   const [buddyOpen, setBuddyOpen] = useState(null);   // 'new' | buddy object
   const [coffeeOpen, setCoffeeOpen] = useState(null); // string[] — the enlarged coffee card
+  // One tap enlarges an item or a buddy (founder, 2026-10-11); × or a tap
+  // outside collapses it. Customizing / renaming moved into the big view.
+  const [zoom, setZoom] = useState(null);             // { type: 'item', key } | { type: 'buddy', id }
   const saveTimer = useRef(null);
 
   useEffect(() => {
@@ -424,22 +427,21 @@ export default function VirtualItems({ stamps }) {
   const cardUp = (kind) => (e) => {
     const d = dragCard.current;
     dragCard.current = null;
-    if (d && !d.moved && Math.abs(e.clientX - d.x) < 8) setOpen(kind);
+    if (d && !d.moved && Math.abs(e.clientX - d.x) < 8) setZoom({ type: "item", key: kind });
   };
 
-  // Swiping a pet cycles its pose; a tap opens its sheet.
+  // Swiping a pet cycles its pose; a tap enlarges it.
+  const setPose = (b, pose) => save({ buddies: buddies.map((x) => (x.id === b.id ? { ...x, pose } : x)) });
+  const nextPose = (b, dx) => POSES[(POSES.indexOf(b.pose) + (dx > 0 ? 1 : POSES.length - 1)) % POSES.length];
   const petTouch = useRef(null);
   const petDown = (e) => { petTouch.current = { x: e.clientX }; };
-  const petUp = (b) => (e) => {
+  const petUp = (b, onTap) => (e) => {
     const t = petTouch.current;
     petTouch.current = null;
     if (!t) return;
     const dx = e.clientX - t.x;
-    if (Math.abs(dx) > 34) {
-      const i = POSES.indexOf(b.pose);
-      const pose = POSES[(i + (dx > 0 ? 1 : POSES.length - 1)) % POSES.length];
-      save({ buddies: buddies.map((x) => (x.id === b.id ? { ...x, pose } : x)) });
-    } else setBuddyOpen(b);
+    if (Math.abs(dx) > 34) setPose(b, nextPose(b, dx));
+    else if (onTap) onTap();
   };
 
   const saveBuddy = (b) => {
@@ -464,7 +466,7 @@ export default function VirtualItems({ stamps }) {
     return (
       <div key={kind} role="button" tabIndex={0} aria-label={kind === "laptop" ? "My laptop" : "My bottle"}
         onPointerDown={cardDown(kind)} onPointerMove={cardMove} onPointerUp={cardUp(kind)}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(kind); } }}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setZoom({ type: "item", key: kind }); } }}
         className="flex-1 rounded-2xl p-3 text-center select-none" style={{ background: IVORY, border: `1px solid ${RULE}`, cursor: "pointer", touchAction: "pan-y" }}>
         {(() => {
           // With coffee orders the cup moves LEFT and the list takes the right
@@ -493,7 +495,7 @@ export default function VirtualItems({ stamps }) {
           {kind === "laptop" ? "My laptop" : DRINK_VARIANTS.find((v) => v.key === (item.variant || "tumbler"))?.name}
         </div>
         <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", color: INK3, textTransform: "uppercase" }}>
-          {n ? `${n} sticker${n === 1 ? "" : "s"}` : "Tap to customize"}
+          {n ? `${n} sticker${n === 1 ? "" : "s"}` : "Tap to see it"}
         </div>
       </div>
     );
@@ -504,7 +506,7 @@ export default function VirtualItems({ stamps }) {
       <div style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".14em", color: "#B0472F", textTransform: "uppercase" }}>My virtual items</div>
       <div className="flex gap-2.5 mt-2">{shelfOrder.map(card)}</div>
       <p style={{ fontSize: fs(11), color: INK3, marginTop: 6, lineHeight: 1.4 }}>
-        Tap an item to color it and place your earned stickers — drag a card sideways to rearrange the shelf.
+        Tap an item to see it up close — color it and place your earned stickers from there. Drag a card sideways to rearrange the shelf.
       </p>
 
       <div className="flex items-baseline justify-between mt-5">
@@ -514,8 +516,8 @@ export default function VirtualItems({ stamps }) {
       <div className="flex gap-2.5 mt-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
         {buddies.map((b) => (
           <div key={b.id} role="button" tabIndex={0} aria-label={b.name}
-            onPointerDown={petDown} onPointerUp={petUp(b)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setBuddyOpen(b); } }}
+            onPointerDown={petDown} onPointerUp={petUp(b, () => setZoom({ type: "buddy", id: b.id }))}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setZoom({ type: "buddy", id: b.id }); } }}
             className="flex-none rounded-2xl p-2.5 text-center select-none" style={{ width: 118, background: IVORY, border: `1px solid ${RULE}`, cursor: "pointer", touchAction: "pan-y" }}>
             <div className="pointer-events-none"><PetArt buddy={b} width={92} /></div>
             {/* Just the name (founder, 2026-10-05 evening: no pose caption) —
@@ -532,9 +534,68 @@ export default function VirtualItems({ stamps }) {
         )}
       </div>
       {buddies.length > 0 && (
-        <p style={{ fontSize: fs(11), color: INK3, marginTop: 4, lineHeight: 1.4 }}>Swipe a buddy to change its pose — sitting or standing. Tap to rename or say goodbye.</p>
+        <p style={{ fontSize: fs(11), color: INK3, marginTop: 4, lineHeight: 1.4 }}>Swipe a buddy to change its pose — sitting or standing. Tap to see it up close.</p>
       )}
 
+      {/* One tap enlarges an item or a buddy (founder, 2026-10-11): the big
+          picture first; × or a tap outside collapses it. Customizing and
+          renaming are one button away inside it. */}
+      {zoom && (() => {
+        const isItem = zoom.type === "item";
+        const b = isItem ? null : buddies.find((x) => x.id === zoom.id);
+        if (!isItem && !b) return null;
+        const item = isItem ? (gear[zoom.key] || (zoom.key === "drink" ? { variant: "tumbler", color: "blue" } : { color: "blue" })) : null;
+        const n = item ? (item.placements || []).length : 0;
+        const coffees = isItem && zoom.key === "drink" ? (item.coffees || []).filter(Boolean).slice(0, 3) : [];
+        const vw = (typeof window !== "undefined" && window.innerWidth) || 390;
+        const big = Math.max(200, Math.min(320, Math.round(vw - 110)));
+        const title = isItem ? (zoom.key === "laptop" ? "My laptop" : DRINK_VARIANTS.find((v) => v.key === (item.variant || "tumbler"))?.name) : b.name;
+        const sub = isItem
+          ? [GEAR_COLORS.find((c) => c.key === (item.color || "blue"))?.name, n ? `${n} sticker${n === 1 ? "" : "s"}` : "No stickers yet"].filter(Boolean).join(" · ")
+          : breedName(b.species, b.breed);
+        return (
+          <div className="fixed inset-0 z-[10010] flex items-center justify-center p-5" role="dialog" aria-modal="true" aria-label={title || "Enlarged"}
+            style={{ background: "rgba(22,17,13,.6)", backdropFilter: "blur(3px)" }} onClick={() => setZoom(null)}>
+            <div className="w-full max-w-sm rounded-3xl px-5 pt-5 pb-4 text-center" style={{ background: "#F3EEE1", position: "relative", boxShadow: "0 24px 60px -20px rgba(0,0,0,.45)" }} onClick={(e) => e.stopPropagation()}>
+              <button type="button" onClick={() => setZoom(null)} aria-label="Close" className="rounded-full p-1.5"
+                style={{ position: "absolute", top: 12, right: 12, background: "#fff", border: `1px solid ${RULE}`, zIndex: 2 }}>
+                <X size={18} color={INK} />
+              </button>
+              {isItem ? (
+                <div className="flex justify-center" style={{ marginTop: 8 }}><GearArt kind={zoom.key} item={item} width={big} stickersBySid={bySid} /></div>
+              ) : (
+                // Swipe the big buddy too, to change its pose.
+                <div className="flex justify-center select-none" style={{ marginTop: 8, touchAction: "pan-y" }} onPointerDown={petDown} onPointerUp={petUp(b, null)}>
+                  <div className="pointer-events-none"><PetArt buddy={b} width={big} /></div>
+                </div>
+              )}
+              <div style={{ fontFamily: SERIF, fontSize: fs(26), color: INK, lineHeight: 1.1, marginTop: 6 }}>{title}</div>
+              {sub && <div style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".08em", color: INK3, textTransform: "uppercase", marginTop: 3 }}>{sub}</div>}
+              {coffees.length > 0 && (
+                <div className="text-left mt-3">
+                  {coffees.map((c, i) => (
+                    <div key={i} style={{ fontSize: fs(14), color: INK2, lineHeight: 1.45, padding: "6px 0", borderTop: i ? `1px solid ${RULE}` : "none" }}>☕ {c}</div>
+                  ))}
+                </div>
+              )}
+              {!isItem && (
+                <div className="flex justify-center gap-2 mt-3">
+                  {POSES.map((p) => (
+                    <button key={p} type="button" onClick={() => setPose(b, p)} aria-pressed={b.pose === p}
+                      className="rounded-full px-4 py-1.5 font-semibold" style={{ background: b.pose === p ? INK : "#fff", color: b.pose === p ? "#fff" : INK, border: `1px solid ${RULE}`, fontSize: fs(13) }}>
+                      {p === "sitting" ? "Sitting" : "Standing"}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button type="button" onClick={() => { setZoom(null); if (isItem) setOpen(zoom.key); else setBuddyOpen(b); }}
+                className="w-full rounded-xl py-3 mt-4 font-semibold" style={{ background: INK, color: "#fff", fontSize: fs(14.5) }}>
+                {isItem ? "🎨 Customize color & stickers" : "✎ Rename or say goodbye"}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
       {open && (
         <GearModal kind={open} item={gear[open] || (open === "drink" ? { variant: "tumbler", color: "blue" } : { color: "blue" })}
           stamps={stamps} stickersBySid={bySid} usedElsewhere={usedFor(open)}

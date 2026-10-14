@@ -8,7 +8,11 @@
 #   scripts/ios-launch-check.sh
 set -uo pipefail
 cd "$(dirname "$0")/../ios/App" || exit 1
-DD="${TMPDIR:-/tmp}/gs-launch-check"
+# Not $TMPDIR: macOS deletes files there that sit unread for 3 days, which on
+# 2026-10-10 emptied the cached Capacitor frameworks and failed every build
+# with "There is no Info.plist found" until the folder was replaced.
+mkdir -p "$HOME/Library/Caches/gs-launch"
+DD="$HOME/Library/Caches/gs-launch/gs-launch-check"
 BUNDLE=com.globeskimmers.app
 RUNTIME=$(xcrun simctl list runtimes available | grep -o '^iOS [0-9.]*' | sort -V | tail -1)
 echo "Runtime: $RUNTIME"
