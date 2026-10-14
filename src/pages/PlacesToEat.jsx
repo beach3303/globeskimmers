@@ -38,7 +38,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
-import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
@@ -49,12 +48,14 @@ import TravelerDishes from "@/components/finder/TravelerDishes";
 import { HereStamp } from "@/components/attraction/AttractionExtras";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
-import { MapPin, Utensils, Clock, SlidersHorizontal, SearchX, AlertCircle } from "lucide-react";
-import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
+import { MapPin, Clock, Moon, SlidersHorizontal, SearchX, AlertCircle, Coffee } from "lucide-react";
+import { TEAL_DEEP, WORLD } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import FinderHeader from "@/components/finder/FinderHeader";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import FilterSheet from "@/components/finder/FilterSheet";
+import FallbackDisclaimer, { fallbackNoteKind } from "@/components/finder/FallbackDisclaimer";
+import { WorldSearch, WorldChip, ChipRow, ResultLine, WorldNote } from "@/components/finder/FinderControls";
 
 // iPad editorial design tokens (design handoff: "Places to Eat · iPad").
 const ED_SERIF = '"Instrument Serif", Georgia, serif';
@@ -587,77 +588,6 @@ function TrustTag({ confirmed }) {
     <span style={{fontSize:"calc(10px*var(--fs))",fontWeight:"700",color:confirmed?"#2E7D32":"#E65100",background:confirmed?"#E8F5E9":"#FFF3E0",padding:"1px 6px",borderRadius:"4px",marginLeft:"4px"}}>
       {confirmed ? "✅ Confirmed" : "⚠️ Reviews"}
     </span>
-  );
-}
-
-// ─── FALLBACK DISCLAIMER ─────────────────────────────────────────────────────
-// Shown when search text has intent but no authentic (Tier 1/2) results found.
-// e.g. "shabu shabu" typed but only generic restaurants in area.
-function FallbackDisclaimer({ fallbackInfo, onExpandRadius }) {
-  if (!fallbackInfo?.needed) return null;
-  return (
-    <motion.div
-      initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }}
-      style={{ padding:"14px 16px", background:"#FFFBEB", borderRadius:"12px",
-               border:"1px solid #FDE68A", marginBottom:"12px" }}
-    >
-      {/* Search-focused, cuisine-neutral wording: never single out a cuisine/ethnicity
-          in a negative "none found" headline (reads badly for "Asian"/"Chinese"/etc.). */}
-      <div style={{ fontWeight:"800", color:"#92400E", fontSize:"calc(14px*var(--fs))", marginBottom:"6px" }}>
-        🔍 No exact match nearby
-      </div>
-      <div style={{ fontSize:"calc(13px*var(--fs))", color:"#B45309", marginBottom:"10px", lineHeight:"1.5" }}>
-        These are the closest options we found — they may be a good fit, but aren't an exact match for your search.
-      </div>
-      <div style={{ display:"flex", gap:"8px", flexWrap:"wrap" }}>
-        <button onClick={onExpandRadius}
-          style={{ padding:"8px 14px", borderRadius:"8px", border:"none",
-                   background:"#F59E0B", color:"#fff", fontWeight:"700",
-                   fontSize:"calc(12px*var(--fs))", cursor:"pointer", fontFamily:"inherit" }}>
-          Search a wider area
-        </button>
-        {fallbackInfo.nearestAuthenticName && (
-          <div style={{ padding:"8px 12px", borderRadius:"8px", background:"#FEF3C7",
-                        fontSize:"calc(12px*var(--fs))", color:"#92400E", display:"flex", alignItems:"center", gap:"4px" }}>
-            📍 Closest match: <strong>{fallbackInfo.nearestAuthenticName}</strong>
-            {fallbackInfo.nearestAuthenticDistanceMiles &&
-              <span style={{ color:"#B45309" }}>({fallbackInfo.nearestAuthenticDistanceMiles} mi)</span>
-            }
-          </div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
-// ─── ALSO-SERVES BANNER ──────────────────────────────────────────────────────
-// Shown when a strict dish search returned 0 exact matches but the backend
-// found cuisine-umbrella restaurants in the existing pool (e.g. "Mang Inasal"
-// in Santa Clarita -> no Mang Inasal branches but 8 Filipino restaurants
-// nearby). Sets honest expectations before the user sees the alternative list.
-function AlsoServesBanner({ banner, onSearchElsewhere }) {
-  if (!banner?.cuisine) return null;
-  return (
-    <motion.div
-      initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }}
-      style={{ padding:"14px 16px", background:"#EFF6FF", borderRadius:"12px",
-               border:"1px solid #BFDBFE", marginBottom:"12px" }}
-    >
-      <div style={{ fontWeight:"800", color:"#1E40AF", fontSize:"calc(14px*var(--fs))", marginBottom:"6px" }}>
-        No exact {banner.queryLabel ? `"${banner.queryLabel}"` : 'match'} nearby
-      </div>
-      <div style={{ fontSize:"calc(13px*var(--fs))", color:"#1E3A8A", marginBottom:"10px", lineHeight:"1.5" }}>
-        Showing nearby <strong>{banner.cuisine}</strong> restaurants you might like instead.
-      </div>
-      {/* Honest action: every finder already searches the full 25-mile net, so the
-          only real way to widen is to move the search — open the location picker. */}
-      <button onClick={onSearchElsewhere}
-        style={{ padding:"8px 14px", borderRadius:"8px", border:"none",
-                 background:"#2563EB", color:"#fff", fontWeight:"700",
-                 fontSize:"calc(12px*var(--fs))", cursor:"pointer", fontFamily:"inherit" }}>
-        Search somewhere else
-      </button>
-    </motion.div>
   );
 }
 
@@ -1474,6 +1404,12 @@ export default function PlacesToEat() {
     return()=>{delete window.mapInstance;delete window.viewRestDetails;delete window.openDirFromMap;if(mapInstanceRef.current){mapInstanceRef.current.remove();mapInstanceRef.current=null;}};
   },[viewMode,filtered,lat,lng,displayCount,selectedMapIndex,userPinExpanded,locationText,activeLocation?.mode]);
 
+  const W = WORLD.eat;
+  const showCount = !(!lat||!lng||loading||error);   /* stale-count rule: never show the previous fetch's number mid-load */
+  // "Where to eat *ramen*" only when the worker read the search as a dish or a cuisine.
+  const dishIntent = !!searchText.trim() && (fallbackInfo?.intentKind === "DISH" || fallbackInfo?.intentKind === "UMBRELLA");
+  // Coffee words: point to the Coffee finder (re-evaluated on every search).
+  const coffeeHint = /\b(coffee|espresso|latte|cappuccino|mocha)\b/i.test(searchText || "");
   const stats = {
     total: filtered.length,
     open:  filtered.filter(r=>r.isOpen===true).length,
@@ -1481,77 +1417,62 @@ export default function PlacesToEat() {
   };
 
   return (
-    <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
+    <div className="font-sans" style={{background:W.paper,minHeight:"100vh",paddingTop:12}}>
 
-      {/* ── HEADER + LOCATION + SEARCH/FILTER BAND — shared FinderHeader (Passport
-          Standard). The page keeps owning LocationModePicker; search bar, cuisine
-          scroller and quick filters ride along as children. ── */}
+      {/* ── THE PLATE + CONTROLS (Eat.dc.html L26-87): the Bordeaux plate with the
+          count, the title, the location and the unit; under it the search, the two
+          chip rows and the result line. One note at a time: the no-exact-match
+          note, else the city line, else the coffee hint. ── */}
       <FinderHeader
-        catKey="food"
-        icon={Utensils}
-        title="Places to Eat"
-        count={(!lat||!lng||loading||error)?null:stats.total}   /* stale-count rule: never show the previous fetch's number mid-load */
-        countNoun="results"
+        world="eat"
+        count={showCount ? stats.total : null}
+        title={dishIntent ? { pre: "Where to eat ", italic: searchText.trim(), post: "" } : undefined}
         onRefresh={handleRefresh}
         refreshing={loading}
         refreshTitle="Refresh places"
-        onChangeLocation={()=>setShowLocPicker(true)}
-        locationLabel={locationText}
+        location={{ label: locationText, onChange: () => setShowLocPicker(true) }}
+        unit={{ value: unit, onChange: setUnit }}
         isCity={isCity}
         cityName={activeLocation?.address?.city || activeLocation?.placeName}
+        note={fallbackNoteKind(fallbackInfo, fallbackBanner) ? (
+          <FallbackDisclaimer world="eat" fallbackInfo={fallbackInfo} banner={fallbackBanner} onSearchElsewhere={() => setShowLocPicker(true)} formatDistance={formatDistance} />
+        ) : null}
+        hint={coffeeHint ? (
+          <WorldNote world="eat" icon={Coffee} title="Looking for coffee?" action={{ label: "See more cafés in Coffee", onClick: () => navigate(createPageUrl("CoffeeFinder"), { state: { from: "PlacesToEat" } }) }} />
+        ) : null}
       >
-        {/* Search bar — food-coral submit button */}
-        <div style={{display:"flex",gap:"8px",marginBottom:"14px"}}>
-          <input
-            value={searchInput}
-            onChange={e=>setSearchInput(e.target.value)}
-            onKeyDown={e=>e.key==='Enter'&&handleSearch()}
-            placeholder="Search dish or restaurant..."
-            className="font-sans"
-            style={{flex:1,padding:"14px 16px",borderRadius:"14px",border:"1px solid #F0E9DC",fontSize:"calc(15px*var(--fs))",outline:"none",color:"#0F1419",background:"#fff",boxShadow:"0 1px 3px rgba(15,20,25,0.04)"}}
-          />
-          <button
-            onClick={handleSearch}
-            className="font-sans"
-            style={{padding:"14px 18px",borderRadius:"14px",border:"none",background:CAT.food.ink,color:"#fff",fontWeight:"800",fontSize:"calc(16px*var(--fs))",cursor:"pointer",boxShadow:`0 6px 18px -6px ${CAT.food.ink}80`}}
-          >→</button>
-          {searchText && (
-            <button
-              onClick={()=>{setSearchInput("");setSearchText("");}}
-              className="font-sans"
-              style={{padding:"14px 14px",borderRadius:"14px",border:"1px solid #F0E9DC",background:"#fff",color:"#475569",fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer"}}
-            >✕</button>
-          )}
-        </div>
-
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
-
-        {/* List/Map view toggle removed — list is the primary view; a card's
-            "📍 Map" button still opens that place on the map. */}
-
-        {/* Cuisine quick-scroll — the door's signature, kept inline (multi-select;
-            dietary types excluded — they live in the FilterSheet's Dietary group) */}
-        <div ref={cuisineScrollRef} style={{display:"flex",gap:"6px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none",marginBottom:"8px"}}>
-          {CUISINES.filter(c=>!['vegetarian','vegan','halal','kosher'].includes(c.id)).map(c=>{
-            const active = selectedCuisines.has(c.id);
-            return (
-              <button key={c.id} onClick={()=>toggleCuisine(c.id)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:"4px",padding:"6px 12px",borderRadius:"20px",border:active?`2px solid ${c.special?GOLD:BLUE}`:"1.5px solid #E2E8F0",background:active?(c.special?`${GOLD}15`:BLUE_LT):"#fff",color:active?(c.special?ORANGE:BLUE):GRAY,fontWeight:active?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                <span>{c.icon}</span><span>{c.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Quick filters: Open Now stays inline; every other advanced group lives in the FilterSheet */}
-        <div style={{display:"flex",alignItems:"center",gap:"8px",overflowX:"auto",scrollbarWidth:"none",paddingBottom:"6px"}}>
-          <button onClick={()=>setFilterOpenNow(!filterOpenNow)} aria-pressed={filterOpenNow} className="font-sans" style={{display:"flex",alignItems:"center",gap:"5px",padding:"7px 13px",borderRadius:"20px",flexShrink:0,border:filterOpenNow?`2px solid ${GREEN}`:"1.5px solid #E2E8F0",background:filterOpenNow?`${GREEN}18`:"#fff",color:filterOpenNow?GREEN:GRAY,fontWeight:filterOpenNow?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer"}}><Clock size={13} strokeWidth={2}/>Open Now</button>
-          <button onClick={()=>setFilterSheetOpen(true)} className="font-sans" style={{display:"flex",alignItems:"center",gap:"5px",padding:"7px 13px",borderRadius:"20px",flexShrink:0,border:sheetFilterCount>0?`2px solid ${CAT.food.ink}`:"1.5px solid #E2E8F0",background:sheetFilterCount>0?`${CAT.food.ink}18`:"#fff",color:sheetFilterCount>0?CAT.food.ink:GRAY,fontWeight:sheetFilterCount>0?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer"}}><SlidersHorizontal size={13} strokeWidth={2}/>Filters{sheetFilterCount>0?` · ${sheetFilterCount}`:""}</button>
-        </div>
-        {/* Substat — honest mono open count (the total lives beside the header pill) */}
-        {!(!lat||!lng||loading||error)&&stats.open>0&&(
-          <div className="font-mono uppercase font-semibold" style={{fontSize:"calc(10.5px*var(--fs))",letterSpacing:"0.12em",color:"#736657",margin:"0 0 6px"}}>{stats.open} open now</div>
+        <WorldSearch
+          world="eat"
+          value={searchInput}
+          onChange={setSearchInput}
+          onSubmit={(text) => setSearchText(String(text || "").trim())}
+          onClear={() => { setSearchInput(""); setSearchText(""); }}
+          placeholder="Search a dish or a restaurant…"
+          busy={loading && !!searchText}
+        />
+        <ChipRow label="Quick filters" style={{ marginTop: 10 }}>
+          <WorldChip world="eat" icon={Clock} label="Open now" active={filterOpenNow} onClick={() => setFilterOpenNow(!filterOpenNow)} />
+          <WorldChip world="eat" icon={Moon} label="Late night" active={selectedCuisines.has("latenight")} onClick={() => toggleCuisine("latenight")} />
+          <WorldChip world="eat" icon={SlidersHorizontal} label="Filters" count={sheetFilterCount} opensSheet onClick={() => setFilterSheetOpen(true)} />
+        </ChipRow>
+        {/* Cuisines: no emoji and no "All" (nothing picked means all). Dietary
+            types live in the filter sheet; Late night sits in the row above. */}
+        <ChipRow label="Cuisines" bleed style={{ marginTop: 2 }}>
+          {CUISINES.filter((c) => !["all", "latenight", "vegetarian", "vegan", "halal", "kosher"].includes(c.id)).map((c) => (
+            <WorldChip key={c.id} world="eat" label={c.label} active={selectedCuisines.has(c.id)} onClick={() => toggleCuisine(c.id)} />
+          ))}
+        </ChipRow>
+        <ResultLine live items={showCount ? [{ count: stats.open, label: "open now" }] : []} />
+        {sortByRating && showCount && (
+          <ResultLine>
+            <span>★ Highest rated first · reviews weighed</span>
+            {" "}
+            <button type="button" onClick={() => setSortByRating(false)} aria-label="Sort by distance instead"
+              style={{ minHeight: 44, margin: "-14px 0", padding: 0, background: "none", border: 0, font: "inherit", letterSpacing: "inherit", textTransform: "inherit", color: W.ink, textDecoration: "underline", textUnderlineOffset: 2, cursor: "pointer" }}>
+              Nearest first
+            </button>
+          </ResultLine>
         )}
-
       </FinderHeader>
 
       {/* ── CONTENT ── */}
@@ -1580,39 +1501,11 @@ export default function PlacesToEat() {
           : <div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}><FinderEmptyState catKey="food" icon={SearchX} title="No restaurants found" reason={error} actionLabel="Search somewhere else" onAction={()=>setShowLocPicker(true)} secondaryLabel={(activeFilterCount>0||searchText)?"Clear filters":"Try again"} onSecondary={(activeFilterCount>0||searchText)?()=>{clearFilters();setSearchInput("");setSearchText("");}:handleRefresh}/></div>
       ):viewMode==="list"?(
         <div style={isTablet
-          ? {maxWidth:1024,margin:"0 auto",padding:"0 24px 170px",display:"flex",flexDirection:"column",gap:"30px"}
-          : {width:"100%",padding:"0 12px 100px",display:"flex",flexDirection:"column",gap:"16px"}}>
+          ? {maxWidth:1024,margin:"0 auto",padding:"16px 24px 0",display:"flex",flexDirection:"column",gap:"30px"}
+          : {width:"100%",padding:"16px 16px 0",display:"flex",flexDirection:"column",gap:"16px"}}>
           {filtered.length===0?(
             <FinderEmptyState catKey="food" icon={SearchX} title="No matches" reason="Nothing here passes the current filters." actionLabel="Search somewhere else" onAction={()=>setShowLocPicker(true)} secondaryLabel={(activeFilterCount>0||searchText)?"Clear filters":undefined} onSecondary={(activeFilterCount>0||searchText)?()=>{clearFilters();setSearchInput("");setSearchText("");}:undefined}/>
           ):(<>
-            {/* 25mi is already the ceiling, so a radius bump was a no-op — the honest
-                "expand" is moving the search. (FallbackDisclaimer's internal button
-                copy belongs to that component, not this call site.) */}
-            {sortByRating && (
-              <div style={{display:"flex",alignItems:"center",gap:8,padding:"2px 2px 0"}}>
-                <span style={{fontFamily:'"JetBrains Mono",ui-monospace,monospace',fontSize:"calc(10.5px*var(--fs))",letterSpacing:".08em",textTransform:"uppercase",color:"#736657"}}>★ Highest rated first · reviews weighed</span>
-                <button type="button" onClick={()=>setSortByRating(false)} aria-label="Sort by distance instead"
-                  style={{fontSize:"calc(11.5px*var(--fs))",color:"#17A38F",fontWeight:600,background:"none",border:"none",padding:0}}>Nearest first</button>
-              </div>
-            )}
-            <FallbackDisclaimer
-              fallbackInfo={fallbackInfo}
-              onExpandRadius={() => setShowLocPicker(true)}
-            />
-            <AlsoServesBanner
-              banner={fallbackBanner}
-              onSearchElsewhere={() => setShowLocPicker(true)}
-            />
-            {/* Subtle cross-promo: if the user typed a coffee query, point
-                them to the dedicated CoffeeFinder feature for more options.
-                Re-evaluates on every searchText change so a new (non-coffee)
-                search automatically removes the hint. */}
-            {/\b(coffee|espresso|latte|cappuccino|mocha)\b/i.test(searchText || '') && (
-              <div style={{padding:"8px 12px",background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:"8px",fontSize:"calc(12px*var(--fs))",color:"#92400E",display:"flex",alignItems:"center",gap:"6px"}}>
-                <span>☕</span>
-                <span>Looking for more coffee spots? <button onClick={() => navigate(createPageUrl("CoffeeFinder"), { state: { from: 'PlacesToEat' } })} style={{background:"transparent",border:"none",padding:0,color:"#92400E",fontWeight:"700",textDecoration:"underline",cursor:"pointer",fontFamily:"inherit",fontSize:"inherit"}}>Try the Coffee Finder feature in this app</button></span>
-              </div>
-            )}
             {filtered.slice(0,displayCount).map((r,i)=>{
               const Card = RestaurantCardTablet;
               return (
