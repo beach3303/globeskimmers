@@ -13,6 +13,7 @@ import { X, Undo2, Eraser, PencilLine } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { blotterMark, blotterSign, blotterCosign, blotterSweep } from "@/lib/passport";
 import { useDismissable } from "@/lib/dismissStack";
+import { useAuth } from "@/lib/AuthContext";
 import TravelerSheet from "@/components/social/TravelerSheet";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
@@ -177,6 +178,11 @@ export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, phot
 // ── The Guestbook sheet: signatures, doodles, co-signs ──────────────────────
 function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, onClose, forPhoto = false }) {
   useDismissable(true, onClose);
+  // Rewriting an old signature republishes it under your name, so a held
+  // teen or an unconfirmed birthday gets no edit (the worker refuses it
+  // too); peeling your own stays open.
+  const { socialTier } = useAuth();
+  const canEdit = socialTier !== "teen" && socialTier !== "confirm" && socialTier !== "blocked";
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [pad, setPad] = useState(false);
@@ -275,7 +281,7 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
                   </button>
                 )}
                 <span className="ml-auto flex gap-2.5">
-                  {e.mine && !e.doodle && <button onClick={() => setEditing({ id: e.id, text: e.body || "" })} style={{ textDecoration: "underline", textUnderlineOffset: 2 }}>edit</button>}
+                  {e.mine && !e.doodle && canEdit && <button onClick={() => setEditing({ id: e.id, text: e.body || "" })} style={{ textDecoration: "underline", textUnderlineOffset: 2 }}>edit</button>}
                   {e.mine && <button onClick={() => peel(e.id)} style={{ textDecoration: "underline", textUnderlineOffset: 2 }}>peel</button>}
                   {ownerView && !e.mine && <button onClick={() => sweep(e.id)} style={{ textDecoration: "underline", textUnderlineOffset: 2, color: "#B0472F" }}>sweep</button>}
                   {!e.mine && (
