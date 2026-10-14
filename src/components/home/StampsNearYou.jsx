@@ -1,82 +1,82 @@
-// StampsNearYou — "Stamps near you" homepage row.
+// StampsNearYou — Home's stamps zone on passport cream (Home-Boxes L149-188).
 //
-// Turns the Virtual Passport into a discovery hook: iconic, collectible stamps
-// you can earn near where you are / where you're staying, with the DISTANCE from
-// your spot. Centered on the active location (which auto-follow keeps current;
-// the accommodation anchor in Phase 2 will pin it). Owned attraction data only
-// (attractions/nearby, D1 — zero Google/AI spend). Renders NOTHING when there's
-// no coverage, so the tiles + feed above stand alone.
+// Turns the Virtual Passport into a discovery hook: iconic, collectible stamps you
+// can earn near the active location, with the distance from your spot in your unit.
+// Owned attraction data only (attractions/nearby, D1 — zero Google/AI spend).
 //
-// A tap opens the attraction's Things to Do card, where the GPS-verified "I was
-// here" stamp is actually earned — we never claim a tap collects a stamp.
+//   Near:   'Be there, and it's *yours*' + the deck, iconic first, then nearest.
+//   Far:    nothing within ~25 mi, so one wider look: 'The nearest *stamps*' and
+//           '{distance} AWAY · WORTH THE TRIP', nearest first.
+//   None:   no stamps even then: 'No famous stamps around here yet' with 'Add a past
+//           trip' and 'Things to do nearby'.
+//   Nothing while loading, without coordinates, or when the read fails.
+//
+// A tap opens the attraction's Things to Do card, where the GPS-verified "I was here"
+// stamp is actually earned — we never claim a tap collects a stamp. onNearest gets
+// the closest stampable place ({ name, km, miles }) for the passport zone.
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
 import { useLocation } from "@/components/location/LocationContext";
 import { callWorker } from "@/lib/callWorker";
-import { stampArtUrl } from "@/lib/stampArt";
-import TypographicStamp from "@/components/passport/TypographicStamp";
 import { logDiscover } from "@/lib/logDiscover";
 import { createPageUrl } from "@/utils";
 import { openAttraction } from "@/lib/openAttraction";
+import { KM_PER_MI, distanceLabel } from "@/lib/units";
+import { HomeZone } from "@/components/redesign/Zone";
+import { NEUTRAL, fs } from "@/components/redesign/constants";
+import StampThumb from "@/components/passport/StampThumb";
 
-const INK = "#243447", INK3 = "#66717D", STAMP = "#B0472F", PAPER = "#FBF6EC";
+const RED = NEUTRAL.stamp;
 
-// One collectible stamp: the bespoke stamp art in a dashed "not yet earned" ring;
-// falls back to a clean rubber-stamp placeholder when a spot has no art yet.
-function StampChip({ item, wide, onOpen }) {
-  const [fail, setFail] = useState(false);
-  const art = stampArtUrl(item.name, { entityId: item.id, country: item.country });
-  const size = wide ? 116 : 100;
-  const miles = Number.isFinite(item.distanceMiles) ? `${item.distanceMiles.toFixed(1)} mi` : null;
+const kmOf = (a) => {
+  if (Number.isFinite(a?.distanceKm)) return a.distanceKm;
+  if (Number.isFinite(a?.distanceMiles)) return a.distanceMiles * KM_PER_MI;
+  return NaN;
+};
+
+// One collectible stamp: its art (or the typographic stamp) in the dashed "not yet
+// earned" ring, the name and the distance.
+function StampDisc({ item, unit, onOpen }) {
+  const dist = distanceLabel(kmOf(item), unit);
+  const spoken = dist ? `${item.name} stamp, ${dist.replace(/ MI$/, " miles").replace(/ KM$/, " kilometres")} away` : `${item.name} stamp`;
   return (
-    <button onClick={onOpen} className={`flex-none text-center ${wide ? "w-[150px]" : "w-[128px]"}`} aria-label={`Stamp: ${item.name}`}>
-      <div
-        className="mx-auto flex items-center justify-center"
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={spoken}
+      className="flex-none flex flex-col items-center"
+      style={{ width: fs(128), background: "transparent", border: 0, padding: 0, color: NEUTRAL.ink, cursor: "pointer" }}
+    >
+      <span
+        aria-hidden="true"
+        className="flex items-center justify-center"
         style={{
-          width: size, height: size, borderRadius: "50%",
-          border: `2px dashed ${STAMP}`, background: PAPER,
-          boxShadow: "inset 0 0 0 1px rgba(176,71,47,.15)", opacity: 0.96,
+          width: 104, height: 104, boxSizing: "border-box", borderRadius: 999,
+          border: `2px dashed ${RED}`, background: NEUTRAL.cream,
+          boxShadow: "inset 0 0 0 1px rgba(176,71,47,.15), 0 6px 14px -10px rgba(22,17,13,.35)",
+          overflow: "hidden",
         }}
       >
-        {art && !fail ? (
-          <img
-            src={art} alt="" loading="lazy" onError={() => setFail(true)}
-            style={{ width: size * 0.78, height: size * 0.78, objectFit: "contain", opacity: 0.92 }}
-          />
-        ) : (
-          // No bespoke art for this spot yet -> a real typographic stamp rather
-          // than a generic emoji, so an uncollected stamp still looks worth having.
-          <TypographicStamp
-            name={item.name} city={item.city} country={item.country}
-            entityId={item.id || item.name} width={size * 0.84} film={item.film || null}
-          />
-        )}
-      </div>
-      <div className="mt-1.5 leading-tight" style={{ fontFamily: '"Instrument Serif", Georgia, serif', color: INK, fontSize: `calc(13px*var(--fs))`, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+        <StampThumb stamp={{ ...item, entity_id: item.id }} size={84} strength={0} />
+      </span>
+      <span
+        className="font-serif"
+        style={{ marginTop: 6, width: "100%", fontSize: fs(15), lineHeight: 1.1, textAlign: "center", color: NEUTRAL.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+      >
         {item.name}
-      </div>
-      {miles && <div className="mt-0.5" style={{ fontFamily: '"JetBrains Mono", ui-monospace, monospace', color: INK3, fontSize: `calc(10.5px*var(--fs))` }}>{miles}</div>}
+      </span>
+      {dist && (
+        <span className="font-mono" style={{ marginTop: 2, fontSize: fs(10.5), lineHeight: 1.2, letterSpacing: ".06em", color: NEUTRAL.ink3 }}>{dist}</span>
+      )}
     </button>
   );
 }
 
-export default function StampsNearYou({ onAction, wide = false, onNearest }) {
-  // First-run explainer (founder queue #1: "explain what stamps near you
-  // mean" — the Atlanta story). Shows once, dismissible, never again after.
-  const [explain, setExplain] = useState(() => {
-    try { return !localStorage.getItem("pp_stamps_explained"); } catch { return false; }
-  });
-  const dismissExplain = () => {
-    setExplain(false);
-    try { localStorage.setItem("pp_stamps_explained", "1"); } catch { /* fine */ }
-  };
-
+export default function StampsNearYou({ onAction, onNearest, unit = "mi" }) {
   const { getActiveLocation } = useLocation();
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
-  // Out of coverage (audit P1 #9): nothing within 25 mi → one wider look so
-  // the first screen still holds a collectible ("the nearest stamps"); only
-  // when even that is empty does a quiet card offer a past trip instead.
   const [far, setFar] = useState(false);
   const [none, setNone] = useState(false);
 
@@ -87,17 +87,13 @@ export default function StampsNearYou({ onAction, wide = false, onNearest }) {
     // every finder; top-level fallbacks cover any flattened picked/search shape.
     const lat = loc?.coordinates?.latitude ?? loc?.latitude ?? loc?.lat;
     const lng = loc?.coordinates?.longitude ?? loc?.longitude ?? loc?.lng;
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) { setItems([]); return; }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) { setItems([]); setNone(false); return undefined; }
     (async () => {
       try {
-        // The worker reads `radiusKm` (NOT `radius`); ~40 km (25 mi) keeps a
-        // city's iconic stamps in range while the distance labels stay honest
-        // for a "near your stay" header (an 80 km default would surface ~50-mi
-        // stamps as "near").
-        // includeSecrets: the worker hides tier=secret rows from general browse; this
-        // proximity path may see them (inside their rotation window) — and we show a
-        // secret ONLY when the traveler is physically inside its footprint. That is
-        // the whole game: you stumble onto it by being there.
+        // The worker reads `radiusKm` (NOT `radius`); ~40 km (25 mi) keeps a city's
+        // iconic stamps in range while the distances stay honest.
+        // includeSecrets: a secret stamp shows ONLY when the traveler is physically
+        // inside its footprint. That is the whole game: you stumble onto it.
         const { data, error } = await callWorker("attractions/nearby", { latitude: lat, longitude: lng, radiusKm: 40, limit: 24, includeSecrets: true, stampsOnly: true });
         if (cancelled) return;
         const raw = (!error && Array.isArray(data?.attractions)) ? data.attractions : [];
@@ -110,43 +106,47 @@ export default function StampsNearYou({ onAction, wide = false, onNearest }) {
           isFar = list.length > 0;
         }
         // Near: iconic first, then nearest. Far: nearest first — the trip is the point.
-        list.sort((a, b) => (isFar ? 0 : (Number(!!b.isMarquee) - Number(!!a.isMarquee))) || ((a.distanceMiles ?? 999) - (b.distanceMiles ?? 999)));
+        const d = (a) => (Number.isFinite(kmOf(a)) ? kmOf(a) : 1e9);
+        list.sort((a, b) => (isFar ? 0 : (Number(!!b.isMarquee) - Number(!!a.isMarquee))) || (d(a) - d(b)));
         setItems(list.slice(0, 12)); setFar(isFar); setNone(!error && !list.length);
-        // Feed the passport hero the closest stampable place (by distance, not
-        // marquee rank — "next stamp" should be the one you can walk to).
+        // The passport zone's "next stamp": the closest one (by distance, not
+        // marquee rank — the one you can walk to).
         if (onNearest) {
-          const near = list.slice().sort((a, b) => (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999))[0];
-          onNearest(near ? { name: near.name, miles: Number.isFinite(near.distanceMiles) ? near.distanceMiles : null } : null);
+          const near = list.slice().sort((a, b) => d(a) - d(b))[0];
+          const km = near ? kmOf(near) : NaN;
+          onNearest(near ? { name: near.name, km: Number.isFinite(km) ? km : null, miles: Number.isFinite(km) ? km / KM_PER_MI : null } : null);
         }
-      } catch { if (!cancelled) setItems([]); }
+      } catch { if (!cancelled) { setItems([]); setNone(false); } }
     })();
     return () => { cancelled = true; };
   }, [getActiveLocation]);
 
+  const toPassport = () => navigate(createPageUrl("Passport"));
+
   if (!items.length) {
     if (!none) return null;
     return (
-      <div className={wide ? "pb-3" : "px-4 pb-3"}>
-        <div className={wide ? "" : "max-w-md mx-auto"}>
-          <div className="rounded-[16px] px-4 py-3.5" style={{ background: "#F6F0E4", border: "1px solid #E4DAC4" }}>
-            <div className="font-serif text-[calc(17px*var(--fs))] leading-[1.2]" style={{ color: "#16302B" }}>No famous stamps around here yet</div>
-            <p className="text-[calc(12.5px*var(--fs))] mt-1 leading-[1.45]" style={{ color: "#3F5A50" }}>
-              Stamps live at the world&rsquo;s iconic places. Been somewhere before? Add the trip with a photo you took there.
-            </p>
-            <div className="flex gap-2 mt-2.5 flex-wrap">
-              <button type="button" onClick={() => navigate(createPageUrl("Passport"))} className="rounded-full px-3.5 py-2 font-semibold text-[calc(12.5px*var(--fs))]" style={{ background: "#B0472F", color: "#fff" }}>
-                ✍️ Add a past trip
-              </button>
-              <button type="button" onClick={() => onAction?.("Things to Do")} className="rounded-full px-3.5 py-2 font-semibold text-[calc(12.5px*var(--fs))]" style={{ background: "#fff", color: "#16302B", border: "1px solid #E4DAC4" }}>
-                Things to do nearby
-              </button>
-            </div>
-          </div>
+      <HomeZone zone="stamps" label="Stamps near you">
+        <h3 className="font-serif m-0" style={{ fontWeight: 400, fontSize: fs(22), lineHeight: 1.15, color: NEUTRAL.ink }}>
+          No famous stamps around here <em style={{ color: RED }}>yet</em>
+        </h3>
+        <p style={{ margin: "6px 0 0", fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}>
+          Stamps live at the world&rsquo;s iconic places. Been somewhere before? Add the trip with a photo you took there.
+        </p>
+        <div className="flex flex-wrap" style={{ gap: 8, marginTop: 12 }}>
+          <button type="button" onClick={toPassport} className="rounded-full" style={{ minHeight: 44, padding: "0 16px", background: RED, border: 0, color: NEUTRAL.white, fontSize: fs(13.5), fontWeight: 600, cursor: "pointer" }}>
+            Add a past trip
+          </button>
+          <button type="button" onClick={() => onAction?.("Things to Do")} className="rounded-full" style={{ minHeight: 44, padding: "0 16px", background: "transparent", border: `1px solid ${NEUTRAL.creamRule}`, color: NEUTRAL.ink, fontSize: fs(13.5), fontWeight: 600, cursor: "pointer" }}>
+            Things to do nearby
+          </button>
         </div>
-      </div>
+      </HomeZone>
     );
   }
-  const nearestMi = far ? Math.round(Math.min(...items.map((x) => (Number.isFinite(x.distanceMiles) ? x.distanceMiles : 999)))) : null;
+
+  const nearestKm = far ? Math.min(...items.map((x) => (Number.isFinite(kmOf(x)) ? kmOf(x) : Infinity))) : NaN;
+  const farLabel = Number.isFinite(nearestKm) ? distanceLabel(nearestKm, unit) : null;
 
   // Open the attraction's Things to Do card — the stamp is earned there by GPS.
   const openStamp = (item) => {
@@ -155,40 +155,35 @@ export default function StampsNearYou({ onAction, wide = false, onNearest }) {
   };
 
   return (
-    <div className={wide ? "pb-3" : "px-4 pb-3"}>
-      <div className={wide ? "" : "max-w-md mx-auto"}>
-        {explain && (
-          <div className="relative rounded-[14px] px-4 py-3 mb-3" style={{ background: "#EAF3EF", border: "1px solid #CDE2D8" }}>
-            <button type="button" onClick={dismissExplain} aria-label="Got it — hide this note"
-              className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center"
-              style={{ background: "#fff", color: "#16302B", fontSize: 12, fontWeight: 700, border: "1px solid #CDE2D8" }}>✕</button>
-            <div className="font-serif text-[calc(16px*var(--fs))] leading-[1.2] pr-6" style={{ color: "#16302B" }}>
-              These are the places actually worth going.
-            </div>
-            <p className="text-[calc(12.5px*var(--fs))] mt-1 leading-[1.45] pr-4" style={{ color: "#3F5A50" }}>
-              The stamps below are the top destinations around you — the aquarium, the mountain, the famous steps. Be at one and its stamp is yours for life, dated and verified. Add your photos, and share the page.
-            </p>
-          </div>
-        )}
-        <div className="flex items-baseline justify-between mb-2 px-0.5 gap-3">
-          <div className="min-w-0">
-            <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1]" style={{ color: "#16302B" }}>{far ? "The nearest stamps" : "Stamps near you"}</div>
-            <div className="text-[calc(12px*var(--fs))] mt-0.5" style={{ color: "#71827D" }}>{far && nearestMi < 999 ? `${nearestMi} mi away — worth the trip` : "Collect these as you explore"}</div>
-          </div>
-          <button
-            onClick={() => navigate(createPageUrl("Passport"))}
-            className="flex-none text-[calc(12.5px*var(--fs))] font-semibold"
-            style={{ color: "#17A38F" }}
-          >
-            My Passport →
-          </button>
-        </div>
-        <div className="flex gap-3 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "none" }}>
-          {items.map((it) => (
-            <StampChip key={it.id} item={it} wide={wide} onOpen={() => openStamp(it)} />
-          ))}
-        </div>
+    <HomeZone zone="stamps" label="Stamps near you">
+      <div className="flex items-center justify-between" style={{ gap: 12, minHeight: 24 }}>
+        <h3 className="font-serif m-0 min-w-0" style={{ fontWeight: 400, fontSize: fs(22), lineHeight: 1.1, color: NEUTRAL.ink }}>
+          {far
+            ? <>The nearest <em style={{ color: RED }}>stamps</em></>
+            : <>Be there, and it&rsquo;s <em style={{ color: RED }}>yours</em></>}
+        </h3>
+        <button
+          type="button"
+          onClick={toPassport}
+          className="flex-none inline-flex items-center"
+          style={{ gap: 4, minHeight: 44, margin: "-10px 0", padding: 0, background: "transparent", border: 0, fontSize: fs(13), fontWeight: 600, color: RED, cursor: "pointer" }}
+        >
+          My Passport
+          <ArrowRight size={14} strokeWidth={2} aria-hidden="true" />
+        </button>
       </div>
-    </div>
+      {far ? (
+        farLabel && <p className="font-mono" style={{ margin: "4px 0 0", fontSize: fs(10.5), lineHeight: 1.4, letterSpacing: ".06em", color: NEUTRAL.ink3 }}>{farLabel} AWAY · WORTH THE TRIP</p>
+      ) : (
+        <p style={{ margin: "4px 0 0", fontSize: fs(12.5), lineHeight: 1.3, color: NEUTRAL.ink3 }}>
+          The famous places around you. Be at one and its stamp is yours for life, dated and verified.
+        </p>
+      )}
+      <div className="flex items-start overflow-x-auto" style={{ gap: 12, marginTop: 12, marginRight: -16, paddingRight: 16, paddingBottom: 2, scrollbarWidth: "none" }}>
+        {items.map((it) => (
+          <StampDisc key={it.id} item={it} unit={unit} onOpen={() => openStamp(it)} />
+        ))}
+      </div>
+    </HomeZone>
   );
 }

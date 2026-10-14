@@ -643,7 +643,7 @@ export default function HomePage() {
       <FriendsTravels wide={isTablet} />
       <NearbyServices wide={isTablet} onAction={handleQuickAction} onAllServices={openAllServices} />
       {isTablet && rowsFirst && <HomeRows unit={unit} onAction={handleQuickAction} />}
-      <StampsNearYou wide={isTablet} onAction={handleQuickAction} onNearest={setNearestStamp} />
+      <StampsNearYou unit={unit} onAction={handleQuickAction} onNearest={setNearestStamp} />
       {isTablet && !rowsFirst && <HomeRows unit={unit} onAction={handleQuickAction} />}
       {isDreamStack && (
         <DreamShelf
