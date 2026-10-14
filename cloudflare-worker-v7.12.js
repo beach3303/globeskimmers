@@ -16292,6 +16292,56 @@ async function freezeSweep(env, now = new Date()) {
   } while (cursor);
   return out;
 }
+// Daily: every stored birthday that is under 13 gets its purge clock — not
+// only the accounts someone happens to open (go-live review, 2026-10-13: an
+// unopened account kept a known child's data with no end date). Birth data
+// decides, never the stored tier (decision 3); a stored tier the birthday no
+// longer supports (an Australian 13–15 stored 'blocked', a teen who turned
+// 18) is corrected the way gbSocialProfile corrects it on read. The rows are
+// read first and then worked, at most FREEZE_SCAN_MAX writes a run (the rest
+// the next day). A failed read changes nothing.
+const FREEZE_SCAN_MAX = 50;
+async function freezeScan(env, now = new Date()) {
+  const out = { marked: 0, fixed: 0, failed: 0 };
+  const kv = env.GLOBESKIMMERS_KV; if (!kv) return out;
+  const have = new Set();
+  let cursor;
+  do {
+    const page = await kv.list({ prefix: 'freeze:', cursor });
+    for (const { name } of page.keys) have.add(name.slice('freeze:'.length));
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  // Anyone who could be under 13 (born in the last 13 years), plus every
+  // stored 'blocked' tier, whatever the year.
+  const rows = [];
+  for (let off = 0; off < 20000; off += 1000) {
+    const q = await gbRest(env, `social_profiles?or=(birth_year.gte.${now.getUTCFullYear() - 13},social_tier.eq.blocked)&select=user_id,birth_year,birth_md,country_at_gate,social_tier&order=user_id.asc&limit=1000&offset=${off}`, {});
+    if (!q.ok) { out.failed++; return out; }
+    const page = await q.json();
+    rows.push(...page);
+    if (page.length < 1000) break;
+  }
+  let writes = 0;
+  for (const r of rows) {
+    if (writes >= FREEZE_SCAN_MAX) break;
+    if (!r.birth_year || !BL_UUID.test(String(r.user_id || ''))) continue;
+    const t = socialTierFor(r.birth_year, r.country_at_gate, r.birth_md, now);
+    if (!t) continue;
+    try {
+      if (t === 'blocked' && !have.has(r.user_id)) {
+        writes++;
+        if (await gbMarkFrozen(env, r.user_id, now)) out.marked++;
+        have.add(r.user_id);
+      }
+      if (t !== r.social_tier) {
+        writes++;
+        const w = await gbRest(env, `social_profiles?user_id=eq.${r.user_id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ social_tier: t, updated_at: now.toISOString() }) });
+        if (w.ok) out.fixed++; else out.failed++;
+      }
+    } catch { out.failed++; /* one account never stops the scan */ }
+  }
+  return out;
+}
 // Daily: finish the deletion of accounts whose purge had a failed step, or
 // whose request ended before its purge did (handleDeleteAccount queues
 // purge:<uid> before it deletes the sign-in). Only a DELETED account is ever
@@ -23797,6 +23847,8 @@ export default {
     try { await freezeSweep(env); } catch (_e) { /* tomorrow's cron tries again */ }
     // Deleted accounts whose clean-up had a failed step: finish it.
     try { await purgeRetrySweep(env); } catch (_e) { /* tomorrow's cron tries again */ }
+    // Every stored under-13 birthday gets its purge clock, opened or not.
+    try { await freezeScan(env); } catch (_e) { /* tomorrow's cron tries again */ }
   }
 };
 // CI test Mon May 11 06:28:51 PDT 2026
