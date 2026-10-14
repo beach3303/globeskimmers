@@ -849,7 +849,19 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   buddy if their breed *.png is not uploaded yet"; 6563d63; `src/lib/petArt.js` lists the 87 drawn breeds,
   refresh it with each pet upload; "Mixed / rescue" isn't drawn for dogs or cats yet). Profile's photo
   packets take more prints, as the Passport's do (founder: "allow users to be able to add more photos to
-  each album"; 9578c01). Both ride the next OTA. Review page:
+  each album"; 9578c01). Both ride the next OTA. **Built 2026-10-14, on "Let's build these"** (new-look,
+  not pushed yet): **City Boards**, a page of every board with postcards, busiest first, with its newest
+  photo and count, and a search (86174d6, f2d1364); doors from Home, Mailbox, search ("Postcards from Paris ·
+  24"), a postcard's postmark and a city stamp; a country code and its name are one board (9e1f652);
+  after a verified stamp, "Send the first postcard to Lisbon's board" (2307109). **Likes and comments on
+  board postcards**, the guestbook on 'pc:' targets (7c10e89, a456611). **Child safety page** for Google
+  Play at /child-safety/ (9bb233d); the founder declares it in Play Console. **Age check** (branch
+  `age-check`): the iPhone plugin registered and answering, Apple's RESCIND_CONSENT verified and acted on,
+  Android's Play Age Signals, the server cap (the younger wins; under 13 freezes) and the app's sync; the
+  age columns (816a078) ship with the City Boards push, the age worker after them, the native parts in
+  iOS 1.0.5 and the next Android build. Open for the founder or counsel: what counts as a significant
+  change (parent re-approval), when to show Google's consent screen, and a Texas user who declines.
+  **Art:** "Mixed / rescue" for dogs and cats (founder). Review page:
   https://claude.ai/artifact/JeXKJshqiT2BJ9BSPARA2G; status: `docs/design/new-look/BUILD_STATUS.md` on new-look.
   **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
   — option A (full-width bands) is not built. **Weather: Bluebird. ATMs: Carbon Copy** (founder,
