@@ -12,7 +12,8 @@
 //   - nothing in a quiet week when you already follow people, or once the invite
 //     is hidden.
 // Rows from people you blocked never show. Every envelope from someone else has the
-// report door (one ReportSheet for the zone); your own rows have none.
+// door to production's TravelerSheet (one for the zone): Report, and Block once the
+// worker advertises block_v2 (go-live decision 6, 2026-10-13). Your own rows have none.
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, X } from "lucide-react";
@@ -22,7 +23,8 @@ import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
 import { HomeZone } from "@/components/redesign/Zone";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
-import Envelope, { ReportSheet } from "@/components/social/Envelope";
+import Envelope from "@/components/social/Envelope";
+import TravelerSheet from "@/components/social/TravelerSheet";
 
 const DISMISS_KEY = "gs_friends_invite_dismissed";
 const HELD_TIERS = new Set(["teen", "blocked", "confirm"]);
@@ -37,7 +39,8 @@ export default function FriendsTravels({ wide = false }) {
   const circle = useCircle();
   const [feed, setFeed] = useState(null); // null while loading: { rows, held, error }
   const [me, setMe] = useState(null);
-  const [reporting, setReporting] = useState(null);
+  const [traveler, setTraveler] = useState(null); // the row whose options sheet is open
+  const [tick, setTick] = useState(0);             // read the feed again after a block
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem(DISMISS_KEY) === "1"; } catch { return false; }
   });
@@ -54,7 +57,7 @@ export default function FriendsTravels({ wide = false }) {
       setMe(h?.handle || null);
     })();
     return () => { gone = true; };
-  }, [socialTierReady, held]);
+  }, [socialTierReady, held, tick]);
 
   if (!socialTierReady || held) return null;
   if (feed === null || circle.status === "loading") return null;
@@ -128,10 +131,22 @@ export default function FriendsTravels({ wide = false }) {
       {/* The envelopes bleed to the box's right edge and scroll sideways. */}
       <div className="flex overflow-x-auto" style={{ gap: 12, marginTop: 12, marginRight: -16, paddingRight: 16, paddingBottom: 2, scrollbarWidth: "none" }}>
         {rows.map((r, i) => (
-          <Envelope key={`${r.type}-${r.created_at}-${i}`} row={r} variant="compact" me={me} onClick={toMailbox} onReport={setReporting} />
+          <Envelope key={`${r.type}-${r.created_at}-${i}`} row={r} variant="compact" me={me} onClick={toMailbox} onReport={setTraveler} />
         ))}
       </div>
-      <ReportSheet row={reporting} me={me} onClose={() => setReporting(null)} />
+      {traveler ? (
+        <TravelerSheet
+          person={{ ...(traveler.by || {}), postcard_id: traveler.type === "postcard" ? traveler.id || null : null }}
+          report={{
+            kind: traveler.type === "postcard" ? "postcard" : "stamp",
+            ...(traveler.type === "postcard" && traveler.id ? { ref: `pc:${traveler.id}` } : {}),
+            note: traveler.type === "postcard"
+              ? `Postcard on Home${traveler.place ? ` from ${traveler.place}` : ""}${traveler.message ? `: "${String(traveler.message).slice(0, 300)}"` : ""}`
+              : `Stamp on Home: ${traveler.name || ""}${traveler.city ? `, ${traveler.city}` : ""}`,
+          }}
+          onClose={() => setTraveler(null)}
+          onChanged={() => { setTraveler(null); circle.retry(); setTick((t) => t + 1); }} />
+      ) : null}
     </HomeZone>
   );
 }

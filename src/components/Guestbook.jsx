@@ -1,6 +1,8 @@
 // Guestbook — kind notes for the next traveler on any place (generic by entity).
 // Read by anyone; signing requires sign-in. Guided prompts (a tip, your favorite
-// part, a shout-out, a memory), edit/delete your own, report others (Apple 1.2).
+// part, a shout-out, a memory), edit/delete your own, report others (Apple 1.2),
+// and Block a note's author once the worker advertises block_v2: their notes
+// (and yours, to them) stop showing here (go-live review, 2026-10-13).
 // Warm notes, NOT reviews: the worker posts kind notes right away and holds any
 // note that reads as negative for an admin to read first (only its author sees
 // it meanwhile, marked as waiting).
@@ -23,6 +25,9 @@ import OwnerNoteSheet from "@/components/OwnerNoteSheet";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
 import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
 import { ChipRow, WorldChip, worldRow } from "@/components/finder/FinderControls";
+import TravelerSheet from "@/components/social/TravelerSheet";
+import { socialFollow } from "@/lib/passport";
+import { blockReady } from "@/lib/blocks";
 
 /** @typedef {import('react').CSSProperties} CSS */
 
@@ -140,6 +145,10 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
   const [doodleBusy, setDoodleBusy] = useState(false);
   const [openDoodle, setOpenDoodle] = useState(null);      // entry id expanded full-width
   const [lightbox, setLightbox] = useState(null);          // full-size photo url
+  // Block: the follow list says whether the worker has block_v2; read once,
+  // only when someone else's note is on screen.
+  const [followList, setFollowList] = useState(null);
+  const [blocking, setBlocking] = useState(null);          // the note whose author is being blocked
 
   const load = useCallback(async () => {
     if (!entityId) return;
@@ -153,6 +162,14 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
   }, [entityId]);
 
   useEffect(() => { load(); }, [load]);
+  const othersHere = isAuthenticated && entries.some((e) => !e.mine);
+  useEffect(() => {
+    if (!othersHere || followList) return undefined;
+    let gone = false;
+    (async () => { const { data } = await socialFollow("list"); if (!gone) setFollowList(data || {}); })();
+    return () => { gone = true; };
+  }, [othersHere, followList]);
+  const canBlock = blockReady(followList);
 
   const displayName = profile?.first_name || "A traveler";
   const homeCity = profile?.home_city || null;
@@ -398,7 +415,13 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
                       <button type="button" onClick={() => remove(e.id)} aria-label="Delete your note" style={textButton}>Delete</button>
                     </>
                   ) : (
-                    <button type="button" onClick={() => report(e.id)} aria-label={`Report the note by ${e.display_name || "a traveler"}`} style={textButton}>Report</button>
+                    <>
+                      <button type="button" onClick={() => report(e.id)} aria-label={`Report the note by ${e.display_name || "a traveler"}`} style={textButton}>Report</button>
+                      {canBlock && (
+                        <button type="button" onClick={() => setBlocking(e)} aria-haspopup="dialog"
+                          aria-label={`Block ${e.display_name || "this traveler"}`} style={textButton}>Block</button>
+                      )}
+                    </>
                   )}
                 </div>
               </li>
@@ -420,6 +443,11 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
       )}
       {ownerNote && (
         <OwnerNoteSheet entityType={entityType} entityId={entityId} entityName={entityName} onClose={() => setOwnerNote(false)} />
+      )}
+      {blocking && (
+        <TravelerSheet person={{ guestbook_entry_id: blocking.id, name: blocking.display_name || null }} list={followList} start="block"
+          report={{ kind: "profile", note: `Guestbook note${entityName ? ` at ${entityName}` : ""}: "${String(blocking.body || "").slice(0, 300)}"` }}
+          onClose={() => setBlocking(null)} onChanged={() => { setBlocking(null); load(); }} />
       )}
       {pad && (
         <DoodlePad busy={doodleBusy} onClose={() => setPad(false)} onPost={postDoodle}

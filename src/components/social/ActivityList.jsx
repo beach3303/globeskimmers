@@ -11,7 +11,10 @@
 //            avatar? }, at, unread, to_me, place, reactions, photo, stamp, doodle, body }).
 //            Hidden when empty.
 //   onOpen   (destination) => void, where destination is 'passport' or 'circle'.
+//   onMore   (item) => void: a 44px '•••' beside each row ('Options for {name}'), outside
+//            the row's own button, e.g. TravelerSheet for Report and Block (go-live decision 6).
 import React from "react";
+import { MoreHorizontal } from "lucide-react";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { Face } from "@/components/social/SocialMarks";
 import { whenLabel } from "@/components/social/Envelope";
@@ -58,7 +61,7 @@ const destinationOf = (a) => {
 /**
  * @param {{ items?: any[], onOpen?: (to: string) => void, className?: string, style?: import('react').CSSProperties }} props
  */
-export default function ActivityList({ items = [], onOpen = undefined, className = undefined, style = undefined }) {
+export default function ActivityList({ items = [], onOpen = undefined, onMore = undefined, className = undefined, style = undefined }) {
   const list = (Array.isArray(items) ? items : []).filter((a) => a && typeof a === "object" && activityLine(a).text).slice(0, MAX_ROWS);
   if (!list.length) return null;
   const fresh = list.filter((a) => a.unread).length;
@@ -91,13 +94,20 @@ export default function ActivityList({ items = [], onOpen = undefined, className
             padding: "8px 14px", margin: 0, border: 0, borderTop: i ? `1px solid ${NEUTRAL.airmailHair}` : 0,
             background: a.unread ? NEUTRAL.airmailUnread : NEUTRAL.white, font: "inherit", textAlign: "left", color: "inherit",
           };
+          const more = typeof onMore === "function";
           return (
-            <li key={`${a.type}-${a.at}-${i}`} style={{ margin: 0 }}>
+            <li key={`${a.type}-${a.at}-${i}`} style={{ margin: 0, display: "flex", alignItems: "flex-start", borderTop: rowStyle.borderTop, background: rowStyle.background }}>
               {to && typeof onOpen === "function" ? (
-                <button type="button" onClick={() => onOpen(to)} style={{ ...rowStyle, cursor: "pointer" }}>{body}</button>
+                <button type="button" onClick={() => onOpen(to)} style={{ ...rowStyle, flex: 1, minWidth: 0, borderTop: 0, paddingRight: more ? 4 : 14, cursor: "pointer" }}>{body}</button>
               ) : (
-                <div style={rowStyle}>{body}</div>
+                <div style={{ ...rowStyle, flex: 1, minWidth: 0, borderTop: 0, paddingRight: more ? 4 : 14 }}>{body}</div>
               )}
+              {more ? (
+                <button type="button" onClick={() => onMore(a)} aria-label={`Options for ${who}`} aria-haspopup="dialog"
+                  style={{ flex: "none", display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, margin: "2px 4px 0 0", padding: 0, background: "transparent", border: 0, borderRadius: 999, color: NEUTRAL.ink3, cursor: "pointer" }}>
+                  <MoreHorizontal size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
+                </button>
+              ) : null}
             </li>
           );
         })}

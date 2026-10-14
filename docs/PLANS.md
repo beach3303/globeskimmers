@@ -836,6 +836,12 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   a lemon italic (#FDEA53) and a sunflower sun. Carbon Copy is a cornflower plate (#7487E6) with carbon type
   (#15171C) and the receipt card. They replace "storm + apricot" and "graphite + gold" below. The canvas
   finders row now shows them; the options not chosen sit in their own row.
+  **Location chooser: B, the Kraft Folder** (founder, 2026-10-13: "I choose attached - B", after asking
+  "can we fix this design as well? can we remove coordinates in the app"). A kraft folder with a WHERE TO
+  tab rises from the bottom, with your places on one white sheet (teal icons) and the umber "Explore
+  where I am" as the one solid button under the thumb. Option A (Boarding Pass) is not built. It is
+  new-look slice S19 and ships with the new look. The manual coordinates entry is already gone on
+  stamping-v2 (cc1d5b2) and reaches phones with the next OTA.
   Original ask and mockups, 2026-10-12: Founder asks the same day: more contrast and a different
   background or bordered box for each section without clutter (Home and Profile); followers/following
   shown creatively, the profile feeling like someone's personal world; every finder its own two- or

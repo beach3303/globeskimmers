@@ -8,7 +8,10 @@
 // 13-17 account; a skeleton while the feed loads, 'Try again' when it fails (never 'An
 // empty mailbox'); rows from people you blocked never show. The old one-tap unfollow chips
 // are gone: 'Your circle · n' opens the Circle screen, where unfollowing asks first.
-// Every stamp and postcard from someone else has the report door.
+// Every person here (a postcard's sender, a stamp, an activity line, a request) has a
+// door to TravelerSheet: Report, Unfollow, and Block once the worker advertises
+// block_v2 (go-live decision 6, 2026-10-13; Apple 1.2). A 'confirm' account (a birthday
+// still to complete) gets the note that lets it finish.
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronRight, Mail, Mailbox as MailboxIcon } from "lucide-react";
@@ -20,7 +23,9 @@ import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import { showToast } from "@/components/Toast";
 import { AirmailChevron } from "@/components/redesign/ornaments";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
-import Envelope, { ReportSheet } from "@/components/social/Envelope";
+import Envelope, { whenLabel } from "@/components/social/Envelope";
+import TravelerSheet from "@/components/social/TravelerSheet";
+import ConfirmBirthdayNote from "@/components/social/ConfirmBirthdayNote";
 import { Face } from "@/components/social/SocialMarks";
 import FollowByHandle, { workerMessage } from "@/components/social/FollowByHandle";
 import Requests from "@/components/social/Requests";
@@ -37,6 +42,10 @@ const BLUE = NEUTRAL.airmailBlue;
 const GAP = 20;
 
 const lc = (v) => String(v ?? "").trim().replace(/^@+/, "").toLowerCase();
+// What a report from an activity line is about (the report queue's kinds), and a short note.
+const ACTIVITY_KIND = { follow_request: "profile", follow: "profile", postcard: "postcard", reaction: "profile", signature: "signature", tag: "tag" };
+const clip = (t, n) => { const v = String(t || "").replace(/\s+/g, " ").trim(); return v.length > n ? `${v.slice(0, n - 1)}…` : v; };
+const whoOf = (by) => String(by?.name ?? "").trim() || (by?.handle ? `@${lc(by.handle)}` : "A traveler");
 
 /** @type {import('react').CSSProperties} */
 const KICKER = { margin: 0, fontFamily: MONO, fontSize: fs(10), fontWeight: 500, letterSpacing: ".16em", lineHeight: 1.2, textTransform: "uppercase", color: BLUE };
@@ -183,7 +192,8 @@ function MailboxBody() {
   const [me, setMe] = useState({ loaded: false, handle: null });
   const [activity, setActivity] = useState([]);
   const [compose, setCompose] = useState(false);
-  const [reporting, setReporting] = useState(null);
+  const [traveler, setTraveler] = useState(null); // { person, report } in the TravelerSheet
+  const openTraveler = (person, report = null) => setTraveler({ person: person || {}, report });
   const [myName, setMyName] = useState(null);   // for a postcard's address line
 
   useEffect(() => {
@@ -223,9 +233,11 @@ function MailboxBody() {
         <FollowByHandle onFollowed={() => load()} style={{ marginTop: 16 }} />
         {!emptyFeed ? <InviteButton style={{ marginTop: 8 }} /> : null}
         {me.loaded && !me.handle ? <ClaimCard onClaimed={(h) => setMe({ loaded: true, handle: h })} style={{ marginTop: GAP }} /> : null}
-        <ActivityList items={activity} onOpen={openFrom} style={{ marginTop: GAP }} />
+        <ActivityList items={activity} onOpen={openFrom} style={{ marginTop: GAP }}
+          onMore={(a) => openTraveler({ ...a.by, entry_id: a.entry_id || null }, { kind: ACTIVITY_KIND[a.type] || "profile", note: clip(`Mailbox, ${whenLabel(a.at)}: ${whoOf(a.by)} (${a.type})`, 480) })} />
         {circle.status === "ready" && circle.requests?.length ? (
-          <Requests rows={circle.requests} onAccept={answer("accept")} onDecline={answer("decline")} style={{ marginTop: GAP }} />
+          <Requests rows={circle.requests} onAccept={answer("accept")} onDecline={answer("decline")} style={{ marginTop: GAP }}
+            onMore={(r) => openTraveler(r, { kind: "profile", note: "Asked to follow me" })} />
         ) : null}
 
         <section aria-label="Where your circle has been" style={{ marginTop: GAP }}>
@@ -263,9 +275,11 @@ function MailboxBody() {
               <h2 style={KICKER}>From your circle · newest first</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
                 {rows.map((r, i) => (r.type === "postcard" ? (
-                  <PostcardCard key={`pc-${r.created_at}-${i}`} row={r} me={me.handle} meName={myName || profile?.first_name || null} onReport={setReporting} />
+                  <PostcardCard key={`pc-${r.created_at}-${i}`} row={r} me={me.handle} meName={myName || profile?.first_name || null}
+                    onReport={(row) => openTraveler({ ...row.by, postcard_id: row.id || null }, { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(`Postcard${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.message ? `: "${row.message}"` : ""}`, 480) })} />
                 ) : (
-                  <Envelope key={`st-${r.created_at}-${i}`} row={r} variant="full" me={me.handle} onReport={setReporting} />
+                  <Envelope key={`st-${r.created_at}-${i}`} row={r} variant="full" me={me.handle}
+                    onReport={(row) => openTraveler(row.by, { kind: "stamp", note: clip(`Stamp in my Mailbox, ${whenLabel(row.created_at)}: ${row.name}${row.city ? `, ${row.city}` : ""}`, 480) })} />
                 )))}
               </div>
             </>
@@ -275,7 +289,10 @@ function MailboxBody() {
         <CircleRow circle={circle} style={{ marginTop: 16 }} />
       </div>
 
-      <ReportSheet row={reporting} me={me.handle} onClose={() => setReporting(null)} />
+      {traveler ? (
+        <TravelerSheet person={traveler.person} report={traveler.report}
+          onClose={() => setTraveler(null)} onChanged={() => { setTraveler(null); circle.retry(); load(); }} />
+      ) : null}
       <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={load}
         following={circle.acc || []} followerCount={counts.followYou ?? null} blocked={circle.blocked} />
     </div>
@@ -286,7 +303,15 @@ export default function MailboxPage() {
   const { socialTier, socialTierReady } = useAuth();
   // Nothing social until the age tier is known; a 13-17 account keeps the masthead and the
   // chevron with the hold note, and the circle isn't read for them.
-  if (!socialTierReady || socialTier === "blocked" || socialTier === "confirm") return <Masthead />;
+  if (!socialTierReady || socialTier === "blocked") return <Masthead />;
+  if (socialTier === "confirm") {
+    return (
+      <div>
+        <Masthead />
+        <div className={COLUMN}><div style={{ marginTop: 16 }}><ConfirmBirthdayNote /></div></div>
+      </div>
+    );
+  }
   if (socialTier === "teen") {
     return (
       <div>

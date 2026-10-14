@@ -14,11 +14,13 @@
 //   accent      the kicker's colour: airmail blue by default.
 //   title       the kicker's words, 'Wants to follow you' (printed in capitals).
 //   headingAs   the kicker's element, 'h2' by default.
+//   onMore      (row) => void: a 44px '•••' after the answers ('Options for {name}'),
+//               e.g. to open TravelerSheet for Report and Block (go-live decision 6).
 //
 // A follow is only ever pending when the person followed is a teen, and teens are held today
 // (TEEN_SOCIAL_ENABLED=false), so this list is empty for every account until that changes.
 import React, { useId, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, MoreHorizontal } from 'lucide-react';
 import { NEUTRAL, fs } from '@/components/redesign/constants';
 import OfficialSeal from '@/components/passport/OfficialSeal';
 import { Face } from './SocialMarks';
@@ -91,6 +93,7 @@ export default function Requests({
   accent = undefined,
   title = 'Wants to follow you',
   headingAs: Heading = 'h2',
+  onMore = undefined,
   className = undefined,
   style = undefined,
 }) {
@@ -174,6 +177,12 @@ export default function Requests({
                 <Answer busy={!!mine && busy.op === 'decline'} waiting={!!busy && !(mine && busy.op === 'decline')} solid={false} onClick={() => answer(r, 'decline')} label={`Not now for ${who}`}>
                   Not now
                 </Answer>
+                {typeof onMore === 'function' ? (
+                  <button type="button" onClick={() => onMore(r)} aria-label={`Options for ${who}`} aria-haspopup="dialog"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, margin: '0 -8px 0 -4px', padding: 0, background: 'transparent', border: 0, borderRadius: 999, color: NEUTRAL.ink3, cursor: 'pointer' }}>
+                    <MoreHorizontal size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
+                  </button>
+                ) : null}
               </span>
             </li>
           );
