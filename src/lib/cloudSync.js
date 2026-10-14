@@ -94,7 +94,7 @@ if (typeof window !== "undefined") {
     window.addEventListener(KINDS[kind].event, () => schedulePush(kind));
   }
   // A frozen account, heard from any call (src/lib/ageGate.js).
-  window.addEventListener(AGE_GATE_EVENT, (e) => { if (e?.detail?.code === "under_age") frozen = true; });
+  window.addEventListener(AGE_GATE_EVENT, (e) => { if (/** @type {CustomEvent} */ (e).detail?.code === "under_age") frozen = true; });
   try {
     supabase.auth.getSession().then(({ data }) => {
       if (data?.session?.user) { signedIn = true; pullMergeAll(); }
