@@ -17,6 +17,8 @@ Branch `new-look` (worktree `gs-new-look`). Updated 2026-10-14. **Nothing on thi
 | S6 | "Your circle" wording across Passport, Settings and stamps; trunk on your own passport only | `18a0ff3`…`b608e75` |
 | S18 | Integration: `stamping-v2` merged in, checked, fixed | `d642f95`, `e8dc0b4`, `1199f05` |
 | Box | The postcard box: every postcard sent to you, kept (founder, 2026-10-14) | `53d4d5f`, `7650530`, `e747556` |
+| Keep | Keep a card sent to everyone in the box (founder, 2026-10-14) | `18ee82b` migration, `aa8cb97`, `019c361` |
+| Shelf | Home's circle shelf: a stamp on a cream plate (founder picked B, 2026-10-14) | `cca31d5` |
 
 ## S18: what the merge brought, and what changed after it
 
@@ -47,23 +49,23 @@ Screens checked after the merge: phone 402×874 @3x, iPad 1032×1376 @2x, the la
 Settings, own Passport, Eat, Coffee, Things to Do and its place sheet, Convenience; the teen hold
 (Mailbox, Circle, Profile, Traveler) and the confirm-birthday tier (Home, Mailbox).
 
-## Open, for the founder
+## Decided since S18 (2026-10-14)
 
-1. Home's circle shelf: a stamp card beside a postcard stretches to the postcard's height and
-   leaves white space (the compact card has no stamp art, per Home-Boxes L80-89). A: top-align the
-   cards (uneven heights). B: print the stamp on a cream plate where a postcard has its photo
-   (recommended). Both were rendered for the founder on 2026-10-14; nothing is committed for either.
-2. The postcard box keeps cards addressed to you. Cards sent to everyone who follows someone stay
-   in the feed; a Keep button could save those into the box too.
+- Home's circle shelf: **B**, the stamp on a cream plate where a postcard has its photo (`cca31d5`).
+- The postcard box keeps every card sent to you, and **Keep** saves a card sent to everyone into it.
 
 ## How it reaches phones, in order
 
 1. Not while a store build is in review: iOS 1.0.4, and Play 1.0.8 if it has been submitted.
 2. On the founder's go, merge `new-look` into `stamping-v2`, then `main`. The push deploys the
-   worker, which carries this branch's four worker commits: three for B10, finder honesty fields
+   worker, which carries this branch's worker commits: three for B10, finder honesty fields
    (`244ebee` money rows, `a77322a` weather fetch time and dates, `5cf7d8d` convenience 24 h),
-   and `53d4d5f`, `POST /postcards/box`. Probe the worker, including `/postcards/box`.
-3. Then the OTA (`npm run ota`, run by the founder). Never before the worker deploy and probe.
+   then `53d4d5f` and `aa8cb97`, the postcard box and Keep. Probe the worker, including
+   `/postcards/box` and `/postcards/keep`.
+3. The same push carries `supabase/migrations/20261014160000_postcard_keeps.sql`, which
+   `deploy-migrations.yml` applies after the founder approves the `production` environment run.
+   Until it runs, the worker hides Keep and the box shows the cards addressed to you; nothing breaks.
+4. Then the OTA (`npm run ota`, run by the founder). Never before the worker deploy and probe.
 
 Backend items, each on the founder's go. The new look already works without them, with honest
 fallbacks:
