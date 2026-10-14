@@ -16,6 +16,10 @@ import UIKit
 //   acknowledgeUpdate({ text }) Apple's sheet for a significant update (iOS 26.4+)
 //   askParent({ text })         asks the parent to approve a significant update (iOS 26.2+);
 //                               the answer arrives later, as the 'parentAnswer' event
+//   appTransaction()            { available, id, environment }: the App Store's id for this
+//                               Apple Account's download (iOS 16+). A parent's withdrawn
+//                               consent (server notification RESCIND_CONSENT) names it, so
+//                               the server keeps it with the account.
 //
 // Every call resolves, never rejects: { available: false } where the iOS has no such API.
 // DeclaredAgeRange and PermissionKit are weak-linked (OTHER_LDFLAGS), so iOS 15-25 still
@@ -29,6 +33,7 @@ public class AgeRangePlugin: CAPPlugin, CAPBridgedPlugin {
     CAPPluginMethod(name: "request", returnType: CAPPluginReturnPromise),
     CAPPluginMethod(name: "acknowledgeUpdate", returnType: CAPPluginReturnPromise),
     CAPPluginMethod(name: "askParent", returnType: CAPPluginReturnPromise),
+    CAPPluginMethod(name: "appTransaction", returnType: CAPPluginReturnPromise),
   ]
 
   override public func load() {
@@ -109,6 +114,22 @@ public class AgeRangePlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve(["available": true, "asked": true])
       } catch {
         call.resolve(["available": true, "asked": false, "error": AgeRangePlugin.code(error)])
+      }
+    }
+  }
+
+  @objc func appTransaction(_ call: CAPPluginCall) {
+    guard #available(iOS 16.0, *) else { call.resolve(["available": false]); return }
+    Task {
+      do {
+        switch try await AppTransaction.shared {
+        case .verified(let tx):
+          call.resolve(["available": true, "id": tx.appTransactionID, "environment": tx.environment.rawValue])
+        case .unverified:
+          call.resolve(["available": false, "error": "unverified"])
+        }
+      } catch {
+        call.resolve(["available": false, "error": "unknown"])
       }
     }
   }
