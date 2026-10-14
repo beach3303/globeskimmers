@@ -17839,7 +17839,13 @@ async function handleSocialUnread(request, env) {
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
     const me = user.id;
-    const sp = await gbSocialProfile(env, me).catch(() => null);
+    // The reader first, failing closed (founder, 2026-10-13): a frozen,
+    // unconfirmed or held account — or one whose age can't be read — gets no
+    // activity and no dot (strangers' follow requests, tag invites and
+    // broadcast cards included; builds before the OTA still render them).
+    const empty = { total: 0, activity: b.mark === true || b.activity === true ? [] : undefined };
+    const sp = await gbSocialProfile(env, me).catch(() => undefined);
+    if (gbOffSocial(sp)) return jsonResponse(empty);
     const seenAt = Date.parse(sp?.mailbox_seen_at || '') || (Date.now() - 14 * 864e5);
     const floor = encodeURIComponent(new Date(Date.now() - 30 * 864e5).toISOString());
     const j = async (r) => (r.ok ? await r.json() : []);
@@ -17856,7 +17862,7 @@ async function handleSocialUnread(request, env) {
     // and presses on MY pages hide only for the people I blocked: someone
     // who blocked me can't hide from me what they left on my passport.
     const blk = await gbBlockSets(env, me);
-    if (!blk) return jsonResponse({ total: 0, activity: b.mark === true || b.activity === true ? [] : undefined });
+    if (!blk) return jsonResponse(empty);
     const blocked = blk.either;
     const fIds = following.map((r) => r.followee_id).filter((id) => id && !blocked.has(id));
     const broadcasts = fIds.length
@@ -17893,11 +17899,18 @@ async function handleSocialUnread(request, env) {
       ...items.map((i) => (i.target || '').startsWith('st:') ? i.target.slice(3) : null),
       ...Object.values(photoStamp),
     ].filter(Boolean))].slice(0, 200);
-    const [hs, ps, st] = await Promise.all([
+    const [hs, psr, st] = await Promise.all([
       uids.length ? gbRest(env, `passport_shares?user_id=in.(${uids.join(',')})&select=user_id,handle,verified,seal`, {}).then(j) : [],
-      uids.length ? gbRest(env, `social_profiles?user_id=in.(${uids.join(',')})&select=user_id,display_name,social_tier`, {}).then(j) : [],
+      uids.length ? gbRest(env, `social_profiles?user_id=in.(${uids.join(',')})&select=user_id,display_name,${GB_TIER_COLS}`, {}) : null,
       stampIds.length ? gbRest(env, `passport_stamps?id=in.(${stampIds.join(',')})&select=id,name`, {}).then(j) : [],
     ]);
+    // Minors never reach this list (the same rule as the feed): nothing from
+    // a held teen, a frozen under-13 or an unconfirmed birth year, and when
+    // their ages can't be read, nothing at all.
+    if (psr && !psr.ok) return jsonResponse(empty);
+    const ps = psr ? (await psr.json()).map(gbTierRow) : [];
+    const checked = new Set(uids);
+    const young = new Set(ps.filter((r) => gbUnderAge(r) || gbAgeHeld(r)).map((r) => r.user_id));
     const who = {};
     for (const r of hs) who[r.user_id] = { handle: r.handle || null, verified: r.verified === true, seal: r.verified === true ? (r.seal || 'burgundy') : null };
     for (const r of ps) who[r.user_id] = { ...(who[r.user_id] || {}), name: r.display_name || null, teen: r.social_tier === 'teen' };
@@ -17905,6 +17918,7 @@ async function handleSocialUnread(request, env) {
     const dayAgo = Date.now() - 864e5;
 
     const activity = items
+      .filter((i) => checked.has(i.uid) && !young.has(i.uid))
       .filter((i) => !(who[i.uid]?.teen && Date.parse(i.at) > dayAgo))
       .sort((a, c) => String(c.at).localeCompare(String(a.at)))
       .slice(0, 40)
