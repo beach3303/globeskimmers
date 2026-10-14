@@ -3,6 +3,8 @@
  * 
  * This file is AUTO-GENERATED. Do not add imports or modify PAGES manually.
  * Pages are auto-registered when you create files in the ./pages/ folder.
+ * (Stale: the Base44 plugin that generated it is gone. New pages are added to
+ * PAGES by hand, as Circle and Traveler were.)
  * 
  * THE ONLY EDITABLE VALUE: mainPage
  * This controls which page is the landing page (shown when users visit the app).
@@ -51,6 +53,7 @@ import ATMFinder from './pages/ATMFinder';
 import ActivityDetail from './components/attraction/ActivityRedirect';
 import AdminAnalytics from './pages/AdminAnalytics';
 import BasicPhrases from './pages/BasicPhrases';
+import Circle from './pages/Circle';
 import CoffeeFinder from './pages/CoffeeFinder';
 import ConvenienceStore from './pages/ConvenienceStore';
 import CultureInformation from './pages/CultureInformation';
@@ -71,6 +74,7 @@ import Shopping from './pages/Shopping';
 import SuggestPlace from './pages/SuggestPlace';
 import Suggestions from './pages/Suggestions';
 import ThingsToDo from './pages/ThingsToDo';
+import Traveler from './pages/Traveler';
 import Weather from './pages/Weather';
 import __Layout from './Layout.jsx';
 
@@ -80,6 +84,7 @@ export const PAGES = {
     "ActivityDetail": ActivityDetail,
     "AdminAnalytics": AdminAnalytics,
     "BasicPhrases": BasicPhrases,
+    "Circle": Circle,
     "CoffeeFinder": CoffeeFinder,
     "ConvenienceStore": ConvenienceStore,
     "CultureInformation": CultureInformation,
@@ -100,6 +105,7 @@ export const PAGES = {
     "SuggestPlace": SuggestPlace,
     "Suggestions": Suggestions,
     "ThingsToDo": ThingsToDo,
+    "Traveler": Traveler,
     "Weather": Weather,
 }
 
