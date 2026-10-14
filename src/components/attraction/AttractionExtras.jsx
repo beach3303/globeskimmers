@@ -8,8 +8,10 @@
 // "I was here" stamp. Either way only when a fresh GPS fix is inside the
 // footprint — checked here, then again by the worker against its own
 // coordinates (the fix rides along for that check and is never stored).
-import React, { useEffect, useState } from "react";
-import { BookOpen, ClipboardList, DollarSign, MapPin } from "lucide-react";
+// The stamp action is the cream rubber stamp (redesign/RubberStamp), the same
+// in every world, so a card keeps one solid button: its Directions.
+import React, { useEffect, useId, useRef, useState } from "react";
+import { BookOpen, ClipboardList, DollarSign, Lock, MapPin } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { addStamp, reportStamp, STAMP_REFUSALS, metersBetween, setStampNote, setStampArt } from "@/lib/passport";
 import { respectPlaceFor } from "@/lib/respectPlaces";
@@ -24,6 +26,8 @@ import { openPartner } from "@/lib/openPartner";
 import Guestbook from "@/components/Guestbook";
 import { useLocation, isLiveFix } from "@/components/location/LocationContext";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
+import RubberStamp, { STAMP_LABEL } from "@/components/redesign/RubberStamp";
+import { NEUTRAL } from "@/components/redesign/constants";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -71,7 +75,11 @@ export function useAttractionLink(a) {
 // localFavorite (founder, 2026-10-10): an approved suggestion's lf:<id> stamp —
 // its own hint line, and never a landmark variant, whose official art a
 // Local favorite must not wear ("Niagara Falls overlook" is not Niagara Falls).
-export function StampHereButton({ a, link: resolved, formatDistance, isTablet, localFavorite = false }) {
+// The button is the RubberStamp: idle, busy, stamped (GPS) or reported. Its
+// panels (how stamps work, a refusal, a memory, a sensitive place) sit on
+// cream or white in the shared inks, with line icons and no emoji. isTablet
+// is no longer read: the stamp is the same size on every screen.
+export function StampHereButton({ a, link: resolved, formatDistance = undefined, localFavorite = false }) {
   const link = resolved?.stamp || null;
   const [busy, setBusy] = useState(false);
   const [stamped, setStamped] = useState(false);
@@ -107,16 +115,24 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet, l
     setMemBusy(false);
     if (error) { showToast(error, "error"); return; }
     setMemSaved(true);
-    showToast("Saved privately to your stamp 🔒", "success");
+    showToast("Saved privately to your stamp", "success");
   };
   const name = a.displayName?.text || a.name || "this place";
   const pid = String(a.placeId || a.id || "");
   const kind = idKind(pid);
   const iconic = !!link;
+  const howId = useId();
+  // After a report, the refusal panel that held keyboard focus is gone: hand focus to
+  // the stamp, which now reads 'In your Virtual Passport'.
+  const stampRef = useRef(null);
+  useEffect(() => {
+    if (stamped && wasReported && (!document.activeElement || document.activeElement === document.body)) stampRef.current?.focus();
+  }, [stamped, wasReported]);
 
   // A grant, from GPS or from a report: the stamp is in either way. A report
-  // never says ✓ — the worker answers with the stamp's strongest proof ever,
-  // which can be an older GPS visit, not what this tap proved.
+  // never says Verified or shows the Check — the worker answers with the
+  // stamp's strongest proof ever, which can be an older GPS visit, not what
+  // this tap proved.
   const granted = (data, req, viaReport) => {
     setStamped(true);
     setRefused(null);
@@ -125,10 +141,10 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet, l
     setWasReported(!!viaReport);
     setWasHeld(!!data?.updated);
     showToast(viaReport
-      ? (data?.updated ? "Already in your Virtual Passport — thanks for telling us" : "Stamped — added to your Virtual Passport 🛂")
+      ? (data?.updated ? "Already in your Virtual Passport — thanks for telling us" : "Stamped — added to your Virtual Passport")
       : data?.verified === "gps"
-        ? (iconic ? "✓ Verified — added to your Virtual Passport 🛂" : "✓ “I was here” — added to your Virtual Passport 🛂")
-        : "Stamped — added to your Virtual Passport 🛂", "success");
+        ? (iconic ? "Verified — added to your Virtual Passport" : "“I was here” — added to your Virtual Passport")
+        : "Stamped — added to your Virtual Passport", "success");
     // A place of respect (founder, 2026-10-04): its message first; a memorial also asks illustrated or text only.
     const place = respectPlaceFor({ kind: "attraction", name: req.stampName });
     if (place && data?.id) setRespect({ place, stamp: { id: data.id, name: req.stampName, city: req.city, country: req.country, entity_id: req.entityId } });
@@ -221,61 +237,82 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet, l
       : r.message || "Your GPS doesn’t show you at this place yet."
   );
 
+  const kindWord = localFavorite ? "A Local favorite stamp" : iconic ? "An official GlobeSkimmers stamp" : "A typographic “I was here” stamp";
+  const stampState = busy ? "busy" : stamped ? (wasReported ? "reported" : "stamped") : "idle";
+  // An outline in stamp red: the passport moment's colour, never a second solid on the card.
+  /** @type {import('react').CSSProperties} */
+  const stampOutline = {
+    display: "flex", alignItems: "center", justifyContent: "center", minHeight: 44, boxSizing: "border-box",
+    borderRadius: 12, border: `1.5px solid ${NEUTRAL.stamp}`, background: NEUTRAL.white, color: NEUTRAL.stamp,
+    fontFamily: "inherit", fontWeight: 700, lineHeight: 1.2, textAlign: "center", cursor: "pointer",
+  };
+
   return (
     <div>
       {respect && <RespectPlaceSheet stamp={respect.stamp} place={respect.place} onChoose={chooseArt} onLater={() => setRespect(null)} />}
-      <button type="button" onClick={stamp} disabled={busy || stamped || reportBusy}
-        style={{ width: "100%", borderRadius: isTablet ? 16 : 14, padding: fs(isTablet ? 15 : 12), border: "none", cursor: "pointer", fontFamily: "inherit",
-          fontSize: fs(isTablet ? 18 : 14.5), fontWeight: 700, background: stamped ? (wasReported ? "#F3EEE3" : "#E7F3EA") : STAMP, color: stamped ? (wasReported ? INK : "#266A3B") : "#fff" }}>
-        {busy ? "Checking you are here…" : stamped ? (wasReported ? "In your Virtual Passport" : "✓ In your Virtual Passport") : iconic ? "📍 Stamp it — I'm here" : "📍 I was here — get the stamp"}
-      </button>
+      <RubberStamp ref={stampRef} state={stampState} onClick={stamp} disabled={reportBusy} placeName={a.displayName?.text || a.name || undefined}>
+        {iconic ? STAMP_LABEL.official : STAMP_LABEL.here}
+      </RubberStamp>
       {stamped && wasReported && (
-        <p style={{ marginTop: 6, fontSize: fs(12.5), color: INK3, textAlign: "center" }}>Thanks for telling us — we&rsquo;ll check our map for {name}.</p>
+        <p style={{ marginTop: 6, fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.ink3, textAlign: "center" }}>Thanks for telling us — we&rsquo;ll check our map for {name}.</p>
       )}
       {!stamped && !refused && (
-        <p style={{ fontSize: fs(11.5), color: INK3, textAlign: "center", marginTop: 5 }}>
-          {localFavorite ? "A Local favorite stamp" : iconic ? "An official GlobeSkimmers stamp" : "A typographic “I was here” stamp"} · only at the place, by GPS ·{" "}
-          <button type="button" onClick={() => setHowOpen((v) => !v)} style={{ textDecoration: "underline", color: "inherit" }}>How stamps work</button>
+        <p style={{ marginTop: 6, fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink3, textAlign: "center" }}>
+          {kindWord} · Only at the place, by GPS ·{" "}
+          {/* A 44px hit area that keeps the line's height: the box's own margins take it back. */}
+          <button type="button" onClick={() => setHowOpen((v) => !v)} aria-expanded={howOpen} aria-controls={howId}
+            style={{ display: "inline-flex", alignItems: "center", minHeight: 44, margin: "-14px 0", padding: 0, background: "transparent", border: 0,
+              fontFamily: "inherit", fontSize: "inherit", lineHeight: "inherit", color: "inherit", textDecoration: "underline", textUnderlineOffset: 2, cursor: "pointer" }}>
+            How stamps work
+          </button>
         </p>
       )}
-      {howOpen && !stamped && (
-        <ul style={{ marginTop: 8, borderRadius: 12, background: "#FBF6EC", border: `1px solid ${RULE}`, padding: "10px 12px 10px 28px", fontSize: fs(12.5), color: INK, lineHeight: 1.45, listStyle: "disc" }}>
-          <li>A stamp is earned by being there: your phone&rsquo;s location has to be inside the place when you tap.</li>
-          <li>We never show where you stood — only the place&rsquo;s name and the date.</li>
-          <li>Notes and photos are yours: private unless you choose to share them.</li>
-          <li>Hospitals, clinics, schools, places of worship and other sensitive places start private. You never have to say why you were there.</li>
-        </ul>
-      )}
+      <ul id={howId} hidden={!(howOpen && !stamped)}
+        style={{ marginTop: 8, borderRadius: 12, background: NEUTRAL.cream, border: `1px solid ${NEUTRAL.creamRule}`, padding: "10px 12px 10px 28px", fontSize: fs(12.5), color: NEUTRAL.ink2, lineHeight: 1.45, listStyle: "disc" }}>
+        <li>A stamp is earned by being there: your phone&rsquo;s location has to be inside the place when you tap.</li>
+        <li>We never show where you stood — only the place&rsquo;s name and the date.</li>
+        <li>Notes and photos are yours: private unless you choose to share them.</li>
+        <li>Hospitals, clinics, schools, places of worship and other sensitive places start private. You never have to say why you were there.</li>
+      </ul>
       {stamped && startedPrivate && (
-        <p style={{ marginTop: 8, borderRadius: 12, border: "1px solid #E6D3EA", background: "#FBF5FC", padding: "10px 12px", fontSize: fs(13), color: "#5B2B66" }}>
-          This may be a sensitive place ❤️ — this stamp starts private, so only you can see it. You can share it from your Passport anytime.
+        <p style={{ marginTop: 8, display: "flex", alignItems: "flex-start", gap: 8, borderRadius: 12, border: `1px solid ${NEUTRAL.creamRule}`, background: NEUTRAL.cream, padding: "10px 12px", fontSize: fs(13), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
+          <Lock size={16} color={NEUTRAL.ink3} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 2 }} />
+          <span>This may be a sensitive place — this stamp starts private, so only you can see it. You can share it from your Passport anytime.</span>
         </p>
       )}
       {/* Not for a stamp already held: saving would replace its note, which this page never showed. */}
       {stamped && stampedId && !memSaved && !wasHeld && (
-        <div style={{ marginTop: 10, borderRadius: 14, border: `1px solid ${RULE}`, background: "#fff", padding: "12px 12px 10px" }}>
-          <div style={{ fontFamily: SERIF, fontSize: fs(18), color: INK, lineHeight: 1.2 }}>Want to remember something about this moment?</div>
-          <div style={{ fontSize: fs(12), color: INK3, marginTop: 2 }}>🔒 Optional, and only you can see it — share it on your passport later if you like.</div>
+        <div style={{ marginTop: 10, borderRadius: 14, border: `1px solid ${NEUTRAL.creamRule}`, background: NEUTRAL.white, padding: "12px 12px 8px" }}>
+          <div style={{ fontFamily: SERIF, fontSize: fs(18), color: NEUTRAL.ink, lineHeight: 1.2 }}>Want to remember something about this moment?</div>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 4, fontSize: fs(12), lineHeight: 1.4, color: NEUTRAL.ink3 }}>
+            <Lock size={13} color={NEUTRAL.ink3} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 2 }} />
+            <span>Optional, and only you can see it — share it on your passport later if you like.</span>
+          </div>
           <textarea value={memory} onChange={(e) => setMemory(e.target.value.slice(0, 280))} rows={2}
             placeholder="Best coffee ever… an important day… who you were with" aria-label="Memory"
-            style={{ width: "100%", marginTop: 8, borderRadius: 10, border: `1px solid ${RULE}`, padding: "8px 10px", fontSize: fs(14), color: INK, resize: "none", fontFamily: "inherit" }} />
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
-            <button type="button" onClick={() => setMemSaved(true)} style={{ fontSize: fs(13), color: INK3, padding: "6px 10px" }}>Not now</button>
+            className="placeholder:text-[color:var(--gs-ph)]"
+            style={/** @type {import('react').CSSProperties} */ ({ "--gs-ph": NEUTRAL.ink3, display: "block", width: "100%", boxSizing: "border-box", marginTop: 8, borderRadius: 10, border: `1px solid ${NEUTRAL.creamRule}`, padding: "8px 10px", fontSize: fs(14), lineHeight: 1.4, color: NEUTRAL.ink, background: NEUTRAL.white, resize: "none", fontFamily: "inherit" })} />
+          <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+            <button type="button" onClick={() => setMemSaved(true)}
+              style={{ minHeight: 44, padding: "0 12px", background: "transparent", border: 0, fontFamily: "inherit", fontSize: fs(13), fontWeight: 600, color: NEUTRAL.ink2, cursor: "pointer" }}>Not now</button>
             <button type="button" onClick={saveMemory} disabled={memBusy || !memory.trim()}
-              style={{ fontSize: fs(13), fontWeight: 700, color: "#fff", background: STAMP, borderRadius: 10, padding: "6px 14px", opacity: memory.trim() ? 1 : 0.5 }}>{memBusy ? "Saving…" : "Save memory"}</button>
+              style={{ ...stampOutline, padding: "0 16px", fontSize: fs(13), opacity: memory.trim() ? 1 : 0.5, cursor: memory.trim() ? "pointer" : "default" }}>{memBusy ? "Saving…" : "Save memory"}</button>
           </div>
         </div>
       )}
-      {refused && !stamped && (
-        <div style={{ marginTop: 8, borderRadius: 12, border: "1px solid #FCD9A8", background: "#FFF8EC", padding: "10px 12px" }}>
-          <p style={{ fontSize: fs(13), color: "#7A4A0C" }}>{refusalText(refused)}</p>
-          <button type="button" onClick={report} disabled={reportBusy}
-            style={{ marginTop: 8, width: "100%", borderRadius: 10, padding: fs(9), border: `1.5px solid ${STAMP}`, background: "#fff", color: STAMP, fontWeight: 700, fontSize: fs(13.5), fontFamily: "inherit", cursor: "pointer" }}>
-            {reportBusy ? "Sending…" : "I’m here, but the app is saying I’m not"}
-          </button>
-          <p style={{ marginTop: 5, fontSize: fs(11.5), color: "#7A4A0C", textAlign: "center" }}>You&rsquo;ll get the stamp, and we&rsquo;ll check our map for this place.</p>
-        </div>
-      )}
+      {/* Always mounted, so a screen reader hears a refusal as it lands. */}
+      <div aria-live="polite">
+        {refused && !stamped && (
+          <div style={{ marginTop: 8, borderRadius: 14, border: `1px solid ${NEUTRAL.creamRule}`, background: NEUTRAL.cream, padding: "12px 12px 8px" }}>
+            <p style={{ fontSize: fs(13), lineHeight: 1.45, color: NEUTRAL.ink }}>{refusalText(refused)}</p>
+            <button type="button" onClick={report} aria-disabled={reportBusy || undefined}
+              style={{ ...stampOutline, marginTop: 10, width: "100%", padding: "8px 12px", fontSize: fs(13.5), cursor: reportBusy ? "default" : "pointer" }}>
+              {reportBusy ? "Sending…" : "I’m here, but the app is saying I’m not"}
+            </button>
+            <p style={{ marginTop: 6, fontSize: fs(12), lineHeight: 1.4, color: NEUTRAL.ink3, textAlign: "center" }}>You&rsquo;ll get the stamp, and we&rsquo;ll check our map for this place.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -283,7 +320,7 @@ export function StampHereButton({ a, link: resolved, formatDistance, isTablet, l
 // "You're here — stamp it" on any place card (restaurants, cafés…): "If you were
 // there, you can stamp it." Shows only while the device's own GPS fix is inside
 // the place; the worker re-checks against Google's location.
-export function HereStamp({ place, formatDistance }) {
+export function HereStamp({ place, formatDistance = undefined }) {
   const { currentGpsLocation } = useLocation();
   // A reading from this app run only — never yesterday's café, restored.
   const g = isLiveFix(currentGpsLocation, 60 * 60 * 1000) ? currentGpsLocation.coordinates : null;
@@ -587,7 +624,7 @@ export function BeforeYouGoCard({ byg, id, website }) {
 
 // Everything above, for one attraction card. children: the card's own details
 // (hours, AI, website) — they sit above the guestbook, which comes last.
-export default function AttractionExtras({ a, formatDistance, isTablet, children }) {
+export default function AttractionExtras({ a, formatDistance = undefined, isTablet: _isTablet = false, children = undefined }) {
   const link = useAttractionLink(a);
   const pid = String(a.placeId || a.id || "");
   const kind = idKind(pid);
@@ -603,7 +640,7 @@ export default function AttractionExtras({ a, formatDistance, isTablet, children
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
       <WhyVisitCard wv={wv} id={visitId} firstLine={a.whyVisit || null} />
-      {link !== undefined && <StampHereButton a={a} link={link} formatDistance={formatDistance} isTablet={isTablet} />}
+      {link !== undefined && <StampHereButton a={a} link={link} formatDistance={formatDistance} />}
       <TicketsCard visit={visit} website={a.websiteUri} />
       <ParkingCard visit={visit} website={a.websiteUri} />
       <BeforeYouGoCard byg={byg} id={visitId} website={a.websiteUri} />
