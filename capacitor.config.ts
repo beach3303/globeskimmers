@@ -10,6 +10,24 @@ const config: CapacitorConfig = {
   appName: 'Globeskimmers',
   webDir: 'dist',
 
+  // Android leaves out @capacitor/status-bar (Play Console, 2026-10-14: its old
+  // Window.setStatusBarColor calls are deprecated for edge-to-edge on Android 15+).
+  // Capacitor 8's built-in SystemBars (below) does the job there; iOS keeps the plugin.
+  // This list is an allowlist: a new native plugin must be added here too, or the
+  // Android build won't include it.
+  android: {
+    includePlugins: [
+      '@capacitor/app',
+      '@capacitor/browser',
+      '@capacitor/filesystem',
+      '@capacitor/geolocation',
+      '@capacitor/preferences',
+      '@capacitor/share',
+      '@capacitor/splash-screen',
+      '@capgo/capacitor-updater',
+    ],
+  },
+
   plugins: {
     // Splash screen — the first thing the user sees while the JS
     // bundle parses. Background color matches IVORY (the app's main
@@ -49,6 +67,15 @@ const config: CapacitorConfig = {
     StatusBar: {
       style: 'DARK',
       overlaysWebView: true,
+    },
+
+    // Android's system bars (Capacitor 8 core). DARK = light icons, as the plugin gave
+    // over the teal banner. 'css' keeps the safe-area insets reaching the page: WebView
+    // 140+ reports env(safe-area-inset-*) itself, older ones get the page padded below
+    // the bars.
+    SystemBars: {
+      insetsHandling: 'css',
+      style: 'DARK',
     },
 
     // Route the WebView's fetch/XHR through native HTTP. On native the page

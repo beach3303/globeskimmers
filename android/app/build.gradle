@@ -46,8 +46,12 @@ android {
             if (hasReleaseKeystore) {
                 signingConfig signingConfigs.release
             }
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // R8 shrinking + obfuscation (Play Console, 2026-10-14: "DEX code optimization
+            // below threshold", fix by Feb 2027). Capacitor ships keep rules for every
+            // plugin class; the AAB carries the mapping file, so Play deobfuscates crashes.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
