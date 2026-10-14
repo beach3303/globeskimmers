@@ -17259,12 +17259,14 @@ async function handleSocialFollow(request, env, ctx) {
       const target = b.handle ? await gbHandleToUser(env, b.handle) : null;
       if (!target) return jsonResponse({ error: 'No traveler with that username' }, 404);
       if (target.user_id === user.id) return jsonResponse({ error: "That's you 🙂" }, 400);
-      if (await gbBlockedEither(env, user.id, target.user_id)) return jsonResponse({ ok: true, status: 'pending', muted: true });
+      // A muted follow answers like any request, @handle included (the app's
+      // toast reads it; without it, it said "Asked to follow @undefined").
+      if (await gbBlockedEither(env, user.id, target.user_id)) return jsonResponse({ ok: true, status: 'pending', muted: true, handle: target.handle });
       const sp = await gbSocialProfile(env, target.user_id).catch(() => undefined);
       if (sp === undefined) return gbAgeUnknownResp();
       // …and gains no followers: a frozen account, or one whose birth year
       // could still be 12, reads like a block — silently.
-      if (gbUnderAge(sp) || gbNeedsConfirm(sp)) return jsonResponse({ ok: true, status: 'pending', muted: true });
+      if (gbUnderAge(sp) || gbNeedsConfirm(sp)) return jsonResponse({ ok: true, status: 'pending', muted: true, handle: target.handle });
       const status = sp?.social_tier === 'teen' ? 'pending' : 'accepted';
       await gbRest(env, 'user_follows', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ follower_id: user.id, followee_id: target.user_id, status }) });
       if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_follow', { status }));
