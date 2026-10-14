@@ -27,7 +27,7 @@
 //     Mailbox L101), never a social tick. method: the stamp's proof ('gps' prints
 //     'Verified · GPS', 'photo_loc' and 'photo_ai' print 'Verified · Photo'); anything else
 //     prints 'Verified' alone. Render it only when the row says the visit was verified.
-//   TwoRingMark: re-exported from the ornaments ('BOTH WAYS', the inner circle).
+//   TwoRingMark: re-exported from the ornaments ('INNER CIRCLE': you follow each other).
 //
 // initialOf(name, handle) is exported for callers that need the same letter.
 import React, { useState } from 'react';

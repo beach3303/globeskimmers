@@ -6,6 +6,10 @@ https://claude.ai/artifact/AArKJHwntKyYgLj5mfYsmn
 - **Home is option B, boxed zones** (`Home-Boxes.dc.html`), and B ships for everyone. Option A, colour
   bands (`Main.dc.html`), is built only as an admin-only preview behind the same switch.
 - **"Your circle"** is approved as the house word for the people you follow and who follow you.
+  **Never "both ways"** (founder, 2026-10-14: it can be misconstrued as sexual): people who follow
+  each other are your **inner circle**. The artboards and `bible.json` still print "BOTH WAYS"
+  (Circle, Profile, Profile-Visit); the app says "INNER CIRCLE", and "IN YOUR INNER CIRCLE" on
+  someone else's page.
 - **The location chooser is B, the Kraft Folder** (founder, 2026-10-13: "I choose attached - B").
   `Location-B.dc.html` and `Location-B-Locating.dc.html` are the pick (slice S19); option A, the
   Boarding Pass, is not built.

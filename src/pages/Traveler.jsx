@@ -88,7 +88,7 @@ function TheirCircle({ world, first, cloth, inner, style }) {
         </h3>
         {inner ? (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: MONO, fontSize: fs(10), lineHeight: 1.2, fontWeight: 500, letterSpacing: ".14em", color: BLUE }}>
-            <TwoRingMark color={BLUE} strokeWidth={1.5} />BOTH WAYS
+            <TwoRingMark color={BLUE} strokeWidth={1.5} />IN YOUR INNER CIRCLE
           </span>
         ) : null}
       </div>

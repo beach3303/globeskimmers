@@ -15,7 +15,7 @@
 //   backend item B7; else by when the follow began). Blocked people are in none of them.
 //   acc            you follow them, accepted (your inner circle included)
 //   fol            they follow you, accepted (your inner circle included)
-//   mutual         both ways: your inner circle (acc and fol)
+//   mutual         you follow each other: your inner circle (acc and fol)
 //   followingOnly  acc without the inner circle (the orbit's middle ring)
 //   followersOnly  fol without the inner circle (the orbit's outer ring)
 //   requests       people asking to follow you, waiting for your answer

@@ -5,7 +5,7 @@
 //   they follow you       'Follow back' (solid)               + •••
 //   you asked, waiting    'Requested' (words, no button)      + •••
 //   you follow them       'Following' (outline: asks first)   + •••
-//   both ways             'Send a postcard' (solid, Mail) + 'Inner circle ⌄' (two rings),
+//   inner circle          'Send a postcard' (solid, Mail) + 'Inner circle ⌄' (two rings),
 //                         whose menu is the •••
 // The ••• ('More options for @handle') holds Unfollow (or Cancel request) when you follow
 // them, Report always, and Block only where the worker can honour it (useCircle.canBlock)

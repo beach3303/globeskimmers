@@ -21,7 +21,7 @@
 //   <PostmarkLines variant="envelope|postcard" />  Three 1px wavy cancellation lines
 //        (Mailbox L91, L193). Position them with `style`.
 //   <TwoRingMark color />                      Two interlocking rings, 20x12 (Circle L164):
-//        'both ways' / inner circle. Stroke defaults to currentColor.
+//        the inner circle (you follow each other). Stroke defaults to currentColor.
 //
 // Every component also takes `style` (merged last, so a caller can move it) and `className`.
 import React from 'react';

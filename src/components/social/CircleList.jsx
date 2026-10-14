@@ -1,7 +1,8 @@
 // CircleList: the people on one tab of the Circle screen, read like an address book
 // (Circle.dc.html L137-345; bible.profile.circle_screen). A white sheet, A-Z dividers in
 // mono, then a row per person: their face (44px, ringed in their cloth), the name in
-// Instrument Serif with their OfficialSeal and 'BOTH WAYS' for your inner circle, '@handle'
+// Instrument Serif with their OfficialSeal and 'INNER CIRCLE' when you follow each other (never
+// 'both ways', founder 2026-10-14: it can be misread), '@handle'
 // (and their country when the list sends one), and the action the relationship asks for:
 //   'Following' (outline; asks before it unfollows), 'Follow back' (solid, only with a
 //   handle: the worker follows by handle), 'Requested' (words).
@@ -188,7 +189,7 @@ export default function CircleList({ rows = [], circle, latest = null, cloth = u
                         {p.verified && p.seal ? <OfficialSeal size={14} tier={p.seal} style={undefined} /> : null}
                         {inner ? (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: MONO, fontSize: fs(9), lineHeight: 12 / 9, letterSpacing: ".06em", color: c.cloth, whiteSpace: "nowrap" }}>
-                            <TwoRingMark color={c.cloth} strokeWidth={1.2} />BOTH WAYS
+                            <TwoRingMark color={c.cloth} strokeWidth={1.2} />INNER CIRCLE
                           </span>
                         ) : null}
                       </div>
