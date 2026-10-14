@@ -1455,8 +1455,12 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
       await del('social_profile', `social_profiles?user_id=eq.${userId}`);
     }
   }
-  // Blocks are safety settings: they go with the account, never with a freeze.
-  if (!keepAccount) await del('user_blocks', `user_blocks?or=(user_id.eq.${userId},blocked_user_id.eq.${userId})`);
+  // Blocks are safety settings: they go with the account, never with a freeze;
+  // so do the @handle notes of those blocks, both ways (gbBlockNoteKey).
+  if (!keepAccount) {
+    await del('user_blocks', `user_blocks?or=(user_id.eq.${userId},blocked_user_id.eq.${userId})`);
+    if (uidOk && !(await gbBlockNotesDrop(env, userId))) failed.push('block_notes');
+  }
 
   // 1k) A freeze keeps the sign-in and the age record, nothing personal
   //     (go-live review, 2026-10-13): the first name, home city, country,
@@ -17614,22 +17618,55 @@ async function handleSocialFollow(request, env, ctx) {
       const following = gq.ok ? await gq.json() : [];
       const blocks = bq.ok ? await bq.json() : [];
       const ids = [...new Set([...followers.map((r) => r.follower_id), ...following.map((r) => r.followee_id), ...blocks.map((r) => r.blocked_user_id)])].slice(0, 200);
+      // Minors are never named here either (go-live round 3: these lists read
+      // no age, so a held teen or a frozen child showed by name and @handle —
+      // and Block on an anonymous guestbook note or signature, then Blocked
+      // travelers, named its author). A minor (held, frozen or unconfirmed)
+      // is left out of my followers and requests; in my Following list it
+      // keeps only the @handle I followed it by; in my blocked list only an
+      // @handle I already knew it by (gbBlockNote) — never a name, a Seal or
+      // a face. When the ages can't be read, nobody in any list is named.
       let who = {};
+      let agesRead = true;
+      const young = new Set();
       if (ids.length) {
         const [hq, pq] = await Promise.all([
           gbRest(env, `passport_shares?user_id=in.(${ids.join(',')})&select=user_id,handle,verified,seal`, {}),
-          gbRest(env, `social_profiles?user_id=in.(${ids.join(',')})&select=user_id,display_name`, {}),
+          gbRest(env, `social_profiles?user_id=in.(${ids.join(',')})&select=user_id,display_name,${GB_TIER_COLS}`, {}),
         ]);
         for (const r of (hq.ok ? await hq.json() : [])) who[r.user_id] = { handle: r.handle || null, verified: r.verified === true, seal: r.verified === true ? (r.seal || 'burgundy') : null };
-        for (const r of (pq.ok ? await pq.json() : [])) who[r.user_id] = { ...(who[r.user_id] || {}), name: r.display_name || null };
+        if (!pq.ok) agesRead = false;
+        for (const r of (pq.ok ? await pq.json() : [])) {
+          const t = gbTierRow(r);
+          if (gbUnderAge(t) || gbAgeHeld(t)) { young.add(r.user_id); continue; }
+          who[r.user_id] = { ...(who[r.user_id] || {}), name: r.display_name || null };
+        }
+        // A traveler already deleted, whose clean-up hasn't reached their
+        // profile yet, is never named (gbPurgeQueued).
+        if (agesRead) for (const id of await gbPurgeQueued(env, Object.keys(who).filter((id) => !who[id].handle && who[id].name))) who[id] = { ...who[id], name: null };
       }
-      const shape = (r, idKey) => ({ user_id: r[idKey], status: r.status, since: r.created_at, handle: who[r[idKey]]?.handle || null, name: who[r[idKey]]?.name || null, verified: who[r[idKey]]?.verified === true, seal: who[r[idKey]]?.seal || null });
+      const anon = { handle: null, name: null, verified: false, seal: null };
+      const shape = (r, idKey) => {
+        const id = r[idKey];
+        const base = { user_id: id, status: r.status, since: r.created_at };
+        if (!agesRead) return { ...base, ...anon };
+        if (young.has(id)) return { ...base, ...anon, handle: idKey === 'followee_id' ? who[id]?.handle || null : null };
+        return { ...base, handle: who[id]?.handle || null, name: who[id]?.name || null, verified: who[id]?.verified === true, seal: who[id]?.seal || null };
+      };
+      // The blocked minors' @handles I already knew (gbBlockNote): at most 50 reads.
+      const notes = {};
+      if (agesRead) {
+        await Promise.all(blocks.map((r) => r.blocked_user_id).filter((id) => young.has(id)).slice(0, 50).map(async (id) => {
+          notes[id] = await env.GLOBESKIMMERS_KV?.get(gbBlockNoteKey(user.id, id)).catch(() => null) || null;
+        }));
+      }
+      const adultFollower = (r) => agesRead ? !young.has(r.follower_id) : true;
       return jsonResponse({
-        followers: followers.filter((r) => r.status === 'accepted').map((r) => shape(r, 'follower_id')),
+        followers: followers.filter((r) => r.status === 'accepted' && adultFollower(r)).map((r) => shape(r, 'follower_id')),
         // A frozen, unconfirmed or held account takes no follow requests
         // (founder, 2026-10-13), so it is shown none — nor when its age
         // can't be read; any from before the hold just wait, unanswerable.
-        requests: gbOffSocial(meSp) ? [] : followers.filter((r) => r.status === 'pending').map((r) => shape(r, 'follower_id')),
+        requests: gbOffSocial(meSp) ? [] : followers.filter((r) => r.status === 'pending' && adultFollower(r)).map((r) => shape(r, 'follower_id')),
         // A request still waiting names no one: its sender knows the @handle
         // they typed, and a name is for people who said yes. A muted follow
         // (see op 'follow') is listed as followed, by the @handle its
@@ -17637,7 +17674,10 @@ async function handleSocialFollow(request, env, ctx) {
         following: following.map((r) => (r.status === 'muted'
           ? { ...shape({ ...r, status: 'accepted' }, 'followee_id'), name: null, verified: false, seal: null }
           : r.status === 'pending' ? { ...shape(r, 'followee_id'), name: null } : shape(r, 'followee_id'))),
-        blocked: blocks.map((r) => shape({ ...r, status: 'blocked' }, 'blocked_user_id')),
+        blocked: blocks.map((r) => {
+          const row = shape({ ...r, status: 'blocked' }, 'blocked_user_id');
+          return notes[r.blocked_user_id] ? { ...row, handle: notes[r.blocked_user_id] } : row;
+        }),
         // block_v2 (2026-10-13): POST /social/block ends follows both ways and
         // hides the pair from each other everywhere; the app shows Block only
         // when this is present.
@@ -17653,6 +17693,7 @@ async function handleSocialFollow(request, env, ctx) {
       // A delete that failed says so, in words the app shows (go-live round 2:
       // it answered ok:true and the block stayed).
       if (!d || !d.ok) return jsonResponse({ error: 'Couldn’t unblock right now — try again' }, 502);
+      await gbBlockNoteDrop(env, user.id, target.user_id);
       if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_unblock', {}));
       return jsonResponse({ ok: true });
     }
@@ -17927,6 +17968,50 @@ async function gbBlockSets(env, userId) {
   } catch { return null; }
 }
 
+// The @handle a blocker already knew a minor by (go-live round 3): typed into
+// the block, or shown in the blocker's own Following list when they blocked.
+// My blocked list names a minor by nothing else (see /social/follow op
+// 'list'), so blocking an anonymous note or signature never reveals whose it
+// was, and blocking a minor's @handle doesn't show that it was a minor's
+// (the list keeps the @handle, as it does for anyone). Kept only for a
+// blocked minor: KV blkh:<blocker>:<blocked> = handle, with the reverse
+// marker blkr:<blocked>:<blocker> so either account's deletion finds it by
+// prefix. Both go with an unblock and with either account.
+const gbBlockNoteKey = (blocker, blocked) => `blkh:${String(blocker).toLowerCase()}:${String(blocked).toLowerCase()}`;
+const gbBlockNoteRevKey = (blocker, blocked) => `blkr:${String(blocked).toLowerCase()}:${String(blocker).toLowerCase()}`;
+async function gbBlockNotePut(env, blocker, blocked, handle) {
+  const kv = env.GLOBESKIMMERS_KV; if (!kv || !handle) return;
+  await kv.put(gbBlockNoteKey(blocker, blocked), String(handle).toLowerCase()).catch(() => {});
+  await kv.put(gbBlockNoteRevKey(blocker, blocked), '1').catch(() => {});
+}
+async function gbBlockNoteDrop(env, blocker, blocked) {
+  const kv = env.GLOBESKIMMERS_KV; if (!kv) return;
+  await kv.delete(gbBlockNoteKey(blocker, blocked)).catch(() => {});
+  await kv.delete(gbBlockNoteRevKey(blocker, blocked)).catch(() => {});
+}
+// Every note an account is part of, either side (account deletion); true
+// when all are gone. At most 5 list pages a side.
+async function gbBlockNotesDrop(env, userId) {
+  const kv = env.GLOBESKIMMERS_KV; if (!kv || typeof kv.list !== 'function') return true;
+  const u = String(userId).toLowerCase();
+  try {
+    for (const [prefix, pair] of [[`blkh:${u}:`, (other) => [u, other]], [`blkr:${u}:`, (other) => [other, u]]]) {
+      // Each page is deleted whole, so the next read starts over at the top.
+      for (let i = 0; ; i++) {
+        if (i === 5) return false;
+        const page = await kv.list({ prefix });
+        for (const { name } of page.keys || []) {
+          const [blocker, blocked] = pair(name.slice(prefix.length));
+          await kv.delete(gbBlockNoteKey(blocker, blocked));
+          await kv.delete(gbBlockNoteRevKey(blocker, blocked));
+        }
+        if (page.list_complete || !(page.keys || []).length) break;
+      }
+    }
+    return true;
+  } catch { return false; }
+}
+
 // POST /social/block { user_id | handle | slug | postcard_id | token } —
 // block a traveler (Apple 1.2, founder 2026-10-13: blocking really blocks;
 // the follow list advertises it as features: ['block_v2']). Silent: they are
@@ -17943,7 +18028,12 @@ async function handleSocialBlock(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const token = String(b.token || '').replace(/[^a-f0-9]/gi, '');
     let target = String(b.user_id || '').replace(/[^0-9a-f-]/gi, '') || null;
-    if (!target && b.handle) target = (await gbHandleToUser(env, String(b.handle).replace(/^@/, '')))?.user_id || null;
+    let typedHandle = null;
+    if (!target && b.handle) {
+      const t = await gbHandleToUser(env, String(b.handle).replace(/^@/, ''));
+      target = t?.user_id || null;
+      typedHandle = t?.handle || null;
+    }
     if (!target && b.slug) target = (await blShare(env, b.slug))?.user_id || null;
     if (!target && b.postcard_id && BL_UUID.test(String(b.postcard_id))) {
       // A card addressed to me, or broadcast to everyone (blocking a sender is
@@ -17984,6 +18074,21 @@ async function handleSocialBlock(request, env, ctx) {
       const note = `Blocked by a traveler. ${String(b.note || '').replace(/\s+/g, ' ').trim()}`.trim().slice(0, 500);
       ctx.waitUntil(gbRest(env, 'content_reports', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ reporter_id: user.id, kind: 'block', reason: 'other', ref: `user:${target}`, note }) }).catch(() => {}));
       ctx.waitUntil(founderAlert(env, '🚩 A traveler blocked someone. Admin → Safety reports.', 'report', { by: user.id }));
+    }
+    // A minor's @handle that I already knew, for my blocked list
+    // (gbBlockNoteKey): the one I typed, or the one my Following list showed
+    // — read before the follow edges end below. An age that can't be read
+    // counts as a minor's.
+    if (env.GLOBESKIMMERS_KV && gbOffSocial(await gbSocialProfile(env, target).catch(() => undefined))) {
+      let known = typedHandle;
+      if (!known) {
+        const fq = await gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${target}&select=status&limit=1`, {}).catch(() => null);
+        if (fq && fq.ok && ((await fq.json().catch(() => [])) || []).length) {
+          const hq = await gbRest(env, `passport_shares?user_id=eq.${target}&select=handle`, {}).catch(() => null);
+          known = hq && hq.ok ? (((await hq.json().catch(() => [])) || [])[0] || {}).handle || null : null;
+        }
+      }
+      if (known) await gbBlockNotePut(env, user.id, target, known);
     }
     const now = new Date().toISOString();
     const [fw, tw] = await Promise.all([
