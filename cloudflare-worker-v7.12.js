@@ -14374,11 +14374,18 @@ async function ppLoad(env, userId) {
   if (taggers.length) {
     const [hq, nq] = await Promise.all([
       gbRest(env, `passport_shares?user_id=in.(${taggers.join(',')})&select=user_id,handle`, {}),
-      gbRest(env, `social_profiles?user_id=in.(${taggers.join(',')})&select=user_id,display_name`, {}),
+      gbRest(env, `social_profiles?user_id=in.(${taggers.join(',')})&select=user_id,display_name,${GB_TIER_COLS}`, {}),
     ]);
     const who = {};
     for (const r of (hq.ok ? await hq.json() : [])) who[r.user_id] = { handle: r.handle || null };
-    for (const r of (nq.ok ? await nq.json() : [])) who[r.user_id] = { ...(who[r.user_id] || {}), name: r.display_name || null };
+    // A tagger who is a minor (held, frozen or unconfirmed) is never named on
+    // the booklet (founder, 2026-10-13); nor is anyone when ages can't be read.
+    if (!nq.ok) { for (const id of taggers) delete who[id]; }
+    for (const r of (nq.ok ? await nq.json() : [])) {
+      const t = gbTierRow(r);
+      if (gbUnderAge(t) || gbAgeHeld(t)) { delete who[r.user_id]; continue; }
+      who[r.user_id] = { ...(who[r.user_id] || {}), name: r.display_name || null };
+    }
     out = out.map((s) => (s.tagged_by && who[s.tagged_by]
       ? { ...s, tagged_by_handle: who[s.tagged_by].handle || null, tagged_by_name: who[s.tagged_by].name || null }
       : s));
@@ -17124,10 +17131,19 @@ async function handleBlotterRead(request, env) {
     if (who.length) {
       const [hq, nq] = await Promise.all([
         gbRest(env, `passport_shares?user_id=in.(${who.join(',')})&select=user_id,handle`, {}),
-        gbRest(env, `social_profiles?user_id=in.(${who.join(',')})&select=user_id,display_name,avatar_key`, {}),
+        gbRest(env, `social_profiles?user_id=in.(${who.join(',')})&select=user_id,display_name,avatar_key,${GB_TIER_COLS}`, {}),
       ]);
       for (const r of (hq.ok ? await hq.json() : [])) names[r.user_id] = { handle: r.handle || null };
-      for (const r of (nq.ok ? await nq.json() : [])) names[r.user_id] = { ...(names[r.user_id] || {}), name: r.display_name || null, avatar_key: r.avatar_key || null };
+      // A minor's name, @handle and face never show on someone else's page
+      // (founder, 2026-10-13): what a held teen, a frozen under-13 or an
+      // unconfirmed birth year signed before stays up, as "traveler". When
+      // the ages can't be read, nobody is named.
+      if (!nq.ok) { for (const id of who) delete names[id]; }
+      for (const r of (nq.ok ? await nq.json() : [])) {
+        const t = gbTierRow(r);
+        if (gbUnderAge(t) || gbAgeHeld(t)) { delete names[r.user_id]; continue; }
+        names[r.user_id] = { ...(names[r.user_id] || {}), name: r.display_name || null, avatar_key: r.avatar_key || null };
+      }
     }
     const origin = new URL(request.url).origin;
     const byEntry = {};
@@ -22326,9 +22342,26 @@ async function handleGuestbookList(request, env) {
     if (!pub.ok) return jsonResponse({ error: `Supabase ${pub.status}`, details: await pub.text().catch(() => '') }, 502);
     const mine = own && own.ok ? await own.json() : [];
     const seen = new Set();
-    const entries = [...mine, ...(await pub.json())]
-      .filter((e) => (seen.has(e.id) ? false : seen.add(e.id)))
-      .map(({ user_id, ...e }) => ({ ...e, mine: !!user && user_id === user.id }))
+    const rows = [...mine, ...(await pub.json())].filter((e) => (seen.has(e.id) ? false : seen.add(e.id)));
+    // A minor's note (from before the hold, or from an account since frozen
+    // or unconfirmed) stays up as "A traveler" — no name, no home city — the
+    // way the teens plan shows a teen (founder, 2026-10-13). When the authors'
+    // ages can't be read, every note is shown that way.
+    const authors = [...new Set(rows.map((e) => e.user_id).filter(Boolean))].slice(0, 200);
+    let named = null;   // user ids whose name may show; null = nobody's
+    if (authors.length) {
+      const aq = await gbRest(env, `social_profiles?user_id=in.(${authors.join(',')})&select=user_id,${GB_TIER_COLS}`, {}).catch(() => null);
+      if (aq && aq.ok) {
+        const young = new Set((await aq.json()).map(gbTierRow).filter((t) => gbUnderAge(t) || gbAgeHeld(t)).map((t) => t.user_id));
+        named = new Set(authors.filter((id) => !young.has(id)));
+      }
+    }
+    const entries = rows
+      .map(({ user_id, ...e }) => ({
+        ...e,
+        ...(user_id && !(named && named.has(user_id)) ? { display_name: 'A traveler', home_city: null } : {}),
+        mine: !!user && user_id === user.id,
+      }))
       .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     return jsonResponse({ entries, entity_id: ids.canon });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
