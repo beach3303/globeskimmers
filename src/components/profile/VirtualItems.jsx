@@ -27,6 +27,7 @@
 //     'TRAVEL BUDDIES'; tiles only enlarge; their coffee orders stay theirs.
 //     ownerFlags: whose home flags their stickers may show (never the viewer's).
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Coffee, Palette, Pencil, Plus, Trash2, X } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { useAuth } from "@/lib/AuthContext";
@@ -96,7 +97,7 @@ function GearArt({ kind, item, width, stickersBySid, edit = false, selected = nu
   return (
     <div ref={boxRef} style={{ position: "relative", width, height: width, touchAction: edit ? "none" : undefined }}>
       {!artFail ? (
-        <img src={renderUrl} alt="" onError={() => setArtFail(true)} style={{ width, height: width, objectFit: "contain", display: "block" }} />
+        <img src={renderUrl} alt="" onError={() => setArtFail(true)} style={{ width, height: width, objectFit: "contain", display: "block", borderRadius: Math.round(width * 0.08), mixBlendMode: "multiply" }} />
       ) : (
         <svg viewBox="0 0 340 340" width={width} height={width} style={{ display: "block" }} aria-hidden="true"
           dangerouslySetInnerHTML={{ __html: svgFor(kind, variant, item?.color) }} />
@@ -378,6 +379,8 @@ const TILE_NAME = { display: "flex", alignItems: "center", justifyContent: "cent
 const TILE_HINT = { marginTop: 4, fontFamily: MONO, fontSize: fs(9), lineHeight: 12 / 9, fontWeight: 500, letterSpacing: ".12em", color: INK3, textAlign: "center" };
 
 const possessive = (first) => `${first}’S`;
+// The sheets render on <body>, clear of any layer the folder sits in.
+const onBody = (node) => (typeof document !== "undefined" ? createPortal(node, document.body) : node);
 
 export default function VirtualItems({
   stamps,
@@ -599,7 +602,7 @@ export default function VirtualItems({
       {/* One tap enlarges an item or a buddy (founder, 2026-10-11): the big
           picture first; × or a tap outside collapses it. Customizing and
           renaming are one button away inside it. */}
-      {zoom && (() => {
+      {zoom && onBody((() => {
         const isItem = zoom.type === "item";
         const b = isItem ? null : buddies.find((x) => x.id === zoom.id);
         if (!isItem && !b) return null;
@@ -657,13 +660,13 @@ export default function VirtualItems({
             </div>
           </div>
         );
-      })()}
-      {open && !readOnly && (
+      })())}
+      {open && !readOnly && onBody(
         <GearModal kind={open} item={itemOf(gear, open)}
           stamps={stamps} stickersBySid={bySid} usedElsewhere={usedFor(open)}
           onChange={(item) => setItem(open, item)} onClose={() => setOpen(null)} />
       )}
-      {buddyOpen && !readOnly && (
+      {buddyOpen && !readOnly && onBody(
         <BuddyModal buddy={buddyOpen === "new" ? null : buddyOpen}
           onSave={saveBuddy} onRemove={() => removeBuddy(buddyOpen)} onClose={() => setBuddyOpen(null)} />
       )}

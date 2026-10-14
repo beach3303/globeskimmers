@@ -13,7 +13,8 @@
 //   'card'    the new look (Profile.dc.html L39-60, Profile-Visit L39-57): a white
 //             hairline card that rests on the cover band, the render cropped to a
 //             280x176 window (object-position 50% 39%), stickers remapped onto
-//             that crop by cardSpot(). The shared story image keeps the dark
+//             that crop by cardSpot(), the render's studio backdrop rounded like a
+//             print. The shared story image keeps the dark
 //             bezel: it is drawn off-screen only while Share renders.
 //
 //   <Luggage stamps readOnly variant cloth luggage onLuggageChanged ownerFlags
@@ -30,6 +31,7 @@
 //                     home_city_country }); the owner's profile by default.
 //   ownerFirst        a visit's kicker: 'KENJI’S LUGGAGE · 3 OF 3 PLACED'.
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import html2canvas from "html2canvas";
 import { Capacitor } from "@capacitor/core";
 import { deriveLabels, unseenLabels, markLabelsSeen } from "@/lib/labels";
@@ -82,6 +84,9 @@ const imagesReady = (root) => Promise.all([...(root?.querySelectorAll("img") || 
   })
 )));
 const nextFrame = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+// The sheets render on <body>: the card sits in its own layer above the cover, and a
+// sheet inside it would sit under the folders that follow.
+const onBody = (node) => (typeof document !== "undefined" ? createPortal(node, document.body) : node);
 
 // A cloth darkened toward black, for the visit card's tinted shadow (Profile-Visit L39).
 function shadeOf(hex, f = 0.4) {
@@ -347,7 +352,7 @@ export default function Luggage({
         <div className="w-[280px] max-w-full md:w-[400px]" style={{ position: "relative", aspectRatio: `${CARD_W} / ${CARD_H}`, margin: "8px auto 0" }}>
           <img src={src} alt={alt} crossOrigin="anonymous"
             onLoad={(e) => { const im = e.currentTarget; if (im.naturalWidth > 0) setSkinAspect(clampAspect(im.naturalHeight / im.naturalWidth)); }}
-            style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: `${CROP_X * 100}% ${CROP_Y * 100}%` }} />
+            style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: `${CROP_X * 100}% ${CROP_Y * 100}%`, borderRadius: 12 }} />
           {frontPlaced.map((pl) => {
             const st = bySid[pl.sid];
             const at = cardSpot(pl, skinAspect, st.w);
@@ -375,7 +380,7 @@ export default function Luggage({
             <TrunkStage stageRef={captureRef} src={src} alt="" aspect={skinAspect} onAspect={setSkinAspect} placed={frontPlaced} bySid={bySid} />
           </div>
         )}
-        {dialogs}
+        {onBody(dialogs)}
       </section>
     );
   }
@@ -417,7 +422,7 @@ export default function Luggage({
       <p style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, marginTop: 6, letterSpacing: ".03em" }}>
         Earned by traveling, never bought. Tap a label for its story.
       </p>
-      {dialogs}
+      {onBody(dialogs)}
     </div>
   );
 }
