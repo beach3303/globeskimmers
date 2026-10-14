@@ -335,3 +335,6 @@ details.data[open] summary { margin-bottom: 4px; }
 /* chart cards: the definition takes the slack, so charts in a row share a baseline */
 .card-chart { display: flex; flex-direction: column; }
 .card-chart:has(.chart) .def { flex: 1 0 auto; }   /* not when the body is an error or a note */
+/* while any card's "Show the numbers" table is open, cards keep their own height: no blank gap in the others */
+.grid:has(details.data[open]) .card-chart { align-self: start; }
+.grid:has(details.data[open]) .card-chart .def { flex: 0 0 auto; }

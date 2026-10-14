@@ -133,7 +133,7 @@ function utcNote() {
   if (new Date().getTimezoneOffset() === 0) return 'Day charts use UTC days, which match your local days right now.';
   const now = new Date();
   const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const at = midnight.toLocaleTimeString(undefined, { hour: 'numeric', minute: midnight.getMinutes() ? '2-digit' : undefined });
+  const at = midnight.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); // minutes always: a 24-hour locale would print a bare "01"
   return `Day charts use UTC days, which start at ${at} your time.`;
 }
 // When a UTC day ("2026-10-14") or UTC month ("2026-10") began, in the viewer's
@@ -1038,16 +1038,16 @@ function build() {
   }, { compact: true });
   itemTile('Saved a setup', 'Travelers with a saved virtual-items record: anyone who saved an item, a buddy or just the shelf order. Someone who later removed every buddy still counts.', (c) => {
     const n = num(c.travelers, 'the traveler count');
-    return kpi(fmt(n), `${plural(n, 'traveler', 'travelers')} today`);
+    return kpi(fmt(n), `${plural(n, 'traveler', 'travelers')} in all`);
   });
   itemTile('Laptops', 'Travelers who customized their laptop (color or stickers). Everyone else’s profile shows the default blue laptop, which isn’t counted.', (c) => kpi(fmt(num(c.laptop?.n, 'the laptop count')), 'customized'));
   itemTile('Drink containers', 'Travelers who customized their drink (which one, its color or stickers). Everyone else’s profile shows the default blue tumbler, which isn’t counted.', (c) => kpi(fmt(num(c.drink?.n, 'the drink count')), 'customized'));
-  itemTile('Travel buddies', 'Pets and buddies on profiles today, and how many travelers have one.', (c) => {
+  itemTile('Travel buddies', 'Pets and buddies on profiles right now, and how many travelers have one.', (c) => {
     const n = num(c.buddies?.n, 'the buddy count'), who = num(c.buddies?.travelers, 'the buddy traveler count');
     return kpi(fmt(n), `with ${fmt(who)} ${plural(who, 'traveler', 'travelers')}`);
   });
   const ig = $('items-grid');
-  const chosen = card(ig, { title: 'What they chose', meta: 'On profiles today', def: 'Saved items on profiles today, by type, color and species. Default laptops and tumblers nobody customized aren’t counted.' });
+  const chosen = card(ig, { title: 'What they chose', meta: 'On profiles now', def: 'Saved items on profiles right now, by type, color and species. Default laptops and tumblers nobody customized aren’t counted.' });
   panel(chosen.body, [D.gear], (g) => {
     // Empty lists here would be the same false zero as the tiles.
     if (gearUnread(g)) return warn('No travelers with items, yet the app has logged item picks: the server may have failed to read saved items (it doesn’t report that).');
