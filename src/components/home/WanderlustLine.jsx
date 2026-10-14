@@ -14,6 +14,8 @@
 // and never flickers on a re-render, yet greets a daily visitor with something
 // new. Passport Standard: serif quote, mono attribution, no emoji.
 import { useMemo } from "react";
+import { BrassDiamondRule } from "@/components/redesign/ornaments";
+import { NEUTRAL, fs } from "@/components/redesign/constants";
 
 // [quote, author|null]. Attributed → public-domain author + real PD source.
 // null → original GlobeSkimmers line.
@@ -46,26 +48,23 @@ function dayIndex() {
   }
 }
 
+// Home-Boxes L359-367: a brass diamond rule, the quote in serif italic, the author
+// in spaced mono caps. Closes Home on the phone and the iPad alike.
 export default function WanderlustLine() {
   const [quote, author] = useMemo(() => QUOTES[dayIndex() % QUOTES.length], []);
   return (
-    <div className="px-6 pt-2 pb-4">
-      <div className="max-w-md mx-auto text-center">
-        <div
-          className="font-serif italic leading-snug text-[calc(15px*var(--fs))]"
-          style={{ color: "#736657" }}
-        >
+    <figure className="m-0 text-center" style={{ marginTop: 16, padding: "0 28px" }}>
+      <div className="max-w-md mx-auto md:max-w-[720px]">
+        <BrassDiamondRule />
+        <blockquote className="font-serif italic" style={{ margin: "8px 0 0", fontSize: fs(18), lineHeight: 1.25, color: NEUTRAL.ink2 }}>
           &ldquo;{quote}&rdquo;
-        </div>
+        </blockquote>
         {author && (
-          <div
-            className="font-mono uppercase tracking-[0.12em] text-[calc(9.5px*var(--fs))] mt-2"
-            style={{ color: "#A99E8C" }}
-          >
+          <figcaption className="font-mono uppercase" style={{ marginTop: 4, fontSize: fs(10), lineHeight: 1.2, letterSpacing: ".18em", color: NEUTRAL.ink3 }}>
             {author}
-          </div>
+          </figcaption>
         )}
       </div>
-    </div>
+    </figure>
   );
 }
