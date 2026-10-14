@@ -323,6 +323,21 @@ export async function cityBoard({ city, country, before = null }) {
     error: held ? null : error || data?.error || null,
   };
 }
+// Every city board with postcards (City Boards, 2026-10-14), busiest first; q narrows by
+// city or country. { boards: [{ city, country, count, recent, last_at, cover }], held,
+// unavailable, error }: unavailable before the worker or its database function is there.
+export async function cityBoards(q = "") {
+  const query = String(q || "").trim();
+  const { data, error } = await callWorker('city/boards', query ? { q: query } : {});
+  if (data && data.path === '/city/boards') return { boards: [], held: null, unavailable: true, error: null };
+  const held = data?.code === 'teen_hold' ? data.held || 'teen' : null;
+  return {
+    boards: Array.isArray(data?.boards) ? data.boards : [],
+    held,
+    unavailable: data?.unavailable === true,
+    error: held ? null : error || data?.error || null,
+  };
+}
 // Avatar: moderated at upload, fail-closed; resolves the serving URL.
 export async function setAvatar(image) {
   const { data, error } = await callWorker('social/avatar', { image });

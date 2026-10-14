@@ -15,7 +15,7 @@
 // fallback) and close the overlay.
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, Search, MapPin, Home as HomeIcon, Globe, Loader2, Clock } from "lucide-react";
+import { X, Search, MapPin, Home as HomeIcon, Globe, Loader2, Clock, Mail } from "lucide-react";
 import { useLocation } from "@/components/location/LocationContext";
 import { getPrimaryStay } from "@/lib/savedLocations";
 import { callWorker } from "@/lib/callWorker";
@@ -27,6 +27,10 @@ import { createPageUrl } from "@/utils";
 import DreamAnswerCard from "./DreamAnswerCard";
 import { showToast } from "@/components/Toast";
 import { openAttraction } from "@/lib/openAttraction";
+import { useAuth } from "@/lib/AuthContext";
+import { cityBoards } from "@/lib/passport";
+import { cityBoardUrl } from "@/lib/boardLinks";
+import { NEUTRAL } from "@/components/redesign/constants";
 
 const IVORY = "#FFFCF7", INK = "#16302B", SUB = "#71827D", TEAL = "#17A38F", EDGE = "#E6DFD0";
 const RECENTS_KEY = "gs_smart_search_recents_v1";
@@ -62,6 +66,23 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
   const [dream, setDream] = useState(null); // {destination, parsed} — dream-search answer card
   const [recents, setRecents] = useState([]);
   const inputRef = useRef(null);
+
+  // City boards that match what's typed (2026-10-14): 'Postcards from Paris · 24' opens the
+  // board without moving your location. "coffee in Paris" asks about the part after "in".
+  const { socialTier, socialTierReady } = useAuth();
+  const boardsOk = socialTierReady && !["blocked", "teen", "confirm"].includes(String(socialTier || ""));
+  const [boards, setBoards] = useState([]);
+  const typed = (scope === "named_place" ? (chosenPlace?.placeName || placeQuery) : q).trim();
+  const boardTerm = (typed.match(/\bin\s+(.+)$/i)?.[1] || typed).trim();
+  useEffect(() => {
+    if (!isOpen || !boardsOk || boardTerm.length < 2) { setBoards([]); return undefined; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const r = await cityBoards(boardTerm);
+      if (!cancelled) setBoards(r.boards.slice(0, 3));
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [isOpen, boardsOk, boardTerm]);
 
   const hasStay = !!getPrimaryStay();
 
@@ -260,6 +281,26 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
           >
             {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Searching…</> : <><Search className="w-4 h-4" strokeWidth={2.4} /> Search</>}
           </button>
+
+          {boards.length > 0 && (
+            <div className="mt-4">
+              <div className="font-mono uppercase tracking-[0.14em] text-[calc(10px*var(--fs))] font-semibold mb-2" style={{ color: SUB }}>City boards</div>
+              <div className="rounded-xl overflow-hidden" style={{ background: "#fff", border: `1px solid ${EDGE}` }}>
+                {boards.map((b, i) => (
+                  <button key={`${b.city}|${b.country}`} type="button"
+                    onClick={() => { navigate(cityBoardUrl(b.city, b.country)); onClose(); }}
+                    className="w-full text-left px-3.5 py-2 flex items-center gap-2.5 hover:bg-black/[0.02]"
+                    style={{ minHeight: 52, borderTop: i ? `1px solid ${EDGE}` : "none" }}>
+                    <Mail className="w-4 h-4 flex-none" style={{ color: NEUTRAL.airmailBlue }} strokeWidth={2} />
+                    <span className="flex-1 min-w-0">
+                      <span className="block truncate text-[calc(14px*var(--fs))] font-semibold" style={{ color: INK }}>Postcards from {b.city} · {b.count}</span>
+                      <span className="block truncate text-[calc(12px*var(--fs))]" style={{ color: SUB }}>{b.country}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Dream-destination answer card — renders when /parse-search grounds
               (or merely suggests) a destination for an ambiguous dream query. */}

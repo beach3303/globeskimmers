@@ -7,7 +7,7 @@
 // Every write goes through src/lib/passport.js; onChanged() reloads the
 // passport so the booklet repacks (a solo stamp moves to its own page at once).
 import React, { useRef, useState } from "react";
-import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck, ScanSearch, ArrowUpDown, MapPin, Type, ArrowRightLeft } from "lucide-react";
+import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck, ScanSearch, ArrowUpDown, MapPin, Type, ArrowRightLeft, Mail } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { openAttraction } from "@/lib/openAttraction";
 import { showToast } from "@/components/Toast";
@@ -28,6 +28,8 @@ import PostcardCompose from "@/components/passport/PostcardCompose";
 import { isLocalFavorite, localFavoriteLine } from "@/components/passport/LocalFavoriteStamp";
 import { socialFollow, setStampNote, setStampVisibility, setStampArt } from "@/lib/passport";
 import { respectPlaceFor } from "@/lib/respectPlaces";
+import { useAuth } from "@/lib/AuthContext";
+import { cityBoardUrl, hasBoard } from "@/lib/boardLinks";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -54,6 +56,10 @@ function Row({ icon: Icon, label, sub, onClick, disabled, tone }) {
 }
 
 export default function StampActions({ stamp, onClose, onChanged, onDetails, onEnlarge, readOnly, pages = null, fits = null }) {
+  // A stamp in a city opens that city's board (City Boards, 2026-10-14), for adults as everywhere.
+  const { socialTier, socialTierReady } = useAuth();
+  const boardCity = String(stamp?.city || (stamp?.kind === "city" ? stamp?.name : "") || "").trim();
+  const showBoard = socialTierReady && !["blocked", "teen", "confirm"].includes(String(socialTier || "")) && hasBoard(boardCity, stamp?.country);
   const navigate = useNavigate();
   // An attraction stamp opens its place's Things to Do card (prices, guestbook…).
   const canSeePlace = stamp.kind === "attraction" && !!stamp.entity_id;
@@ -494,6 +500,10 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
           )}
           {!readOnly && (
             <Row icon={PencilLine} label="Send as a postcard" sub="This place's photo on the front, your words on the back" onClick={openCompose} />
+          )}
+          {showBoard && (
+            <Row icon={Mail} label={`Postcards from ${boardCity}`} sub="Its city board, from travelers who were really there"
+              onClick={() => { onClose?.(); navigate(cityBoardUrl(boardCity, stamp.country)); }} />
           )}
           {!readOnly && (
             TAGGING_ENABLED

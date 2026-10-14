@@ -17,8 +17,13 @@
 //   onKeep   (row) => void: a card sent to everyone that the feed marks with a boolean `kept`
 //            gets the Keep pill at its top left ('Keep' / 'Kept', aria-pressed), which saves it
 //            into the postcard box or lets it go. Cards addressed to you are always kept.
+// The postmark opens that city's board (City Boards, 2026-10-14): a 44px link wherever the
+// card names a city and a country, except on the board itself and for a held account.
 import React from "react";
+import { Link } from "react-router-dom";
 import { Bookmark, BookmarkCheck } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
+import { cityBoardUrl, hasBoard } from "@/lib/boardLinks";
 import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
 import { PostmarkLines } from "@/components/redesign/ornaments";
 import { PostmarkRing, ReportControl, canReport, senderName, whenLabel } from "@/components/social/Envelope";
@@ -38,6 +43,7 @@ const handleOf = (v) => String((v && typeof v === "object" ? v.handle : v) ?? ""
  * @param {{ row: any, me?: any, meName?: string|null, onReport?: (row: any) => void, onKeep?: (row: any) => void, className?: string, style?: import('react').CSSProperties }} props
  */
 export default function PostcardCard({ row, me = undefined, meName = null, onReport = undefined, onKeep = undefined, className = undefined, style = undefined }) {
+  const { socialTier } = useAuth();
   if (!row || typeof row !== "object") return null;
   const by = row.by || {};
   const from = senderName(by, me);
@@ -53,6 +59,9 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
   const firstName = String(meName ?? "").trim().split(/\s+/)[0] || null;
   const keepable = typeof onKeep === "function" && typeof row.kept === "boolean" && !toMe && canReport(row, me);
   const kept = row.kept === true;
+  const boardCity = String(row.city ?? "").trim();
+  const boardCountry = String(row.country ?? "").trim();
+  const toBoard = row.board !== true && hasBoard(boardCity, boardCountry) && !["blocked", "teen", "confirm"].includes(String(socialTier || ""));
 
   return (
     <article aria-label={`Postcard from ${from === "You" ? "you" : from}${place ? `, ${place}` : ""}`} className={className}
@@ -77,12 +86,19 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
           </div>
           <div aria-hidden="true" style={{ flex: "none", width: 1, background: DIVIDE }} />
           <div style={{ flex: "none", width: 112 }}>
-            <div aria-hidden="true" style={{ position: "relative", height: 48 }}>
-              <div style={{ position: "absolute", right: 4, top: 1, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: NEUTRAL.cream, border: `1px dashed ${STAMP_BOX_LINE}`, borderRadius: 2, transform: "rotate(3deg)" }}>
+            <div style={{ position: "relative", height: 48 }}>
+              <div aria-hidden="true" style={{ position: "absolute", right: 4, top: 1, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: NEUTRAL.cream, border: `1px dashed ${STAMP_BOX_LINE}`, borderRadius: 2, transform: "rotate(3deg)" }}>
                 {canStamp ? <StampThumb stamp={stamp} size={36} feedSafe /> : <PostmarkRing city={row.city || place} date={row.created_at} size={34} />}
               </div>
-              <PostmarkRing city={row.city || place} date={row.created_at} size={40} style={{ position: "absolute", left: 18, top: 4 }} />
-              <PostmarkLines variant="postcard" style={{ position: "absolute", left: 56, top: 17 }} />
+              <span aria-hidden="true" style={{ position: "absolute", left: 56, top: 17, pointerEvents: "none" }}><PostmarkLines variant="postcard" style={{ display: "block" }} /></span>
+              {toBoard ? (
+                <Link to={cityBoardUrl(boardCity, boardCountry)} aria-label={`Postcards from ${boardCity}`}
+                  style={{ position: "absolute", left: 16, top: 2, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 999 }}>
+                  <PostmarkRing city={row.city || place} date={row.created_at} size={40} />
+                </Link>
+              ) : (
+                <span aria-hidden="true" style={{ position: "absolute", left: 18, top: 4 }}><PostmarkRing city={row.city || place} date={row.created_at} size={40} /></span>
+              )}
             </div>
             {toMe && (firstName || myHandle) ? (
               <div style={{ marginTop: 8 }}>
