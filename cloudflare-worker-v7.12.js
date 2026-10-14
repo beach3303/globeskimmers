@@ -17458,10 +17458,17 @@ async function handleAvatarServe(request, env) {
 
 // City Board keys (2026-10-14): 'lisbon|portugal', the city and its country without
 // accents, case or extra spaces, matched against the city and country on stamps.
+// A board's country by name: airport stamps keep ISO codes ('PT') where boards and most stamps
+// use names ('Portugal'), so a code and its name must make one board.
+const pcCountryName = (v) => {
+  const s = String(v || '').trim();
+  if (!/^[A-Za-z]{2}$/.test(s)) return s;
+  try { const n = new Intl.DisplayNames(['en'], { type: 'region' }).of(s.toUpperCase()); return n && n.toUpperCase() !== s.toUpperCase() && n !== 'Unknown Region' ? n : s; } catch { return s; }
+};
 const pcCityKey = (city, country) => {
   const n = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
   const c = n(city);
-  const k = n(country);
+  const k = n(pcCountryName(country));
   return c && k ? `${c}|${k}`.slice(0, 140) : null;
 };
 const PC_CITY_DAILY = 5;
@@ -17520,7 +17527,7 @@ async function handlePostcardSend(request, env, ctx) {
       // words are checked first, and five boards a day is plenty.
       if (sp.social_tier === 'teen') return jsonResponse({ error: 'City boards open at age 18' }, 403);
       boardCity = clean(b.to_city.city, 60);
-      boardCountry = clean(b.to_city.country, 60);
+      boardCountry = clean(pcCountryName(b.to_city.country), 60);
       toCity = pcCityKey(boardCity, boardCountry);
       if (!toCity) return jsonResponse({ error: 'Which city?' }, 400);
       if (!(await pcWasThere(env, user.id, toCity))) return jsonResponse({ error: 'Only travelers who were really there can post here. Stamp it first, verified.', code: 'not_there' }, 403);
