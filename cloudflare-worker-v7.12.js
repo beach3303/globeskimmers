@@ -18086,7 +18086,7 @@ async function handleSocialFollow(request, env, ctx) {
       const followers = fq.ok ? await fq.json() : [];
       const following = gq.ok ? await gq.json() : [];
       const blocks = bq.ok ? await bq.json() : [];
-      const ids = [...new Set([...followers.map((r) => r.follower_id), ...following.map((r) => r.followee_id), ...blocks.map((r) => r.blocked_user_id)])].slice(0, 200);
+      const ids = [...new Set([...followers.map((r) => r.follower_id), ...following.map((r) => r.followee_id)])].slice(0, 200);
       // Minors are never named here either (go-live round 3: these lists read
       // no age, so a held teen or a frozen child showed by name and @handle —
       // and Block on an anonymous guestbook note or signature, then Blocked
@@ -18122,31 +18122,39 @@ async function handleSocialFollow(request, env, ctx) {
         if (young.has(id)) return { ...base, ...anon, handle: idKey === 'followee_id' ? who[id]?.handle || null : null };
         return { ...base, handle: who[id]?.handle || null, name: who[id]?.name || null, verified: who[id]?.verified === true, seal: who[id]?.seal || null };
       };
-      // The blocked minors' @handles I already knew (gbBlockNote): at most 50 reads.
+      // The @handles I already knew the people I blocked by (gbBlockNote): at most 100 reads.
       const notes = {};
-      if (agesRead) {
-        await Promise.all(blocks.map((r) => r.blocked_user_id).filter((id) => young.has(id)).slice(0, 50).map(async (id) => {
-          notes[id] = await env.GLOBESKIMMERS_KV?.get(gbBlockNoteKey(user.id, id)).catch(() => null) || null;
-        }));
-      }
+      await Promise.all(blocks.map((r) => r.blocked_user_id).slice(0, 100).map(async (id) => {
+        notes[id] = await env.GLOBESKIMMERS_KV?.get(gbBlockNoteKey(user.id, id)).catch(() => null) || null;
+      }));
       const adultFollower = (r) => agesRead ? !young.has(r.follower_id) : true;
+      // Who follows me back (accepted): the people my Following list names.
+      const followsMe = new Set(followers.filter((r) => r.status === 'accepted' && adultFollower(r)).map((r) => r.follower_id));
       return jsonResponse({
         followers: followers.filter((r) => r.status === 'accepted' && adultFollower(r)).map((r) => shape(r, 'follower_id')),
         // A frozen, unconfirmed or held account takes no follow requests
         // (founder, 2026-10-13), so it is shown none — nor when its age
         // can't be read; any from before the hold just wait, unanswerable.
         requests: gbOffSocial(meSp) ? [] : followers.filter((r) => r.status === 'pending' && adultFollower(r)).map((r) => shape(r, 'follower_id')),
-        // A request still waiting names no one: its sender knows the @handle
-        // they typed, and a name is for people who said yes. A muted follow
-        // (see op 'follow') is listed as followed, by the @handle its
-        // follower typed and nothing more.
-        following: following.map((r) => (r.status === 'muted'
-          ? { ...shape({ ...r, status: 'accepted' }, 'followee_id'), name: null, verified: false, seal: null }
-          : r.status === 'pending' ? { ...shape(r, 'followee_id'), name: null } : shape(r, 'followee_id'))),
-        blocked: blocks.map((r) => {
-          const row = shape({ ...r, status: 'blocked' }, 'blocked_user_id');
-          return notes[r.blocked_user_id] ? { ...row, handle: notes[r.blocked_user_id] } : row;
+        // My Following list names only the people who follow me back (go-live
+        // final check: a follow to an adult is accepted at once, so a name or
+        // a Seal on the row told a stranger that an @handle was an adult's,
+        // and a minor's muted follow showed neither). Everyone else, a request
+        // still waiting, a muted follow or someone who doesn't follow me back,
+        // is the @handle I followed them by and nothing more: a name is for
+        // people who said yes. A muted follow (see op 'follow') is listed as
+        // followed.
+        following: following.map((r) => {
+          const row = shape(r.status === 'muted' ? { ...r, status: 'accepted' } : r, 'followee_id');
+          return r.status === 'accepted' && followsMe.has(r.followee_id) ? row : { ...row, name: null, verified: false, seal: null };
         }),
+        // My blocked list names no one (go-live final check: a name there told
+        // an adult from a minor): each row is the @handle I already knew them
+        // by (gbBlockNote), or nothing.
+        blocked: blocks.map((r) => ({
+          user_id: r.blocked_user_id, status: 'blocked', since: r.created_at,
+          handle: notes[r.blocked_user_id] || null, name: null, verified: false, seal: null,
+        })),
         // block_v2 (2026-10-13): POST /social/block ends follows both ways and
         // hides the pair from each other everywhere; the app shows Block only
         // when this is present.
@@ -18437,13 +18445,12 @@ async function gbBlockSets(env, userId) {
   } catch { return null; }
 }
 
-// The @handle a blocker already knew a minor by (go-live round 3): typed into
-// the block, or shown in the blocker's own Following list when they blocked.
-// My blocked list names a minor by nothing else (see /social/follow op
-// 'list'), so blocking an anonymous note or signature never reveals whose it
-// was, and blocking a minor's @handle doesn't show that it was a minor's
-// (the list keeps the @handle, as it does for anyone). Kept only for a
-// blocked minor: KV blkh:<blocker>:<blocked> = handle, with the reverse
+// The @handle a blocker already knew someone by (go-live round 3; for
+// everyone since the final check): typed into the block, or shown in the
+// blocker's own follow lists when they blocked. My blocked list names people
+// by nothing else (see /social/follow op 'list'), so blocking an anonymous
+// note or signature never reveals whose it was, and nothing on a row tells a
+// minor from an adult. KV blkh:<blocker>:<blocked> = handle, with the reverse
 // marker blkr:<blocked>:<blocker> so either account's deletion finds it by
 // prefix. Both go with an unblock and with either account.
 const gbBlockNoteKey = (blocker, blocked) => `blkh:${String(blocker).toLowerCase()}:${String(blocked).toLowerCase()}`;
@@ -18499,21 +18506,24 @@ async function handleSocialBlock(request, env, ctx) {
     const token = String(b.token || '').replace(/[^a-f0-9]/gi, '');
     let target = String(b.user_id || '').replace(/[^0-9a-f-]/gi, '') || null;
     let typedHandle = null;
+    let via = target ? 'user_id' : null; // the door that named them (the blocked list's note)
     if (!target && b.handle) {
       const t = await gbHandleToUser(env, String(b.handle).replace(/^@/, ''));
       target = t?.user_id || null;
       typedHandle = t?.handle || null;
     }
-    if (!target && b.slug) target = (await blShare(env, b.slug))?.user_id || null;
+    if (!target && b.slug) { target = (await blShare(env, b.slug))?.user_id || null; if (target) via = 'shown'; }
     if (!target && b.postcard_id && BL_UUID.test(String(b.postcard_id))) {
       // A card addressed to me, or broadcast to everyone (blocking a sender is
       // never a way to learn who sent other people's cards).
       const q = await gbRest(env, `postcards?id=eq.${b.postcard_id}&or=(to_user_id.eq.${user.id},to_user_id.is.null)&select=sender_id`, {});
       target = (q.ok ? await q.json() : [])[0]?.sender_id || null;
+      if (target) via = 'shown';
     }
     if (!target && token) {
       const q = await gbRest(env, `passport_tags?token=eq.${token}&select=from_user_id`, {});
       target = (q.ok ? await q.json() : [])[0]?.from_user_id || null;
+      if (target) via = 'shown';
     }
     // A signature or doodle on a passport page (go-live review, 2026-10-13):
     // signing needs no @handle, so its entry is the only name some signers
@@ -18566,15 +18576,23 @@ async function handleSocialBlock(request, env, ctx) {
         await founderAlert(env, '🚩 A traveler blocked someone. Admin → Safety reports.', 'report', { by: user.id });
       })().catch(() => {}));
     }
-    // A minor's @handle that I already knew, for my blocked list
-    // (gbBlockNoteKey): the one I typed, or the one my Following list showed
-    // — read before the follow edges end below. An age that can't be read
-    // counts as a minor's.
-    if (env.GLOBESKIMMERS_KV && gbOffSocial(await gbSocialProfile(env, target).catch(() => undefined))) {
+    // The @handle I already knew them by, for my blocked list, which names
+    // people by nothing else (gbBlockNoteKey): the one I typed, or the one
+    // the app showed me, read before the follow edges end below. My Following
+    // list shows everyone I follow by @handle. My Followers and requests, a
+    // postcard, a shared passport and a tag invite show only travelers who aren't held
+    // (an age that can't be read counts as held). Blocking from an anonymous
+    // note or signature names no one.
+    if (env.GLOBESKIMMERS_KV) {
       let known = typedHandle;
       if (!known) {
-        const fq = await gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${target}&select=status&limit=1`, {}).catch(() => null);
-        if (fq && fq.ok && ((await fq.json().catch(() => [])) || []).length) {
+        const eq = await gbRest(env, `user_follows?or=(and(follower_id.eq.${user.id},followee_id.eq.${target}),and(follower_id.eq.${target},followee_id.eq.${user.id}))&select=follower_id,status`, {}).catch(() => null);
+        const edges = eq && eq.ok ? ((await eq.json().catch(() => [])) || []) : [];
+        let shown = edges.some((e) => e.follower_id === user.id);
+        if (!shown && (via === 'shown' || edges.some((e) => e.follower_id === target && (e.status === 'accepted' || e.status === 'pending')))) {
+          shown = !gbOffSocial(await gbSocialProfile(env, target).catch(() => undefined));
+        }
+        if (shown) {
           const hq = await gbRest(env, `passport_shares?user_id=eq.${target}&select=handle`, {}).catch(() => null);
           known = hq && hq.ok ? (((await hq.json().catch(() => [])) || [])[0] || {}).handle || null : null;
         }
