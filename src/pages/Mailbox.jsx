@@ -1,299 +1,299 @@
-// Mailbox — the feed (Social P2+). Friends' stamps AND postcards, newest
-// first, reverse-chronological only (never ranked), never coordinates. Plus
-// the follow controls: follow by @handle, and the teen-approval requests.
-// (The old "postcards arrive later" note here outlived the postcard launch
-// and misled a 2026-10-10 bug hunt — postcards render below at ~222.)
+// Mailbox: where your circle has been (bible.mailbox; Mailbox.dc.html), in the airmail
+// stock that Home's circle zone and the profile's circle folder share. Your circle's stamps
+// and postcards, newest first and never ranked, never coordinates; what happened on your
+// passport (the activity behind the nav dot, cleared on opening); requests; and the ways in:
+// follow by @username, the invite, and claiming your own @username.
+//
+// It shows nothing untrue: nothing social until the age tier is known; the hold note for a
+// 13-17 account; a skeleton while the feed loads, 'Try again' when it fails (never 'An
+// empty mailbox'); rows from people you blocked never show. The old one-tap unfollow chips
+// are gone: 'Your circle · n' opens the Circle screen, where unfollowing asks first.
+// Every stamp and postcard from someone else has the report door.
 import React, { useEffect, useState } from "react";
-import { Loader2, UserPlus } from "lucide-react";
-import { showToast } from "@/components/Toast";
-import OfficialSeal from "@/components/passport/OfficialSeal";
-import { socialFollow, socialFeed, getHandle, setHandle, setAgeGate, splitDob, socialUnread } from "@/lib/passport";
-import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
-import InviteButton from "@/components/passport/InviteButton";
-import PostcardCompose from "@/components/passport/PostcardCompose";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { ChevronRight, Mail, Mailbox as MailboxIcon } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
+import useCircle from "@/lib/useCircle";
+import { socialFeed, getHandle, getSocialProfile, setHandle, setAgeGate, splitDob, socialUnread } from "@/lib/passport";
+import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
+import { showToast } from "@/components/Toast";
+import { AirmailChevron } from "@/components/redesign/ornaments";
+import { NEUTRAL, fs } from "@/components/redesign/constants";
+import Envelope, { ReportSheet } from "@/components/social/Envelope";
+import { Face } from "@/components/social/SocialMarks";
+import FollowByHandle, { workerMessage } from "@/components/social/FollowByHandle";
+import Requests from "@/components/social/Requests";
+import ActivityList from "@/components/social/ActivityList";
+import PostcardCard from "@/components/social/PostcardCard";
+import InviteButton from "@/components/passport/InviteButton";
+import PostcardCompose from "@/components/passport/PostcardCompose";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
 
-// One line per thing that happened to you — the activity the dot announces.
-function activityLine(a) {
-  const who = a.by.name || (a.by.handle ? `@${a.by.handle}` : "A traveler");
-  switch (a.type) {
-    case "follow_request": return { who, text: "asked to follow you" };
-    case "follow": return { who, text: "started following you" };
-    case "postcard": return { who, text: a.to_me ? `sent you a postcard${a.place ? ` from ${a.place}` : ""}` : `mailed a postcard${a.place ? ` from ${a.place}` : ""}` };
-    case "reaction": return { who, text: `stamped ${a.reactions.join(" · ")}${a.photo ? ` on your photo${a.stamp ? ` from ${a.stamp}` : ""}` : a.stamp ? ` on ${a.stamp}` : " on your passport"}` };
-    case "signature": return { who, text: a.photo
-      ? `${a.doodle && !a.body ? "doodled on" : "commented on"} your photo${a.stamp ? ` from ${a.stamp}` : ""}${a.body ? `: “${a.body}”` : ""}`
-      : `${a.doodle && !a.body ? "left a doodle" : "signed"}${a.stamp ? ` your ${a.stamp} page` : " your passport"}${a.body ? `: “${a.body}”` : ""}` };
-    case "tag": return { who, text: `tagged you${a.place ? ` at ${a.place}` : ""} — were you there together?` };
-    default: return { who, text: "" };
-  }
+const SERIF = "'Instrument Serif', Georgia, serif";
+const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
+const COLUMN = "max-w-md md:max-w-2xl mx-auto px-4";
+const BLUE = NEUTRAL.airmailBlue;
+const GAP = 20;
+
+const lc = (v) => String(v ?? "").trim().replace(/^@+/, "").toLowerCase();
+
+/** @type {import('react').CSSProperties} */
+const KICKER = { margin: 0, fontFamily: MONO, fontSize: fs(10), fontWeight: 500, letterSpacing: ".16em", lineHeight: 1.2, textTransform: "uppercase", color: BLUE };
+
+// The masthead on the page, then the full-bleed chevron (Mailbox L28-41).
+function Masthead({ onPostcard = undefined, addressable = false }) {
+  return (
+    <>
+      <div aria-hidden="true" style={{ height: 12 }} />
+      <header className={COLUMN} style={{ paddingTop: 12, paddingBottom: 12 }}>
+        <div style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".2em", lineHeight: 1.2, textTransform: "uppercase", color: NEUTRAL.stamp }}>Globeskimmers · Mailbox</div>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 12, marginTop: 4 }}>
+          <h1 style={{ margin: 0, minWidth: 0, flex: "1 1 200px", fontFamily: SERIF, fontSize: fs(30), fontWeight: 400, lineHeight: 1.04, color: NEUTRAL.ink }}>
+            Where your <em style={{ fontStyle: "italic", color: BLUE }}>circle</em> has been
+          </h1>
+          {onPostcard ? (
+            <button type="button" onClick={onPostcard}
+              style={{ flex: "none", display: "flex", alignItems: "center", gap: 8, minHeight: 44, padding: "0 16px", borderRadius: 999, border: addressable ? 0 : `1px solid ${BLUE}`, background: addressable ? NEUTRAL.stamp : "transparent", font: "inherit", fontSize: fs(13), fontWeight: 600, color: addressable ? NEUTRAL.white : BLUE, cursor: "pointer" }}>
+              <Mail size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
+              Postcard
+            </button>
+          ) : null}
+        </div>
+      </header>
+      <AirmailChevron height={5} />
+    </>
+  );
 }
 
-const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
-const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
-const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657", RULE = "rgba(22,17,13,.12)";
-const TEAL = "#0E7C86", STAMP = "#B0472F", IVORY = "#FFFCF7", SOFT = "#F6F0E4", GREEN = "#2E6B4E";
-const fs = (px) => `calc(${px}px * var(--fs, 1))`;
-
-const when = (iso) => {
-  const d = new Date(iso); const days = Math.floor((Date.now() - d.getTime()) / 864e5);
-  if (days <= 0) return "today"; if (days === 1) return "yesterday"; if (days < 7) return `${days}d ago`;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-};
-
-export default function MailboxPage() {
-  const navigate = useNavigate();
-  const { socialTier, refreshSocialTier } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState([]);
-  const [me, setMe] = useState(null);           // my handle (null until claimed)
-  const [lists, setLists] = useState({ followers: [], following: [], requests: [] });
-  const [handleDraft, setHandleDraft] = useState("");
+// Claim your @username, right here (it used to live two taps away). Today's flow: the age
+// gate first when the worker asks (the OS age range, else the birthday), suggestions when the
+// name is taken.
+function ClaimCard({ onClaimed, style = undefined }) {
+  const { refreshSocialTier } = useAuth();
+  const [draft, setDraft] = useState("");
+  const [sugs, setSugs] = useState([]);
+  const [needYear, setNeedYear] = useState(false);
+  const [year, setYear] = useState("");
   const [busy, setBusy] = useState(false);
-  const [compose, setCompose] = useState(false);
-  const [activity, setActivity] = useState([]);
-  // Claim-your-@username, right here (it used to live two taps away).
-  const [claimDraft, setClaimDraft] = useState("");
-  const [claimSugs, setClaimSugs] = useState([]);
-  const [claimNeedYear, setClaimNeedYear] = useState(false);
-  const [claimYear, setClaimYear] = useState("");
-  const [claimBusy, setClaimBusy] = useState(false);
 
   const claim = async () => {
-    const want = claimDraft.trim().toLowerCase();
-    if (!want) return;
-    setClaimBusy(true);
-    if (claimNeedYear) {
-      const dob = splitDob(claimYear);
-      if (!dob) { setClaimBusy(false); showToast("Enter your full birthday", "error"); return; }
+    const want = draft.trim().toLowerCase();
+    if (!want || busy) return;
+    setBusy(true);
+    if (needYear) {
+      const dob = splitDob(year);
+      if (!dob) { setBusy(false); showToast("Enter your full birthday", "error"); return; }
       const { error: yErr } = await setAgeGate(dob.year, dob.md);
-      if (yErr && yErr !== "age_required") { setClaimBusy(false); showToast(yErr, "error"); return; }
-      setClaimNeedYear(false);
+      if (yErr && yErr !== "age_required") { setBusy(false); showToast(yErr, "error"); return; }
+      setNeedYear(false);
       refreshSocialTier(); // a teen sees the hold, an under-13 the freeze, right away
     }
     const { handle: h, suggestions, error } = await setHandle(want);
-    setClaimBusy(false);
+    setBusy(false);
     if (error === "age_required") {
       const osYear = birthYearFromRange(await readOsAgeRange());
       if (osYear) { const { error: aErr } = await setAgeGate(osYear); if (!aErr) { refreshSocialTier(); claim(); return; } }
-      setClaimNeedYear(true); showToast("One thing first — your birthday", "success"); return;
+      setNeedYear(true); showToast("One thing first — your birthday", "success"); return;
     }
-    setClaimSugs(error ? (suggestions || []) : []);
-    if (error) { showToast(error, "error"); return; }
-    setMe(h); setClaimDraft("");
-    showToast(`You're @${h} — friends can find you now`, "success");
+    setSugs(error ? (suggestions || []) : []);
+    if (error) { showToast(workerMessage(error, "That username didn’t work. Try another."), "error"); return; }
+    setDraft("");
+    showToast(`You’re @${h} — your circle can find you now`, "success");
+    onClaimed(h);
   };
+
+  const field = { flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 4, minHeight: 44, padding: "0 12px", borderRadius: 12, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}` };
+  const ready = draft.length >= 3 && (!needYear || !!splitDob(year));
+  return (
+    <section aria-label="Claim your @username" style={{ padding: 16, background: NEUTRAL.cream, border: `1px solid ${NEUTRAL.creamRule}`, borderRadius: 16, ...style }}>
+      <h2 style={{ margin: 0, fontSize: fs(14), fontWeight: 700, lineHeight: 1.3, color: NEUTRAL.ink }}>Claim your @username</h2>
+      <p style={{ margin: "2px 0 0", fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}>It’s how your circle finds you, follows you, and sends you postcards.</p>
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <label style={field}>
+          <span aria-hidden="true" style={{ fontWeight: 700, color: NEUTRAL.ink3 }}>@</span>
+          <span className="sr-only">Choose your username</span>
+          <input value={draft} onChange={(e) => setDraft(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20))}
+            placeholder="yourname" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            onKeyDown={(e) => { if (e.key === "Enter") claim(); }}
+            style={{ flex: 1, minWidth: 0, height: 42, border: 0, background: "transparent", outline: "none", font: "inherit", fontSize: fs(14), color: NEUTRAL.ink }} />
+        </label>
+        <button type="button" onClick={claim} aria-disabled={!ready || busy || undefined} aria-busy={busy || undefined}
+          style={{ flex: "none", minHeight: 44, padding: "0 16px", borderRadius: 12, border: 0, background: BLUE, font: "inherit", fontSize: fs(13.5), fontWeight: 600, color: NEUTRAL.white, opacity: ready && !busy ? 1 : 0.55, cursor: ready && !busy ? "pointer" : "default" }}>
+          {busy ? "One moment…" : "Claim"}
+        </button>
+      </div>
+      {needYear ? (
+        <div style={{ marginTop: 10 }}>
+          <label htmlFor="gs-mb-birth-year" style={{ display: "block", fontSize: fs(12.5), fontWeight: 600, color: NEUTRAL.ink }}>One thing first — your birthday</label>
+          <p style={{ margin: "1px 0 0", fontSize: fs(11.5), color: NEUTRAL.ink3 }}>Asked once, never shown.</p>
+          <input id="gs-mb-birth-year" type="date" value={year} onChange={(e) => setYear(e.target.value)} autoComplete="bday"
+            min="1900-01-01" max={new Date().toISOString().slice(0, 10)}
+            style={{ marginTop: 6, width: 190, maxWidth: "100%", height: 44, boxSizing: "border-box", padding: "0 12px", borderRadius: 12, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, fontSize: fs(14), outline: "none" }} />
+        </div>
+      ) : null}
+      {sugs.length ? (
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 10 }}>
+          <span style={{ fontSize: fs(11.5), color: NEUTRAL.ink3 }}>Free right now:</span>
+          {sugs.map((sug) => (
+            <button key={sug} type="button" onClick={() => { setDraft(sug); setSugs([]); }}
+              style={{ minHeight: 44, padding: "0 12px", borderRadius: 999, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, font: "inherit", fontSize: fs(12.5), fontWeight: 600, color: NEUTRAL.ink, cursor: "pointer" }}>
+              @{sug}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+// 'Your circle · 18' with up to five faces (your inner circle first, then the newest),
+// opening the Circle screen (Mailbox L211-221). Hidden while nobody is on either side.
+function CircleRow({ circle, style = undefined }) {
+  const counts = circle.counts || {};
+  if (circle.status !== "ready" || (!counts.youFollow && !counts.followYou)) return null;
+  const seen = new Set();
+  const faces = [...(circle.mutual || []), ...(circle.acc || []), ...(circle.fol || [])].filter((p) => {
+    const k = String(p.user_id ?? p.handle ?? "");
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).slice(0, 5);
+  return (
+    <Link to={createPageUrl("Circle")}
+      style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 56, boxSizing: "border-box", padding: "0 12px 0 16px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16, textDecoration: "none", ...style }}>
+      <span style={{ flex: 1, minWidth: 0, fontSize: fs(15), fontWeight: 600, lineHeight: 1.3, color: NEUTRAL.ink }}>
+        Your circle{counts.youFollow ? <span style={{ fontFamily: MONO, fontSize: fs(11), fontWeight: 500, letterSpacing: ".06em", color: NEUTRAL.ink3 }}> · {counts.youFollow}</span> : null}
+      </span>
+      <span aria-hidden="true" style={{ flex: "none", display: "flex", alignItems: "center" }}>
+        {faces.map((p, i) => (
+          <Face key={String(p.user_id ?? p.handle)} name={p.name} handle={p.handle} avatar={p.avatar} cloth={p.cloth} size={24} style={{ marginLeft: i ? -7 : 0 }} />
+        ))}
+      </span>
+      <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
+    </Link>
+  );
+}
+
+function MailboxBody() {
+  const navigate = useNavigate();
+  const { profile } = useAuth();
+  const circle = useCircle();
+  const [feed, setFeed] = useState(null);        // { rows, held, error } once read
+  const [me, setMe] = useState({ loaded: false, handle: null });
+  const [activity, setActivity] = useState([]);
+  const [compose, setCompose] = useState(false);
+  const [reporting, setReporting] = useState(null);
+  const [myName, setMyName] = useState(null);   // for a postcard's address line
+
+  useEffect(() => {
+    let gone = false;
+    getSocialProfile().then((sp) => { if (!gone) setMyName(sp.profile?.display_name || null); });
+    return () => { gone = true; };
+  }, []);
 
   const load = async () => {
-    const [f, l, h, u] = await Promise.all([socialFeed(), socialFollow("list"), getHandle(), socialUnread({ mark: true })]);
-    setRows(f.rows); setMe(h.handle); setActivity(u.activity || []);
-    if (l.data) setLists({ followers: l.data.followers || [], following: l.data.following || [], requests: l.data.requests || [] });
-    setLoading(false);
+    // Opening the Mailbox marks the activity read, which clears the nav dot.
+    const [f, h, u] = await Promise.all([socialFeed(), getHandle(), socialUnread({ mark: true })]);
+    setFeed(f);
+    setMe({ loaded: true, handle: h.handle || null });
+    setActivity(u.activity || []);
   };
   useEffect(() => { load(); }, []);
+  const retry = () => { setFeed(null); load(); };
 
-  const follow = async () => {
-    const h = handleDraft.trim().replace(/^@/, "");
-    if (!h) return;
-    setBusy(true);
-    const { data, error } = await socialFollow("follow", { handle: h });
-    setBusy(false);
-    if (error) { showToast(error, "error"); return; }
-    setHandleDraft("");
-    showToast(data.status === "pending" ? `Asked to follow @${data.handle} — they approve first` : `Following @${data.handle}`, "success");
-    load();
+  const blocked = circle.blockedHandles || new Set();
+  const rows = feed && !feed.error ? (feed.rows || []).filter((r) => !blocked.has(lc(r?.by?.handle))) : [];
+  const counts = circle.counts || {};
+  const addressable = (circle.acc || []).some((r) => r.handle) || (counts.followYou || 0) > 0;
+  const emptyFeed = !!feed && !feed.error && !feed.held && rows.length === 0;
+  const openFrom = (to) => navigate(to === "passport" ? createPageUrl("Passport") : `${createPageUrl("Circle")}?tab=followers`);
+
+  const answer = (op) => async (row) => {
+    const res = op === "accept" ? await circle.accept(row) : await circle.decline(row);
+    if (!res.ok) showToast(workerMessage(res.error, "That didn’t go through. Try again."), "error");
+    else if (op === "accept") showToast(row?.handle ? `@${lc(row.handle)} follows you now` : "They follow you now", "success");
+    return res;
   };
-  const respond = async (user_id, op) => { await socialFollow(op, { user_id }); load(); };
-  const unfollow = async (user_id) => { await socialFollow("unfollow", { user_id }); load(); };
 
-  // 13–17: the whole social page is the hold note (founder, 2026-10-11).
+  return (
+    <div>
+      <Masthead onPostcard={() => setCompose(true)} addressable={addressable} />
+      <div className={COLUMN}>
+        <FollowByHandle onFollowed={() => load()} style={{ marginTop: 16 }} />
+        {!emptyFeed ? <InviteButton style={{ marginTop: 8 }} /> : null}
+        {me.loaded && !me.handle ? <ClaimCard onClaimed={(h) => setMe({ loaded: true, handle: h })} style={{ marginTop: GAP }} /> : null}
+        <ActivityList items={activity} onOpen={openFrom} style={{ marginTop: GAP }} />
+        {circle.status === "ready" && circle.requests?.length ? (
+          <Requests rows={circle.requests} onAccept={answer("accept")} onDecline={answer("decline")} style={{ marginTop: GAP }} />
+        ) : null}
+
+        <section aria-label="Where your circle has been" style={{ marginTop: GAP }}>
+          {!feed ? (
+            <>
+              <span className="sr-only" role="status">Loading your mailbox</span>
+              {[0, 1].map((i) => (
+                <div key={i} aria-hidden="true" className="animate-pulse motion-reduce:animate-none"
+                  style={{ height: 112, marginTop: i ? 12 : 0, borderRadius: 14, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}` }} />
+              ))}
+            </>
+          ) : feed.held ? (
+            <TeenHoldNote />
+          ) : feed.error ? (
+            <div style={{ padding: 16, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16 }}>
+              <p style={{ margin: 0, fontSize: fs(14), lineHeight: 1.4, color: NEUTRAL.ink2 }}>Couldn’t load your mailbox.</p>
+              <button type="button" onClick={retry}
+                style={{ marginTop: 10, minHeight: 44, padding: "0 16px", borderRadius: 14, background: "transparent", border: `1px solid ${BLUE}`, font: "inherit", fontSize: fs(14), fontWeight: 600, color: BLUE, cursor: "pointer" }}>
+                Try again
+              </button>
+            </div>
+          ) : rows.length === 0 ? (
+            <div style={{ padding: "24px 20px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 18, textAlign: "center" }}>
+              <MailboxIcon size={40} strokeWidth={1.6} color={BLUE} aria-hidden="true" focusable="false" style={{ display: "block", margin: "0 auto" }} />
+              <p style={{ margin: "10px 0 0", fontFamily: SERIF, fontSize: fs(20), lineHeight: 1.2, color: NEUTRAL.ink }}>
+                An empty mailbox, <em style={{ fontStyle: "italic", color: BLUE }}>for now</em>
+              </p>
+              <p style={{ margin: "6px auto 0", maxWidth: "34ch", fontSize: fs(13), lineHeight: 1.5, color: NEUTRAL.ink2 }}>
+                Follow a friend by their @username and their new stamps land here: where they went, when, and whether it’s verified.
+              </p>
+              <InviteButton style={{ marginTop: 16 }} />
+            </div>
+          ) : (
+            <>
+              <h2 style={KICKER}>From your circle · newest first</h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+                {rows.map((r, i) => (r.type === "postcard" ? (
+                  <PostcardCard key={`pc-${r.created_at}-${i}`} row={r} me={me.handle} meName={myName || profile?.first_name || null} onReport={setReporting} />
+                ) : (
+                  <Envelope key={`st-${r.created_at}-${i}`} row={r} variant="full" me={me.handle} onReport={setReporting} />
+                )))}
+              </div>
+            </>
+          )}
+        </section>
+
+        <CircleRow circle={circle} style={{ marginTop: 16 }} />
+      </div>
+
+      <ReportSheet row={reporting} me={me.handle} onClose={() => setReporting(null)} />
+      <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={load}
+        following={circle.acc || []} followerCount={counts.followYou ?? null} blocked={circle.blocked} />
+    </div>
+  );
+}
+
+export default function MailboxPage() {
+  const { socialTier, socialTierReady } = useAuth();
+  // Nothing social until the age tier is known; a 13-17 account keeps the masthead and the
+  // chevron with the hold note, and the circle isn't read for them.
+  if (!socialTierReady || socialTier === "blocked" || socialTier === "confirm") return <Masthead />;
   if (socialTier === "teen") {
     return (
-      <div className="min-h-screen pb-28" style={{ background: IVORY }}>
-        <div className="max-w-md md:max-w-2xl mx-auto px-4 pt-6">
-          <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: STAMP }}>Globeskimmers · Mailbox</div>
-          <h1 style={{ fontFamily: SERIF, fontSize: fs(28), color: INK, lineHeight: 1.05, marginTop: 4 }}>Where your people went</h1>
-          <TeenHoldNote className="mt-4" />
-        </div>
+      <div>
+        <Masthead />
+        <div className={COLUMN}><div style={{ marginTop: 16 }}><TeenHoldNote /></div></div>
       </div>
     );
   }
-
-  return (
-    <div className="min-h-screen pb-28" style={{ background: IVORY }}>
-      {/* md:max-w-2xl (2026-10-10): on iPad this page sat in a phone-width
-          column with empty cream on both sides — Apple's 13" screenshots
-          made it look unfinished. Phones are untouched. */}
-      <div className="max-w-md md:max-w-2xl mx-auto px-4 pt-6">
-        <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: STAMP }}>Globeskimmers · Mailbox</div>
-        <div className="flex items-end justify-between gap-3">
-          <h1 style={{ fontFamily: SERIF, fontSize: fs(28), color: INK, lineHeight: 1.05, marginTop: 4 }}>Where your people went</h1>
-          <button type="button" onClick={() => setCompose(true)} className="flex-none rounded-full px-4 py-2 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12.5) }}>
-            ✉️ Postcard
-          </button>
-        </div>
-
-        {/* Follow by handle */}
-        <div className="flex gap-2 mt-4">
-          <div className="flex-1 flex items-center rounded-xl px-3 h-12" style={{ border: `1px solid ${RULE}`, background: "#fff" }}>
-            <span style={{ color: INK3, fontWeight: 700 }}>@</span>
-            <input value={handleDraft} onChange={(e) => setHandleDraft(e.target.value.toLowerCase().replace(/[^a-z0-9_@]/g, "").slice(0, 21))}
-              placeholder="follow a friend by username" aria-label="Follow by username" autoCapitalize="none" autoCorrect="off"
-              className="flex-1 outline-none bg-transparent pl-1" style={{ fontSize: fs(14) }} onKeyDown={(e) => e.key === "Enter" && follow()} />
-          </div>
-          <button type="button" onClick={follow} disabled={busy || !handleDraft.trim()} aria-label="Follow"
-            className="h-12 w-12 rounded-xl flex items-center justify-center disabled:opacity-50" style={{ background: TEAL, color: "#fff" }}>
-            {busy ? <Loader2 size={17} className="animate-spin" /> : <UserPlus size={17} />}
-          </button>
-        </div>
-        {!me && !loading && (
-          <div className="mt-4 rounded-[16px] p-3.5" style={{ background: "#FFFBF0", border: "1px solid #EAD9AE" }}>
-            <p style={{ fontSize: fs(13.5), color: INK, fontWeight: 700 }}>Claim your @username</p>
-            <p style={{ fontSize: fs(12), color: INK2, marginTop: 2 }}>It&rsquo;s how friends find you, follow you, and send you postcards.</p>
-            <div className="flex gap-2 mt-2.5 items-center">
-              <div className="flex-1 min-w-0 flex items-center rounded-xl px-3 h-11" style={{ border: `1px solid ${RULE}`, background: "#fff" }}>
-                <span style={{ color: INK3, fontWeight: 700 }}>@</span>
-                <input value={claimDraft} onChange={(e) => setClaimDraft(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20))}
-                  placeholder="yourname" aria-label="Choose your username" autoCapitalize="none" autoCorrect="off"
-                  className="flex-1 min-w-0 outline-none bg-transparent pl-1" style={{ fontSize: fs(14) }} onKeyDown={(e) => e.key === "Enter" && claim()} />
-              </div>
-              <button type="button" onClick={claim} disabled={claimBusy || claimDraft.length < 3 || (claimNeedYear && !splitDob(claimYear))}
-                className="flex-none h-11 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL, color: "#fff", fontSize: fs(13) }}>
-                {claimBusy ? "…" : "Claim"}
-              </button>
-            </div>
-            {claimNeedYear && (
-              <div className="mt-2.5">
-                <label htmlFor="gs-mb-birth-year" style={{ display: "block", fontSize: fs(12.5), color: INK, fontWeight: 600 }}>One thing first — your birthday</label>
-                <p style={{ fontSize: fs(11.5), color: INK3, marginTop: 1 }}>Asked once, never shown.</p>
-                <input id="gs-mb-birth-year" type="date" value={claimYear} onChange={(e) => setClaimYear(e.target.value)} autoComplete="bday"
-                  min="1900-01-01" max={new Date().toISOString().slice(0, 10)}
-                  className="mt-1.5 w-44 h-11 rounded-xl px-3 outline-none" style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(14) }} />
-              </div>
-            )}
-            {claimSugs.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2 items-center">
-                <span style={{ color: INK3, fontSize: fs(11.5) }}>Free right now:</span>
-                {claimSugs.map((sug) => (
-                  <button key={sug} type="button" onClick={() => { setClaimDraft(sug); setClaimSugs([]); }} className="rounded-full px-3 py-1"
-                    style={{ border: `1px solid ${RULE}`, background: "#fff", fontSize: fs(12.5), fontWeight: 600, color: INK }}>@{sug}</button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-        <InviteButton compact />
-
-        {/* What happened to you — the activity behind the Mailbox dot */}
-        {activity.length > 0 && (
-          <div className="mt-5">
-            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".16em", color: "#8A5410" }}>
-              On your passport{activity.some((a) => a.unread) ? ` · ${activity.filter((a) => a.unread).length} new` : ""}
-            </div>
-            <div className="mt-2 rounded-[16px] overflow-hidden" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
-              {activity.slice(0, 12).map((a, i) => {
-                const { who, text } = activityLine(a);
-                const goes = a.type === "reaction" || a.type === "signature" || a.type === "tag";
-                return (
-                  <button key={i} type="button" onClick={goes ? () => navigate(createPageUrl("Passport")) : undefined} disabled={!goes}
-                    className="w-full text-left flex items-start gap-2.5 px-3.5 py-2.5"
-                    style={{ borderTop: i ? `1px solid ${RULE}` : "none", background: a.unread ? "#FFFBF0" : "#fff", cursor: goes ? "pointer" : "default" }}>
-                    <span aria-label={a.unread ? "new" : undefined} className="flex-none rounded-full" style={{ width: 8, height: 8, marginTop: 6, background: a.unread ? "#E0533C" : "transparent" }} />
-                    <span className="flex-1" style={{ fontSize: fs(13), color: INK2, lineHeight: 1.4 }}>
-                      <b style={{ color: INK }}>{who}</b>{a.by.verified ? <OfficialSeal size={11} tier={a.by.seal || "burgundy"} /> : null} {text}
-                    </span>
-                    <span className="flex-none" style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, marginTop: 2 }}>{when(a.at)}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Requests (teen approval) */}
-        {lists.requests.length > 0 && (
-          <div className="mt-5">
-            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".16em", color: "#8A5410" }}>Wants to follow you</div>
-            {lists.requests.map((r) => (
-              <div key={r.user_id} className="flex items-center gap-2 rounded-[14px] px-3 py-2.5 mt-2" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
-                <span className="flex-1 truncate" style={{ fontSize: fs(13.5), color: INK, fontWeight: 600 }}>{r.name || (r.handle ? `@${r.handle}` : "A traveler")}{r.verified ? <OfficialSeal size={12} tier={r.seal || "burgundy"} /> : null}</span>
-                <button type="button" onClick={() => respond(r.user_id, "accept")} className="rounded-lg px-3 py-1.5 font-semibold" style={{ background: GREEN, color: "#fff", fontSize: fs(12) }}>Allow</button>
-                <button type="button" onClick={() => respond(r.user_id, "decline")} className="rounded-lg px-3 py-1.5 font-semibold" style={{ background: SOFT, color: INK2, fontSize: fs(12) }}>Not now</button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* The feed */}
-        <div className="mt-6">
-          {loading ? (
-            <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin" style={{ color: STAMP }} /></div>
-          ) : rows.length === 0 ? (
-            <div className="rounded-[18px] p-6 text-center" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
-              <div style={{ fontSize: 40 }}>📬</div>
-              <p style={{ fontFamily: SERIF, fontSize: fs(19), color: INK, marginTop: 6 }}>An empty mailbox, for now</p>
-              <p style={{ color: INK2, fontSize: fs(13), lineHeight: 1.5, marginTop: 6, maxWidth: "34ch", marginInline: "auto" }}>
-                Follow a friend by their @username and their new stamps land here — where they went, when, and whether it&apos;s verified.
-              </p>
-            </div>
-          ) : (
-            rows.map((r, i) => r.type === "postcard" ? (
-              <div key={i} className="rounded-[14px] overflow-hidden mt-3 first:mt-0" style={{ background: "#FFFDF6", border: "1px solid #E4DAC4", boxShadow: "0 8px 18px -14px rgba(22,17,13,.4)" }}>
-                <img src={r.photo} alt={r.place ? `Postcard from ${r.place}` : "A postcard"} loading="lazy" style={{ width: "100%", aspectRatio: "3 / 2", objectFit: "cover", display: "block" }} />
-                <div className="px-4 py-3">
-                  {r.message && <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(17), color: INK, lineHeight: 1.3 }}>&ldquo;{r.message}&rdquo;</div>}
-                  {(r.dish || r.place) && (
-                    <div style={{ fontSize: fs(12.5), color: INK2, marginTop: r.message ? 5 : 0 }}>
-                      {r.dish ? <b>{r.dish}</b> : null}{r.dish && r.place ? " · " : ""}{r.place || ""}
-                    </div>
-                  )}
-                  <div className="flex items-baseline gap-2 mt-2">
-                    <span style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, letterSpacing: ".04em" }}>
-                      FROM {r.by.name || (r.by.handle ? `@${r.by.handle}` : "A TRAVELER")}{r.city ? ` · ${String(r.city).toUpperCase()}` : ""}{r.to_me ? " · TO YOU" : ""}
-                    </span>
-                    <span className="ml-auto flex-none" style={{ fontFamily: MONO, fontSize: fs(10), color: INK3 }}>{when(r.created_at)}</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div key={i} className="rounded-[16px] px-4 py-3 mt-2 first:mt-0" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
-                <div className="flex items-baseline gap-2">
-                  <span className="truncate" style={{ fontWeight: 700, fontSize: fs(13.5), color: INK }}>{r.by.name || (r.by.handle ? `@${r.by.handle}` : "A traveler")}</span>
-                  <span className="flex-none ml-auto" style={{ fontFamily: MONO, fontSize: fs(10), color: INK3 }}>{when(r.created_at)}</span>
-                </div>
-                <div style={{ fontFamily: SERIF, fontSize: fs(18), color: INK, lineHeight: 1.2, marginTop: 3 }}>
-                  {r.kind === "airport" ? "landed at " : "stamped "}<b>{r.name}</b>
-                  {r.verified && <span title="Verified visit" style={{ color: GREEN, marginLeft: 6, fontSize: fs(14) }}>✓</span>}
-                </div>
-                <div style={{ fontFamily: MONO, fontSize: fs(10.5), color: INK3, marginTop: 3, letterSpacing: ".03em" }}>
-                  {[r.city, r.country].filter(Boolean).join(", ").toUpperCase()}
-                  {r.film ? `  ·  FILMED HERE: ${String(r.film.title || "").toUpperCase()}` : ""}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Following list */}
-        <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={load} following={lists.following} followerCount={lists.followers.length} />
-
-        {lists.following.length > 0 && (
-          <div className="mt-7">
-            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".16em", color: "#8A5410" }}>Following · {lists.following.length}</div>
-            <div className="flex gap-1.5 flex-wrap mt-2">
-              {lists.following.map((f) => (
-                <button key={f.user_id} type="button" onClick={() => unfollow(f.user_id)} title="Tap to unfollow"
-                  className="rounded-full px-3 py-1.5" style={{ background: SOFT, border: `1px solid ${RULE}`, fontSize: fs(12), color: INK2, fontWeight: 600 }}>
-                  {f.name || (f.handle ? `@${f.handle}` : "traveler")}{f.verified ? <OfficialSeal size={12} tier={f.seal || "burgundy"} /> : null}{f.status === "pending" ? " · pending" : ""}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return <MailboxBody />;
 }
