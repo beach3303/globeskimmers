@@ -16,6 +16,7 @@ Branch `new-look` (worktree `gs-new-look`). Updated 2026-10-14. **Nothing on thi
 | S5 | Mailbox in airmail stock; postcards drawn like postcards | `32812d3`…`3e88bc7` |
 | S6 | "Your circle" wording across Passport, Settings and stamps; trunk on your own passport only | `18a0ff3`…`b608e75` |
 | S18 | Integration: `stamping-v2` merged in, checked, fixed | `d642f95`, `e8dc0b4`, `1199f05` |
+| Box | The postcard box: every postcard sent to you, kept (founder, 2026-10-14) | `53d4d5f`, `7650530`, `e747556` |
 
 ## S18: what the merge brought, and what changed after it
 
@@ -49,16 +50,19 @@ Settings, own Passport, Eat, Coffee, Things to Do and its place sheet, Convenien
 ## Open, for the founder
 
 1. Home's circle shelf: a stamp card beside a postcard stretches to the postcard's height and
-   leaves white space (the compact card has no stamp art, per Home-Boxes L80-89). Top-align the
-   cards (uneven heights), or print the stamp in the compact card?
+   leaves white space (the compact card has no stamp art, per Home-Boxes L80-89). A: top-align the
+   cards (uneven heights). B: print the stamp on a cream plate where a postcard has its photo
+   (recommended). Both were rendered for the founder on 2026-10-14; nothing is committed for either.
+2. The postcard box keeps cards addressed to you. Cards sent to everyone who follows someone stay
+   in the feed; a Keep button could save those into the box too.
 
 ## How it reaches phones, in order
 
 1. Not while a store build is in review: iOS 1.0.4, and Play 1.0.8 if it has been submitted.
 2. On the founder's go, merge `new-look` into `stamping-v2`, then `main`. The push deploys the
-   worker, which carries this branch's three worker commits (B10, finder honesty fields:
-   `244ebee` money rows, `a77322a` weather fetch time and dates, `5cf7d8d` convenience 24 h).
-   Probe the worker.
+   worker, which carries this branch's four worker commits: three for B10, finder honesty fields
+   (`244ebee` money rows, `a77322a` weather fetch time and dates, `5cf7d8d` convenience 24 h),
+   and `53d4d5f`, `POST /postcards/box`. Probe the worker, including `/postcards/box`.
 3. Then the OTA (`npm run ota`, run by the founder). Never before the worker deploy and probe.
 
 Backend items, each on the founder's go. The new look already works without them, with honest
