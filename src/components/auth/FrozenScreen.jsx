@@ -1,12 +1,13 @@
 // FrozenScreen — the whole app for an account whose birthday is under 13
 // (founder, 2026-10-11: freeze at once, purge after 7 days, access-only
 // appeal). Rendered by App.jsx in place of every route while the worker's age
-// gate answers tier 'blocked'. Its words match the worker (go-live, 2026-10-13):
-// the passport is hidden and every stamp, post and send is refused; the
-// worker's freezeSweep deletes the content after FREEZE_PURGE_DAYS (guestbook
-// tips stay, anonymized, and are public under the first name until then; the
-// sign-in account and age record stay for an appeal), or the person deletes
-// the whole account now. The appeal restores access only — nothing else.
+// gate answers tier 'blocked'. Its words match the worker (go-live, 2026-10-13;
+// round 2): the passport is hidden and every stamp, post and send is refused;
+// the worker's freezeSweep deletes the content after FREEZE_PURGE_DAYS,
+// guestbook notes included (until then they show without a name; the sign-in
+// account and age record stay for an appeal), or the person deletes the whole
+// account now, which deletes the guestbook notes too. The appeal restores
+// access only — nothing else.
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { showToast } from '@/components/Toast';
@@ -46,7 +47,7 @@ export default function FrozenScreen() {
         <h1 style={{ fontFamily: SERIF, fontSize: fs(26), lineHeight: 1.1, color: INK, marginTop: 6 }}>GlobeSkimmers isn&rsquo;t available on this account</h1>
         <p style={{ fontSize: fs(14.5), lineHeight: 1.5, color: INK2, marginTop: 12 }}>
           The birthday on this account is under 13, so the account is frozen: its passport is hidden, and nothing can be stamped, posted or sent.
-          After 7 days, its stamps, photos, postcards and posts are deleted for good; its guestbook tips stay up without a name. You can delete the account now instead.
+          After 7 days, its stamps, photos, postcards, posts and guestbook notes are deleted for good. You can delete the account now instead.
         </p>
         <button type="button" onClick={erase} disabled={busy}
           className="mt-5 w-full rounded-xl py-3 font-semibold disabled:opacity-60"
