@@ -741,7 +741,7 @@ export default function AttractionExtras({ a, formatDistance = undefined, isTabl
           <BookOpen size={14} color={w.iconInk} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
           Guestbook
         </h3>
-        {link !== undefined && <Guestbook entityType="attraction" entityId={link.gid || pid} entityName={name} />}
+        {link !== undefined && <Guestbook entityType="attraction" entityId={link.gid || pid} entityName={name} world={w} />}
       </section>
     </div>
   );

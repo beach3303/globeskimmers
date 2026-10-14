@@ -4,31 +4,47 @@
 // Warm notes, NOT reviews: the worker posts kind notes right away and holds any
 // note that reads as negative for an admin to read first (only its author sees
 // it meanwhile, marked as waiting).
-import { useEffect, useState, useCallback } from "react";
+//
+// The new look (plan F6): lucide line icons and no emoji in the prompts, the
+// entry lines and the toasts; people's own words are untouched. Its buttons are
+// outlines, never a solid (a card's one solid is its Directions). world, optional
+// (a WORLD row or key), prints the lines, icons and ink in that world; without it
+// the guestbook stays neutral (the shared inks). A list that fails to load says so
+// and offers a retry: it never reads as an empty guestbook. Signing waits for the
+// age read when AuthContext reports it (socialTierReady false), so a teen never
+// glimpses the sign button.
+import { useEffect, useState, useCallback, useId } from "react";
+import { Binoculars, Brush, EyeOff, HandHeart, Heart, Hourglass, Lightbulb, Lock, PenLine, X } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
 import { DoodlePad } from "@/components/passport/Blotter";
 import OwnerNoteSheet from "@/components/OwnerNoteSheet";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
+import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
+import { ChipRow, WorldChip, worldRow } from "@/components/finder/FinderControls";
+
+/** @typedef {import('react').CSSProperties} CSS */
+
+const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 
 const PROMPTS = [
-  { key: "tip", label: "💡 Tip for visitors", hint: "One thing you wish you'd known before you came…" },
-  { key: "favorite", label: "❤️ Favorite part", hint: "What did you love most about it?" },
-  { key: "musttry", label: "⭐ Don't miss", hint: "The one thing every visitor should see or do…" },
-  { key: "shoutout", label: "🙌 Shout-out", hint: "Thank someone who made your visit special…" },
-  { key: "story", label: "✍️ My memory", hint: "A moment from your visit you'll remember…" },
+  { key: "tip", label: "Tip for visitors", icon: Lightbulb, hint: "One thing you wish you'd known before you came…" },
+  { key: "favorite", label: "Favorite part", icon: Heart, hint: "What did you love most about it?" },
+  { key: "musttry", label: "Don't miss", icon: Binoculars, hint: "The one thing every visitor should see or do…" },
+  { key: "shoutout", label: "Shout-out", icon: HandHeart, hint: "Thank someone who made your visit special…" },
+  { key: "story", label: "My memory", icon: PenLine, hint: "A moment from your visit you'll remember…" },
 ];
-const PROMPT_LABEL = { ...Object.fromEntries(PROMPTS.map((p) => [p.key, p.label])), doodle: "✍️ Doodle" };
+const PROMPT_LABEL = { ...Object.fromEntries(PROMPTS.map((p) => [p.key, p.label])), doodle: "Doodle" };
 
-const HELD_TOAST = "Thank you! Our team takes a quick look before it posts 💛";
+const HELD_TOAST = "Thank you! Our team takes a quick look before it posts";
 // The worker's age gate answers 428 { error: "age_required", message }.
 const errText = (data, error) => (data?.error === "age_required" ? (data.message || "Add your birth year in Settings to sign guestbooks.") : error);
 
 function timeAgo(iso) {
   try {
     const d = new Date(iso), now = new Date();
-    const days = Math.floor((now - d) / 86400000);
+    const days = Math.floor((now.getTime() - d.getTime()) / 86400000);
     if (days <= 0) return "Today";
     if (days === 1) return "Yesterday";
     if (days < 30) return `${days}d ago`;
@@ -57,12 +73,48 @@ function resizePhoto(file, maxDim = 1280, quality = 0.82) {
   });
 }
 
-export default function Guestbook({ entityType = "place", entityId, entityName, onCount, startComposing = false }) {
-  const { user, profile, isAuthenticated, socialTier } = useAuth();
+// ── Looks ────────────────────────────────────────────────────────────────
+// A white box with the world line: the composer, the list, the empty and error states.
+/** @param {any} w @returns {CSS} */
+const box = (w) => ({ boxSizing: "border-box", background: NEUTRAL.white, border: `1px solid ${w.line}`, borderRadius: 16 });
+// The one strong action: an outline in the world ink (FinderEmptyState's action).
+/** @param {any} w @returns {CSS} */
+const outline = (w) => ({
+  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44, boxSizing: "border-box",
+  padding: "0 16px", borderRadius: 14, background: NEUTRAL.white, border: `1px solid ${w.ink}`, color: w.ink,
+  fontFamily: "inherit", fontSize: fs(14), lineHeight: 1.2, fontWeight: 600, textAlign: "center", cursor: "pointer",
+});
+// A quieter button: white with the world line and an ink-2 label.
+/** @param {any} w @returns {CSS} */
+const quiet = (w) => ({ ...outline(w), border: `1px solid ${w.line}`, color: NEUTRAL.ink2 });
+// A text button with a 44px target (Cancel, Edit, Delete, Report).
+/** @type {CSS} */
+const textButton = {
+  display: "inline-flex", alignItems: "center", minHeight: 44, minWidth: 44, padding: 0, background: "transparent", border: 0,
+  fontFamily: "inherit", fontSize: fs(12.5), lineHeight: 1.2, fontWeight: 600, color: NEUTRAL.ink3, textAlign: "left", cursor: "pointer",
+};
+// A 16px line icon that leads a button's label.
+const Lead = ({ icon: Icon, color }) => <Icon size={16} strokeWidth={2} color={color} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />;
+
+/**
+ * @param {{
+ *   entityType?: string, entityId: any, entityName?: string, onCount?: (n: number) => void,
+ *   startComposing?: boolean, world?: any,
+ * }} props
+ */
+export default function Guestbook({ entityType = "place", entityId, entityName = undefined, onCount = undefined, startComposing = false, world = undefined }) {
+  const { user, profile, isAuthenticated, socialTier, socialTierReady } = useAuth();
+  // Without a world: NEUTRAL_WORLD, the shared inks on white.
+  const w = worldRow(world);
+  const composeId = useId();
+  // Today's AuthContext has no socialTierReady (undefined): the tier is treated as read.
+  const tierReady = socialTierReady !== false;
   const [entries, setEntries] = useState([]);
-  const publicCount = entries.filter((e) => !e.review_status || e.review_status === "ok").length;
-  useEffect(() => { onCount?.(publicCount); }, [publicCount]); // eslint-disable-line react-hooks/exhaustive-deps
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const publicCount = entries.filter((e) => !e.review_status || e.review_status === "ok").length;
+  // Only a count that was read: never a 0 while loading or after a failed read.
+  useEffect(() => { if (!loading && !loadError) onCount?.(publicCount); }, [publicCount, loading, loadError]);
   const [composing, setComposing] = useState(startComposing);
   const [prompt, setPrompt] = useState("tip");
   const [body, setBody] = useState("");
@@ -79,7 +131,10 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
   const load = useCallback(async () => {
     if (!entityId) return;
     setLoading(true);
-    const { data } = await callWorker("guestbook/list", { entity_id: String(entityId) });
+    setLoadError(false);
+    const { data, error } = await callWorker("guestbook/list", { entity_id: String(entityId) });
+    // A failed read is not an empty guestbook.
+    if (error && !Array.isArray(data?.entries)) { setLoadError(true); setLoading(false); return; }
     setEntries(Array.isArray(data?.entries) ? data.entries : []);
     setLoading(false);
   }, [entityId]);
@@ -109,11 +164,10 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
     if (data?.entry) {
       setEntries((prev) => [{ ...data.entry, review_status: data.held ? "held" : "ok" }, ...prev]);
       setPad(false); resetCompose();
-      showToast(data.held ? HELD_TOAST : "Doodle signed in ✍️", "success");
+      showToast(data.held ? HELD_TOAST : "Doodle signed in", "success");
     }
   };
 
-  
   const submit = async () => {
     const text = body.trim();
     if (text.length < 2) { showToast("Write a short note first", "error"); return; }
@@ -128,7 +182,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
     if (data?.entry) {
       setEntries((prev) => [{ ...data.entry, review_status: data.held ? "held" : "ok" }, ...prev]);
       resetCompose();
-      showToast(data.held ? HELD_TOAST : "Thank you for helping the next visitor 💛", "success");
+      showToast(data.held ? HELD_TOAST : "Thank you for helping the next visitor", "success");
     }
   };
 
@@ -158,83 +212,86 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
     showToast("Thank you — our team will take a look.", "success");
   };
 
+  /** @type {CSS} */
+  const field = /** @type {CSS} */ ({
+    "--gs-ph": NEUTRAL.ink3, display: "block", width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 12,
+    border: `1px solid ${w.line}`, background: NEUTRAL.white, fontFamily: "inherit", fontSize: fs(14), lineHeight: 1.45, color: NEUTRAL.ink, resize: "none",
+  });
+
   return (
-    <div className="space-y-3">
+    <div style={/** @type {CSS} */ ({ display: "flex", flexDirection: "column", gap: 12, ...(world ? { "--gs-focus": w.ink } : {}) })}>
       {/* Sign CTA — a 13–17 account reads, never posts (founder, 2026-10-11) */}
-      {isAuthenticated && socialTier === "teen" ? (
+      {isAuthenticated && !tierReady ? null : isAuthenticated && socialTier === "teen" ? (
         <TeenHoldNote />
       ) : isAuthenticated ? (
         !composing ? (
-          <div className="flex gap-2">
-            <button
-              onClick={() => setComposing(true)}
-              className="flex-1 py-3 rounded-xl font-semibold text-white text-[calc(15px*var(--fs))]"
-              style={{ background: "linear-gradient(90deg,#667eea,#764ba2)" }}
-            >✍️ Sign the guestbook</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={() => setComposing(true)} style={{ ...outline(w), flex: "1 1 auto" }}>
+              <Lead icon={PenLine} color={w.ink} />
+              Sign the guestbook
+            </button>
             {/* Every guestbook takes a doodle too (founder, 2026-10-03). */}
-            <button
-              onClick={() => setPad(true)} disabled={doodleBusy}
-              className="flex-none px-4 py-3 rounded-xl font-semibold text-[calc(15px*var(--fs))] border border-purple-300 bg-white text-purple-700 disabled:opacity-60"
-            >{doodleBusy ? "Posting…" : "🎨 Doodle"}</button>
+            <button type="button" onClick={() => setPad(true)} disabled={doodleBusy}
+              style={{ ...quiet(w), flex: "none", opacity: doodleBusy ? 0.6 : 1 }}>
+              <Lead icon={Brush} color={w.iconInk} />
+              {doodleBusy ? "Posting…" : "Doodle"}
+            </button>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-md p-4 space-y-3">
+          <div role="group" aria-labelledby={composeId} style={{ ...box(w), padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
             {/* Header with an always-visible exit — so you can back out of writing
                 even while the keyboard covers the Cancel button below. */}
-            <div className="flex items-center justify-between">
-              <span className="text-[calc(13.5px*var(--fs))] font-bold text-gray-800">Leave a kind note</span>
-              <button
-                onClick={resetCompose}
-                aria-label="Close"
-                className="w-8 h-8 -mr-1 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 text-[calc(18px*var(--fs))] leading-none"
-              >✕</button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span id={composeId} style={{ fontFamily: SERIF, fontSize: fs(20), lineHeight: 1.2, color: NEUTRAL.ink }}>Leave a kind note</span>
+              <button type="button" onClick={resetCompose} aria-label="Close"
+                style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, margin: "-10px -12px -10px 0", padding: 0, borderRadius: 999, background: "transparent", border: 0, cursor: "pointer" }}>
+                <X size={18} strokeWidth={2} color={NEUTRAL.ink3} aria-hidden="true" focusable="false" />
+              </button>
             </div>
-            <p className="text-[calc(13px*var(--fs))] text-gray-600 leading-snug -mt-1">
-              Help future visitors — share a tip, or tell us your favorite part{entityName ? ` of ${entityName}` : ""} 💛
+            <p style={{ marginTop: -6, fontSize: fs(13), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
+              Help future visitors — share a tip, or tell us your favorite part{entityName ? ` of ${entityName}` : ""}
             </p>
-            <div className="flex flex-wrap gap-2">
+            <ChipRow wrap label="Kind of note">
               {PROMPTS.map((p) => (
-                <button
-                  key={p.key}
-                  onClick={() => setPrompt(p.key)}
-                  className={`px-3 py-1.5 rounded-full text-[calc(12.5px*var(--fs))] font-semibold border ${
-                    prompt === p.key ? "bg-purple-600 text-white border-purple-600" : "bg-white text-gray-700 border-gray-300"
-                  }`}
-                >{p.label}</button>
+                <WorldChip key={p.key} world={w} icon={p.icon} label={p.label} active={prompt === p.key} clearable={false} onClick={() => setPrompt(p.key)} />
               ))}
-            </div>
+            </ChipRow>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               maxLength={1000}
               rows={3}
+              aria-label="Your note"
               placeholder={PROMPTS.find((p) => p.key === prompt)?.hint || "Leave a tip…"}
-              className="w-full p-3 rounded-lg border border-gray-300 text-[calc(14px*var(--fs))] resize-none focus:outline-none focus:border-purple-500"
+              className="placeholder:text-[color:var(--gs-ph)]"
+              style={field}
             />
 
             {/* Doodles instead of photos (founder, 2026-10-02): draw with a
                 finger — a note, both, or the doodle alone. Photos belong in
                 your own albums, postcards and the city collection. */}
             <button type="button" onClick={() => setPad(true)} disabled={doodleBusy}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-gray-300 text-[calc(12.5px*var(--fs))] text-gray-600 hover:border-purple-400">
-              ✍️ {doodleBusy ? "Posting your doodle…" : "Doodle with your finger instead"}
+              style={{ ...quiet(w), alignSelf: "flex-start", justifyContent: "flex-start", textAlign: "left", border: `1px dashed ${w.line}`, padding: "0 12px", fontSize: fs(12.5), opacity: doodleBusy ? 0.6 : 1 }}>
+              <Lead icon={Brush} color={w.iconInk} />
+              {doodleBusy ? "Posting your doodle…" : "Doodle with your finger instead"}
             </button>
 
             {homeCity && (
-              <label className="flex items-center gap-2 text-[calc(12.5px*var(--fs))] text-gray-600">
-                <input type="checkbox" checked={showCity} onChange={(e) => setShowCity(e.target.checked)} />
+              <label style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 44, fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink2, cursor: "pointer" }}>
+                <input type="checkbox" checked={showCity} onChange={(e) => setShowCity(e.target.checked)}
+                  style={{ width: 18, height: 18, margin: 0, flexShrink: 0, accentColor: w.ink }} />
                 Show &ldquo;from {homeCity}&rdquo; on my note
               </label>
             )}
-            <p className="text-[calc(10.5px*var(--fs))] text-gray-400 leading-snug">
+            <p style={{ fontSize: fs(11), lineHeight: 1.45, color: NEUTRAL.ink3 }}>
               Kind notes post right away; if a note sounds like a complaint, our team reads it first.
               Notes &amp; doodles post publicly. By posting you grant Globeskimmers a license to display them.
             </p>
-            <div className="flex items-center justify-between">
-              <span className="text-[calc(11px*var(--fs))] text-gray-400">{body.length}/1000 · posts publicly as {displayName}</span>
-              <div className="flex gap-2">
-                <button onClick={resetCompose} className="px-4 py-2 rounded-lg text-[calc(13px*var(--fs))] text-gray-600">Cancel</button>
-                <button onClick={submit} disabled={busy} className="px-5 py-2 rounded-lg font-semibold text-white text-[calc(13px*var(--fs))] disabled:opacity-50" style={{ background: "#17A38F" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", columnGap: 12 }}>
+              <span style={{ fontSize: fs(11), lineHeight: 1.35, color: NEUTRAL.ink3 }}>{body.length}/1000 · posts publicly as {displayName}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+                <button type="button" onClick={resetCompose} style={{ ...textButton, justifyContent: "center", padding: "0 8px", fontSize: fs(13), color: NEUTRAL.ink2 }}>Cancel</button>
+                <button type="button" onClick={submit} disabled={busy} style={{ ...outline(w), padding: "0 20px", opacity: busy ? 0.5 : 1 }}>
                   {busy ? "Signing…" : "Sign"}
                 </button>
               </div>
@@ -242,104 +299,112 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
           </div>
         )
       ) : (
-        <div className="bg-white rounded-xl shadow-md p-5 text-center text-[calc(14px*var(--fs))] text-gray-600">
+        <div style={{ ...box(w), padding: "16px 20px", textAlign: "center", fontSize: fs(14), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
           Sign in to leave a tip or your favorite part for the next traveler.
         </div>
       )}
 
       {/* Entries */}
       {loading ? (
-        <div className="text-center text-gray-400 text-[calc(13px*var(--fs))] py-6">Loading notes…</div>
+        <p role="status" style={{ padding: "20px 0", textAlign: "center", fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink3 }}>Loading notes…</p>
+      ) : loadError ? (
+        <div role="status" style={{ ...box(w), padding: "20px", textAlign: "center" }}>
+          <p style={{ fontSize: fs(14), lineHeight: 1.45, color: NEUTRAL.ink2 }}>We couldn&rsquo;t load this guestbook.</p>
+          <button type="button" onClick={load} style={{ ...outline(w), marginTop: 12 }}>Try again</button>
+        </div>
       ) : entries.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-md p-8 text-center">
-          <p className="text-[calc(15px*var(--fs))] text-gray-600">No notes yet — be the first to share a tip or your favorite part{entityName ? ` of ${entityName}` : ""} 💛</p>
+        <div style={{ ...box(w), padding: "24px 20px", textAlign: "center" }}>
+          <p style={{ fontSize: fs(14.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>No notes yet — be the first to share a tip or your favorite part{entityName ? ` of ${entityName}` : ""}</p>
         </div>
       ) : (
-        entries.map((e) => {
-          const mine = !!e.mine || (!!user && e.user_id === user.id);
-          return (
-            <div key={e.id} className="bg-white rounded-xl shadow-md p-4">
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-[calc(13px*var(--fs))] flex-shrink-0">
+        <ul style={{ ...box(w), padding: "0 16px" }}>
+          {entries.map((e, i) => {
+            const mine = !!e.mine || (!!user && e.user_id === user.id);
+            const doodleOpen = openDoodle === e.id;
+            return (
+              <li key={e.id} style={{ padding: "14px 0", borderTop: i ? `1px solid ${w.line}` : 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span aria-hidden="true" style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 999, background: w.wash, color: w.washInk, fontFamily: SERIF, fontSize: fs(16), lineHeight: 1 }}>
                     {(e.display_name || "?").charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-bold text-[calc(14px*var(--fs))] text-gray-900 truncate">
-                      {e.display_name}{e.home_city ? <span className="font-normal text-gray-500"> from {e.home_city}</span> : null}
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: fs(14), lineHeight: 1.3, fontWeight: 700, color: NEUTRAL.ink, overflowWrap: "anywhere" }}>
+                      {e.display_name}{e.home_city ? <span style={{ fontWeight: 400, color: NEUTRAL.ink3 }}> from {e.home_city}</span> : null}
                     </p>
-                    <p className="text-[calc(11px*var(--fs))] text-gray-400">
-                      {PROMPT_LABEL[e.prompt_type] || "💡 Tip"} · {timeAgo(e.created_at)}{e.edited_at ? " · edited" : ""}{e.verified_visit ? " · ✓ visited" : ""}
+                    <p style={{ marginTop: 1, fontSize: fs(11.5), lineHeight: 1.35, color: NEUTRAL.ink3 }}>
+                      {PROMPT_LABEL[e.prompt_type] || "Tip"} · {timeAgo(e.created_at)}{e.edited_at ? " · edited" : ""}{e.verified_visit ? " · visited" : ""}
                     </p>
                   </div>
                 </div>
-              </div>
-              {mine && e.review_status === "held" && (
-                <p className="mt-1 mb-1 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[calc(11.5px*var(--fs))] text-amber-900">
-                  ⏳ Waiting for a quick look from our team — only you can see this for now.
-                </p>
-              )}
-              {mine && e.review_status === "rejected" && (
-                <p className="mt-1 mb-1 rounded-lg bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-[calc(11.5px*var(--fs))] text-gray-600">
-                  Our team kept this note private — only you can see it. You can edit or delete it.
-                </p>
-              )}
-              {editId === e.id ? (
-                <div className="mt-2">
-                  <textarea value={editBody} onChange={(ev) => setEditBody(ev.target.value)} rows={3} maxLength={1000}
-                    className="w-full p-2 rounded-lg border border-gray-300 text-[calc(14px*var(--fs))] resize-none" />
-                  <div className="flex gap-2 justify-end mt-1">
-                    <button onClick={() => setEditId(null)} className="px-3 py-1 text-[calc(12px*var(--fs))] text-gray-500">Cancel</button>
-                    <button onClick={() => saveEdit(e.id)} disabled={busy} className="px-3 py-1 rounded-lg text-white text-[calc(12px*var(--fs))]" style={{ background: "#17A38F" }}>Save</button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <p className="text-[calc(14px*var(--fs))] text-gray-700 leading-relaxed mt-1">{e.body}</p>
-                  {e.photo_url && e.is_doodle && (
-                    <button type="button" onClick={() => setOpenDoodle(openDoodle === e.id ? null : e.id)}
-                      aria-label={openDoodle === e.id ? "Shrink the doodle" : "Enlarge the doodle"}
-                      className="mt-2 block rounded-lg border border-amber-200 bg-[#FFFDF6] overflow-hidden transition-all"
-                      style={{ width: openDoodle === e.id ? "100%" : 112 }}>
-                      <img src={e.photo_url} alt={`A doodle by ${e.display_name}`} loading="lazy"
-                        className="w-full object-contain" style={{ maxHeight: openDoodle === e.id ? 360 : 84 }} />
-                      <span className="block text-[calc(10px*var(--fs))] text-gray-400 py-0.5">
-                        {openDoodle === e.id ? "tap to shrink" : "tap to enlarge"}
-                      </span>
-                    </button>
-                  )}
-                  {e.photo_url && !e.is_doodle && (
-                    <img
-                      src={e.photo_url} alt="" loading="lazy"
-                      onClick={() => setLightbox(e.photo_url)}
-                      className="mt-2 rounded-lg w-full max-h-72 object-cover border border-gray-100 cursor-zoom-in"
-                    />
-                  )}
-                </>
-              )}
-              <div className="flex gap-4 mt-2 text-[calc(11.5px*var(--fs))]">
-                {mine ? (
-                  <>
-                    <button onClick={() => { setEditId(e.id); setEditBody(e.body); }} className="text-gray-500 hover:text-purple-600">Edit</button>
-                    <button onClick={() => remove(e.id)} className="text-gray-500 hover:text-red-600">Delete</button>
-                  </>
-                ) : (
-                  <button onClick={() => report(e.id)} className="text-gray-400 hover:text-red-600">Report</button>
+                {mine && e.review_status === "held" && (
+                  <p style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 8, borderRadius: 10, background: NEUTRAL.cream, border: `1px solid ${NEUTRAL.creamRule}`, padding: "6px 10px", fontSize: fs(11.5), lineHeight: 1.4, color: NEUTRAL.ink2 }}>
+                    <Hourglass size={13} strokeWidth={2} color={NEUTRAL.ink3} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <span>Waiting for a quick look from our team — only you can see this for now.</span>
+                  </p>
                 )}
-              </div>
-            </div>
-          );
-        })
+                {mine && e.review_status === "rejected" && (
+                  <p style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 8, borderRadius: 10, background: NEUTRAL.ivory2, border: `1px solid ${NEUTRAL.lobbyLine}`, padding: "6px 10px", fontSize: fs(11.5), lineHeight: 1.4, color: NEUTRAL.ink2 }}>
+                    <EyeOff size={13} strokeWidth={2} color={NEUTRAL.ink3} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <span>Our team kept this note private — only you can see it. You can edit or delete it.</span>
+                  </p>
+                )}
+                {editId === e.id ? (
+                  <div style={{ marginTop: 8 }}>
+                    <textarea value={editBody} onChange={(ev) => setEditBody(ev.target.value)} rows={3} maxLength={1000} aria-label="Edit your note"
+                      className="placeholder:text-[color:var(--gs-ph)]" style={field} />
+                    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, marginTop: 6 }}>
+                      <button type="button" onClick={() => setEditId(null)} style={{ ...textButton, justifyContent: "center", padding: "0 8px", color: NEUTRAL.ink2 }}>Cancel</button>
+                      <button type="button" onClick={() => saveEdit(e.id)} disabled={busy} style={{ ...outline(w), opacity: busy ? 0.5 : 1 }}>Save</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p style={{ marginTop: 8, fontSize: fs(14), lineHeight: 1.55, color: NEUTRAL.ink2, overflowWrap: "anywhere" }}>{e.body}</p>
+                    {e.photo_url && e.is_doodle && (
+                      <button type="button" onClick={() => setOpenDoodle(doodleOpen ? null : e.id)}
+                        aria-label={doodleOpen ? "Shrink the doodle" : "Enlarge the doodle"}
+                        style={{ display: "block", minHeight: 44, marginTop: 8, padding: 0, width: doodleOpen ? "100%" : 112, borderRadius: 12, border: `1px solid ${w.line}`, background: NEUTRAL.cream, overflow: "hidden", cursor: "pointer", transition: "width .2s" }}>
+                        <img src={e.photo_url} alt={`A doodle by ${e.display_name}`} loading="lazy"
+                          style={{ display: "block", width: "100%", objectFit: "contain", maxHeight: doodleOpen ? 360 : 84 }} />
+                        <span style={{ display: "block", padding: "2px 0 3px", fontSize: fs(10.5), lineHeight: 1.3, color: NEUTRAL.ink3 }}>
+                          {doodleOpen ? "tap to shrink" : "tap to enlarge"}
+                        </span>
+                      </button>
+                    )}
+                    {e.photo_url && !e.is_doodle && (
+                      <button type="button" onClick={() => setLightbox(e.photo_url)} aria-label="Open the photo"
+                        style={{ display: "block", width: "100%", marginTop: 8, padding: 0, background: "transparent", border: 0, cursor: "zoom-in" }}>
+                        <img src={e.photo_url} alt="" loading="lazy"
+                          style={{ display: "block", width: "100%", maxHeight: 288, objectFit: "cover", borderRadius: 12, border: `1px solid ${w.line}` }} />
+                      </button>
+                    )}
+                  </>
+                )}
+                <div style={{ display: "flex", gap: 8, margin: "-2px 0 -12px" }}>
+                  {mine ? (
+                    <>
+                      <button type="button" onClick={() => { setEditId(e.id); setEditBody(e.body); }} aria-label="Edit your note" style={textButton}>Edit</button>
+                      <button type="button" onClick={() => remove(e.id)} aria-label="Delete your note" style={textButton}>Delete</button>
+                    </>
+                  ) : (
+                    <button type="button" onClick={() => report(e.id)} aria-label={`Report the note by ${e.display_name || "a traveler"}`} style={textButton}>Report</button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
-      {/* Lightbox */}
       {/* The quiet door for anything not kind (founder, 2026-10-05): a private
           message to the owner — never posted; screened before delivery. */}
-      {isAuthenticated && !composing && socialTier !== "teen" && (
+      {isAuthenticated && tierReady && !composing && socialTier !== "teen" && (
         <button type="button" onClick={() => setOwnerNote(true)}
-          className="w-full mt-2 py-1.5 text-center"
-          style={{ fontSize: "calc(12px*var(--fs))", color: "#736657", fontFamily: "inherit" }}>
-          🔒 Something for the owner&rsquo;s ears? Send a private message
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 44, padding: "4px 0", background: "transparent", border: 0, fontFamily: "inherit", fontSize: fs(12), lineHeight: 1.4, color: NEUTRAL.ink3, textAlign: "center", cursor: "pointer" }}>
+          <span>
+            <Lock size={13} strokeWidth={2} color={NEUTRAL.ink3} aria-hidden="true" focusable="false" style={{ display: "inline", verticalAlign: "-2px", marginRight: 6 }} />
+            Something for the owner&rsquo;s ears? Send a private message
+          </span>
         </button>
       )}
       {ownerNote && (
@@ -352,9 +417,15 @@ export default function Guestbook({ entityType = "place", entityId, entityName, 
           starter="I was here!" />
       )}
 
+      {/* Lightbox */}
       {lightbox && (
-        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
+        <div role="dialog" aria-modal="true" aria-label="Photo" onClick={() => setLightbox(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: rgba(NEUTRAL.black, 0.85) }}>
           <img src={lightbox} alt="" className="max-w-full max-h-full rounded-lg" />
+          <button type="button" autoFocus onClick={() => setLightbox(null)} aria-label="Close the photo"
+            style={{ position: "absolute", top: "calc(env(safe-area-inset-top, 0px) + 8px)", right: 8, display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, padding: 0, borderRadius: 999, background: rgba(NEUTRAL.black, 0.4), border: 0, cursor: "pointer" }}>
+            <X size={20} strokeWidth={2} color={NEUTRAL.white} aria-hidden="true" focusable="false" />
+          </button>
         </div>
       )}
     </div>
