@@ -16325,8 +16325,9 @@ async function freezeSweep(env, now = new Date()) {
 // only the accounts someone happens to open (go-live review, 2026-10-13: an
 // unopened account kept a known child's data with no end date). Birth data
 // decides, never the stored tier (decision 3); a stored tier the birthday no
-// longer supports (an Australian 13–15 stored 'blocked', a teen who turned
-// 18) is corrected the way gbSocialProfile corrects it on read. The rows are
+// longer supports (an Australian 13–15 stored 'blocked', a 12-year-old who
+// has turned 13) is corrected the way gbSocialProfile corrects it on read —
+// a clock already running is left to freezeSweep's own check. The rows are
 // read first and then worked, at most FREEZE_SCAN_MAX writes a run (the rest
 // the next day). A failed read changes nothing.
 const FREEZE_SCAN_MAX = 50;
