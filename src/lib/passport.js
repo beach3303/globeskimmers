@@ -208,15 +208,37 @@ export async function setSocialProfile(patch) {
   return { profile: data?.profile || null, error: error || data?.error || null };
 }
 // Follow graph (Social P2): op 'list' | 'follow' {handle} | 'unfollow' |
-// 'accept'/'decline' {user_id}. The feed is reverse-chron stamps of accepted
-// followees whose visibility allows it.
+// 'accept'/'decline' {user_id} | 'unblock' {user_id}. The feed is reverse-chron
+// stamps of accepted followees whose visibility allows it.
 export async function socialFollow(op, args) {
   const { data, error } = await callWorker('social/follow', { op, ...(args || {}) });
   return { data, error: error || data?.error || null };
 }
+// held: 'teen' when the worker holds this reader's social doors (13-17); the
+// rows are then empty by rule, not because nothing happened. rows is [] on an
+// error too, so read error before treating an empty feed as a quiet week.
 export async function socialFeed() {
   const { data, error } = await callWorker('social/feed', {});
-  return { rows: data?.rows || [], error };
+  return { rows: data?.rows || [], held: data?.held || null, error };
+}
+// Block a person by user id. Today's worker records the block, silences tags
+// and postcards both ways and kills that person's pending invites to you;
+// backend item B8 also ends the follow edges and filters feeds, and advertises
+// it as features 'block_v2' on op:list (useCircle's canBlock).
+export async function blockUser(user_id) {
+  const id = String(user_id ?? '').trim();
+  if (!id) return { ok: false, data: null, error: 'user_id required' };
+  const { data, error } = await callWorker('social/block', { user_id: id });
+  const err = error || data?.error || null;
+  return { ok: !err && data?.ok === true, data, error: err };
+}
+// Lift a block you made (op 'unblock' deletes only your own block row). The
+// worker has supported it since 2026-10-10, so the Blocked list works today.
+export async function unblockUser(user_id) {
+  const id = String(user_id ?? '').trim();
+  if (!id) return { ok: false, data: null, error: 'user_id required' };
+  const { data, error } = await socialFollow('unblock', { user_id: id });
+  return { ok: !error && data?.ok === true, data, error };
 }
 // Birthday (MM-DD): read via getAgeGate's birth_md; set here ONCE — it is part
 // of the age now, so it locks like the year (founder, 2026-10-05). Completing
