@@ -42,6 +42,7 @@ import {
   UtensilsCrossed,
   X,
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { useLocation } from './LocationContext';
@@ -91,6 +92,20 @@ function savedLine(list) {
 // Search runs on more than 2 typed characters (spaces count, nothing is trimmed), but a
 // query of nothing but spaces is never sent.
 const searchable = (q) => q.length > 2 && q.trim() !== '';
+
+// What a failed "Explore where I am" says, by GeolocationPositionError code. The app has no
+// browser settings, so a denial on iOS and Android points to Settings instead.
+function gpsErrorText(error) {
+  const code = error?.code;
+  if (code === 1) {
+    return Capacitor.isNativePlatform()
+      ? 'Location access was denied. Turn on location for Globeskimmers in Settings, then try again.'
+      : 'Location access was denied. Please enable location permissions in your browser settings, then try again.';
+  }
+  if (code === 2) return 'Unable to determine your location. Please check your GPS/location settings and try again.';
+  if (code === 3) return 'Location request timed out. Please try again.';
+  return 'Unable to get your current location. Please try again or choose a location manually.';
+}
 
 const NO_RESULTS = 'No locations found. Please search for a specific address, landmark, or place.';
 const SEARCH_ERROR = 'Error searching. Please try again.';
@@ -306,6 +321,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
   const [searching, setSearching] = useState(false);
   const [savedLocations, setSavedLocations] = useState([]);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsError, setGpsError] = useState(''); // shown on the select page, above the button
   const [errorMessage, setErrorMessage] = useState('');
   const [picked, setPicked] = useState(null); // the search result "Now exploring" names
 
@@ -330,6 +346,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
       setSearchResults([]);
       setSearching(false);
       setErrorMessage('');
+      setGpsError('');
       setPicked(null);
     }
   }, [isOpen]);
@@ -411,7 +428,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
   const handleUseCurrentLocation = async () => {
     if (gpsLoading) return; // busy: the button stays focusable, so it ignores taps instead of disabling
     setGpsLoading(true);
-    setErrorMessage('');
+    setGpsError('');
 
     try {
       // Don't pre-check permission - just try to get location
@@ -420,20 +437,8 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
       onClose();
     } catch (error) {
       console.error('Error using current location:', error);
-
-      // Show user-friendly error based on error type
-      if (error?.code === 1) {
-        // Permission denied
-        setErrorMessage('Location access was denied. Please enable location permissions in your browser settings, then try again.');
-      } else if (error?.code === 2) {
-        // Position unavailable
-        setErrorMessage('Unable to determine your location. Please check your GPS/location settings and try again.');
-      } else if (error?.code === 3) {
-        // Timeout
-        setErrorMessage('Location request timed out. Please try again.');
-      } else {
-        setErrorMessage('Unable to get your current location. Please try again or choose a location manually.');
-      }
+      // Shown beside the button it explains; the sheet stays open.
+      setGpsError(gpsErrorText(error));
     }
 
     setGpsLoading(false);
@@ -561,6 +566,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
           </span>
           <span aria-hidden="true" style={{ flex: 1, height: 1, background: K.rule }} />
         </div>
+        {gpsError ? <Note text={gpsError} style={{ marginBottom: 10 }} /> : null}
         {/* The board's only solid fill. While locating it stays full strength and
             focusable (aria-disabled, the handler ignores taps); the rows stay tappable. */}
         <button
