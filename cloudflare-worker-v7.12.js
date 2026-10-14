@@ -16160,7 +16160,10 @@ const gbTeenHold = (sp) => sp?.social_tier === 'teen' && (!TEEN_SOCIAL_ENABLED |
 const gbTeenHoldResp = () => jsonResponse({ error: 'Social features open at age 18 — your passport stays yours, private', code: 'teen_hold' }, 403);
 // 'confirm': nothing is stamped or posted until the month and day are in.
 const gbNeedsConfirm = (sp) => sp?.social_tier === 'confirm';
-const gbConfirmResp = () => jsonResponse({ error: 'confirm_birthday', code: 'confirm_birthday', message: 'Add the month and day of your birthday in Settings first' }, 403);
+// `error` is what builds from before the OTA show word for word, so it is
+// words; the code rides in `code`, which the new app reads first.
+const GB_CONFIRM_MSG = 'Add the month and day of your birthday in Settings first';
+const gbConfirmResp = () => jsonResponse({ error: GB_CONFIRM_MSG, code: 'confirm_birthday', message: GB_CONFIRM_MSG }, 403);
 // The social doors' one check: a held teen, or a birth year still to confirm.
 const gbAgeHeld = (sp) => gbNeedsConfirm(sp) || gbTeenHold(sp);
 const gbAgeHeldResp = (sp) => (gbNeedsConfirm(sp) ? gbConfirmResp() : gbTeenHoldResp());
@@ -16799,7 +16802,7 @@ const BL_TEEN_HOLD = 'Social features open at age 18 — your passport stays you
 const BL_FROZEN = "GlobeSkimmers isn't available on this account";
 const BL_AGE_UNKNOWN = 'Couldn’t check your account — try again';
 function blGateResp(gate) {
-  const code = gate === 'confirm_birthday' ? 'confirm_birthday' : gate === BL_TEEN_HOLD ? 'teen_hold' : gate === BL_FROZEN ? 'under_age' : gate === BL_AGE_UNKNOWN ? 'age_unknown' : null;
+  const code = gate === GB_CONFIRM_MSG ? 'confirm_birthday' : gate === BL_TEEN_HOLD ? 'teen_hold' : gate === BL_FROZEN ? 'under_age' : gate === BL_AGE_UNKNOWN ? 'age_unknown' : null;
   return jsonResponse({ error: gate, ...(code ? { code } : {}) }, gate === 'Not found' ? 404 : gate === BL_AGE_UNKNOWN ? 503 : 403);
 }
 async function blGate(env, user, share, opts) {
@@ -16821,7 +16824,7 @@ async function blGate(env, user, share, opts) {
     const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
     if (sp === undefined) return BL_AGE_UNKNOWN;
     if (sp?.social_tier === 'blocked') return BL_FROZEN;
-    if (gbNeedsConfirm(sp)) return 'confirm_birthday';
+    if (gbNeedsConfirm(sp)) return GB_CONFIRM_MSG;
     if (gbTeenHold(sp)) return BL_TEEN_HOLD;
     if (opts.identity && sp?.social_tier === 'teen') {
       const f = await gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${share.user_id}&status=eq.accepted&select=follower_id&limit=1`, {});
