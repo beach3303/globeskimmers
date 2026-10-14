@@ -31,8 +31,9 @@
 //
 // The sheet is a modal dialog: it is named by the page's title, focus moves into it on
 // open and on each page change and back to the opener on close, Tab stays inside it, and
-// Escape, a scrim tap, the global swipe-down or Android's back key close it. Closing is
-// instant.
+// Escape, a scrim tap or the global swipe-down close it. Android's back key goes back from
+// the saved and search pages, as the on-screen Back does, and closes it elsewhere. Closing
+// is instant.
 import React, { useState, useEffect, useLayoutEffect, useRef, useId } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
@@ -437,7 +438,8 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
   const bodyRef = useRef(null);
   const footerRef = useRef(null);
   const rowsRef = useRef(null); // the rows inside the sheet
-  // The page and layout now, for the ResizeObserver, which outlives a render.
+  // The page and layout now, for listeners that outlive a render (Android's back key, a
+  // late GPS fix, the ResizeObserver).
   const modeRef = useRef(mode);
   modeRef.current = mode;
   const layoutRef = useRef(layout);
@@ -450,9 +452,10 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
 
   useDismissable(isOpen, onClose);
 
-  // Android's back key closes the chooser, instead of leaving the finder under it or, on a
-  // cold open with no history, the app. Capacitor turns the key's own behaviour off only
-  // while a listener is registered, so it is added on open and removed on close (as
+  // Android's back key does what the on-screen controls do: Back on the saved and search
+  // pages, otherwise Close (instead of leaving the finder under the chooser or, on a cold
+  // open with no history, the app). Capacitor turns the key's own behaviour off only while
+  // a listener is registered, so it is added on open and removed on close (as
   // SuggestPlaceSection's useOverlayClose does).
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -460,7 +463,11 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
     if (!isOpen || Capacitor.getPlatform() !== 'android') return undefined;
     let handle = null;
     let gone = false;
-    Promise.resolve(App.addListener('backButton', () => closeRef.current?.()))
+    const onBack = () => {
+      if (modeRef.current === 'saved' || modeRef.current === 'search') setMode('select');
+      else closeRef.current?.();
+    };
+    Promise.resolve(App.addListener('backButton', onBack))
       .then((h) => { if (gone) h?.remove?.(); else handle = h; })
       .catch(() => { /* the key keeps its own behaviour */ });
     return () => {
@@ -486,6 +493,12 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
       setMode('select');
     }
   }, [isOpen]);
+
+  // A GPS error belongs to the attempt beside it: leaving the select page drops it, so
+  // coming back doesn't read an old denial out again.
+  useEffect(() => {
+    if (mode !== 'select') setGpsError('');
+  }, [mode]);
 
   useEffect(() => {
     if (searchable(searchQuery)) {
@@ -689,7 +702,10 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
       // Don't pre-check permission - just try to get location
       // The browser will prompt if needed
       await switchToCurrentLocation();
-      onClose();
+      // A fix that arrives after the traveler moved on to another page (typing a search,
+      // the saved list, the confirmation) doesn't close the chooser under them; a pick
+      // there still replaces it.
+      if (modeRef.current === 'select') onClose();
     } catch (error) {
       console.error('Error using current location:', error);
       // Shown beside the button it explains; the sheet stays open.
@@ -715,10 +731,12 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
     onClose();
   };
 
-  // Escape closes; Tab and Shift+Tab go round inside the dialog (focus on the dialog
-  // itself counts as before the first control).
+  // Escape closes (not while an input method is composing: Escape cancels the composition
+  // there); Tab and Shift+Tab go round inside the dialog (focus on the dialog itself counts
+  // as before the first control).
   const onKeyDown = (e) => {
     if (e.key === 'Escape') {
+      if (e.nativeEvent.isComposing || e.keyCode === 229) return;
       e.stopPropagation();
       onClose();
       return;
