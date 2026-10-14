@@ -1212,7 +1212,9 @@ function PassportInner() {
             {/* My luggage — the trunk of earned labels (founder, 2026-09-29:
                 passport keeps proof, the trunk keeps play). Derived from the
                 stamps above; the photo-real skin auto-upgrades from R2. */}
-            <Luggage stamps={stampsView} readOnly={readOnly || preview} />
+            {/* Only on your own passport: a visitor meets the owner's trunk on their visit
+                page, and the preview mirrors what visitors see. */}
+            {!readOnly && !preview && <Luggage stamps={stampsView} readOnly={false} />}
             {/* The photo packets — a friend's payload only carries reviewed
                 photos, so this shelf is safe on both views for free. */}
             <PhotoPackets stamps={stampsView} title={readOnly ? "Their photo packets" : "Photo packets"} owner={!readOnly && !preview} onChanged={load} social={!preview && blSlug ? { slug: blSlug, blotter, onBlotterChanged: refreshBlotter } : null} />
