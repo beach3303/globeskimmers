@@ -254,7 +254,8 @@ function TravelerWorld() {
           name={person.name}
           handle={person.handle}
           seal={person.verified ? person.seal || true : null}
-          place={person.country ? [person.country] : null}
+          // Home country always; the city only when they turned it on (Settings → Privacy).
+          place={person.city || person.country ? [person.city, person.country].filter(Boolean) : null}
           stats={world.stats}
           bio={world.bio || null}
           website={world.website || null}

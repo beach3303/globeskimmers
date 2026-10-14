@@ -2,7 +2,8 @@
 //
 //   getWorld({ handle, slug }) asks POST /social/world (backend item B3) and resolves one of:
 //     { state: 'world', ... }   their page. person { user_id, handle, name, avatar, cloth,
-//                               verified, seal, country }, relation { self, i_follow,
+//                               verified, seal, country, city (only if they turned it on) },
+//                               relation { self, i_follow,
 //                               follows_me, inner } and private always; when the passport is
 //                               visible to you, also slug, stamps, stats, luggage, flags,
 //                               gear and circle. fallback: true when it came from today's
@@ -42,6 +43,8 @@ function personOf(p) {
     verified: p.verified === true,
     seal: p.verified === true && p.seal ? String(p.seal) : null,
     country: text(p.country) || null,
+    // Their home city, sent only when they turned it on in Settings (founder, 2026-10-14).
+    city: text(p.city) || null,
   };
 }
 
@@ -75,7 +78,7 @@ async function fromPublic(slug) {
       private: false,
       slug,
       // holder_cloth: the owner's cloth (B2), so the page is bound in it even by share link.
-      person: { user_id: null, handle: null, name: holder && holder !== 'A traveler' ? holder : null, avatar: null, cloth: text(data.holder_cloth) || null, verified: false, seal: null, country: null },
+      person: { user_id: null, handle: null, name: holder && holder !== 'A traveler' ? holder : null, avatar: null, cloth: text(data.holder_cloth) || null, verified: false, seal: null, country: null, city: null },
       relation: null,
       stamps: data.stamps,
       stats: data.stats || null,

@@ -516,6 +516,7 @@ export default function SettingsPage() {
   const [homeCountry, setHomeCountry] = useState("");
   const [homeCity, setHomeCity] = useState("");
   const [showHomeCountryInfo, setShowHomeCountryInfo] = useState(false);
+  const [showHomeCity, setShowHomeCity] = useState(false); // visitors see your city too (Privacy)
   const [showHomeFlag, setShowHomeFlag] = useState(false);
   const [preferredCurrency, setPreferredCurrency] = useState("USD");
   // primary_banking_currency = currency of the bank account / card the user
@@ -566,6 +567,7 @@ export default function SettingsPage() {
     setPreferredTempScale(profile?.temp_unit === "C" ? "celsius" : "fahrenheit");
     setPreferredDistanceUnit(profile?.distance_unit === "mi" ? "miles" : "km");
     setShowHomeCountryInfo(!!profile?.show_home_country_info);
+    setShowHomeCity(!!profile?.show_home_city);
     setShowHomeFlag(!!profile?.show_home_flag);
     setLoading(false);
   }, [profile, authUser]);
@@ -966,6 +968,16 @@ export default function SettingsPage() {
                 desc="In the app they can't follow you, see your passport or send you postcards. They aren't told."
                 control={{ below: true, node: <BlockedTravelers blocked={social.blocked} onChanged={() => setSocialTick((t) => t + 1)} /> }}
                 last={false}
+              />
+            )}
+            {/* Where you live, for visitors (founder, 2026-10-14: "A plus a switch to turn on city"):
+                your country always, your city only when this is on. Shown once the column exists. */}
+            {profile && "show_home_city" in profile && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Show my home city on my page"
+                desc={showHomeCity && homeCity
+                  ? `Visitors see ${[homeCity, homeCountry].filter(Boolean).join(" · ")}`
+                  : homeCity ? `Visitors see ${homeCountry || "your country"} only` : "Set your home city above first. Visitors see your country only"}
+                control={{ node: <EdToggle on={showHomeCity} onClick={() => { const next = !showHomeCity; setShowHomeCity(next); persist({ show_home_city: next }); }} label="Show my home city on my page" /> }}
               />
             )}
             <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.culture.ink} title="Our promise" desc="Your stamps and photos are yours. We never sell your photos or your location history, and we never show ads to kids. Shared passports never reveal exact locations, and photos only appear to others after review."
