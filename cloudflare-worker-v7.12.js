@@ -16203,27 +16203,48 @@ const FREEZE_PURGE_DAYS = 7;
 const FREEZE_SWEEP_MAX = 5;        // purges per daily run (~60 subrequests each); the rest wait a day
 const gbUnderAge = (sp) => sp?.social_tier === 'blocked';
 const gbUnderAgeResp = () => jsonResponse({ error: "GlobeSkimmers isn't available on this account", code: 'under_age' }, 403);
-async function gbMarkFrozen(env, userId) {
-  const kv = env.GLOBESKIMMERS_KV; if (!kv || !userId) return;
+// Starts the purge clock (once). `now` is a parameter only for tests and the
+// daily scan; true when a new clock started.
+async function gbMarkFrozen(env, userId, now = new Date()) {
+  const kv = env.GLOBESKIMMERS_KV; if (!kv || !userId) return false;
   const k = `freeze:${userId}`;
-  if (await kv.get(k).catch(() => null)) return;
-  await kv.put(k, JSON.stringify({ at: new Date().toISOString() })).catch(() => {});
+  if (await kv.get(k).catch(() => null)) return false;
+  await kv.put(k, JSON.stringify({ at: now.toISOString() })).catch(() => {});
   await gbLogEvent(env, 'age_frozen', {}).catch(() => {});
+  return true;
 }
-// The birthday no longer says under 13 (a 12-year-old has turned 13, the
-// month and day were completed, an appeal): the purge clock stops.
-async function gbClearFrozen(env, userId) {
-  const kv = env.GLOBESKIMMERS_KV; if (!kv || !userId) return;
+// Was this birthday under 13 on the day the clock started? The purge is
+// judged on THAT day (go-live review, 2026-10-13): a child who simply grows
+// older inside the window — a 12-year-old who turns 13, a year-only 2014 at
+// New Year — keeps the clock, because data collected from a known under-13
+// doesn't become keepable at 13 (COPPA; teens plan §3: never quietly move an
+// under-13 to 13). Only a birthday that was never under 13 then — corrected
+// by an appeal, or completed with its month and day — stops it. A record
+// with no readable date is judged on today.
+function gbFrozenAsChild(rec, birthYear, birthMd, now = new Date()) {
+  const at = Date.parse(rec?.at || '');
+  return socialTierFor(birthYear, null, birthMd, Number.isFinite(at) ? new Date(at) : now) === 'blocked';
+}
+// Stops the purge clock unless the birthday shows the holder was under 13
+// when it started (gbFrozenAsChild). True when a clock was stopped.
+async function gbClearFrozen(env, userId, birthYear, birthMd) {
+  const kv = env.GLOBESKIMMERS_KV; if (!kv || !userId) return false;
   const k = `freeze:${userId}`;
-  const rec = await kv.get(k).catch(() => null);
-  if (!rec) return;
+  const raw = await kv.get(k).catch(() => null);
+  if (!raw) return false;
+  let rec = null;
+  try { rec = JSON.parse(raw); } catch { rec = null; }
+  if (gbFrozenAsChild(rec, birthYear, birthMd)) return false;
   await kv.delete(k).catch(() => {});
   await gbLogEvent(env, 'age_frozen_cleared', {}).catch(() => {});
+  return true;
 }
 // Daily: delete the content of accounts frozen longer than FREEZE_PURGE_DAYS.
-// Right before deleting, the age is checked AGAIN from the stored birthday;
-// an account that is no longer under 13 loses its marker instead. If the
-// check can't be made, nothing is deleted today. A purge with any failed step
+// Right before deleting, the stored birthday is checked AGAIN — as of the day
+// the account was frozen (gbFrozenAsChild): a marker whose birthday was never
+// under 13 then (an appeal, a completed month and day, no age record left)
+// is removed instead; a child who has since turned 13 is still cleaned up.
+// If the check can't be made, nothing is deleted today. A purge with any failed step
 // keeps its marker and is tried again tomorrow — purged_at is written only
 // when every step succeeded (the founder hears about a third failed day).
 async function freezeSweep(env, now = new Date()) {
@@ -16246,7 +16267,7 @@ async function freezeSweep(env, now = new Date()) {
           if (!q.ok) throw new Error(String(q.status));
           row = (await q.json())[0] || null;
         } catch { out.failed++; continue; }   // couldn't check the age: no delete today
-        if (socialTierFor(row?.birth_year, null, row?.birth_md, now) !== 'blocked') {
+        if (!gbFrozenAsChild(rec, row?.birth_year, row?.birth_md, now)) {
           await kv.delete(name).catch(() => {});
           out.cleared++;
           await gbLogEvent(env, 'age_frozen_cleared', {}).catch(() => {});
@@ -16327,7 +16348,7 @@ async function handleAdminAgeAppeal(request, env, ctx) {
     if (!w.ok) return jsonResponse({ error: 'Could not update' }, 502);
     if (!((await w.json().catch(() => [])) || []).length) return jsonResponse({ error: 'No age record for that user_id' }, 404);
     if (tier === 'blocked') await gbMarkFrozen(env, uid);
-    else await gbClearFrozen(env, uid);
+    else await gbClearFrozen(env, uid, b.birth_year, md);
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'age_appeal', { tier }));
     return jsonResponse({ ok: true, tier });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
@@ -16350,7 +16371,7 @@ async function gbSocialProfile(env, userId) {
   if (row?.birth_year) {
     const t = socialTierFor(row.birth_year, row.country_at_gate, row.birth_md);
     if (t === 'blocked') await gbMarkFrozen(env, userId);
-    else if (t && row.social_tier === 'blocked') await gbClearFrozen(env, userId);
+    else if (t && row.social_tier === 'blocked') await gbClearFrozen(env, userId, row.birth_year, row.birth_md);
     if (t && t !== row.social_tier) {
       row.social_tier = t;
       try { await gbRest(env, `social_profiles?user_id=eq.${userId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ social_tier: t, updated_at: new Date().toISOString() }) }); } catch { /* derived value still used this request */ }
@@ -16387,7 +16408,7 @@ async function handleSocialAge(request, env, ctx) {
       if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
       // Only a true under-13 starts the purge clock; anything else stops it.
       if (patch.social_tier === 'blocked') await gbMarkFrozen(env, user.id);
-      else if (mine?.birth_year) await gbClearFrozen(env, user.id);
+      else if (mine?.birth_year) await gbClearFrozen(env, user.id, mine.birth_year, md);
       if (ctx && mine?.birth_year) ctx.waitUntil(gbLogEvent(env, 'social_age_completed', { tier: patch.social_tier || null }));
       return jsonResponse({ set: !!mine?.birth_year, tier: patch.social_tier || mine?.social_tier || null, birth_md: md });
     }
