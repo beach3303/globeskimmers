@@ -48,8 +48,9 @@ function Envelope({ packet, onOpen }) {
   );
 }
 
-export default function PhotoPackets({ stamps, title = "Photo packets", owner = false, onChanged = null, social = null }) {
+export default function PhotoPackets({ stamps, title = "Photo packets", owner = false, onChanged = null, social = null, className = "max-w-md mx-auto px-4 mt-8" }) {
   // social: { slug, blotter, onBlotterChanged } — the per-photo guestbook inside an open album.
+  // className: the column (the profile passes its own, which widens on iPad).
   const packets = useMemo(() => derivePackets(stamps), [stamps]);
   const [open, setOpen] = useState(null); // { photos, index, city }
   // Add prints straight from a packet (founder, 2026-10-05): they land on the
@@ -79,7 +80,7 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
   };
   if (!packets.length) return null;
   return (
-    <div className="max-w-md mx-auto px-4 mt-8">
+    <div className={className}>
       <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: "#8A5410" }}>{title}</div>
       <div style={{ fontFamily: SERIF, fontSize: fs(22), color: "#16110D", lineHeight: 1.1 }}>Prints from every place</div>
       <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPick} />
