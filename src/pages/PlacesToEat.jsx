@@ -29,12 +29,11 @@
 //   ✅ Load more (20 at a time)
 // ============================================================================
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useId } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { sortByRating as rankByRating, keepCountry, nearFirst as nearFirstSplit, pinInstitutions } from "@/lib/searchRank";
 import { createPageUrl } from "@/utils";
-import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
@@ -48,14 +47,16 @@ import TravelerDishes from "@/components/finder/TravelerDishes";
 import { HereStamp } from "@/components/attraction/AttractionExtras";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
-import { MapPin, Clock, Moon, SlidersHorizontal, SearchX, AlertCircle, Coffee } from "lucide-react";
-import { TEAL_DEEP, WORLD } from "@/components/redesign/constants";
+import { MapPin, Clock, Moon, SlidersHorizontal, SearchX, AlertCircle, Coffee, Target, Check, Link2, Utensils, ExternalLink, X } from "lucide-react";
+import { WORLD, fs } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import FinderHeader from "@/components/finder/FinderHeader";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import FilterSheet from "@/components/finder/FilterSheet";
 import FallbackDisclaimer, { fallbackNoteKind } from "@/components/finder/FallbackDisclaimer";
 import { WorldSearch, WorldChip, ChipRow, ResultLine, WorldNote } from "@/components/finder/FinderControls";
+import { WorldCard, worldGrid, NumberMark, FactsLine, RatingFact, WorldTag, TagRow, CardKicker, CardName, QuietRows, ActionRow } from "@/components/finder/FinderCard";
+import { WorldStrip } from "@/components/finder/PhotoOrIcon";
 
 // iPad editorial design tokens (design handoff: "Places to Eat · iPad").
 const ED_SERIF = '"Instrument Serif", Georgia, serif';
@@ -76,6 +77,9 @@ function photoSrc(photo, maxWidth = 800) {
   if (photo.name) return `${WORKER_URL}/places/photo?name=${encodeURIComponent(photo.name)}&maxWidth=${maxWidth}`;
   return photo.full || photo.url || photo.thumbnail || null;
 }
+
+// The Eat world (Bordeaux plate, saffron accents): every colour on the page comes from it.
+const EAT = WORLD.eat;
 
 // ─── THEME ──────────────────────────────────────────────────────────────────
 const BLUE      = "#3B82F6";
@@ -511,16 +515,17 @@ function processRest(place, userLat, userLng, isLocal = true) {
   };
 }
 
-// ─── PHOTO CAROUSEL ──────────────────────────────────────────────────────────
-function PhotoCarousel({ photos=[], rank, badges=[], height=180 }) {
+// ─── PHOTO CAROUSEL (Eat.dc.html) ───────────────────────────────────────────
+// A 16:10 photo that swipes sideways, opens full screen on a tap, and carries the
+// card's serif numeral and a mono "2/5". No photos: the Bordeaux strip with the
+// numeral in its middle. While an owned place's photos are still being looked up:
+// a quiet 16:10 wash, so the card doesn't jump when they land.
+function PhotoCarousel({ photos=[], rank, name, pending=false }) {
   const [cur,setCur]=useState(0); const [errs,setErrs]=useState({}); const ref=useRef(null);
-  const H = typeof height==='number'?`calc(${height}px*var(--fs))`:height;
   const [lightbox,setLightbox]=useState(false);   // tap-to-enlarge full-screen viewer
   const [lbCur,setLbCur]=useState(0);
   const lbRef=useRef(null);
   const valid=photos.filter((_,i)=>!errs[i]);
-  const medalColors = ['#FFD700','#C0C0C0','#CD7F32'];
-  const rankLabel   = rank<=3 ? ['🥇','🥈','🥉'][rank-1] : `#${rank}`;
   // On open, jump the lightbox to the photo the user was viewing in the card.
   useEffect(()=>{
     if(lightbox && lbRef.current){
@@ -529,37 +534,39 @@ function PhotoCarousel({ photos=[], rank, badges=[], height=180 }) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[lightbox]);
+  if (!valid.length) {
+    if (pending) return <div aria-hidden="true" style={{aspectRatio:"16 / 10",background:EAT.wash}}/>;
+    return <WorldStrip world="eat"><NumberMark n={rank} world="eat" place="middle"/></WorldStrip>;
+  }
   return (
-    <div style={{position:"relative",background:"#F1F5F9"}}>
-      {valid.length>0?(
-        <div ref={ref} onScroll={()=>ref.current&&setCur(Math.round(ref.current.scrollLeft/ref.current.offsetWidth))} style={{display:"flex",overflowX:"auto",scrollSnapType:"x mandatory",scrollbarWidth:"none",height:H}}>
-          {valid.map((p,i)=><img key={i} src={p} loading={i===0?"eager":"lazy"} onError={()=>setErrs(e=>({...e,[photos.indexOf(p)]:true}))} onClick={()=>setLightbox(true)} style={{minWidth:"100%",height:H,objectFit:"cover",scrollSnapAlign:"start",flexShrink:0,cursor:"zoom-in"}} alt=""/>)}
-        </div>
-      ):(
-        <div style={{height:H,background:"linear-gradient(135deg,#EFF6FF,#DBEAFE)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"calc(48px*var(--fs))"}}>🍽️</div>
+    <div style={{position:"relative",aspectRatio:"16 / 10",background:EAT.wash}}>
+      <div ref={ref} onScroll={()=>ref.current&&setCur(Math.round(ref.current.scrollLeft/ref.current.offsetWidth))} style={{display:"flex",overflowX:"auto",scrollSnapType:"x mandatory",scrollbarWidth:"none",height:"100%"}}>
+        {valid.map((p,i)=>(
+          <button key={i} type="button" onClick={()=>setLightbox(true)} aria-label={valid.length>1?`View photos of ${name}, ${i+1} of ${valid.length}`:`View the photo of ${name}`}
+            style={{minWidth:"100%",height:"100%",padding:0,border:0,background:"transparent",scrollSnapAlign:"start",flexShrink:0,cursor:"zoom-in"}}>
+            <img src={p} loading={i===0?"eager":"lazy"} onError={()=>setErrs(e=>({...e,[photos.indexOf(p)]:true}))} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+          </button>
+        ))}
+      </div>
+      <NumberMark n={rank} world="eat"/>
+      {valid.length>1&&(
+        <span aria-hidden="true" className="font-mono" style={{position:"absolute",bottom:8,right:10,padding:"2px 7px",borderRadius:999,background:"rgba(22,17,13,.62)",color:"#fff",fontSize:fs(10.5),letterSpacing:".08em",lineHeight:1.4}}>{cur+1}/{valid.length}</span>
       )}
-      {/* Rank badge */}
-      <div style={{position:"absolute",top:"10px",left:"10px",width:"36px",height:"36px",borderRadius:"50%",background:rank<=3?medalColors[rank-1]:BLUE,color:rank<=3?"#fff":"#fff",fontWeight:"800",fontSize:rank<=3?"18px":"13px",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{rankLabel}</div>
-      {/* Smart badges — shifted left of the wishlist heart the card overlays top-right */}
-      {badges.length>0&&<div style={{position:"absolute",top:"10px",right:"54px",display:"flex",flexDirection:"column",gap:"4px",alignItems:"flex-end"}}>{badges.slice(0,2).map((b,i)=><span key={i} style={{background:"rgba(255,255,255,0.95)",color:b.color,padding:"3px 8px",borderRadius:"6px",fontSize:"calc(11px*var(--fs))",fontWeight:"700",boxShadow:"0 1px 4px rgba(0,0,0,0.1)"}}>{b.icon} {b.label}</span>)}</div>}
-      {/* Tap-to-enlarge hint */}
-      {valid.length>0&&<div style={{position:"absolute",bottom:"8px",left:"10px",background:"rgba(0,0,0,0.55)",color:"#fff",padding:"3px 8px",borderRadius:"20px",fontSize:"calc(10.5px*var(--fs))",fontWeight:"600",pointerEvents:"none"}}>🔍 Tap to enlarge</div>}
-      {valid.length>1&&<div style={{position:"absolute",bottom:"8px",right:"10px",background:"rgba(0,0,0,0.6)",color:"#fff",padding:"3px 8px",borderRadius:"20px",fontSize:"calc(11px*var(--fs))",fontWeight:"600"}}>📷 {cur+1}/{valid.length}</div>}
-      {/* Dot indicators */}
-      {valid.length>1&&<div style={{position:"absolute",bottom:"10px",left:"50%",transform:"translateX(-50%)",display:"flex",gap:"5px"}}>{valid.map((_,i)=><div key={i} style={{width:"5px",height:"5px",borderRadius:"50%",background:i===cur?"#fff":"rgba(255,255,255,0.5)"}}/>)}</div>}
 
-      {/* FULL-SCREEN LIGHTBOX — swipe between photos, contain-fit so the whole
-          photo is visible enlarged. Tap the dark area or ✕ to close. */}
+      {/* FULL-SCREEN VIEWER — swipe between photos, contain-fit so the whole
+          photo is visible. Tap the dark area or Close to leave. */}
       {lightbox && createPortal(
         <div
           onClick={()=>setLightbox(false)}
+          role="dialog" aria-modal="true" aria-label={`Photos of ${name}`}
           style={{position:"fixed",inset:0,zIndex:100000,background:"rgba(0,0,0,0.94)",display:"flex",flexDirection:"column"}}
         >
           <button
+            type="button"
             onClick={(e)=>{e.stopPropagation();setLightbox(false);}}
             aria-label="Close"
-            style={{position:"absolute",top:"calc(env(safe-area-inset-top) + 12px)",right:"14px",zIndex:2,width:"40px",height:"40px",borderRadius:"50%",background:"rgba(255,255,255,0.18)",backdropFilter:"blur(8px)",border:"none",color:"#fff",fontSize:"20px",fontWeight:"700",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}
-          >✕</button>
+            style={{position:"absolute",top:"calc(env(safe-area-inset-top) + 10px)",right:"12px",zIndex:2,width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.18)",backdropFilter:"blur(8px)",border:"none",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}
+          ><X size={20} strokeWidth={2} aria-hidden="true"/></button>
           <div
             ref={lbRef}
             onClick={(e)=>e.stopPropagation()}
@@ -573,7 +580,7 @@ function PhotoCarousel({ photos=[], rank, badges=[], height=180 }) {
             ))}
           </div>
           {valid.length>1&&(
-            <div style={{position:"absolute",bottom:"calc(env(safe-area-inset-bottom) + 18px)",left:"50%",transform:"translateX(-50%)",background:"rgba(0,0,0,0.6)",color:"#fff",padding:"4px 12px",borderRadius:"20px",fontSize:"13px",fontWeight:"600"}}>{lbCur+1} / {valid.length}</div>
+            <div className="font-mono" style={{position:"absolute",bottom:"calc(env(safe-area-inset-bottom) + 18px)",left:"50%",transform:"translateX(-50%)",background:"rgba(0,0,0,0.6)",color:"#fff",padding:"4px 12px",borderRadius:"20px",fontSize:"13px"}}>{lbCur+1} / {valid.length}</div>
           )}
         </div>,
         document.body
@@ -582,28 +589,60 @@ function PhotoCarousel({ photos=[], rank, badges=[], height=180 }) {
   );
 }
 
-// ─── TRUST TAG ────────────────────────────────────────────────────────────────
-function TrustTag({ confirmed }) {
+// ─── TIER PILL ───────────────────────────────────────────────────────────────
+// The worker's intent tier as a lightness ladder (WORLD.eat.tiers), with the exact
+// TIER_LABELS words. Only tiers 1-4 print; a GENERAL search sends none.
+const TIER_WORDS = { 1:'Dish Specialist', 2:'Authentic Match', 3:'Related', 4:'Serves It' };
+const TIER_ICON  = { 1:Target, 2:Check, 3:Link2, 4:Utensils };
+function TierPill({ tier }) {
+  const t = EAT.tiers?.[tier];
+  const Icon = TIER_ICON[tier];
+  if (!t || !TIER_WORDS[tier]) return null;
   return (
-    <span style={{fontSize:"calc(10px*var(--fs))",fontWeight:"700",color:confirmed?"#2E7D32":"#E65100",background:confirmed?"#E8F5E9":"#FFF3E0",padding:"1px 6px",borderRadius:"4px",marginLeft:"4px"}}>
-      {confirmed ? "✅ Confirmed" : "⚠️ Reviews"}
+    <span className="font-mono uppercase inline-flex items-center flex-none"
+      style={{gap:5,minHeight:20,boxSizing:"border-box",padding:"0 7px",borderRadius:6,background:t.bg,color:t.ink,border:t.border?`1px solid ${t.border}`:0,fontSize:fs(10),fontWeight:500,letterSpacing:".12em",lineHeight:1,whiteSpace:"nowrap"}}>
+      <Icon size={11} strokeWidth={2.4} aria-hidden="true"/>{TIER_WORDS[tier]}
     </span>
   );
 }
 
-// ─── RESTAURANT CARD — editorial layout (design handoff) ─────────────────────
-// Full-width editorial card: big photo + rank + Dish-Specialist tag, serif name,
-// Say-it/Translate/rating row, pill tags, green Open bar, blue phone bar, three
-// action buttons. Reuses PhotoCarousel / NameLanguageHelp /
-// AIDetailsSection / TrustTag.
-// Responsive: renders at BOTH widths — keeps the full iPad sizing when
-// `isTablet`, and switches to compact phone-tuned sizing when `!isTablet`.
-// Every text size stays on fs() so the 4-step glasses control scales it; the
-// serif name is 2-line clamped and the card uses a min-height (not fixed) so
-// enlarged text grows the card instead of clipping.
-function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, formatDistance, isTablet, isLocal, batchEnrich }) {
+// Closes at or after 11 PM (or is open all day), from today's real hours in the
+// place's own zone — the same rule as the Late night chip.
+function closesLate(todayHours, is24) {
+  if (is24) return true;
+  if (!todayHours || /closed/i.test(todayHours)) return false;
+  const parts = todayHours.split(/[-–]| to /i);
+  const closeStr = (parts.length > 1 ? parts[parts.length - 1] : todayHours).trim().toLowerCase();
+  if (closeStr.includes('midnight')) return true;
+  const m = closeStr.match(/(\d+)(?::(\d+))?\s*(am|pm)/);
+  if (!m) return false;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2] || 0, 10);
+  if (m[3] === 'pm' && h !== 12) h += 12;
+  if (m[3] === 'am' && h === 12) h = 0;
+  const v = h + min / 60;
+  return v >= 23 || v <= 5;
+}
+
+// One hairline row in the card's More panel: a mono label, then plain words.
+function MoreRow({ label, children }) {
+  return (
+    <div style={{padding:"12px 0",borderTop:`1px solid ${EAT.line}`}}>
+      <div className="font-mono uppercase" style={{fontSize:fs(10.5),letterSpacing:".12em",color:EAT.iconInk,marginBottom:4}}>{label}</div>
+      <div style={{fontSize:fs(13.5),lineHeight:1.5,color:"#3A3128"}}>{children}</div>
+    </div>
+  );
+}
+
+// ─── RESTAURANT CARD (Eat.dc.html L91-132) ──────────────────────────────────
+// One card at both widths: the photo (or the strip), the tier pill and the cuisine
+// kicker, the name on its menu line with the distance, Say it · Translate, one facts
+// line, the address, at most three tags, the quiet rows (AI details, add a photo),
+// the rubber stamp when you're here, and the action row with More.
+function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDistance, isLocal, batchEnrich, cardRef }) {
   const [expanded,setExpanded]=useState(false);
   const [enriched,setEnriched]=useState(null);
+  const moreId = useId();
   // 3 real Google photos + hours for OWNED restaurants (owned records carry none).
   // T1.15: the parent batch-enriches the whole visible page in ONE worker call and
   // hands this card its slice via `batchEnrich` (undefined = batch still in flight,
@@ -617,197 +656,116 @@ function RestaurantCardTablet({ restaurant, rank, onDirections, onShowOnMap, for
     callWorker('places/enrich-owned',{id:key,name:restaurant.displayName?.text||restaurant.name,lat:restaurant.lat,lng:restaurant.lng,maxPhotos:3})
       .then(({data})=>{ if(data&&data.matched)setEnriched(data); }).catch(()=>{});
   },[batchEnrich]); // eslint-disable-line react-hooks/exhaustive-deps
-  const fs=(n)=>`calc(${n}px*var(--fs))`;
-  // Pick tablet vs phone-tuned value.
-  const t=(tab,phone)=>isTablet?tab:phone;
 
   const name    = restaurant.displayName?.text || restaurant.name || "Restaurant";
-  const phone   = restaurant.nationalPhoneNumber || restaurant.internationalPhoneNumber || "";
+  const placeId = restaurant.placeId || restaurant.id;
+  const phone   = restaurant.nationalPhoneNumber || restaurant.internationalPhoneNumber || enriched?.nationalPhoneNumber || enriched?.phone || "";
   const parking = restaurant.parking;
-  const parkingConfirmed = parking?.source==='api';
-  const hasAnySeating = restaurant.hasIndoorSeating || restaurant.hasOutdoorSeating;
-  const seatingConfirmed = restaurant.seatingSource==='api';
+  const types   = restaurant.types || [];
   const cuisineLabel = restaurant.primaryType
-    ? restaurant.primaryType.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())
-    : restaurant.types?.[0]?.replace(/_/g,' ')?.replace(/\b\w/g,l=>l.toUpperCase()) || null;
+    ? restaurant.primaryType.replace(/_/g,' ')
+    : restaurant.types?.[0]?.replace(/_/g,' ') || null;
   const weekdays = (enriched?.hours?.weekdayDescriptions?.length ? enriched.hours.weekdayDescriptions
     : (restaurant.currentOpeningHours?.weekdayDescriptions || restaurant.regularOpeningHours?.weekdayDescriptions || restaurant.hours || []));
   const photosToShow = (enriched?.photos?.length ? enriched.photos : (restaurant.photos || (restaurant.photoUrl ? [restaurant.photoUrl] : [])));
-  // Open/Closed. Owned places get hours on-tap from enrich-owned, whose `openNow`
-  // is a Place-Details boolean cached for 90 days — never a live answer. Re-run
-  // the same zone-aware parser the list uses over the enriched hours (offset from
-  // the enriched payload when the worker sends it, else the place's own); the
-  // cached boolean only survives as a last resort when the user is standing here.
+  const photosPending = restaurant.source==='owned' && !enriched && batchEnrich===undefined && !photosToShow.length;
+  // Open words: the place's own zone (offset from the enriched payload when the
+  // worker sends it, else the row's own). A cached boolean is never trusted here.
   const offset = enriched?.utcOffsetMinutes ?? restaurant.utcOffsetMinutes;
-  const openInfo = enriched?.hours
-    ? computeOpenStatus({ currentOpeningHours:{ weekdayDescriptions: weekdays }, utcOffsetMinutes: offset, isOpen: enriched.hours.openNow ?? null }, { isLocal })
-    : { isOpen: restaurant.isOpen, todayHours: restaurant.todayHours, is24Hours: restaurant.is24Hours };
-  const openNow = openInfo.isOpen;
-  const is24    = openInfo.is24Hours;
+  const openPlace = { ...restaurant, currentOpeningHours: weekdays.length ? { weekdayDescriptions: weekdays } : restaurant.currentOpeningHours, utcOffsetMinutes: offset };
+  const openInfo = computeOpenStatus({ currentOpeningHours:{ weekdayDescriptions: weekdays }, utcOffsetMinutes: offset, isOpen: enriched?.hours?.openNow ?? restaurant.isOpen ?? null }, { isLocal });
   const today   = placeDay(offset, isLocal); // null = unknown day over there → no "today"
-  // Google's weekdayDescriptions start on Monday; getDay() is Sunday-based.
-  const todayHrs = openInfo.todayHours || (weekdays.length && today!=null ? ((weekdays[(today+6)%7]||'').split(': ').slice(1).join(': ')||null) : null);
-  const openText = is24 ? 'Open 24/7' : (openNow===true ? 'Open' : openNow===false ? 'Closed' : '');
+  const rating  = enriched?.rating ?? restaurant.rating;
+  const ratingCount = enriched?.userRatingCount ?? restaurant.userRatingCount;
+  const address = restaurant.shortFormattedAddress || restaurant.formattedAddress || restaurant.vicinity || "";
+  const dist = restaurant.distanceMiles != null ? String(formatDistance(restaurant.distanceMiles) || "").toUpperCase() : null;
 
-  const Tag=({bg,color,children})=>(
-    <span style={{background:bg,color,borderRadius:"999px",padding:`${t(fs(9),fs(5))} ${t(fs(16),fs(11))}`,fontSize:t(fs(15.5),fs(12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
-  );
+  // At most three tags, most useful first. Cash only and the dietary ones are
+  // facts a traveler must know; Late night only from real hours.
+  const tags = [];
+  if (restaurant.isCashOnly) tags.push(restaurant.cashSource==='reviews' ? 'Cash only (reported)' : 'Cash only');
+  if (restaurant.servesVegetarianFood === true || types.includes('vegetarian_restaurant')) tags.push('Vegetarian');
+  if (types.includes('halal_restaurant')) tags.push('Halal');
+  if (closesLate(openInfo.todayHours, openInfo.is24Hours)) tags.push('Late night');
+  if (restaurant.isChain) tags.push('Chain option');
+  if (restaurant.hasDriveThru) tags.push('Drive-thru');
+  if (restaurant.dineIn) tags.push('Dine-in');
+  if (restaurant.takeout) tags.push('Takeout');
+  if (restaurant.delivery) tags.push('Delivery');
+  if (restaurant.reservable) tags.push('Reservable');
+
+  const seatingWords = [restaurant.hasIndoorSeating&&'Indoor', restaurant.hasOutdoorSeating&&'Outdoor', restaurant.seating?.hasLoungeSeating&&'Lounge'].filter(Boolean);
+  const parkingWords = parking && !parking.noParking ? (parking.details?.length ? parking.details.map(d=>d.label) : ['Parking available']) : [];
+  const trust = (confirmed) => confirmed ? 'confirmed by Google' : 'mentioned in reviews';
+  const hasMore = !!(restaurant.bestTimeNote || seatingWords.length || parking || restaurant.editorialSummary || restaurant.generativeSummary?.overview?.text || weekdays.length || restaurant.websiteUri);
 
   return (
-    <motion.div initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} transition={{delay:Math.min(rank,8)*0.03}}
-      style={{background:"#fff",borderRadius:t("28px","20px"),overflow:"hidden",boxShadow:t("0 24px 50px -30px rgba(22,17,13,.4)","0 12px 28px -18px rgba(22,17,13,.4)"),border:`1px solid ${ED_RULE}`}}>
-
-      {/* Photo — reuse the carousel (rank badge + smart badges incl. Dish Specialist) at editorial
-          height, with the wishlist heart overlaid top-right (smart badges shift left of it) */}
-      <div style={{position:"relative"}}>
-        <PhotoCarousel photos={photosToShow} rank={rank} badges={restaurant.badges||[]} height={t(360,200)}/>
-      </div>
-
-      <div style={{padding:t(`${fs(28)} ${fs(32)} ${fs(32)}`,`${fs(16)} ${fs(16)} ${fs(18)}`)}}>
-        {cuisineLabel&&<div style={{color:ED_EAT,fontWeight:600,fontSize:t(fs(17),fs(13)),letterSpacing:"0.2px"}}>{cuisineLabel}</div>}
-        <h3 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:t(fs(38),fs(26)),lineHeight:1.04,color:ED_INK,margin:`${fs(4)} 0 0`,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</h3>
-
-        {/* Say it / Translate / rating / distance */}
-        <div style={{display:"flex",gap:t(fs(16),fs(10)),alignItems:"center",flexWrap:"wrap",marginTop:t(fs(12),fs(8)),fontSize:t(fs(17),fs(13.5)),color:ED_INK3}}>
-          <NameLanguageHelp placeId={restaurant.placeId||restaurant.id} name={name}/>
-          {/* Source word: every star here is Google's (owned rows carry no rating) — quiet, no logo */}
-          {restaurant.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{restaurant.rating.toFixed(1)}</span><span style={{fontSize:"0.8em",color:ED_INK3,marginLeft:"0.35em"}}>Google</span></span>}
-          {restaurant.distanceMiles!=null&&<span>· {formatDistance(restaurant.distanceMiles)}</span>}
-          {restaurant.priceStr&&<span>· {restaurant.priceStr}</span>}
-        </div>
-
-        {/* Street address — muted, single line, renders on phone + tablet */}
-        {(restaurant.shortFormattedAddress||restaurant.formattedAddress||restaurant.vicinity)&&(
-          <div style={{marginTop:t(fs(8),fs(6)),fontSize:t(fs(13.5),fs(12)),color:ED_INK3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-            📍 {restaurant.shortFormattedAddress||restaurant.formattedAddress||restaurant.vicinity}
+    <WorldCard world="eat" as="li" ref={cardRef}>
+      <PhotoCarousel photos={photosToShow} rank={rank} name={name} pending={photosPending}/>
+      <div style={{padding:"12px 16px 16px"}}>
+        {(restaurant.tier || cuisineLabel) && (
+          <div className="flex items-center flex-wrap" style={{columnGap:10,rowGap:4,minHeight:20}}>
+            <TierPill tier={restaurant.tier}/>
+            {cuisineLabel && <CardKicker world="eat">{cuisineLabel}</CardKicker>}
           </div>
         )}
-
-        {/* Pill tags */}
-        <div style={{display:"flex",gap:t(fs(10),fs(7)),flexWrap:"wrap",marginTop:t(fs(16),fs(11))}}>
-          {restaurant.dineIn&&<Tag bg="#EAF0FB" color="#2E6FE0">🍴 Dine-in</Tag>}
-          {restaurant.takeout&&<Tag bg="#E7F3EA" color="#2E7D46">📦 Takeout</Tag>}
-          {restaurant.delivery&&<Tag bg="#FDEBD7" color="#C57A1F">🛵 Delivery</Tag>}
-          {restaurant.hasDriveThru&&<Tag bg="#E0F2FE" color="#0277BD">🚗 Drive-Thru</Tag>}
-          {restaurant.reservable&&<Tag bg="#FBE0DC" color="#C2392F">📅 Reservable</Tag>}
-          {restaurant.isCashOnly&&<Tag bg="#FEF2F2" color="#DC2626">💵 Cash{restaurant.cashSource==='reviews'?' (reported)':''}</Tag>}
-        </div>
-
-        {/* Open bar */}
-        {(openNow!==null||is24)&&(
-          <div style={{marginTop:t(fs(18),fs(12)),background:openNow===false?"#FBE0DC":"#E7F3EA",borderRadius:t("16px","12px"),padding:t(`${fs(16)} ${fs(20)}`,`${fs(10)} ${fs(13)}`),fontSize:t(fs(18),fs(13.5)),fontWeight:600,color:openNow===false?"#C2392F":"#2E7D46",display:"flex",alignItems:"center",gap:t(fs(11),fs(8))}}>
-            <span style={{width:t(fs(10),fs(8)),height:t(fs(10),fs(8)),borderRadius:"50%",background:is24?"#00BCD4":(openNow===false?"#C2392F":"#2E7D46"),flexShrink:0}}/>
-            <span>{openText}</span>
-            {todayHrs&&!is24&&<span style={{color:ED_INK3,fontWeight:500}}>· {todayHrs}</span>}
-          </div>
+        <CardName world="eat" leader trailing={dist}>{name}</CardName>
+        <div style={{marginTop:2}}><NameLanguageHelp placeId={placeId} name={name} world="eat"/></div>
+        <FactsLine world="eat" place={openPlace} isLocal={isLocal}
+          items={[<RatingFact key="r" world="eat" rating={rating} count={ratingCount} source="google"/>, restaurant.priceStr]}
+          style={{marginTop:4}}/>
+        {address && <p style={{margin:0,fontSize:fs(13),lineHeight:1.4,color:"#736657"}}>{address}</p>}
+        {tags.length>0 && (
+          <TagRow max={3} style={{marginTop:12}}>
+            {tags.map(t=><WorldTag key={t} world="eat">{t}</WorldTag>)}
+          </TagRow>
         )}
-
-        {/* Phone bar */}
-        {phone&&(
-          <a href={`tel:${phone}`} style={{marginTop:t(fs(14),fs(10)),background:"#EFF4FB",borderRadius:t("16px","12px"),padding:t(`${fs(18)} ${fs(20)}`,`${fs(11)} ${fs(13)}`),display:"flex",alignItems:"center",gap:t(fs(14),fs(10)),textDecoration:"none"}}>
-            <span style={{fontSize:t(fs(24),fs(18))}}>📞</span>
-            <span><span style={{display:"block",fontSize:t(fs(20),fs(13.5)),fontWeight:600,color:"#2E6FE0"}}>{phone}</span><span style={{fontSize:t(fs(15),fs(11)),color:ED_INK3}}>Tap to call</span></span>
-          </a>
-        )}
-
-        {/* AI details — on the front card, above the actions */}
-        <div style={{marginTop:t(fs(18),fs(13))}}>
-          <AIDetailsSection placeId={restaurant.placeId||restaurant.id} placeName={name} lat={restaurant.lat} lng={restaurant.lng} page="PlacesToEat" kind="restaurant"/>
-        </div>
-        <div style={{marginTop:t(fs(12),fs(10))}}>
-          <HereStamp place={{id:restaurant.placeId||restaurant.id,name,lat:restaurant.lat,lng:restaurant.lng,types:restaurant.types,formattedAddress:restaurant.formattedAddress||restaurant.address}}/>
-          <TravelerDishes place={{id:restaurant.placeId||restaurant.id,name,lat:restaurant.lat,lng:restaurant.lng}} kind="restaurant"/>
-        </div>
-
-        {/* Actions */}
-        <div style={{display:"flex",gap:t(fs(12),fs(8)),marginTop:t(fs(20),fs(14))}}>
-          <button onClick={onDirections} style={{flex:1,borderRadius:t("16px","12px"),padding:t(fs(15),fs(11)),fontSize:t(fs(18),fs(14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_EAT,color:"#fff"}}>Directions</button>
-          <button onClick={onShowOnMap} style={{flex:1,borderRadius:t("16px","12px"),padding:t(fs(15),fs(11)),fontSize:t(fs(18),fs(14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
-          <button onClick={()=>setExpanded(e=>!e)} style={{flex:1,borderRadius:t("16px","12px"),padding:t(fs(15),fs(11)),fontSize:t(fs(18),fs(14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:expanded?ED_INK:ED_IVORY2,color:expanded?"#fff":ED_INK2}}>{expanded?"Less ▴":"More ▾"}</button>
-        </div>
-
-        {/* Expanded details */}
-        <AnimatePresence>
-          {expanded&&(
-            <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{marginTop:fs(20),display:"flex",flexDirection:"column",gap:fs(14)}}>
-
-                {restaurant.bestTimeNote&&(
-                  <div style={{padding:fs(16),background:"#E7F3EA",borderRadius:"16px",fontSize:fs(16),color:"#166534"}}>
-                    <span style={{fontWeight:700,color:"#2E7D46"}}>🕐 Best time to visit · </span>{restaurant.bestTimeNote}
-                  </div>
-                )}
-
-                {(hasAnySeating||parking)&&(
-                  <div style={{display:"flex",gap:fs(14),flexWrap:"wrap"}}>
-                    {hasAnySeating&&(
-                      <div style={{flex:"1 1 240px",padding:fs(16),background:"#FAF7F0",borderRadius:"16px",border:`1px solid ${ED_RULE}`}}>
-                        <div style={{display:"flex",alignItems:"center",marginBottom:fs(8)}}><span style={{fontSize:fs(17),fontWeight:700,color:ED_INK}}>🪑 Seating</span><TrustTag confirmed={seatingConfirmed}/></div>
-                        <div style={{display:"flex",flexWrap:"wrap",gap:fs(6)}}>
-                          {restaurant.hasIndoorSeating&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🏠 Indoor</span>}
-                          {restaurant.hasOutdoorSeating&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🌿 Outdoor</span>}
-                          {restaurant.seating?.hasLoungeSeating&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🛋️ Lounge</span>}
-                        </div>
-                      </div>
-                    )}
-                    {parking&&(
-                      <div style={{flex:"1 1 240px",padding:fs(16),background:"#FAF7F0",borderRadius:"16px",border:`1px solid ${ED_RULE}`}}>
-                        <div style={{display:"flex",alignItems:"center",marginBottom:fs(8)}}><span style={{fontSize:fs(17),fontWeight:700,color:ED_INK}}>🅿️ Parking</span><TrustTag confirmed={parkingConfirmed}/></div>
-                        {parking.noParking?(
-                          <div style={{fontSize:fs(15),color:"#C2392F"}}>{parking.noParkingNote}</div>
-                        ):(
-                          <div style={{display:"flex",flexWrap:"wrap",gap:fs(6)}}>
-                            {parking.details?.length>0?parking.details.map((d,i)=>(
-                              <span key={i} style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>{d.icon} {d.label}</span>
-                            )):<span style={{fontSize:fs(15),color:ED_INK3}}>Parking available</span>}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {restaurant.editorialSummary&&(
-                  <div style={{padding:fs(16),background:"#F0F9FF",borderRadius:"16px",border:"1px solid #BAE6FD"}}>
-                    <div style={{fontSize:fs(13),fontWeight:700,color:"#0369A1",letterSpacing:"0.5px",marginBottom:fs(6)}}>📖 ABOUT THIS PLACE</div>
-                    <p style={{fontSize:fs(16),lineHeight:1.6,color:"#0C4A6E",margin:0}}>{restaurant.editorialSummary}</p>
-                  </div>
-                )}
-
-                {restaurant.generativeSummary?.overview?.text&&(
-                  <div style={{padding:fs(16),background:"#EFF6FF",borderRadius:"16px",border:"1px solid #BFDBFE"}}>
-                    <div style={{fontSize:fs(13),fontWeight:700,color:"#1E40AF",letterSpacing:"0.5px",marginBottom:fs(6)}}>✨ AI VENUE SUMMARY ({restaurant.generativeSummary.disclosureText?.text||"Summarized with Gemini"})</div>
-                    <p style={{fontSize:fs(16),lineHeight:1.6,color:"#1E3A8A",margin:0}}>{restaurant.generativeSummary.overview.text}</p>
-                  </div>
-                )}
-
-                {weekdays.length>0&&(
-                  <div style={{padding:fs(16),background:"#FAF7F0",borderRadius:"16px"}}>
-                    <div style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px",marginBottom:fs(8)}}>🕐 DAILY HOURS</div>
-                    <div>
-                      {weekdays.map((day,i)=>{
-                        const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                        const isToday=DAY.findIndex(d=>day.startsWith(d))===today; // place's day, not the device's
-                        return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isToday?700:400,color:isToday?TEAL_DEEP:ED_INK2,borderBottom:i<6?`1px solid ${ED_RULE}`:"none"}}>
-                          <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
-                        </div>;
-                      })}
+        <QuietRows world="eat" style={{marginTop:12}}>
+          <AIDetailsSection world="eat" placeId={placeId} placeName={name} lat={restaurant.lat} lng={restaurant.lng} page="PlacesToEat" kind="restaurant"/>
+          <TravelerDishes world="eat" variant="row" place={{id:placeId,name,lat:restaurant.lat,lng:restaurant.lng}} kind="restaurant"/>
+        </QuietRows>
+        <HereStamp place={{id:placeId,name,lat:restaurant.lat,lng:restaurant.lng,types:restaurant.types,formattedAddress:restaurant.formattedAddress||restaurant.address}} formatDistance={formatDistance}/>
+        <ActionRow world="eat" name={name} onDirections={onDirections} onMap={onShowOnMap} phone={phone}
+          onMore={hasMore?()=>setExpanded(e=>!e):undefined} moreExpanded={hasMore?expanded:undefined} moreControls={hasMore?moreId:undefined}
+          style={{marginTop:4}}/>
+        {hasMore && expanded && (
+          <div id={moreId} style={{marginTop:12}}>
+            {restaurant.bestTimeNote && <MoreRow label="Best time to visit">{restaurant.bestTimeNote}</MoreRow>}
+            {seatingWords.length>0 && <MoreRow label="Seating">{seatingWords.join(' · ')} <span style={{color:"#736657"}}>({trust(restaurant.seatingSource==='api')})</span></MoreRow>}
+            {parking && (
+              <MoreRow label="Parking">
+                {parking.noParking ? parking.noParkingNote : <>{parkingWords.join(' · ')} <span style={{color:"#736657"}}>({trust(parking.source==='api')})</span></>}
+              </MoreRow>
+            )}
+            {restaurant.editorialSummary && <MoreRow label="About">{restaurant.editorialSummary}</MoreRow>}
+            {restaurant.generativeSummary?.overview?.text && (
+              <MoreRow label={`AI venue summary · ${restaurant.generativeSummary.disclosureText?.text || 'Summarized with Gemini'}`}>{restaurant.generativeSummary.overview.text}</MoreRow>
+            )}
+            {weekdays.length>0 && (
+              <MoreRow label="Hours">
+                {weekdays.map((day,i)=>{
+                  const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                  const isToday=DAY.findIndex(d=>day.startsWith(d))===today; // the place's day, not the device's
+                  return (
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",gap:12,padding:"2px 0",fontWeight:isToday?700:400,color:isToday?EAT.ink:"#3A3128"}}>
+                      <span>{day.split(':')[0]}</span><span style={{textAlign:"right"}}>{day.split(':').slice(1).join(':').trim()}</span>
                     </div>
-                  </div>
-                )}
-
-                {restaurant.websiteUri&&(
-                  <a href={restaurant.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(16),background:"#F3E8FF",borderRadius:"16px",textDecoration:"none",color:"#7C3AED"}}>
-                    <span style={{fontSize:fs(22)}}>🌐</span>
-                    <span><span style={{display:"block",fontWeight:600,fontSize:fs(16)}}>Visit Website</span><span style={{fontSize:fs(14),color:ED_INK3}}>Menu &amp; reservations</span></span>
-                  </a>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                  );
+                })}
+              </MoreRow>
+            )}
+            {restaurant.websiteUri && (
+              <MoreRow label="Website">
+                <a href={restaurant.websiteUri} target="_blank" rel="noopener noreferrer" className="inline-flex items-center"
+                  style={{gap:6,minHeight:44,margin:"-12px 0",color:EAT.ink,fontWeight:600,textDecoration:"underline",textUnderlineOffset:2}}>
+                  Menu and reservations<ExternalLink size={14} strokeWidth={2} aria-hidden="true"/>
+                </a>
+              </MoreRow>
+            )}
+          </div>
+        )}
       </div>
-    </motion.div>
+    </WorldCard>
   );
 }
 
@@ -1506,24 +1464,24 @@ export default function PlacesToEat() {
           {filtered.length===0?(
             <FinderEmptyState catKey="food" icon={SearchX} title="No matches" reason="Nothing here passes the current filters." actionLabel="Search somewhere else" onAction={()=>setShowLocPicker(true)} secondaryLabel={(activeFilterCount>0||searchText)?"Clear filters":undefined} onSecondary={(activeFilterCount>0||searchText)?()=>{clearFilters();setSearchInput("");setSearchText("");}:undefined}/>
           ):(<>
-            {filtered.slice(0,displayCount).map((r,i)=>{
-              const Card = RestaurantCardTablet;
-              return (
-              <div key={r.id||i} ref={el=>cardRefs.current[i]=el}>
-                <Card
+            <ol aria-label="Places to eat" style={worldGrid(isTablet)}>
+              {filtered.slice(0,displayCount).map((r,i)=>(
+                <RestaurantCard
+                  key={r.id||i}
+                  cardRef={el=>{cardRefs.current[i]=el;}}
                   restaurant={r} rank={i+1}
                   batchEnrich={ownedEnrich[r.id||r.placeId]}
-                  isTablet={isTablet}
                   onDirections={()=>setDirModal({open:true,lat:r.lat,lng:r.lng,name:r.name,address:r.formattedAddress||r.shortFormattedAddress||r.vicinity||r.address||''})}
                   onShowOnMap={()=>handleShowOnMap(i)}
                   formatDistance={formatDistance}
                   isLocal={isLocal}
                 />
-              </div>
-            );})}
+              ))}
+            </ol>
             {displayCount<filtered.length&&(
-              <button onClick={handleLoadMore} style={{padding:"14px",borderRadius:"12px",border:`2px solid ${BLUE}`,background:"#fff",color:BLUE,fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer",fontFamily:"inherit",marginTop:"4px"}}>
-                Load More · {filtered.length-displayCount} remaining
+              <button type="button" onClick={handleLoadMore}
+                style={{alignSelf:"center",minHeight:44,padding:"0 18px",borderRadius:14,border:`1px solid ${EAT.line}`,background:"#fff",color:"#3A3128",fontWeight:600,fontSize:fs(14),cursor:"pointer",fontFamily:"inherit",marginTop:4}}>
+                Load more · {filtered.length-displayCount} more
               </button>
             )}
           </>)}
