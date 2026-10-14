@@ -16506,6 +16506,111 @@ async function purgeRetrySweep(env, now = new Date()) {
   if (last) await kv.put('sweep:purge', last).catch(() => {});
   return out;
 }
+// Daily: orphans of earlier deletions (go-live round 2). Accounts deleted
+// under the worker before go-live lost their sign-in, stamps, tags and share
+// link, and left the rest: the social profile (birth data included),
+// signatures, postcards, dish posts, follows, blocks, luggage, gear, saves
+// and the photos those rows name — and some of it still showed (a deleted
+// traveler's signature, name and face on an adult's public passport). This
+// pass compares the user ids those tables hold with the live sign-ins and
+// queues purge:<uid> {at, failed_steps: ['orphan']} for an id with none, so
+// purgeRetrySweep — which checks for a 404 again right before it purges —
+// removes it as account deletion would.
+// Never a live account: the GoTrue admin list must be read to its end (a
+// failed, empty or unfinished listing queues nothing), and an id missing from
+// it is queued only when its own admin lookup answers 404 (one that answers
+// 200 signed up after the list was read). An existing purge record is never
+// overwritten. Bounded and resumable: at most ORPHAN_SCAN_BUDGET subrequests
+// a run (fetches and KV calls) and ORPHAN_QUEUE_MAX ids queued; the cursor
+// (KV orphans:cursor) keeps the column it reached and the last id done there.
+// Pages are keyset pages over distinct ids, so a user with a thousand rows
+// costs one page. A finished pass starts over on the next run.
+const ORPHAN_SCAN_COLS = [
+  ['social_profiles', 'user_id'], ['blotter_entries', 'author_user_id'], ['blotter_cosigns', 'user_id'],
+  ['blotter_marks', 'user_id'], ['postcards', 'sender_id'], ['place_dishes', 'user_id'], ['guestbook_entries', 'user_id'],
+  ['blotter_entries', 'owner_user_id'], ['blotter_marks', 'owner_user_id'], ['postcards', 'to_user_id'],
+  ['user_follows', 'follower_id'], ['user_follows', 'followee_id'], ['user_blocks', 'user_id'], ['user_blocks', 'blocked_user_id'],
+  ['owner_notes', 'user_id'], ['luggage_state', 'user_id'], ['profile_gear', 'user_id'], ['user_saves', 'user_id'],
+  ['handle_requests', 'user_id'], ['passport_shares', 'user_id'], ['passport_stamps', 'user_id'], ['passport_stamp_photos', 'user_id'],
+  ['passport_tags', 'from_user_id'], ['passport_tags', 'to_user_id'], ['guestbook_visits', 'user_id'],
+];
+const ORPHAN_SCAN_BUDGET = 100;
+const ORPHAN_QUEUE_MAX = 20;
+const ORPHAN_AUTH_PAGES_MAX = 40;   // 40 pages of up to 1000 sign-ins; more is a partial listing
+async function orphanScan(env, now = new Date()) {
+  const out = { queued: 0, pages: 0, live: 0, spent: 0, done: false, failed: 0 };
+  const kv = env.GLOBESKIMMERS_KV;
+  const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY;
+  if (!kv || !key) return out;
+  const auth = { apikey: key, Authorization: `Bearer ${key}` };
+  let spent = 0;
+  try {
+    // 1) Every live sign-in, or nothing is queued.
+    const live = new Set();
+    for (let page = 1; ; page++) {
+      if (page > ORPHAN_AUTH_PAGES_MAX) { out.failed++; return out; }
+      spent++;
+      const r = await fetch(`${GB_URL(env)}/auth/v1/admin/users?page=${page}&per_page=1000`, { headers: auth }).catch(() => null);
+      const body = r && r.ok ? await r.json().catch(() => null) : null;
+      const users = Array.isArray(body?.users) ? body.users : null;
+      if (!users) { out.failed++; return out; }
+      for (const u of users) { const id = String(u?.id || '').toLowerCase(); if (BL_UUID.test(id)) live.add(id); }
+      const total = Number(r.headers.get('x-total-count'));
+      if (!users.length || (Number.isFinite(total) && total > 0 && live.size >= total)) break;
+    }
+    if (!live.size) { out.failed++; return out; }   // an empty list is a broken one
+    out.live = live.size;
+    // 2) Ids already queued are left alone.
+    spent++;
+    const qpage = await kv.list({ prefix: 'purge:' });
+    const queued = new Set((qpage.keys || []).map((k) => k.name.slice('purge:'.length)));
+    // 3) The columns, from where the last run stopped.
+    spent++;
+    const cur = await kv.get('orphans:cursor', { type: 'json' }).catch(() => null);
+    let i = Number.isInteger(cur?.i) && cur.i >= 0 && cur.i < ORPHAN_SCAN_COLS.length ? cur.i : 0;
+    let after = i === cur?.i && BL_UUID.test(String(cur?.after || '')) ? String(cur.after).toLowerCase() : '';
+    const RESERVE = 2;   // the cursor write, and one to spare
+    scan: while (i < ORPHAN_SCAN_COLS.length) {
+      if (spent + 1 + RESERVE > ORPHAN_SCAN_BUDGET) break;
+      const [table, col] = ORPHAN_SCAN_COLS[i];
+      spent++; out.pages++;
+      const q = await gbRest(env, `${table}?select=${col}&${col}=${after ? `gt.${after}` : 'not.is.null'}&order=${col}.asc&limit=1000`, {}).catch(() => null);
+      // A table or column that isn't there (400/404) is skipped this pass;
+      // anything else is tried again next run.
+      if (q && (q.status === 400 || q.status === 404)) { out.failed++; i++; after = ''; continue; }
+      const rows = q && q.ok ? await q.json().catch(() => null) : null;
+      if (!Array.isArray(rows)) { out.failed++; break; }   // this page again next run
+      const ids = [...new Set(rows.map((r) => String(r?.[col] || '').toLowerCase()).filter((id) => BL_UUID.test(id)))];
+      const from = after;
+      for (const id of ids) {
+        if (!live.has(id) && !queued.has(id)) {
+          // A lookup and maybe a check and a write: stop before the budget or the queue cap runs out.
+          if (out.queued >= ORPHAN_QUEUE_MAX || spent + 3 + RESERVE > ORPHAN_SCAN_BUDGET) break scan;
+          spent++;
+          const au = await fetch(`${GB_URL(env)}/auth/v1/admin/users/${id}`, { headers: auth }).catch(() => null);
+          if (au && au.status === 404) {
+            spent++;
+            const had = await kv.get(`purge:${id}`).catch(() => 'unknown');
+            if (!had) {
+              spent++;
+              await kv.put(`purge:${id}`, JSON.stringify({ at: now.toISOString(), failed_steps: ['orphan'] }));
+              out.queued++;
+            }
+            queued.add(id);
+          } else if (!(au && au.ok)) { out.failed++; break scan; }   // couldn't tell: this id again next run
+        }
+        after = id;   // everything up to here is done
+      }
+      // The column is done at a short page (or at a page that moved nothing).
+      if (rows.length < 1000 || after === from) { i++; after = ''; }
+    }
+    if (i >= ORPHAN_SCAN_COLS.length) { out.done = true; i = 0; after = ''; }
+    spent++;
+    await kv.put('orphans:cursor', JSON.stringify({ i, after, at: now.toISOString() })).catch(() => {});
+  } catch { out.failed++; }
+  out.spent = spent;
+  return out;
+}
 // POST /admin/age-appeal { user_id, birth_year, birth_md, override? } — an
 // adult who mistyped: the corrected birthday recomputes the tier and lifts
 // the freeze (a birthday that is still under 13 keeps it). Deleted content
@@ -24085,6 +24190,9 @@ export default {
     try { await purgeRetrySweep(env); } catch (_e) { /* tomorrow's cron tries again */ }
     // Every stored under-13 birthday gets its purge clock, opened or not.
     try { await freezeScan(env); } catch (_e) { /* tomorrow's cron tries again */ }
+    // Accounts deleted before go-live that left rows behind: their clean-up is
+    // queued for purgeRetrySweep (at most ORPHAN_SCAN_BUDGET subrequests).
+    try { await orphanScan(env); } catch (_e) { /* tomorrow's cron tries again */ }
   }
 };
 // CI test Mon May 11 06:28:51 PDT 2026
