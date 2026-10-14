@@ -16333,7 +16333,7 @@ const GEAR_KINDS = new Set(['laptop', 'drink']);
 const GEAR_COLORS_W = new Set(['pink', 'white', 'black', 'yellow', 'blue', 'purple', 'green', 'orange', 'red', 'silver']); // red + silver arrived with the 2026-10-05 render batch
 const DRINK_VARIANTS_W = new Set(['tumbler', 'straw-bottle', 'lid-bottle']);
 const PET_SPECIES_W = new Set(['dog', 'cat', 'hamster', 'bird', 'reptile']);
-const PET_POSES_W = new Set(['sitting', 'laying', 'belly-up']);
+const PET_POSES_W = new Set(['sitting', 'standing', 'laying', 'belly-up']); // standing: the app's second pose since 475bb9b; laying/belly-up kept for buddies saved before it
 
 async function handleGearGet(request, env) {
   try {
