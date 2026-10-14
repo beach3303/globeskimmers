@@ -17622,8 +17622,12 @@ async function handleSocialFollow(request, env, ctx) {
         // can't be read; any from before the hold just wait, unanswerable.
         requests: gbOffSocial(meSp) ? [] : followers.filter((r) => r.status === 'pending').map((r) => shape(r, 'follower_id')),
         // A request still waiting names no one: its sender knows the @handle
-        // they typed, and a name is for people who said yes.
-        following: following.map((r) => (r.status === 'pending' ? { ...shape(r, 'followee_id'), name: null } : shape(r, 'followee_id'))),
+        // they typed, and a name is for people who said yes. A muted follow
+        // (see op 'follow') is listed as followed, by the @handle its
+        // follower typed and nothing more.
+        following: following.map((r) => (r.status === 'muted'
+          ? { ...shape({ ...r, status: 'accepted' }, 'followee_id'), name: null, verified: false, seal: null }
+          : r.status === 'pending' ? { ...shape(r, 'followee_id'), name: null } : shape(r, 'followee_id'))),
         blocked: blocks.map((r) => shape({ ...r, status: 'blocked' }, 'blocked_user_id')),
         // block_v2 (2026-10-13): POST /social/block ends follows both ways and
         // hides the pair from each other everywhere; the app shows Block only
@@ -17653,20 +17657,32 @@ async function handleSocialFollow(request, env, ctx) {
       const target = b.handle ? await gbHandleToUser(env, b.handle) : null;
       if (!target) return jsonResponse({ error: 'No traveler with that username' }, 404);
       if (target.user_id === user.id) return jsonResponse({ error: "That's you 🙂" }, 400);
-      // A muted follow answers like any request, @handle included (the app's
-      // toast reads it; without it, it said "Asked to follow @undefined").
-      if (await gbBlockedEither(env, user.id, target.user_id)) return jsonResponse({ ok: true, status: 'pending', muted: true, handle: target.handle });
-      const sp = await gbSocialProfile(env, target.user_id).catch(() => undefined);
-      if (sp === undefined) return gbAgeUnknownResp();
-      // …and gains no followers: a frozen account, a birth year that could
-      // still be 12, or a held teen (founder, 2026-10-13: "no following" for
-      // 13–17 — a request it could never answer only piled up and showed the
-      // sender its name) reads like a block — silently. If the teen hold is
-      // lifted (TEEN_SOCIAL_ENABLED), only a country hold stays muted.
-      if (gbUnderAge(sp) || gbAgeHeld(sp)) return jsonResponse({ ok: true, status: 'pending', muted: true, handle: target.handle });
-      const status = sp?.social_tier === 'teen' ? 'pending' : 'accepted';
-      await gbRest(env, 'user_follows', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ follower_id: user.id, followee_id: target.user_id, status }) });
-      if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_follow', { status }));
+      // A follow that can't reach its target — a block either way, or a
+      // target who gains no followers: a frozen account, a birth year that
+      // could still be 12, or a held teen (founder, 2026-10-13: "no
+      // following" for 13–17; if the teen hold is lifted, only a country
+      // hold stays) — is MUTED, and nobody can tell it from an adult's follow
+      // (go-live round 3: "pending" + muted:true told a stranger that an
+      // @handle belonged to a minor, and so did their own Following list).
+      // It answers exactly like an adult's follow, @handle included, and is
+      // stored as a 'muted' edge that only its follower ever sees: in their
+      // own Following list, as followed (op:'list'). Everything else ignores
+      // it — the target's followers and requests, the feed, friends,
+      // postcards and the Mailbox all read accepted or pending edges only.
+      let muted = await gbBlockedEither(env, user.id, target.user_id);
+      let status = 'accepted';
+      if (!muted) {
+        const sp = await gbSocialProfile(env, target.user_id).catch(() => undefined);
+        if (sp === undefined) return gbAgeUnknownResp();
+        if (gbUnderAge(sp) || gbAgeHeld(sp)) muted = true;
+        else if (sp?.social_tier === 'teen') status = 'pending';
+      }
+      const w = await gbRest(env, 'user_follows', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ follower_id: user.id, followee_id: target.user_id, status: muted ? 'muted' : status }) });
+      if (!w.ok) return jsonResponse({ error: 'Couldn’t follow right now — try again' }, 502);
+      // A muted edge from before (the block is gone, the teen turned 18)
+      // becomes a real follow when it is asked for again.
+      if (!muted) await gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${target.user_id}&status=eq.muted`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status }) });
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_follow', { status: muted ? 'muted' : status }));
       return jsonResponse({ ok: true, status, handle: target.handle });
     }
 
@@ -18295,7 +18311,8 @@ async function handleSocialUnread(request, env) {
       : [];
 
     const items = [];
-    for (const r of follows) items.push({ type: r.status === 'pending' ? 'follow_request' : 'follow', uid: r.follower_id, at: r.created_at });
+    // A muted follow (see /social/follow) is never news to its target.
+    for (const r of follows) if (r.status !== 'muted') items.push({ type: r.status === 'pending' ? 'follow_request' : 'follow', uid: r.follower_id, at: r.created_at });
     for (const r of direct) items.push({ type: 'postcard', uid: r.sender_id, place: r.place_name || null, at: r.created_at, to_me: true });
     for (const r of broadcasts) items.push({ type: 'postcard', uid: r.sender_id, place: r.place_name || null, at: r.created_at });
     // One row per person per page, however many stamps they pressed.
