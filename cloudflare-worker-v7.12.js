@@ -13817,6 +13817,15 @@ async function handleGuestbookPhotoUpload(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in to add a photo' }, 401);
+    // A guestbook photo or doodle is a public post: the posting doors apply
+    // before anything is moderated or stored (go-live round 2) — a frozen
+    // account, a birth year still to confirm or a held teen can't upload one,
+    // and an age that can't be read refuses. (Such an upload used to land in
+    // R2 and wait for a sign that would be refused.)
+    const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (sp === undefined) return gbAgeUnknownResp();
+    if (gbUnderAge(sp)) return gbUnderAgeResp();
+    if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
     if (!env.MEDIA) return jsonResponse({ error: 'Photo storage not configured' }, 500);
     const b = await request.json().catch(() => ({}));
     const entityId = gbClean(b.entity_id);
