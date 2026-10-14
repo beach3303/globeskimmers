@@ -18052,6 +18052,15 @@ async function handlePassportTag(request, env, ctx) {
       // Never reveal a block: the response looks exactly like a delivered tag.
       return jsonResponse({ ok: true, status: 'created', token, to_handle: toHandle, muted: true });
     }
+    // The recipient's rails, the same as a postcard's (founder, 2026-10-13):
+    // a frozen account, an unconfirmed birth year or a held teen is never
+    // tagged — the invite "sends" and lands nowhere, exactly like a block —
+    // and when the recipient's age can't be read, nothing is sent.
+    if (row.to_user_id) {
+      const rsp = await gbSocialProfile(env, row.to_user_id).catch(() => undefined);
+      if (rsp === undefined) return jsonResponse({ error: 'Couldn’t send right now — try again' }, 503);
+      if (gbUnderAge(rsp) || gbAgeHeld(rsp)) return jsonResponse({ ok: true, status: 'created', token, to_handle: toHandle, muted: true });
+    }
     const ins = await gbRest(env, 'passport_tags', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
     if (!ins.ok) return jsonResponse({ error: 'Could not create invite', details: await ins.text().catch(() => '') }, 502);
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_tag', { is_user: !!toUserId, via: toHandle ? 'handle' : 'link' }));
@@ -18091,6 +18100,15 @@ async function handlePassportTagClaim(request, env, ctx) {
     if (!tag) return jsonResponse({ error: 'This invite was already used or has expired.' }, 404);
     if (tag.from_user_id === user.id) return jsonResponse({ error: "That's your own tag 🙂" }, 400);
     if (await gbBlockedEither(env, user.id, tag.from_user_id)) return jsonResponse({ error: 'This invite was already used or has expired.' }, 404);
+    // Accepting is a social act: closed to a frozen account, an unconfirmed
+    // birth year or a held teen (founder, 2026-10-13). Declining stays open,
+    // so an invite can always be cleared away.
+    if (accept) {
+      const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+      if (sp === undefined) return gbAgeUnknownResp();
+      if (gbUnderAge(sp)) return gbUnderAgeResp();
+      if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
+    }
     if (accept) {
       let exists = null;
       if (tag.entity_id) {
@@ -18144,8 +18162,23 @@ async function handlePassportTagsList(request, env) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ tags: [] });
+    // A frozen account, an unconfirmed birth year or a held teen has no tag
+    // inbox (founder, 2026-10-13: no tagging under 18); neither does an
+    // account whose age can't be read right now.
+    if (gbOffSocial(await gbSocialProfile(env, user.id).catch(() => undefined))) return jsonResponse({ tags: [] });
     const q = await gbRest(env, `passport_tags?to_user_id=eq.${user.id}&status=eq.pending&order=created_at.desc&select=*`, {});
-    return jsonResponse({ tags: q.ok ? await q.json() : [] });
+    let tags = q.ok ? await q.json() : [];
+    // An invite from someone who has since turned out to be a minor isn't
+    // shown (their name and the place stay private); when the senders' ages
+    // can't be read, none are.
+    const from = [...new Set(tags.map((t) => t.from_user_id).filter(Boolean))].slice(0, 200);
+    if (from.length) {
+      const pq = await gbRest(env, `social_profiles?user_id=in.(${from.join(',')})&select=user_id,${GB_TIER_COLS}`, {});
+      if (!pq.ok) return jsonResponse({ tags: [] });
+      const prof = Object.fromEntries((await pq.json()).map((r) => [r.user_id, gbTierRow(r)]));
+      tags = tags.filter((t) => { const r = prof[t.from_user_id]; return !(r && (gbUnderAge(r) || gbAgeHeld(r))); });
+    }
+    return jsonResponse({ tags });
   } catch (e) { return jsonResponse({ error: e.message, tags: [] }, 500); }
 }
 
@@ -18161,6 +18194,14 @@ async function handlePassportTagRespond(request, env, ctx) {
     const tq = await gbRest(env, `passport_tags?id=eq.${tagId}&to_user_id=eq.${user.id}&status=eq.pending&select=*`, {});
     const tag = (tq.ok ? await tq.json() : [])[0];
     if (!tag) return jsonResponse({ error: 'Tag not found' }, 404);
+    // Accepting is a social act (see handlePassportTagClaim): closed to a
+    // frozen, unconfirmed or held account; declining stays open.
+    if (accept) {
+      const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+      if (sp === undefined) return gbAgeUnknownResp();
+      if (gbUnderAge(sp)) return gbUnderAgeResp();
+      if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
+    }
     if (accept) {
       // Skip if they already have this stamp (unique per user+kind+entity).
       let exists = null;
