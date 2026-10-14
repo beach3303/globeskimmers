@@ -21,7 +21,7 @@ const BACK_TO_TOP_PAGES = new Set([
   "PlacesToEat", "CoffeeFinder", "ATMFinder", "RestroomFinder",
   "ConvenienceStore", "ThingsToDo", "Shopping", "MoneyExchange",
   "CultureInformation", "BasicPhrases", "Weather",
-  "Mailbox", "Circle",
+  "Mailbox", "Postcards", "Circle",
 ]);
 
 // The bottom reserve under every page except Onboarding: the nav pill sits 22px above
@@ -39,17 +39,19 @@ const FINDER_PAGES = Object.entries(WORLD_BY_PAGE); // [page key, world key]
 const PAGE_GROUND = new Map(Object.entries({
   ...Object.fromEntries(FINDER_PAGES.map(([page, key]) => [page, WORLD[key].paper])),
   Mailbox: NEUTRAL.airmail,
+  Postcards: NEUTRAL.airmail,
   Profile: HARBOUR.paper,
   Circle: HARBOUR.paper,
   Traveler: HARBOUR.paper,
 }));
 
 // The ink of the shared chrome over a page (Back-to-top): the world ink on a finder,
-// airmail blue on Mailbox, the owner's cloth on Circle (the page sets it through
-// usePageGround; Harbour until then), the neutral ink elsewhere.
+// airmail blue on Mailbox and the postcard box, the owner's cloth on Circle (the page
+// sets it through usePageGround; Harbour until then), the neutral ink elsewhere.
 const PAGE_INK = new Map(Object.entries({
   ...Object.fromEntries(FINDER_PAGES.map(([page, key]) => [page, WORLD[key].ink])),
   Mailbox: NEUTRAL.airmailBlue,
+  Postcards: NEUTRAL.airmailBlue,
   Circle: HARBOUR.cloth,
 }));
 

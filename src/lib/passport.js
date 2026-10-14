@@ -239,6 +239,18 @@ export async function socialFeed() {
   const { data, error } = await callWorker('social/feed', {});
   return { rows: data?.rows || [], held: data?.held || null, error };
 }
+// The postcard box (2026-10-14): every postcard sent to you, newest first, a page at a
+// time from the worker's /postcards/box; before = the previous page's `next` (the last
+// card's created_at, passed back as sent). A worker without the route answers 404
+// { path }: the box then shows the cards addressed to you that the feed holds, partial.
+export async function postcardBox(before = null) {
+  const { data, error } = await callWorker('postcards/box', before ? { before } : {});
+  if (data && data.path === '/postcards/box') {
+    const f = await socialFeed();
+    return { rows: (f.rows || []).filter((r) => r?.type === 'postcard' && r.to_me === true), next: null, held: f.held, error: f.error, partial: true };
+  }
+  return { rows: data?.rows || [], next: data?.next || null, held: data?.held || null, error: error || data?.error || null, partial: false };
+}
 // Block a person by user id. Today's worker records the block, silences tags
 // and postcards both ways and kills that person's pending invites to you;
 // backend item B8 also ends the follow edges and filters feeds, and advertises

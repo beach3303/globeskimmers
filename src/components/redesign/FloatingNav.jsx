@@ -13,8 +13,9 @@ import { NEUTRAL, rgba } from '@/components/redesign/constants';
 //
 // Active state is derived from useLocation().pathname so Layout can render
 // <FloatingNav /> without prop wiring. Your circle (/Circle) lights Profile,
-// since it opens from there; someone else's page (/Traveler) and the finders
-// light no tab. Pass `dark` over dark/map surfaces for higher contrast.
+// since it opens from there, and the postcard box (/Postcards) lights Mailbox;
+// someone else's page (/Traveler) and the finders light no tab. Pass `dark`
+// over dark/map surfaces for higher contrast.
 //
 // An always-on 1px cream outer ring keeps the pill's edge readable where it
 // floats over dark ground (the navy and plum Home bands, the dark plates).
@@ -67,6 +68,7 @@ export default function FloatingNav({ active, dark = false }) {
     if (path.includes('passport')) return 'passport';
     if (path.includes('profile')) return 'profile';
     if (path.includes('mailbox')) return 'mailbox';
+    if (path.includes('postcards')) return 'mailbox';  // the postcard box opens from Mailbox
     if (path.includes('settings')) return 'settings';
     if (path === '/' || path.includes('home')) return 'home';
     if (path.includes('circle')) return 'profile';  // your circle opens from Profile

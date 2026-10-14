@@ -7,7 +7,8 @@
 // It shows nothing untrue: nothing social until the age tier is known; the hold note for a
 // 13-17 account; a skeleton while the feed loads, 'Try again' when it fails (never 'An
 // empty mailbox'); rows from people you blocked never show. The old one-tap unfollow chips
-// are gone: 'Your circle · n' opens the Circle screen, where unfollowing asks first.
+// are gone: 'Your circle · n' opens the Circle screen, where unfollowing asks first. The
+// feed holds only the newest cards; 'Your postcard box' keeps every one sent to you.
 // Every person here (a postcard's sender, a stamp, an activity line, a request) has a
 // door to TravelerSheet: Report, Unfollow, and Block once the worker advertises
 // block_v2 (go-live decision 6, 2026-10-13; Apple 1.2). A 'confirm' account (a birthday
@@ -184,6 +185,22 @@ function CircleRow({ circle, style = undefined }) {
   );
 }
 
+// 'Your postcard box', above the feed: the feed shows only the newest cards, the box keeps
+// every one sent to you (Postcards).
+function PostcardBoxRow({ style = undefined }) {
+  return (
+    <Link to={createPageUrl("Postcards")}
+      style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 56, boxSizing: "border-box", padding: "8px 12px 8px 16px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16, textDecoration: "none", ...style }}>
+      <Mail size={20} strokeWidth={1.8} color={NEUTRAL.stamp} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: fs(15), fontWeight: 600, lineHeight: 1.3, color: NEUTRAL.ink }}>Your postcard box</span>
+        <span style={{ display: "block", fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink3 }}>Every postcard sent to you, kept</span>
+      </span>
+      <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
+    </Link>
+  );
+}
+
 function MailboxBody() {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -239,6 +256,7 @@ function MailboxBody() {
           <Requests rows={circle.requests} onAccept={answer("accept")} onDecline={answer("decline")} style={{ marginTop: GAP }}
             onMore={(r) => openTraveler(r, { kind: "profile", note: "Asked to follow me" })} />
         ) : null}
+        {rows.length ? <PostcardBoxRow style={{ marginTop: GAP }} /> : null}
 
         <section aria-label="Where your circle has been" style={{ marginTop: GAP }}>
           {!feed ? (
