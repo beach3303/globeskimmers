@@ -1478,6 +1478,20 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
     await call('login_events', `login_events?user_id=eq.${userId}`, { method: 'DELETE', headers: { Prefer: 'return=minimal', 'Content-Profile': 'public' } });
   }
 
+  // 1l) The member number (events D1, see gbMemberNumber) goes at the
+  //     under-13 clean-up too (go-live round 2): the bell's alerts named the
+  //     account by it. A table that doesn't exist yet is created empty, so
+  //     there is simply nothing to delete; a D1 error fails the step, which
+  //     is retried like the others.
+  if (keepAccount) {
+    try {
+      if (env.DB) {
+        await env.DB.prepare(MEMBER_NUMBERS_SQL).run();
+        await env.DB.prepare('DELETE FROM member_numbers WHERE user_id = ?1').bind(String(userId).toLowerCase()).run();
+      }
+    } catch { failed.push('member_number'); }
+  }
+
   // 1j) Their place suggestions (+ their photos in R2), likes, reports and
   //     daily counts (events D1). A place only they had suggested goes too —
   //     its name and pin were theirs — unless the founder already decided it
