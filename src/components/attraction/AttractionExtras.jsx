@@ -9,9 +9,15 @@
 // footprint — checked here, then again by the worker against its own
 // coordinates (the fix rides along for that check and is never stored).
 // The stamp action is the cream rubber stamp (redesign/RubberStamp), the same
-// in every world, so a card keeps one solid button: its Directions.
+// in every world, so a card keeps one solid button: its Directions. The detail
+// cards print in the page's world (the default export's `world`, Things to Do
+// by default): white with the world line, serif titles, mono kickers and lucide
+// icons in the world ink. No emoji.
 import React, { useEffect, useId, useRef, useState } from "react";
-import { BookOpen, ClipboardList, DollarSign, Lock, MapPin } from "lucide-react";
+import {
+  Accessibility, ArrowUpRight, Backpack, BookOpen, CalendarCheck, CalendarClock, CalendarDays, Camera, CameraOff,
+  Check, ChevronDown, ClipboardList, DoorOpen, Info, Lock, Shirt, SquareParking, Ticket, Timer,
+} from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { addStamp, reportStamp, STAMP_REFUSALS, metersBetween, setStampNote, setStampArt } from "@/lib/passport";
 import { respectPlaceFor } from "@/lib/respectPlaces";
@@ -27,12 +33,11 @@ import Guestbook from "@/components/Guestbook";
 import { useLocation, isLiveFix } from "@/components/location/LocationContext";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import RubberStamp, { STAMP_LABEL } from "@/components/redesign/RubberStamp";
-import { NEUTRAL } from "@/components/redesign/constants";
+import { NEUTRAL, fs } from "@/components/redesign/constants";
+import { worldRow } from "@/components/finder/FinderControls";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
-const INK = "#16110D", INK3 = "#736657", RULE = "rgba(22,17,13,.12)", STAMP = "#B0472F";
-const fs = (n) => `calc(${n}px*var(--fs))`;
 
 const idKind = (id) => {
   const v = String(id || "");
@@ -363,20 +368,67 @@ export function useVisitInfo(id) {
   return visit;
 }
 
-function Card({ icon, title, children }) {
+// The detail cards print in the page's world (plan F6 detail 3; default Things to Do):
+// white with a 1px world line, radius 16; a serif title in ink led by a lucide icon in the
+// world's icon ink; mono kickers in the world ink, never stamp red (which belongs to the
+// stamp and to 'Closed'). Loading bars shimmer on the world wash. Every link and toggle is
+// a 44px target; their margins take the extra height back so the cards keep their rhythm.
+function Card({ w, icon: Icon, title, children }) {
   return (
-    <div style={{ background: "#fff", border: `1px solid ${RULE}`, borderRadius: 16, padding: "14px 16px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: SERIF, fontSize: fs(21), color: INK, marginBottom: 8 }}>{icon}{title}</div>
+    <section style={{ background: NEUTRAL.white, border: `1px solid ${w.line}`, borderRadius: 16, padding: "14px 16px" }}>
+      <h3 style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px", fontFamily: SERIF, fontWeight: 400, fontSize: fs(21), lineHeight: 1.15, color: NEUTRAL.ink }}>
+        <Icon size={18} color={w.iconInk} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
+        <span>{title}</span>
+      </h3>
       {children}
+    </section>
+  );
+}
+// Loading bars on the world wash (hidden from screen readers; the card's words say what is loading).
+function Bars({ w, widths, first = 6 }) {
+  return (
+    <div aria-hidden="true" style={/** @type {import('react').CSSProperties} */ ({ "--w-wash": w.wash })}>
+      {widths.map((x, i) => <span key={x} className="gs-shimmer" style={{ display: "block", height: 12, width: `${x}%`, borderRadius: 6, marginTop: i ? 8 : first }} />)}
     </div>
   );
 }
+/**
+ * A text button with a 44px target. Its words sit `gap` px under whatever is above, on one
+ * line or several; the padding and the negative margins make the target without moving them.
+ * @param {string} color @param {number} size @param {number} gap
+ * @returns {import('react').CSSProperties}
+ */
+const linkButton = (color, size, gap) => ({
+  display: "flex", alignItems: "flex-start", gap: 6, minHeight: 44, boxSizing: "border-box", margin: `${gap - 8}px 0 -12px`, padding: "8px 0",
+  background: "transparent", border: 0, fontFamily: "inherit", fontSize: fs(size), lineHeight: 1.3, fontWeight: 600, color, textAlign: "left",
+  textDecoration: "underline", textUnderlineOffset: 3, cursor: "pointer",
+});
+// An external link's label and arrow: the arrow stays on the last word's line however the
+// label wraps.
+function OutLabel({ label, color }) {
+  const cut = label.lastIndexOf(" ") + 1;
+  return (
+    <span>
+      {label.slice(0, cut)}
+      <span style={{ whiteSpace: "nowrap" }}>
+        {label.slice(cut)}
+        <ArrowUpRight size={15} color={color} strokeWidth={2} aria-hidden="true" focusable="false" style={{ display: "inline", verticalAlign: "-2px", marginLeft: 4 }} />
+      </span>
+    </span>
+  );
+}
+// The same 44px target inside a sentence: the line keeps its height.
+/** @type {import('react').CSSProperties} */
+const inlineButton = {
+  display: "inline-flex", alignItems: "center", minHeight: 44, margin: "-14px 0", padding: 0, background: "transparent", border: 0,
+  fontFamily: "inherit", fontSize: "inherit", lineHeight: "inherit", color: "inherit", textDecoration: "underline", textUnderlineOffset: 2, cursor: "pointer",
+};
 function SourceLine({ url, checkedAt }) {
   const host = hostOf(url);
   if (!host) return null;
   return (
-    <p style={{ marginTop: 10, fontSize: fs(11.5), color: INK3 }}>
-      From <button type="button" onClick={() => openPartner(url)} style={{ textDecoration: "underline", color: "inherit" }}>{host}</button>
+    <p style={{ marginTop: 10, fontSize: fs(11.5), lineHeight: 1.45, color: NEUTRAL.ink3 }}>
+      From <button type="button" onClick={() => openPartner(url)} style={inlineButton}>{host}</button>
       {checkedAt ? ` · checked ${checkedOn(checkedAt)}` : ""} · prices can change
     </p>
   );
@@ -388,22 +440,39 @@ const verifyUrlFor = (src, official) => {
   const sh = hostOf(src), oh = hostOf(official);
   return sh && oh && (sh === oh || sh.endsWith(`.${oh}`) || oh.endsWith(`.${sh}`)) ? src : (official || src || null);
 };
-function VerifyLink({ url, label }) {
+function VerifyLink({ w, url, label }) {
   if (!url) return null;
-  return <button type="button" onClick={() => openPartner(url)} style={{ display: "block", marginTop: 6, fontSize: fs(13.5), fontWeight: 600, color: "#6D28D9", textDecoration: "underline", textAlign: "left" }}>{label} ↗</button>;
+  return (
+    <button type="button" onClick={() => openPartner(url)} style={linkButton(w.ink, 13.5, 6)}>
+      <OutLabel label={label} color={w.ink} />
+    </button>
+  );
 }
-function OfficialLink({ url, label }) {
-  if (!url) return <p style={{ fontSize: fs(13), color: INK3 }}>Prices aren&rsquo;t listed online — ask at the venue.</p>;
-  return <button type="button" onClick={() => openPartner(url)} style={{ fontSize: fs(14), fontWeight: 600, color: "#6D28D9", textDecoration: "underline", textAlign: "left" }}>{label} ↗</button>;
+function OfficialLink({ w, url, label }) {
+  if (!url) return <p style={{ fontSize: fs(13), lineHeight: 1.45, color: NEUTRAL.ink3 }}>Prices aren&rsquo;t listed online — ask at the venue.</p>;
+  return (
+    <button type="button" onClick={() => openPartner(url)} style={linkButton(w.ink, 14, 0)}>
+      <OutLabel label={label} color={w.ink} />
+    </button>
+  );
+}
+// A short line led by a 16px icon in the world's icon ink (free days, booking ahead).
+function IconLine({ w, icon: Icon, children }) {
+  return (
+    <p style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 6, fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink }}>
+      <Icon size={16} color={w.iconInk} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 2 }} />
+      <span>{children}</span>
+    </p>
+  );
 }
 
-export function TicketsCard({ visit, website }) {
-  const icon = <DollarSign size={18} color="#2E7D46" />;
+export function TicketsCard({ visit, website = undefined, world = "todo" }) {
+  const w = worldRow(world);
   if (visit === "loading") {
     return (
-      <Card icon={icon} title="Prices">
-        <p style={{ fontSize: fs(13), color: INK3, marginBottom: 8 }}>Checking the official site for current prices…</p>
-        {[75, 66, 50].map((w) => <div key={w} aria-hidden="true" className="animate-pulse" style={{ height: 12, width: `${w}%`, borderRadius: 6, background: "#ECE6D8", marginTop: 6 }} />)}
+      <Card w={w} icon={Ticket} title="Prices">
+        <p style={{ fontSize: fs(13), lineHeight: 1.45, color: NEUTRAL.ink3, marginBottom: 8 }}>Checking the official site for current prices…</p>
+        <Bars w={w} widths={[75, 66, 50]} />
       </Card>
     );
   }
@@ -414,54 +483,59 @@ export function TicketsCard({ visit, website }) {
   const free = a?.free === true;
   const hasAny = free || prices.length || a?.discounts?.length || a?.free_days || a?.reservation;
   return (
-    <Card icon={icon} title="Prices">
-      {!hasAny && <OfficialLink url={official} label="See prices on the official site" />}
-      {free && <p style={{ fontSize: fs(18), fontWeight: 700, color: "#2E7D46" }}>Free admission</p>}
+    <Card w={w} icon={Ticket} title="Prices">
+      {!hasAny && <OfficialLink w={w} url={official} label="See prices on the official site" />}
+      {free && <p style={{ fontSize: fs(18), lineHeight: 1.3, fontWeight: 700, color: NEUTRAL.open }}>Free admission</p>}
       {prices.length > 0 && (
         <div>
           {prices.map((p, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, padding: "7px 0", borderTop: i ? `1px solid ${RULE}` : "none" }}>
-              <span style={{ fontSize: fs(14), color: INK, minWidth: 0 }}>
+            <div key={i} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, padding: "7px 0", borderTop: i ? `1px solid ${w.line}` : "none" }}>
+              <span style={{ fontSize: fs(14), lineHeight: 1.4, color: NEUTRAL.ink, minWidth: 0 }}>
                 {p.label}
-                {p.note && <span style={{ display: "block", fontSize: fs(12), color: INK3 }}>{p.note}</span>}
+                {p.note && <span style={{ display: "block", fontSize: fs(12), color: NEUTRAL.ink3 }}>{p.note}</span>}
               </span>
-              <span style={{ fontSize: fs(16), fontWeight: 700, color: INK, flex: "none" }}>{p.amount === 0 ? "Free" : (p.amount_text || `${p.amount}`)}</span>
+              <span style={{ fontSize: fs(16), lineHeight: 1.3, fontWeight: 700, color: NEUTRAL.ink, flex: "none" }}>{p.amount === 0 ? "Free" : (p.amount_text || `${p.amount}`)}</span>
             </div>
           ))}
         </div>
       )}
       {a?.discounts?.length > 0 && (
         <ul style={{ marginTop: 6 }}>
-          {a.discounts.map((d, i) => <li key={i} style={{ fontSize: fs(13.5), color: INK, display: "flex", gap: 8 }}><span style={{ color: "#2E7D46" }}>✓</span><span>{d.label}</span></li>)}
+          {a.discounts.map((d, i) => (
+            <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink }}>
+              <Check size={15} color={NEUTRAL.open} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 2 }} />
+              <span>{d.label}</span>
+            </li>
+          ))}
         </ul>
       )}
-      {a?.free_days && <p style={{ marginTop: 6, fontSize: fs(13.5), color: INK }}>🗓️ {a.free_days}</p>}
-      {a?.reservation && <p style={{ marginTop: 6, fontSize: fs(13.5), color: INK }}>🎟️ {a.reservation}</p>}
+      {a?.free_days && <IconLine w={w} icon={CalendarDays}>{a.free_days}</IconLine>}
+      {a?.reservation && <IconLine w={w} icon={CalendarCheck}>{a.reservation}</IconLine>}
       {hasAny && a && <SourceLine url={a.source_url || official} checkedAt={visit.checked_at} />}
-      {hasAny && a && <VerifyLink url={verifyUrlFor(a.source_url, official)} label="Verify the latest prices on the official website" />}
+      {hasAny && a && <VerifyLink w={w} url={verifyUrlFor(a.source_url, official)} label="Verify the latest prices on the official website" />}
     </Card>
   );
 }
 
-export function ParkingCard({ visit, website }) {
+export function ParkingCard({ visit, website = undefined, world = "todo" }) {
+  const w = worldRow(world);
   if (!visit || visit === "loading") return null;
-  const icon = <MapPin size={18} color="#6D28D9" />;
   const pk = visit.ok ? visit.parking : null;
   const official = visit.official_site || website || null;
   if (!pk?.options?.length && !pk?.note) {
-    return official ? <Card icon={icon} title="Parking"><OfficialLink url={official} label="Parking details on the official site" /></Card> : null;
+    return official ? <Card w={w} icon={SquareParking} title="Parking"><OfficialLink w={w} url={official} label="Parking details on the official site" /></Card> : null;
   }
   return (
-    <Card icon={icon} title="Parking">
+    <Card w={w} icon={SquareParking} title="Parking">
       {pk.options.map((o, i) => (
-        <div key={i} style={{ padding: "7px 0", borderTop: i ? `1px solid ${RULE}` : "none" }}>
-          <p style={{ fontSize: fs(14), fontWeight: 600, color: INK }}>{o.label}</p>
-          {o.price_text && <p style={{ fontSize: fs(13.5), color: INK3 }}>{o.price_text}</p>}
+        <div key={i} style={{ padding: "7px 0", borderTop: i ? `1px solid ${w.line}` : "none" }}>
+          <p style={{ fontSize: fs(14), lineHeight: 1.4, fontWeight: 600, color: NEUTRAL.ink }}>{o.label}</p>
+          {o.price_text && <p style={{ fontSize: fs(13.5), lineHeight: 1.4, color: NEUTRAL.ink3 }}>{o.price_text}</p>}
         </div>
       ))}
-      {pk.note && <p style={{ marginTop: 6, fontSize: fs(13.5), color: INK }}>{pk.note}</p>}
+      {pk.note && <p style={{ marginTop: 6, fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink }}>{pk.note}</p>}
       <SourceLine url={pk.source_url || official} checkedAt={visit.checked_at} />
-      <VerifyLink url={verifyUrlFor(pk.source_url, official)} label="Verify the latest parking info on the official website" />
+      <VerifyLink w={w} url={verifyUrlFor(pk.source_url, official)} label="Verify the latest parking info on the official website" />
     </Card>
   );
 }
@@ -496,52 +570,57 @@ export const useBeforeYouGo = (id) => useOnOpenLookup("attractions/before-you-go
 function ReportLine({ route, id, children }) {
   const [sent, setSent] = useState(false);
   if (!id) return null;
-  if (sent) return <p style={{ marginTop: 8, fontSize: fs(12), color: INK3 }}>Thanks — we&rsquo;ll look at this place again.</p>;
+  if (sent) return <p role="status" style={{ marginTop: 8, fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink3 }}>Thanks — we&rsquo;ll look at this place again.</p>;
   return (
     <button type="button" onClick={async () => { setSent(true); await callWorker(route, { id, report: true }); showToast("Thanks — we'll recheck this place", "success"); }}
-      style={{ marginTop: 8, fontSize: fs(12), color: INK3, textDecoration: "underline", textAlign: "left" }}>{children}</button>
+      style={{ ...linkButton(NEUTRAL.ink3, 12, 8), fontWeight: 400 }}>{children}</button>
   );
 }
 
 // Why visit (top of the page, above the stamp) + what you can do + the story.
 // Everything here is ours, written once from public records and kept; a line
 // the guards rejected is simply absent, so an empty card never renders.
-export function WhyVisitCard({ wv, id, firstLine }) {
+export function WhyVisitCard({ wv, id = undefined, firstLine = undefined, world = "todo" }) {
+  const w = worldRow(world);
   const [open, setOpen] = useState(false);
+  const storyId = useId();
   const why = (wv && wv !== "loading" && wv.ok && wv.why_visit) || firstLine || null;
   const canDo = wv && wv !== "loading" && wv.ok && Array.isArray(wv.can_do) ? wv.can_do : [];
   const story = wv && wv !== "loading" && wv.ok && wv.story ? String(wv.story).split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean) : [];
+  /** @type {import('react').CSSProperties} */
+  const box = { background: NEUTRAL.white, border: `1px solid ${w.line}`, borderRadius: 16, padding: "14px 16px" };
   if (wv === "loading" && !why) {
-    return (
-      <div style={{ background: "#fff", border: `1px solid ${RULE}`, borderRadius: 16, padding: "14px 16px" }}>
-        {[88, 70].map((w) => <div key={w} aria-hidden="true" className="animate-pulse" style={{ height: 12, width: `${w}%`, borderRadius: 6, background: "#ECE6D8", marginTop: w === 88 ? 2 : 8 }} />)}
-      </div>
-    );
+    return <section style={box}><Bars w={w} widths={[88, 70]} first={2} /></section>;
   }
   if (!why && !canDo.length && !story.length) return null;
   return (
-    <div style={{ background: "#fff", border: `1px solid ${RULE}`, borderRadius: 16, padding: "14px 16px" }}>
+    <section style={box}>
       {why && (
         <>
-          <div style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".14em", textTransform: "uppercase", color: STAMP, marginBottom: 6 }}>Why visit</div>
-          <p style={{ fontFamily: SERIF, fontSize: fs(18), lineHeight: 1.28, color: INK }}>{why}</p>
+          <h3 style={{ margin: "0 0 6px", fontFamily: MONO, fontSize: fs(10.5), lineHeight: 1.35, fontWeight: 500, letterSpacing: ".14em", textTransform: "uppercase", color: w.ink }}>Why visit</h3>
+          <p style={{ fontFamily: SERIF, fontSize: fs(18), lineHeight: 1.28, color: NEUTRAL.ink }}>{why}</p>
         </>
       )}
       {canDo.length > 0 && (
         <ul style={{ marginTop: why ? 10 : 0 }}>
-          {canDo.map((l, i) => <li key={i} style={{ display: "flex", gap: 8, fontSize: fs(13.5), color: INK, padding: "3px 0" }}><span style={{ color: STAMP }}>·</span><span>{l}</span></li>)}
+          {canDo.map((l, i) => <li key={i} style={{ display: "flex", gap: 8, fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink, padding: "3px 0" }}><span aria-hidden="true" style={{ color: w.iconInk, fontWeight: 700 }}>·</span><span>{l}</span></li>)}
         </ul>
       )}
       {story.length > 0 && (
-        <div style={{ marginTop: 10, borderTop: `1px solid ${RULE}`, paddingTop: 8 }}>
-          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: fs(13.5), fontWeight: 600, color: "#6D28D9" }}>
-            <BookOpen size={15} /> {open ? "Hide the story ▴" : "Read the story ▾"}
+        <div style={{ marginTop: 10, borderTop: `1px solid ${w.line}`, paddingTop: 2 }}>
+          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={storyId}
+            style={{ ...linkButton(w.ink, 13.5, 8), textDecoration: "none" }}>
+            <BookOpen size={16} color={w.iconInk} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>{open ? "Hide the story" : "Read the story"}</span>
+            <ChevronDown size={14} color={NEUTRAL.ink3} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 2, transform: open ? "rotate(180deg)" : undefined, transition: "transform .2s" }} />
           </button>
-          {open && story.map((p, i) => <p key={i} style={{ marginTop: 8, fontSize: fs(14), lineHeight: 1.5, color: INK }}>{p}</p>)}
+          <div id={storyId} hidden={!open}>
+            {story.map((p, i) => <p key={i} style={{ marginTop: i ? 8 : 4, fontSize: fs(14), lineHeight: 1.5, color: NEUTRAL.ink }}>{p}</p>)}
+          </div>
         </div>
       )}
       {wv && wv !== "loading" && wv.ok && <ReportLine route="attractions/why-visit" id={id}>Something&rsquo;s off?</ReportLine>}
-    </div>
+    </section>
   );
 }
 
@@ -553,70 +632,78 @@ const BYG_DRESS = { cover_shoulders: "Cover your shoulders", cover_knees: "Cover
 const BYG_SECURITY = { bag_check: "Bag check at the entrance", no_large_bags: "No large bags", lockers: "Lockers are available", id_required: "Bring ID", other: "" };
 const BYG_CLOSURE = { prayer: "Prayer times", service: "Services", ceremony: "Ceremonies", weekly: "Weekly closure", seasonal: "Seasonal closure", other: "Closure" };
 const minutesText = (m) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${m} min`);
-function BygRow({ icon, head, text, quote, tone }) {
+// A row's head in words, coloured only where the colour already has a meaning: the open
+// green for 'Open to all visitors' and allowed photos, the stamp red ('Closed') for 'Not
+// open to visitors'. Cautions read in ink; their words carry them.
+const BYG_TONE = { green: NEUTRAL.open, red: NEUTRAL.stamp };
+function BygRow({ w, icon: Icon, head, text, quote, tone }) {
   const [open, setOpen] = useState(false);
-  const color = tone === "amber" ? "#8A5A00" : tone === "red" ? "#B3261E" : tone === "green" ? "#2E7D46" : INK;
+  const quoteId = useId();
   return (
-    <div style={{ padding: "8px 0", borderTop: `1px solid ${RULE}` }}>
-      <p style={{ fontSize: fs(14), fontWeight: 600, color, display: "flex", gap: 8 }}><span aria-hidden="true">{icon}</span><span>{head}</span></p>
-      {text && text !== head && <p style={{ fontSize: fs(13.5), color: INK, marginTop: 2, paddingLeft: 26 }}>{text}</p>}
+    <div style={{ padding: "8px 0", borderTop: `1px solid ${w.line}` }}>
+      <p style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: fs(14), lineHeight: 1.4, fontWeight: 600, color: BYG_TONE[tone] || NEUTRAL.ink }}>
+        <Icon size={18} color={w.iconInk} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 1 }} />
+        <span>{head}</span>
+      </p>
+      {text && text !== head && <p style={{ fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink2, marginTop: 2, paddingLeft: 26 }}>{text}</p>}
       {quote && (
         <div style={{ paddingLeft: 26 }}>
-          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} style={{ marginTop: 3, fontSize: fs(12), color: INK3, textDecoration: "underline" }}>{open ? "Hide what the site says" : "What the official site says"}</button>
-          {open && <p style={{ marginTop: 4, fontSize: fs(12.5), lineHeight: 1.45, color: INK3, fontStyle: "italic" }}>&ldquo;{quote}&rdquo;</p>}
+          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={quoteId}
+            style={{ ...linkButton(NEUTRAL.ink3, 12, 3), fontWeight: 400 }}>{open ? "Hide what the site says" : "What the official site says"}</button>
+          <p id={quoteId} hidden={!open} style={{ marginTop: -4, fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.ink3, fontStyle: "italic" }}>&ldquo;{quote}&rdquo;</p>
         </div>
       )}
     </div>
   );
 }
-export function BeforeYouGoCard({ byg, id, website }) {
-  const icon = <ClipboardList size={18} color="#8A5A00" />;
+export function BeforeYouGoCard({ byg, id = undefined, website = undefined, world = "todo" }) {
+  const w = worldRow(world);
   if (!byg) return null;
   if (byg === "loading") {
     return (
-      <Card icon={icon} title="Before you go">
-        <p style={{ fontSize: fs(13), color: INK3, marginBottom: 8 }}>Reading the official site for visiting rules…</p>
-        {[70, 58].map((w) => <div key={w} aria-hidden="true" className="animate-pulse" style={{ height: 12, width: `${w}%`, borderRadius: 6, background: "#ECE6D8", marginTop: 6 }} />)}
+      <Card w={w} icon={ClipboardList} title="Before you go">
+        <p style={{ fontSize: fs(13), lineHeight: 1.45, color: NEUTRAL.ink3, marginBottom: 8 }}>Reading the official site for visiting rules…</p>
+        <Bars w={w} widths={[70, 58]} />
       </Card>
     );
   }
   const official = byg.official_site || website || null;
   if (!byg.ok || !byg.found) {
     return (
-      <Card icon={icon} title="Before you go">
-        <p style={{ fontSize: fs(13.5), color: INK }}>{byg.busy ? "Rule lookups are paused for today." : "We couldn't find published visiting rules for this place."} Check the official site before you go.</p>
-        <div style={{ marginTop: 6 }}><OfficialLink url={official} label="Visiting information on the official site" /></div>
+      <Card w={w} icon={ClipboardList} title="Before you go">
+        <p style={{ fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink }}>{byg.busy ? "Rule lookups are paused for today." : "We couldn't find published visiting rules for this place."} Check the official site before you go.</p>
+        <div style={{ marginTop: 6 }}><OfficialLink w={w} url={official} label="Visiting information on the official site" /></div>
       </Card>
     );
   }
   const rows = [];
   const e = byg.entry;
-  if (e?.value === "open_to_all") rows.push({ icon: "🚪", head: "Open to all visitors", text: e.text, quote: e.quote, tone: "green", src: e.source_url });
-  if (e?.value === "restricted") rows.push({ icon: "🚪", head: `Entry is limited — ${(e.limits || []).map((l) => BYG_LIMITS[l]).filter(Boolean).join("; ") || "see below"}`, text: e.text, quote: e.quote, tone: "amber", src: e.source_url });
-  if (e?.value === "closed_to_visitors") rows.push({ icon: "🚪", head: "Not open to visitors", text: e.text, quote: e.quote, tone: "red", src: e.source_url });
+  if (e?.value === "open_to_all") rows.push({ icon: DoorOpen, head: "Open to all visitors", text: e.text, quote: e.quote, tone: "green", src: e.source_url });
+  if (e?.value === "restricted") rows.push({ icon: DoorOpen, head: `Entry is limited — ${(e.limits || []).map((l) => BYG_LIMITS[l]).filter(Boolean).join("; ") || "see below"}`, text: e.text, quote: e.quote, tone: "amber", src: e.source_url });
+  if (e?.value === "closed_to_visitors") rows.push({ icon: DoorOpen, head: "Not open to visitors", text: e.text, quote: e.quote, tone: "red", src: e.source_url });
   const d = byg.dress;
-  if (d?.value === "stated") rows.push({ icon: "👕", head: (d.items || []).map((x) => BYG_DRESS[x]).filter(Boolean).join(" · ") || "Dress rules apply", text: d.text, quote: d.quote, tone: "amber", src: d.source_url });
+  if (d?.value === "stated") rows.push({ icon: Shirt, head: (d.items || []).map((x) => BYG_DRESS[x]).filter(Boolean).join(" · ") || "Dress rules apply", text: d.text, quote: d.quote, tone: "amber", src: d.source_url });
   const r = byg.reservation;
-  if (r?.value) rows.push({ icon: "🎟️", head: r.value === "required" ? "Book ahead — required" : r.value === "recommended" ? "Booking ahead is recommended" : "No booking needed", text: r.text, quote: r.quote, tone: r.value === "required" ? "amber" : "ink", src: r.source_url });
+  if (r?.value) rows.push({ icon: Ticket, head: r.value === "required" ? "Book ahead — required" : r.value === "recommended" ? "Booking ahead is recommended" : "No booking needed", text: r.text, quote: r.quote, tone: r.value === "required" ? "amber" : "ink", src: r.source_url });
   const t = byg.time_needed;
-  if (Number.isFinite(+t?.value)) rows.push({ icon: "⏱️", head: `Plan about ${minutesText(+t.value)}`, text: t.text, quote: t.quote, tone: "ink", src: t.source_url });
-  for (const c of (byg.closures?.items || [])) rows.push({ icon: "🕰️", head: BYG_CLOSURE[c.kind] || "Closure", text: c.text, quote: c.quote, tone: "amber", src: c.source_url });
+  if (Number.isFinite(+t?.value)) rows.push({ icon: Timer, head: `Plan about ${minutesText(+t.value)}`, text: t.text, quote: t.quote, tone: "ink", src: t.source_url });
+  for (const c of (byg.closures?.items || [])) rows.push({ icon: CalendarClock, head: BYG_CLOSURE[c.kind] || "Closure", text: c.text, quote: c.quote, tone: "amber", src: c.source_url });
   const p = byg.photography;
-  if (p?.value) rows.push({ icon: "📷", head: p.value === "allowed" ? "Photos are allowed" : p.value === "restricted" ? "Photos are limited in places" : "No photos inside", text: p.text, quote: p.quote, tone: p.value === "allowed" ? "green" : "amber", src: p.source_url });
+  if (p?.value) rows.push({ icon: p.value === "allowed" ? Camera : CameraOff, head: p.value === "allowed" ? "Photos are allowed" : p.value === "restricted" ? "Photos are limited in places" : "No photos inside", text: p.text, quote: p.quote, tone: p.value === "allowed" ? "green" : "amber", src: p.source_url });
   const s = byg.security;
-  if (s?.value === "stated") rows.push({ icon: "🎒", head: (s.items || []).map((x) => BYG_SECURITY[x]).filter(Boolean).join(" · ") || "Security checks", text: s.text, quote: s.quote, tone: "ink", src: s.source_url });
+  if (s?.value === "stated") rows.push({ icon: Backpack, head: (s.items || []).map((x) => BYG_SECURITY[x]).filter(Boolean).join(" · ") || "Security checks", text: s.text, quote: s.quote, tone: "ink", src: s.source_url });
   const a = byg.accessibility;
-  if (a?.value === "stated") rows.push({ icon: "♿", head: "Accessibility", text: a.text, quote: a.quote, tone: "ink", src: a.source_url });
-  for (const o of (byg.other_rules || [])) rows.push({ icon: "ℹ️", head: o.text, text: null, quote: o.quote, tone: "ink", src: o.source_url });
+  if (a?.value === "stated") rows.push({ icon: Accessibility, head: "Accessibility", text: a.text, quote: a.quote, tone: "ink", src: a.source_url });
+  for (const o of (byg.other_rules || [])) rows.push({ icon: Info, head: o.text, text: null, quote: o.quote, tone: "ink", src: o.source_url });
   const firstSrc = rows.find((x) => x.src)?.src || null;
   return (
-    <Card icon={icon} title="Before you go">
-      <div style={{ marginTop: -8 }}>{rows.map((row, i) => <BygRow key={i} {...row} />)}</div>
-      <p style={{ marginTop: 10, fontSize: fs(11.5), color: INK3 }}>
-        From <button type="button" onClick={() => openPartner(firstSrc || official)} style={{ textDecoration: "underline", color: "inherit" }}>{hostOf(firstSrc || official) || "the official site"}</button>
+    <Card w={w} icon={ClipboardList} title="Before you go">
+      <div>{rows.map((row, i) => <BygRow key={i} w={w} {...row} />)}</div>
+      <p style={{ marginTop: 10, fontSize: fs(11.5), lineHeight: 1.45, color: NEUTRAL.ink3 }}>
+        From <button type="button" onClick={() => openPartner(firstSrc || official)} style={inlineButton}>{hostOf(firstSrc || official) || "the official site"}</button>
         {byg.checked_at ? ` · checked ${checkedOn(byg.checked_at)}` : ""} · rules can change
       </p>
-      <VerifyLink url={verifyUrlFor(firstSrc, official)} label="Confirm on the official website" />
+      <VerifyLink w={w} url={verifyUrlFor(firstSrc, official)} label="Confirm on the official website" />
       <ReportLine route="attractions/before-you-go" id={id}>Something&rsquo;s wrong?</ReportLine>
     </Card>
   );
@@ -624,7 +711,11 @@ export function BeforeYouGoCard({ byg, id, website }) {
 
 // Everything above, for one attraction card. children: the card's own details
 // (hours, AI, website) — they sit above the guestbook, which comes last.
-export default function AttractionExtras({ a, formatDistance = undefined, isTablet: _isTablet = false, children = undefined }) {
+// world: the page's world for the cards (a WORLD row or key; Things to Do by default).
+// isTablet is accepted and no longer read.
+export default function AttractionExtras({ a, formatDistance = undefined, isTablet: _isTablet = false, children = undefined, world = "todo" }) {
+  const w = worldRow(world);
+  const guestbookId = useId();
   const link = useAttractionLink(a);
   const pid = String(a.placeId || a.id || "");
   const kind = idKind(pid);
@@ -639,16 +730,19 @@ export default function AttractionExtras({ a, formatDistance = undefined, isTabl
   const name = a.displayName?.text || a.name || "";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
-      <WhyVisitCard wv={wv} id={visitId} firstLine={a.whyVisit || null} />
+      <WhyVisitCard wv={wv} id={visitId} firstLine={a.whyVisit || null} world={w} />
       {link !== undefined && <StampHereButton a={a} link={link} formatDistance={formatDistance} />}
-      <TicketsCard visit={visit} website={a.websiteUri} />
-      <ParkingCard visit={visit} website={a.websiteUri} />
-      <BeforeYouGoCard byg={byg} id={visitId} website={a.websiteUri} />
+      <TicketsCard visit={visit} website={a.websiteUri} world={w} />
+      <ParkingCard visit={visit} website={a.websiteUri} world={w} />
+      <BeforeYouGoCard byg={byg} id={visitId} website={a.websiteUri} world={w} />
       {children}
-      <div>
-        <div style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".12em", textTransform: "uppercase", color: INK3, margin: "6px 2px 8px" }}>📖 Guestbook</div>
+      <section aria-labelledby={guestbookId}>
+        <h3 id={guestbookId} style={{ display: "flex", alignItems: "center", gap: 6, margin: "6px 2px 8px", fontFamily: MONO, fontSize: fs(10.5), lineHeight: 1.35, fontWeight: 500, letterSpacing: ".12em", textTransform: "uppercase", color: w.ink }}>
+          <BookOpen size={14} color={w.iconInk} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
+          Guestbook
+        </h3>
         {link !== undefined && <Guestbook entityType="attraction" entityId={link.gid || pid} entityName={name} />}
-      </div>
+      </section>
     </div>
   );
 }
