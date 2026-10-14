@@ -3,40 +3,84 @@
 // founder's colors, each taking the traveler's EARNED stickers (same inventory
 // as the luggage; a sticker lives on ONE item at a time, so a flag on the trunk
 // can't also ride the laptop). Items enlarge to edit, and the shelf order can
-// be dragged. Below them, up to six named travel buddies (virtual pets):
+// be dragged. Beside them, up to six named travel buddies (virtual pets):
 // species → breed → coat → name, pose cycles with a swipe (sitting / standing).
 // Pets never take stickers. The founder's photo renders live on R2 at
 // stamp-art/pets/<species>/<breed>[/<coat>]/<pose> and replace the drawn
 // fallback automatically, like the luggage skins. Every pick logs a gear_select
 // / buddy_add event (with city+country) so the admin can report what travelers
 // choose, per day/week/month and per place.
+//
+// The new look files all of it in one MY KIT folder (Profile.dc.html L185-211,
+// Profile-Visit L192-218): three columns of white tiles, the two items under
+// MY VIRTUAL ITEMS, the buddies under TRAVEL BUDDIES (row one holds the first
+// buddy, or the seat 'Room for 6 travel buddies'; the rest wrap three a row),
+// each tile 'TAP TO SEE IT'.
+//
+//   <VirtualItems stamps luggage readOnly gear buddies layout ownerFlags ownerFirst
+//                 className style />
+//   Owner (default): reads /gear/get itself; luggage ({ active, placements } from
+//     the page's one /luggage/get, null while loading; left out, it reads it) tells
+//     the sticker picker which stickers already ride the trunk.
+//   readOnly: someone else's kit, from their gear, buddies and layout: tab
+//     '{FIRST}’S KIT', labels 'VIRTUAL ITEMS' and 'TRAVEL BUDDY' (one) or
+//     'TRAVEL BUDDIES'; tiles only enlarge; their coffee orders stay theirs.
+//     ownerFlags: whose home flags their stickers may show (never the viewer's).
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { X, Plus, Trash2 } from "lucide-react";
+import { Coffee, Palette, Pencil, Plus, Trash2, X } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { useAuth } from "@/lib/AuthContext";
 import { useLocation } from "@/components/location/LocationContext";
 import { logEvent } from "@/lib/analytics";
 import { gearGet, gearSet } from "@/lib/gear";
 import { luggageGet } from "@/lib/passport";
+import { useIsTablet } from "@/lib/useIsTablet";
 import { buildStickers } from "@/components/passport/VirtualLuggage";
 import LuggageLabel from "@/components/passport/LuggageLabel";
 import { GEAR_SHAPES, GEAR_COLORS, DRINK_VARIANTS, GEAR_BOUNDS, colorOf } from "@/components/profile/gearShapes";
 import { PET_SHAPES, POSES } from "@/components/profile/petShapes";
 import { SPECIES, BREEDS, breedName } from "@/lib/petCatalog";
 import { coatsFor, coatFor } from "@/lib/petCoats";
+import { Folder } from "@/components/redesign/Zone";
+import { NEUTRAL, ZONE, fs } from "@/components/redesign/constants";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657", RULE = "rgba(22,17,13,.12)", IVORY = "#FFFCF7";
-const fs = (px) => `calc(${px}px * var(--fs, 1))`;
+const KIT = ZONE.kit;
 const PETS_BASE = "https://globeskimmers-api.maizasimeon.workers.dev/stamp-art/pets";
 const GEAR_BASE = "https://globeskimmers-api.maizasimeon.workers.dev/stamp-art/gear";
+const MAX_BUDDIES = 6;
 
 const svgFor = (kind, variant, colorKey) => {
   const c = colorOf(colorKey);
   const fn = kind === "laptop" ? GEAR_SHAPES.laptop : GEAR_SHAPES[variant] || GEAR_SHAPES.tumbler;
   return fn(c.body, c.dark, c.lite);
 };
+
+// The default item, when the traveler hasn't chosen one.
+const itemOf = (gear, kind) => gear?.[kind] || (kind === "drink" ? { variant: "tumbler", color: "blue" } : { color: "blue" });
+const drinkName = (item) => DRINK_VARIANTS.find((v) => v.key === (item?.variant || "tumbler"))?.name || "My bottle";
+
+// A 44px round close button for the sheets.
+function CloseButton({ onClick, style = undefined }) {
+  return (
+    <button type="button" onClick={onClick} aria-label="Close" className="rounded-full flex items-center justify-center"
+      style={{ width: 44, height: 44, flex: "none", background: "#fff", border: `1px solid ${RULE}`, ...style }}>
+      <X size={18} color={INK} />
+    </button>
+  );
+}
+
+// A colour choice: a small swatch inside a 44px target.
+function Swatch({ color, name, on, onClick, size = 28 }) {
+  return (
+    <button type="button" role="radio" aria-checked={on} aria-label={name} title={name} onClick={onClick}
+      style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: 0, padding: 0 }}>
+      <span aria-hidden="true" style={{ width: size, height: size, borderRadius: 999, background: color, border: on ? `3px solid ${INK}` : "2px solid rgba(22,17,13,.18)" }} />
+    </button>
+  );
+}
 
 // The item's art + its placed stickers, at any size. Stickers use the same
 // normalized coords as the luggage so they hold across phones.
@@ -79,7 +123,7 @@ function GearArt({ kind, item, width, stickersBySid, edit = false, selected = nu
 }
 
 // A pet: the uploaded breed render when R2 has one, else the drawn chibi.
-export function PetArt({ buddy, width }) {
+export function PetArt({ buddy, width, alt = "" }) {
   // Render ladder: coat render in this pose → breed render in this pose → the
   // coat's sitting render (most coats shipped sitting-only) → breed sitting →
   // the drawn chibi. The chibi has no standing drawing, so it maps to sitting.
@@ -93,11 +137,11 @@ export function PetArt({ buddy, width }) {
   ].filter(Boolean))];
   useEffect(() => { setStep(0); }, [buddy.species, buddy.breed, buddy.coat, buddy.pose]);
   if (step < urls.length) {
-    return <img src={urls[step]} alt="" onError={() => setStep(step + 1)} style={{ width, height: width, objectFit: "contain", display: "block" }} />;
+    return <img src={urls[step]} alt={alt} onError={() => setStep(step + 1)} style={{ width, height: width, objectFit: "contain", display: "block" }} />;
   }
   const fn = PET_SHAPES[buddy.species] || PET_SHAPES.dog;
   const pose = buddy.pose === "standing" ? "sitting" : buddy.pose;
-  return <svg viewBox="0 0 340 340" width={width} height={width} style={{ display: "block" }} aria-hidden="true"
+  return <svg viewBox="0 0 340 340" width={width} height={width} style={{ display: "block" }} role={alt ? "img" : undefined} aria-label={alt || undefined} aria-hidden={alt ? undefined : "true"}
     dangerouslySetInnerHTML={{ __html: fn(pose, coatFor(buddy.species, buddy.breed, buddy.coat)) }} />;
 }
 
@@ -147,23 +191,19 @@ function GearModal({ kind, item, stamps, stickersBySid, usedElsewhere, onChange,
       <div className="w-full max-w-md rounded-2xl p-4 overflow-y-auto" style={{ background: "#F3EEE1", maxHeight: "92vh" }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3">
           <div style={{ fontFamily: SERIF, fontSize: fs(21), color: INK }}>
-            {kind === "laptop" ? "My laptop" : DRINK_VARIANTS.find((v) => v.key === variant)?.name || "My bottle"}
+            {kind === "laptop" ? "My laptop" : drinkName(item)}
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-full p-1.5" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
-            <X size={16} color={INK} />
-          </button>
+          <CloseButton onClick={onClose} />
         </div>
 
         <div className="flex justify-center mt-2" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag}>
           <GearArt kind={kind} item={item} width={W} stickersBySid={stickersBySid} edit selected={selected} onSelect={setSelected} boxRef={boxRef} />
         </div>
 
-        {/* Colors — the founder's eight. */}
-        <div className="flex flex-wrap items-center gap-2 mt-2" role="radiogroup" aria-label="Color">
+        {/* Colors — the founder's eight (and two from the render batches). */}
+        <div className="flex flex-wrap items-center mt-2" role="radiogroup" aria-label="Color">
           {GEAR_COLORS.map((c) => (
-            <button key={c.key} type="button" role="radio" aria-checked={(item?.color || "blue") === c.key} aria-label={c.name}
-              onClick={() => patch({ color: c.key })} className="rounded-full"
-              style={{ width: 27, height: 27, background: c.body, border: (item?.color || "blue") === c.key ? `3px solid ${INK}` : `2px solid rgba(22,17,13,.18)` }} />
+            <Swatch key={c.key} color={c.body} name={c.name} on={(item?.color || "blue") === c.key} onClick={() => patch({ color: c.key })} />
           ))}
         </div>
 
@@ -171,22 +211,22 @@ function GearModal({ kind, item, stamps, stickersBySid, usedElsewhere, onChange,
           <>
             <div className="grid grid-cols-3 gap-1.5 mt-2.5">
               {DRINK_VARIANTS.map((v) => (
-                <button key={v.key} type="button" onClick={() => patch({ variant: v.key })}
+                <button key={v.key} type="button" onClick={() => patch({ variant: v.key })} aria-pressed={variant === v.key}
                   className="rounded-xl px-2 py-2 text-center"
-                  style={{ background: variant === v.key ? INK : "#fff", color: variant === v.key ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(11.5), fontWeight: 600, fontFamily: "inherit", lineHeight: 1.2 }}>
+                  style={{ minHeight: 44, background: variant === v.key ? INK : "#fff", color: variant === v.key ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(11.5), fontWeight: 600, fontFamily: "inherit", lineHeight: 1.2 }}>
                   {v.name}
                 </button>
               ))}
             </div>
             {/* Top-3 coffee orders, the traveler's own words (founder, 2026-10-05
-                evening) — they print in a small column beside the drink on the shelf. */}
+                evening) — they show when the drink is enlarged. */}
             <div style={{ fontFamily: SERIF, fontSize: fs(16), color: INK, marginTop: 12 }}>How I take my coffee (or tea)</div>
-            <p style={{ fontSize: fs(11), color: INK3, margin: "2px 0 6px", lineHeight: 1.4 }}>Your top 3, your words — they print beside your drink.</p>
+            <p style={{ fontSize: fs(11), color: INK3, margin: "2px 0 6px", lineHeight: 1.4 }}>Your top 3, in your words. They show when your drink is open.</p>
             {[0, 1, 2].map((i) => (
               <input key={i} value={(item?.coffees || [])[i] || ""} aria-label={`Coffee order ${i + 1}`}
                 onChange={(e) => { const next = [0, 1, 2].map((j) => (item?.coffees || [])[j] || ""); next[i] = e.target.value.slice(0, 48); patch({ coffees: next }); }}
                 placeholder={["Cold brew, grande, 3 Splendas", "Oat milk latte, extra hot", "Earl Grey, splash of honey"][i]}
-                className="w-full rounded-xl px-3 h-10 outline-none" style={{ background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(13), color: INK, marginTop: i ? 6 : 0 }} />
+                className="w-full rounded-xl px-3 outline-none" style={{ height: 44, background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(13), color: INK, marginTop: i ? 6 : 0 }} />
             ))}
           </>
         )}
@@ -197,32 +237,34 @@ function GearModal({ kind, item, stamps, stickersBySid, usedElsewhere, onChange,
             <div className="flex items-center gap-3">
               <span style={{ fontSize: fs(12), color: INK3, minWidth: 34 }}>Size</span>
               <input type="range" min="0.5" max="2.2" step="0.05" value={sel.scale} aria-label="Sticker size"
-                onChange={(e) => patchPl(sel.sid, { scale: Number(e.target.value) })} style={{ flex: 1, accentColor: INK }} />
+                onChange={(e) => patchPl(sel.sid, { scale: Number(e.target.value) })} style={{ flex: 1, minHeight: 44, accentColor: INK }} />
             </div>
-            <div className="flex items-center gap-3 mt-1">
+            <div className="flex items-center gap-3">
               <span style={{ fontSize: fs(12), color: INK3, minWidth: 34 }}>Turn</span>
               <input type="range" min="-45" max="45" step="1" value={sel.rot} aria-label="Sticker rotation"
-                onChange={(e) => patchPl(sel.sid, { rot: Number(e.target.value) })} style={{ flex: 1, accentColor: INK }} />
-              <button type="button" onClick={removeSel} aria-label="Take the sticker off" className="rounded-lg p-1.5" style={{ background: IVORY, border: `1px solid ${RULE}` }}>
-                <Trash2 size={14} color="#B0472F" />
+                onChange={(e) => patchPl(sel.sid, { rot: Number(e.target.value) })} style={{ flex: 1, minHeight: 44, accentColor: INK }} />
+              <button type="button" onClick={removeSel} aria-label="Take the sticker off" className="rounded-lg flex items-center justify-center"
+                style={{ width: 44, height: 44, flex: "none", background: IVORY, border: `1px solid ${RULE}` }}>
+                <Trash2 size={16} color={NEUTRAL.stamp} />
               </button>
             </div>
           </div>
         )}
 
         <button type="button" onClick={() => setPicking(true)}
-          className="w-full mt-2.5 rounded-xl py-2.5 font-semibold" style={{ background: "#fff", color: INK, border: `1.5px dashed rgba(22,17,13,.3)`, fontSize: fs(13.5) }}>
-          + Add a sticker
+          className="w-full mt-2.5 rounded-xl font-semibold flex items-center justify-center gap-1.5"
+          style={{ minHeight: 44, background: "#fff", color: INK, border: "1.5px dashed rgba(22,17,13,.3)", fontSize: fs(13.5) }}>
+          <Plus size={16} aria-hidden="true" /> Add a sticker
         </button>
         <p className="text-center" style={{ fontSize: fs(10.5), color: INK3, marginTop: 6, fontFamily: MONO, letterSpacing: ".04em" }}>
-          Stickers are earned by traveling — and each one lives on one item at a time.
+          Stickers are earned by traveling, and each one lives on one item at a time.
         </p>
 
         {picking && (
           <div className="rounded-xl p-3 mt-2" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
             <div className="flex items-center justify-between">
               <span style={{ fontWeight: 700, fontSize: fs(13.5), color: INK }}>Your stickers</span>
-              <button type="button" onClick={() => setPicking(false)} style={{ fontSize: fs(12.5), color: INK3, fontFamily: "inherit" }}>Close</button>
+              <button type="button" onClick={() => setPicking(false)} style={{ minHeight: 44, padding: "0 6px", fontSize: fs(12.5), color: INK3, fontFamily: "inherit" }}>Close</button>
             </div>
             {earned.length === 0 && <p style={{ fontSize: fs(12.5), color: INK3, marginTop: 6 }}>Stamp places and arrive in countries to earn stickers.</p>}
             <div className="flex flex-wrap gap-2.5 mt-2" style={{ maxHeight: 190, overflowY: "auto" }}>
@@ -267,9 +309,7 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
             <div className="truncate" style={{ fontFamily: SERIF, fontSize: fs(21), color: INK }}>{isNew ? "Add your travel buddy" : name || "Your buddy"}</div>
             {!isNew && species && <div className="truncate" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".06em", color: INK3, textTransform: "uppercase" }}>{breedName(species, breed) || species}</div>}
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-full p-1.5" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
-            <X size={16} color={INK} />
-          </button>
+          <CloseButton onClick={onClose} />
         </div>
 
         {preview && <div className="flex justify-center my-1"><PetArt key={`${species}-${breed}-${coat}`} buddy={preview} width={150} /></div>}
@@ -278,8 +318,8 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
           {SPECIES.map((s) => (
             <button key={s.key} type="button" role="radio" aria-checked={species === s.key}
               onClick={() => { setSpecies(s.key); setBreed(null); setCoat(null); setQ(""); }}
-              className="rounded-full px-3 py-1.5" style={{ background: species === s.key ? INK : "#fff", color: species === s.key ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(12.5), fontWeight: 600, fontFamily: "inherit" }}>
-              {s.emoji} {s.name}
+              className="rounded-full px-3.5" style={{ minHeight: 44, background: species === s.key ? INK : "#fff", color: species === s.key ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(12.5), fontWeight: 600, fontFamily: "inherit" }}>
+              {s.name}
             </button>
           ))}
         </div>
@@ -287,11 +327,11 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
         {species && (
           <>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${breeds.length || (BREEDS[species] || []).length} breeds…`} aria-label="Search breeds"
-              className="w-full mt-2.5 rounded-xl px-3 h-10 outline-none" style={{ background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(14), color: INK }} />
-            <div className="flex flex-wrap gap-1.5 mt-2" style={{ maxHeight: 132, overflowY: "auto" }}>
+              className="w-full mt-2.5 rounded-xl px-3 outline-none" style={{ height: 44, background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(14), color: INK }} />
+            <div className="flex flex-wrap gap-1.5 mt-2" style={{ maxHeight: 196, overflowY: "auto" }}>
               {breeds.slice(0, 60).map((b) => (
-                <button key={b.key} type="button" onClick={() => { setBreed(b.key); setCoat(null); }}
-                  className="rounded-full px-2.5 py-1" style={{ background: breed === b.key ? INK : "#fff", color: breed === b.key ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(11.5), fontFamily: "inherit" }}>
+                <button key={b.key} type="button" onClick={() => { setBreed(b.key); setCoat(null); }} aria-pressed={breed === b.key}
+                  className="rounded-full px-3" style={{ minHeight: 44, background: breed === b.key ? INK : "#fff", color: breed === b.key ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(11.5), fontFamily: "inherit" }}>
                   {b.name}
                 </button>
               ))}
@@ -299,13 +339,11 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
             {/* Coats are per-breed where the founder rendered them (a cavalier offers
                 Ruby, a great dane Harlequin); other breeds show the species palette. */}
             {breed && (
-              <div className="flex flex-wrap items-center gap-2 mt-2.5" role="radiogroup" aria-label="Coat color">
+              <div className="flex flex-wrap items-center mt-2.5" role="radiogroup" aria-label="Coat color">
                 {coatsFor(species, breed).map((c) => (
-                  <button key={c.key} type="button" role="radio" aria-checked={coat === c.key} aria-label={c.name} title={c.name}
-                    onClick={() => setCoat(c.key)} className="rounded-full"
-                    style={{ width: 25, height: 25, background: c.body, border: coat === c.key ? `3px solid ${INK}` : `2px solid rgba(22,17,13,.18)` }} />
+                  <Swatch key={c.key} color={c.body} name={c.name} on={coat === c.key} onClick={() => setCoat(c.key)} size={26} />
                 ))}
-                {coat && <span style={{ fontSize: fs(11), color: INK3 }}>{coatsFor(species, breed).find((c) => c.key === coat)?.name}</span>}
+                {coat && <span style={{ fontSize: fs(11), color: INK3, marginLeft: 4 }}>{coatsFor(species, breed).find((c) => c.key === coat)?.name}</span>}
               </div>
             )}
             {/* The name is the identity (founder, 2026-10-05) — the breed is just a pick. */}
@@ -317,8 +355,8 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
 
         <div className="flex gap-2 mt-3">
           {!isNew && (
-            <button type="button" onClick={onRemove} className="rounded-xl px-3 py-3" aria-label="Say goodbye" style={{ background: "#fff", color: "#B0472F", border: `1px solid ${RULE}`, fontSize: fs(13.5), fontWeight: 600 }}>
-              <Trash2 size={15} />
+            <button type="button" onClick={onRemove} className="rounded-xl px-3 py-3" aria-label="Say goodbye" style={{ minWidth: 44, background: "#fff", color: NEUTRAL.stamp, border: `1px solid ${RULE}`, fontSize: fs(13.5), fontWeight: 600 }}>
+              <Trash2 size={16} />
             </button>
           )}
           <button type="button" onClick={onClose} className="flex-1 rounded-xl py-3 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(14) }}>Cancel</button>
@@ -333,39 +371,70 @@ function BuddyModal({ buddy, onSave, onRemove, onClose }) {
   );
 }
 
-// ── The shelf on the profile ────────────────────────────────────────────────
-export default function VirtualItems({ stamps }) {
+// ── The kit folder ──────────────────────────────────────────────────────────
+const LABEL = { fontFamily: MONO, fontSize: fs(9.5), lineHeight: 1.26, fontWeight: 500, letterSpacing: ".12em", color: KIT.tab, margin: 0, overflowWrap: "anywhere" };
+const TILE = { position: "relative", display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0, boxSizing: "border-box", padding: "8px 6px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.creamRule}`, borderRadius: 18, cursor: "pointer", userSelect: "none", WebkitUserSelect: "none" };
+const TILE_NAME = { display: "flex", alignItems: "center", justifyContent: "center", minHeight: 32, marginTop: 8, maxWidth: "100%", fontFamily: SERIF, fontSize: fs(15), lineHeight: 16 / 15, color: INK, textAlign: "center", overflowWrap: "anywhere" };
+const TILE_HINT = { marginTop: 4, fontFamily: MONO, fontSize: fs(9), lineHeight: 12 / 9, fontWeight: 500, letterSpacing: ".12em", color: INK3, textAlign: "center" };
+
+const possessive = (first) => `${first}’S`;
+
+export default function VirtualItems({
+  stamps,
+  luggage = undefined,
+  readOnly = false,
+  gear: gearProp = undefined,
+  buddies: buddiesProp = undefined,
+  layout: layoutProp = undefined,
+  ownerFlags = undefined,
+  ownerFirst = null,
+  className = undefined,
+  style = undefined,
+}) {
   const { profile } = useAuth();
   const { activeLocation } = useLocation();
+  const tablet = useIsTablet();
   const [state, setState] = useState(null);           // { gear, buddies, layout }
-  const [luggageSids, setLuggageSids] = useState(new Set());
+  const [ownLug, setOwnLug] = useState(null);
   const [open, setOpen] = useState(null);             // 'laptop' | 'drink'
   const [buddyOpen, setBuddyOpen] = useState(null);   // 'new' | buddy object
-  const [coffeeOpen, setCoffeeOpen] = useState(null); // string[] — the enlarged coffee card
   // One tap enlarges an item or a buddy (founder, 2026-10-11); × or a tap
   // outside collapses it. Customizing / renaming moved into the big view.
   const [zoom, setZoom] = useState(null);             // { type: 'item', key } | { type: 'buddy', id }
   const saveTimer = useRef(null);
+  const lugGiven = luggage !== undefined;
 
   useEffect(() => {
+    if (readOnly) return undefined;
     let gone = false;
     (async () => {
-      const [g, lug] = await Promise.all([gearGet(), luggageGet()]);
-      if (gone) return;
-      setState(g);
-      const sids = new Set();
-      for (const faces of Object.values(lug?.placements || {})) for (const list of Object.values(faces || {})) for (const pl of list || []) sids.add(pl.sid);
-      setLuggageSids(sids);
+      const g = await gearGet();
+      if (!gone) setState(g);
     })();
     return () => { gone = true; };
-  }, []);
+  }, [readOnly]);
+  useEffect(() => {
+    if (readOnly || lugGiven) return undefined;
+    let gone = false;
+    (async () => { const d = await luggageGet(); if (!gone) setOwnLug(d); })();
+    return () => { gone = true; };
+  }, [readOnly, lugGiven]);
+  const lug = lugGiven ? luggage : ownLug;
+  const luggageSids = useMemo(() => {
+    const sids = new Set();
+    for (const faces of Object.values(lug?.placements || {})) for (const list of Object.values(faces || {})) for (const pl of list || []) sids.add(pl.sid);
+    return sids;
+  }, [lug]);
 
-  const stickers = useMemo(() => buildStickers(stamps, profile), [stamps, profile]);
+  // A visitor's flags never ride someone else's items.
+  const flagsOf = readOnly ? (ownerFlags || null) : (ownerFlags || profile);
+  const stickers = useMemo(() => buildStickers(Array.isArray(stamps) ? stamps : [], flagsOf), [stamps, flagsOf]);
   const bySid = useMemo(() => Object.fromEntries(stickers.map((x) => [x.sid, x])), [stickers]);
 
-  const gear = state?.gear || {};
-  const buddies = state?.buddies || [];
-  const order = (state?.layout?.order || []).filter((k) => k === "laptop" || k === "drink");
+  const data = readOnly ? { gear: gearProp || {}, buddies: buddiesProp || [], layout: layoutProp || {} } : state;
+  const gear = data?.gear || {};
+  const buddies = (Array.isArray(data?.buddies) ? data.buddies : []).slice(0, MAX_BUDDIES);
+  const order = (data?.layout?.order || []).filter((k) => k === "laptop" || k === "drink");
   const shelfOrder = order.length === 2 ? order : ["laptop", "drink"];
 
   // Where the traveler is right now — rides along on selection events so the
@@ -411,12 +480,12 @@ export default function VirtualItems({ stamps }) {
     return m;
   };
 
-  // Drag a card sideways past its neighbour to swap the shelf order.
+  // Drag a tile sideways past its neighbour to swap the shelf order.
   const dragCard = useRef(null);
   const cardDown = (kind) => (e) => { dragCard.current = { kind, x: e.clientX, moved: false }; };
   const cardMove = (e) => {
     const d = dragCard.current;
-    if (!d || d.moved) return;
+    if (!d || d.moved || readOnly) return;
     const dx = e.clientX - d.x;
     if (Math.abs(dx) > 70) {
       d.moved = true;
@@ -440,7 +509,7 @@ export default function VirtualItems({ stamps }) {
     petTouch.current = null;
     if (!t) return;
     const dx = e.clientX - t.x;
-    if (Math.abs(dx) > 34) setPose(b, nextPose(b, dx));
+    if (Math.abs(dx) > 34 && !readOnly) setPose(b, nextPose(b, dx));
     else if (onTap) onTap();
   };
 
@@ -449,93 +518,83 @@ export default function VirtualItems({ stamps }) {
     save({ buddies: next });
     setBuddyOpen(null);
     logEvent(b.id ? "buddy_update" : "buddy_add", { species: b.species, breed: b.breed, coat: b.coat || null, count: next.length, ...here() }, "Profile");
-    showToast(b.id ? "Saved" : `${b.name} joined your travels 🧳`, "success");
+    showToast(b.id ? "Saved" : `${b.name} joined your travels`, "success");
   };
   const removeBuddy = (b) => {
     save({ buddies: buddies.filter((x) => x.id !== b.id) });
     setBuddyOpen(null);
     logEvent("buddy_remove", { species: b.species, breed: b.breed, ...here() }, "Profile");
-    showToast(`${b.name} says goodbye 👋`, "success");
+    showToast(`${b.name} said goodbye`, "success");
   };
 
-  if (!state) return null;
+  const first = String(ownerFirst ?? "").trim();
+  const tab = readOnly ? (first ? `${possessive(first)} kit` : "Their kit") : "My kit";
+  const art = tablet ? 120 : 80;
+  const keyTap = (fn) => (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); } };
 
-  const card = (kind) => {
-    const item = gear[kind] || (kind === "drink" ? { variant: "tumbler", color: "blue" } : { color: "blue" });
-    const n = (item.placements || []).length;
+  const itemTile = (kind) => {
+    const item = itemOf(gear, kind);
+    const name = kind === "laptop" ? (readOnly ? "Laptop" : "My laptop") : drinkName(item);
     return (
-      <div key={kind} role="button" tabIndex={0} aria-label={kind === "laptop" ? "My laptop" : "My bottle"}
+      <div key={kind} role="button" tabIndex={0} aria-label={name}
         onPointerDown={cardDown(kind)} onPointerMove={cardMove} onPointerUp={cardUp(kind)}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setZoom({ type: "item", key: kind }); } }}
-        className="flex-1 rounded-2xl p-3 text-center select-none" style={{ background: IVORY, border: `1px solid ${RULE}`, cursor: "pointer", touchAction: "pan-y" }}>
-        {(() => {
-          // With coffee orders the cup moves LEFT and the list takes the right
-          // column, no overlap (founder, 2026-10-05 evening). Tapping the list
-          // enlarges it to the center of the screen; × collapses it back.
-          const coffees = kind === "drink" ? (item.coffees || []).filter(Boolean).slice(0, 3) : [];
-          if (!coffees.length) {
-            return <div className="flex justify-center pointer-events-none"><GearArt kind={kind} item={item} width={128} stickersBySid={bySid} /></div>;
-          }
-          return (
-            <div className="flex items-center pointer-events-none" style={{ gap: 2 }}>
-              <div style={{ flex: "none" }}><GearArt kind={kind} item={item} width={100} stickersBySid={bySid} /></div>
-              <div role="button" tabIndex={0} aria-label="Read my coffee orders"
-                onPointerDown={(e) => e.stopPropagation()}
-                onPointerUp={(e) => { e.stopPropagation(); setCoffeeOpen(coffees); }}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setCoffeeOpen(coffees); } }}
-                style={{ pointerEvents: "auto", flex: 1, minWidth: 0, textAlign: "left", cursor: "pointer" }}>
-                {coffees.map((c, i) => (
-                  <div key={i} style={{ fontFamily: MONO, fontSize: fs(7.5), lineHeight: 1.8, color: INK2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>☕ {c}</div>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
-        <div style={{ fontFamily: SERIF, fontSize: fs(15.5), color: INK, marginTop: 2 }}>
-          {kind === "laptop" ? "My laptop" : DRINK_VARIANTS.find((v) => v.key === (item.variant || "tumbler"))?.name}
+        onKeyDown={keyTap(() => setZoom({ type: "item", key: kind }))}
+        style={{ ...TILE, touchAction: "pan-y" }}>
+        <div className="pointer-events-none" style={{ display: "flex", justifyContent: "center", width: "100%" }}>
+          <GearArt kind={kind} item={item} width={art} stickersBySid={bySid} />
         </div>
-        <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", color: INK3, textTransform: "uppercase" }}>
-          {n ? `${n} sticker${n === 1 ? "" : "s"}` : "Tap to see it"}
-        </div>
+        <span style={TILE_NAME}>{name}</span>
+        <span aria-hidden="true" style={TILE_HINT}>TAP TO SEE IT</span>
       </div>
     );
   };
 
-  return (
-    <div className="max-w-md mx-auto px-4 mt-5">
-      <div style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".14em", color: "#B0472F", textTransform: "uppercase" }}>My virtual items</div>
-      <div className="flex gap-2.5 mt-2">{shelfOrder.map(card)}</div>
-      <p style={{ fontSize: fs(11), color: INK3, marginTop: 6, lineHeight: 1.4 }}>
-        Tap an item to see it up close — color it and place your earned stickers from there. Drag a card sideways to rearrange the shelf.
-      </p>
+  const buddyTile = (b) => (
+    <div key={b.id} role="button" tabIndex={0} aria-label={b.name}
+      onPointerDown={petDown} onPointerUp={petUp(b, () => setZoom({ type: "buddy", id: b.id }))}
+      onKeyDown={keyTap(() => setZoom({ type: "buddy", id: b.id }))}
+      style={{ ...TILE, touchAction: "pan-y" }}>
+      <div className="pointer-events-none" style={{ display: "flex", justifyContent: "center", width: "100%" }}>
+        <PetArt buddy={b} width={art} />
+      </div>
+      <span style={TILE_NAME}>{b.name}</span>
+      <span aria-hidden="true" style={TILE_HINT}>TAP TO SEE IT</span>
+    </div>
+  );
 
-      <div className="flex items-baseline justify-between mt-5">
-        <div style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".14em", color: "#B0472F", textTransform: "uppercase" }}>Travel buddies</div>
-        <span style={{ fontFamily: MONO, fontSize: fs(10), color: INK3 }}>{buddies.length}/6</span>
+  const room = MAX_BUDDIES - buddies.length;
+  const seat = !readOnly && room > 0 ? (
+    <button key="seat" type="button" onClick={() => setBuddyOpen("new")}
+      style={{ ...TILE, justifyContent: "center", gap: 8, background: "transparent", border: `1.5px dashed ${NEUTRAL.brassRule}`, fontFamily: "inherit", minHeight: 44 }}>
+      <span aria-hidden="true" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 999, border: `1px solid ${NEUTRAL.brassRule}` }}>
+        <Plus size={16} color={KIT.tab} strokeWidth={2} />
+      </span>
+      <span style={{ fontFamily: SERIF, fontSize: fs(15), lineHeight: 17 / 15, color: INK, textAlign: "center", overflowWrap: "anywhere" }}>
+        {buddies.length ? `Room for ${room} more` : `Room for ${MAX_BUDDIES} travel buddies`}
+      </span>
+      <span style={{ fontSize: fs(12), lineHeight: 15 / 12, fontWeight: 600, color: KIT.tab, textAlign: "center" }}>Add your travel buddy</span>
+    </button>
+  ) : null;
+
+  const buddyLabel = readOnly
+    ? (buddies.length === 1 ? "TRAVEL BUDDY" : buddies.length ? "TRAVEL BUDDIES" : null)
+    : "TRAVEL BUDDIES";
+
+  // While the owner's kit loads: the folder and its labels, quiet tiles, no guessed items.
+  const loading = !readOnly && !state;
+
+  return (
+    <Folder stock="kit" size="profile" tab={tab} padding="16px" className={className} style={style}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, alignItems: "end" }}>
+        <h3 style={{ ...LABEL, gridColumn: "span 2 / span 2" }}>{readOnly ? "VIRTUAL ITEMS" : "MY VIRTUAL ITEMS"}</h3>
+        {buddyLabel ? <h3 style={LABEL}>{buddyLabel}</h3> : null}
       </div>
-      <div className="flex gap-2.5 mt-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-        {buddies.map((b) => (
-          <div key={b.id} role="button" tabIndex={0} aria-label={b.name}
-            onPointerDown={petDown} onPointerUp={petUp(b, () => setZoom({ type: "buddy", id: b.id }))}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setZoom({ type: "buddy", id: b.id }); } }}
-            className="flex-none rounded-2xl p-2.5 text-center select-none" style={{ width: 118, background: IVORY, border: `1px solid ${RULE}`, cursor: "pointer", touchAction: "pan-y" }}>
-            <div className="pointer-events-none"><PetArt buddy={b} width={92} /></div>
-            {/* Just the name (founder, 2026-10-05 evening: no pose caption) —
-                the breed and pose live in the manage sheet. */}
-            <div className="truncate" style={{ fontFamily: SERIF, fontSize: fs(16), color: INK }}>{b.name}</div>
-          </div>
-        ))}
-        {buddies.length < 6 && (
-          <button type="button" onClick={() => setBuddyOpen("new")} aria-label="Add your travel buddy"
-            className="flex-none rounded-2xl flex flex-col items-center justify-center gap-1" style={{ width: 118, minHeight: 148, background: "#fff", border: `1.5px dashed rgba(22,17,13,.3)` }}>
-            <Plus size={20} color={INK3} />
-            <span style={{ fontSize: fs(11.5), color: INK2, fontWeight: 600 }}>Add your<br />travel buddy</span>
-          </button>
-        )}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginTop: 8 }}>
+        {loading
+          ? [0, 1, 2].map((i) => <div key={i} aria-hidden="true" className="animate-pulse motion-reduce:animate-none" style={{ ...TILE, cursor: "default", minHeight: art + 64, background: NEUTRAL.white }} />)
+          : <>{shelfOrder.map(itemTile)}{buddies.map(buddyTile)}{seat}</>}
       </div>
-      {buddies.length > 0 && (
-        <p style={{ fontSize: fs(11), color: INK3, marginTop: 4, lineHeight: 1.4 }}>Swipe a buddy to change its pose — sitting or standing. Tap to see it up close.</p>
-      )}
+      {loading ? <span className="sr-only">Loading your kit</span> : null}
 
       {/* One tap enlarges an item or a buddy (founder, 2026-10-11): the big
           picture first; × or a tap outside collapses it. Customizing and
@@ -544,12 +603,12 @@ export default function VirtualItems({ stamps }) {
         const isItem = zoom.type === "item";
         const b = isItem ? null : buddies.find((x) => x.id === zoom.id);
         if (!isItem && !b) return null;
-        const item = isItem ? (gear[zoom.key] || (zoom.key === "drink" ? { variant: "tumbler", color: "blue" } : { color: "blue" })) : null;
+        const item = isItem ? itemOf(gear, zoom.key) : null;
         const n = item ? (item.placements || []).length : 0;
-        const coffees = isItem && zoom.key === "drink" ? (item.coffees || []).filter(Boolean).slice(0, 3) : [];
+        const coffees = isItem && !readOnly && zoom.key === "drink" ? (item.coffees || []).filter(Boolean).slice(0, 3) : [];
         const vw = (typeof window !== "undefined" && window.innerWidth) || 390;
         const big = Math.max(200, Math.min(320, Math.round(vw - 110)));
-        const title = isItem ? (zoom.key === "laptop" ? "My laptop" : DRINK_VARIANTS.find((v) => v.key === (item.variant || "tumbler"))?.name) : b.name;
+        const title = isItem ? (zoom.key === "laptop" ? (readOnly ? "Laptop" : "My laptop") : drinkName(item)) : b.name;
         const sub = isItem
           ? [GEAR_COLORS.find((c) => c.key === (item.color || "blue"))?.name, n ? `${n} sticker${n === 1 ? "" : "s"}` : "No stickers yet"].filter(Boolean).join(" · ")
           : breedName(b.species, b.breed);
@@ -557,10 +616,7 @@ export default function VirtualItems({ stamps }) {
           <div className="fixed inset-0 z-[10010] flex items-center justify-center p-5" role="dialog" aria-modal="true" aria-label={title || "Enlarged"}
             style={{ background: "rgba(22,17,13,.6)", backdropFilter: "blur(3px)" }} onClick={() => setZoom(null)}>
             <div className="w-full max-w-sm rounded-3xl px-5 pt-5 pb-4 text-center" style={{ background: "#F3EEE1", position: "relative", boxShadow: "0 24px 60px -20px rgba(0,0,0,.45)" }} onClick={(e) => e.stopPropagation()}>
-              <button type="button" onClick={() => setZoom(null)} aria-label="Close" className="rounded-full p-1.5"
-                style={{ position: "absolute", top: 12, right: 12, background: "#fff", border: `1px solid ${RULE}`, zIndex: 2 }}>
-                <X size={18} color={INK} />
-              </button>
+              <CloseButton onClick={() => setZoom(null)} style={{ position: "absolute", top: 10, right: 10, zIndex: 2 }} />
               {isItem ? (
                 <div className="flex justify-center" style={{ marginTop: 8 }}><GearArt kind={zoom.key} item={item} width={big} stickersBySid={bySid} /></div>
               ) : (
@@ -572,56 +628,45 @@ export default function VirtualItems({ stamps }) {
               <div style={{ fontFamily: SERIF, fontSize: fs(26), color: INK, lineHeight: 1.1, marginTop: 6 }}>{title}</div>
               {sub && <div style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".08em", color: INK3, textTransform: "uppercase", marginTop: 3 }}>{sub}</div>}
               {coffees.length > 0 && (
-                <div className="text-left mt-3">
+                <ul className="text-left mt-3" style={{ listStyle: "none", margin: "12px 0 0", padding: 0 }} aria-label="How I take my coffee">
                   {coffees.map((c, i) => (
-                    <div key={i} style={{ fontSize: fs(14), color: INK2, lineHeight: 1.45, padding: "6px 0", borderTop: i ? `1px solid ${RULE}` : "none" }}>☕ {c}</div>
+                    <li key={i} className="flex items-start gap-2" style={{ fontSize: fs(14), color: INK2, lineHeight: 1.45, padding: "6px 0", borderTop: i ? `1px solid ${RULE}` : "none" }}>
+                      <Coffee size={15} color={KIT.tab} aria-hidden="true" style={{ flex: "none", marginTop: 3 }} />
+                      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{c}</span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
-              {!isItem && (
+              {!isItem && !readOnly && (
                 <div className="flex justify-center gap-2 mt-3">
                   {POSES.map((p) => (
                     <button key={p} type="button" onClick={() => setPose(b, p)} aria-pressed={b.pose === p}
-                      className="rounded-full px-4 py-1.5 font-semibold" style={{ background: b.pose === p ? INK : "#fff", color: b.pose === p ? "#fff" : INK, border: `1px solid ${RULE}`, fontSize: fs(13) }}>
+                      className="rounded-full px-4 font-semibold" style={{ minHeight: 44, background: b.pose === p ? INK : "#fff", color: b.pose === p ? "#fff" : INK, border: `1px solid ${RULE}`, fontSize: fs(13) }}>
                       {p === "sitting" ? "Sitting" : "Standing"}
                     </button>
                   ))}
                 </div>
               )}
-              <button type="button" onClick={() => { setZoom(null); if (isItem) setOpen(zoom.key); else setBuddyOpen(b); }}
-                className="w-full rounded-xl py-3 mt-4 font-semibold" style={{ background: INK, color: "#fff", fontSize: fs(14.5) }}>
-                {isItem ? "🎨 Customize color & stickers" : "✎ Rename or say goodbye"}
-              </button>
+              {!readOnly && (
+                <button type="button" onClick={() => { setZoom(null); if (isItem) setOpen(zoom.key); else setBuddyOpen(b); }}
+                  className="w-full rounded-xl mt-4 font-semibold flex items-center justify-center gap-2" style={{ minHeight: 48, background: INK, color: "#fff", fontSize: fs(14.5) }}>
+                  {isItem ? <Palette size={17} aria-hidden="true" /> : <Pencil size={16} aria-hidden="true" />}
+                  {isItem ? "Customize color and stickers" : "Rename or say goodbye"}
+                </button>
+              )}
             </div>
           </div>
         );
       })()}
-      {open && (
-        <GearModal kind={open} item={gear[open] || (open === "drink" ? { variant: "tumbler", color: "blue" } : { color: "blue" })}
+      {open && !readOnly && (
+        <GearModal kind={open} item={itemOf(gear, open)}
           stamps={stamps} stickersBySid={bySid} usedElsewhere={usedFor(open)}
           onChange={(item) => setItem(open, item)} onClose={() => setOpen(null)} />
       )}
-      {buddyOpen && (
+      {buddyOpen && !readOnly && (
         <BuddyModal buddy={buddyOpen === "new" ? null : buddyOpen}
           onSave={saveBuddy} onRemove={() => removeBuddy(buddyOpen)} onClose={() => setBuddyOpen(null)} />
       )}
-      {/* The coffee list, enlarged to the center of the screen (tap the tiny
-          column to open; × or a tap outside collapses it back). */}
-      {coffeeOpen && (
-        <div className="fixed inset-0 z-[10010] flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="How I take my coffee"
-          style={{ background: "rgba(22,17,13,.6)", backdropFilter: "blur(3px)" }} onClick={() => setCoffeeOpen(null)}>
-          <div className="w-full max-w-sm rounded-2xl p-5" style={{ background: "#F3EEE1", position: "relative", boxShadow: "0 24px 60px -20px rgba(0,0,0,.45)" }} onClick={(e) => e.stopPropagation()}>
-            <button type="button" onClick={() => setCoffeeOpen(null)} aria-label="Close" className="rounded-full p-1.5"
-              style={{ position: "absolute", top: 10, right: 10, background: "#fff", border: `1px solid ${RULE}` }}>
-              <X size={16} color={INK} />
-            </button>
-            <div style={{ fontFamily: SERIF, fontSize: fs(21), color: INK, marginBottom: 6, paddingRight: 30 }}>How I take my coffee</div>
-            {coffeeOpen.map((c, i) => (
-              <div key={i} style={{ fontSize: fs(16), color: INK2, lineHeight: 1.5, padding: "9px 0", borderTop: i ? `1px solid ${RULE}` : "none" }}>☕ {c}</div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+    </Folder>
   );
 }
