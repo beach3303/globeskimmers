@@ -1,8 +1,8 @@
 // Postcards: your postcard box (founder, 2026-10-14: "i want to keep the postcards sent to
-// me"). Every postcard addressed to you, kept and drawn like a postcard (PostcardCard) on
-// the Mailbox's airmail stock: newest first, 24 at a time, 'Show older' for the rest.
-// Cards someone sent to everyone who follows them stay in the Mailbox feed. Opened from
-// Mailbox, whose tab stays lit.
+// me"). Every postcard addressed to you, and every card sent to everyone that you kept
+// from the Mailbox (its Keep pill), drawn like a postcard (PostcardCard) on the Mailbox's
+// airmail stock: newest first, 24 at a time, 'Show older' for the rest. A kept card's
+// 'Kept' pill lets it go again. Opened from Mailbox, whose tab stays lit.
 //
 // It shows nothing untrue: nothing social until the age tier is known; the hold or the
 // birthday note for a held account; a skeleton while the first page loads; 'Try again'
@@ -16,7 +16,9 @@ import { ChevronLeft, Mail } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
-import { postcardBox, getHandle, getSocialProfile } from "@/lib/passport";
+import { postcardBox, keepPostcard, getHandle, getSocialProfile } from "@/lib/passport";
+import { showToast } from "@/components/Toast";
+import { workerMessage } from "@/components/social/FollowByHandle";
 import { AirmailChevron } from "@/components/redesign/ornaments";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { whenLabel } from "@/components/social/Envelope";
@@ -62,7 +64,7 @@ function Masthead({ onBack }) {
         <h1 style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(30), fontWeight: 400, lineHeight: 1.04, color: NEUTRAL.ink }}>
           Every postcard <em style={{ fontStyle: "italic", color: BLUE }}>sent to you</em>
         </h1>
-        <p style={{ margin: "6px 0 0", fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>They stay here, newest first.</p>
+        <p style={{ margin: "6px 0 0", fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>Cards sent to you stay here, and so do the ones you keep.</p>
       </header>
       <AirmailChevron height={5} />
     </>
@@ -109,6 +111,17 @@ function PostcardBox({ onBack }) {
     });
   };
 
+  // A kept card's 'Kept' pill lets it go: it leaves the box at once and comes back when the
+  // worker says no.
+  const letGo = async (row) => {
+    if (!row?.id) return;
+    const snapshot = box;
+    setBox((b) => ({ ...b, rows: (b.rows || []).filter((x) => x.id !== row.id) }));
+    const res = await keepPostcard(row.id, false);
+    if (!res.ok) { setBox(snapshot); showToast(workerMessage(res.error, "That didn’t go through. Try again."), "error"); return; }
+    showToast("Removed from your postcard box", "success");
+  };
+
   const blocked = circle.blockedHandles || new Set();
   const rows = box && !box.error && !box.held ? (box.rows || []).filter((r) => !blocked.has(lc(r?.by?.handle))) : [];
   const meName = me.name || profile?.first_name || null;
@@ -145,7 +158,7 @@ function PostcardBox({ onBack }) {
           No postcards <em style={{ fontStyle: "italic", color: BLUE }}>yet</em>
         </p>
         <p style={{ margin: "6px auto 0", maxWidth: "34ch", fontSize: fs(13), lineHeight: 1.5, color: NEUTRAL.ink2 }}>
-          When someone in your circle sends you a postcard, it stays here, long after it leaves your Mailbox.
+          When someone in your circle sends you a postcard, it stays here, long after it leaves your Mailbox. Tap Keep on any other postcard there to add it too.
         </p>
       </div>
     );
@@ -158,7 +171,7 @@ function PostcardBox({ onBack }) {
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: 16, marginTop: 8, alignItems: "start" }}>
           {rows.map((r, i) => (
-            <PostcardCard key={r.id || `pc-${r.created_at}-${i}`} row={r} me={me.handle} meName={meName} onReport={report} />
+            <PostcardCard key={r.id || `pc-${r.created_at}-${i}`} row={r} me={me.handle} meName={meName} onReport={report} onKeep={letGo} />
           ))}
         </div>
         {box.partial ? (

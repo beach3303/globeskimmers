@@ -251,6 +251,16 @@ export async function postcardBox(before = null) {
   }
   return { rows: data?.rows || [], next: data?.next || null, held: data?.held || null, error: error || data?.error || null, partial: false };
 }
+// Keep a card someone sent to everyone in your postcard box (keep true), or let it go
+// (false): worker /postcards/keep. { ok, kept, error }. The feed marks the cards it can
+// keep with a boolean `kept`; without one the app offers no Keep.
+export async function keepPostcard(postcard_id, keep = true) {
+  const id = String(postcard_id ?? '').trim();
+  if (!id) return { ok: false, kept: null, error: 'postcard_id required' };
+  const { data, error } = await callWorker('postcards/keep', { postcard_id: id, keep: keep !== false });
+  const err = error || data?.error || null;
+  return { ok: !err && data?.ok === true, kept: typeof data?.kept === 'boolean' ? data.kept : null, error: err };
+}
 // Block a person by user id. Today's worker records the block, silences tags
 // and postcards both ways and kills that person's pending invites to you;
 // backend item B8 also ends the follow edges and filters feeds, and advertises

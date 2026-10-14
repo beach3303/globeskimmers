@@ -14,10 +14,14 @@
 //   meName   your first name for the address line.
 //   onReport (row) => void: someone else's card gets the 44px report door at its top right,
 //            outside any button or link (the card itself is not a control).
+//   onKeep   (row) => void: a card sent to everyone that the feed marks with a boolean `kept`
+//            gets the Keep pill at its top left ('Keep' / 'Kept', aria-pressed), which saves it
+//            into the postcard box or lets it go. Cards addressed to you are always kept.
 import React from "react";
+import { Bookmark, BookmarkCheck } from "lucide-react";
 import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
 import { PostmarkLines } from "@/components/redesign/ornaments";
-import { PostmarkRing, ReportControl, senderName, whenLabel } from "@/components/social/Envelope";
+import { PostmarkRing, ReportControl, canReport, senderName, whenLabel } from "@/components/social/Envelope";
 import StampThumb, { stampThumbKind } from "@/components/passport/StampThumb";
 import OfficialSeal from "@/components/passport/OfficialSeal";
 import { feedStamp } from "@/lib/stampKind";
@@ -31,9 +35,9 @@ const STAMP_BOX_LINE = "#CDBB98";     // the dashed stamp box (kraft line)
 const handleOf = (v) => String((v && typeof v === "object" ? v.handle : v) ?? "").trim().replace(/^@+/, "").toLowerCase();
 
 /**
- * @param {{ row: any, me?: any, meName?: string|null, onReport?: (row: any) => void, className?: string, style?: import('react').CSSProperties }} props
+ * @param {{ row: any, me?: any, meName?: string|null, onReport?: (row: any) => void, onKeep?: (row: any) => void, className?: string, style?: import('react').CSSProperties }} props
  */
-export default function PostcardCard({ row, me = undefined, meName = null, onReport = undefined, className = undefined, style = undefined }) {
+export default function PostcardCard({ row, me = undefined, meName = null, onReport = undefined, onKeep = undefined, className = undefined, style = undefined }) {
   if (!row || typeof row !== "object") return null;
   const by = row.by || {};
   const from = senderName(by, me);
@@ -47,6 +51,8 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
   const when = whenLabel(row.created_at);
   const seal = by.seal && by.verified !== false ? String(by.seal) : null;
   const firstName = String(meName ?? "").trim().split(/\s+/)[0] || null;
+  const keepable = typeof onKeep === "function" && typeof row.kept === "boolean" && !toMe && canReport(row, me);
+  const kept = row.kept === true;
 
   return (
     <article aria-label={`Postcard from ${from === "You" ? "you" : from}${place ? `, ${place}` : ""}`} className={className}
@@ -94,6 +100,16 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
         </div>
       </div>
       <ReportControl row={row} me={me} onReport={onReport} style={{ position: "absolute", top: 8, right: 8 }} />
+      {keepable ? (
+        <button type="button" onClick={() => onKeep(row)} aria-pressed={kept}
+          aria-label={kept ? "Kept in your postcard box. Remove it" : `Keep ${from}’s postcard in your postcard box`}
+          style={{ position: "absolute", top: 8, left: 8, display: "flex", alignItems: "center", minHeight: 44, padding: "0 8px", margin: 0, background: "transparent", border: 0, cursor: "pointer" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 30, boxSizing: "border-box", padding: "0 12px", borderRadius: 999, background: kept ? NEUTRAL.airmailBlue : NEUTRAL.white, border: `1px solid ${kept ? NEUTRAL.airmailBlue : NEUTRAL.airmailLine}`, boxShadow: `0 1px 3px ${rgba(NEUTRAL.ink, 0.12)}`, fontSize: fs(12.5), fontWeight: 600, lineHeight: 1, color: kept ? NEUTRAL.white : NEUTRAL.airmailBlue }}>
+            {kept ? <BookmarkCheck size={14} strokeWidth={2} aria-hidden="true" focusable="false" /> : <Bookmark size={14} strokeWidth={2} aria-hidden="true" focusable="false" />}
+            {kept ? "Kept" : "Keep"}
+          </span>
+        </button>
+      ) : null}
     </article>
   );
 }

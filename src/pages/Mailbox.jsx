@@ -19,7 +19,7 @@ import { ChevronRight, Mail, Mailbox as MailboxIcon } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
-import { socialFeed, getHandle, getSocialProfile, setHandle, setAgeGate, splitDob, socialUnread } from "@/lib/passport";
+import { socialFeed, getHandle, getSocialProfile, setHandle, setAgeGate, splitDob, socialUnread, keepPostcard } from "@/lib/passport";
 import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import { showToast } from "@/components/Toast";
 import { AirmailChevron } from "@/components/redesign/ornaments";
@@ -186,7 +186,7 @@ function CircleRow({ circle, style = undefined }) {
 }
 
 // 'Your postcard box', above the feed: the feed shows only the newest cards, the box keeps
-// every one sent to you (Postcards).
+// every one sent to you and each one you Keep from your circle (Postcards).
 function PostcardBoxRow({ style = undefined }) {
   return (
     <Link to={createPageUrl("Postcards")}
@@ -194,7 +194,7 @@ function PostcardBoxRow({ style = undefined }) {
       <Mail size={20} strokeWidth={1.8} color={NEUTRAL.stamp} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: "block", fontSize: fs(15), fontWeight: 600, lineHeight: 1.3, color: NEUTRAL.ink }}>Your postcard box</span>
-        <span style={{ display: "block", fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink3 }}>Every postcard sent to you, kept</span>
+        <span style={{ display: "block", fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink3 }}>Every postcard sent to you, and the ones you keep</span>
       </span>
       <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
     </Link>
@@ -235,6 +235,18 @@ function MailboxBody() {
   const addressable = (circle.acc || []).some((r) => r.handle) || (counts.followYou || 0) > 0;
   const emptyFeed = !!feed && !feed.error && !feed.held && rows.length === 0;
   const openFrom = (to) => navigate(to === "passport" ? createPageUrl("Passport") : `${createPageUrl("Circle")}?tab=followers`);
+
+  // Keep a card sent to everyone in your postcard box, or let it go: the pill flips at once
+  // and flips back when the worker says no.
+  const keep = async (row) => {
+    if (!row?.id) return;
+    const want = !row.kept;
+    const flip = (v) => setFeed((f) => (f && Array.isArray(f.rows) ? { ...f, rows: f.rows.map((r) => (r?.type === "postcard" && r.id === row.id ? { ...r, kept: v } : r)) } : f));
+    flip(want);
+    const res = await keepPostcard(row.id, want);
+    if (!res.ok) { flip(!want); showToast(workerMessage(res.error, "That didn’t go through. Try again."), "error"); return; }
+    showToast(want ? "Kept in your postcard box" : "Removed from your postcard box", "success");
+  };
 
   const answer = (op) => async (row) => {
     const res = op === "accept" ? await circle.accept(row) : await circle.decline(row);
@@ -293,7 +305,7 @@ function MailboxBody() {
               <h2 style={KICKER}>From your circle · newest first</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
                 {rows.map((r, i) => (r.type === "postcard" ? (
-                  <PostcardCard key={`pc-${r.created_at}-${i}`} row={r} me={me.handle} meName={myName || profile?.first_name || null}
+                  <PostcardCard key={`pc-${r.created_at}-${i}`} row={r} me={me.handle} meName={myName || profile?.first_name || null} onKeep={keep}
                     onReport={(row) => openTraveler({ ...row.by, postcard_id: row.id || null }, { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(`Postcard${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.message ? `: "${row.message}"` : ""}`, 480) })} />
                 ) : (
                   <Envelope key={`st-${r.created_at}-${i}`} row={r} variant="full" me={me.handle}
