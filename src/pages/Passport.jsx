@@ -36,7 +36,7 @@ import PhotoPackets from "@/components/passport/PhotoPackets";
 import HeldHandleClaim from "@/components/passport/HeldHandleClaim";
 import PhotoFooter from "@/components/passport/PhotoFooter";
 import TravelerSheet from "@/components/social/TravelerSheet";
-import { blockTarget } from "@/lib/blocks";
+import { blockTarget, blockReady } from "@/lib/blocks";
 
 
 // ============================================================================
@@ -877,12 +877,29 @@ function PassportInner() {
     } else showToast(action === "accept" ? "You already have this stamp 🛂" : presence ? "Noted — no stamp added" : "Declined", "success");
     load();
   };
-  const blockClaim = async () => {
-    if (!claim) return;
-    const { error } = await blockTagger(claim.token);
+  // "Don't know them? Block this person" (go-live decision 6): with a
+  // block_v2 worker the invite's token is a full block — follows end both
+  // ways and each passport looks private to the other — so it opens the
+  // same TravelerSheet question that says exactly that, never one tap.
+  // An older worker's block only stops tags: one tap, an honest toast.
+  const [claimList, setClaimList] = useState(null);
+  const [blockingClaim, setBlockingClaim] = useState(false);
+  useEffect(() => {
+    if (!claim || claimList) return undefined;
+    let gone = false;
+    (async () => { const { data } = await socialFollow("list"); if (!gone) setClaimList(data || {}); })();
+    return () => { gone = true; };
+  }, [claim, claimList]);
+  const claimDone = () => {
     try { sessionStorage.removeItem("pp_claim_token"); } catch { /* ignore */ }
     setClaim(null); setClaimPresence(null);
-    showToast(error || "Blocked — they can't tag you again", error ? "error" : "success");
+  };
+  const blockClaim = async () => {
+    if (!claim) return;
+    if (blockReady(claimList)) { setBlockingClaim(true); return; }
+    const { error } = await blockTagger(claim.token);
+    claimDone();
+    showToast(error || "Blocked. They can't tag you again.", error ? "error" : "success");
   };
 
   const holder = readOnly ? (viewHolder || "A traveler") : (profile?.first_name || profile?.display_name || "Traveler");
@@ -1123,10 +1140,16 @@ function PassportInner() {
                 <button onClick={() => respondClaim("accept", true)} className="flex-1 rounded-lg py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>Prove it with a photo ✓</button>
               </div>
             </>)}
-            <button onClick={blockClaim} className="w-full text-center mt-2.5" style={{ background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
+            <button type="button" onClick={blockClaim} aria-haspopup={blockReady(claimList) ? "dialog" : undefined} className="w-full text-center mt-1" style={{ minHeight: 44, background: "none", border: 0, color: INK3, fontSize: fs(11), textDecoration: "underline", textUnderlineOffset: 3 }}>
               Don&apos;t know them? Block this person
             </button>
           </div>
+        )}
+        {claim && blockingClaim && (
+          <TravelerSheet person={{ token: claim.token, name: claim.tag.from_name || null }} list={claimList} start="block"
+            report={{ kind: "tag", note: `Tag invite${claim.tag.name ? ` at ${claim.tag.name}` : ""}${claim.tag.from_name ? ` from "${claim.tag.from_name}"` : ""}` }}
+            onClose={() => setBlockingClaim(false)}
+            onChanged={() => { setBlockingClaim(false); claimDone(); load(); }} />
         )}
 
         {/* Tagged-you inbox — someone said you were with them */}
