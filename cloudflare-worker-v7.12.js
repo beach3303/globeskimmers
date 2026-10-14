@@ -18589,15 +18589,24 @@ async function handleSocialBlock(request, env, ctx) {
     // A signature or doodle on a passport page (go-live review, 2026-10-13):
     // signing needs no @handle, so its entry is the only name some signers
     // have. The author is resolved here and never returned.
+    let authorGone = false; // the signature or note is there, its author's account isn't
     if (!target && b.entry_id && BL_UUID.test(String(b.entry_id))) {
       const q = await gbRest(env, `blotter_entries?id=eq.${b.entry_id}&select=author_user_id`, {});
-      target = (q.ok ? await q.json() : [])[0]?.author_user_id || null;
+      const row = (q.ok ? await q.json() : [])[0];
+      target = row?.author_user_id || null;
+      if (row && !target) authorGone = true;
     }
     // A note on a place guestbook (its author is never returned either).
     if (!target && b.guestbook_entry_id && BL_UUID.test(String(b.guestbook_entry_id))) {
       const q = await gbRest(env, `guestbook_entries?id=eq.${b.guestbook_entry_id}&select=user_id`, {});
-      target = (q.ok ? await q.json() : [])[0]?.user_id || null;
+      const row = (q.ok ? await q.json() : [])[0];
+      target = row?.user_id || null;
+      if (row && !target) authorGone = true;
     }
+    // A deleted account's anonymous note or signature answers like any block
+    // (go-live final check: a 400 here told it from a living minor's). There
+    // is no one to block, so nothing is stored or filed.
+    if (!target && authorGone) return jsonResponse({ ok: true });
     if (!target || !BL_UUID.test(target) || target.toLowerCase() === user.id) return jsonResponse({ error: 'Nothing to block' }, 400);
     target = target.toLowerCase();
     // An id sent as is must be an account's (go-live round 3: user_blocks has
