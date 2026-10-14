@@ -1,35 +1,41 @@
-// SuggestPlaceSection — "Suggest a place to stamp" on Home, just above the
-// quotes (founder decisions 2026-10-10; mockup screen 1). Locals and people
-// who've been suggest a spot; at 5 suggestions the founder reviews it, and an
-// approved place becomes a Local favorite stamp. Under the button: up to three
-// places near the active location that are almost a stamp, each with its
-// like heart and its count toward 5. Teens may like but not suggest
-// (suggesting is publishing), so they get no button — and with nothing
-// nearby either, the section stays away. Nothing shows while it loads.
-// It also keeps the thanks screen's promise, "We'll let you know if it
-// becomes a stamp": a place you suggested that the founder approved is
-// announced here once, until you open it or close the note.
-// Also here, shared by everyone's list and the Local favorite page: the
-// Report door on a place (ReportPlace), what closes an overlay and keeps Tab
-// inside it (useOverlayClose), and one photo full screen (PhotoView, which
-// the admin desk uses too).
+// SuggestPlaceSection — Home's local favorites zone on the sage stock (Home-Boxes
+// L271-357), just above the quote. Locals and people who've been suggest a spot; at
+// REVIEW_AT suggestions the founder reviews it, and an approved place becomes a
+// Local favorite stamp. Under the button: up to three places near the active
+// location that are almost a stamp, each with its like heart and its count toward
+// REVIEW_AT. Anyone held from publishing (teen, frozen, the birthday check) may
+// like but not suggest, so they get no button — and with nothing nearby either, the
+// zone stays away. Nothing shows while it loads.
+// It also keeps the thanks screen's promise, "We'll let you know if it becomes a
+// stamp": a place you suggested that the founder approved is announced here once,
+// until you open it or close the note.
+// Also here, shared by everyone's list and the Local favorite page: the Report door
+// on a place (ReportPlace), what closes an overlay and keeps Tab inside it
+// (useOverlayClose), and one photo full screen (PhotoView, which the admin desk
+// uses too).
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
-import { Heart, MapPinPlus, Stamp, X } from "lucide-react";
+import { Heart, MapPinPlus, X } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import { useLocation } from "@/components/location/LocationContext";
 import { showToast } from "@/components/Toast";
 import { useDismissable } from "@/lib/dismissStack";
 import { listSuggestions, toggleLike, isLiked, progressLabel, progressSpoken, progressPct, reasonOf, placeWhere, reportPlace, PLACE_GONE, REPORT_REASONS, REVIEW_AT } from "@/lib/suggestions";
+import { HomeZone } from "@/components/redesign/Zone";
+import { NEUTRAL, ZONE, fs as zfs, rgba } from "@/components/redesign/constants";
+import LocalFavoriteStamp from "@/components/passport/LocalFavoriteStamp";
 
+// The shared parts below (ReportPlace, PhotoView) keep their own palette.
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const INK = "#0F1419", INK2 = "#3D4550", INK3 = "#5B6470";
-const TEAL = "#0E7C73", TEAL_DARK = "#0A5F58", TEAL_SOFT = "#E8F4F2", SAND = "#F7F4EC", TRACK = "#E6E1D6", IVORY = "#FFFCF7";
-const HEART = "#B4233C", HEART_BG = "#FDECEF";
+const TEAL = "#0E7C73", SAND = "#F7F4EC", IVORY = "#FFFCF7";
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
+
+const L = ZONE.local;
+const HELD_TIERS = new Set(["teen", "blocked", "confirm"]);
 
 // The approved places already announced on this device (ids). Without
 // storage the note may show again, which is the honest way to fail.
@@ -41,7 +47,9 @@ const markTold = (id) => {
   try { localStorage.setItem(TOLD_KEY, JSON.stringify([...readTold(), id].slice(-200))); } catch { /* shows again next time */ }
 };
 
-// wide: the iPad Home, where the section fills the column and the places sit three across.
+// A 44px target around a link-sized label.
+const linkStyle = { minHeight: 44, margin: "-12px 0", padding: 0, background: "transparent", border: 0, fontSize: zfs(13), fontWeight: 600, lineHeight: 1.2, color: NEUTRAL.pine, cursor: "pointer" };
+
 export default function SuggestPlaceSection({ wide = false }) {
   const navigate = useNavigate();
   const { socialTier, refreshSocialTier } = useAuth();
@@ -80,7 +88,7 @@ export default function SuggestPlaceSection({ wide = false }) {
     return () => { gone = true; };
   }, [socialTier]);
 
-  const canSuggest = socialTier !== "teen";
+  const canSuggest = !HELD_TIERS.has(socialTier);
   if (items === null || (!items.length && !canSuggest)) return null;
 
   const seeNews = () => { markTold(news.id); navigate(`${createPageUrl("LocalFavorite")}?id=${encodeURIComponent(news.id)}`); };
@@ -98,93 +106,92 @@ export default function SuggestPlaceSection({ wide = false }) {
   };
 
   return (
-    <div className={wide ? "mt-9" : "px-4 pt-1 pb-5"}>
-      <section aria-labelledby="gs-suggest-h" className={`${wide ? "w-full" : "max-w-md mx-auto"} flex flex-col`}
-        style={{ background: "#FFFFFF", border: "1px solid rgba(15,20,25,.08)", borderRadius: 22, padding: "20px 18px 16px", gap: 14, color: INK,
-          boxShadow: "0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.10)" }}>
-        {news && (
-          <div role="status" className="flex items-start" style={{ gap: 10, padding: "12px 6px 12px 14px", borderRadius: 14, background: TEAL_SOFT, color: TEAL_DARK }}>
-            <Stamp size={20} strokeWidth={2} className="flex-none" style={{ marginTop: 1 }} aria-hidden="true" />
-            <div className="flex-1 min-w-0 flex flex-col items-start" style={{ gap: 4, fontSize: fs(13.5), lineHeight: 1.4 }}>
-              <div><b>Your suggestion is now a stamp.</b> <span style={{ overflowWrap: "anywhere" }}>{news.name}</span> became a Local favorite.</div>
-              <button type="button" onClick={seeNews} className="font-semibold"
-                style={{ color: TEAL_DARK, background: "none", border: "none", padding: 0, textDecoration: "underline", fontSize: fs(13.5) }}>See the stamp</button>
-            </div>
-            <button type="button" onClick={closeNews} aria-label="Close this note" className="flex-none flex items-center justify-center"
-              style={{ width: 36, height: 36, marginTop: -8, color: TEAL_DARK, background: "none", border: "none" }}>
-              <X size={17} strokeWidth={2} aria-hidden="true" />
-            </button>
-          </div>
-        )}
-        <div className="flex flex-col" style={{ gap: 6 }}>
-          <div className="uppercase" style={{ fontSize: fs(11.5), fontWeight: 700, letterSpacing: ".12em", color: TEAL }}>Suggest a place to stamp</div>
-          <h2 id="gs-suggest-h" style={{ margin: 0, fontFamily: SERIF, fontWeight: 400, fontSize: fs(31), lineHeight: 1.05 }}>
-            Know a spot worth <i>a visit?</i>
-          </h2>
-          <p style={{ margin: 0, fontSize: fs(14.5), lineHeight: 1.45, color: INK2 }}>
-            Locals and people who&rsquo;ve been can suggest a place. When {REVIEW_AT} people suggest the same one, we review it. Approved places become a <b>Local favorite</b> stamp everyone can collect.
+    <HomeZone zone="local" label="Local favorites" wide={wide}>
+      {news && (
+        <div role="status" className="flex items-start" style={{ gap: 10, padding: "8px 2px 8px 12px", marginBottom: 12, borderRadius: 14, background: NEUTRAL.cream }}>
+          <span aria-hidden="true" className="flex-none" style={{ display: "block", width: 40, marginTop: 4, transform: "rotate(-6deg)" }}>
+            <LocalFavoriteStamp name={news.name} city={news.city || null} country={news.country || null} width={40} />
+          </span>
+          <p className="flex-1 min-w-0" style={{ margin: 0, fontSize: zfs(12.5), lineHeight: 1.3, color: NEUTRAL.ink2 }}>
+            <b style={{ fontWeight: 700, color: NEUTRAL.ink }}>Your suggestion is now a stamp.</b>{" "}
+            <span style={{ overflowWrap: "anywhere" }}>{news.name}</span> became a Local favorite.{" "}
+            <button type="button" onClick={seeNews} style={{ padding: 0, background: "transparent", border: 0, font: "inherit", fontWeight: 600, color: NEUTRAL.tealInk, textDecoration: "underline", textUnderlineOffset: 2, cursor: "pointer" }}>See the stamp</button>
           </p>
+          <button type="button" onClick={closeNews} aria-label="Close this note" className="flex-none flex items-center justify-center"
+            style={{ width: 44, height: 44, margin: "-8px 0", background: "transparent", border: 0, color: NEUTRAL.ink2, cursor: "pointer" }}>
+            <X size={16} strokeWidth={2} aria-hidden="true" />
+          </button>
         </div>
+      )}
 
-        {canSuggest && (
+      <h3 className="font-serif m-0" style={{ fontWeight: 400, fontSize: zfs(28), lineHeight: 1.15, color: L.title }}>
+        Know a spot worth <em style={{ color: L.accent }}>a visit?</em>
+      </h3>
+      <p style={{ margin: "8px 0 0", fontSize: zfs(14), lineHeight: 1.43, color: L.meta }}>
+        When {REVIEW_AT} people suggest the same place, we review it for a Local favorite stamp anyone can collect.
+      </p>
+
+      {canSuggest && (
+        <div className="flex" style={{ marginTop: 12 }}>
           <button type="button" onClick={() => navigate(createPageUrl("SuggestPlace"))}
-            className="flex items-center justify-center gap-2 font-semibold"
-            style={{ minHeight: 48, borderRadius: 14, background: TEAL, color: "#FFFFFF", fontSize: fs(16), border: "none" }}>
+            className="inline-flex items-center"
+            style={{ gap: 8, minHeight: 48, padding: "0 20px 0 16px", borderRadius: 14, background: NEUTRAL.tealInk, border: 0, color: NEUTRAL.white, fontSize: zfs(15), fontWeight: 600, cursor: "pointer" }}>
             <MapPinPlus size={18} strokeWidth={2} aria-hidden="true" />
             Suggest a place
           </button>
-        )}
+        </div>
+      )}
 
-        {items.length > 0 ? (
-          <div className="flex flex-col" style={{ gap: 10 }}>
-            <div className="flex justify-between items-baseline gap-3">
-              <div style={{ fontSize: fs(13), fontWeight: 600 }}>Almost a stamp near you</div>
-              <button type="button" onClick={() => navigate(createPageUrl("Suggestions"))}
-                style={{ fontSize: fs(13), fontWeight: 600, color: TEAL, background: "none", border: "none", padding: 0 }}>See all</button>
-            </div>
-            <div className={wide ? "grid grid-cols-3" : "flex flex-col"} style={{ gap: 10 }}>
-              {items.map((p) => {
-                const liked = isLiked(p);
-                const why = reasonOf(p.top_reason)?.short;
-                const where = placeWhere(p);
-                return (
-                  <div key={p.id} className="flex flex-col" style={{ gap: 7, padding: 12, borderRadius: 14, background: SAND }}>
-                    <div className="flex justify-between items-start" style={{ gap: 10 }}>
-                      <div className="flex flex-col min-w-0" style={{ gap: 2 }}>
-                        <div style={{ fontWeight: 600, fontSize: fs(15), overflowWrap: "anywhere" }}>{p.name}</div>
-                        {(where || why) && <div style={{ fontSize: fs(12.5), color: INK3 }}>{[where, why].filter(Boolean).join(" · ")}</div>}
-                      </div>
-                      {/* Liked: a full heart-red edge, so pressed reads at a glance;
-                          the same 1.5px either way, so the pill never shifts (2026-10-12). */}
-                      <button type="button" onClick={() => like(p)} aria-pressed={liked}
-                        aria-label={`Like ${p.name} · ${p.likes || 0} likes`}
-                        className="flex-none flex items-center font-semibold"
-                        style={{ gap: 5, height: 32, padding: "0 10px", borderRadius: 999, fontSize: fs(13), color: HEART,
-                          border: `1.5px solid ${liked ? HEART : "rgba(15,20,25,.12)"}`, background: liked ? HEART_BG : "#FFFFFF" }}>
-                        <Heart size={15} fill="currentColor" strokeWidth={0} aria-hidden="true" />
-                        {p.likes || 0}
-                      </button>
-                    </div>
-                    <div className="flex items-center" style={{ gap: 10 }}>
-                      <div role="img" aria-label={progressSpoken(p.count)} className="flex-1 overflow-hidden" style={{ height: 6, borderRadius: 99, background: TRACK }}>
-                        <div style={{ height: 6, borderRadius: 99, background: TEAL, width: progressPct(p.count) }} />
-                      </div>
-                      <div className="flex-none" style={{ fontSize: fs(12.5), fontWeight: 600, color: TEAL }}>{progressLabel(p.count)}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+      {items.length > 0 ? (
+        <>
+          <div className="flex items-center justify-between" style={{ gap: 12, marginTop: 14, minHeight: 20 }}>
+            <span style={{ fontSize: zfs(13), fontWeight: 600, lineHeight: 1.5, color: NEUTRAL.ink }}>Almost a stamp near you</span>
+            <button type="button" onClick={() => navigate(createPageUrl("Suggestions"))} style={linkStyle}>See all</button>
           </div>
-        ) : (
-          // Nothing near the active location yet — everyone's list is still a tap away.
-          <button type="button" onClick={() => navigate(createPageUrl("Suggestions"))}
-            style={{ alignSelf: "center", fontSize: fs(13), fontWeight: 600, color: TEAL, background: "none", border: "none", padding: "2px 0" }}>
+          <div style={{ marginTop: 8, borderRadius: 16, background: NEUTRAL.white, overflow: "hidden" }}>
+            {items.map((p, i) => {
+              const liked = isLiked(p);
+              const why = reasonOf(p.top_reason)?.short;
+              const where = placeWhere(p);
+              return (
+                <div key={p.id} className="flex flex-col justify-center" style={{ minHeight: 56, padding: "7px 12px", borderTop: i ? `1px solid ${L.rowLine}` : 0 }}>
+                  <div className="flex items-center justify-between" style={{ gap: 10, minHeight: 24 }}>
+                    <span className="min-w-0" style={{ fontSize: zfs(15), fontWeight: 600, lineHeight: 1.25, color: NEUTRAL.ink, overflowWrap: "anywhere" }}>{p.name}</span>
+                    <button type="button" onClick={() => like(p)} aria-pressed={liked}
+                      aria-label={`Like ${p.name} · ${p.likes || 0} likes`}
+                      className="flex-none flex items-center"
+                      style={{ minHeight: 44, margin: "-10px 0", padding: 0, background: "transparent", border: 0, cursor: "pointer" }}>
+                      {/* Liked: a full heart-red edge and a blush fill, so pressed reads
+                          at a glance; the same 1px either way, so the pill never shifts. */}
+                      <span className="inline-flex items-center" style={{ gap: 4, minHeight: 24, padding: "0 9px", borderRadius: 999, background: liked ? rgba(NEUTRAL.heart, 0.08) : NEUTRAL.white, border: `1px solid ${liked ? NEUTRAL.heart : L.heartLine}`, fontSize: zfs(12.5), fontWeight: 600, lineHeight: 1, color: NEUTRAL.heart }}>
+                        <Heart size={12} fill="currentColor" strokeWidth={0} aria-hidden="true" />
+                        {p.likes || 0}
+                      </span>
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between" style={{ gap: 10, minHeight: 18 }}>
+                    <span className="min-w-0 truncate" style={{ fontSize: zfs(12.5), lineHeight: 1.3, color: NEUTRAL.ink3 }}>{[where, why].filter(Boolean).join(" · ")}</span>
+                    <span role="img" aria-label={progressSpoken(p.count)} className="flex-none flex flex-col items-end" style={{ gap: 3 }}>
+                      <span className="font-mono uppercase" style={{ fontSize: zfs(11), lineHeight: 1.1, letterSpacing: ".04em", color: L.accent }}>{progressLabel(p.count)}</span>
+                      <span style={{ display: "block", width: 64, height: 3, borderRadius: 99, background: L.track, overflow: "hidden" }}>
+                        <span style={{ display: "block", height: 3, borderRadius: 99, background: L.accent, width: progressPct(p.count) }} />
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        // Nothing near the active location yet — everyone's list is still a tap away.
+        <div className="flex" style={{ marginTop: 12 }}>
+          <button type="button" onClick={() => navigate(createPageUrl("Suggestions"))} style={linkStyle}>
             See everyone&rsquo;s suggestions
           </button>
-        )}
-      </section>
-    </div>
+        </div>
+      )}
+    </HomeZone>
   );
 }
 
