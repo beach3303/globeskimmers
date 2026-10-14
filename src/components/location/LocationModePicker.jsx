@@ -926,6 +926,9 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
     // The persistent status line reads the outcome: searching, the count, or the
     // no-results words (an error note is role=alert and reads itself).
     const status = searching ? 'Searching…' : n > 0 ? `${n} ${n === 1 ? 'result' : 'results'}` : note?.kind === 'empty' ? note.text : '';
+    // Right of the text: the spinner while searching, else nothing (the placeholder gets
+    // the room).
+    const endSlot = searching;
     header = (
       <>
         {backAndClose(<>Choose a <em style={EM}>destination</em></>)}
@@ -949,7 +952,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Empire State Building, JFK Airport, hotel address..."
+              placeholder="Place or address"
               aria-describedby={showHint ? hintId : undefined}
               className="placeholder:text-ink-3"
               style={{
@@ -958,7 +961,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
                 minHeight: 52,
                 boxSizing: 'border-box',
                 margin: 0,
-                padding: '0 44px',
+                padding: `0 ${endSlot ? 44 : 14}px 0 44px`,
                 borderRadius: 14,
                 background: NEUTRAL.white,
                 // Umber at 70%: the field's edge reaches 3:1 against the kraft.
