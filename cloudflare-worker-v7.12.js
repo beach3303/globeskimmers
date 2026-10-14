@@ -1250,6 +1250,13 @@ async function handleLogEvent(request, env) {
 // ({ ok, failed }) so the sweeps retry. Photos come down BEFORE the rows that
 // name them, and a row group whose photos failed is kept, so a retry can
 // still find them.
+// The personal columns of public.profiles a freeze clears (step 1k); the
+// settings columns (units, currency, language, toggles) stay.
+const GB_PROFILE_PERSONAL_COLS = [
+  'first_name', 'display_name', 'home_city', 'home_country', 'home_city_country', 'home_lat', 'home_lng', 'home_timezone',
+  'dietary_prefs', 'accessibility_needs', 'travel_frequency', 'travel_purpose', 'traveler_type', 'frequent_countries',
+  'next_destination', 'travel_budget', 'accommodation_style', 'referral_source',
+];
 async function gbPurgeUserContent(env, userId, opts = {}) {
   const keepAccount = !!opts.keepAccount;
   const failed = [];
@@ -1394,6 +1401,27 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
   }
   // Blocks are safety settings: they go with the account, never with a freeze.
   if (!keepAccount) await del('user_blocks', `user_blocks?or=(user_id.eq.${userId},blocked_user_id.eq.${userId})`);
+
+  // 1k) A freeze keeps the sign-in and the age record, nothing personal
+  //     (go-live review, 2026-10-13): the first name, home city, country,
+  //     pin and timezone, diet and accessibility needs and the old onboarding
+  //     answers in public.profiles are cleared, and the sign-in history goes.
+  //     (Account deletion removes both with the auth user.) Only columns the
+  //     row actually has are named — the table grew by hand, and a PATCH that
+  //     names a missing column would fail this step every day.
+  if (keepAccount && uidOk) {
+    const pr = await call('profiles_personal', `profiles?id=eq.${userId}&select=*`, { headers: { 'Accept-Profile': 'public' } });
+    let row = null;
+    if (pr) { try { row = ((await pr.json()) || [])[0] || null; } catch { failed.push('profiles_personal'); } }
+    if (row) {
+      const patch = {};
+      for (const c of GB_PROFILE_PERSONAL_COLS) if (c in row && row[c] !== null) patch[c] = null;
+      if (Object.keys(patch).length) {
+        await call('profiles_personal', `profiles?id=eq.${userId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal', 'Content-Profile': 'public' }, body: JSON.stringify(patch) });
+      }
+    }
+    await call('login_events', `login_events?user_id=eq.${userId}`, { method: 'DELETE', headers: { Prefer: 'return=minimal', 'Content-Profile': 'public' } });
+  }
 
   // 1j) Their place suggestions (+ their photos in R2), likes, reports and
   //     daily counts (events D1). A place only they had suggested goes too —
