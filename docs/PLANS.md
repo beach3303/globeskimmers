@@ -829,7 +829,13 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
 - **New look — APPROVED by the founder 2026-10-13** ("now this design is phenomenal … I say approve on
   this design"; "your circle" confirmed by the founder the same day: "yes on my circle"). Building it into the app
   on branch `new-look` (off stamping-v2); nothing ships until stamping-v2 has merged and the founder says
-  go (OTA). **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
+  go (OTA). **2026-10-14: built and integrated.** All slices S1–S19 are on `new-look`, with stamping-v2
+  merged in (d642f95) and checked: the gates pass and iOS 27 launches on iPad and iPhone. Nothing is
+  pushed. It waits on (1) iOS 1.0.4, and Play 1.0.8 if submitted, leaving review, (2) the founder's go,
+  then the worker deploy and probe before the OTA, and (3) one open question: Home's circle shelf, A
+  (top-align cards) or B (print the stamp on the small card; recommended). Review page:
+  https://claude.ai/artifact/JeXKJshqiT2BJ9BSPARA2G; status: `docs/design/new-look/BUILD_STATUS.md` on new-look.
+  **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
   — option A (full-width bands) is not built. **Weather: Bluebird. ATMs: Carbon Copy** (founder,
   2026-10-13, picking from two new options each after saying "i don't like the color of weather and atm":
   "i choose the ones inside red circle"). Bluebird is a flat clear-sky blue plate (#0F6D9A) with white type,
