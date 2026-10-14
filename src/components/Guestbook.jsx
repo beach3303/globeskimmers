@@ -93,8 +93,21 @@ const textButton = {
   display: "inline-flex", alignItems: "center", minHeight: 44, minWidth: 44, padding: 0, background: "transparent", border: 0,
   fontFamily: "inherit", fontSize: fs(12.5), lineHeight: 1.2, fontWeight: 600, color: NEUTRAL.ink3, textAlign: "left", cursor: "pointer",
 };
-// A 16px line icon that leads a button's label.
-const Lead = ({ icon: Icon, color }) => <Icon size={16} strokeWidth={2} color={color} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />;
+// A button's label led by a 16px line icon that travels with its first word, so a label that
+// wraps at a large text size stays one block led by the icon.
+function Labelled({ icon: Icon, color, children }) {
+  const text = String(children);
+  const cut = text.indexOf(" ");
+  return (
+    <span style={{ minWidth: 0 }}>
+      <span style={{ whiteSpace: "nowrap" }}>
+        <Icon size={16} strokeWidth={2} color={color} aria-hidden="true" focusable="false" style={{ display: "inline", verticalAlign: "-3px", marginRight: 8 }} />
+        {cut > 0 ? text.slice(0, cut) : text}
+      </span>
+      {cut > 0 ? text.slice(cut) : null}
+    </span>
+  );
+}
 
 /**
  * @param {{
@@ -227,14 +240,12 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
         !composing ? (
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" onClick={() => setComposing(true)} style={{ ...outline(w), flex: "1 1 auto" }}>
-              <Lead icon={PenLine} color={w.ink} />
-              Sign the guestbook
+              <Labelled icon={PenLine} color={w.ink}>Sign the guestbook</Labelled>
             </button>
             {/* Every guestbook takes a doodle too (founder, 2026-10-03). */}
             <button type="button" onClick={() => setPad(true)} disabled={doodleBusy}
               style={{ ...quiet(w), flex: "none", opacity: doodleBusy ? 0.6 : 1 }}>
-              <Lead icon={Brush} color={w.iconInk} />
-              {doodleBusy ? "Posting…" : "Doodle"}
+              <Labelled icon={Brush} color={w.iconInk}>{doodleBusy ? "Posting…" : "Doodle"}</Labelled>
             </button>
           </div>
         ) : (
@@ -272,8 +283,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
                 your own albums, postcards and the city collection. */}
             <button type="button" onClick={() => setPad(true)} disabled={doodleBusy}
               style={{ ...quiet(w), alignSelf: "flex-start", justifyContent: "flex-start", textAlign: "left", border: `1px dashed ${w.line}`, padding: "0 12px", fontSize: fs(12.5), opacity: doodleBusy ? 0.6 : 1 }}>
-              <Lead icon={Brush} color={w.iconInk} />
-              {doodleBusy ? "Posting your doodle…" : "Doodle with your finger instead"}
+              <Labelled icon={Brush} color={w.iconInk}>{doodleBusy ? "Posting your doodle…" : "Doodle with your finger instead"}</Labelled>
             </button>
 
             {homeCity && (
@@ -324,7 +334,8 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
             return (
               <li key={e.id} style={{ padding: "14px 0", borderTop: i ? `1px solid ${w.line}` : 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span aria-hidden="true" style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 999, background: w.wash, color: w.washInk, fontFamily: SERIF, fontSize: fs(16), lineHeight: 1 }}>
+                  {/* The disc grows with the text size, so the initial never outgrows it. */}
+                  <span aria-hidden="true" style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", width: fs(32), height: fs(32), borderRadius: 999, background: w.wash, color: w.washInk, fontFamily: SERIF, fontSize: fs(16), lineHeight: 1 }}>
                     {(e.display_name || "?").charAt(0).toUpperCase()}
                   </span>
                   <div style={{ minWidth: 0 }}>
