@@ -910,13 +910,16 @@ async function founderAlert(env, text, tag = 'bell', opts = {}) {
     await gbBellSend(env, text, tag, opts);
   } catch { /* the bell never breaks the app */ }
 }
-// The transport: ntfy and/or Twilio, whichever are configured.
+// The transport: ntfy and/or Twilio, whichever are configured. Each send gets one retry (after
+// a network error, a 5xx or a 429), and one that still fails is recorded as 'bell_failed' in
+// the events DB: the transport, the alert's kind and the status, never the text or the topic
+// (2026-10-14: a stamp alert the founder never saw could not be traced).
 async function gbBellSend(env, text, tag, opts = {}) {
-  const jobs = [];
+  const sends = [];
   if (env.NTFY_TOPIC) {
     // Only a plain printable-ASCII link can ride in a header; anything else is dropped, never the alert.
     const click = typeof opts?.click === 'string' && /^[\x21-\x7e]{1,500}$/.test(opts.click) ? opts.click : null;
-    jobs.push(fetch(`https://ntfy.sh/${env.NTFY_TOPIC}`, {
+    sends.push(['ntfy', () => fetch(`https://ntfy.sh/${env.NTFY_TOPIC}`, {
       method: 'POST', body: text,
       headers: {
         // 'report' (a report or a block), 'ops' (a clean-up that keeps failing)
@@ -925,16 +928,31 @@ async function gbBellSend(env, text, tag, opts = {}) {
         ...(click ? { Click: click } : {}),
         ...(env.NTFY_TOKEN ? { Authorization: `Bearer ${env.NTFY_TOKEN}` } : {}),
       },
-    }));
+    })]);
   }
   if (env.TWILIO_SID && env.TWILIO_TOKEN && env.TWILIO_FROM && env.FOUNDER_PHONE) {
-    jobs.push(fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_SID}/Messages.json`, {
+    sends.push(['sms', () => fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_SID}/Messages.json`, {
       method: 'POST',
       headers: { Authorization: 'Basic ' + btoa(`${env.TWILIO_SID}:${env.TWILIO_TOKEN}`), 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ To: env.FOUNDER_PHONE, From: env.TWILIO_FROM, Body: text }),
-    }));
+    })]);
   }
-  await Promise.allSettled(jobs);
+  await Promise.all(sends.map(([via, go]) => gbBellTry(env, via, tag, go)));
+}
+// One alert over one transport: true once it's accepted; else a retry, then a record.
+async function gbBellTry(env, via, tag, go) {
+  let status = 'network';
+  for (let i = 0; i < 2; i++) {
+    try {
+      const r = await go();
+      if (r.ok) return true;
+      status = r.status;
+      if (r.status < 500 && r.status !== 429) break; // a refusal won't change on a retry
+    } catch { status = 'network'; }
+    if (i === 0) await new Promise((res) => setTimeout(res, 1500));
+  }
+  await gbLogEvent(env, 'bell_failed', { via, tag, status });
+  return false;
 }
 
 // ── Daily counters (go-live round 3) ────────────────────────────────────────
