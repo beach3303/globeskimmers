@@ -1,197 +1,183 @@
-// DreamShelf — the DREAM-mode photo rail of stampable places.
+// DreamShelf — Home's stamp shelf on the plum stock (Home-Boxes L190-269), dream
+// stack only.
 //
-// Home (planning/home stack) points this at the city the user is DREAMING
-// about — its navigate-mode selection — and the shelf lays out the stamps
-// waiting there as the promise of the trip. Endowed progress: the mono kicker
-// reads "{CITY} · {earned} OF {total}" even at 0 — the set itself is the
-// endowment. Owned attraction data only (/dream/shelf, D1 — zero Google/AI
-// spend) + one /passport/list read to mark what's already collected.
+// The region's stampable places as the promise of the trip: 'Stamps of *Lisbon*'
+// (fallback 'Your *stamp shelf*'), then the worker's rows (ICONS OF …, CUSTOMER
+// FAVORITES, WORTH A DAY TRIP), each card with its distance from the shelf's anchor
+// in the traveler's unit. Owned attraction data only (/dream/shelf, D1 — zero
+// Google/AI spend). Not-yet-collected places lead each row.
 //
-// Deliberately different from StampsNearYou:
-//   - NO includeSecrets — secrets are found by being there, never dreamed;
-//   - the REGION, not a circle around you (founder, 2026-10-08): three rows —
-//     Icons of <region>, Customer favorites, Worth a day trip — the same from
-//     every suburb; DISTANCE under every card from where you are, in the
-//     traveler's unit (miles in mile countries, km elsewhere, Settings
-//     override wins). Water in between gets an honest ⛴ FERRY tag.
-//   - photo-forward cards when a place has a real photoUrl, the engraved
-//     typographic stamp card otherwise (never a colored placeholder box).
-// A tap opens the place's full page — the same one "Stamps near you" opens
-// (founder, 2026-10-08: Six Flags opened its page, but the Hollywood Sign
-// opened a name-matched photo gallery full of other "Hollywood" signs).
-// Home still owns what opening means (onOpenActivity → openStamp).
+//   The count line: '39 TO COLLECT' until one is earned, then '3 OF 39 COLLECTED',
+//   plus '68°F NOW' and, when it's a flight away, '~9H FLIGHT (EST)'. Each fragment
+//   shows only when its data is real.
+//   earnedIds   a Set of collected entity ids from Home's one passport read. While it
+//               is null the shelf waits, so the count and the order never flip after
+//               it lands; earnedError: the read failed, so the shelf shows without
+//               a count or collected marks rather than claiming none are collected.
+//               Without the prop (undefined) the shelf reads the passport itself.
+//
+// Deliberately different from StampsNearYou: no secrets (found by being there,
+// never dreamed); the REGION, not a circle around you; photo cards when a place
+// has a real photo, the stamp tile otherwise. A tap opens the place's page (Home's
+// onOpenActivity). Collected cards get a brass edge and the COLLECTED badge (boxes)
+// or 'COLLECTED' printed after the distance (bands).
 import { useEffect, useState } from "react";
+import { Ship } from "lucide-react";
 import { useLocation } from "@/components/location/LocationContext";
 import { useAuth } from "@/lib/AuthContext";
 import { countryCode } from "@/lib/countries";
 import { distanceUnit, distanceLabel } from "@/lib/units";
 import { callWorker } from "@/lib/callWorker";
 import { listPassport } from "@/lib/passport";
-import { stampArtUrl } from "@/lib/stampArt";
 import { haversineKm } from "@/lib/homeContext";
 import { estFlightHours, MIN_FLIGHT_MILES, KM_TO_MI } from "@/lib/flightTime";
-import TypographicStamp from "@/components/passport/TypographicStamp";
 import { logDiscover } from "@/lib/logDiscover";
-import { IVORY_2 } from "@/components/redesign/constants";
+import { HomeZone, useHomeZoneStyle } from "@/components/redesign/Zone";
+import { NEUTRAL, ZONE, fs } from "@/components/redesign/constants";
+import StampThumb from "@/components/passport/StampThumb";
 
-const INK = "#16302B", INK2 = "#243447", MUTED = "#736657";
-const STAMP = "#B0472F", PAPER = "#FBF6EC", EDGE = "#E6DFD0";
+const Z = ZONE.shelf;
+const FERRY = ["catalina", "alcatraz", "statue of liberty", "liberty island", "ellis island", "angel island", "channel islands"];
 
-// Subtle mono "already in your passport" mark — the rubber-stamp red at low
-// volume, never teal (collected is a fact, not a call to action).
-function CollectedTag({ overlay }) {
+const spokenDist = (d) => (d ? d.replace(/ MI$/, " miles").replace(/ KM$/, " kilometres") : "");
+
+function CollectedBadge() {
   return (
-    <div
-      className={`font-mono uppercase tracking-[0.08em] leading-none text-[calc(8.5px*var(--fs))] ${overlay ? "absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded" : "mt-0.5"}`}
-      style={{ color: STAMP, ...(overlay ? { background: "rgba(251,246,236,.94)" } : {}) }}
+    <span
+      className="font-mono uppercase"
+      style={{ position: "absolute", top: 6, left: 6, padding: "2px 4px", borderRadius: 4, background: "rgba(251,246,236,.94)", fontSize: fs(8.5), lineHeight: 1.2, letterSpacing: ".1em", color: NEUTRAL.stamp }}
     >
       Collected
-    </div>
+    </span>
   );
 }
 
-// One shelf card. Photo-forward when the place has a real photo; otherwise the
-// engraved typographic stamp in the dashed "not yet earned" ring (mirrors
-// StampsNearYou's StampChip — bespoke stamp art first, TypographicStamp when
-// there's none). No distance line in either form — dreaming isn't nearby.
-function DreamCard({ item, collected, sub, onOpen }) {
+// The mono line under a card: the distance (or FERRY · distance with a ship), and in
+// the bands variant 'COLLECTED' printed after it in stamp red.
+function DistanceLine({ dist, ferry, collectedInline }) {
+  if (!dist && !collectedInline) return null;
+  return (
+    <span className="font-mono uppercase inline-flex items-center" style={{ marginTop: 2, gap: 4, fontSize: fs(10), lineHeight: 1.2, letterSpacing: ".08em", color: NEUTRAL.ink3 }}>
+      {ferry && <Ship size={11} strokeWidth={2} aria-hidden="true" />}
+      {ferry && "FERRY · "}{dist}
+      {collectedInline && <span style={{ color: NEUTRAL.stamp }}>{dist ? " · " : ""}Collected</span>}
+    </span>
+  );
+}
+
+function ShelfCard({ item, collected, dist, ferry, bands, onOpen }) {
   const [photoFail, setPhotoFail] = useState(false);
-  const [artFail, setArtFail] = useState(false);
-  const art = stampArtUrl(item.name, { entityId: item.id, country: item.country });
+  const label = [item.name, spokenDist(dist), ferry ? "by ferry" : "", collected ? "collected" : ""].filter(Boolean).join(", ");
+  const edge = collected ? `1px solid ${Z.accent}` : "1px solid transparent";
 
   if (item.photoUrl && !photoFail) {
     return (
       <button
+        type="button"
         onClick={onOpen}
-        className="flex-none w-[150px] rounded-2xl overflow-hidden bg-white text-left border"
-        style={{ borderColor: EDGE, boxShadow: "0 8px 20px -16px rgba(22,17,13,.4)" }}
-        aria-label={`Stamp shelf: ${item.name}`}
+        aria-label={label}
+        className="flex-none flex flex-col text-left overflow-hidden"
+        style={{ width: fs(132), borderRadius: 16, background: NEUTRAL.white, border: edge, padding: 0, cursor: "pointer" }}
       >
-        <div className="relative w-full" style={{ aspectRatio: "4 / 3", background: IVORY_2 }}>
+        <span className="relative block w-full" style={{ aspectRatio: "4 / 3", background: NEUTRAL.ivory2 }}>
           <img src={item.photoUrl} alt="" loading="lazy" onError={() => setPhotoFail(true)} className="w-full h-full object-cover" />
-          {collected && <CollectedTag overlay />}
-        </div>
-        <div className="p-2.5">
-          <div
-            className="font-serif leading-[1.1] text-[calc(15px*var(--fs))]"
-            style={{ color: INK, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
-          >
-            {item.name}
-          </div>
-          {sub && <div className="font-mono uppercase tracking-[0.08em] text-[calc(9px*var(--fs))] mt-0.5" style={{ color: MUTED }}>{sub}</div>}
-        </div>
+          {collected && !bands && <CollectedBadge />}
+        </span>
+        <span className="flex flex-col" style={{ padding: "8px 10px 10px" }}>
+          <span className="font-serif" style={{ fontSize: fs(15), lineHeight: 1.1, color: NEUTRAL.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{item.name}</span>
+          <DistanceLine dist={dist} ferry={ferry} collectedInline={collected && bands} />
+        </span>
       </button>
     );
   }
 
-  const size = 104;
   return (
-    <button onClick={onOpen} className="flex-none text-center w-[150px]" aria-label={`Stamp shelf: ${item.name}`}>
-      <div
-        className="mx-auto flex items-center justify-center"
-        style={{
-          width: size, height: size, borderRadius: "50%",
-          border: `2px dashed ${STAMP}`, background: PAPER,
-          boxShadow: "inset 0 0 0 1px rgba(176,71,47,.15)", opacity: 0.96,
-        }}
-      >
-        {art && !artFail ? (
-          <img
-            src={art} alt="" loading="lazy" onError={() => setArtFail(true)}
-            style={{ width: size * 0.78, height: size * 0.78, objectFit: "contain", opacity: 0.92 }}
-          />
-        ) : (
-          <TypographicStamp
-            name={item.name} city={item.city} country={item.country}
-            entityId={item.id || item.name} width={size * 0.84}
-          />
-        )}
-      </div>
-      <div className="mt-1.5 leading-tight" style={{ fontFamily: '"Instrument Serif", Georgia, serif', color: INK2, fontSize: `calc(13px*var(--fs))`, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-        {item.name}
-      </div>
-      {sub && <div className="font-mono uppercase tracking-[0.08em] text-[calc(9px*var(--fs))] mt-0.5" style={{ color: MUTED }}>{sub}</div>}
-      {collected && <CollectedTag />}
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={label}
+      className="flex-none relative flex flex-col items-center"
+      style={{ width: fs(132), minHeight: 160, boxSizing: "border-box", padding: collected ? "7px 7px 10px" : "8px 8px 10px", borderRadius: 18, background: Z.tile, border: collected ? edge : 0, cursor: "pointer" }}
+    >
+      <span aria-hidden="true" className="flex-none" style={{ display: "block", width: 96, height: 96 }}>
+        <StampThumb stamp={{ ...item, entity_id: item.id }} size={96} strength={collected ? undefined : 0} />
+      </span>
+      <span className="font-serif" style={{ marginTop: 6, width: "100%", fontSize: fs(15), lineHeight: 1.1, textAlign: "center", color: NEUTRAL.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{item.name}</span>
+      <DistanceLine dist={dist} ferry={ferry} collectedInline={collected && bands} />
+      {collected && !bands && <CollectedBadge />}
     </button>
   );
 }
 
-// `cityTempF` is OPTIONAL: the dreamed city's current temperature in °F, when
-// the mounting page already holds it (Home fetches /weather-forecast for the
-// active location in dream mode). No temp passed → that fragment just hides.
-export default function DreamShelf({ latitude, longitude, cityName, cityTempF = null, onOpenActivity }) {
+// cityTempF / cityTempC are OPTIONAL: the dreamed city's current temperature, when
+// Home already holds it; tempUnit picks which one prints. No temperature → that
+// fragment hides.
+export default function DreamShelf({ latitude, longitude, cityName, cityTempF = null, cityTempC = null, tempUnit = "F", earnedIds: earnedProp = undefined, earnedError = false, onOpenActivity }) {
   const { currentGpsLocation, activeLocation } = useLocation();
   const { profile } = useAuth();
+  const zoneStyle = useHomeZoneStyle();
   const [tiers, setTiers] = useState([]); // [{ key, title, items }]
   const [metroName, setMetroName] = useState(null);
-  const [earnedIds, setEarnedIds] = useState(() => new Set());
+  const [ownEarned, setOwnEarned] = useState(null);
+  const ownRead = earnedProp === undefined;
 
   useEffect(() => {
     let cancelled = false;
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) { setTiers([]); return; }
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) { setTiers([]); return undefined; }
     (async () => {
       try {
-        // The REGION's shelf (founder, 2026-10-08): from Arcadia, Santa Clarita
-        // or Van Nuys alike — Icons of Los Angeles (Disneyland to Six Flags),
-        // Customer favorites (LACMA, the Original Farmers Market), Worth a day
-        // trip (San Diego Zoo, Legoland). The worker names the rows. No secrets:
-        // those are found by being there.
-        // /passport/list marks what's collected (signed-out it's empty, never an error).
+        // The REGION's shelf: the worker names the rows. No secrets.
         const [shelf, pass] = await Promise.all([
           callWorker("dream/shelf", { latitude, longitude, cityName: cityName || "" }),
-          listPassport(),
+          ownRead ? listPassport() : Promise.resolve(null),
         ]);
         if (cancelled) return;
         const got = (!shelf.error && Array.isArray(shelf.data?.tiers)) ? shelf.data.tiers : [];
         setMetroName(shelf.data?.metro?.name || null);
         setTiers(got.map((t) => ({ ...t, items: (t.items || []).filter((a) => a.tier !== "secret") })));
-        // Attraction stamps store the attraction id as entity_id, so id
-        // membership = already collected.
-        setEarnedIds(new Set((pass.stamps || []).filter((s) => s && s.entity_id != null).map((s) => String(s.entity_id))));
+        // Attraction stamps store the attraction id as entity_id.
+        if (pass) setOwnEarned(pass.error ? false : new Set((pass.stamps || []).filter((s) => s && s.entity_id != null).map((s) => String(s.entity_id))));
       } catch { if (!cancelled) setTiers([]); }
     })();
     return () => { cancelled = true; };
-  }, [latitude, longitude, cityName]);
+  }, [latitude, longitude, cityName, ownRead]);
 
+  // What's collected: a Set, or false when the read failed (no count, no marks).
+  let earned = null;
+  if (ownRead) earned = ownEarned;
+  else if (earnedProp instanceof Set) earned = earnedProp;
+  else if (earnedError) earned = false;
+  if (earned === null) return null; // wait, so the count and the order never flip
+
+  const has = (it) => earned instanceof Set && earned.has(String(it.id));
   // Each row needs 3+ places to read as a set; the shelf hides when none does.
   // Not-yet-collected places lead each row, so the shelf always offers what's next.
   const rows = tiers
-    .map((t) => ({ ...t, items: [...t.items.filter((it) => !earnedIds.has(String(it.id))), ...t.items.filter((it) => earnedIds.has(String(it.id)))].slice(0, 16) }))
+    .map((t) => ({ ...t, items: [...t.items.filter((it) => !has(it)), ...t.items.filter(has)].slice(0, 16) }))
     .filter((t) => t.items.length >= 3);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !rows.length) return null;
 
   const all = rows.flatMap((t) => t.items);
-  const earned = all.filter((it) => earnedIds.has(String(it.id))).length;
+  const got = earned instanceof Set ? all.filter(has).length : null;
   const city = String(metroName || cityName || "").trim();
 
-  // "72°F NOW · ~9H FLIGHT (EST)" — the dreamed city's live temp (optional
-  // cityTempF prop) and a rough flight estimate from where the user PHYSICALLY
-  // is (GPS fix; null in navigate mode until Home's silent fetch fills it).
-  // Each fragment hides without its datum; under MIN_FLIGHT_MILES no flight
-  // fragment at all — nobody flies to the town next door. The whole line is
-  // skipped silently when both are missing.
+  // The count line's fragments, each only when its data is real.
+  const frags = [];
+  if (got != null) frags.push(got > 0 ? `${got} OF ${all.length} COLLECTED` : `${all.length} TO COLLECT`);
+  const t = tempUnit === "C" ? cityTempC : cityTempF;
+  if (Number.isFinite(t)) frags.push(`${Math.round(t)}°${tempUnit === "C" ? "C" : "F"} NOW`);
   const gpsLat = currentGpsLocation?.coordinates?.latitude;
   const gpsLng = currentGpsLocation?.coordinates?.longitude;
-  const dataFrags = [];
-  if (Number.isFinite(cityTempF)) dataFrags.push(`${Math.round(cityTempF)}°F NOW`);
   if (Number.isFinite(gpsLat) && Number.isFinite(gpsLng)) {
     const mi = haversineKm(gpsLat, gpsLng, latitude, longitude) * KM_TO_MI;
-    if (mi >= MIN_FLIGHT_MILES) dataFrags.push(`~${estFlightHours(mi)}H FLIGHT (EST)`);
+    if (mi >= MIN_FLIGHT_MILES) frags.push(`~${estFlightHours(mi)}H FLIGHT (EST)`);
   }
-  const dataLine = dataFrags.length ? dataFrags.join(" · ") : null;
 
-  // Distance under each card, from the shelf's anchor. Unit: Settings choice
-  // first, else the traveler's country (mile countries get miles). Known
-  // water crossings say so instead of pretending the road exists.
+  // Distance under each card, from the shelf's anchor, in the traveler's unit.
   const unit = distanceUnit(profile, countryCode(activeLocation?.address?.country || currentGpsLocation?.address?.country) || "");
-  const FERRY = ["catalina", "alcatraz", "statue of liberty", "liberty island", "ellis island", "angel island", "channel islands"];
-  const subFor = (it) => {
-    if (!Number.isFinite(it?.lat) || !Number.isFinite(it?.lng)) return null;
-    const d = distanceLabel(haversineKm(latitude, longitude, it.lat, it.lng), unit);
-    if (!d) return null;
-    const ferry = FERRY.some((f) => String(it.name || "").toLowerCase().includes(f));
-    return ferry ? `⛴ FERRY · ${d}` : d;
-  };
+  const distOf = (it) => (Number.isFinite(it?.lat) && Number.isFinite(it?.lng) ? distanceLabel(haversineKm(latitude, longitude, it.lat, it.lng), unit) : null);
+  const ferryOf = (it) => FERRY.some((f) => String(it.name || "").toLowerCase().includes(f));
+  const bands = zoneStyle === "bands";
 
   const openDream = (item) => {
     logDiscover("dream_shelf_tap", { place_id: item.id, place_name: item.name });
@@ -199,33 +185,26 @@ export default function DreamShelf({ latitude, longitude, cityName, cityTempF = 
   };
 
   return (
-    // md: overrides (2026-10-10): on the iPad Home the shelf now mounts too
-    // (HomeTablet), where the phone's max-w-md left it a narrow centered strip
-    // — let it fill the tablet container; phones are untouched.
-    <div className="px-4 md:px-0 pb-3">
-      <div className="max-w-md md:max-w-none mx-auto">
-        <div className="mb-2 px-0.5">
-          <div className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))]" style={{ color: MUTED }}>
-            {city ? `${city} · ` : ""}{earned} of {all.length}
+    <HomeZone zone="shelf" label="Stamp shelf">
+      <h3 className="font-serif m-0" style={{ fontWeight: 400, fontSize: fs(24), lineHeight: 1.15, color: Z.title }}>
+        {city ? <>Stamps of <em style={{ color: Z.accent }}>{city}</em></> : <>Your <em style={{ color: Z.accent }}>stamp shelf</em></>}
+      </h3>
+      {frags.length > 0 && (
+        <p className="font-mono" style={{ margin: "4px 0 0", fontSize: fs(10), lineHeight: 1.3, letterSpacing: ".1em", color: Z.meta }}>{frags.join(" · ")}</p>
+      )}
+      {rows.map((row, i) => (
+        <div key={row.key} style={{ marginTop: i === 0 ? 12 : 10 }}>
+          <div className="flex items-center" style={{ gap: 10, minHeight: 12, marginRight: -16 }}>
+            <span className="flex-none font-mono uppercase" style={{ fontSize: fs(10), lineHeight: 1.2, letterSpacing: ".14em", color: Z.meta }}>{row.title}</span>
+            <span aria-hidden="true" style={{ flex: 1, height: 1, background: Z.rowRule }} />
           </div>
-          <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1] mt-0.5" style={{ color: INK }}>Stamp shelf</div>
-          {dataLine && (
-            <div className="font-mono uppercase tracking-[0.08em] text-[calc(10px*var(--fs))] mt-1" style={{ color: MUTED }}>
-              {dataLine}
-            </div>
-          )}
+          <div className="flex items-start overflow-x-auto" style={{ gap: 12, marginTop: 6, marginRight: -16, paddingRight: 16, paddingBottom: 2, scrollbarWidth: "none" }}>
+            {row.items.map((it) => (
+              <ShelfCard key={it.id} item={it} collected={has(it)} dist={distOf(it)} ferry={ferryOf(it)} bands={bands} onOpen={() => openDream(it)} />
+            ))}
+          </div>
         </div>
-        {rows.map((t) => (
-          <div key={t.key} className="mt-2.5">
-            <div className="font-mono uppercase tracking-[0.08em] text-[calc(10px*var(--fs))] mb-1.5 px-0.5" style={{ color: INK2 }}>{t.title}</div>
-            <div className="flex gap-3 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "none" }}>
-              {t.items.map((it) => (
-                <DreamCard key={it.id} item={it} collected={earnedIds.has(String(it.id))} sub={subFor(it)} onOpen={() => openDream(it)} />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+      ))}
+    </HomeZone>
   );
 }

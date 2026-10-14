@@ -651,7 +651,10 @@ export default function HomePage() {
           longitude={activeLocation?.coordinates?.longitude}
           cityName={cityName}
           cityTempF={weatherInfo?.fahrenheit ?? null}
+          cityTempC={weatherInfo?.celsius ?? null}
+          tempUnit={tempUnit}
           earnedIds={passport.earnedIds}
+          earnedError={!!passport.error}
           onOpenActivity={openDreamActivity}
         />
       )}
