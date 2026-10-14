@@ -17644,6 +17644,13 @@ async function handleSocialBlock(request, env, ctx) {
       const q = await gbRest(env, `passport_tags?token=eq.${token}&select=from_user_id`, {});
       target = (q.ok ? await q.json() : [])[0]?.from_user_id || null;
     }
+    // A signature or doodle on a passport page (go-live review, 2026-10-13):
+    // signing needs no @handle, so its entry is the only name some signers
+    // have. The author is resolved here and never returned.
+    if (!target && b.entry_id && BL_UUID.test(String(b.entry_id))) {
+      const q = await gbRest(env, `blotter_entries?id=eq.${b.entry_id}&select=author_user_id`, {});
+      target = (q.ok ? await q.json() : [])[0]?.author_user_id || null;
+    }
     if (!target || !BL_UUID.test(target) || target === user.id) return jsonResponse({ error: 'Nothing to block' }, 400);
     const w = await gbRest(env, 'user_blocks', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ user_id: user.id, blocked_user_id: target }) });
     if (!w.ok) return jsonResponse({ error: 'Could not block right now — try again' }, 502);
@@ -17969,7 +17976,7 @@ async function handleSocialUnread(request, env) {
       gbRest(env, `user_follows?follower_id=eq.${me}&status=eq.accepted&select=followee_id&limit=200`, {}).then(j),
       gbRest(env, `postcards?to_user_id=eq.${me}&created_at=gte.${floor}&select=sender_id,place_name,created_at&order=created_at.desc&limit=50`, {}).then(j),
       gbRest(env, `blotter_marks?owner_user_id=eq.${me}&user_id=neq.${me}&created_at=gte.${floor}&select=target,user_id,kind,created_at&order=created_at.desc&limit=150`, {}).then(j),
-      gbRest(env, `blotter_entries?owner_user_id=eq.${me}&author_user_id=neq.${me}&created_at=gte.${floor}&select=target,author_user_id,body,doodle_key,created_at&order=created_at.desc&limit=50`, {}).then(j),
+      gbRest(env, `blotter_entries?owner_user_id=eq.${me}&author_user_id=neq.${me}&created_at=gte.${floor}&select=id,target,author_user_id,body,doodle_key,created_at&order=created_at.desc&limit=50`, {}).then(j),
       gbRest(env, `passport_tags?to_user_id=eq.${me}&status=eq.pending&created_at=gte.${floor}&select=from_user_id,name,created_at&order=created_at.desc&limit=50`, {}).then(j),
     ]);
     // Blocks hide the pair both ways (block_v2, 2026-10-13), activity from
@@ -17997,7 +18004,7 @@ async function handleSocialUnread(request, env) {
       else grouped.set(k, { type: 'reaction', uid: r.user_id, target: r.target, kinds: [r.kind], at: r.created_at });
     }
     items.push(...grouped.values());
-    for (const r of entries) items.push({ type: 'signature', uid: r.author_user_id, target: r.target, body: r.body ? String(r.body).slice(0, 90) : null, doodle: !!r.doodle_key, at: r.created_at });
+    for (const r of entries) items.push({ type: 'signature', uid: r.author_user_id, entry_id: r.id, target: r.target, body: r.body ? String(r.body).slice(0, 90) : null, doodle: !!r.doodle_key, at: r.created_at });
     for (const r of tags) items.push({ type: 'tag', uid: r.from_user_id, place: r.name || null, at: r.created_at });
 
     for (let i = items.length - 1; i >= 0; i--) {
@@ -18039,7 +18046,11 @@ async function handleSocialUnread(request, env) {
       .slice(0, 40)
       .map((i) => ({
         type: i.type, at: i.at, unread: Date.parse(i.at) > seenAt,
-        by: { handle: who[i.uid]?.handle || null, name: who[i.uid]?.name || null, verified: !!who[i.uid]?.verified, seal: who[i.uid]?.seal || null },
+        // user_id (and a signature's entry_id): someone who acted on MY pages
+        // or inbox can be blocked even without an @handle (go-live review,
+        // 2026-10-13). Minors never reach this list.
+        by: { user_id: i.uid, handle: who[i.uid]?.handle || null, name: who[i.uid]?.name || null, verified: !!who[i.uid]?.verified, seal: who[i.uid]?.seal || null },
+        ...(i.entry_id ? { entry_id: i.entry_id } : {}),
         ...(i.kinds ? { reactions: i.kinds.map((k) => BL_KIND_LABEL[k] || k) } : {}),
         ...(i.target ? { stamp: stampName[i.target.startsWith('ph:') ? photoStamp[i.target.slice(3)] : i.target.slice(3)] || null, photo: i.target.startsWith('ph:') } : {}),
         ...(i.body !== undefined ? { body: i.body, doodle: i.doodle } : {}),
