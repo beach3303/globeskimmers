@@ -5,7 +5,8 @@ import { searchHomeCities, resolveHomePlace } from "@/lib/homePlace";
 import { searchCountries, countryCode } from "@/lib/countries";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2 } from "lucide-react";
+import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2, LayoutGrid } from "lucide-react";
+import { useHomeZoneStyle, setHomeZoneStyle } from "@/components/redesign/Zone";
 import ContactUsModal from "../components/ContactUsModal";
 import RefreshAccessModal from "../components/RefreshAccessModal";
 import { ADMIN_EMAILS } from "@/lib/admins";
@@ -658,6 +659,8 @@ export default function SettingsPage() {
   // error boundary in this tree renders nothing — exactly the symptom.
   // Optional-chain it so a missing email just means "not admin".
   const isAdmin = !!(user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase()));
+  // Home's layout on this device: folders (B, what everyone sees) or the bands preview (A).
+  const homeZones = useHomeZoneStyle();
 
   if (loading) {
     return (<div className="min-h-screen bg-gradient-to-b from-[#f7fafc] to-[#e2e8f0] flex items-center justify-center"><div className="w-16 h-16 border-4 border-[#6366f1] border-t-transparent rounded-full animate-spin"></div></div>);
@@ -747,6 +750,8 @@ export default function SettingsPage() {
     const navItems = [
       { show: true, onClick: () => navigate(createPageUrl("SavedLocations")), icon: MapPin, bg: CAT.money.ink, title: "Saved Locations", desc: "Manage your favorite places" },
       { show: isAdmin, onClick: () => navigate(createPageUrl("AdminAnalytics")), icon: BarChart3, bg: CAT.transit.ink, title: "Admin Portal", desc: "Users, sign-ups & usage analytics" },
+      // Admin-only: preview option A on this device; switching back clears the choice.
+      { show: isAdmin, onClick: () => setHomeZoneStyle(homeZones === "bands" ? null : "bands"), icon: LayoutGrid, bg: CAT.shopping.ink, title: "Home layout (preview)", desc: homeZones === "bands" ? "Bands (A) — preview on this device" : "Folders (B) — what everyone sees" },
       { show: isAdmin, onClick: () => setShowRefreshAccess(true), icon: RefreshCw, bg: CAT.atm.ink, title: "Refresh Access", desc: "Grant the refresh button to users" },
       { show: true, onClick: () => setShowContactUs(true), icon: MessageCircle, bg: CAT.restroom.ink, title: "Contact Us", desc: "Get in touch with our team" },
       // Same admin gate the old FloatingNav button had — the Refresh Access grant flow below stays meaningful.
