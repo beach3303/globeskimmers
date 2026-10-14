@@ -843,7 +843,13 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   verified stamp in that city; Home's "Postcards from Lisbon" row). **Decided 2026-10-14:** what a
   visitor sees about where someone lives is the home country always, and the home city only once they
   turn on "Show my home city on my page" in Settings → Privacy (founder: "A plus a switch to turn on
-  city"); built on new-look the same day. Review page:
+  city"); built on new-look the same day. **Shipped to everyone 2026-10-14** (main 29c9be4, OTA
+  1.0.2610141816). **Decided 2026-10-14, after it shipped:** a travel buddy needs its uploaded picture, so
+  breeds not drawn yet say "Coming soon" and can't be added (founder: "do not allow users to add a travel
+  buddy if their breed *.png is not uploaded yet"; 6563d63; `src/lib/petArt.js` lists the 87 drawn breeds,
+  refresh it with each pet upload; "Mixed / rescue" isn't drawn for dogs or cats yet). Profile's photo
+  packets take more prints, as the Passport's do (founder: "allow users to be able to add more photos to
+  each album"; 9578c01). Both ride the next OTA. Review page:
   https://claude.ai/artifact/JeXKJshqiT2BJ9BSPARA2G; status: `docs/design/new-look/BUILD_STATUS.md` on new-look.
   **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
   — option A (full-width bands) is not built. **Weather: Bluebird. ATMs: Carbon Copy** (founder,
