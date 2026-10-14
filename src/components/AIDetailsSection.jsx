@@ -1,15 +1,21 @@
 /**
- * AIDetailsSection — collapsible "🤖 AI DETAILS" panel used on per-place
- * cards. Drops into PlacesToEat (RestaurantCard) and CoffeeFinder (CoffeeCard)
- * as a single self-contained component.
+ * AIDetailsSection — the "AI details" disclosure on per-place cards. Drops into
+ * PlacesToEat (RestaurantCard) and CoffeeFinder (CoffeeCard) as a single
+ * self-contained component.
+ *
+ * Look (the new look; Eat.dc.html L122): the header is a quiet row (Sparkles 18 in the
+ * world's icon ink, 'AI details', the word 'AI' kept) with aria-expanded and
+ * aria-controls; the body opens under it on white with a 1px world line, mono labels in
+ * the world ink and plain words. No lilac, no emoji. Inside a card's QuietRows the body
+ * takes the full width under the rows (QuietPanel); anywhere else it follows the row.
  *
  * Behavior:
- * - Collapsed by default. Tap header to open.
- * - First open triggers lazy fetch via base44.functions.invoke('getAIDetails')
- *   which routes through the Worker /ai-details endpoint:
+ * - Collapsed by default. Tap the row to open.
+ * - First open triggers lazy fetch via callWorker(ROUTE.getAIDetails), which
+ *   routes through the Worker /ai-details endpoint:
  *   • Worker checks 30-day KV cache → returns instantly if hit ($0)
  *   • Cache miss → Place Details ($0.02, cached 90d) + Claude Haiku ($0.005)
- * - Shimmer placeholders while loading.
+ * - Shimmer placeholders (on the world wash) while loading.
  * - Fires logEvent('ai_details_opened') on every open (engagement signal).
  * - Fires logEvent('ai_details_fetched') with cache hit/miss flag after
  *   response (cost signal).
@@ -26,42 +32,60 @@
  *                 'restroom'              — 0-5 stars (0 = always dirty),
  *                                           red flag if unsafe
  *               Different kinds get separate cache entries on the Worker.
+ *   lat, lng  — passed to the Worker as before.
+ *   world     — WORLD row or key ('eat'); the shared neutrals without it.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
+import { Flag, Sparkles, Star } from 'lucide-react';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { logEvent } from '@/lib/analytics';
+import { NEUTRAL, fs, rgba } from '@/components/redesign/constants';
+import { worldRow } from '@/components/finder/FinderControls';
+import { QuietRow, QuietPanel } from '@/components/finder/FinderCard';
 
-const DARK = '#1A2332';
-const GRAY = '#64748B';
-const PURPLE = '#6D28D9';
-const PURPLE_LIGHT = '#DDD6FE';
-const PURPLE_BG = '#F5F3FF';
-const PURPLE_SHIMMER = '#EDE9FE';
+/** @typedef {import('react').CSSProperties} CSS */
 
-// Per-kind text highlight rules. Each rule = { pattern: regex, bg, color }.
+const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
+
+/**
+ * A style object that may carry CSS custom properties (--w-wash).
+ * @param {Record<string, any>} o
+ * @returns {CSS}
+ */
+const css = (o) => o;
+
+// Per-kind text highlight rules. Each rule = { pattern: regex, tone }.
 // Applied to all AI Details body text (best dish/crowd/vibe/value/good to
 // know/traveler/verdict) via the highlightText() helper below.
 //
 // Restroom highlights are designed to help travelers scan fast:
-//   green = positive (clean, free, accessible)
-//   orange = friction (paid, customer-only, stairs)
-//   yellow = attention (location callouts)
+//   positive = clean, free
+//   friction = paid, customer-only, stairs
+//   attention = location callouts
 // "free" is scoped to /free to use|free of charge|free for use|free$/i to
 // avoid false positives on "free wifi", "stress-free", etc.
 const HIGHLIGHT_RULES = {
   restroom: [
-    // GREEN — positives
-    { pattern: /\b(clean|spotless|well[- ]maintained|tidy)\b/gi, bg: '#D1FAE5', color: '#065F46' },
-    { pattern: /\b(free to use|free of charge|free for use|no fee|no charge)\b/gi, bg: '#D1FAE5', color: '#065F46' },
+    // positives
+    { pattern: /\b(clean|spotless|well[- ]maintained|tidy)\b/gi, tone: 'positive' },
+    { pattern: /\b(free to use|free of charge|free for use|no fee|no charge)\b/gi, tone: 'positive' },
     // (accessibility phrases are deliberately NOT highlighted: AI copy can't
-    //  verify them, and green reads as confirmed)
-    // ORANGE — friction
-    { pattern: /\b(need to (?:order|buy|purchase|pay)|purchase required|customers? only|for customers?|paying customers?|requires purchase|small fee|fee required|paid|coin[- ]operated|requires payment)\b/gi, bg: '#FED7AA', color: '#9A3412' },
-    { pattern: /\b(stairs?|staircase|steps?(?:\s+up)?|no elevator|walk up)\b/gi, bg: '#FED7AA', color: '#9A3412' },
-    // YELLOW — attention/location callouts
-    { pattern: /\b(located[^.]*?(?=[.,;\n]|$))/gi, bg: '#FEF08A', color: '#713F12' },
+    //  verify them, and a positive highlight reads as confirmed)
+    // friction
+    { pattern: /\b(need to (?:order|buy|purchase|pay)|purchase required|customers? only|for customers?|paying customers?|requires purchase|small fee|fee required|paid|coin[- ]operated|requires payment)\b/gi, tone: 'friction' },
+    { pattern: /\b(stairs?|staircase|steps?(?:\s+up)?|no elevator|walk up)\b/gi, tone: 'friction' },
+    // attention/location callouts
+    { pattern: /\b(located[^.]*?(?=[.,;\n]|$))/gi, tone: 'attention' },
   ],
+};
+
+// The highlight tones, in the shared inks: green and red text on their own faint tints,
+// and ink on a pale gold for a location callout.
+const HIGHLIGHT_TONES = {
+  positive: { background: rgba(NEUTRAL.open, 0.1), color: NEUTRAL.open },
+  friction: { background: rgba(NEUTRAL.stamp, 0.08), color: NEUTRAL.stamp },
+  attention: { background: rgba(NEUTRAL.gold, 0.22), color: NEUTRAL.ink },
 };
 
 // Render a string with per-kind highlights as React nodes. Returns the
@@ -72,13 +96,13 @@ function highlightText(text, kind) {
   if (!rules || rules.length === 0) return text;
 
   // Collect all matches across all rules, then merge into a non-overlapping
-  // sequence of spans. First-rule-wins on overlap (greens checked before oranges).
+  // sequence of spans. First-rule-wins on overlap (positives checked before friction).
   const matches = [];
   for (const rule of rules) {
     rule.pattern.lastIndex = 0;
     let m;
     while ((m = rule.pattern.exec(text)) !== null) {
-      matches.push({ start: m.index, end: m.index + m[0].length, bg: rule.bg, color: rule.color });
+      matches.push({ start: m.index, end: m.index + m[0].length, tone: rule.tone });
       if (m[0].length === 0) rule.pattern.lastIndex++; // safety against zero-width loop
     }
   }
@@ -98,7 +122,7 @@ function highlightText(text, kind) {
   merged.forEach((m, i) => {
     if (m.start > pos) nodes.push(text.slice(pos, m.start));
     nodes.push(
-      <span key={i} style={{ background: m.bg, color: m.color, padding: '0 4px', borderRadius: '3px', fontWeight: '600' }}>
+      <span key={i} style={{ ...HIGHLIGHT_TONES[m.tone], padding: '0 4px', borderRadius: '3px', fontWeight: '600' }}>
         {text.slice(m.start, m.end)}
       </span>
     );
@@ -121,7 +145,12 @@ function markVerdictHelperSeen() {
   try { localStorage.setItem(GS_VERDICT_HELPER_KEY, '1'); } catch { /* ignore */ }
 }
 
-export default function AIDetailsSection({ placeId, placeName, page, kind, lat, lng }) {
+/**
+ * @param {{ placeId?: string, placeName?: string, page?: string, kind?: string, lat?: number, lng?: number, world?: any }} props
+ */
+export default function AIDetailsSection({ placeId = undefined, placeName = undefined, page = undefined, kind = undefined, lat = undefined, lng = undefined, world = undefined }) {
+  const w = worldRow(world);
+  const bodyId = useId();
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -172,87 +201,72 @@ export default function AIDetailsSection({ placeId, placeName, page, kind, lat, 
   }, [open, placeId, kind]);
 
   return (
-    <div style={{ padding: '12px 14px', background: PURPLE_BG, borderRadius: '10px', border: `1px solid ${PURPLE_LIGHT}` }}>
-      <button
-        onClick={onToggle}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}
-      >
-        <span style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.5px' }}>🤖 AI DETAILS</span>
-        <span style={{ fontSize: 'calc(11px * var(--fs))', color: PURPLE }}>{open ? '▲' : '▼'}</span>
-      </button>
-      {open && (
-        <div style={{ marginTop: '10px' }}>
-          <AIDetailsBody loading={loading} error={error} details={details} kind={kind} showVerdictHelper={showVerdictHelper} />
-        </div>
-      )}
-    </div>
+    <>
+      <QuietRow world={w} icon={Sparkles} expanded={open} controls={bodyId} onClick={onToggle}>
+        AI details
+      </QuietRow>
+      <QuietPanel world={w} id={bodyId} order={2} hidden={!open} style={{ padding: '14px 16px' }}>
+        {open ? <AIDetailsBody loading={loading} error={error} details={details} kind={kind} showVerdictHelper={showVerdictHelper} w={w} /> : null}
+      </QuietPanel>
+    </>
   );
 }
 
-function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
+function AIDetailsBody({ loading, error, details, kind, showVerdictHelper, w }) {
   if (loading) {
     return (
-      <div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {[88, 72, 80, 66, 75].map((w, i) => (
-            <div
-              key={i}
-              style={{
-                height: '12px',
-                width: `${w}%`,
-                background: `linear-gradient(90deg,${PURPLE_SHIMMER} 0%,${PURPLE_LIGHT} 50%,${PURPLE_SHIMMER} 100%)`,
-                backgroundSize: '200% 100%',
-                borderRadius: '4px',
-                animation: 'gsShimmer 1.2s ease-in-out infinite',
-              }}
-            />
-          ))}
-        </div>
-        <style>{`@keyframes gsShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
+      <div role="status" aria-label="Loading AI details" style={css({ display: 'flex', flexDirection: 'column', gap: '8px', '--w-wash': w.wash })}>
+        {[88, 72, 80, 66, 75].map((pct, i) => (
+          <span key={i} className="gs-shimmer" aria-hidden="true" style={{ display: 'block', height: '12px', width: `${pct}%`, borderRadius: '4px' }} />
+        ))}
       </div>
     );
   }
   if (error) {
-    return <div style={{ fontSize: 'calc(12px * var(--fs))', color: '#B91C1C' }}>AI Details unavailable right now. {error}</div>;
+    return <div role="alert" style={{ fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.stamp }}>AI details unavailable right now. {error}</div>;
   }
   if (!details) return null;
 
   // Highlight text per kind-specific rules. For restaurant/coffee/attraction
-  // this is a no-op (no rules defined). For restroom, highlights clean/free/
-  // accessible (green) / paid/stairs (orange) / located (yellow).
+  // this is a no-op (no rules defined). For restroom, highlights clean/free
+  // (positive) / paid/stairs (friction) / located (attention).
   const h = (text) => highlightText(text, kind);
 
-  const row = (icon, label, value) =>
+  /** @type {CSS} */
+  const labelStyle = { fontFamily: MONO, fontSize: fs(10.5), lineHeight: 1.34, fontWeight: 500, letterSpacing: '.12em', textTransform: 'uppercase', color: w.ink, marginBottom: '4px' };
+  /** @type {CSS} */
+  const bodyStyle = { fontSize: fs(13), lineHeight: 1.5, color: NEUTRAL.ink };
+  const Label = ({ children }) => <div style={labelStyle}>{children}</div>;
+
+  const row = (label, value) =>
     value ? (
-      <div style={{ marginBottom: '8px' }}>
-        <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>
-          {icon} {label}
-        </div>
-        <div style={{ fontSize: 'calc(13px * var(--fs))', lineHeight: '1.5', color: DARK }}>{h(value)}</div>
+      <div style={{ marginBottom: '10px' }}>
+        <Label>{label}</Label>
+        <div style={bodyStyle}>{h(value)}</div>
       </div>
     ) : null;
 
-  // Worth-it tag → display label + emoji. Five tiers in v6; any unknown
-  // value (or legacy v5 enum) hides the chip rather than mislabeling.
+  // Worth-it tag → words. Five tiers in v6; any unknown value (or legacy v5 enum)
+  // hides the chip rather than mislabeling. One tone for all: the words carry it.
   const WORTH_LABELS = {
-    worth_the_stop:       { icon: '💎', label: 'Worth the Stop',       bg: '#DCFCE7', color: '#166534' },
-    strong_nearby_pick:   { icon: '✅', label: 'Strong Nearby Pick',   bg: '#DBEAFE', color: '#1E40AF' },
-    craving_match:        { icon: '🍽️', label: 'Craving Match',        bg: '#FCE7F3', color: '#9D174D' },
-    know_before_you_go:   { icon: '⚠️', label: 'Know Before You Go',   bg: '#FEF3C7', color: '#92400E' },
-    better_if_convenient: { icon: '↪️', label: 'Better If Convenient', bg: '#F1F5F9', color: '#475569' },
+    worth_the_stop: 'Worth the stop',
+    strong_nearby_pick: 'Strong nearby pick',
+    craving_match: 'Craving match',
+    know_before_you_go: 'Know before you go',
+    better_if_convenient: 'Better if convenient',
   };
   const worthTag = details.worthIt && WORTH_LABELS[details.worthIt];
 
   // Bulleted outline renderer for arrays of { name, context } objects
   // (bestDish wrapped into a 1-item array; alsoRecommended already is one).
   const renderDishList = (items) => (
-    <ul style={{ margin: 0, paddingLeft: '0', listStyle: 'none', fontSize: 'calc(13px * var(--fs))', lineHeight: '1.55', color: DARK }}>
+    <ul style={{ margin: 0, paddingLeft: '0', listStyle: 'none', ...bodyStyle }}>
       {items.map((it, i) => (
-        <li key={i} style={{ marginBottom: '6px', display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
-          <span style={{ flexShrink: 0, color: PURPLE, fontWeight: '700' }}>•</span>
+        <li key={i} style={{ marginBottom: '6px', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+          <span aria-hidden="true" style={{ flexShrink: 0, width: 5, height: 5, marginTop: '0.6em', borderRadius: 999, background: w.ink }} />
           <span>
-            <strong style={{ fontWeight: '600' }}>{h(it.name)}</strong>
-            {it.context ? <span style={{ color: '#475569' }}> — {h(it.context)}</span> : null}
+            <strong style={{ fontWeight: 600 }}>{h(it.name)}</strong>
+            {it.context ? <span style={{ color: NEUTRAL.ink2 }}> — {h(it.context)}</span> : null}
           </span>
         </li>
       ))}
@@ -272,48 +286,57 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
     return read === 1 ? 'Mentioned in the one Google review we read' : `Mentioned in ${Math.min(m, read)} of the ${read} Google reviews we read`;
   };
 
+  const stars = Math.min(5, Math.max(0, Math.round(Number(details.gsStars) || 0)));
   const hasVerdict = (details.gsStars != null || details.gsRedFlag || details.gsVerdict || worthTag);
 
   return (
     <div>
-      {/* GS VERDICT — moved to the TOP. The badge carries the personality
-          (💎 / ✅ / 🍽️ / ⚠️ / ↪️) so the title itself stays clean. On the
-          user's first-ever open of any AI Details panel, a one-line helper
-          subtitle explains what GS Verdict means; after that it's hidden. */}
+      {/* GS VERDICT at the top. The worth tag carries its words; on the user's
+          first-ever open of any AI Details panel, a one-line helper subtitle
+          explains what GS Verdict means; after that it's hidden. */}
       {hasVerdict && (
-        <div style={{ marginBottom: '12px', paddingBottom: '10px', borderBottom: `1px solid ${PURPLE_LIGHT}` }}>
-          <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: showVerdictHelper ? '2px' : '6px' }}>💯 GS VERDICT</div>
+        <div style={{ marginBottom: '12px', paddingBottom: '10px', borderBottom: `1px solid ${w.line}` }}>
+          <div style={{ ...labelStyle, marginBottom: showVerdictHelper ? '2px' : '6px' }}>GS verdict</div>
           {showVerdictHelper && (
-            <div style={{ fontSize: 'calc(11px * var(--fs))', color: GRAY, fontStyle: 'italic', marginBottom: '8px' }}>
+            <div style={{ fontSize: fs(12), color: NEUTRAL.ink3, fontStyle: 'italic', marginBottom: '8px' }}>
               Globeskimmers' traveler-fit take on this place.
             </div>
           )}
           {worthTag && (
             <div style={{ marginBottom: '8px' }}>
               <span style={{
-                display: 'inline-block',
-                fontSize: 'calc(12px * var(--fs))',
-                fontWeight: '600',
-                padding: '3px 10px',
-                background: worthTag.bg,
-                color: worthTag.color,
+                display: 'inline-flex',
+                alignItems: 'center',
+                minHeight: 24,
+                boxSizing: 'border-box',
+                fontSize: fs(12),
+                fontWeight: 600,
+                padding: '2px 10px',
+                background: w.wash,
+                color: w.washInk,
                 borderRadius: '9999px',
               }}>
-                {worthTag.icon} {worthTag.label}
+                {worthTag}
               </span>
             </div>
           )}
-          {(details.gsStars != null && details.gsStars > 0) || details.gsRedFlag ? (
-            <div style={{ fontSize: 'calc(13px * var(--fs))', marginBottom: '4px' }}>
-              {details.gsRedFlag ? (
-                <strong>🚩</strong>
-              ) : (
-                <strong style={{ letterSpacing: '1px' }}>{'⭐'.repeat(Math.min(5, Math.max(0, details.gsStars)))}</strong>
-              )}
+          {details.gsRedFlag ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '4px', fontSize: fs(13), fontWeight: 600, color: NEUTRAL.stamp }}>
+              <Flag size={14} color={NEUTRAL.stamp} strokeWidth={2} aria-hidden="true" focusable="false" />
+              Red flag
+            </div>
+          ) : stars > 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginBottom: '4px' }}>
+              {Array.from({ length: stars }, (_, i) => (
+                <Star key={i} size={14} color={w.star} fill={w.star} strokeWidth={2} aria-hidden="true" focusable="false" />
+              ))}
+              <span style={{ marginLeft: 6, fontFamily: MONO, fontSize: fs(10.5), letterSpacing: '.12em', color: NEUTRAL.ink3 }}>
+                {stars} OF 5
+              </span>
             </div>
           ) : null}
           {details.gsVerdict && (
-            <div style={{ fontSize: 'calc(13px * var(--fs))', lineHeight: '1.5', color: DARK }}>
+            <div style={bodyStyle}>
               {h(details.gsVerdict)}
             </div>
           )}
@@ -322,22 +345,20 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
 
       {/* Awards next when present — Michelin / UNESCO / etc.
           is the strongest single recognition signal. */}
-      {row('🏆', 'AWARDS', details.awards)}
+      {row('Awards', details.awards)}
 
       {topDishes.length > 0 && (
         <div style={{ marginBottom: '10px' }}>
-          <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
-            {kind === 'coffee' ? '☕ TOP ORDERS' : '🥘 TOP DISHES'}
-          </div>
+          <Label>{kind === 'coffee' ? 'Top orders' : 'Top dishes'}</Label>
           <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
             {topDishes.map((d, i) => (
               <li key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '8px' }}>
-                <span style={{ flexShrink: 0, width: '20px', height: '20px', borderRadius: '9999px', background: PURPLE_BG, border: `1px solid ${PURPLE_LIGHT}`, color: PURPLE, fontSize: 'calc(11px * var(--fs))', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1px' }}>{i + 1}</span>
-                <span style={{ minWidth: 0, fontSize: 'calc(13px * var(--fs))', lineHeight: '1.5', color: DARK }}>
-                  <strong style={{ fontWeight: '600' }}>{h(d.name)}</strong>
-                  {d.context ? <span style={{ color: '#475569' }}> — {h(d.context)}</span> : null}
+                <span aria-hidden="true" style={{ flexShrink: 0, minWidth: '20px', minHeight: '20px', boxSizing: 'border-box', borderRadius: '9999px', border: `1px solid ${w.line}`, color: w.ink, fontFamily: MONO, fontSize: fs(10.5), fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1px' }}>{i + 1}</span>
+                <span style={{ minWidth: 0, ...bodyStyle }}>
+                  <strong style={{ fontWeight: 600 }}>{h(d.name)}</strong>
+                  {d.context ? <span style={{ color: NEUTRAL.ink2 }}> — {h(d.context)}</span> : null}
                   {mentionLine(d.mentions) && (
-                    <span style={{ display: 'block', fontSize: 'calc(11.5px * var(--fs))', color: GRAY, marginTop: '1px' }}>{mentionLine(d.mentions)}</span>
+                    <span style={{ display: 'block', fontSize: fs(11.5), color: NEUTRAL.ink3, marginTop: '1px' }}>{mentionLine(d.mentions)}</span>
                   )}
                 </span>
               </li>
@@ -349,8 +370,8 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
       {/* BEST DISH — single-bullet outline (one item, formatted like the
           alsoRecommended list for visual consistency). Older cached panels. */}
       {topDishes.length === 0 && bestDishItems.length > 0 && (
-        <div style={{ marginBottom: '8px' }}>
-          <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>🥘 BEST DISH</div>
+        <div style={{ marginBottom: '10px' }}>
+          <Label>Best dish</Label>
           {renderDishList(bestDishItems)}
         </div>
       )}
@@ -358,8 +379,8 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
       {/* ALSO RECOMMENDED — bulleted outline, one bullet per dish/item.
           v5 schema: array of {name, context} objects. */}
       {topDishes.length === 0 && details.alsoRecommended?.length > 0 && (
-        <div style={{ marginBottom: '8px' }}>
-          <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>👍 ALSO RECOMMENDED</div>
+        <div style={{ marginBottom: '10px' }}>
+          <Label>Also recommended</Label>
           {renderDishList(details.alsoRecommended)}
         </div>
       )}
@@ -372,21 +393,20 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
           know coming in). */}
       {details.practical && (() => {
         const rows = [
-          { key: 'payment',     icon: '💳', label: 'Payment' },
-          { key: 'englishMenu', icon: '🗣️', label: 'English' },
-          { key: 'reservation', icon: '📅', label: 'Reservation' },
-          { key: 'dietary',     icon: '🥗', label: 'Dietary' },
-          { key: 'tipping',     icon: '💁', label: 'Tipping' },
+          { key: 'payment',     label: 'Payment' },
+          { key: 'englishMenu', label: 'English' },
+          { key: 'reservation', label: 'Reservation' },
+          { key: 'dietary',     label: 'Dietary' },
+          { key: 'tipping',     label: 'Tipping' },
         ].filter(r => details.practical[r.key]);
         if (rows.length === 0) return null;
         return (
-          <div style={{ marginBottom: '8px' }}>
-            <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>📋 PRACTICAL</div>
-            <ul style={{ margin: 0, paddingLeft: '0', listStyle: 'none', fontSize: 'calc(13px * var(--fs))', lineHeight: '1.5', color: DARK }}>
+          <div style={{ marginBottom: '10px' }}>
+            <Label>Practical</Label>
+            <ul style={{ margin: 0, paddingLeft: '0', listStyle: 'none', ...bodyStyle }}>
               {rows.map(r => (
-                <li key={r.key} style={{ marginBottom: '4px', display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
-                  <span style={{ flexShrink: 0 }}>{r.icon}</span>
-                  <span><strong style={{ fontWeight: '600' }}>{r.label}:</strong> {h(details.practical[r.key])}</span>
+                <li key={r.key} style={{ marginBottom: '4px' }}>
+                  <strong style={{ fontWeight: '600' }}>{r.label}:</strong> {h(details.practical[r.key])}
                 </li>
               ))}
             </ul>
@@ -394,21 +414,21 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
         );
       })()}
 
-      {row('📸', 'PHOTO-WORTHY', details.photoWorthy)}
+      {row('Photo-worthy', details.photoWorthy)}
 
       {/* Attraction-only fields */}
-      {row('👀', 'WHAT YOU SEE', details.whatYouSee)}
-      {row('📜', 'ABOUT & HISTORY', details.aboutAndHistory)}
+      {row('What you see', details.whatYouSee)}
+      {row('About & history', details.aboutAndHistory)}
 
-      {row('👥', 'CROWD', details.crowd)}
-      {row('⏰', 'BEST TIME', details.bestTime)}
-      {row('🎭', 'VIBE', details.vibe)}
-      {row('💰', 'VALUE', details.value)}
+      {row('Crowd', details.crowd)}
+      {row('Best time', details.bestTime)}
+      {row('Vibe', details.vibe)}
+      {row('Value', details.value)}
 
       {details.goodToKnow?.length > 0 && (
-        <div style={{ marginBottom: '8px' }}>
-          <div style={{ fontSize: 'calc(11px * var(--fs))', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>📌 GOOD TO KNOW</div>
-          <ul style={{ margin: 0, paddingLeft: '18px', fontSize: 'calc(13px * var(--fs))', lineHeight: '1.5', color: DARK }}>
+        <div style={{ marginBottom: '10px' }}>
+          <Label>Good to know</Label>
+          <ul style={{ margin: 0, paddingLeft: '18px', listStyle: 'disc', ...bodyStyle }}>
             {details.goodToKnow.map((g, i) => (
               <li key={i}>{h(g)}</li>
             ))}
@@ -416,12 +436,12 @@ function AIDetailsBody({ loading, error, details, kind, showVerdictHelper }) {
         </div>
       )}
 
-      {row('🌍', 'TRAVELER', details.travelerNotes)}
+      {row('Traveler', details.travelerNotes)}
 
       {details.websiteUri && (
-        <div style={{ marginTop: '10px', fontSize: 'calc(12px * var(--fs))', color: GRAY }}>
+        <div style={{ marginTop: '10px', fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
           For more information, visit{' '}
-          <a href={details.websiteUri} target="_blank" rel="noopener noreferrer" style={{ color: PURPLE, textDecoration: 'underline' }}>
+          <a href={details.websiteUri} target="_blank" rel="noopener noreferrer" style={{ color: w.ink, textDecoration: 'underline', textUnderlineOffset: 3, overflowWrap: 'anywhere' }}>
             {details.websiteUri.replace(/^https?:\/\//, '').replace(/\/$/, '')}
           </a>
         </div>

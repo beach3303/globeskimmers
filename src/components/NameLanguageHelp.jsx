@@ -1,32 +1,48 @@
 /**
- * NameLanguageHelp — renders subtle "🔤 Pronounce" / "🌐 Translate" buttons
- * under business names that aren't plain English.
+ * NameLanguageHelp — quiet "How to say it" / "Say it" / "Translate" links under business
+ * names that aren't plain English (the new look: Eat.dc.html L146-150).
  *
  * Decision matrix (using nameAnalyzer.js, purely client-side):
- *   hasNonLatin                 → both Pronounce + Translate buttons
- *   !hasNonLatin && !looksEnglish → Translate only
+ *   hasNonLatin                 → How to say it + Say it + Translate
+ *   !hasNonLatin && !looksEnglish → Say it + Translate
  *   !hasNonLatin && looksEnglish  → render nothing
  *
- * Lazy fetch: tapping EITHER button fires a single getNameInfo call that
+ * Lazy fetch: tapping ANY link fires a single getNameInfo call that
  * returns { romanization, translation }. Cached 90 days per placeId.
- * Subsequent taps of the other button reveal the already-loaded data
+ * Subsequent taps of the other link reveal the already-loaded data
  * without a second fetch.
+ *
+ * Look: 12.5/500 #3A3128 links underlined in the world line, each with a 14px lucide icon
+ * in the world ink (Type, Volume2, Languages), joined by a muted '·'. Each link has a 44px
+ * hit area while the row stays one text line tall. The two disclosures carry aria-expanded
+ * and aria-controls. No emoji.
+ *
+ * Props: placeId, name; ink (icon colour) and line (underline colour), or world (a WORLD
+ * row or key, giving iconInk and line). Defaults are the shared neutrals.
  *
  * Used by: PlacesToEat, CoffeeFinder, MoneyExchange, ThingsToDo,
  * Shopping, ConvenienceStore, RestroomFinder. (Excluded: ATMFinder.)
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
+import { Languages, Type, Volume2 } from 'lucide-react';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { hasNonLatinScript, looksEnglish } from '@/lib/nameAnalyzer';
+import { NEUTRAL, fs, worldOf } from '@/components/redesign/constants';
 
-const GRAY = '#64748B';
-const GRAY_DARK = '#475569';
-
-export default function NameLanguageHelp({ placeId, name }) {
+/**
+ * @param {{ placeId?: string, name?: string, ink?: string, line?: string, world?: any }} props
+ */
+export default function NameLanguageHelp({ placeId = undefined, name = undefined, ink = undefined, line = undefined, world = undefined }) {
+  const w = world && typeof world === 'object' ? world : worldOf(world);
+  const iconInk = ink || (w ? w.iconInk : NEUTRAL.ink2);
+  const underline = line || (w ? w.line : NEUTRAL.lobbyLine);
+  const uid = useId();
+  const pronounceId = `${uid}-say`;
+  const translateId = `${uid}-tr`;
   const [pronounceOpen, setPronounceOpen] = useState(false);
   const [translateOpen, setTranslateOpen] = useState(false);
-  // sayItPending: user tapped "🔊 Say it" but data hasn't loaded yet —
+  // sayItPending: user tapped "Say it" but data hasn't loaded yet —
   // speak as soon as it arrives.
   const [sayItPending, setSayItPending] = useState(false);
   const [data, setData] = useState(/** @type {{romanization: string|null, translation: string|null, lang: string|null, nativeScript: string|null}|null} */ (null));
@@ -165,80 +181,106 @@ export default function NameLanguageHelp({ placeId, name }) {
 
   if (!showPronounce && !showTranslate) return null;
 
-  const buttonStyle = {
+  const linkStyle = {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: '4px',
+    gap: '5px',
+    minHeight: 44,
+    // The 44px hit area reaches past the 18px row instead of making it taller.
+    margin: '-13px 0',
+    padding: 0,
     background: 'transparent',
-    border: 'none',
-    padding: '2px 4px',
-    color: GRAY,
-    fontSize: '11px',
-    fontWeight: '500',
+    border: 0,
+    color: NEUTRAL.ink2,
+    fontSize: fs(12.5),
+    lineHeight: 1.2,
+    fontWeight: 500,
     cursor: 'pointer',
     fontFamily: 'inherit',
     textDecoration: 'underline',
+    textDecorationColor: underline,
+    textUnderlineOffset: 3,
   };
+  const icon = (Icon) => <Icon size={14} color={iconInk} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />;
+  const dot = <span aria-hidden="true" style={{ fontSize: fs(12.5), color: NEUTRAL.ink3 }}>·</span>;
 
   const revealStyle = {
     marginTop: '4px',
-    fontSize: '12px',
-    color: GRAY_DARK,
+    fontSize: fs(12),
+    color: NEUTRAL.ink2,
     fontStyle: 'italic',
     lineHeight: '1.4',
   };
 
+  const links = [];
+  if (showPronounce) {
+    links.push(
+      <button
+        key="say"
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setPronounceOpen(o => !o); }}
+        style={linkStyle}
+        aria-expanded={pronounceOpen}
+        aria-controls={pronounceId}
+      >
+        {icon(Type)}
+        {pronounceOpen ? 'Hide pronunciation' : 'How to say it'}
+      </button>
+    );
+  }
+  if (showSayIt && speechSupported) {
+    links.push(
+      <button
+        key="audio"
+        type="button"
+        onClick={onSayIt}
+        style={linkStyle}
+        aria-label="Say it in the local language"
+      >
+        {icon(Volume2)}
+        Say it
+      </button>
+    );
+  }
+  if (showTranslate) {
+    links.push(
+      <button
+        key="tr"
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setTranslateOpen(o => !o); }}
+        style={linkStyle}
+        aria-expanded={translateOpen}
+        aria-controls={translateId}
+      >
+        {icon(Languages)}
+        {translateOpen ? 'Hide translation' : 'Translate'}
+      </button>
+    );
+  }
+
   return (
     <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-        {showPronounce && (
-          <button
-            onClick={(e) => { e.stopPropagation(); setPronounceOpen(o => !o); }}
-            style={buttonStyle}
-            aria-label={pronounceOpen ? 'Hide pronunciation' : 'Show pronunciation'}
-          >
-            🔤 {pronounceOpen ? 'Hide pronunciation' : 'How to say it'}
-          </button>
-        )}
-        {showSayIt && speechSupported && (
-          <button
-            onClick={onSayIt}
-            style={buttonStyle}
-            aria-label="Play audio pronunciation in local language"
-            title="Hear it spoken in the local language"
-          >
-            🔊 Say it
-          </button>
-        )}
-        {showTranslate && (
-          <button
-            onClick={(e) => { e.stopPropagation(); setTranslateOpen(o => !o); }}
-            style={buttonStyle}
-            aria-label={translateOpen ? 'Hide translation' : 'Show translation'}
-          >
-            🌐 {translateOpen ? 'Hide translate' : 'Translate'}
-          </button>
-        )}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: '8px', rowGap: '26px', minHeight: 18 }}>
+        {links.map((l, i) => (
+          <React.Fragment key={i}>
+            {i > 0 ? dot : null}
+            {l}
+          </React.Fragment>
+        ))}
       </div>
 
-      {loading && (pronounceOpen || translateOpen) && (
-        <div style={revealStyle}>Loading…</div>
-      )}
-      {error && (pronounceOpen || translateOpen) && (
-        <div style={{ ...revealStyle, color: '#B91C1C' }}>Couldn't load: {error}</div>
-      )}
-      {pronounceOpen && data?.romanization && (
-        <div style={revealStyle}>↪ {data.romanization}</div>
-      )}
-      {translateOpen && data?.translation && (
-        <div style={revealStyle}>↪ Means: {data.translation}</div>
-      )}
-      {pronounceOpen && data && !data.romanization && (
-        <div style={revealStyle}>Already in Latin script.</div>
-      )}
-      {translateOpen && data && !data.translation && (
-        <div style={revealStyle}>Name is already English (or a person's name).</div>
-      )}
+      <div id={pronounceId} hidden={!pronounceOpen}>
+        {loading && pronounceOpen && <div style={revealStyle}>Loading…</div>}
+        {error && pronounceOpen && <div style={{ ...revealStyle, color: NEUTRAL.stamp }}>Couldn't load: {error}</div>}
+        {pronounceOpen && data?.romanization && <div style={revealStyle}>Pronounced: {data.romanization}</div>}
+        {pronounceOpen && data && !data.romanization && <div style={revealStyle}>Already in Latin script.</div>}
+      </div>
+      <div id={translateId} hidden={!translateOpen}>
+        {loading && translateOpen && !pronounceOpen && <div style={revealStyle}>Loading…</div>}
+        {error && translateOpen && !pronounceOpen && <div style={{ ...revealStyle, color: NEUTRAL.stamp }}>Couldn't load: {error}</div>}
+        {translateOpen && data?.translation && <div style={revealStyle}>Means: {data.translation}</div>}
+        {translateOpen && data && !data.translation && <div style={revealStyle}>Name is already English (or a person's name).</div>}
+      </div>
     </div>
   );
 }

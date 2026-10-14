@@ -3,8 +3,22 @@
 // plus the door to add yours. A post needs proof you're here (GPS at the place
 // or the photo's own location tag) and passes photo review before anyone sees
 // it; posts never carry a name. Loads only when the card scrolls into view.
+//
+// Two looks:
+//   variant 'panel' (default)  today's look: the ivory "From travelers" panel and the
+//                              dashed add button under it.
+//   variant 'row'              the new look (Eat.dc.html L121-123): the add door is a
+//                              quiet row (Camera 18, 'Add a photo of what you ordered')
+//                              that sits in the card's QuietRows; the dishes travelers
+//                              shared open under the rows on a white panel with a mono
+//                              'FROM TRAVELERS'. No emoji. The row is the element the
+//                              lazy load watches.
+// Props: place, kind ('restaurant' | 'coffee' | 'store'), variant, and for the row: ink
+// (the icon colour) and line (borders), or world (a WORLD row or key giving iconInk and
+// line). The add sheet is the same in both looks, with line icons and no emoji.
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Camera, MapPin, X } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import { listDishes, addDish, deleteDish } from "@/lib/dishes";
@@ -12,15 +26,20 @@ import { readPhotoExif } from "@/lib/photoExif";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { getCurrentPositionSmart } from "@/lib/geolocation";
 import { useDismissable } from "@/lib/dismissStack";
+import { worldOf } from "@/components/redesign/constants";
+import { QuietRow, QuietPanel } from "./FinderCard";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657", RULE = "rgba(22,17,13,.12)";
 const IVORY = "#FAF7F0", STAMP = "#B0472F";
 const fs = (n) => `calc(${n}px*var(--fs))`;
-const travelers = (n, loved, fav = 0) => `Ordered by ${n} traveler${n === 1 ? "" : "s"}${loved > 0 ? ` · ${loved === n ? (n === 1 ? "loved it" : "all loved it") : `${loved} loved it`}` : ""}${fav > 0 ? ` · ⭐ favorite of ${fav}` : ""}`;
+const travelers = (n, loved, fav = 0, plain = false) => `Ordered by ${n} traveler${n === 1 ? "" : "s"}${loved > 0 ? ` · ${loved === n ? (n === 1 ? "loved it" : "all loved it") : `${loved} loved it`}` : ""}${fav > 0 ? ` · ${plain ? "" : "⭐ "}favorite of ${fav}` : ""}`;
 
-export default function TravelerDishes({ place, kind = "restaurant" }) {
+/**
+ * @param {{ place?: any, kind?: string, variant?: 'panel'|'row', ink?: string, line?: string, world?: any }} props
+ */
+export default function TravelerDishes({ place = undefined, kind = "restaurant", variant = "panel", ink = undefined, line = undefined, world = undefined }) {
   const rootRef = useRef(null);
   const [seen, setSeen] = useState(false);
   const [state, setState] = useState(null); // { dishes, mine } once loaded
@@ -28,6 +47,9 @@ export default function TravelerDishes({ place, kind = "restaurant" }) {
   const [view, setView] = useState(null);   // { photos, index, title }
   const store = kind === "store";
   const goods = kind === "coffee" ? "drinks and treats" : store ? "finds" : "dishes";
+  const w = world && typeof world === "object" ? world : worldOf(world);
+  const rowInk = ink || (w ? w.iconInk : STAMP);
+  const rowLine = line || (w ? w.line : RULE);
 
   useEffect(() => {
     const el = rootRef.current;
@@ -52,6 +74,70 @@ export default function TravelerDishes({ place, kind = "restaurant" }) {
     showToast("Removed", "success");
     load();
   };
+
+  const overlays = (
+    <>
+      {adding && (
+        <AddDishSheet place={place} kind={kind} goods={goods} known={dishes.map((d) => d.dish)} ink={variant === "row" ? rowInk : undefined}
+          onClose={() => setAdding(false)} onAdded={() => { setAdding(false); load(); }} />
+      )}
+      {view && (
+        <PhotoLightbox photos={view.photos} index={view.index} title={view.title} credit="Shared by travelers who were here"
+          onClose={() => setView(null)} onIndexChange={(i) => setView((v) => (v ? { ...v, index: i } : v))} />
+      )}
+    </>
+  );
+
+  if (variant === "row") {
+    // A world-shaped row for the quiet row and its panels.
+    const q = { ...(w || {}), iconInk: rowInk, line: rowLine };
+    return (
+      <>
+        <QuietRow ref={rootRef} world={q} icon={Camera} aria-haspopup="dialog" onClick={() => setAdding(true)}>
+          {store ? "Add a photo of what you got here" : "Add a photo of what you ordered"}
+        </QuietRow>
+        {dishes.length > 0 && (
+          <QuietPanel world={q} order={1}>
+            <div style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".12em", color: INK3, textTransform: "uppercase" }}>From travelers</div>
+            <ul style={{ listStyle: "none", margin: "8px 0 0", padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+              {dishes.slice(0, 3).map((d, i) => (
+                <li key={i} className="flex items-center gap-3">
+                  <button type="button" aria-label={`Photos of ${d.dish}`} className="flex-none" style={{ padding: 0, border: 0, background: "transparent", borderRadius: 10 }}
+                    onClick={() => setView({ photos: d.photos.map((p) => ({ src: p.url })), index: 0, title: d.dish })}>
+                    <img src={d.photos[0]?.url} alt="" loading="lazy" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 10, border: `1px solid ${rowLine}`, display: "block" }} />
+                  </button>
+                  <div className="min-w-0">
+                    <div style={{ fontFamily: SERIF, fontSize: fs(17), color: INK, lineHeight: 1.15, overflowWrap: "break-word" }}>{d.dish}</div>
+                    <div style={{ fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.4 }}>{travelers(d.travelers, d.loved || 0, d.favorites || 0, true)}{d.photos.length > 1 ? ` · ${d.photos.length} photos` : ""}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {dishes.length > 3 && (
+              <div style={{ fontSize: fs(12), color: INK3, marginTop: 8, lineHeight: 1.4 }}>
+                Also: {dishes.slice(3, 8).map((d) => d.dish).join(" · ")}
+              </div>
+            )}
+          </QuietPanel>
+        )}
+        {mine.length > 0 && (
+          <QuietPanel world={q} order={1} style={{ padding: "4px 6px 4px 14px", display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 4 }}>
+            <span style={{ fontSize: fs(12), color: INK3 }}>Yours:</span>
+            {mine.map((m) => (
+              <button key={m.id} type="button" aria-label={`Remove your ${m.dish} photo`} onClick={() => removeMine(m.id)}
+                style={{ display: "inline-flex", alignItems: "center", minHeight: 44, padding: "0 2px", background: "transparent", border: 0, cursor: "pointer", fontFamily: "inherit" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, minHeight: 26, padding: "0 8px", borderRadius: 999, border: `1px solid ${rowLine}`, fontSize: fs(12), color: INK2 }}>
+                  {m.dish}
+                  <X size={12} color={INK3} strokeWidth={2.4} aria-hidden="true" focusable="false" />
+                </span>
+              </button>
+            ))}
+          </QuietPanel>
+        )}
+        {overlays}
+      </>
+    );
+  }
 
   return (
     <div ref={rootRef}>
@@ -102,19 +188,12 @@ export default function TravelerDishes({ place, kind = "restaurant" }) {
         </div>
       )}
 
-      {adding && (
-        <AddDishSheet place={place} kind={kind} goods={goods} known={dishes.map((d) => d.dish)}
-          onClose={() => setAdding(false)} onAdded={() => { setAdding(false); load(); }} />
-      )}
-      {view && (
-        <PhotoLightbox photos={view.photos} index={view.index} title={view.title} credit="Shared by travelers who were here"
-          onClose={() => setView(null)} onIndexChange={(i) => setView((v) => (v ? { ...v, index: i } : v))} />
-      )}
+      {overlays}
     </div>
   );
 }
 
-function AddDishSheet({ place, kind, goods, known, onClose, onAdded }) {
+function AddDishSheet({ place, kind, goods, known, onClose, onAdded, ink = undefined }) {
   useDismissable(true, onClose);
   const fileRef = useRef(null);
   const [file, setFile] = useState(null);
@@ -124,6 +203,9 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded }) {
   const [favorite, setFavorite] = useState(false); // "this is my favorite dish here"
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(null);
+  // The row look prints the sheet's choices and its Share in the world's ink.
+  const accent = ink || STAMP;
+  const on = ink || INK;
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   const pick = (e) => {
@@ -148,7 +230,7 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded }) {
       const { data, error, proofNeeded } = await addDish({ place, kind, dish: dish.trim(), liked, favorite, image, gps, exif });
       if (proofNeeded) { setNote(error); return; }
       if (error) { setNote(error); return; }
-      showToast(data?.replaced ? "Photo updated 📸" : "Thank you! Your order is up 🍽️", "success");
+      showToast(data?.replaced ? "Photo updated" : "Thank you! Your order is up", "success");
       onAdded();
     } catch (err) {
       setNote(err?.message || "Upload failed — try again");
@@ -159,12 +241,13 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded }) {
 
   return createPortal(
     <div className="fixed inset-0 flex items-end justify-center" style={{ zIndex: 9997, background: "rgba(22,17,13,.5)" }} onClick={onClose}>
-      <div className="w-full max-w-md rounded-t-[22px] px-5 pt-4 pb-6" style={{ background: "#F3EEE1", paddingBottom: "max(24px, env(safe-area-inset-bottom))" }} onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label={kind === "store" ? "Add a photo of what you got" : "Add a photo of what you ordered"}
+        className="w-full max-w-md rounded-t-[22px] px-5 pt-4 pb-6" style={{ background: "#F3EEE1", paddingBottom: "max(24px, env(safe-area-inset-bottom))" }} onClick={(e) => e.stopPropagation()}>
         <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: "rgba(22,17,13,.18)" }} />
         <div style={{ fontFamily: SERIF, fontSize: fs(24), color: INK, lineHeight: 1.1 }}>{kind === "store" ? "Add a photo of what you got" : "Add a photo of what you ordered"}</div>
         <div className="truncate" style={{ fontSize: fs(12.5), color: INK3, marginTop: 2 }}>{place.name}</div>
         <p style={{ fontSize: fs(13), color: INK2, lineHeight: 1.45, marginTop: 6 }}>
-          {kind === "store" ? "Could be anything — a snack, a drink, a find. We\u2019ll let others know how you liked it 😊" : `Help everyone find delicious ${goods}! Add a photo of what you ordered — and let us know if you loved it 😊`}
+          {kind === "store" ? "Could be anything — a snack, a drink, a find. We’ll let others know how you liked it." : `Help everyone find delicious ${goods}! Add a photo of what you ordered — and let us know if you loved it.`}
         </p>
 
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pick} />
@@ -172,7 +255,7 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded }) {
           style={{ height: 180, background: preview ? "#000" : "#fff", border: preview ? "none" : `1.5px dashed ${RULE}` }}>
           {preview
             ? <img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            : <span style={{ fontSize: fs(14), color: INK2 }}>📷 Take or choose a photo</span>}
+            : <span className="inline-flex items-center gap-2" style={{ fontSize: fs(14), color: INK2 }}><Camera size={18} color={accent} strokeWidth={2} aria-hidden="true" />Take or choose a photo</span>}
         </button>
 
         <input value={dish} onChange={(e) => setDish(e.target.value.slice(0, 60))} maxLength={60}
@@ -182,38 +265,39 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded }) {
           <div className="flex flex-wrap gap-1.5 mt-2">
             {known.slice(0, 6).map((k) => (
               <button key={k} type="button" onClick={() => setDish(k)} className="rounded-full px-2.5 py-1"
-                style={{ background: dish === k ? INK : "#fff", color: dish === k ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(12) }}>{k}</button>
+                style={{ background: dish === k ? on : "#fff", color: dish === k ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(12) }}>{k}</button>
             ))}
           </div>
         )}
 
         <div style={{ fontSize: fs(13), color: INK2, marginTop: 12 }}>Did you like it?</div>
         <div className="flex gap-2 mt-1.5">
-          {[[true, "😋 Loved it"], [false, "🙂 It was OK"]].map(([v, label]) => (
-            <button key={label} type="button" onClick={() => setLiked(liked === v ? null : v)} aria-pressed={liked === v}
+          {[[true, "Loved it"], [false, "It was OK"]].map(([v, label]) => (
+            <button key={String(label)} type="button" onClick={() => setLiked(liked === v ? null : v)} aria-pressed={liked === v}
               className="flex-1 rounded-full py-2 font-semibold"
-              style={{ background: liked === v ? INK : "#fff", color: liked === v ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>{label}</button>
+              style={{ background: liked === v ? on : "#fff", color: liked === v ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>{label}</button>
           ))}
         </div>
 
         {/* Founder, 2026-10-05: "a check box … this is my favorite dish in this
             restaurant". One per traveler per place — a new pick replaces the old. */}
-        <label className="flex items-center gap-2.5 mt-3 rounded-xl px-3 py-2.5 cursor-pointer" style={{ background: "#fff", border: `1px solid ${favorite ? STAMP : RULE}` }}>
-          <input type="checkbox" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} style={{ width: 18, height: 18, accentColor: STAMP }} />
+        <label className="flex items-center gap-2.5 mt-3 rounded-xl px-3 py-2.5 cursor-pointer" style={{ background: "#fff", border: `1px solid ${favorite ? accent : RULE}` }}>
+          <input type="checkbox" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} style={{ width: 18, height: 18, accentColor: accent }} />
           <span style={{ fontSize: fs(13.5), color: INK }}>
-            ⭐ This is my favorite {kind === "restaurant" ? "dish at this restaurant" : "here"}
+            This is my favorite {kind === "restaurant" ? "dish at this restaurant" : "here"}
           </span>
         </label>
 
-        <p style={{ fontSize: fs(11.5), color: INK3, lineHeight: 1.45, marginTop: 10 }}>
-          📍 We check that you're here — your location now, or where the photo was taken. Shared without your name, after a quick photo review.
+        <p className="flex items-start gap-1.5" style={{ fontSize: fs(11.5), color: INK3, lineHeight: 1.45, marginTop: 10 }}>
+          <MapPin size={14} color={INK3} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>We check that you're here — your location now, or where the photo was taken. Shared without your name, after a quick photo review.</span>
         </p>
         {note && <p role="alert" style={{ fontSize: fs(12.5), color: STAMP, lineHeight: 1.4, marginTop: 6 }}>{note}</p>}
 
         <div className="flex gap-2 mt-3">
           <button type="button" onClick={onClose} className="flex-1 rounded-xl py-3 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(14) }}>Cancel</button>
           <button type="button" onClick={submit} disabled={!file || !dish.trim() || busy} className="flex-1 rounded-xl py-3 font-semibold disabled:opacity-50"
-            style={{ background: STAMP, color: "#fff", fontSize: fs(14) }}>{busy ? "Checking…" : "Share"}</button>
+            style={{ background: accent, color: "#fff", fontSize: fs(14) }}>{busy ? "Checking…" : "Share"}</button>
         </div>
       </div>
     </div>,
