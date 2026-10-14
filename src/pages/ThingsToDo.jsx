@@ -21,11 +21,14 @@ import { matchesQuery } from "@/lib/searchText";
 import {
   SlidersHorizontal, Stamp, ChevronRight, ChevronDown, Compass, Palette, Telescope, Church, Trees, Waves, Fish,
   FerrisWheel, Mountain, Castle, Landmark, Drama, TramFront, Route, Martini, Flower2, Binoculars, Music, Ship, Tent, Library,
+  X, Heart, TriangleAlert, Sunrise, Clock,
 } from "lucide-react";
-import { CAT, WORLD, NEUTRAL, fs as fsx, rgba } from "@/components/redesign/constants";
+import { WORLD, NEUTRAL, fs as fsx, rgba } from "@/components/redesign/constants";
 import FinderHeader, { finderColumnStyle } from "@/components/finder/FinderHeader";
 import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
-import { FactsLine, WorldTag, TagRow } from "@/components/finder/FinderCard";
+import { WorldCard, worldGrid, NumberMark, FactsLine, WorldTag, TagRow, CardKicker, CardName, ActionRow } from "@/components/finder/FinderCard";
+import { openStateFor } from "@/lib/openState";
+import { useOverlayClose } from "@/components/home/SuggestPlaceSection";
 import { Contours } from "@/components/finder/motifs";
 import { WorldSearch, WorldChip, ChipRow, WorldSegmented } from "@/components/finder/FinderControls";
 import FilterSheet, { FilterToggleRow } from "@/components/finder/FilterSheet";
@@ -35,17 +38,6 @@ import { usePersona, personaRank } from "@/lib/persona";
 import { expandActivityQuery, fameFirstThings } from "@/lib/searchPlan";
 import { sortByRating as rankByRating } from "@/lib/searchRank";
 
-// iPad editorial design tokens (design handoff: matches "Places to Eat · iPad").
-const ED_SERIF = '"Instrument Serif", Georgia, serif';
-const ED_MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
-const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
-const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)";
-// Things-To-Do category accent — this finder's own color world. Replaces the
-// Places-to-Eat coral (#D8443C) on the iPad editorial cards so the kicker /
-// Directions button / tier accents read as part of THIS finder, not Eat.
-// Sourced from CAT.todo.ink (#C5197A) — kept as a local const so the editorial
-// tokens cluster reads in one place.
-const ED_TODO = CAT.todo.ink; // #C5197A
 
 const T={teal:"#00BCD4",tealD:"#00838F",dark:"#1A2332",dark2:"#243447",gray:"#64748B",grayL:"#F1F5F9",green:"#4CAF50",blue:"#1565C0",blueL:"#E3F2FD",coral:"#FF6B6B",gold:"#FFB74D",
   accent:"#F59E0B",accentD:"#D97706",accentL:"#FFFBEB"};
@@ -69,42 +61,7 @@ const CATEGORIES=[
 const inCategory=(a,c)=>a.activityCategory===c||(c==="tours"&&a.activityCategory==="tour");
 const ROW_FADE="linear-gradient(90deg,#000 calc(100% - 20px),transparent)";
 
-const PROP_TAGS=[
-  {key:"isFree",           icon:"🆓",label:"Free Entry",      color:"#059669",bg:"#D1FAE5"},
-  {key:"isFamilyFriendly", icon:"👨‍👩‍👧",label:"Family Friendly",color:"#D97706",bg:"#FEF3C7"},
-  {key:"isOutdoor",        icon:"🌤️",label:"Outdoor",         color:"#059669",bg:"#D1FAE5"},
-  {key:"isIndoor",         icon:"🏛️",label:"Indoor",          color:"#7C3AED",bg:"#EDE9FE"},
-  {key:"hasGuidedTour",    icon:"🎤",label:"Guided Tour",     color:"#0891B2",bg:"#E0F2FE"},
-  {key:"isBucketList",     icon:"🏆",label:"Bucket List",     color:"#D97706",bg:"#FEF3C7"},
-  {key:"isHiddenGem",      icon:"💎",label:"Hidden Gem",      color:"#7C3AED",bg:"#EDE9FE"},
-  {key:"isPhotoWorthy",    icon:"📸",label:"Photo Worthy",    color:"#DB2777",bg:"#FCE7F3"},
-  {key:"isAdventure",      icon:"⚡",label:"Adventure",       color:"#DC2626",bg:"#FEE2E2"},
-  {key:"isCultural",       icon:"🎭",label:"Authentic Culture",color:"#92400E",bg:"#FEF3C7"},
-  {key:"isAccessible",     icon:"♿",label:"Accessible",      color:"#1565C0",bg:"#E3F2FD"},
-  {key:"isBudgetFriendly", icon:"💰",label:"Budget Friendly", color:"#059669",bg:"#D1FAE5"},
-  {key:"isGoodForCouples", icon:"💑",label:"Great for Couples",color:"#DB2777",bg:"#FCE7F3"},
-  {key:"isPetFriendly",    icon:"🐾",label:"Pet Friendly",    color:"#059669",bg:"#D1FAE5"},
-  // Audience tags introduced for the Phase 4 query restructure:
-  // - groups: bachelor/bachelorette/large-party venues
-  // - singles: hostel-style + solo-traveler-friendly venues
-  // - teens: theme parks, arcades, escape rooms, zip lines, etc.
-  //   ("teen-leaning" — distinct from family friendly which signals
-  //   strollers / small kids)
-  {key:"isGoodForGroups",  icon:"👥",label:"Great for Groups", color:"#2563EB",bg:"#DBEAFE"},
-  {key:"isGoodForSingles", icon:"🧍",label:"Solo Friendly",    color:"#0E7490",bg:"#CFFAFE"},
-  {key:"isGoodForTeens",   icon:"🛹",label:"Great for Teens",  color:"#9333EA",bg:"#F3E8FF"},
-];
 
-// Tour-mode display map. Keys match the `tourMode` value the backend
-// stamps on results that came from a mode-bearing tour query
-// ("walking tour" -> walking, etc.). Used to render a small chip on
-// the activity card so a user can see "🚶 Walking tour" at a glance
-// without expanding the card.
-const TOUR_MODE_LABELS = {
-  walking: { icon: "🚶", label: "Walking tour" },
-  biking:  { icon: "🚴", label: "Bike tour" },
-  boating: { icon: "⛵", label: "Boat tour" },
-};
 
 // Synonym map for fuzzy/conceptual activity searches — concrete terms (zipline,
 // kayaking, ATV) already match Google well, but vague ones return junk. We expand
@@ -432,207 +389,6 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
   );
 }
 
-// ─── ACTIVITY CARD — editorial layout (responsive: phone + iPad) ─────────────
-// Full-width editorial card: big photo (tablet ~360 / phone ~200) + rank badge +
-// category tag, magenta attraction-category kicker, serif name, Say-it/Translate/
-// rating/distance row, tinted pill tags, green Open bar, blue phone bar, three
-// action buttons, and a "More ▾" expand panel (badges / property tags /
-// what-people-love / heads-up / best-time / address / daily hours /
-// AttractionAIDetails / website).
-// Reuses PhotoGalleryModal / NameLanguageHelp / AttractionAIDetails /
-// MapAppSelector / openStatus / PROP_TAGS / TOUR_MODE_LABELS.
-// RESPONSIVE: renders the editorial layout at BOTH widths. `isTablet` gates every
-// size — tablet keeps the original generous sizes; phone uses compact phone-tuned
-// sizes (smaller photo, tighter radius/type/padding) while keeping the exact same
-// fields, handlers, and sub-components. fs() stays on every text size so the
-// 4-step glasses control scales card text gracefully (serif name has a 2-line
-// clamp + the card uses min-height so it GROWS instead of clipping).
-function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet}){
-  const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false); const [hoursExp,setHoursExp]=useState(false); const [gallery,setGallery]=useState({open:false,idx:0});
-  const fs=(n)=>`calc(${n}px*var(--fs))`;
-  // t(tabletValue, phoneValue) — pick the size for the active platform. Used for
-  // BOTH fs()-wrapped type sizes and raw px (photo height, radius, paddings).
-  const t=(tab,ph)=>isTablet?tab:ph;
-  useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
-  const name=a.displayName?.text||a.name||"Activity"; const st=openStatus(a);
-  const activeTags=PROP_TAGS.filter(t=>a.props?.[t.key]);
-  const aColor=a.activityColor||T.accent;
-  const photos=(a.photos||[]).filter(Boolean);
-  const openText=st.label;
-  const photoH=t(360,200);   // tablet 360px, phone ~200px
-  const radius=t("28px","20px");
-
-  const Tag=({bg,color,children})=>(
-    <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(t(9,6))} ${fs(t(16,12))}`,fontSize:fs(t(15.5,12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
-  );
-
-  // Expanded details (what people love, address, daily hours, AI, website) —
-  // a const so the attraction extras can place them above the guestbook.
-  const details=(
-    <AnimatePresence>
-      {exp&&(
-        <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-          {/* Inside the attraction extras their own gap spaces it like the cards around it. */}
-          <div style={{marginTop:forceExpanded?0:fs(t(20,14)),display:"flex",flexDirection:"column",gap:fs(t(14,12))}}>
-
-            {a.highlights?.length>0&&(
-              <div style={{padding:fs(t(16,14)),background:"#F0FDF4",borderRadius:t("16px","14px"),border:"1px solid #BBF7D0"}}>
-                <div style={{fontSize:fs(t(13,11.5)),fontWeight:700,color:"#059669",letterSpacing:"0.5px",marginBottom:fs(9),textTransform:"uppercase"}}>💚 What People Love</div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:fs(8)}}>
-                  {a.highlights.map((h,i)=><span key={i} style={{background:"#D1FAE5",color:"#065F46",padding:`${fs(5)} ${fs(t(13,11))}`,borderRadius:"999px",fontSize:fs(t(15,12.5)),fontWeight:600,textTransform:"capitalize"}}>{h}</span>)}
-                </div>
-              </div>
-            )}
-
-            {a.warnings?.length>0&&(
-              <div style={{padding:fs(t(16,14)),background:"#FFF7ED",borderRadius:t("16px","14px"),border:"1px solid #FED7AA"}}>
-                <div style={{fontSize:fs(t(13,11.5)),fontWeight:700,color:"#D97706",letterSpacing:"0.5px",marginBottom:fs(9),textTransform:"uppercase"}}>⚠️ Heads Up</div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:fs(8)}}>
-                  {a.warnings.map((w,i)=><span key={i} style={{background:"#FEF3C7",color:"#92400E",padding:`${fs(5)} ${fs(t(13,11))}`,borderRadius:"999px",fontSize:fs(t(15,12.5)),fontWeight:600,textTransform:"capitalize"}}>{w}</span>)}
-                </div>
-              </div>
-            )}
-
-            {a.bestTime&&(
-              <div style={{padding:fs(t(16,14)),background:"#EFF6FF",borderRadius:t("16px","14px"),border:"1px solid #BFDBFE",fontSize:fs(t(16,13)),color:"#1E40AF"}}>
-                <span style={{fontWeight:700}}>🕐 Best time · </span>{a.bestTime}
-              </div>
-            )}
-
-            {a.formattedAddress&&(
-              <div style={{display:"flex",alignItems:"flex-start",gap:fs(10),padding:fs(t(16,14)),background:"#FAF7F0",borderRadius:t("16px","14px"),border:`1px solid ${ED_RULE}`}}>
-                <span style={{fontSize:fs(t(20,16)),flexShrink:0}}>📍</span>
-                <span style={{fontSize:fs(t(16,13)),color:ED_INK2,lineHeight:1.5,fontWeight:500}}>{a.formattedAddress}</span>
-              </div>
-            )}
-
-            {a.hours?.length>0&&(
-              <div style={{padding:fs(t(16,14)),background:"#FAF7F0",borderRadius:t("16px","14px")}}>
-                <button onClick={()=>setHoursExp(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
-                  <span style={{fontSize:fs(t(13,11.5)),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 DAILY HOURS</span>
-                  <span style={{fontSize:fs(t(13,11.5)),color:ED_INK3}}>{hoursExp?"▲":"▼"}</span>
-                </button>
-                {hoursExp&&(
-                  <div style={{marginTop:fs(8)}}>
-                    {a.hours.map((d,i)=>{const today=new Date().getDay();const dn=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];const di=dn.findIndex(n=>d.toLowerCase().startsWith(n.toLowerCase()));const isT=di===today;const pts=d.split(":");const dn2=pts[0];const hrs=pts.slice(1).join(":").trim();return(<div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(t(15,12.5)),fontWeight:isT?700:400,color:isT?T.accentD:ED_INK2,borderBottom:i<a.hours.length-1?`1px solid ${ED_RULE}`:"none"}}><span>{dn2}</span><span style={{color:hrs.toLowerCase()==="closed"?"#C2392F":isT?T.accentD:ED_INK3}}>{hrs}</span></div>);})}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <AttractionAIDetails placeId={a.placeId||a.id} placeName={name} page="ThingsToDo"/>
-
-            {a.websiteUri&&(
-              <a href={a.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(t(16,14)),background:T.accentL,borderRadius:t("16px","14px"),textDecoration:"none",color:T.accentD,border:`1px solid ${T.accent}40`}}>
-                <span style={{fontSize:fs(t(22,18))}}>🌐</span>
-                <span><span style={{display:"block",fontWeight:600,fontSize:fs(t(16,13.5))}}>Visit Website</span><span style={{fontSize:fs(t(14,12)),color:ED_INK3}}>Hours, prices &amp; details</span></span>
-              </a>
-            )}
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-
-  return(
-    <motion.div ref={cardRef} initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} transition={{delay:Math.min(index,8)*0.03}}
-      style={{background:"#fff",borderRadius:radius,overflow:"hidden",boxShadow:isHighlighted?`0 0 0 3px ${T.accent},0 24px 50px -30px rgba(22,17,13,.4)`:"0 24px 50px -30px rgba(22,17,13,.4)",border:isHighlighted?`2px solid ${T.accent}`:`1px solid ${ED_RULE}`,transition:"box-shadow 0.3s,border 0.3s",
-      /* min-height (not fixed height) — the card grows with enlarged text
-         instead of clipping; the photo height stays fixed, the body flows. */
-      minHeight:fs(t(520,360))}}>
-
-      {/* Photo — editorial block (tablet 360 / phone ~200); reuse photos + gallery, rank + category tag overlays */}
-      <div style={{position:"relative",height:fs(photoH),background:`linear-gradient(135deg,${aColor}ee,${aColor}99)`}}>
-        {photos.length>0?(
-          // Swipeable inline carousel (scroll-snap) — swipe photos left/right without
-          // expanding; tap opens the fullscreen gallery. Mirrors Eat/Coffee.
-          <div style={{display:"flex",height:"100%",overflowX:"auto",scrollSnapType:"x mandatory",scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}}>
-            {photos.map((p,i)=>(
-              <img key={i} src={p} alt="" onClick={()=>setGallery({open:true,idx:i})} style={{minWidth:"100%",height:"100%",objectFit:"cover",scrollSnapAlign:"start",flexShrink:0,cursor:"zoom-in"}}/>
-            ))}
-          </div>
-        ):(
-          <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:fs(t(96,56))}}>{a.activityIcon||"⭐"}</div>
-        )}
-        {/* No rank badge: this card only opens one at a time (always "1"), and a
-            pinned stamp card has no rank. Category tag on the LEFT — the sheet's
-            ✕ sits top-right and used to cover it. */}
-        {a.activityLabel&&<div style={{position:"absolute",top:fs(t(14,12)),left:fs(t(14,12)),background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:`${fs(t(5,4))} ${fs(t(13,10))}`,borderRadius:"999px",fontSize:fs(t(14,11)),fontWeight:700,color:aColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{a.activityIcon} {a.activityLabel}</div>}
-        {photos.length>1&&<div style={{position:"absolute",bottom:fs(t(12,10)),right:fs(t(12,10)),background:"rgba(0,0,0,0.6)",color:"#fff",padding:`${fs(t(4,3))} ${fs(t(11,9))}`,borderRadius:"999px",fontSize:fs(t(13,11)),fontWeight:600,cursor:"pointer"}} onClick={()=>setGallery({open:true,idx:0})}>📷 {photos.length} photos</div>}
-      </div>
-
-      <div style={{padding:t(`${fs(28)} ${fs(32)} ${fs(32)}`,`${fs(16)} ${fs(16)} ${fs(18)}`)}}>
-        {/* Attraction-category kicker — Things-To-Do magenta accent (not Eat coral) */}
-        {a.activityLabel&&<div style={{color:ED_TODO,fontWeight:600,fontSize:fs(t(17,13)),letterSpacing:"0.2px"}}>{a.activityIcon} {a.activityLabel}</div>}
-        {/* Serif name — 2-line clamp + min-height so enlarged text grows the card */}
-        <h3 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(t(38,26)),lineHeight:1.04,color:ED_INK,margin:`${fs(4)} 0 0`,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</h3>
-
-        {/* Tour mode chip */}
-        {a.tourMode && TOUR_MODE_LABELS[a.tourMode] && (
-          <div style={{display:"inline-flex",alignItems:"center",gap:fs(5),padding:`${fs(4)} ${fs(t(12,10))}`,marginTop:fs(10),background:"#F1F5F9",color:"#334155",borderRadius:"999px",fontSize:fs(t(15,12.5)),fontWeight:600}}>
-            <span>{TOUR_MODE_LABELS[a.tourMode].icon}</span>{TOUR_MODE_LABELS[a.tourMode].label}
-          </div>
-        )}
-
-        {/* Say it / Translate / rating / distance */}
-        <div style={{display:"flex",gap:fs(t(16,12)),alignItems:"center",flexWrap:"wrap",marginTop:fs(t(12,10)),fontSize:fs(t(17,13.5)),color:ED_INK3}}>
-          <NameLanguageHelp placeId={a.placeId||a.id} name={name}/>
-          {a.rating&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{a.rating}</span>{a.userRatingCount>0&&<span> ({a.userRatingCount.toLocaleString()})</span>}</span>}
-          {a.distanceMiles!=null&&<span>· {formatDistance(a.distanceMiles)}</span>}
-        </div>
-
-        {/* Street address — muted single-line, on-card at both widths */}
-        {a.formattedAddress&&<div style={{marginTop:fs(t(8,6)),fontSize:fs(t(13.5,12)),color:ED_INK3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress}</div>}
-
-        {/* Pill tags — traveler badges + property tags */}
-        {(a.badges?.length>0||activeTags.length>0||a.outdoorContext)&&(
-          <div style={{display:"flex",gap:fs(t(10,8)),flexWrap:"wrap",marginTop:fs(t(16,12))}}>
-            {a.badges?.map((b,i)=><Tag key={`b${i}`} bg={T.accentL} color={T.accentD}>{b}</Tag>)}
-            {a.outdoorContext&&<Tag bg="#FEF3C7" color="#92400E">🏛️ {a.outdoorContext}</Tag>}
-            {activeTags.map((t,i)=><Tag key={`t${i}`} bg={t.bg} color={t.color}>{t.icon} {t.label}</Tag>)}
-          </div>
-        )}
-
-        {/* Open bar */}
-        {(st.today||st.isOpen!==null)&&(
-          <div style={{marginTop:fs(t(18,12)),background:st.isOpen===true?"#E7F3EA":st.isOpen===false?"#FBE0DC":ED_IVORY2,borderRadius:t("16px","14px"),padding:t(`${fs(16)} ${fs(20)}`,`${fs(11)} ${fs(14)}`),fontSize:fs(t(18,13.5)),fontWeight:600,color:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK2,display:"flex",alignItems:"center",gap:fs(t(11,9))}}>
-            <span style={{width:fs(t(10,8)),height:fs(t(10,8)),borderRadius:"50%",background:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK3,flexShrink:0}}/>
-            <span>{openText}</span>
-            {st.today&&<span style={{color:ED_INK3,fontWeight:500}}>· {st.today}</span>}
-          </div>
-        )}
-
-        {/* Phone bar */}
-        {a.nationalPhoneNumber&&(
-          <a href={`tel:${a.nationalPhoneNumber}`} style={{marginTop:fs(t(14,12)),background:"#EFF4FB",borderRadius:t("16px","14px"),padding:t(`${fs(18)} ${fs(20)}`,`${fs(12)} ${fs(14)}`),display:"flex",alignItems:"center",gap:fs(t(14,12)),textDecoration:"none"}}>
-            <span style={{fontSize:fs(t(24,20))}}>📞</span>
-            <span><span style={{display:"block",fontSize:fs(t(20,13.5)),fontWeight:600,color:"#2E6FE0"}}>{a.nationalPhoneNumber}</span><span style={{fontSize:fs(t(15,12)),color:ED_INK3}}>Tap to call</span></span>
-          </a>
-        )}
-
-        {/* Actions */}
-        <div style={{display:"flex",gap:fs(t(12,8)),marginTop:fs(t(20,14))}}>
-          <button onClick={()=>setDirs(true)} style={{flex:1,borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_TODO,color:"#fff"}}>Directions</button>
-          <button onClick={()=>onMap?.(index)} style={{flex:1,borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
-          <button onClick={()=>setExp(e=>!e)} style={{flex:1,borderRadius:t("16px","14px"),padding:fs(t(15,12)),fontSize:fs(t(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:exp?ED_INK:ED_IVORY2,color:exp?"#fff":ED_INK2}}>{exp?"Less ▴":"More ▾"}</button>
-        </div>
-
-        {/* The attraction page (founder, 2026-10-03): GPS-only stamp, verified
-            prices + parking for planning a day and a budget, the card's own
-            details (hours, AI, website), and the guestbook last — the longest part. */}
-        {forceExpanded?<AttractionExtras a={a} formatDistance={formatDistance} isTablet={isTablet}>{details}</AttractionExtras>:details}
-      </div>
-      <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",latitude:a.lat,longitude:a.lng}} userLat={userLat} userLng={userLng}/>
-      <PhotoGalleryModal photos={a.photos||[]} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
-    </motion.div>
-  );
-}
-
-// Distance bands are straight-line (haversine) — the worker no longer emits a
-// transport verb ("Drive"/"Flights") for a distance nobody has routed (T2.4).
-// Old verb keys stay so payloads cached before the change still color.
-const TRAVEL_COLORS={'100+ mi away':{bg:'#FEE2E2',color:'#DC2626'},'≈50–100 mi':{bg:'#FED7AA',color:'#C2410C'},'≈15–50 mi':{bg:'#FEF3C7',color:'#D97706'},'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC2626'},'✈️ Flights Required':{bg:'#FEE2E2',color:'#DC2626'},'🚗 Long Drive':{bg:'#FED7AA',color:'#C2410C'},'🚗 Drive':{bg:'#FEF3C7',color:'#D97706'},'🚗 Short Drive':{bg:'#D1FAE5',color:'#059669'},'🚗 Day Trip':{bg:'#FEF3C7',color:'#D97706'},'📍 Nearby':{bg:'#D1FAE5',color:'#059669'}};
-
 const MONO="'JetBrains Mono', ui-monospace, Menlo, monospace";
 const SERIF="'Instrument Serif', Georgia, serif";
 
@@ -722,11 +478,11 @@ function makeMarks(stamps,stampable){
   };
 }
 
-function PassportMark({mark}){
+function PassportMark({mark,side="left"}){
   const solid=mark.kind!=="stamp";
   const text=mark.kind==="collected"?`Collected · ${mark.date}`:mark.kind==="here"?"You’re here":"Stamp here";
   return(
-    <span style={{position:"absolute",top:10,left:10,display:"inline-flex",alignItems:"center",gap:5,minHeight:24,maxWidth:"calc(100% - 20px)",boxSizing:"border-box",padding:"0 9px 0 7px",borderRadius:999,background:NEUTRAL.cream,border:`1px ${solid?"solid":"dashed"} ${NEUTRAL.stamp}`,fontFamily:MONO,fontSize:fsx(9.5),lineHeight:1.2,fontWeight:500,letterSpacing:".12em",textTransform:"uppercase",color:NEUTRAL.stamp,whiteSpace:"nowrap",overflow:"hidden"}}>
+    <span style={{position:"absolute",top:10,[side]:10,display:"inline-flex",alignItems:"center",gap:5,minHeight:24,maxWidth:"calc(100% - 20px)",boxSizing:"border-box",padding:"0 9px 0 7px",borderRadius:999,background:NEUTRAL.cream,border:`1px ${solid?"solid":"dashed"} ${NEUTRAL.stamp}`,fontFamily:MONO,fontSize:fsx(9.5),lineHeight:1.2,fontWeight:500,letterSpacing:".12em",textTransform:"uppercase",color:NEUTRAL.stamp,whiteSpace:"nowrap",overflow:"hidden"}}>
       <Stamp size={12} color={NEUTRAL.stamp} strokeWidth={2} aria-hidden="true" style={{flexShrink:0}}/>{text}
     </span>
   );
@@ -782,116 +538,193 @@ function StripCard({a,photos,isTablet,mark,isLocal,fmt,onOpen,cardRef}){
   );
 }
 
-function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,cardRef=null,pinnedLabel=null,gpsLat=null,gpsLng=null,fmt=null,markOf=null,isLocal=false}){
+// ─── THE FULL CARD AND THE PLACE'S SHEET ─────────────────────────────────────
+
+// A detail card in the sheet, cut like the attraction extras' own (AttractionExtras
+// Card): white with the world line, radius 16, a serif title led by a lucide icon.
+function SheetCard({icon:Icon,title,children}){
+  return(
+    <section style={{background:NEUTRAL.white,border:`1px solid ${W.line}`,borderRadius:16,padding:"14px 16px"}}>
+      <h3 style={{display:"flex",alignItems:"center",gap:8,margin:"0 0 8px",fontFamily:SERIF,fontWeight:400,fontSize:fsx(21),lineHeight:1.15,color:NEUTRAL.ink}}>
+        <Icon size={18} color={W.iconInk} strokeWidth={2} aria-hidden="true" focusable="false" style={{flexShrink:0}}/>
+        <span>{title}</span>
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+// The week's hours, Monday first. Today is marked by the place's own day (openState
+// reads it from Google's utcOffsetMinutes, or the device's clock in current-location
+// mode); with neither, no day is marked rather than the wrong one. Closed reads in
+// stamp red.
+function WeekHours({os}){
+  const week=Array.isArray(os?.week)?os.week:[];
+  return(
+    <dl style={{margin:0}}>
+      {week.map((d,i)=>(
+        <div key={d.day} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:12,padding:"7px 0",borderTop:i?`1px solid ${W.line}`:"none",fontSize:fsx(13.5),lineHeight:1.35,color:d.today?W.ink:NEUTRAL.ink2,fontWeight:d.today?600:400}}>
+          <dt>{d.day}{d.today&&<span style={{marginLeft:8,fontFamily:MONO,fontSize:fsx(10),fontWeight:500,letterSpacing:".12em",textTransform:"uppercase",color:W.accentText}}>Today</span>}</dt>
+          <dd style={{margin:0,textAlign:"right",color:/^closed$/i.test(String(d.text||""))?NEUTRAL.stamp:undefined}}>{d.text||"Not listed"}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+// The sheet's photos at 16:10: swipe through them; a tap opens the gallery there. No
+// photo: the contour strip with the place's icon.
+function PhotoReel({photos,name,icon,onOpen}){
+  if(!photos.length) return <PhotoOrIcon world="todo" photos={[]} alt={name} icon={icon}/>;
+  return(
+    <div style={{position:"relative",aspectRatio:"16 / 10",background:W.wash,overflow:"hidden"}}>
+      <div className="gs-noscroll" style={{display:"flex",height:"100%",overflowX:"auto",scrollSnapType:"x mandatory",overscrollBehaviorX:"contain",WebkitOverflowScrolling:"touch"}}>
+        {photos.map((p,i)=>(
+          <button key={`${i}-${p}`} type="button" onClick={()=>onOpen(i)} aria-label={`View photo ${i+1} of ${photos.length} of ${name}`}
+            style={{flex:"0 0 100%",height:"100%",padding:0,border:0,background:"transparent",scrollSnapAlign:"start",cursor:"zoom-in"}}>
+            <img src={p} alt="" loading={i?"lazy":"eager"} style={{display:"block",width:"100%",height:"100%",objectFit:"cover"}}/>
+          </button>
+        ))}
+      </div>
+      {photos.length>1&&<span aria-hidden="true" style={{position:"absolute",right:12,bottom:12,display:"flex",alignItems:"center",minHeight:24,padding:"0 9px",boxSizing:"border-box",borderRadius:999,background:rgba(NEUTRAL.ink,0.66),fontFamily:MONO,fontSize:fsx(10),letterSpacing:".12em",textTransform:"uppercase",color:NEUTRAL.white}}>{photos.length} photos</span>}
+    </div>
+  );
+}
+
+const capFirst=(t)=>{const x=String(t||"").trim();return x?x.charAt(0).toUpperCase()+x.slice(1):x;};
+
+// The place's sheet (plan S9 detail 7): the full card at sheet size. Photos; the kicker,
+// the serif name and Say it / Translate; the facts (open words in the place's zone, the
+// distance, a Google rating), the address and up to three tags; Directions, Map, Call
+// and Website. Then, inside the attraction extras (why visit, the stamp, tickets and
+// parking, before you go, the guestbook last): what people love, good to know, the
+// best time, the week's hours and the AI details.
+function PlaceSheet({a,photos,isTablet,isLocal,fmt,onMap,onDirections,onPhotos}){
+  const name=a.displayName?.text||a.name||"Attraction";
+  const os=openStateFor(a,{isLocal});
+  const dist=Number.isFinite(a.distanceMiles)?fmt(a.distanceMiles):null;
+  const tags=tagsOf(a).slice(0,3);
+  const love=(a.highlights||[]).filter(Boolean), heads=(a.warnings||[]).filter(Boolean);
+  return(
+    <article aria-label={name} style={{background:NEUTRAL.white,borderRadius:20,overflow:"hidden",boxShadow:"0 24px 50px -30px rgba(22,17,13,.5)"}}>
+      <PhotoReel photos={photos} name={name} icon={placeIcon(a)} onOpen={onPhotos}/>
+      <div style={{padding:isTablet?"22px 26px 26px":"16px 16px 18px"}}>
+        <CardKicker world="todo">{kindOf(a)}</CardKicker>
+        <CardName world="todo" as="h2" style={{fontSize:fsx(isTablet?32:28)}}>{name}</CardName>
+        <div style={{marginTop:4}}><NameLanguageHelp placeId={a.placeId||a.id} name={name} world="todo"/></div>
+        <FactsLine world="todo" open={os} items={[dist,ratingOf(a)]} style={{marginTop:6}}/>
+        {a.formattedAddress&&<p style={{margin:"4px 0 0",fontSize:fsx(13),lineHeight:1.4,color:NEUTRAL.ink3}}>{a.formattedAddress}</p>}
+        {tags.length>0&&<TagRow max={3} style={{marginTop:10}}>{tags.map((t,i)=><WorldTag key={t} world="todo" tone={i?"outline":"wash"}>{t}</WorldTag>)}</TagRow>}
+        <ActionRow world="todo" name={name} onDirections={onDirections} onMap={onMap}
+          phone={a.nationalPhoneNumber||null} website={a.websiteUri||null} onWebsite={a.websiteUri?()=>openPartner(a.websiteUri):undefined} style={{marginTop:14}}/>
+        <AttractionExtras a={a} formatDistance={fmt} isTablet={isTablet} world="todo">
+          {love.length>0&&<SheetCard icon={Heart} title="What people love"><TagRow max={love.length}>{love.map((h)=><WorldTag key={h} world="todo">{capFirst(h)}</WorldTag>)}</TagRow></SheetCard>}
+          {heads.length>0&&<SheetCard icon={TriangleAlert} title="Good to know"><TagRow max={heads.length}>{heads.map((h)=><WorldTag key={h} world="todo">{capFirst(h)}</WorldTag>)}</TagRow></SheetCard>}
+          {a.bestTime&&<SheetCard icon={Sunrise} title="Best time to go"><p style={{margin:0,fontSize:fsx(13.5),lineHeight:1.45,color:NEUTRAL.ink2}}>{a.bestTime}</p></SheetCard>}
+          {(os.week||[]).some((d)=>d.text)&&<SheetCard icon={Clock} title="Hours"><WeekHours os={os}/></SheetCard>}
+          <AttractionAIDetails placeId={a.placeId||a.id} placeName={name} page="ThingsToDo"/>
+        </AttractionExtras>
+      </div>
+    </article>
+  );
+}
+
+// A full card (ThingsToDo.dc.html L192-205; bible todo.card): numbered, with a 16:10
+// photo or the 72px contour strip; the kicker, the serif name, the facts line (open
+// words, the distance, a Google rating), the address and up to three tags; then
+// Directions, Map and More. The words open the place's sheet, as More does (one
+// invisible button over them, "Open <name>"); the photo opens the gallery. A place
+// picked on the map is ringed in lapis for a moment.
+function FullCard({a,n,photos,mark,isLocal,fmt,onOpen,onMap,onDirections,onPhotos,highlighted,pinnedLabel,as,cardRef,children}){
+  const name=a.displayName?.text||a.name||"Attraction";
+  const dist=Number.isFinite(a.distanceMiles)?fmt(a.distanceMiles):null;
+  const tags=tagsOf(a).slice(0,3);
+  return(
+    <WorldCard world="todo" as={as} ref={cardRef} style={highlighted?{boxShadow:`0 0 0 3px ${W.ink}, ${W.cardShadow}`}:undefined}>
+      <PhotoOrIcon world="todo" photos={photos} alt={name} icon={placeIcon(a)} onClick={photos.length?onPhotos:undefined}>
+        {n!=null&&<NumberMark n={n} world="todo"/>}
+        {mark&&<PassportMark mark={mark} side="right"/>}
+      </PhotoOrIcon>
+      <div style={{padding:16}}>
+        <div style={{position:"relative"}}>
+          {pinnedLabel&&<div style={{marginBottom:6,fontFamily:MONO,fontSize:fsx(10),lineHeight:1.4,letterSpacing:".12em",textTransform:"uppercase",color:NEUTRAL.ink3}}>{pinnedLabel}</div>}
+          <CardKicker world="todo">{kindOf(a)}</CardKicker>
+          <CardName world="todo" as="h3">{name}</CardName>
+          <FactsLine world="todo" place={a} isLocal={isLocal} items={[dist,ratingOf(a)]} style={{marginTop:6}}/>
+          {a.formattedAddress&&<p style={{margin:"4px 0 0",fontSize:fsx(13),lineHeight:1.4,color:NEUTRAL.ink3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.formattedAddress}</p>}
+          <button type="button" onClick={onOpen} aria-label={`Open ${name}`}
+            style={{position:"absolute",top:-8,right:-8,bottom:-8,left:-8,padding:0,border:0,borderRadius:12,background:"transparent",cursor:"pointer",outlineOffset:-2}}/>
+        </div>
+        {tags.length>0&&<TagRow max={3} style={{marginTop:10}}>{tags.map((t,i)=><WorldTag key={t} world="todo" tone={i?"outline":"wash"}>{t}</WorldTag>)}</TagRow>}
+        <ActionRow world="todo" name={name} onDirections={onDirections} onMap={onMap} onMore={onOpen} moreIcon style={{marginTop:14}}/>
+      </div>
+      {children}
+    </WorldCard>
+  );
+}
+
+// One place, as a strip card (a chapter) or a full card (Near you, a search, filters),
+// with what opens from it: the place's sheet (and over it a map of the place), the
+// photo gallery and the directions chooser.
+function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,cardRef=null,pinnedLabel=null,gpsLat=null,gpsLng=null,fmt=null,markOf=null,isLocal=false,n=null,onMap=null,highlighted=false,inList=false}){
   const [dirs,setDirs]=useState(false);
   const [gallery,setGallery]=useState({open:false,idx:0});
-  // fs()-style scaler for the editorial body (used at both widths now).
-  const fs=(n)=>`calc(${n}px*var(--fs))`;
-  // t(tabletValue, phoneValue) — pick the platform size, same pattern as the
-  // editorial activity card. The tier card now uses the editorial body at BOTH
-  // widths; tablet keeps its 340px width / generous sizes, phone is a compact
-  // ~240px card so the horizontal strips match the main editorial cards.
-  const t=(tab,ph)=>isTablet?tab:ph;
-  // Tapping the compact card body opens a fullscreen modal rendering the
-  // full ActivityCardTablet (the same editorial component used under "Near
-  // You", responsive to isTablet). Inner buttons (Directions / Website /
-  // photo) stopPropagation so they don't also open the modal.
-  const [expanded,setExpanded]=useState(false);
-  // The Map button inside the expanded modal opens a fullscreen TierMapOverlay
-  // ON TOP of the modal — the modal stays mounted so when the overlay's X is
-  // tapped, the modal is visible again. This avoids the previous broken UX
-  // where Map closed the modal AND swapped the page to viewMode='map', and
-  // double-X buttons appeared (one inside the popup, one outside).
+  const [expanded,setExpanded]=useState(false); // the place's sheet
+  // The sheet's Map opens a full-screen map ON TOP of the sheet, which stays mounted:
+  // closing the map comes back to the same sheet.
   const [mapOpen,setMapOpen]=useState(false);
   const [enriched,setEnriched]=useState(null);
-  // Owned "Nearby Attractions" carry no photos (National Icons/Regional come from
-  // Google w/ photos) — enrich on mount so this tier is just as beautiful. Skips
-  // items that already have a photo; resolves owned→Google once, cached 90d.
+  const sheetRef=useRef(null);
+  const closeRef=useRef(null);
+  // Owned "Nearby attractions" carry no photos (the icons and regional rows come from
+  // Google with photos), so enrich on mount; rows with a photo skip it. Owned→Google
+  // resolves once and is cached 90 days.
   useEffect(()=>{
     if(enriched||(a.photos&&a.photos.length))return;
     callWorker('places/enrich-owned',{id:a.id||a.placeId,name:a.displayName?.text||a.name,lat:a.lat??a.location?.latitude,lng:a.lng??a.location?.longitude,maxPhotos:3})
       .then(({data})=>{if(data&&data.matched)setEnriched(data);}).catch(()=>{});
   },[]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Open the fullscreen modal when the parent forces it (tapped from the map, or
-  // the Near-You list which uses this card full-width so all cards behave alike).
+  // The parent opens the sheet: a pin's "View" on the map, or a stamp tapped elsewhere.
   useEffect(()=>{if(forceOpen)setExpanded(true);},[forceOpen]);
-  const name=a.displayName?.text||a.name||"Activity";
-  const tc=TRAVEL_COLORS[a.travelType]||{bg:'#F1F5F9',color:'#64748B'};
-  // Prefer enriched Google photos; normalize objects→URL strings.
+  const closeSheet=()=>setExpanded(false);
+  // Escape, Android's back key and a swipe down close the sheet; Tab stays inside it.
+  // While the map is open over it, the map has those keys.
+  useOverlayClose(expanded&&!mapOpen,closeSheet,sheetRef);
+  // Focus moves to the sheet's close button, and back to what opened it.
+  useEffect(()=>{
+    if(!expanded) return undefined;
+    const from=/** @type {HTMLElement|null} */(document.activeElement);
+    const t=setTimeout(()=>closeRef.current?.focus({preventScroll:true}),60);
+    return()=>{clearTimeout(t);from?.focus?.({preventScroll:true});};
+  },[expanded]);
+  const name=a.displayName?.text||a.name||"Attraction";
+  // Enriched Google photos first; any photo object becomes its URL.
   const _photos=(enriched?.photos?.length?enriched.photos:(a.photos||[]))
     .map(p=>typeof p==="string"?p:(p?.url||p?.full||p?.thumbnail||null)).filter(Boolean);
-  const photo1=_photos[0]||null;
-  const photo2=_photos[1]||null;
-  const photo3=_photos[2]||null;
   // The page's mi/km formatter when given; miles otherwise.
   const fmtDist=fmt||((d)=>`${d.toFixed(1)} mi`);
   // Standing at it? Only the device's own GPS fix counts (never a picked place).
   const here=Number.isFinite(gpsLat)&&Number.isFinite(gpsLng)&&Number.isFinite(a.lat)&&metersBetween(gpsLat,gpsLng,a.lat,a.lng)<=stampRadiusFor({types:a.types,category:a.activityCategory,footprint_radius_m:a.stamp?.footprint_radius_m});
-  // ── Editorial tier card (responsive) ────────────────────────────────────
-  // Same DATA + handlers as before (open-modal onClick, photo-gallery taps,
-  // Directions, Website) — restyled with the editorial tokens (serif name,
-  // ED_* inks, fs()-scaled type, magenta ED_TODO accent) so the tier strips
-  // match the main editorial cards. Renders at BOTH widths: tablet keeps the
-  // 340px width / generous sizes; phone is a compact ~240px card. Fixed-width
-  // flex child so the tier row scrolls horizontally.
-  const photoH=t(220,150);   // tablet 220px, phone ~150px photo block
-  const stripBody=(
-    <StripCard a={a} photos={_photos} isTablet={isTablet} mark={markOf?markOf(a,here):null} isLocal={isLocal} fmt={fmtDist} onOpen={()=>setExpanded(true)} cardRef={cardRef}/>
-  );
-  const editorialBody=(
-    <div ref={cardRef} onClick={()=>setExpanded(true)} style={{flexShrink:0,width:fullWidth?"100%":t("340px","240px"),background:"#fff",borderRadius:t("24px","20px"),boxShadow:t("0 18px 40px -26px rgba(22,17,13,.4)","0 10px 26px -18px rgba(22,17,13,.4)"),overflow:"hidden",border:`1px solid ${ED_RULE}`,cursor:"pointer"}}>
-      <div style={{position:"relative",height:fs(photoH),background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
-        {photo1&&photo2&&photo3?(
-          <div style={{display:"grid",gridTemplateColumns:"50% 50%",gridTemplateRows:`${fs(photoH/2)} ${fs(photoH/2)}`,height:fs(photoH),gap:"2px",background:"#fff"}}>
-            <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",gridRow:"span 2",minWidth:0}}/>
-            <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
-            <img src={photo3} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:2});}} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer",minWidth:0}}/>
-          </div>
-        ):photo1&&photo2?(
-          <div style={{display:"flex",height:fs(photoH)}}>
-            <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{flex:1,height:fs(photoH),objectFit:"cover",cursor:"pointer",minWidth:0}}/>
-            <img src={photo2} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:1});}} style={{flex:1,height:fs(photoH),objectFit:"cover",cursor:"pointer",borderLeft:"2px solid #fff",minWidth:0}}/>
-          </div>
-        ):photo1?(
-          <img src={photo1} alt="" onClick={(e)=>{e.stopPropagation();setGallery({open:true,idx:0});}} style={{width:"100%",height:fs(photoH),objectFit:"cover",cursor:"pointer"}}/>
-        ):(
-          <div style={{height:fs(photoH),display:"flex",alignItems:"center",justifyContent:"center",fontSize:fs(t(72,48))}}>{a.activityIcon||"⭐"}</div>
-        )}
-      </div>
-      <div style={{padding:t(`${fs(20)} ${fs(22)} ${fs(22)}`,`${fs(14)} ${fs(14)} ${fs(14)}`)}}>
-        {pinnedLabel&&<div style={{fontFamily:ED_MONO,fontSize:fs(t(12,10)),letterSpacing:".12em",textTransform:"uppercase",color:ED_INK3,marginBottom:fs(6)}}>{pinnedLabel}</div>}
-        {a.activityLabel&&<div style={{fontSize:fs(t(14,11.5)),fontWeight:600,color:ED_TODO,letterSpacing:"0.2px",marginBottom:fs(4)}}>{a.activityIcon} {a.activityLabel}</div>}
-        <div style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(t(26,21)),lineHeight:1.08,color:ED_INK,marginBottom:fs(10),display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</div>
-        {a.travelType&&<div style={{marginBottom:fs(8)}}><span style={{background:tc.bg,color:tc.color,padding:`${fs(5)} ${fs(t(12,10))}`,borderRadius:"999px",fontSize:fs(t(13,11)),fontWeight:700,display:"inline-block"}}>{a.travelType} · {a.distance}</span></div>}
-        {a.rating&&<div style={{display:"flex",alignItems:"center",gap:fs(6),marginBottom:fs(8)}}><span style={{color:"#E0922F",fontSize:fs(t(16,13))}}>★</span><span style={{fontWeight:700,color:ED_INK2,fontSize:fs(t(16,13))}}>{a.rating}</span><span style={{color:ED_INK3,fontSize:fs(t(14,11.5))}}>({(a.userRatingCount||0).toLocaleString()})</span></div>}
-        {a.formattedAddress&&<div style={{fontSize:fs(t(14,11.5)),color:ED_INK3,marginBottom:fs(12),whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {a.formattedAddress.split(',').slice(-3,-1).join(',').trim()}</div>}
-        {here&&<button onClick={(e)=>{e.stopPropagation();setExpanded(true);}} style={{width:"100%",marginBottom:fs(8),padding:fs(t(12,9)),borderRadius:t("14px","12px"),border:"none",background:"#B0472F",color:"#fff",fontWeight:700,fontSize:fs(t(15,12.5)),cursor:"pointer",fontFamily:"inherit"}}>📍 You&rsquo;re here — get the stamp</button>}
-        <div style={{display:"flex",gap:fs(t(10,8))}}>
-          <button onClick={(e)=>{e.stopPropagation();setDirs(true);}} style={{flex:1,padding:fs(t(13,10)),borderRadius:t("14px","12px"),border:"none",background:ED_TODO,color:"#fff",fontWeight:600,fontSize:fs(t(16,12.5)),cursor:"pointer",fontFamily:"inherit"}}>🧭 Directions</button>
-          {a.websiteUri&&<button onClick={(e)=>{e.stopPropagation();openPartner(a.websiteUri);}} style={{flex:1,padding:fs(t(13,10)),borderRadius:t("14px","12px"),border:"none",background:ED_IVORY2,color:ED_INK2,fontWeight:600,fontSize:fs(t(16,12.5)),cursor:"pointer",fontFamily:"inherit"}}>🌐 Website</button>}
-        </div>
-      </div>
-    </div>
-  );
-  return(
+  const mark=markOf?markOf(a,here):null;
+  const openPhotos=(i)=>setGallery({open:true,idx:Number.isFinite(i)?i:0});
+  const sheetPlace=_photos.length?{...a,photos:_photos}:a;
+
+  const opened=(
     <>
-      {fullWidth?editorialBody:stripBody}
       <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",latitude:a.lat,longitude:a.lng}} userLat={userLat} userLng={userLng}/>
       <PhotoGalleryModal photos={_photos} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
       <AnimatePresence>
         {expanded&&(
-          <motion.div
-            initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            onClick={()=>setExpanded(false)}
-            style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",backdropFilter:"blur(4px)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px",overflowY:"auto"}}
-          >
-            <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxWidth:isTablet?"min(840px, 94vw)":"480px",position:"relative",marginTop:"20px",marginBottom:"40px"}}>
-              <button
-                onClick={()=>setExpanded(false)}
-                aria-label="Close"
-                style={{position:"absolute",top:"12px",right:"12px",zIndex:10000,width:"36px",height:"36px",borderRadius:"50%",border:"none",background:"rgba(255,255,255,0.95)",color:T.dark,fontSize:"calc(18px*var(--fs))",fontWeight:"800",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}
-              >✕</button>
-              <ActivityCardTablet a={_photos.length?{...a,photos:_photos}:a} index={0} onMap={()=>setMapOpen(true)} isHighlighted={false} cardRef={null} forceExpanded={true} userLat={userLat} userLng={userLng} formatDistance={fmtDist} isTablet={isTablet}/>
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onClick={closeSheet}
+            style={{position:"fixed",inset:0,zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",overscrollBehavior:"contain",padding:"calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 40px)",background:"rgba(22,17,13,.7)"}}>
+            <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={name} onClick={(e)=>e.stopPropagation()}
+              style={{position:"relative",width:"100%",maxWidth:isTablet?"min(840px, 94vw)":480}}>
+              <button ref={closeRef} type="button" onClick={closeSheet} aria-label="Close"
+                style={{position:"absolute",top:12,right:12,zIndex:2,display:"flex",alignItems:"center",justifyContent:"center",width:44,height:44,padding:0,border:0,borderRadius:999,background:"rgba(255,255,255,.95)",boxShadow:"0 2px 10px rgba(22,17,13,.25)",cursor:"pointer"}}>
+                <X size={20} color={NEUTRAL.ink} strokeWidth={2} aria-hidden="true"/>
+              </button>
+              <PlaceSheet a={sheetPlace} photos={_photos} isTablet={isTablet} isLocal={isLocal} fmt={fmtDist}
+                onMap={()=>setMapOpen(true)} onDirections={()=>setDirs(true)} onPhotos={openPhotos}/>
             </div>
           </motion.div>
         )}
@@ -899,6 +732,22 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
       <AnimatePresence>
         {mapOpen&&(<TierMapOverlay activity={a} userLat={userLat} userLng={userLng} onClose={()=>setMapOpen(false)}/>)}
       </AnimatePresence>
+    </>
+  );
+
+  if(fullWidth){
+    return(
+      <FullCard a={a} n={n} photos={_photos} mark={mark} isLocal={isLocal} fmt={fmtDist} onOpen={()=>setExpanded(true)}
+        onMap={onMap||(()=>setMapOpen(true))} onDirections={()=>setDirs(true)} onPhotos={openPhotos}
+        highlighted={highlighted} pinnedLabel={pinnedLabel} as={inList?"li":"article"} cardRef={cardRef}>
+        {opened}
+      </FullCard>
+    );
+  }
+  return(
+    <>
+      <StripCard a={a} photos={_photos} isTablet={isTablet} mark={mark} isLocal={isLocal} fmt={fmtDist} onOpen={()=>setExpanded(true)} cardRef={cardRef}/>
+      {opened}
     </>
   );
 }
@@ -1318,7 +1167,7 @@ export default function ThingsToDoFinder() {
           ongoing background refresh state. */}
       {focusCard&&viewMode==="list"&&(
         <div style={{...finderColumnStyle(isTablet),paddingTop:14}}>
-          <TierCard key={focusCard.id} a={focusCard} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={focusOpen} pinnedLabel={routerLocation.state?.focus?.from||null} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance}/>
+          <TierCard key={focusCard.id} a={focusCard} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={focusOpen} pinnedLabel={routerLocation.state?.focus?.from||null} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} markOf={markOf} isLocal={isLocal}/>
         </div>
       )}
       {loading&&activities.length===0&&nationalIcons.length===0?(<TtdSkeleton/>)
@@ -1354,13 +1203,15 @@ export default function ThingsToDoFinder() {
 
         {/* Main cards — within-radius (both modes). When searching, the
             "a bit farther" divider is injected before the first beyond card. */}
-        {(!nearYouChapter||openCh.near)&&<div id="ttd-near-you" style={{display:"flex",flexDirection:"column",gap:isTablet?"30px":"16px",marginTop:nearYouChapter?8:0}}>{cardsList.map((a,i)=>{
-          const showBeyondHeader=submitted&&searchBeyond.length>0&&i===filtered.length;
-          return (<React.Fragment key={a.id||i}>
-            {showBeyondHeader&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:isTablet?"14px 4px 4px":"6px 4px 2px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🧭</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>A bit farther — worth the trip</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({searchBeyond.length})</span></div>}
-            <TierCard a={a} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={expandedIdx===i} cardRef={(el)=>cardRefs.current[i]=el} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} markOf={markOf} isLocal={isLocal}/>
-          </React.Fragment>);
-        })}</div>}
+        {(!nearYouChapter||openCh.near)&&cardsList.length>0&&(
+          <ol id="ttd-near-you" aria-label={submitted?`Places for ${submitted}`:"Things to do near you"} style={{...worldGrid(isTablet),marginTop:nearYouChapter?8:0}}>
+            {cardsList.map((a,i)=>(
+              <TierCard key={a.id||a.placeId||i} a={a} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth inList n={i+1}
+                onMap={()=>handleMap(i)} highlighted={highlight===i} forceOpen={expandedIdx===i} cardRef={(el)=>{cardRefs.current[i]=el;}}
+                gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} markOf={markOf} isLocal={isLocal}/>
+            ))}
+          </ol>
+        )}
 
         {/* Results rendered but the search call failed — say so honestly. */}
         {submitted&&!tourBusy&&searchError&&cardsList.length>0&&(
