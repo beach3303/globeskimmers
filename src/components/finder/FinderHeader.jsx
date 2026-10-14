@@ -305,6 +305,7 @@ export default function FinderHeader({
             {leader ? (
               <>
                 <MenuLeader world={w} variant="inline" />
+                <span className="sr-only">, </span>
                 <span>{countText}</span>
               </>
             ) : null}
