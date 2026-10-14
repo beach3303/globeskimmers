@@ -17207,13 +17207,14 @@ async function handleSocialFollow(request, env, ctx) {
     const op = String(b.op || 'list');
 
     if (op === 'list') {
-      const [fq, gq, bq] = await Promise.all([
+      const [fq, gq, bq, meSp] = await Promise.all([
         gbRest(env, `user_follows?followee_id=eq.${user.id}&select=follower_id,status,created_at`, {}),
         gbRest(env, `user_follows?follower_id=eq.${user.id}&select=followee_id,status,created_at`, {}),
         // Blocks were write-only (2026-10-10): nothing listed them and nothing
         // could remove one, while a block silently eats postcards and tags in
         // BOTH directions — the founder's "postcard never arrived" case.
         gbRest(env, `user_blocks?user_id=eq.${user.id}&select=blocked_user_id,created_at`, {}),
+        gbSocialProfile(env, user.id).catch(() => undefined),
       ]);
       const followers = fq.ok ? await fq.json() : [];
       const following = gq.ok ? await gq.json() : [];
@@ -17231,8 +17232,13 @@ async function handleSocialFollow(request, env, ctx) {
       const shape = (r, idKey) => ({ user_id: r[idKey], status: r.status, since: r.created_at, handle: who[r[idKey]]?.handle || null, name: who[r[idKey]]?.name || null, verified: who[r[idKey]]?.verified === true, seal: who[r[idKey]]?.seal || null });
       return jsonResponse({
         followers: followers.filter((r) => r.status === 'accepted').map((r) => shape(r, 'follower_id')),
-        requests: followers.filter((r) => r.status === 'pending').map((r) => shape(r, 'follower_id')),
-        following: following.map((r) => shape(r, 'followee_id')),
+        // A frozen, unconfirmed or held account takes no follow requests
+        // (founder, 2026-10-13), so it is shown none — nor when its age
+        // can't be read; any from before the hold just wait, unanswerable.
+        requests: gbOffSocial(meSp) ? [] : followers.filter((r) => r.status === 'pending').map((r) => shape(r, 'follower_id')),
+        // A request still waiting names no one: its sender knows the @handle
+        // they typed, and a name is for people who said yes.
+        following: following.map((r) => (r.status === 'pending' ? { ...shape(r, 'followee_id'), name: null } : shape(r, 'followee_id'))),
         blocked: blocks.map((r) => shape({ ...r, status: 'blocked' }, 'blocked_user_id')),
         // block_v2 (2026-10-13): POST /social/block ends follows both ways and
         // hides the pair from each other everywhere; the app shows Block only
@@ -17264,9 +17270,12 @@ async function handleSocialFollow(request, env, ctx) {
       if (await gbBlockedEither(env, user.id, target.user_id)) return jsonResponse({ ok: true, status: 'pending', muted: true, handle: target.handle });
       const sp = await gbSocialProfile(env, target.user_id).catch(() => undefined);
       if (sp === undefined) return gbAgeUnknownResp();
-      // …and gains no followers: a frozen account, or one whose birth year
-      // could still be 12, reads like a block — silently.
-      if (gbUnderAge(sp) || gbNeedsConfirm(sp)) return jsonResponse({ ok: true, status: 'pending', muted: true, handle: target.handle });
+      // …and gains no followers: a frozen account, a birth year that could
+      // still be 12, or a held teen (founder, 2026-10-13: "no following" for
+      // 13–17 — a request it could never answer only piled up and showed the
+      // sender its name) reads like a block — silently. If the teen hold is
+      // lifted (TEEN_SOCIAL_ENABLED), only a country hold stays muted.
+      if (gbUnderAge(sp) || gbAgeHeld(sp)) return jsonResponse({ ok: true, status: 'pending', muted: true, handle: target.handle });
       const status = sp?.social_tier === 'teen' ? 'pending' : 'accepted';
       await gbRest(env, 'user_follows', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ follower_id: user.id, followee_id: target.user_id, status }) });
       if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_follow', { status }));
@@ -17288,10 +17297,11 @@ async function handleSocialFollow(request, env, ctx) {
         if (meSp === undefined) return gbAgeUnknownResp();
         if (gbUnderAge(meSp)) return gbUnderAgeResp();
         if (gbAgeHeld(meSp)) return gbAgeHeldResp(meSp);
-        // A request from an account since frozen (or unconfirmed) is dropped, never accepted.
+        // A request from an account since frozen, unconfirmed or held is
+        // dropped, never accepted (13–17 have no following).
         const fsp = await gbSocialProfile(env, fid).catch(() => undefined);
         if (fsp === undefined) return gbAgeUnknownResp();
-        if (gbUnderAge(fsp) || gbNeedsConfirm(fsp)) {
+        if (gbUnderAge(fsp) || gbAgeHeld(fsp)) {
           await gbRest(env, `user_follows?follower_id=eq.${fid}&followee_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
           return jsonResponse({ ok: true });
         }
