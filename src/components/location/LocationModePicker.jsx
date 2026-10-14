@@ -18,7 +18,8 @@
 //
 // The sheet is a modal dialog: it is named by the page's title, focus moves into it on
 // open and on each page change and back to the opener on close, Tab stays inside it, and
-// Escape, a scrim tap or the global swipe-down close it. Closing is instant.
+// Escape, a scrim tap, the global swipe-down or Android's back key close it. Closing is
+// instant.
 import React, { useState, useEffect, useRef, useId } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
@@ -44,6 +45,7 @@ import {
   X,
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { App } from '@capacitor/app';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { useLocation } from './LocationContext';
@@ -339,6 +341,25 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
   const hintId = useId();
 
   useDismissable(isOpen, onClose);
+
+  // Android's back key closes the chooser, instead of leaving the finder under it or, on a
+  // cold open with no history, the app. Capacitor turns the key's own behaviour off only
+  // while a listener is registered, so it is added on open and removed on close (as
+  // SuggestPlaceSection's useOverlayClose does).
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (!isOpen || Capacitor.getPlatform() !== 'android') return undefined;
+    let handle = null;
+    let gone = false;
+    Promise.resolve(App.addListener('backButton', () => closeRef.current?.()))
+      .then((h) => { if (gone) h?.remove?.(); else handle = h; })
+      .catch(() => { /* the key keeps its own behaviour */ });
+    return () => {
+      gone = true;
+      handle?.remove?.();
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
