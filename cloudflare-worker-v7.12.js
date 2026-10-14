@@ -18608,6 +18608,18 @@ async function handlePassportTag(request, env, ctx) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// A tag whose SENDER is off every social surface (go-live round 3) — a held
+// teen, a frozen under-13 or an unconfirmed birth year, or a sender whose age
+// can't be read right now — is no invite at all. The inbox already dropped
+// such an invite ("their name and the place stay private"); its link doors
+// (the /t/ page, the preview, the claim) and the respond door answer exactly
+// as for an invite that doesn't exist, so a minor's first name, the stamp's
+// place and, on accepting, its exact point and date never reach anyone.
+async function gbTagSenderOff(env, tag) {
+  if (!tag?.from_user_id) return false;
+  return gbOffSocial(await gbSocialProfile(env, tag.from_user_id).catch(() => undefined));
+}
+
 // Preview a tag by its token (no auth — the token is the secret). For the in-app
 // claim card + the landing page.
 async function handlePassportTagByToken(request, env) {
@@ -18615,8 +18627,11 @@ async function handlePassportTagByToken(request, env) {
     const b = await request.json().catch(() => ({}));
     const token = String(b.token || '').replace(/[^a-f0-9]/gi, '');
     if (!token) return jsonResponse({ tag: null });
-    const q = await gbRest(env, `passport_tags?token=eq.${token}&select=from_name,name,city,region,country,kind,status`, {});
-    return jsonResponse({ tag: (q.ok ? await q.json() : [])[0] || null });
+    const q = await gbRest(env, `passport_tags?token=eq.${token}&select=from_user_id,from_name,name,city,region,country,kind,status`, {});
+    const row = (q.ok ? await q.json() : [])[0] || null;
+    if (!row || await gbTagSenderOff(env, row)) return jsonResponse({ tag: null });
+    const { from_user_id, ...tag } = row;
+    return jsonResponse({ tag });
   } catch (e) { return jsonResponse({ tag: null, error: e.message }); }
 }
 
@@ -18636,7 +18651,7 @@ async function handlePassportTagClaim(request, env, ctx) {
     if (!token) return jsonResponse({ error: 'token required' }, 400);
     const tq = await gbRest(env, `passport_tags?token=eq.${token}&status=eq.pending&select=*`, {});
     const tag = (tq.ok ? await tq.json() : [])[0];
-    if (!tag) return jsonResponse({ error: 'This invite was already used or has expired.' }, 404);
+    if (!tag || await gbTagSenderOff(env, tag)) return jsonResponse({ error: 'This invite was already used or has expired.' }, 404);
     if (tag.from_user_id === user.id) return jsonResponse({ error: "That's your own tag 🙂" }, 400);
     if (await gbBlockedEither(env, user.id, tag.from_user_id)) return jsonResponse({ error: 'This invite was already used or has expired.' }, 404);
     // Accepting is a social act: closed to a frozen account, an unconfirmed
@@ -18673,8 +18688,10 @@ async function handlePassportTagLanding(request, env) {
     const token = decodeURIComponent(new URL(request.url).pathname.replace(/^\/t\//, '')).replace(/[^a-f0-9]/gi, '');
     let tag = null;
     if (token) {
-      const q = await gbRest(env, `passport_tags?token=eq.${token}&select=from_name,name,city,country,status`, {});
+      const q = await gbRest(env, `passport_tags?token=eq.${token}&select=from_user_id,from_name,name,city,country,status`, {});
       tag = (q.ok ? await q.json() : [])[0] || null;
+      // A minor's invite reads as not found (gbTagSenderOff).
+      if (tag && await gbTagSenderOff(env, tag)) tag = null;
     }
     const esc = (s) => String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const who = esc(tag?.from_name || 'A friend');
@@ -18732,7 +18749,9 @@ async function handlePassportTagRespond(request, env, ctx) {
     if (!tagId) return jsonResponse({ error: 'tag_id required' }, 400);
     const tq = await gbRest(env, `passport_tags?id=eq.${tagId}&to_user_id=eq.${user.id}&status=eq.pending&select=*`, {});
     const tag = (tq.ok ? await tq.json() : [])[0];
-    if (!tag) return jsonResponse({ error: 'Tag not found' }, 404);
+    // An invite whose sender turned out to be a minor is dropped from the
+    // inbox, and by its id it is no invite either (gbTagSenderOff).
+    if (!tag || await gbTagSenderOff(env, tag)) return jsonResponse({ error: 'Tag not found' }, 404);
     // Accepting is a social act (see handlePassportTagClaim): closed to a
     // frozen, unconfirmed or held account; declining stays open.
     if (accept) {
