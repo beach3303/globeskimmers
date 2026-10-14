@@ -22,6 +22,7 @@ Branch `new-look` (worktree `gs-new-look`). Updated 2026-10-14. **Nothing on thi
 | Cloth | Your cloth saved (B1) and every face carrying its cloth and photo (B2) | `eca1c73` migration, `5ae3dc8` |
 | Visits | Someone's whole world on a visit (B3), with B4 and B5 | `c6d3c2a` |
 | City Board | Postcards to a city's public board, from travelers who were really there | `a5b2184` migration, `bb22e10`, `8d283f5` |
+| Home city | A visit shows the home country; the city only with the owner's switch (founder: A plus a switch) | `63f6860` migration, `76b8c50`, `398fa1a` |
 
 ## S18: what the merge brought, and what changed after it
 
@@ -66,11 +67,11 @@ Settings, own Passport, Eat, Coffee, Things to Do and its place sheet, Convenien
    then the postcard box and Keep (`53d4d5f`, `aa8cb97`), faces (`5ae3dc8`), visits with B4 and
    B5 (`c6d3c2a`) and City Board (`bb22e10`). Probe the worker, including `/postcards/box`,
    `/postcards/keep`, `/social/world` and `/city/board`.
-3. The same push carries three migrations, which `deploy-migrations.yml` applies together after
+3. The same push carries four migrations, which `deploy-migrations.yml` applies together after
    the founder approves the `production` environment run: `20261014160000_postcard_keeps.sql`,
-   `20261014170000_profile_cloth.sql` and `20261014180000_city_board.sql`. Until they run, nothing
-   breaks: Keep stays hidden, the cloth picker stays hidden, and boards say they open with the
-   next update. Each was tested on Postgres 17 (PGlite); the worker routes were tested by running
+   `20261014170000_profile_cloth.sql`, `20261014180000_city_board.sql` and
+   `20261014190000_profile_show_home_city.sql`. Until they run, nothing breaks: Keep, the cloth
+   picker and the home-city switch stay hidden, and boards say they open with the next update. Each was tested on Postgres 17 (PGlite); the worker routes were tested by running
    the worker file against a fake Supabase (visits 21 cases, postcards 17, City Board 14).
 4. Then the OTA (`npm run ota`, run by the founder). Never before the worker deploy and probe.
 
@@ -81,7 +82,7 @@ fallbacks:
 |---|---|---|
 | B1 | Cloth column on the owner's prefs row (Supabase migration) | **Written** (`eca1c73`); applies with the push. The picker appears then |
 | B2 | Faces carry cloth and avatar | **Built** (`5ae3dc8`): only where a name already shows |
-| B3 | `POST /social/world` for visits, and the `world` flag (with B4, B5) | **Built** (`c6d3c2a`). Home country only on the bookplate, the default, until the founder decides |
+| B3 | `POST /social/world` for visits, and the `world` flag (with B4, B5) | **Built** (`c6d3c2a`). Home country always, the city only with the owner's switch (`76b8c50`) |
 | B4 | Blotter read gate mirrors the write gate | **Built** (`c6d3c2a`) |
 | B5 | Moderate profile text before visitors see it | **Built** (`c6d3c2a`). Older bios, places and coffee orders stay out of visits |
 | B6 | Feed fields for envelope art and verification method | Not built. Envelopes print "Verified" alone |
