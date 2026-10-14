@@ -4,12 +4,14 @@
 // month, and a week's pause after a decline. The answer goes to the worker (POST /social/age
 // { os }), which keeps only the tier it implies and caps the birthday's with it; the birthday
 // is still asked. The App Store download id goes once per download ({ app_transaction }), so a
-// parent's withdrawn consent (RESCIND_CONSENT) finds the account. Android (Play Age Signals)
-// comes with its plugin. Nothing here throws, and nothing runs on the web.
+// parent's withdrawn consent (RESCIND_CONSENT) finds the account. On Android, AgeSignalsPlugin
+// asks Google's Play Age Signals silently: bounds come only where Google has a signal (Texas,
+// Brazil…), so no signal is looked for again weekly. Nothing here throws, and nothing runs on
+// the web.
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { callWorker } from "@/lib/callWorker";
 
-const ASKED_KEY = "gs_os_age_v1"; // { at, declined }: when this phone last asked
+const ASKED_KEY = "gs_os_age_v1"; // { at, declined, none }: when this phone last asked, and how it went
 const TXN_KEY = "gs_app_txn_v1";  // the download id already sent
 const MONTH = 30 * 86400000;
 const WEEK = 7 * 86400000;
@@ -20,7 +22,14 @@ function ageRange() {
   try { plugin = registerPlugin("AgeRange"); } catch { plugin = null; }
   return plugin;
 }
+let playPlugin = null;
+function ageSignals() {
+  if (playPlugin) return playPlugin;
+  try { playPlugin = registerPlugin("AgeSignals"); } catch { playPlugin = null; }
+  return playPlugin;
+}
 const onIos = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
+const onAndroid = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
 const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } };
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage off */ } };
 const within = (ms, p) => Promise.race([p, new Promise((res) => setTimeout(() => res(null), ms))]);
@@ -31,21 +40,28 @@ export async function osAgeStatus() {
   try { return await within(8000, ageRange().status()); } catch { return null; }
 }
 
-// Asks Apple for the age range where the laws apply here, and tells the worker. The worker's
-// answer ({ tier, os_tier }) when one was sent, else null. force skips the monthly pause.
+// Asks the phone for the age range (Apple where the laws apply here; Play on Android) and tells
+// the worker. The worker's answer ({ tier, os_tier }) when one was sent, else null. force skips
+// the pause.
 export async function syncOsAge({ force = false } = {}) {
-  if (!onIos()) return null;
+  const platform = onIos() ? "ios" : onAndroid() ? "android" : null;
+  if (!platform) return null;
   const last = read(ASKED_KEY);
   const now = Date.now();
-  if (!force && last?.at && now - last.at < (last.declined ? WEEK : MONTH)) return null;
-  const st = await osAgeStatus();
-  if (!st?.available || st.eligible !== true) return null;
+  if (!force && last?.at && now - last.at < (last.declined || last.none ? WEEK : MONTH)) return null;
   let r = null;
-  // Apple's sheet waits for the person, so this waits too (the old 4 s race lost real answers).
-  try { r = await within(120000, ageRange().request()); } catch { r = null; }
-  if (!r || r.available === false) return null;
-  if (r.declined) { write(ASKED_KEY, { at: now, declined: true }); return null; }
-  const { data, error } = await callWorker("social/age", { os: { platform: "ios", lower: r.lower ?? null, upper: r.upper ?? null } });
+  if (platform === "ios") {
+    const st = await osAgeStatus();
+    if (!st?.available || st.eligible !== true) return null;
+    // Apple's sheet waits for the person, so this waits too (the old 4 s race lost real answers).
+    try { r = await within(120000, ageRange().request()); } catch { r = null; }
+    if (!r || r.available === false) return null;
+    if (r.declined) { write(ASKED_KEY, { at: now, declined: true }); return null; }
+  } else {
+    try { r = await within(15000, ageSignals().check()); } catch { r = null; }
+    if (!r?.available || (r.lower == null && r.upper == null)) { write(ASKED_KEY, { at: now, none: true }); return null; }
+  }
+  const { data, error } = await callWorker("social/age", { os: { platform, lower: r.lower ?? null, upper: r.upper ?? null } });
   if (error || !data || data.error) return null;
   write(ASKED_KEY, { at: now, declined: false });
   return data;
