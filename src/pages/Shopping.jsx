@@ -1,450 +1,527 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+// Shopping: The Boutique (the new look, Shopping.dc.html; plan S17).
+//
+// The blush plate with its swing tag ('30 NEARBY'), "Shops & markets", the location and
+// the unit; then Open now / Luxury / Filters (food shopping) / List | Map, and the shop
+// kinds; numbered cards with a swing-tag number, a photo (or two side by side) or the
+// plum strip, the kind as a mono pill, the street, the serif name as written, the facts
+// line, up to three blush tags and the plum action row; a map with plum pins.
+//
+// Honest by design: open words read the shop's clock (Google's utcOffsetMinutes, or the
+// device's in current-location mode; unknown hours read 'Hours not listed'); a rating
+// under 5 reviews says FEW REVIEWS; tags are never repeated and never more than three,
+// and 'Open late' is left to the hours. No venue colours, no rainbow, no emoji. No search
+// field, no Boutiques or Books chips and no neighbourhood: no data backs them (plan open
+// question 13).
+import React, { useState, useEffect, useRef, useMemo, useId } from "react";
 import { useLocation } from "@/components/location/LocationContext";
 import { useLocation as useRouterLocation } from "react-router-dom";
 import { getLocationLabel, isCityLocation } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
-import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { logSearch } from "@/lib/logSearch";
+import { openPartner } from "@/lib/openPartner";
+import { openStateFor } from "@/lib/openState";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
-import { MapPin, ShoppingBag, Clock, Gem, SlidersHorizontal, ShoppingCart, Check, AlertCircle, SearchX } from "lucide-react";
-import { CAT, IVORY } from "@/components/redesign/constants";
-import { useIsTablet } from "@/lib/useIsTablet";
-import FinderHeader from "@/components/finder/FinderHeader";
+import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
+import FinderHeader, { finderColumnStyle } from "@/components/finder/FinderHeader";
+import { WorldChip, ChipRow, WorldSegmented, ResultLine } from "@/components/finder/FinderControls";
+import { WorldCard, worldGrid, NumberMark, FactsLine, WorldTag, TagRow, CardKicker, CardName, ActionRow, WorldSkeleton } from "@/components/finder/FinderCard";
 import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
-import FilterSheet from "@/components/finder/FilterSheet";
+import FilterSheet, { FilterGroupLabel, FilterToggleRow } from "@/components/finder/FilterSheet";
+import { SwingTag } from "@/components/finder/motifs";
+import {
+  AlertCircle, Apple, Beef, Building2, Carrot, Clock, Gem, Gift, MapPin, Moon, Package, Plane, Scissors, SearchX,
+  ShoppingBag, ShoppingCart, SlidersHorizontal, Store, Tag, Tent, X,
+} from "lucide-react";
+import { WORLD, NEUTRAL, fs } from "@/components/redesign/constants";
+import { useIsTablet } from "@/lib/useIsTablet";
 
-// iPad editorial design tokens (design handoff — shared across all finders).
-const ED_SERIF = '"Instrument Serif", Georgia, serif';
-const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
-const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)";
-const fs=(n)=>`calc(${n}px*var(--fs))`;
+const W = WORLD.shopping;
+const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
+const SERIF = "'Instrument Serif', Georgia, serif";
 
-const T={teal:"#00BCD4",tealD:"#00838F",dark:"#1A2332",dark2:"#243447",gray:"#64748B",grayL:"#F1F5F9",green:"#4CAF50",blue:"#1565C0",blueL:"#E3F2FD",coral:"#FF6B6B",gold:"#FFB74D",
-  accent:"#7C3AED",accentD:"#6D28D9",accentL:"#EDE9FE"};
-
-// ── Food Shopping (priority) then General Shopping ──────────────────────────
-const CATEGORIES=[
-  {id:"all",                  label:"All",        icon:"🛍️",color:T.accent,   family:"all"},
-  // Food Shopping family
-  {id:"supermarkets",         label:"Groceries",  icon:"🥬",color:"#2E7D32",  family:"food"},
-  // General Shopping family
-  {id:"general_shopping",     label:"Shopping",   icon:"🛍️",color:"#7C3AED",  family:"general"},
-  {id:"souvenir_shopping",    label:"Souvenir",   icon:"🎁",color:"#7C3AED",  family:"general"},
-  {id:"markets_bazaars",      label:"Bazaar",     icon:"🏺",color:"#B45309",  family:"general"},
-  {id:"night_markets",        label:"Night Mkt",  icon:"🌙",color:"#1565C0",  family:"general"},
-  {id:"local_crafts",         label:"Crafts",     icon:"🧶",color:"#D97706",  family:"general"},
-  {id:"luxury_shopping",      label:"Luxury",     icon:"💎",color:"#BE185D",  family:"general"},
-  {id:"malls",                label:"Malls",      icon:"🏬",color:"#7C3AED",  family:"general"},
-  {id:"outlets",              label:"Outlets",    icon:"🏷️",color:"#DC2626",  family:"general"},
-  {id:"duty_free",            label:"Duty Free",  icon:"✈️",color:"#0891B2",  family:"general"},
+// The kinds of shop the worker can look for ('all' is the plain list). Luxury is the
+// Luxury chip in the first row, so it is not repeated here.
+const CATEGORIES = [
+  { id: "supermarkets", label: "Groceries" },
+  { id: "general_shopping", label: "Shops" },
+  { id: "souvenir_shopping", label: "Souvenirs" },
+  { id: "markets_bazaars", label: "Bazaars" },
+  { id: "night_markets", label: "Night markets" },
+  { id: "local_crafts", label: "Crafts" },
+  { id: "malls", label: "Malls" },
+  { id: "outlets", label: "Outlets" },
+  { id: "duty_free", label: "Duty free" },
 ];
+const KNOWN_CATEGORIES = new Set(["all", "luxury_shopping", ...CATEGORIES.map((c) => c.id)]);
 
-const PROP_TAGS=[
-  // Food tags
-  {key:"isFoodShopping",  icon:"🛒",label:"Food Shopping",   color:"#2E7D32",bg:"#D1FAE5"},
-  {key:"hasFreshProduce", icon:"🥬",label:"Fresh Produce",    color:"#689F38",bg:"#ECFCCB"},
-  {key:"isBudgetFriendly",icon:"💰",label:"Budget Friendly",  color:"#059669",bg:"#D1FAE5"},
-  {key:"isOpenLate",      icon:"🌙",label:"Open Late",        color:"#1565C0",bg:"#E3F2FD"},
-  // General tags
-  {key:"isLuxury",        icon:"💎",label:"Luxury Brands",    color:"#BE185D",bg:"#FCE7F3"},
-  {key:"isBudget",        icon:"💰",label:"Budget Friendly",  color:"#059669",bg:"#D1FAE5"},
-  {key:"hasFoodCourt",    icon:"🍽️",label:"Food & Dining",   color:"#D97706",bg:"#FEF3C7"},
-  {key:"hasFreeParking",  icon:"🅿️",label:"Free Parking",    color:"#1565C0",bg:"#E3F2FD"},
-  {key:"isOutdoor",       icon:"🌤️",label:"Open Air",        color:"#059669",bg:"#D1FAE5"},
-  {key:"hasLocalCrafts",  icon:"🧶",label:"Local Crafts",     color:"#B45309",bg:"#FEF3C7"},
-  {key:"isDutyFree",      icon:"✈️",label:"Duty Free",        color:"#0891B2",bg:"#E0F2FE"},
-  {key:"isBargain",       icon:"🤝",label:"Bargain/Haggle",   color:"#D97706",bg:"#FEF3C7"},
-  {key:"isTouristFav",    icon:"📸",label:"Tourist Favorite", color:"#7C3AED",bg:"#EDE9FE"},
+// The kind's line icon (the worker's shoppingSubtype; its emoji and colour are ignored).
+const SUBTYPE_ICON = {
+  supermarket: ShoppingCart, warehouse_club: Package, farmers_market: Carrot, fresh_market: Apple, bodega: Store,
+  butcher_shop: Beef, outlet: Tag, night_market: Moon, bazaar: Tent, souvenir: Gift, crafts: Scissors, luxury: Gem,
+  duty_free: Plane, mall: Building2, shopping: ShoppingBag,
+};
+
+// Tags, deduplicated across the worker's highlights (words) and props (flags): one key
+// per idea, in the order a shopper scans them. 'Open late' is left to the hours, and
+// 'Food shopping' to the kind.
+const TAGS = [
+  { key: "crafts", label: "Local crafts", highlight: ["Local Crafts"], prop: "hasLocalCrafts" },
+  { key: "bargain", label: "Bargain / haggle", highlight: ["Bargain Hunting"], prop: "isBargain" },
+  { key: "tourist", label: "Tourist favorite", highlight: ["Tourist Favorite", "Tourist Friendly"], prop: "isTouristFav" },
+  { key: "dutyfree", label: "Duty free", highlight: ["Duty Free"], prop: "isDutyFree" },
+  { key: "outdoor", label: "Open air", highlight: ["Open Air"], prop: "isOutdoor" },
+  { key: "food", label: "Food & dining", highlight: ["Food & Dining"], prop: "hasFoodCourt" },
+  { key: "fresh", label: "Fresh produce", highlight: ["Fresh Produce"], prop: "hasFreshProduce" },
+  { key: "organic", label: "Organic options", highlight: ["Organic Options"] },
+  { key: "intl", label: "International foods", highlight: ["International Foods"] },
+  { key: "prepared", label: "Prepared foods", highlight: ["Prepared Foods"] },
+  { key: "budget", label: "Budget friendly", highlight: ["Budget Friendly"], prop: "isBudget" },
+  { key: "parking", label: "Free parking", prop: "hasFreeParking" },
 ];
-
-// Which clock to read a place's hours against. Google's utcOffsetMinutes puts
-// "now" in the PLACE's zone (right when browsing another city); without it the
-// device clock is only right when the user is physically there (isLocal =
-// current-location browse). Returns null when neither holds so callers show
-// nothing rather than a wrong Open/Closed. (T1.5)
-function placeClock(p,isLocal){
-  const off=p?.utcOffsetMinutes;
-  if(Number.isFinite(off)){ const n=new Date(Date.now()+off*60000); return {day:n.getUTCDay(),mins:n.getUTCHours()*60+n.getUTCMinutes()}; }
-  if(isLocal){ const n=new Date(); return {day:n.getDay(),mins:n.getHours()*60+n.getMinutes()}; }
-  return null;
-}
-
-function openStatus(p,isLocal=true){
-  const h=p.currentOpeningHours?.weekdayDescriptions||p.hours||[];
-  if(!h.length){
-    // No hours to compute from. Google's openNow boolean is only trusted for the
-    // city we're standing in (the snapshot is at least on the right clock); for
-    // another city it may be days old AND on the wrong clock, so show nothing.
-    const io=isLocal?(p.isOpen??null):null;
-    return {isOpen:io,label:io===true?"Open Now":io===false?"Closed":"Hours Unknown",is24H:false,today:""};
-  }
-  const clock=placeClock(p,isLocal);
-  if(!clock) return {isOpen:null,label:"Hours Unknown",is24H:false,today:""}; // zone unknown for a non-local city
-  const days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-  const tod=days[clock.day];
-  const ent=h.find((x)=>x?.toLowerCase().startsWith(tod.toLowerCase()));
-  if(!ent) return {isOpen:null,label:"Hours Unknown",is24H:false,today:""};
-  const txt=ent.split(":").slice(1).join(":").trim();
-  if(txt.toLowerCase()==="closed") return {isOpen:false,label:"Closed Today",is24H:false,today:"Closed"};
-  const cur=clock.mins;
-  const open=txt.split(",").some((seg)=>{
-    const m=seg.match(/(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)\s*[–\-]\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)/i);
-    if(!m) return false;
-    const tm=(s)=>{const n=s.trim().toUpperCase(),r=n.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/);if(!r)return 0;let h=+r[1];const mm=r[2]?+r[2]:0;if(r[3]==="PM"&&h!==12)h+=12;if(r[3]==="AM"&&h===12)h=0;return h*60+mm;};
-    let o=tm(m[1]),c=tm(m[2]);if(c<=o)c+=1440;return cur>=o&&cur<c;
+function tagsOf(p) {
+  const hi = new Set(Array.isArray(p.highlights) ? p.highlights : []);
+  const props = p.props || {};
+  const out = [];
+  if (props.isLuxury || hi.has("Luxury Brands")) out.push({ key: "luxury", label: "Luxury", luxury: true });
+  TAGS.forEach((t) => {
+    if ((t.highlight || []).some((h) => hi.has(h)) || (t.prop && props[t.prop])) out.push(t);
   });
-  return {isOpen:open,label:open?"Open Now":"Closed Now",is24H:false,today:txt};
+  return out.slice(0, 3);
 }
 
-// Directions handled by the shared <MapAppSelector> (address-aware destination +
-// "from my location / other address" origin picker) — see src/components/MapAppSelector.jsx
+const nameOf = (p) => p.displayName?.text || p.name || "Shop";
 
-// ─── SHOP CARD — EDITORIAL (responsive: phone + iPad) ────────────────────────
-// One editorial card for BOTH platforms — gated by the isTablet prop via the
-// local v(tablet,phone) helper. Tablet keeps the original handoff sizes; phone
-// gets compact, glasses-scalable equivalents. Editorial structure cloned from
-// RestaurantCardTablet (PlacesToEat); only the domain content differs. Domain:
-// shop category kicker (venueLabel), mall-vs-market hours, rating. No best-time /
-// seating / parking / customer-favorites panels — this finder doesn't have them.
-function ShopCardTablet({p,index,onMap,isHighlighted,cardRef,forceExpanded,userLat,userLng,formatDistance,isTablet,isLocal,batchEnrich}){
-  const [dirs,setDirs]=useState(false); const [exp,setExp]=useState(false);
-  const [hoursExpanded,setHoursExpanded]=useState(false);
-  const [enriched,setEnriched]=useState(null);
-  useEffect(()=>{if(forceExpanded)setExp(true);},[forceExpanded]);
-  // Real Google photos + hours for OWNED shops (owned records carry none).
-  // T1.15: the parent batch-enriches all visible owned shops in ONE worker call
-  // and hands this card its slice via `batchEnrich` (undefined = batch in flight —
-  // wait, don't double-call). A card the batch missed (null) falls back to its
-  // own single call; both paths share the worker's per-item KV cache.
-  useEffect(()=>{
-    if(enriched||p.source!=='owned')return;
-    const key=p.id||p.placeId;
-    if(key&&batchEnrich===undefined)return; // parent batch pending — its result arrives via prop
-    if(batchEnrich){ if(batchEnrich.matched)setEnriched(batchEnrich); return; }
-    callWorker('places/enrich-owned',{id:key,name:p.displayName?.text||p.name,lat:p.lat,lng:p.lng,maxPhotos:3})
-      .then(({data})=>{ if(data&&data.matched)setEnriched(data); }).catch(()=>{});
-  },[batchEnrich]); // eslint-disable-line react-hooks/exhaustive-deps
-  const name=p.displayName?.text||p.name||"Shop";
-  // Layer enrich (owned) photos + hours over the owned fields before deriving status.
-  const photos=enriched?.photos?.length?enriched.photos:p.photos;
-  const dailyHours=enriched?.hours?.weekdayDescriptions?.length?enriched.hours.weekdayDescriptions:(p.hours||[]);
-  // enrich-owned's hours come from a 90-day-cached Place Details entry, so its
-  // openNow is a stale snapshot — never use it. Recompute from the weekday
-  // hours in the place's zone (utcOffsetMinutes, when the worker sends it).
-  const pStatus=enriched?.hours?{...p,currentOpeningHours:{weekdayDescriptions:enriched.hours.weekdayDescriptions},utcOffsetMinutes:enriched.utcOffsetMinutes??p.utcOffsetMinutes??null}:p;
-  const st=openStatus(pStatus,isLocal);
-  const todayIdx=placeClock(pStatus,isLocal)?.day??-1; // -1 = no trustworthy clock → no "today" highlight
-  const openText=st.label;
-  const activeTags=PROP_TAGS.filter(t=>p.props?.[t.key]);
-  const vColor=p.venueColor||T.accent;
-  const phone=p.nationalPhoneNumber||p.internationalPhoneNumber||"";
-
-  // Responsive token picker: tablet value | phone value. Every text size stays
-  // wrapped in fs() so the 4-step glasses control scales card text gracefully.
-  const v=(t,ph)=>isTablet?t:ph;
-
-  const Tag=({bg,color,children})=>(
-    <span style={{background:bg,color,borderRadius:"999px",padding:v(`${fs(9)} ${fs(16)}`,`${fs(6)} ${fs(12)}`),fontSize:v(fs(15.5),fs(12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
-  );
-
-  return(
-    <motion.div ref={cardRef} initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} transition={{delay:Math.min(index,8)*0.03}}
-      style={{background:"#fff",borderRadius:v("28px","20px"),overflow:"hidden",minHeight:v(fs(560),fs(360)),boxShadow:isHighlighted?`0 0 0 3px ${T.accent},0 24px 50px -30px rgba(22,17,13,.4)`:v("0 24px 50px -30px rgba(22,17,13,.4)","0 12px 30px -20px rgba(22,17,13,.35)"),border:isHighlighted?`2px solid ${T.accent}`:`1px solid ${ED_RULE}`,transition:"box-shadow 0.3s,border 0.3s"}}>
-
-      {/* Photo — editorial hero (PhotoOrIcon: first working photo, else icon-on-tint) + rank badge + save + venue tag */}
-      <div style={{position:"relative"}}>
-        <PhotoOrIcon photos={photos} alt={name} fallbackIcon={ShoppingBag} tint={p.venueColor||CAT.shopping} height={v(360,200)} iconSize={v(64,48)}/>
-        <div style={{position:"absolute",top:fs(14),left:fs(14),width:v(fs(38),fs(32)),height:v(fs(38),fs(32)),borderRadius:"50%",background:index===0?"linear-gradient(135deg,#FFD700,#FFA000)":index===1?"linear-gradient(135deg,#B0BEC5,#78909C)":index===2?"linear-gradient(135deg,#FFAB40,#F57C00)":T.accent,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:"800",fontSize:v(fs(16),fs(13)),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
-        {p.venueLabel&&<div style={{position:"absolute",top:fs(14),right:`calc(${fs(14)} + ${fs(48)})`,background:"rgba(255,255,255,0.95)",backdropFilter:"blur(8px)",padding:v(`${fs(5)} ${fs(12)}`,`${fs(4)} ${fs(10)}`),borderRadius:"999px",fontSize:v(fs(14),fs(11)),fontWeight:"800",color:vColor,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>{p.venueIcon} {p.venueLabel}</div>}
-      </div>
-
-      <div style={{padding:v(`${fs(28)} ${fs(32)} ${fs(32)}`,`${fs(16)} ${fs(16)} ${fs(18)}`)}}>
-        {/* Coral kicker — shop category */}
-        {p.venueLabel&&<div style={{color:CAT.shopping.ink,fontWeight:600,fontSize:v(fs(17),fs(13)),letterSpacing:"0.2px"}}>{p.venueLabel}</div>}
-        <h3 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:v(fs(38),fs(26)),lineHeight:1.04,color:ED_INK,margin:`${fs(4)} 0 0`,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</h3>
-
-        {/* Say it / Translate / rating / distance */}
-        <div style={{display:"flex",gap:v(fs(16),fs(10)),alignItems:"center",flexWrap:"wrap",marginTop:fs(12),fontSize:v(fs(17),fs(13.5)),color:ED_INK3}}>
-          <NameLanguageHelp placeId={p.placeId||p.id} name={name}/>
-          {p.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{p.rating.toFixed?p.rating.toFixed(1):p.rating}</span>{p.userRatingCount>0&&<> ({p.userRatingCount.toLocaleString()})</>} <span style={{fontSize:"0.8em",color:ED_INK3}}>Google</span></span>}
-          {p.distanceMiles!=null&&<span>· {formatDistance(p.distanceMiles)}</span>}
-        </div>
-
-        {/* Street address — subtle on-card line (phone + tablet) */}
-        {(p.formattedAddress||p.shortFormattedAddress||p.vicinity)&&(
-          <div style={{marginTop:fs(8),fontSize:v(fs(13.5),fs(12)),color:ED_INK3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {p.formattedAddress||p.shortFormattedAddress||p.vicinity}</div>
-        )}
-
-        {/* Pill tags — editorial highlights + property tags */}
-        {(p.highlights?.length>0||activeTags.length>0)&&(
-          <div style={{display:"flex",gap:v(fs(10),fs(6)),flexWrap:"wrap",marginTop:fs(16)}}>
-            {p.highlights?.map((h,i)=><Tag key={`h${i}`} bg={T.accentL} color={T.accentD}>{h}</Tag>)}
-            {activeTags.map((t,i)=><Tag key={`t${i}`} bg={t.bg} color={t.color}>{t.icon} {t.label}</Tag>)}
-          </div>
-        )}
-
-        {/* Open bar */}
-        {(st.today||st.isOpen!==null)&&(
-          <div style={{marginTop:v(fs(18),fs(14)),background:st.isOpen===true?"#E7F3EA":st.isOpen===false?"#FBE0DC":"#FAF7F0",borderRadius:"16px",padding:v(`${fs(16)} ${fs(20)}`,`${fs(12)} ${fs(14)}`),fontSize:v(fs(18),fs(13.5)),fontWeight:600,color:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK2,display:"flex",alignItems:"center",gap:fs(11)}}>
-            <span style={{width:fs(10),height:fs(10),borderRadius:"50%",background:st.isOpen===true?"#2E7D46":st.isOpen===false?"#C2392F":ED_INK3,flexShrink:0}}/>
-            <span>{openText}</span>
-            {st.today&&<span style={{color:ED_INK3,fontWeight:500}}>· {st.today}</span>}
-          </div>
-        )}
-
-        {/* Phone bar */}
-        {phone&&(
-          <a href={`tel:${phone}`} style={{marginTop:fs(14),background:"#EFF4FB",borderRadius:"16px",padding:v(`${fs(18)} ${fs(20)}`,`${fs(13)} ${fs(14)}`),display:"flex",alignItems:"center",gap:fs(14),textDecoration:"none"}}>
-            <span style={{fontSize:v(fs(24),fs(18))}}>📞</span>
-            <span><span style={{display:"block",fontSize:v(fs(20),fs(13.5)),fontWeight:600,color:"#2E6FE0"}}>{phone}</span><span style={{fontSize:v(fs(15),fs(11.5)),color:ED_INK3}}>Tap to call</span></span>
-          </a>
-        )}
-
-        {/* Actions */}
-        <div style={{display:"flex",gap:v(fs(12),fs(8)),marginTop:v(fs(20),fs(16))}}>
-          <button onClick={()=>setDirs(true)} style={{flex:1,borderRadius:"16px",padding:v(fs(15),fs(12)),fontSize:v(fs(18),fs(14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:CAT.shopping.ink,color:"#fff"}}>Directions</button>
-          <button onClick={()=>onMap?.(index)} style={{flex:1,borderRadius:"16px",padding:v(fs(15),fs(12)),fontSize:v(fs(18),fs(14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
-          <button onClick={()=>setExp(e=>!e)} style={{flex:1,borderRadius:"16px",padding:v(fs(15),fs(12)),fontSize:v(fs(18),fs(14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:exp?ED_INK:ED_IVORY2,color:exp?"#fff":ED_INK2}}>{exp?"Less ▴":"More ▾"}</button>
-        </div>
-
-        {/* Expanded details */}
-        <AnimatePresence>
-          {exp&&(
-            <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{marginTop:v(fs(20),fs(16)),display:"flex",flexDirection:"column",gap:v(fs(14),fs(10))}}>
-
-                {p.formattedAddress&&(
-                  <div style={{display:"flex",alignItems:"flex-start",gap:fs(11),padding:v(fs(16),fs(13)),background:"#FAF7F0",borderRadius:"16px",border:`1px solid ${ED_RULE}`}}>
-                    <span style={{fontSize:v(fs(20),fs(16)),flexShrink:0}}>📍</span>
-                    <span style={{fontSize:v(fs(16),fs(13)),lineHeight:1.5,color:ED_INK2}}>{p.formattedAddress}</span>
-                  </div>
-                )}
-
-                {dailyHours.length>0&&(
-                  <div style={{padding:v(fs(16),fs(13)),background:"#FAF7F0",borderRadius:"16px"}}>
-                    <button onClick={()=>setHoursExpanded(h=>!h)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit"}}>
-                      <span style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px"}}>🕐 WEEKLY HOURS</span>
-                      <span style={{fontSize:fs(13),color:ED_INK3}}>{hoursExpanded?'▲':'▼'}</span>
-                    </button>
-                    {hoursExpanded&&(
-                      <div style={{marginTop:fs(8)}}>
-                        {dailyHours.map((day,i)=>{
-                          const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                          const isToday=DAY.findIndex(d=>day.toLowerCase().startsWith(d.toLowerCase()))===todayIdx;
-                          const hrs=day.split(':').slice(1).join(':').trim();
-                          return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:v(fs(15),fs(13)),fontWeight:isToday?700:400,color:isToday?T.accentD:ED_INK2,borderBottom:i<dailyHours.length-1?`1px solid ${ED_RULE}`:"none"}}>
-                            <span>{day.split(':')[0]}</span><span style={{color:hrs.toLowerCase()==="closed"?"#C2392F":isToday?T.accentD:ED_INK3}}>{hrs}</span>
-                          </div>;
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {p.websiteUri&&(
-                  <a href={p.websiteUri} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:v(fs(16),fs(13)),background:"#F3E8FF",borderRadius:"16px",textDecoration:"none",color:"#7C3AED"}}>
-                    <span style={{fontSize:v(fs(22),fs(18))}}>🌐</span>
-                    <span><span style={{display:"block",fontWeight:600,fontSize:v(fs(16),fs(13.5))}}>Visit Website</span><span style={{fontSize:v(fs(14),fs(11.5)),color:ED_INK3}}>Store info &amp; hours</span></span>
-                  </a>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-      <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:p.formattedAddress||p.shortFormattedAddress||p.vicinity||p.address||"",latitude:p.lat,longitude:p.lng}} userLat={userLat} userLng={userLng}/>
-    </motion.div>
+function MoreRow({ label, children }) {
+  return (
+    <div style={{ padding: "12px 0", borderTop: `1px solid ${W.line}` }}>
+      <div style={{ marginBottom: 4, fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".12em", textTransform: "uppercase", color: W.iconInk }}>{label}</div>
+      <div style={{ fontSize: fs(13.5), lineHeight: 1.5, color: NEUTRAL.ink2 }}>{children}</div>
+    </div>
   );
 }
 
+// ─── SHOP CARD (Shopping.dc.html L86-112) ───────────────────────────────────
+function ShopCard({ p, n, isLocal, formatDistance, onDirections, onShowOnMap, highlighted, cardRef, forceExpanded, batchEnrich }) {
+  const [expanded, setExpanded] = useState(false);
+  const [gallery, setGallery] = useState({ open: false, idx: 0 });
+  const [enriched, setEnriched] = useState(null);
+  const moreId = useId();
+  useEffect(() => { if (forceExpanded) setExpanded(true); }, [forceExpanded]);
+  // Real Google photos and hours for planet-DB shops (owned records carry none). The page
+  // batch-enriches every visible owned shop in one worker call and hands this card its
+  // slice through batchEnrich (undefined: the batch is in flight, wait). A card the batch
+  // missed (null) falls back to its own call; both share the worker's per-item cache.
+  useEffect(() => {
+    if (enriched || p.source !== "owned") return;
+    const key = p.id || p.placeId;
+    if (key && batchEnrich === undefined) return;
+    if (batchEnrich) { if (batchEnrich.matched) setEnriched(batchEnrich); return; }
+    callWorker("places/enrich-owned", { id: key, name: nameOf(p), lat: p.lat, lng: p.lng, maxPhotos: 3 })
+      .then(({ data }) => { if (data && data.matched) setEnriched(data); }).catch(() => {});
+  }, [batchEnrich]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const name = nameOf(p);
+  const photos = (enriched?.photos?.length ? enriched.photos : (p.photos || []))
+    .map((x) => (typeof x === "string" ? x : (x?.url || null))).filter(Boolean);
+  // The open words read the shop's clock: the enriched weekly hours when the planet-DB
+  // row had none (never its cached openNow), else the row's own.
+  const statusRow = enriched?.hours?.weekdayDescriptions?.length
+    ? { ...p, currentOpeningHours: { weekdayDescriptions: enriched.hours.weekdayDescriptions }, utcOffsetMinutes: enriched.utcOffsetMinutes ?? p.utcOffsetMinutes ?? null }
+    : p;
+  const os = openStateFor(statusRow, { isLocal });
+  const week = (os.week || []).some((d) => d.text) ? os.week : [];
+  const KindIcon = SUBTYPE_ICON[p.shoppingSubtype] || ShoppingBag;
+  const street = String(p.shortFormattedAddress || p.formattedAddress || "").split(",")[0].trim();
+  const dist = Number.isFinite(p.distanceMiles) ? formatDistance(p.distanceMiles) : null;
+  const count = Number(p.userRatingCount) || 0;
+  const few = p.rating > 0 && count < 5;
+  const tags = tagsOf(p);
+  const phone = p.nationalPhoneNumber || p.internationalPhoneNumber || null;
+  const website = p.websiteUri || null;
+  const hasMore = week.length > 0 || !!p.formattedAddress || !!website;
+
+  return (
+    <WorldCard world="shopping" as="li" ref={cardRef} style={highlighted ? { boxShadow: `0 0 0 3px ${W.ink}, ${W.cardShadow}` } : undefined}>
+      <PhotoOrIcon world="shopping" photos={photos} alt={name} split={photos.length >= 2}
+        onClick={photos.length ? (i) => setGallery({ open: true, idx: Number.isFinite(i) ? i : 0 }) : undefined}>
+        <NumberMark n={n} world="shopping" />
+        {p.venueLabel ? (
+          <span style={{ position: "absolute", top: photos.length ? 12 : 20, right: 12, display: "inline-flex", alignItems: "center", gap: 5, minHeight: 24, maxWidth: "calc(100% - 80px)", boxSizing: "border-box", padding: "0 9px 0 8px", borderRadius: 999, background: NEUTRAL.white, fontFamily: MONO, fontSize: fs(9.5), fontWeight: 500, letterSpacing: ".12em", textTransform: "uppercase", color: W.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <KindIcon size={12} color={W.iconInk} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0 }} />{p.venueLabel}
+          </span>
+        ) : null}
+      </PhotoOrIcon>
+      <div style={{ padding: "14px 16px 16px" }}>
+        {street ? <CardKicker world="shopping">{street}</CardKicker> : null}
+        <CardName world="shopping" as="h3">{name}</CardName>
+        <div style={{ marginTop: 2 }}><NameLanguageHelp placeId={p.placeId || p.id} name={name} world="shopping" /></div>
+        <FactsLine world="shopping" open={os}
+          items={[dist, { rating: p.rating, count, source: "google" },
+            few ? <span key="few" style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".1em", color: NEUTRAL.ink3 }}>FEW REVIEWS</span> : null]}
+          style={{ marginTop: 6 }} />
+        {tags.length > 0 && (
+          <TagRow max={3} style={{ marginTop: 10 }}>
+            {tags.map((t) => (t.luxury
+              ? <WorldTag key={t.key} world="shopping" tone="outline" icon={Gem} style={{ borderColor: W.ink, color: W.ink }}>{t.label}</WorldTag>
+              : <WorldTag key={t.key} world="shopping" tone="wash">{t.label}</WorldTag>))}
+          </TagRow>
+        )}
+        <ActionRow world="shopping" name={name} onDirections={() => onDirections(p)} onMap={onShowOnMap} phone={phone}
+          onMore={hasMore ? () => setExpanded((e) => !e) : undefined} moreIcon moreExpanded={hasMore ? expanded : undefined} moreControls={hasMore ? moreId : undefined}
+          style={{ marginTop: 12 }} />
+        {hasMore && expanded && (
+          <div id={moreId} style={{ marginTop: 12 }}>
+            {week.length > 0 && (
+              <MoreRow label="Hours">
+                <dl style={{ margin: 0 }}>
+                  {week.map((d) => (
+                    <div key={d.day} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "2px 0", fontWeight: d.today ? 600 : 400, color: d.today ? W.ink : NEUTRAL.ink2 }}>
+                      <dt>{d.day}</dt>
+                      <dd style={{ margin: 0, textAlign: "right", color: /^closed$/i.test(String(d.text || "")) ? NEUTRAL.stamp : undefined }}>{d.text || "Not listed"}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </MoreRow>
+            )}
+            {p.formattedAddress ? <MoreRow label="Address">{p.formattedAddress}</MoreRow> : null}
+            {website ? (
+              <MoreRow label="Website">
+                <button type="button" onClick={() => openPartner(website)}
+                  style={{ display: "inline-flex", alignItems: "center", minHeight: 44, margin: "-12px 0", padding: 0, background: "transparent", border: 0, fontFamily: "inherit", fontSize: "inherit", color: W.ink, textDecoration: "underline", textUnderlineOffset: 2, cursor: "pointer", overflowWrap: "anywhere", textAlign: "left" }}>
+                  {website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                </button>
+              </MoreRow>
+            ) : null}
+          </div>
+        )}
+      </div>
+      <PhotoGalleryModal photos={photos} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
+    </WorldCard>
+  );
+}
+
+// ─── MAP ────────────────────────────────────────────────────────────────────
+const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const mapFs = (px) => `calc(${px}px * var(--fs, 1))`;
+
+// A plum pin with the card's serif numeral; the one picked in blush with a plum ring.
+function pinHtml(n, active) {
+  const sz = active ? 34 : 28;
+  return `<div style="width:${sz}px;height:${sz}px;box-sizing:border-box;border-radius:50%;background:${active ? W.plate : W.ink};border:${active ? 3 : 2}px solid ${active ? W.ink : NEUTRAL.white};box-shadow:0 3px 10px rgba(21,23,28,.3);display:flex;align-items:center;justify-content:center;font-family:${SERIF};font-size:${active ? 17 : 15}px;line-height:1;color:${active ? W.ink : NEUTRAL.white};">${n}</div>`;
+}
+
+function popupHtml(p, i, isLocal, fmt) {
+  const os = openStateFor(p, { isLocal });
+  const tone = { open: NEUTRAL.open, closed: NEUTRAL.stamp, muted: NEUTRAL.ink3 }[os.tone] || NEUTRAL.ink2;
+  const dist = Number.isFinite(p.distanceMiles) && fmt ? fmt(p.distanceMiles) : "";
+  const btn = (call, label, solid) => `<button onclick="${call}" style="flex:1;min-height:44px;border:${solid ? "0" : `1px solid ${W.line}`};border-radius:12px;background:${solid ? W.cta : "#fff"};color:${solid ? W.ctaInk : NEUTRAL.ink2};font-weight:600;font-size:${mapFs(13)};cursor:pointer;font-family:inherit;">${label}</button>`;
+  const xSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${NEUTRAL.ink3}" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`;
+  return `<div style="width:256px;position:relative;font-family:inherit;">`
+    + `<button onclick="window._gsMapInstance&&window._gsMapInstance.closePopup()" aria-label="Close" style="position:absolute;top:4px;right:4px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;">${xSvg}</button>`
+    + `<div style="padding:14px 16px 16px;">`
+    + `<div style="padding-right:36px;font-family:${MONO};font-size:${mapFs(10)};line-height:1.4;letter-spacing:.12em;text-transform:uppercase;color:${W.ink};">${esc(p.venueLabel || "Shopping")}</div>`
+    + `<button onclick="window._gsViewShop&&window._gsViewShop(${i})" style="display:block;margin:4px 0 0;padding:0 30px 0 0;border:0;background:transparent;text-align:left;cursor:pointer;font-family:${SERIF};font-size:${mapFs(20)};line-height:1.15;color:${NEUTRAL.ink};">${esc(nameOf(p))}</button>`
+    + `<div style="margin-top:6px;font-size:${mapFs(13)};line-height:1.4;color:${NEUTRAL.ink2};"><span style="font-weight:600;color:${tone};">${esc(os.word)}</span>${dist ? ` · ${esc(dist)}` : ""}</div>`
+    + (p.formattedAddress ? `<div style="margin-top:4px;font-size:${mapFs(12.5)};line-height:1.4;color:${NEUTRAL.ink3};">${esc(p.formattedAddress)}</div>` : "")
+    + `<div style="display:flex;gap:8px;margin-top:12px;">${btn(`window._gsShopDirs&&window._gsShopDirs(${i})`, "Directions", true)}${btn(`window._gsViewShop&&window._gsViewShop(${i})`, "Details", false)}</div>`
+    + `</div></div>`;
+}
+
+// ─── MAIN PAGE ──────────────────────────────────────────────────────────────
 export default function ShoppingFinder() {
-  const [places,setPlaces]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [error,setError]=useState(null);
-  const [refreshTick,setRefreshTick]=useState(0);
-  const forceNextRef=useRef(false);
-  const handleRefresh=()=>{ forceNextRef.current=true; setRefreshTick(t=>t+1); };
-  const [viewMode,setViewMode]=useState("list");
-  const [filterSheet,setFilterSheet]=useState(false);
-  const [category,setCategory]=useState("all");
-  const [radius]=useState(25); // wide net; no radius UI — nearest-first
-  const [openOnly,setOpenOnly]=useState(false);
-  const [luxOnly,setLuxOnly]=useState(false);
-  const [foodOnly,setFoodOnly]=useState(false);
-  const [locPicker,setLocPicker]=useState(false);
-  const [dirsP,setDirsP]=useState(null);
-  const [highlight,setHighlight]=useState(null);
-  const [expandedIdx,setExpandedIdx]=useState(null);
-  const [activePin,setActivePin]=useState(null);
-  const cardRefs=useRef({});
-  const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
-  const {activeLocation,locationMode}=useLocation();
-  // Physically here → the device clock is the place clock (mirrors LocationContext's isLive).
-  const isLocal=locationMode==='current'||activeLocation?.placeType==='current_location';
-  // Smart-Search handoff: a category passed via router state (from the spine's
-  // shopping-query mapping) selects that chip once.
-  const routerLocation=useRouterLocation();
-  const presetCatRanRef=useRef(false);
-  useEffect(()=>{
-    const pc=routerLocation.state?.presetCategory;
-    if(presetCatRanRef.current||!pc) return;
-    if(CATEGORIES.some((c)=>c.id===pc)){ presetCatRanRef.current=true; setCategory(pc); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[routerLocation.state?.presetCategory]);
-  const lat=activeLocation?.coordinates?.latitude; const lng=activeLocation?.coordinates?.longitude;
-  const locLabel=getLocationLabel(activeLocation);
-  const isCity=isCityLocation(activeLocation);
-  const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
-  // iPad: wider centered column + editorial shop cards (design handoff).
-  // Phone layout is unchanged — every tablet branch is gated on this.
   const isTablet = useIsTablet();
-  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
+  const [places, setPlaces] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const forceNextRef = useRef(false);
+  const handleRefresh = () => { forceNextRef.current = true; setRefreshTick((t) => t + 1); };
+  const [viewMode, setViewMode] = useState("list");
+  const [showSheet, setShowSheet] = useState(false);
+  const [category, setCategory] = useState("all");
+  const [openOnly, setOpenOnly] = useState(false);
+  const [luxOnly, setLuxOnly] = useState(false);
+  const [foodOnly, setFoodOnly] = useState(false);
+  const [showLocPicker, setShowLocPicker] = useState(false);
+  const [directionsTo, setDirectionsTo] = useState(null);
+  const [highlightIdx, setHighlightIdx] = useState(null);
+  const [expandedIdx, setExpandedIdx] = useState(null);
+  const [activeMapPin, setActiveMapPin] = useState(null);
+  const cardRefs = useRef({});
+  const mapRef = useRef(null);
+  const mapInstRef = useRef(null);
+  const markersRef = useRef([]);
 
-  // radius filter removed app-wide — fixed wide net, results shown nearest-first
+  const { activeLocation, locationMode } = useLocation();
+  // Physically here: the device clock is the shop's clock (mirrors LocationContext's isLive).
+  const isLocal = locationMode === "current" || activeLocation?.placeType === "current_location";
+  // Smart Search hands a category over in router state (the spine's shopping-query
+  // mapping); it selects that kind once.
+  const routerLocation = useRouterLocation();
+  const presetCatRanRef = useRef(false);
+  useEffect(() => {
+    const pc = routerLocation.state?.presetCategory;
+    if (presetCatRanRef.current || !pc) return;
+    if (KNOWN_CATEGORIES.has(pc)) { presetCatRanRef.current = true; setCategory(pc); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routerLocation.state?.presetCategory]);
+  const lat = activeLocation?.coordinates?.latitude;
+  const lng = activeLocation?.coordinates?.longitude;
+  const locLabel = getLocationLabel(activeLocation);
+  const isCity = isCityLocation(activeLocation);
+  const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
 
-  useEffect(()=>{
-    if(!lat||!lng){ setLoading(false); return; } // no location yet — don't spin forever
-    let cancelled=false;
-    setLoading(true); setError(null);
-    const force=forceNextRef.current; forceNextRef.current=false;
-    (async()=>{
-      try{
-        // List source: GOOGLE (getShoppingPlaces) — real stores with photos + hours
-        // and sensible filter results. Temporary: the owned planet DB shopping data
-        // is low-quality (junk names, no photos), so we source from Google until it's
-        // cleaned, then flip back to owned-first. `category` filters server-side.
-        const {data, error: workerError}=await callWorker(ROUTE.getShoppingPlaces,{latitude:lat,longitude:lng,radius:radius*1609,maxResults:30,category,forceRefresh:force});
-        if(cancelled) return; // a newer fetch (radius/category/location change) superseded this one
+  // ── Fetch ──
+  useEffect(() => {
+    if (!lat || !lng) { setLoading(false); return undefined; } // no location yet: never spin
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const force = forceNextRef.current; forceNextRef.current = false;
+    (async () => {
+      try {
+        // Google's shops (getShoppingPlaces): a 25-mile wide net, nearest first, the kind
+        // filtered on the server.
+        const { data, error: workerError } = await callWorker(ROUTE.getShoppingPlaces, { latitude: lat, longitude: lng, radius: 25 * 1609, maxResults: 30, category, forceRefresh: force });
+        if (cancelled) return;
         if (workerError) throw new Error(workerError);
-        const raw=data?.places||[];
-        // Compute distanceMiles client-side so the unit formatter has a raw number.
-        const enriched = raw.map(p => {
-          if (p.distanceMiles!=null || !p.lat || !p.lng) return p;
-          const R=3959, dLat=(p.lat-lat)*Math.PI/180, dLon=(p.lng-lng)*Math.PI/180;
-          const a=Math.sin(dLat/2)**2+Math.cos(lat*Math.PI/180)*Math.cos(p.lat*Math.PI/180)*Math.sin(dLon/2)**2;
-          return { ...p, distanceMiles: R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)) };
-        });
-        if(enriched.length) setPlaces(enriched); else setError(data?.error||"No shopping found nearby.");
-      }catch(e){ if(!cancelled) setError(`Failed: ${e.message}`);}
-      finally{ if(!cancelled) setLoading(false);}
-    })();
-    return ()=>{ cancelled=true; };
-  },[lat,lng,radius,category,refreshTick]);
-
-  const filtered=useMemo(()=>{
-    let r=[...places];
-    if(openOnly)  r=r.filter(p=>openStatus(p,isLocal).isOpen===true); // same clock rule as the cards, not raw openNow
-    if(luxOnly)   r=r.filter(p=>p.props?.isLuxury);
-    if(foodOnly)  r=r.filter(p=>p.shoppingFamily==="food_shopping");
-    return r;
-  },[places,openOnly,luxOnly,foodOnly,isLocal]);
-
-  // ── T1.15: BATCH ENRICH VISIBLE OWNED SHOPS ──────────────────────────────
-  // Was: every owned card fired its own /places/enrich-owned on mount (one call
-  // per rendered card). Now all visible owned shops go up in batched calls of 20
-  // (the worker's batch cap). ownedEnrich[key]: undefined = batch pending,
-  // payload = result, null = batch missed/errored → that card's own single-call
-  // fallback runs (same KV cache server-side).
-  const [ownedEnrich,setOwnedEnrich]=useState({});
-  const ownedEnrichAsked=useRef(new Set());
-  useEffect(()=>{
-    const owned=filtered.filter(p=>p.source==='owned')
-      .map(p=>({id:p.id||p.placeId,name:p.displayName?.text||p.name,lat:p.lat,lng:p.lng}))
-      .filter(p=>p.id&&!ownedEnrichAsked.current.has(p.id));
-    if(!owned.length)return;
-    owned.forEach(p=>ownedEnrichAsked.current.add(p.id));
-    (async()=>{
-      for(let i=0;i<owned.length;i+=20){
-        const chunk=owned.slice(i,i+20);
-        const {data}=await callWorker('places/enrich-owned',{places:chunk,maxPhotos:3});
-        const res=data?.results||{};
-        setOwnedEnrich(prev=>{const nx={...prev};chunk.forEach(p=>{nx[p.id]=res[p.id]??null;});return nx;});
+        const raw = data?.places || [];
+        // distanceMiles on every row, so the unit formatter has a number.
+        setPlaces(raw.map((p) => {
+          if (p.distanceMiles != null || !p.lat || !p.lng) return p;
+          const R = 3959, dLat = (p.lat - lat) * Math.PI / 180, dLon = (p.lng - lng) * Math.PI / 180;
+          const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat * Math.PI / 180) * Math.cos(p.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+          return { ...p, distanceMiles: R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) };
+        }));
+      } catch (e) {
+        if (cancelled) return;
+        setPlaces([]); // a failed fetch must not leave the old list's count on screen
+        setError("Check your connection and try again.");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
-  },[filtered]);
+    return () => { cancelled = true; };
+  }, [lat, lng, category, refreshTick]);
 
-  const handleMap=(i)=>{setViewMode("map");setActivePin(i);setTimeout(()=>{const p=filtered[i];if(mapInst.current&&p?.lat&&p?.lng){mapInst.current.setView([p.lat,p.lng],17);markers.current[i]?.openPopup();}},350);};
+  const filtered = useMemo(() => {
+    let r = places;
+    if (openOnly) r = r.filter((p) => openStateFor(p, { isLocal }).status === "open"); // the cards' own clock rule
+    if (luxOnly) r = r.filter((p) => p.props?.isLuxury);
+    if (foodOnly) r = r.filter((p) => p.shoppingFamily === "food_shopping");
+    return r;
+  }, [places, openOnly, luxOnly, foodOnly, isLocal]);
 
-  useEffect(()=>{
-    if(viewMode!=="map"||!mapRef.current||!lat||!lng) return;
-    const init=()=>{
-      if(mapInst.current) mapInst.current.remove(); markers.current=[];
-      const map=window.L.map(mapRef.current).setView([lat,lng],14);
-      window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OSM"}).addTo(map);
-      mapInst.current=map; window._gsSHMapInst=map;
-      window._gsSHView=(i)=>{map.closePopup();setViewMode("list");setExpandedIdx(i);setHighlight(i);setTimeout(()=>cardRefs.current[i]?.scrollIntoView({behavior:"smooth",block:"center"}),150);setTimeout(()=>setHighlight(null),2800);};
-      window._gsSHDirs=(i)=>setDirsP(filtered[i]);
-      window.L.marker([lat,lng],{icon:window.L.divIcon({html:`<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.35);"></div>`,iconSize:[16,16],className:""})}).addTo(map).bindTooltip(`<div style="font-family:-apple-system,sans-serif;padding:5px 9px;"><span style="font-weight:700;color:#1A2332;font-size:calc(11px*var(--fs));">📍 You are here</span></div>`,{permanent:true,direction:"bottom",opacity:1,offset:[0,12],className:"gs-user-tooltip",interactive:false});
-      filtered.forEach((p,i)=>{
-        if(!p.lat||!p.lng) return;
-        const active=activePin===i; const color=active?"#FF6B35":p.venueColor||T.accent; const sz=active?36:30;
-        const mk=window.L.marker([p.lat,p.lng],{icon:window.L.divIcon({html:`<div style="width:${sz}px;height:${sz}px;background:${color};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:${active?14:12}px;box-shadow:0 3px 12px ${color}70;border:${active?3:2}px solid #fff;">${p.venueIcon||"🛍️"}</div>`,iconSize:[sz,sz],className:""})}).addTo(map);
-        const st=openStatus(p,isLocal);
-        mk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:260px;position:relative;"><button onclick="window._gsSHMapInst?.closePopup()" style="position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#64748B;font-size:13px;z-index:10;">✕</button><div style="padding:12px 14px;"><div onclick="window._gsSHView&&window._gsSHView(${i})" style="font-weight:700;font-size:calc(15px*var(--fs));color:#1A2332;margin-bottom:5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding-right:26px;line-height:1.3;">${p.displayName?.text||p.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${p.formattedAddress||''}</div><div style="font-size:calc(12px*var(--fs));padding:6px 9px;border-radius:7px;background:${st.isOpen===true?"#F0FDF4":st.isOpen===false?"#FEF2F2":"#F5F5F5"};margin-bottom:10px;"><span style="font-weight:700;color:${st.isOpen===true?"#15803D":st.isOpen===false?"#DC2626":"#9E9E9E"};">${st.label}</span></div><div style="display:flex;gap:8px;"><button onclick="window._gsSHDirs&&window._gsSHDirs(${i})" style="flex:1;padding:9px;border:none;border-radius:8px;background:#3B82F6;color:#fff;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit;">🧭 Directions</button><button onclick="window._gsSHView&&window._gsSHView(${i})" style="flex:1;padding:9px;border:none;border-radius:8px;background:#F1F5F9;color:#1A2332;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit;">📋 Details</button></div></div></div>`,{maxWidth:280,className:"gs-popup",autoPanPaddingTopLeft:[0,160],autoPanPaddingBottomRight:[20,20],keepInView:true});
-        mk.on("popupopen",()=>setActivePin(i)); markers.current[i]=mk;
+  // Batch-enrich every visible planet-DB shop in calls of 20 (the worker's cap).
+  // ownedEnrich[key]: undefined while pending, the payload, or null when missed (that card
+  // then makes its own call; the cache is shared server-side).
+  const [ownedEnrich, setOwnedEnrich] = useState({});
+  const ownedEnrichAsked = useRef(new Set());
+  useEffect(() => {
+    const owned = filtered.filter((p) => p.source === "owned")
+      .map((p) => ({ id: p.id || p.placeId, name: nameOf(p), lat: p.lat, lng: p.lng }))
+      .filter((p) => p.id && !ownedEnrichAsked.current.has(p.id));
+    if (!owned.length) return;
+    owned.forEach((p) => ownedEnrichAsked.current.add(p.id));
+    (async () => {
+      for (let i = 0; i < owned.length; i += 20) {
+        const chunk = owned.slice(i, i + 20);
+        const { data } = await callWorker("places/enrich-owned", { places: chunk, maxPhotos: 3 });
+        const res = data?.results || {};
+        setOwnedEnrich((prev) => { const nx = { ...prev }; chunk.forEach((p) => { nx[p.id] = res[p.id] ?? null; }); return nx; });
+      }
+    })();
+  }, [filtered]);
+
+  const settled = !!lat && !!lng && !loading && !error;
+  const openCount = useMemo(() => filtered.filter((p) => openStateFor(p, { isLocal }).status === "open").length, [filtered, isLocal]);
+  const hasFilters = openOnly || luxOnly || foodOnly;
+  const clearFilters = () => { setOpenOnly(false); setLuxOnly(false); setFoodOnly(false); };
+  const pickCategory = (id) => {
+    const next = category === id ? "all" : id;
+    setCategory(next);
+    if (next !== "all") logSearch("shopping", CATEGORIES.find((c) => c.id === next)?.label || next, { category: next });
+  };
+
+  const handleShowOnMap = (index) => {
+    setViewMode("map");
+    setActiveMapPin(index);
+    setTimeout(() => {
+      const p = filtered[index];
+      if (mapInstRef.current && p?.lat && p?.lng) {
+        mapInstRef.current.setView([p.lat, p.lng], 17);
+        markersRef.current[index]?.openPopup();
+      }
+    }, 350);
+  };
+  const viewInList = (i) => {
+    setViewMode("list");
+    setExpandedIdx(i);
+    setHighlightIdx(i);
+    setTimeout(() => cardRefs.current[i]?.scrollIntoView({ behavior: "smooth", block: "center" }), 150);
+    setTimeout(() => setHighlightIdx(null), 2800);
+  };
+
+  // ── Map ──
+  useEffect(() => {
+    if (viewMode !== "map" || !mapRef.current || !lat || !lng) return undefined;
+    const initMap = () => {
+      if (mapInstRef.current) mapInstRef.current.remove();
+      markersRef.current = [];
+      const map = window.L.map(mapRef.current).setView([lat, lng], 14);
+      window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap contributors" }).addTo(map);
+      mapInstRef.current = map;
+      window._gsMapInstance = map;
+      // The popups' buttons are HTML: they reach React through these bridges.
+      window._gsViewShop = (i) => { map.closePopup(); viewInList(i); };
+      window._gsShopDirs = (i) => setDirectionsTo(filtered[i]);
+      // Where you are: the blue dot, its words below it (clear of the popups above).
+      window.L.marker([lat, lng], { icon: window.L.divIcon({ html: '<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>', iconSize: [16, 16], className: "" }) })
+        .addTo(map)
+        .bindTooltip(`<div style="padding:5px 9px;font-family:inherit;font-weight:600;color:${NEUTRAL.ink};font-size:${mapFs(11)};">You are here</div>`, { permanent: true, direction: "bottom", opacity: 1, offset: [0, 12], className: "gs-user-tooltip", interactive: false });
+      filtered.forEach((p, i) => {
+        if (!p.lat || !p.lng) return;
+        const isActive = activeMapPin === i;
+        const size = isActive ? 34 : 28;
+        const marker = window.L.marker([p.lat, p.lng], { icon: window.L.divIcon({ html: pinHtml(i + 1, isActive), iconSize: [size, size], className: "" }), keyboard: true, title: `${i + 1}. ${nameOf(p)}` }).addTo(map);
+        marker.bindPopup(popupHtml(p, i, isLocal, formatDistance), { maxWidth: 280, closeButton: false, autoPan: true, autoPanPaddingTopLeft: [0, 160], autoPanPaddingBottomRight: [20, 20], keepInView: true, className: "gs-popup" });
+        marker.on("popupopen", () => setActiveMapPin(i));
+        markersRef.current[i] = marker;
       });
-      if(activePin!==null) setTimeout(()=>markers.current[activePin]?.openPopup(),200);
+      if (activeMapPin !== null && markersRef.current[activeMapPin]) setTimeout(() => markersRef.current[activeMapPin]?.openPopup(), 200);
     };
-    if(!window.L){const lk=document.createElement("link");lk.rel="stylesheet";lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(lk);const sc=document.createElement("script");sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";sc.onload=init;document.head.appendChild(sc);}else init();
-    return()=>{delete window._gsSHMapInst;delete window._gsSHView;delete window._gsSHDirs;if(mapInst.current){mapInst.current.remove();mapInst.current=null;}};
-  },[viewMode,filtered,lat,lng,activePin,isLocal]);
+    if (!window.L) {
+      const link = document.createElement("link"); link.rel = "stylesheet"; link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"; document.head.appendChild(link);
+      const script = document.createElement("script"); script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; script.onload = initMap; document.head.appendChild(script);
+    } else initMap();
+    return () => {
+      delete window._gsMapInstance;
+      delete window._gsViewShop;
+      delete window._gsShopDirs;
+      if (mapInstRef.current) { mapInstRef.current.remove(); mapInstRef.current = null; }
+    };
+  }, [viewMode, filtered, lat, lng, activeMapPin, unit, isLocal]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return(
-    <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
-      {/* HEADER + LOCATION + FILTER BAND — shared FinderHeader (Passport Standard) */}
+  return (
+    <div className="font-sans" style={{ background: W.paper, minHeight: "100vh", paddingTop: 12 }}>
+
+      {/* ── THE PLATE + CONTROLS (Shopping.dc.html L26-84): the count on the swing tag,
+          then the filters with List | Map, and the kinds of shop. ── */}
       <FinderHeader
-        catKey="shopping"
-        icon={ShoppingBag}
-        title="Shopping"
-        count={(!lat||!lng||loading||error)?null:filtered.length}
-        countNoun="nearby"
+        world="shopping"
+        count={null}
+        plateTag={settled && filtered.length > 0 ? <SwingTag size="plate" label={`${filtered.length} nearby`} /> : null}
         onRefresh={handleRefresh}
         refreshing={loading}
         refreshTitle="Refresh shopping"
-        onChangeLocation={()=>setLocPicker(true)}
-        locationLabel={locLabel}
+        location={{ label: locLabel, onChange: () => setShowLocPicker(true) }}
+        unit={{ value: unit, onChange: setUnit }}
         isCity={isCity}
         cityName={activeLocation?.address?.city || activeLocation?.placeName}
       >
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
-        <div style={{overflowX:"auto",scrollbarWidth:"none"}}><div style={{display:"flex",gap:"7px",paddingBottom:"10px"}}>{CATEGORIES.map(c=><motion.button key={c.id} whileTap={{scale:0.94}} onClick={()=>{setCategory(c.id); if(c.id!=='all') logSearch('shopping',c.label,{category:c.id});}} className="font-sans" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",padding:"8px 12px",borderRadius:"14px",flexShrink:0,border:category===c.id?`2px solid ${c.color}`:"1px solid #F0E9DC",background:category===c.id?`${c.color}18`:"#fff",color:category===c.id?c.color:'#475569',fontWeight:category===c.id?"700":"500",fontSize:"calc(11px*var(--fs))",cursor:"pointer",minWidth:"64px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>{c.icon}</span><span>{c.label}</span></motion.button>)}</div></div>
-        {/* Quick filters: the 2 highest-use inline; the rest live in the FilterSheet */}
-        <div style={{display:"flex",alignItems:"center",gap:"8px",overflowX:"auto",scrollbarWidth:"none",paddingBottom:"6px"}}>
-          {[{label:"Open Now",Icon:Clock,state:openOnly,set:setOpenOnly,color:T.green},{label:"Luxury",Icon:Gem,state:luxOnly,set:setLuxOnly,color:"#BE185D"}].map(f=><button key={f.label} onClick={()=>f.set((x)=>!x)} aria-pressed={f.state} style={{display:"flex",alignItems:"center",gap:"5px",padding:"7px 13px",borderRadius:"20px",flexShrink:0,border:f.state?`2px solid ${f.color}`:"1.5px solid #E2E8F0",background:f.state?f.color+"18":"#fff",color:f.state?f.color:T.gray,fontWeight:f.state?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}><f.Icon size={13} strokeWidth={2}/>{f.label}</button>)}
-          <button onClick={()=>setFilterSheet(true)} style={{display:"flex",alignItems:"center",gap:"5px",padding:"7px 13px",borderRadius:"20px",flexShrink:0,border:foodOnly?`2px solid ${CAT.shopping.ink}`:"1.5px solid #E2E8F0",background:foodOnly?`${CAT.shopping.ink}18`:"#fff",color:foodOnly?CAT.shopping.ink:T.gray,fontWeight:foodOnly?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}><SlidersHorizontal size={13} strokeWidth={2}/>Filters{foodOnly?" · 1":""}</button>
-          <div style={{marginLeft:"auto",display:"flex",gap:"3px",flexShrink:0}}>{["list","map"].map(m=><button key={m} onClick={()=>setViewMode(m)} style={{padding:"6px 11px",borderRadius:"8px",border:"none",background:viewMode===m?T.accent:"#E2E8F0",color:viewMode===m?"#fff":T.gray,fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{m==="list"?"List View":"Map View"}</button>)}</div>
+        <ChipRow label="Filters">
+          <WorldChip world="shopping" icon={Clock} label="Open now" active={openOnly} onClick={() => setOpenOnly((o) => !o)} />
+          <WorldChip world="shopping" icon={Gem} label="Luxury" active={luxOnly} onClick={() => setLuxOnly((o) => !o)} />
+          <WorldChip world="shopping" icon={SlidersHorizontal} label={foodOnly ? "Filters · 1" : "Filters"} opensSheet onClick={() => setShowSheet(true)} />
+        </ChipRow>
+        <ChipRow label="Kinds of shop">
+          {CATEGORIES.map((c) => (
+            <WorldChip key={c.id} world="shopping" label={c.label} active={category === c.id} onClick={() => pickCategory(c.id)} />
+          ))}
+        </ChipRow>
+        {/* The result line, and List | Map right above the results it switches. */}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", columnGap: 12, marginTop: 2 }}>
+          <div style={{ minWidth: 0 }}>
+            {settled && filtered.length > 0 ? <ResultLine live style={{ margin: 0 }} items={[{ count: filtered.length, label: filtered.length === 1 ? "shop" : "shops" }, { count: openCount, label: "open now" }]} /> : null}
+          </div>
+          <WorldSegmented world="shopping" label="View" mode="pressed" value={viewMode} onChange={(v) => { if (v) setViewMode(v); }}
+            options={[{ value: "list", label: "List" }, { value: "map", label: "Map" }]} style={{ flexShrink: 0, marginLeft: "auto" }} />
         </div>
       </FinderHeader>
-      {/* No location yet (first-run / permission denied): say so and open the picker — never a spinner or a misleading "No matches" (T1.4) */}
-      {(!lat||!lng)?(<div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}><FinderEmptyState catKey="shopping" icon={MapPin} title="Choose a location to search" reason="Malls · Markets · Boutiques · Souks · Night Markets" actionLabel="Choose location" onAction={()=>setLocPicker(true)}/></div>)
-      :loading?(<div style={{textAlign:"center",padding:"70px 24px"}}><motion.div animate={{scale:[1,1.1,1],rotate:[0,5,-5,0]}} transition={{repeat:Infinity,duration:1.8}} style={{fontSize:"calc(52px*var(--fs))",marginBottom:"16px",display:"inline-block"}}>🛍️</motion.div><div style={{color:T.dark,fontWeight:"700",fontSize:"calc(16px*var(--fs))",marginBottom:"6px"}}>Finding shopping nearby…</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))"}}>Malls · Markets · Boutiques · Souks · Night Markets</div><div style={{display:"flex",justifyContent:"center",gap:"6px",marginTop:"18px"}}>{[0,1,2].map(i=><motion.div key={i} animate={{opacity:[0.3,1,0.3]}} transition={{repeat:Infinity,duration:1.2,delay:i*0.2}} style={{width:"8px",height:"8px",borderRadius:"50%",background:T.accent}}/>)}</div></div>)
-      :error?(/^Failed/.test(error)
-        ?<div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}><FinderEmptyState catKey="shopping" icon={AlertCircle} title="Couldn't load shopping" reason={error} actionLabel="Try again" onAction={handleRefresh} secondaryLabel="Search somewhere else" onSecondary={()=>setLocPicker(true)}/></div>
-        :<div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}><FinderEmptyState catKey="shopping" icon={SearchX} title="No shopping found" reason={error} actionLabel="Search somewhere else" onAction={()=>setLocPicker(true)} secondaryLabel="Try again" onSecondary={handleRefresh}/></div>)
-      :viewMode==="list"?(<div style={isTablet
-        ? {maxWidth:1024,margin:"0 auto",padding:"0 24px 170px",display:"flex",flexDirection:"column",gap:"30px"}
-        : {width:"100%",padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"16px"}}>{filtered.length===0?<FinderEmptyState catKey="shopping" icon={SearchX} title="No matches" reason="Nothing here passes the current filters." actionLabel="Search somewhere else" onAction={()=>setLocPicker(true)} secondaryLabel={(openOnly||luxOnly||foodOnly)?"Clear filters":undefined} onSecondary={(openOnly||luxOnly||foodOnly)?()=>{setOpenOnly(false);setLuxOnly(false);setFoodOnly(false);}:undefined}/>:filtered.map((p,i)=>{const Card=ShopCardTablet;return <Card key={p.id||i} p={p} index={i} onMap={handleMap} isHighlighted={highlight===i} cardRef={(el)=>cardRefs.current[i]=el} forceExpanded={expandedIdx===i} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet} isLocal={isLocal} batchEnrich={ownedEnrich[p.id||p.placeId]}/>;})}</div>)
-      :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(20px*var(--fs))",color:T.dark}}>✕</button></div>)}
-      <style>{`::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:16px;padding:0;overflow:hidden;}.gs-popup .leaflet-popup-content{margin:0;}.gs-popup .leaflet-popup-tip-container{display:none;}`}</style>
-      <MapAppSelector isOpen={!!dirsP} onClose={()=>setDirsP(null)} destination={dirsP?{name:dirsP.displayName?.text||dirsP.name,address:dirsP.formattedAddress||dirsP.shortFormattedAddress||dirsP.vicinity||dirsP.address||"",latitude:dirsP.lat,longitude:dirsP.lng}:null} userLat={lat} userLng={lng}/>
-      <FilterSheet open={filterSheet} onClose={()=>setFilterSheet(false)} title="Filters" onClear={foodOnly?()=>setFoodOnly(false):undefined}>
-        <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase font-semibold mb-2" style={{color:'#94A3B8'}}>Show only</div>
-        <button onClick={()=>setFoodOnly((x)=>!x)} aria-pressed={foodOnly} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{background:'#FFFFFF',border:foodOnly?`2px solid ${CAT.shopping.ink}`:'1px solid #F0E9DC',cursor:'pointer'}}>
-          <ShoppingCart size={18} color={foodOnly?CAT.shopping.ink:'#736657'} strokeWidth={2} className="flex-none"/>
-          <span className="flex-1 min-w-0">
-            <span className="block font-bold text-[calc(13.5px*var(--fs))]" style={{color:'#0F1419'}}>Food shopping only</span>
-            <span className="block text-[calc(11.5px*var(--fs))]" style={{color:'#736657'}}>Groceries, markets &amp; fresh produce</span>
-          </span>
-          {foodOnly&&<Check size={16} color={CAT.shopping.ink} strokeWidth={2.5} className="flex-none"/>}
-        </button>
+
+      {(!lat || !lng) ? (
+        <div style={{ ...finderColumnStyle(isTablet), paddingTop: 24 }}>
+          <FinderEmptyState world="shopping" icon={MapPin} title="Choose a location" hint="Malls, markets, boutiques, souks and night markets near where you are."
+            actionLabel="Choose a location" onAction={() => setShowLocPicker(true)} />
+        </div>
+      ) : loading ? (
+        <div style={{ ...finderColumnStyle(isTablet), paddingTop: 14 }}>
+          <WorldSkeleton world="shopping" variant="card" count={2} label="Finding shopping nearby" />
+        </div>
+      ) : error ? (
+        <div style={{ ...finderColumnStyle(isTablet), paddingTop: 24 }}>
+          <FinderEmptyState world="shopping" icon={AlertCircle} title="Couldn’t load shopping" hint={error} actionLabel="Try again" onAction={handleRefresh}
+            secondaryLabel="Search somewhere else" onSecondary={() => setShowLocPicker(true)} />
+        </div>
+      ) : viewMode === "list" ? (
+        <div style={{ ...finderColumnStyle(isTablet), paddingTop: 14, paddingBottom: 24 }}>
+          {filtered.length === 0 ? (
+            <FinderEmptyState world="shopping" icon={SearchX} title="No shops found"
+              hint={hasFilters ? "No shops here match these filters." : "Nothing within 25 miles of this location."}
+              actionLabel="Search somewhere else" onAction={() => setShowLocPicker(true)}
+              secondaryLabel={hasFilters ? "Clear filters" : undefined} onSecondary={hasFilters ? clearFilters : undefined} />
+          ) : (
+            <ol aria-label="Shops" style={worldGrid(isTablet)}>
+              {filtered.map((p, i) => (
+                <ShopCard key={p.id || i} p={p} n={i + 1} isLocal={isLocal} formatDistance={formatDistance}
+                  onDirections={setDirectionsTo} onShowOnMap={() => handleShowOnMap(i)} highlighted={highlightIdx === i}
+                  cardRef={(el) => { cardRefs.current[i] = el; }} forceExpanded={expandedIdx === i} batchEnrich={ownedEnrich[p.id || p.placeId]} />
+              ))}
+            </ol>
+          )}
+        </div>
+      ) : (
+        <div style={{ ...finderColumnStyle(isTablet), paddingTop: 12, paddingBottom: 24 }}>
+          <div style={{ position: "relative", height: "calc(100vh - 300px)", minHeight: 360, borderRadius: 16, overflow: "hidden", border: `1px solid ${W.line}` }}>
+            <div ref={mapRef} role="region" aria-label="Map of shops" style={{ height: "100%", width: "100%" }} />
+            <button type="button" onClick={() => setViewMode("list")} aria-label="Back to the list"
+              style={{ position: "absolute", top: 12, right: 12, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, padding: 0, border: `1px solid ${W.line}`, borderRadius: 999, background: NEUTRAL.white, boxShadow: "0 2px 10px rgba(21,23,28,.15)", cursor: "pointer" }}>
+              <X size={20} color={W.ink} strokeWidth={2} aria-hidden="true" />
+            </button>
+            {/* The legend, in words. */}
+            <div role="group" aria-label="Legend" style={{ position: "absolute", bottom: 14, left: 12, zIndex: 1000, display: "flex", flexDirection: "column", gap: 5, padding: "8px 10px", borderRadius: 12, background: "rgba(255,255,255,.95)", border: `1px solid ${W.line}`, boxShadow: "0 2px 10px rgba(21,23,28,.10)" }}>
+              {[
+                { bg: W.ink, border: NEUTRAL.white, label: "Shop" },
+                { bg: W.plate, border: W.ink, label: "Picked" },
+              ].map((k) => (
+                <div key={k.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: fs(11), lineHeight: 1.2, color: NEUTRAL.ink2 }}>
+                  <span aria-hidden="true" style={{ width: 12, height: 12, boxSizing: "border-box", borderRadius: 999, background: k.bg, border: `2px solid ${k.border}`, boxShadow: "0 0 0 1px rgba(21,23,28,.2)" }} />
+                  {k.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        .gs-popup .leaflet-popup-content-wrapper { border-radius:16px; padding:0; overflow:hidden; box-shadow:0 8px 32px rgba(21,23,28,.18); }
+        .gs-popup .leaflet-popup-content { margin:0; }
+        .gs-popup .leaflet-popup-tip-container { display:none; }
+      `}</style>
+
+      {/* Filters: food shopping only (groceries, markets and fresh produce). */}
+      <FilterSheet world="shopping" open={showSheet} onClose={() => setShowSheet(false)} title="Filters"
+        onClear={foodOnly ? () => setFoodOnly(false) : undefined}>
+        <FilterGroupLabel>Show only</FilterGroupLabel>
+        <FilterToggleRow world="shopping" icon={ShoppingCart} label="Food shopping only" description="Groceries, markets and fresh produce" checked={foodOnly} onChange={() => setFoodOnly((x) => !x)} />
       </FilterSheet>
-      <LocationModePicker isOpen={locPicker} onClose={()=>setLocPicker(false)}/>
+
+      <LocationModePicker isOpen={showLocPicker} onClose={() => setShowLocPicker(false)} />
+      {directionsTo && (
+        <MapAppSelector
+          isOpen={true}
+          onClose={() => setDirectionsTo(null)}
+          destination={{ name: nameOf(directionsTo), address: directionsTo.formattedAddress || directionsTo.shortFormattedAddress || directionsTo.vicinity || "", latitude: directionsTo.lat, longitude: directionsTo.lng }}
+          userLat={lat}
+          userLng={lng}
+        />
+      )}
     </div>
   );
 }
