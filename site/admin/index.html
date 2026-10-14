@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The same policy is also sent as a header from site/_headers (which adds
+     frame-ancestors). No inline script or style is allowed, and Trusted Types
+     refuse any innerHTML: every server string is set with textContent. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src https://globeskimmers-api.maizasimeon.workers.dev https://bkaxadiyehddzkiuheea.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>Admin · Globeskimmers</title>
+<link rel="icon" href="/img/icon-64.png" sizes="64x64">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="admin.css">
+<script type="module" src="admin.js"></script>
+</head>
+<body>
+<a class="skip" id="skip" href="#main" hidden>Skip to the numbers</a>
+
+<div id="boot" class="boot" role="status"><span id="boot-text">Loading…</span></div>
+<noscript><p class="boot">This page needs JavaScript.</p></noscript>
+
+<!-- Sign-in: the same Globeskimmers account as the app. -->
+<main id="signin" class="auth" hidden>
+  <div class="auth-card">
+    <p class="auth-mark"><img src="/img/icon-64.png" alt="" width="32" height="32">Globeskimmers · Admin</p>
+    <h1 tabindex="-1">Sign in</h1>
+    <p class="lede">Use your Globeskimmers account. Only admin accounts see any numbers.</p>
+    <button class="btn btn-google" id="google" type="button">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+      Continue with Google
+    </button>
+    <p class="or">or</p>
+    <form id="signin-form" method="post" novalidate>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <label class="check"><input id="remember" type="checkbox" checked> Keep me signed in on this computer</label>
+      <button class="btn btn-primary" id="signin-submit" type="submit">Sign in</button>
+    </form>
+    <p class="auth-msg" id="signin-msg" role="alert" hidden></p>
+    <p class="auth-foot">On a shared computer, untick “Keep me signed in”: closing or reloading this tab then signs you out. Press Sign out when you’re done either way.</p>
+  </div>
+</main>
+
+<!-- Signed in, but the server doesn't count this account as an admin. -->
+<main id="denied" class="auth" hidden>
+  <div class="auth-card">
+    <p class="auth-mark"><img src="/img/icon-64.png" alt="" width="32" height="32">Globeskimmers · Admin</p>
+    <h1 tabindex="-1">This account isn’t an admin</h1>
+    <p class="lede">You’re signed in as <span class="denied-who" id="denied-email"></span>. The server shows these numbers only to Globeskimmers admin accounts, so there’s nothing to see here with this one.</p>
+    <p class="auth-msg ok" id="denied-detail" hidden></p>
+    <p><button class="btn btn-primary" id="denied-signout" type="button">Sign out and use another account</button></p>
+  </div>
+</main>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="/admin/"><img src="/img/icon-64.png" alt="" width="32" height="32"><b>Globeskimmers</b><small>Admin · read-only</small></a>
+      <div class="who">
+        <span class="email" id="who-email"></span>
+        <button class="btn" id="refresh" type="button"><svg class="ic" id="refresh-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg><span id="refresh-label">Refresh</span></button>
+        <button class="btn" id="signout" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="wrap" tabindex="-1">
+    <div class="head">
+      <h1 tabindex="-1">Analytics</h1>
+      <p class="stamp">
+        <span id="loaded" role="status">Loading…</span>
+        <span>Times are in your time zone: <b id="tz"></b></span>
+        <span id="utc-note"></span>
+      </p>
+      <nav class="jump" aria-label="Sections">
+        <a href="#overview">Overview</a>
+        <a href="#trends">Trends</a>
+        <a href="#members">Members</a>
+        <a href="#users">Users</a>
+        <a href="#searches">Searches</a>
+        <a href="#screens">Screens &amp; events</a>
+        <a href="#passport">Passport</a>
+        <a href="#items">Virtual items</a>
+        <a href="#messages" id="jump-messages">Messages</a>
+        <a href="#stores">Stores</a>
+      </nav>
+    </div>
+
+    <section class="sec" id="overview" aria-labelledby="overview-h">
+      <p class="kick">Overview</p>
+      <h2 id="overview-h">The headline numbers</h2>
+      <p class="lede">Windows like “last 7 days” count back from the moment the page loaded, not by calendar day. Tap <b>i</b> on a tile for exactly what it counts.</p>
+      <div class="kpis" id="overview-kpis"></div>
+    </section>
+
+    <section class="sec" id="trends" aria-labelledby="trends-h">
+      <p class="kick">Trends</p>
+      <h2 id="trends-h">Day by day</h2>
+      <p class="lede" id="trends-lede">Each bar is one UTC day. Hatched bars are partial days: the window starts or ends partway through them.</p>
+      <div class="grid grid-3" id="trends-grid"></div>
+    </section>
+
+    <section class="sec" id="members" aria-labelledby="members-h">
+      <p class="kick">Members</p>
+      <h2 id="members-h">Newest members</h2>
+      <p class="lede">The 50 newest accounts, newest first. Team alerts show a member number, never a name; this is who each number is. Looking up one person’s activity stays in the app.</p>
+      <div class="grid" id="members-grid"></div>
+    </section>
+
+    <section class="sec" id="users" aria-labelledby="users-h">
+      <p class="kick">Users</p>
+      <h2 id="users-h">Where they’re from</h2>
+      <p class="lede">From each account’s profile: home country is what people entered (it can be skipped), language comes from the phone unless changed in Settings, and age comes from the age gate. Blank values aren’t counted.</p>
+      <div class="grid grid-3" id="users-grid"></div>
+    </section>
+
+    <section class="sec" id="searches" aria-labelledby="searches-h">
+      <p class="kick">Searches</p>
+      <h2 id="searches-h">What people look for</h2>
+      <p class="lede">From the app’s event log: the text of each search, trimmed. Shopping’s category chips log their label as a search.</p>
+      <div class="grid grid-2" id="searches-grid"></div>
+    </section>
+
+    <section class="sec" id="screens" aria-labelledby="screens-h">
+      <p class="kick">Screens &amp; events</p>
+      <h2 id="screens-h">What people open</h2>
+      <p class="lede">From the app’s event log, over the last 7 days.</p>
+      <div class="grid grid-2" id="screens-grid"></div>
+    </section>
+
+    <section class="sec" id="passport" aria-labelledby="passport-h">
+      <p class="kick">Passport</p>
+      <h2 id="passport-h">Stamps and the guestbook</h2>
+      <p class="lede">From the passport and guestbook tables as they are now (deleting an account removes its stamps). The event log lost stamp events before Sep 28, 2026, so it isn’t used here.</p>
+      <div class="kpis kpis-4" id="passport-kpis"></div>
+      <div class="grid grid-2" id="passport-grid"></div>
+    </section>
+
+    <section class="sec" id="items" aria-labelledby="items-h">
+      <p class="kick">Virtual items</p>
+      <h2 id="items-h">What travelers pick</h2>
+      <p class="lede">Laptops, drinks and travel buddies. The tiles and “What they chose” show what’s saved on profiles right now; “Picks per month” comes from the event log, which keeps about 180 days.</p>
+      <div class="kpis kpis-4" id="items-kpis"></div>
+      <div class="grid grid-2" id="items-grid"></div>
+    </section>
+
+    <section class="sec" id="messages" aria-labelledby="messages-h">
+      <p class="kick">Messages</p>
+      <h2 id="messages-h">From the contact forms</h2>
+      <p class="lede">Open messages from the website’s contact form and the app’s Settings → Contact us, newest first. Mark them handled in the app: this page only reads.</p>
+      <div class="grid" id="messages-grid"></div>
+    </section>
+
+    <section class="sec" id="stores" aria-labelledby="stores-h">
+      <p class="kick">Stores</p>
+      <h2 id="stores-h">Downloads and store pages</h2>
+      <p class="lede">Official downloads, store page views and conversion live in the store consoles.</p>
+      <div class="links">
+        <a class="out" href="https://appstoreconnect.apple.com/analytics" target="_blank" rel="noopener noreferrer">
+          <div><b>App Store Connect · Analytics</b><span>iPhone and iPad downloads, page views, conversion</span></div>
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+        </a>
+        <a class="out" href="https://play.google.com/console/" target="_blank" rel="noopener noreferrer">
+          <div><b>Google Play Console · Statistics</b><span>Open Globeskimmers, then Statistics</span></div>
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+        </a>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <p>Read-only. Moderation (safety reports, guestbook review, usernames, the Seal, stamp reports and place suggestions) stays in the app’s Admin page.</p>
+      <p>This page adds no tracking of its own. It reads the numbers the app’s Admin page reads, from the same server, and only for admin accounts.</p>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

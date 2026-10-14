@@ -1424,9 +1424,11 @@ async function handleAdminUserStats(request, env) {
     if (!ADMIN_EMAILS_WORKER.includes(email)) return jsonResponse({ error: 'Forbidden' }, 403);
 
     // Read all profiles with the service key (bypasses RLS). select=* is safe —
-    // PostgREST won't error on columns that don't exist.
+    // PostgREST won't error on columns that don't exist. profiles lives in the
+    // `public` schema; PostgREST's default here is `api`, so without the
+    // Accept-Profile header this read 404s (PGRST205) and the route 502s.
     const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=*`, {
-      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Accept-Profile': 'public' },
     });
     if (res.status !== 200) {
       const detail = await res.text().catch(() => '');
