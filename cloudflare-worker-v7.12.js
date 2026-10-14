@@ -1251,7 +1251,8 @@ async function handleLogEvent(request, env) {
 // public.profiles + public.login_events (FK ON DELETE CASCADE).
 // Requires the Worker secret SUPABASE_SERVICE_ROLE_KEY (`wrangler secret put`).
 // Everything a traveler created, removed: guestbook notes anonymized and
-// their photos down, stamps + memory photos + R2 objects, tags, share link,
+// their photos down (a child's notes deleted, see step 1b), stamps + memory
+// photos + R2 objects, tags, share link,
 // postcards they sent or received (and their photos), follow edges both
 // ways, their "I'm here" reports, their place suggestions (and photos) and
 // likes, dish and drink posts (and photos), messages to place owners,
@@ -1330,16 +1331,51 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
     } catch { failed.push(step); return false; }
   };
   const uidOk = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(userId));
+  // Every object under `prefix` whose next-to-last path segment is this
+  // user's id. A guestbook upload is gb/<place id>/<uid>/<file>, and the
+  // place id is whatever id the app had at upload (not always the note's
+  // canonical one), so a user's files share no single prefix: the gb/ list
+  // is read and filtered. At most 50 pages; past that the step fails (and
+  // is retried) rather than claim it finished.
+  const r2Owned = async (step, prefix) => {
+    if (!env.MEDIA || typeof env.MEDIA.list !== 'function') return true;
+    const uid = String(userId).toLowerCase();
+    try {
+      let cursor;
+      for (let i = 0; i < 50; i++) {
+        const page = await env.MEDIA.list({ prefix, cursor, limit: 1000 });
+        const keys = (page.objects || []).map((o) => o.key).filter((k) => {
+          const parts = String(k || '').split('/');
+          return parts.length >= 4 && parts[parts.length - 2].toLowerCase() === uid;
+        });
+        if (keys.length) await env.MEDIA.delete(keys);
+        if (!page.truncated) return true;
+        cursor = page.cursor;
+      }
+      failed.push(step); return false;
+    } catch { failed.push(step); return false; }
+  };
 
-  // 1b) Anonymize their PUBLIC guestbook notes (keep the tip, drop the identity —
-  //     Apple 5.1.1 / GDPR; the photos come DOWN) + remove their PRIVATE visit records.
+  // 1b) Guestbook. Their photos come DOWN first (Apple 5.1.1 / GDPR) and their
+  //     PRIVATE visit records go. Account deletion keeps their PUBLIC notes,
+  //     anonymized (keep the tip, drop the identity). A child's notes are
+  //     DELETED (go-live round 2): at the under-13 clean-up (keepAccount)
+  //     every note row goes, the ones the child had deleted themselves too
+  //     (a soft delete kept the text), once the photos the notes name are
+  //     gone; then every file under gb/<place>/<uid>/ goes, uploads that
+  //     never became a note included.
+  const child = keepAccount;
   const gbPhotos = await rows('guestbook_photos', `guestbook_entries?user_id=eq.${userId}&photo_key=not.is.null&select=photo_key`);
   if (gbPhotos && await r2('guestbook_photos_r2', gbPhotos.map((r) => r.photo_key))) {
-    await call('guestbook_entries', `guestbook_entries?user_id=eq.${userId}`, {
-      method: 'PATCH', headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ user_id: null, display_name: 'A traveler', home_city: null, photo_key: null, photo_url: null }),
-    });
+    if (child) await del('guestbook_entries', `guestbook_entries?user_id=eq.${userId}`);
+    else {
+      await call('guestbook_entries', `guestbook_entries?user_id=eq.${userId}`, {
+        method: 'PATCH', headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ user_id: null, display_name: 'A traveler', home_city: null, photo_key: null, photo_url: null }),
+      });
+    }
   }
+  if (child && uidOk) await r2Owned('guestbook_files', 'gb/');
   await del('guestbook_visits', `guestbook_visits?user_id=eq.${userId}`);
 
   // 1c) Passport is PRIVATE (not public UGC) → fully DELETE the user's stamps +
