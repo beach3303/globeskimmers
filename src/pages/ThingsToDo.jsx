@@ -354,7 +354,8 @@ function PosterBand({kicker,name}){
 // One strip card (ThingsToDo.dc.html L97-121): 240px wide (280 on iPad); a 4:3 photo,
 // or the lapis contours with the place's icon, under the poster band; then the facts
 // line (the open words in the place's own zone and a Google rating) and one tag. The
-// whole card is one button that opens the place's sheet.
+// whole card is one button that opens the place's sheet. It is positioned, so the facts
+// line's screen-reader words stay inside the row's scroll instead of widening the page.
 function StripCard({a,photos,isTablet,mark,isLocal,fmt,onOpen,cardRef}){
   const name=a.displayName?.text||a.name||"Attraction";
   const dist=Number.isFinite(a.distanceMiles)?fmt(a.distanceMiles):null;
@@ -373,7 +374,7 @@ function StripCard({a,photos,isTablet,mark,isLocal,fmt,onOpen,cardRef}){
   );
   return(
     <button ref={cardRef} type="button" onClick={onOpen}
-      style={{flexShrink:0,display:"flex",flexDirection:"column",justifyContent:"flex-start",width,padding:0,textAlign:"left",background:NEUTRAL.white,border:`1px solid ${W.line}`,borderRadius:16,overflow:"hidden",boxShadow:W.cardShadow,cursor:"pointer",fontFamily:"inherit",color:NEUTRAL.ink}}>
+      style={{position:"relative",flexShrink:0,display:"flex",flexDirection:"column",justifyContent:"flex-start",width,padding:0,textAlign:"left",background:NEUTRAL.white,border:`1px solid ${W.line}`,borderRadius:16,overflow:"hidden",boxShadow:W.cardShadow,cursor:"pointer",fontFamily:"inherit",color:NEUTRAL.ink}}>
       <PhotoOrIcon world="todo" photos={photos} alt={name} aspect="4 / 3" icon={Icon} stripHeight={Math.round(width*3/4)} stripContent={drawing}>
         {mark&&<PassportMark mark={mark}/>}
         <PosterBand kicker={kicker} name={name}/>
