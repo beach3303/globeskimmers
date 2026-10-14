@@ -922,9 +922,10 @@ async function gbBellSend(env, text, tag, opts = {}) {
     sends.push(['ntfy', () => fetch(`https://ntfy.sh/${env.NTFY_TOPIC}`, {
       method: 'POST', body: text,
       headers: {
-        // 'report' (a report or a block), 'ops' (a clean-up that keeps failing)
-        // and 'urgent' (a child-safety report, 24h triage) stand out from stamp alerts.
-        Title: 'GlobeSkimmers', Tags: tag === 'new' ? 'tada' : tag === 'urgent' ? 'rotating_light' : tag === 'report' ? 'triangular_flag_on_post' : tag === 'ops' ? 'warning' : 'round_pushpin', Priority: tag === 'urgent' ? '5' : tag === 'new' || tag === 'report' || tag === 'ops' ? '4' : '3',
+        // Every alert is high priority (4: time-sensitive on an iPhone, so it shows through
+        // a Focus; stamp alerts too since 2026-10-14, when one at 3 went unseen); 'urgent'
+        // (a child-safety report, 24h triage) is 5. The tag tells them apart.
+        Title: 'GlobeSkimmers', Tags: tag === 'new' ? 'tada' : tag === 'urgent' ? 'rotating_light' : tag === 'report' ? 'triangular_flag_on_post' : tag === 'ops' ? 'warning' : 'round_pushpin', Priority: tag === 'urgent' ? '5' : '4',
         ...(click ? { Click: click } : {}),
         ...(env.NTFY_TOKEN ? { Authorization: `Bearer ${env.NTFY_TOKEN}` } : {}),
       },
