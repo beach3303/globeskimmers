@@ -16611,6 +16611,25 @@ async function orphanScan(env, now = new Date()) {
   out.spent = spent;
   return out;
 }
+// Names of travelers already deleted (go-live round 2): an account whose
+// clean-up hasn't finished — an orphan the daily scan queued, or a deletion
+// whose purge is still retrying — has a purge:<uid> record, and is never
+// named or shown by face on someone else's page. Of `ids` (the ones that
+// would show a name or face WITHOUT a username: a deleted account's username
+// row goes first, and an account deleted before go-live has none), returns
+// those with a queued purge. At most 50 lookups a read; an id past that, or
+// one whose lookup fails, counts as queued. (A traveler whose social profile
+// is gone already shows no name or face: both come from it.)
+async function gbPurgeQueued(env, ids) {
+  const out = new Set();
+  const kv = env.GLOBESKIMMERS_KV;
+  if (!kv || !ids.length) return out;
+  for (const id of ids.slice(50)) out.add(id);
+  await Promise.all(ids.slice(0, 50).map(async (id) => {
+    try { if (await kv.get(`purge:${id}`)) out.add(id); } catch { out.add(id); }
+  }));
+  return out;
+}
 // POST /admin/age-appeal { user_id, birth_year, birth_md, override? } — an
 // adult who mistyped: the corrected birthday recomputes the tier and lifts
 // the freeze (a birthday that is still under 13 keeps it). Deleted content
@@ -17507,6 +17526,10 @@ async function handleBlotterRead(request, env) {
         if (gbUnderAge(t) || gbAgeHeld(t)) { delete names[r.user_id]; continue; }
         names[r.user_id] = { ...(names[r.user_id] || {}), name: r.display_name || null, avatar_key: r.avatar_key || null };
       }
+      // A traveler already deleted, whose clean-up hasn't reached their
+      // profile yet, is never named here (go-live round 2, gbPurgeQueued).
+      const gone = await gbPurgeQueued(env, Object.keys(names).filter((id) => !names[id].handle && (names[id].name || names[id].avatar_key)));
+      for (const id of gone) delete names[id];
     }
     const origin = new URL(request.url).origin;
     const byEntry = {};
@@ -17753,13 +17776,18 @@ async function handleSocialFeed(request, env) {
       for (const r of (p2.ok ? await p2.json() : [])) prof[r.user_id] = { ...(prof[r.user_id] || {}), ...gbTierRow(r) };
     }
     pcs = pcs.filter((p) => !blocked.has(p.sender_id) && (ids.includes(p.sender_id) ? profOk : pcProfOk) && !minor(p.sender_id));
+    // A traveler already deleted, whose clean-up hasn't reached them yet, is
+    // never named (go-live round 2, gbPurgeQueued).
+    const shownIds = [...new Set([...pcs.map((p) => p.sender_id), ...visible])];
+    const gone = await gbPurgeQueued(env, shownIds.filter((id) => !share[id]?.handle && prof[id]?.display_name));
+    const nameOf = (id) => (gone.has(id) ? null : prof[id]?.display_name || null);
     const cardRows = pcs.map((p) => ({
       type: 'postcard', id: p.id, created_at: p.created_at,
       photo: `${origin}/pc-photo/${p.photo_key}`,
       message: p.message, place: p.place_name, city: p.city, country: p.country,
       dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
       to_me: p.to_user_id === user.id,
-      by: { handle: share[p.sender_id]?.handle || null, name: prof[p.sender_id]?.display_name || null },
+      by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id) },
     }));
     const dayAgo = Date.now() - 24 * 3600 * 1000;
     const stampRows = ((sq && sq.ok) ? await sq.json() : [])
@@ -17773,7 +17801,7 @@ async function handleSocialFeed(request, env) {
         visited_on: s.visited_on, created_at: s.created_at,
         verified: ['gps', 'photo_loc', 'photo_ai'].includes(s.verified),
         film: s.meta && s.meta.film ? { title: s.meta.film.title, year: s.meta.film.year } : null,
-        by: { handle: share[s.user_id]?.handle || null, name: prof[s.user_id]?.display_name || null },
+        by: { handle: share[s.user_id]?.handle || null, name: nameOf(s.user_id) },
       }));
     const rows = [...cardRows, ...stampRows]
       .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
@@ -18312,6 +18340,12 @@ async function handleSocialUnread(request, env) {
     const who = {};
     for (const r of hs) who[r.user_id] = { handle: r.handle || null, verified: r.verified === true, seal: r.verified === true ? (r.seal || 'burgundy') : null };
     for (const r of ps) who[r.user_id] = { ...(who[r.user_id] || {}), name: r.display_name || null, teen: r.social_tier === 'teen' };
+    // A traveler already deleted, whose clean-up hasn't reached them yet, is
+    // never named in the list (go-live round 2, gbPurgeQueued); only looked
+    // up when the list itself is asked for.
+    if (b.activity === true || b.mark === true) {
+      for (const id of await gbPurgeQueued(env, Object.keys(who).filter((id) => !who[id].handle && who[id].name))) who[id] = { ...who[id], name: null };
+    }
     const stampName = Object.fromEntries(st.map((r) => [r.id, r.name]));
     const dayAgo = Date.now() - 864e5;
 
