@@ -14094,11 +14094,46 @@ async function handleGuestbookPhotoUpload(request, env, ctx) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// Public media by row, never by key (go-live round 3). An upload's R2 key
+// names its author's account (gb/<place>/<uid>/…, gb/u/<uid>/…, dish/<uid>/…,
+// bl/<owner>/<author>/…, pp/<uid>/…), so the URLs that public reads handed
+// out let anyone link an anonymous minor's notes, dish photos and doodles to
+// one account — and named a public passport's owner. Public reads now hand
+// out /gb-photo/n/<note id>, /dish-photo/d/<dish id>, /bl-doodle/e/<entry
+// id> and /pp-photo/p/<photo id>; the server looks the key up by the row
+// and serves only what that row still shows. The keys in storage are
+// unchanged (the clean-ups find files by them), and the key URLs still
+// serve, for an author's own upload previews and older stored links.
+// gbRowMedia: the R2 object for one row, or null. `table` and `cols` are
+// fixed by the callers; `ok` decides from the row whether it still shows.
+async function gbRowMedia(env, table, id, col, ok) {
+  if (!env.MEDIA || !BL_UUID.test(String(id || ''))) return null;
+  const q = await gbRest(env, `${table}?id=eq.${id}&select=*`, {});
+  const row = q.ok ? (await q.json())[0] : null;
+  const key = row && ok(row) ? row[col] : null;
+  if (!key || typeof key !== 'string' || key.includes('..')) return null;
+  return env.MEDIA.get(key);
+}
+function gbMediaResp(obj, type, cache) {
+  if (!obj) return new Response('Not found', { status: 404 });
+  const headers = new Headers();
+  headers.set('Content-Type', obj.httpMetadata?.contentType || type);
+  headers.set('Cache-Control', cache);
+  headers.set('Access-Control-Allow-Origin', '*');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  if (obj.httpEtag) headers.set('ETag', obj.httpEtag);
+  return new Response(obj.body, { headers });
+}
+
 // Serve a stored guestbook photo from R2 (zero-egress; long-cached at the edge).
+// /gb-photo/n/<note id>: a note's photo by the note, while it isn't deleted.
 async function handleGuestbookPhotoServe(request, env) {
   try {
     if (!env.MEDIA) return new Response('Not found', { status: 404 });
-    const key = decodeURIComponent(new URL(request.url).pathname.replace(/^\/gb-photo\//, ''));
+    const path = new URL(request.url).pathname;
+    const byRow = /^\/gb-photo\/n\/([0-9a-f-]{36})$/i.exec(path);
+    if (byRow) return gbMediaResp(await gbRowMedia(env, 'guestbook_entries', byRow[1], 'photo_key', (r) => !r.deleted_at && String(r.photo_key || '').startsWith('gb/')), 'image/jpeg', 'public, max-age=3600');
+    const key = decodeURIComponent(path.replace(/^\/gb-photo\//, ''));
     if (!key || key.includes('..') || !key.startsWith('gb/')) return new Response('Bad key', { status: 400 });
     const obj = await env.MEDIA.get(key);
     if (!obj) return new Response('Not found', { status: 404 });
@@ -14831,6 +14866,7 @@ async function handlePassportPublic(request, env) {
     }
     const holder = await ppHolder(env, share.user_id);
     const { stamps } = await ppLoad(env, share.user_id);
+    const origin = new URL(request.url).origin;
     // A shared booklet renders names, dates, art and photos — never the exact
     // coordinates of every visit (privacy audit 2026-09-29: select=* leaked
     // full-precision lat/lng of the owner's whole history to anyone with the
@@ -14846,8 +14882,9 @@ async function handlePassportPublic(request, env) {
         ...(meta && typeof meta === 'object' ? { meta: (({ presence, birthday, ...m }) => m)(meta) } : {}),
         // A trip note is private unless its owner chose to share it.
         ...(note_public && note ? { note, note_public: true } : {}),
-        // Fail-closed: another viewer sees only photos that PASSED moderation.
-        photos: (rest.photos || []).filter((p) => p.mod_status === 'ok'),
+        // Fail-closed: another viewer sees only photos that PASSED moderation,
+        // each by its id, never by its key (gbRowMedia).
+        photos: (rest.photos || []).filter((p) => p.mod_status === 'ok').map((p) => ({ ...p, photo_url: `${origin}/pp-photo/p/${p.id}` })),
       }));
     return jsonResponse({ holder, stamps: shared, stats: ppStats(shared) });
   } catch (e) { return jsonResponse({ error: e.message, private: true }, 500); }
@@ -15302,14 +15339,15 @@ async function dishPlaceIds(env, raw) {
   }
   return { canon: id, all: [id] };
 }
-function dishSummary(rows) {
+// A dish photo goes out by the dish post's id, never by its key (gbRowMedia).
+function dishSummary(rows, origin) {
   const by = new Map();
   for (const r of rows) {
     const g = by.get(r.dish_key) || { dish: r.dish, travelers: new Set(), loved: new Set(), favorite: new Set(), photos: [], last: r.created_at };
     g.travelers.add(r.user_id);
     if (r.liked === true) g.loved.add(r.user_id);
     if (r.favorite === true) g.favorite.add(r.user_id);
-    if (g.photos.length < 6) g.photos.push({ id: r.id, url: r.photo_url });
+    if (g.photos.length < 6) g.photos.push({ id: r.id, url: r.photo_url ? `${origin}/dish-photo/d/${r.id}` : null });
     by.set(r.dish_key, g);
   }
   return [...by.values()]
@@ -15331,7 +15369,7 @@ async function handlePlaceDishes(request, env) {
     const rows = q.ok ? await q.json() : [];
     const user = await gbUser(request, env).catch(() => null);
     const mine = user ? rows.filter((r) => r.user_id === user.id).map((r) => ({ id: r.id, dish: r.dish, url: r.photo_url })) : [];
-    return jsonResponse({ dishes: dishSummary(rows), mine });
+    return jsonResponse({ dishes: dishSummary(rows, new URL(request.url).origin), mine });
   } catch (e) { return jsonResponse({ error: e.message, dishes: [], mine: [] }, 500); }
 }
 
@@ -16254,9 +16292,12 @@ async function handlePlaceDishDelete(request, env) {
 }
 
 // Serve a dish photo (public: these passed review before they were stored).
+// /dish-photo/d/<dish id>: by the dish post, while it shows (mod_status ok).
 async function handleDishPhotoServe(request, env) {
   try {
     if (!env.MEDIA) return new Response('Not found', { status: 404 });
+    const byRow = /^\/dish-photo\/d\/([0-9a-f-]{36})$/i.exec(new URL(request.url).pathname);
+    if (byRow) return gbMediaResp(await gbRowMedia(env, 'place_dishes', byRow[1], 'photo_key', (r) => r.mod_status === 'ok' && String(r.photo_key || '').startsWith('dish/')), 'image/jpeg', 'public, max-age=3600');
     const key = decodeURIComponent(new URL(request.url).pathname.replace(/^\/dish-photo\//, ''));
     if (!/^dish\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/i.test(key)) return new Response('Bad key', { status: 400 });
     const obj = await env.MEDIA.get(key);
@@ -16272,9 +16313,13 @@ async function handleDishPhotoServe(request, env) {
 }
 
 // Serve a stamp photo from R2 (unguessable key). Private-by-obscurity.
+// /pp-photo/p/<photo id>: by the photo, only one that passed review — what a
+// shared passport shows anyone but its owner.
 async function handlePassportPhotoServe(request, env) {
   try {
     if (!env.MEDIA) return new Response('Not found', { status: 404 });
+    const byRow = /^\/pp-photo\/p\/([0-9a-f-]{36})$/i.exec(new URL(request.url).pathname);
+    if (byRow) return gbMediaResp(await gbRowMedia(env, 'passport_stamp_photos', byRow[1], 'photo_key', (r) => r.mod_status === 'ok' && String(r.photo_key || '').startsWith('pp/')), 'image/jpeg', 'private, max-age=3600');
     const key = decodeURIComponent(new URL(request.url).pathname.replace(/^\/pp-photo\//, ''));
     if (!key || key.includes('..') || !key.startsWith('pp/')) return new Response('Bad key', { status: 400 });
     const obj = await env.MEDIA.get(key);
@@ -17648,7 +17693,7 @@ async function handleBlotterSign(request, env, ctx) {
     const row = (await w.json())[0];
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'blotter_sign', { doodle: !!doodleKey }));
     const origin = new URL(request.url).origin;
-    return jsonResponse({ entry: { id: row.id, target: row.target, body: row.body, doodle: row.doodle_key ? `${origin}/bl-doodle/${row.doodle_key}` : null, created_at: row.created_at } });
+    return jsonResponse({ entry: { id: row.id, target: row.target, body: row.body, doodle: row.doodle_key ? `${origin}/bl-doodle/e/${row.id}` : null, created_at: row.created_at } });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -17813,7 +17858,7 @@ async function handleBlotterRead(request, env) {
         name: names[e.author_user_id]?.name || null,
         avatar: names[e.author_user_id]?.avatar_key ? `${origin}/av-photo/${names[e.author_user_id].avatar_key}` : null,
         body: e.body,
-        doodle: e.doodle_key ? `${origin}/bl-doodle/${e.doodle_key}` : null,
+        doodle: e.doodle_key ? `${origin}/bl-doodle/e/${e.id}` : null,
         created_at: e.created_at,
         edited: !!e.updated_at,
         cosigns: cs.length,
@@ -17827,9 +17872,12 @@ async function handleBlotterRead(request, env) {
 }
 
 // GET /bl-doodle/<key> — serve a stored doodle (immutable, unguessable key).
+// GET /bl-doodle/e/<entry id>: by the signature, while it exists.
 async function handleBlotterDoodleServe(request, env) {
   try {
     if (!env.MEDIA) return new Response('Not found', { status: 404 });
+    const byRow = /^\/bl-doodle\/e\/([0-9a-f-]{36})$/i.exec(new URL(request.url).pathname);
+    if (byRow) return gbMediaResp(await gbRowMedia(env, 'blotter_entries', byRow[1], 'doodle_key', (r) => String(r.doodle_key || '').startsWith('bl/')), 'image/png', 'private, max-age=3600');
     const key = decodeURIComponent(new URL(request.url).pathname.replace(/^\/bl-doodle\//, ''));
     if (!key || key.includes('..') || !key.startsWith('bl/')) return new Response('Bad key', { status: 400 });
     const obj = await env.MEDIA.get(key);
@@ -23274,9 +23322,12 @@ async function handleGuestbookList(request, env) {
         named = new Set(authors.filter((id) => !young.has(id)));
       }
     }
+    // A note's photo goes out by the note's id, never by its key (gbRowMedia).
+    const origin = new URL(request.url).origin;
     const entries = rows
       .map(({ user_id, ...e }) => ({
         ...e,
+        ...(e.photo_url ? { photo_url: `${origin}/gb-photo/n/${e.id}` } : {}),
         ...(user_id && !(named && named.has(user_id)) ? { display_name: 'A traveler', home_city: null } : {}),
         mine: !!user && user_id === user.id,
       }))
