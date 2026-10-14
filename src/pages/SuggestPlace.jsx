@@ -28,7 +28,6 @@ import HomeCityField from "@/components/home/HomeCityField";
 import { getStampFix } from "@/lib/geolocation";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { setAgeGate, splitDob } from "@/lib/passport";
-import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import { REASONS, REVIEW_AT, reasonOf, checkSuggest, suggestPlace, getSuggestion, cityAt, progressLabel, progressPct, progressSpoken, placeWhere } from "@/lib/suggestions";
 
 // Leaflet's default marker images resolve against the bundle and 404 — the
@@ -690,12 +689,6 @@ export default function SuggestPlacePage() {
     });
     let res = await send();
     if (res.code === "age_required") {
-      // The OS age range answers without a question when the build carries it.
-      const osYear = birthYearFromRange(await readOsAgeRange());
-      const { error: ageErr } = osYear ? await setAgeGate(osYear) : { error: "no_range" };
-      const tier = ageErr ? null : await refreshSocialTier();
-      if (tier === "teen" || tier === "blocked") { setBusy(false); return; }
-      if (tier) res = await send();
       // The field takes focus and says its label, these same words: the
       // toast only shows (2026-10-12).
       if (res.code === "age_required") { setBusy(false); setNeedBirthday(true); showToast("One thing first — your birthday", "success", 3000, { silent: true }); return; }

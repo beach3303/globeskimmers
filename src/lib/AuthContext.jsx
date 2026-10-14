@@ -32,6 +32,7 @@ import {
   OAUTH_REDIRECT_TO,
 } from '@/lib/nativeAuth';
 import { callWorker } from '@/lib/callWorker';
+import { syncAppTransaction, syncOsAge } from "@/lib/ageSignal";
 import { AGE_GATE_EVENT } from '@/lib/ageGate';
 
 // sessionStorage flag set the moment the USER initiates a sign-in/sign-up, so we
@@ -341,6 +342,19 @@ export const AuthProvider = ({ children }) => {
     window.addEventListener(AGE_GATE_EVENT, onAgeGate);
     return () => { clearTimeout(timer); window.removeEventListener(AGE_GATE_EVENT, onAgeGate); };
   }, [user?.id, refreshSocialTier]);
+  // The phone's own age answer and its App Store download id (teens plan Phase 0), once the
+  // tier is known for this user: a tier the answer changed (a cap, an under-13 freeze) is
+  // re-read at once, so the screen follows.
+  useEffect(() => {
+    if (!user?.id || !socialTierReady) return undefined;
+    let gone = false;
+    (async () => {
+      await syncAppTransaction();
+      const r = await syncOsAge();
+      if (!gone && r?.tier && r.tier !== tierRef.current) refreshSocialTier();
+    })();
+    return () => { gone = true; };
+  }, [user?.id, socialTierReady, refreshSocialTier]);
 
   // canRefresh = admin email (always) OR an email an admin granted in the
   // Supabase `refresh_access` table. Re-evaluated whenever the user changes, so

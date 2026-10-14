@@ -21,7 +21,6 @@ import { cityBoardsUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
 import { socialFeed, getHandle, getSocialProfile, setHandle, setAgeGate, splitDob, socialUnread, keepPostcard } from "@/lib/passport";
-import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import { showToast } from "@/components/Toast";
 import { AirmailChevron } from "@/components/redesign/ornaments";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
@@ -103,8 +102,6 @@ function ClaimCard({ onClaimed, style = undefined }) {
     const { handle: h, suggestions, error } = await setHandle(want);
     setBusy(false);
     if (error === "age_required") {
-      const osYear = birthYearFromRange(await readOsAgeRange());
-      if (osYear) { const { error: aErr } = await setAgeGate(osYear); if (!aErr) { refreshSocialTier(); claim(); return; } }
       setNeedYear(true); showToast("One thing first — your birthday", "success"); return;
     }
     setSugs(error ? (suggestions || []) : []);

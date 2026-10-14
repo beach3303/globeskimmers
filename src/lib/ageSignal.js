@@ -1,9 +1,18 @@
-// The OS age signal (Apple Declared Age Range) — JS side, wired BEFORE the
-// native build so the plugin lights up the moment the founder's store build
-// ships AgeRangePlugin.swift (docs/NATIVE_BUILD_CHECKLIST.md). Until then, or
-// on Android/web, this resolves null and the self-declared year remains the
-// path. Never throws.
+// The phone's own age answer (teens plan Phase 0; Apple has required it for new Texas accounts
+// since 2026-06-04), the JS side of AgeRangePlugin.swift (iOS). The app asks only where Apple
+// says the age laws apply to this person (status().eligible): Apple's sheet, at most once a
+// month, and a week's pause after a decline. The answer goes to the worker (POST /social/age
+// { os }), which keeps only the tier it implies and caps the birthday's with it; the birthday
+// is still asked. The App Store download id goes once per download ({ app_transaction }), so a
+// parent's withdrawn consent (RESCIND_CONSENT) finds the account. Android (Play Age Signals)
+// comes with its plugin. Nothing here throws, and nothing runs on the web.
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import { callWorker } from "@/lib/callWorker";
+
+const ASKED_KEY = "gs_os_age_v1"; // { at, declined }: when this phone last asked
+const TXN_KEY = "gs_app_txn_v1";  // the download id already sent
+const MONTH = 30 * 86400000;
+const WEEK = 7 * 86400000;
 
 let plugin = null;
 function ageRange() {
@@ -11,25 +20,46 @@ function ageRange() {
   try { plugin = registerPlugin("AgeRange"); } catch { plugin = null; }
   return plugin;
 }
+const onIos = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
+const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } };
+const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage off */ } };
+const within = (ms, p) => Promise.race([p, new Promise((res) => setTimeout(() => res(null), ms))]);
 
-// → { lower, upper, parentControlled } | { declined: true } | null (unavailable)
-export async function readOsAgeRange() {
-  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== "ios") return null;
-  try {
-    const p = ageRange();
-    if (!p || typeof p.request !== "function") return null;
-    const r = await Promise.race([p.request(), new Promise((res) => setTimeout(() => res(null), 4000))]);
-    if (!r || r.available === false) return null;
-    if (r.declined) return { declined: true };
-    return { lower: r.lower ?? null, upper: r.upper ?? null, parentControlled: !!r.parentControlled };
-  } catch { return null; }
+// { available, eligible, features, ageRatingCode } from the plugin, or null off iOS.
+export async function osAgeStatus() {
+  if (!onIos()) return null;
+  try { return await within(8000, ageRange().status()); } catch { return null; }
 }
 
-// The OS range as a birth-year stand-in for the gate: the OLDEST year the
-// range allows (a 16–17 range gates as 17 → 'teen'; 18+ gates as adult).
-// Conservative by construction — the gate can only be stricter, never looser,
-// than what the OS asserts.
-export function birthYearFromRange(range) {
-  if (!range || range.declined || !Number.isFinite(range.lower)) return null;
-  return new Date().getFullYear() - range.lower;
+// Asks Apple for the age range where the laws apply here, and tells the worker. The worker's
+// answer ({ tier, os_tier }) when one was sent, else null. force skips the monthly pause.
+export async function syncOsAge({ force = false } = {}) {
+  if (!onIos()) return null;
+  const last = read(ASKED_KEY);
+  const now = Date.now();
+  if (!force && last?.at && now - last.at < (last.declined ? WEEK : MONTH)) return null;
+  const st = await osAgeStatus();
+  if (!st?.available || st.eligible !== true) return null;
+  let r = null;
+  // Apple's sheet waits for the person, so this waits too (the old 4 s race lost real answers).
+  try { r = await within(120000, ageRange().request()); } catch { r = null; }
+  if (!r || r.available === false) return null;
+  if (r.declined) { write(ASKED_KEY, { at: now, declined: true }); return null; }
+  const { data, error } = await callWorker("social/age", { os: { platform: "ios", lower: r.lower ?? null, upper: r.upper ?? null } });
+  if (error || !data || data.error) return null;
+  write(ASKED_KEY, { at: now, declined: false });
+  return data;
+}
+
+// Sends this phone's App Store download id, once per download. true when it was sent.
+export async function syncAppTransaction() {
+  if (!onIos()) return false;
+  try {
+    const t = await within(10000, ageRange().appTransaction());
+    if (!t?.available || !t.id || read(TXN_KEY) === t.id) return false;
+    const { data, error } = await callWorker("social/age", { app_transaction: { id: t.id, environment: t.environment || null } });
+    if (error || !data?.ok) return false;
+    write(TXN_KEY, t.id);
+    return true;
+  } catch { return false; }
 }

@@ -18,7 +18,6 @@ import { getHandle, setHandle, setAgeGate, splitDob, getAgeInfo, setBirthday, so
 import { blockReady } from "@/lib/blocks";
 import { openConfirmBirthday } from "@/lib/ageGate";
 import BlockedTravelers from "@/components/social/BlockedTravelers";
-import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useFontScale } from "@/components/a11y/FontScaleContext";
 import { useLocation, readOpenBehavior, writeOpenBehavior } from "@/components/location/LocationContext";
@@ -471,14 +470,8 @@ export default function SettingsPage() {
     setHandleBusy(false);
     setHandleSugs(error ? (suggestions || []) : []);
     if (error === "age_required") {
-      // Prefer the OS's Declared Age Range when the native build carries the
-      // plugin — no question asked, and the OS assertion is the stricter one.
-      const os = await readOsAgeRange();
-      const osYear = birthYearFromRange(os);
-      if (osYear) {
-        const { error: ageErr } = await setAgeGate(osYear);
-        if (!ageErr) { saveHandle(); return; }
-      }
+      // The birthday is asked for; the phone's own age answer reaches the server on its
+      // own after sign-in (ageSignal.syncOsAge) and can only make the tier stricter.
       setNeedYear(true); showToast("One thing first — your birthday", "success"); return;
     }
     if (error) { showToast(error, "error"); return; }

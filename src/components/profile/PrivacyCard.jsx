@@ -14,7 +14,6 @@ import { Copy, Globe, Lock } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
 import { getShareLink, setAgeGate, splitDob } from "@/lib/passport";
-import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { clothRow } from "@/components/profile/CoverBand";
 
@@ -54,12 +53,6 @@ export default function PrivacyCard({ cloth = undefined, share = null, onShare =
     const { data, error } = await getShareLink(next);
     setBusy(false);
     if (error === "age_required") {
-      const os = await readOsAgeRange();
-      const osYear = birthYearFromRange(os);
-      if (osYear) {
-        const { error: ageErr } = await setAgeGate(osYear);
-        if (!ageErr) { refreshSocialTier(); toggleShare(); return; }
-      }
       setNeedYear(true); showToast("One thing first — your birthday", "success"); return;
     }
     if (error) { showToast(error, "error"); return; }

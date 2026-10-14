@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { heldForMe, setHandle, setAgeGate, splitDob } from "@/lib/passport";
-import { readOsAgeRange, birthYearFromRange } from "@/lib/ageSignal";
 import { showToast } from "@/components/Toast";
 
 // The held-username ceremony (founder, 2026-10-03). When the founder has
@@ -55,13 +54,7 @@ export default function HeldHandleClaim({ fs = (n) => n }) {
     const { handle, heldClaim, error } = await setHandle(held.handle, token);
     setBusy(false);
     if (error === "age_required") {
-      // Prefer the OS age assertion; fall back to one inline question.
-      const os = await readOsAgeRange();
-      const osYear = birthYearFromRange(os);
-      if (osYear) {
-        const { error: aErr } = await setAgeGate(osYear);
-        if (!aErr) { claim(); return; }
-      }
+      // One inline question: the birthday (the phone's own answer goes to the server on its own).
       setNeedYear(true);
       return;
     }
