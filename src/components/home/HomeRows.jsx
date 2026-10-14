@@ -1,89 +1,114 @@
-// HomeRows — the "living homepage" carousels.
+// HomeRows — the "living homepage" carousels, iPad only, in Home's white
+// "Around you" folder (ZONE.rows; plan-authored, no artboard).
 //
 // Photo-forward horizontal rows assembled by the Worker's POST /home/rows from
 // OWNED attraction data (D1) — zero Google Places spend. Themed by day-part /
 // weather / season so the homepage reshuffles across the day.
 //
 // Self-contained: resolves the active location itself, fetches once per location
-// change, and renders NOTHING when there's no owned coverage (cold-start) so the
-// static finder tiles below stand alone — we never show an empty carousel.
+// change, and renders NOTHING when there's no owned coverage (cold-start), so the
+// zone never shows an empty folder.
 //
-// Interaction (matches the app): swipe a row SIDEWAYS to browse; "See all" (and
-// a card tap) calls onAction(seeAll.action) — the same handleQuickAction the
-// tiles use — to open the vertical finder page. Sideways → down/up.
+// Interaction: swipe a row SIDEWAYS to browse; "See all" calls
+// onAction(seeAll.action) — the same handleQuickAction the services use — to open
+// the vertical finder page; a card opens a quick look with Directions and
+// "Explore more" (the attraction's Things to Do card).
 //
-// The worker's `whereToNext` (dream) row is skipped here.
+// Honesty: no "★ rating" — these are D1 attraction ratings with no recorded
+// source. Distances follow the traveler's unit. The worker's `whereToNext`
+// (dream) row is skipped here.
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { MapPin, Navigation, X } from "lucide-react";
 import { useLocation } from "@/components/location/LocationContext";
 import { callWorker } from "@/lib/callWorker";
 import { fetchHomeRows } from "@/lib/homeRows";
 import { trackEvent } from "@/Layout";
+import { KM_PER_MI, distanceLabel } from "@/lib/units";
 import MapAppSelector from "@/components/MapAppSelector";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import useHorizontalSwipe from "@/lib/useHorizontalSwipe";
 import { openAttraction } from "@/lib/openAttraction";
+import { HomeZone } from "@/components/redesign/Zone";
+import { NEUTRAL, ZONE, fs } from "@/components/redesign/constants";
 
-function HomeRowCard({ card, onOpen, wide }) {
+const Z = ZONE.rows;
+
+// "0.4 KM" / "0.3 MI", or "FREE" when there's no distance but the place is free.
+function metaLine(card, unit) {
+  const km = Number.isFinite(card.distanceMiles) ? card.distanceMiles * KM_PER_MI : NaN;
+  const dist = distanceLabel(km, unit);
+  if (dist) return dist;
+  return card.freeToVisit ? "FREE" : "";
+}
+
+// No photo: a quiet ivory tile with a map pin, never an emoji.
+function NoPhoto({ size = 28 }) {
+  return (
+    <div className="w-full h-full flex items-center justify-center" style={{ background: NEUTRAL.ivory2 }}>
+      <MapPin size={size} color={NEUTRAL.ink3} strokeWidth={2} aria-hidden="true" />
+    </div>
+  );
+}
+
+function HomeRowCard({ card, unit, onOpen }) {
   const name = card.name || "Explore";
-  const meta = [];
-  if (card.rating) meta.push(`★ ${card.rating}`);
-  if (Number.isFinite(card.distanceMiles)) meta.push(`${card.distanceMiles.toFixed(1)} mi`);
-  else if (card.freeToVisit) meta.push("Free");
-
+  const meta = metaLine(card, unit);
   return (
     <button
+      type="button"
       onClick={onOpen}
-      className={`flex-none ${wide ? "w-[190px]" : "w-[150px]"} rounded-2xl overflow-hidden bg-white text-left border`}
-      style={{ borderColor: "#E6DFD0", boxShadow: "0 8px 20px -16px rgba(22,17,13,.4)" }}
+      aria-label={meta ? `${name}, ${meta.toLowerCase()}` : name}
+      className="flex-none overflow-hidden text-left"
+      style={{ width: 190, borderRadius: 16, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.creamRule}`, padding: 0, cursor: "pointer" }}
     >
-      <div className="relative w-full" style={{ aspectRatio: "4 / 3", background: "linear-gradient(135deg,#E7C7A0,#C98A2E)" }}>
+      <div className="relative w-full" style={{ aspectRatio: "4 / 3", background: NEUTRAL.ivory2 }}>
         {card.photoUrl ? (
           <img src={card.photoUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-[28px]">📍</div>
+          <NoPhoto />
         )}
         {card.photoUrl && (card.credit || card.photographer) && (
           <div
-            className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[calc(8px*var(--fs))] leading-none"
-            style={{ background: "rgba(0,0,0,0.42)", color: "rgba(255,255,255,0.9)" }}
+            className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded leading-none"
+            style={{ fontSize: fs(8), background: "rgba(0,0,0,0.42)", color: "rgba(255,255,255,0.9)" }}
           >
             {card.credit || card.photographer}
           </div>
         )}
       </div>
-      <div className="p-2.5">
+      <div style={{ padding: "10px 12px 12px" }}>
         <div
-          className="font-serif leading-[1.1] text-[calc(15px*var(--fs))]"
-          style={{ color: "#16302B", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+          className="font-serif"
+          style={{ fontSize: fs(15), lineHeight: 1.15, color: NEUTRAL.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
         >
           {name}
         </div>
-        {meta.length > 0 && (
-          <div className="text-[calc(11px*var(--fs))] mt-1" style={{ color: "#71827D" }}>{meta.join(" · ")}</div>
+        {meta && (
+          <div className="font-mono uppercase" style={{ marginTop: 4, fontSize: fs(10), letterSpacing: ".08em", color: Z.meta }}>{meta}</div>
         )}
       </div>
     </button>
   );
 }
 
-export default function HomeRows({ onAction, wide = false }) {
+export default function HomeRows({ onAction, unit = "mi" }) {
   const { getActiveLocation, locationMode } = useLocation();
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
-  const [detail, setDetail] = useState(null);     // attraction opened full-screen
+  const [detail, setDetail] = useState(null);     // attraction opened in the quick look
   const [dirsCard, setDirsCard] = useState(null); // attraction to route to (Waze/Apple/Google chooser)
-  const [modalPhotos, setModalPhotos] = useState([]); // [{url, credit}] for the quick-look modal
+  const [modalPhotos, setModalPhotos] = useState([]); // [{url, credit}] for the quick look
   const [modalIdx, setModalIdx] = useState(0);
-  const [galleryOpen, setGalleryOpen] = useState(false); // fullscreen viewer over the modal
+  const [galleryOpen, setGalleryOpen] = useState(false); // fullscreen viewer over the quick look
 
-  // Swipe the modal's hero photo left/right through the loaded photos.
+  // Swipe the quick look's hero photo left/right through the loaded photos.
   const heroSwipe = useHorizontalSwipe({
     onLeft: () => setModalIdx((i) => (modalPhotos.length ? (i + 1) % modalPhotos.length : i)),
     onRight: () => setModalIdx((i) => (modalPhotos.length ? (i - 1 + modalPhotos.length) % modalPhotos.length : i)),
   });
 
-  // Open the quick-look modal + enrich it with owned Wikimedia photos (swipeable).
+  // Open the quick look + enrich it with owned Wikimedia photos (swipeable).
   const openDetail = (card) => {
     setDetail(card);
     setModalIdx(0);
@@ -106,13 +131,12 @@ export default function HomeRows({ onAction, wide = false }) {
     if (!openAttraction(navigate, card, "Picked for you")) onAction?.("Things to Do");
   };
 
-
   useEffect(() => {
     let cancelled = false;
     const loc = getActiveLocation?.();
     // Active-location shape stores coords NESTED (coordinates.latitude) — same as
-    // every finder (PlacesToEat/Coffee/FindAHotel). Keep top-level fallbacks for
-    // any picked/search shape that flattens them.
+    // every finder. Keep top-level fallbacks for any picked/search shape that
+    // flattens them.
     const latitude = loc?.coordinates?.latitude ?? loc?.latitude ?? loc?.lat;
     const longitude = loc?.coordinates?.longitude ?? loc?.longitude ?? loc?.lng;
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
@@ -151,151 +175,165 @@ export default function HomeRows({ onAction, wide = false }) {
   const activeLoc = getActiveLocation?.();
   const activeLat = activeLoc?.coordinates?.latitude ?? activeLoc?.latitude ?? activeLoc?.lat;
   const activeLng = activeLoc?.coordinates?.longitude ?? activeLoc?.longitude ?? activeLoc?.lng;
+  const detailMeta = detail ? metaLine(detail, unit) : "";
 
   return (
     <>
-    <div className={wide ? "pb-3" : "px-4 pb-3"}>
-      <div className={wide ? "flex flex-col gap-5" : "max-w-md mx-auto flex flex-col gap-4"}>
-        {rows.map((row) => (
-          <div key={row.key}>
-            <div className="flex items-baseline justify-between mb-2 px-0.5 gap-3">
-              <div className="min-w-0">
-                <div className="font-serif text-[calc(19px*var(--fs))] leading-[1.1]" style={{ color: "#16302B" }}>{row.title}</div>
-                {row.subtitle && (
-                  <div className="text-[calc(12px*var(--fs))] mt-0.5" style={{ color: "#71827D" }}>{row.subtitle}</div>
+      <HomeZone zone="rows" label="Around you">
+        <div className="flex flex-col" style={{ gap: 20 }}>
+          {rows.map((row) => (
+            <div key={row.key}>
+              <div className="flex items-baseline justify-between" style={{ gap: 12, marginBottom: 8 }}>
+                <div className="min-w-0">
+                  <h3 className="font-serif m-0" style={{ fontSize: fs(19), lineHeight: 1.1, fontWeight: 400, color: Z.title }}>{row.title}</h3>
+                  {row.subtitle && (
+                    <div style={{ marginTop: 2, fontSize: fs(12), color: Z.meta }}>{row.subtitle}</div>
+                  )}
+                </div>
+                {row.seeAll?.action && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      trackEvent("home_row_see_all", { row: row.key, action: row.seeAll.action });
+                      onAction?.(row.seeAll.action);
+                    }}
+                    aria-label={`See all: ${row.title}`}
+                    className="flex-none"
+                    style={{ minHeight: 44, margin: "-12px 0", padding: "0 2px", background: "transparent", border: 0, fontSize: fs(13), fontWeight: 600, color: NEUTRAL.pine, cursor: "pointer" }}
+                  >
+                    See all
+                  </button>
                 )}
               </div>
-              {row.seeAll?.action && (
-                <button
-                  onClick={() => {
-                    trackEvent("home_row_see_all", { row: row.key, action: row.seeAll.action });
-                    onAction?.(row.seeAll.action);
-                  }}
-                  className="flex-none text-[calc(12.5px*var(--fs))] font-semibold"
-                  style={{ color: "#17A38F" }}
-                >
-                  See all →
-                </button>
-              )}
+              <div className="flex overflow-x-auto" style={{ gap: 12, paddingBottom: 4, scrollbarWidth: "none" }}>
+                {row.cards.map((card) => (
+                  <HomeRowCard
+                    key={card.id}
+                    card={card}
+                    unit={unit}
+                    onOpen={() => {
+                      trackEvent("home_row_card_tap", {
+                        row: row.key,
+                        place_id: card.id,
+                        place_name: card.name,
+                        category: card.category,
+                        city: card.city,
+                        country: card.country,
+                      });
+                      openDetail(card); // open THIS attraction (quick look)
+                    }}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="flex gap-3 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "none" }}>
-              {row.cards.map((card) => (
-                <HomeRowCard
-                  key={card.id}
-                  card={card}
-                  wide={wide}
-                  onOpen={() => {
-                    trackEvent("home_row_card_tap", {
-                      row: row.key,
-                      place_id: card.id,
-                      place_name: card.name,
-                      category: card.category,
-                      city: card.city,
-                      country: card.country,
-                    });
-                    openDetail(card); // open THIS attraction (quick-look modal)
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+          ))}
+        </div>
+      </HomeZone>
 
-    {detail && (
-      <div
-        onClick={() => setDetail(null)}
-        className="fixed inset-0 z-[9999] overflow-y-auto"
-        style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
-      >
+      {detail && (
         <div
-          onClick={(e) => e.stopPropagation()}
-          className="mx-auto my-8 bg-white rounded-3xl overflow-hidden"
-          style={{ width: "92%", maxWidth: 480 }}
+          onClick={() => setDetail(null)}
+          className="fixed inset-0 z-[9999] overflow-y-auto"
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
         >
           <div
-            className="relative cursor-pointer"
-            style={{ aspectRatio: "16 / 10", background: "linear-gradient(135deg,#E7C7A0,#C98A2E)" }}
-            {...heroSwipe}
-            onClick={() => { if (modalPhotos[modalIdx]?.url || detail.photoUrl) setGalleryOpen(true); }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={detail.name || "Place"}
+            className="mx-auto my-8 overflow-hidden"
+            style={{ width: "92%", maxWidth: 480, borderRadius: 24, background: NEUTRAL.white }}
           >
-            {(modalPhotos[modalIdx]?.url || detail.photoUrl) ? (
-              <img src={modalPhotos[modalIdx]?.url || detail.photoUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-[56px]">📍</div>
-            )}
-            {modalPhotos[modalIdx]?.credit && (
-              <div
-                className="absolute bottom-1.5 right-2 px-1.5 py-0.5 rounded text-[calc(9px*var(--fs))] leading-none"
-                style={{ background: "rgba(0,0,0,0.42)", color: "rgba(255,255,255,0.9)" }}
+            <div
+              className="relative cursor-pointer"
+              style={{ aspectRatio: "16 / 10", background: NEUTRAL.ivory2 }}
+              {...heroSwipe}
+              onClick={() => { if (modalPhotos[modalIdx]?.url || detail.photoUrl) setGalleryOpen(true); }}
+            >
+              {(modalPhotos[modalIdx]?.url || detail.photoUrl) ? (
+                <img src={modalPhotos[modalIdx]?.url || detail.photoUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <NoPhoto size={48} />
+              )}
+              {modalPhotos[modalIdx]?.credit && (
+                <div
+                  className="absolute bottom-1.5 right-2 px-1.5 py-0.5 rounded leading-none"
+                  style={{ fontSize: fs(9), background: "rgba(0,0,0,0.42)", color: "rgba(255,255,255,0.9)" }}
+                >
+                  {modalPhotos[modalIdx].credit}
+                </div>
+              )}
+              {modalPhotos.length > 1 && (
+                <div
+                  className="absolute bottom-1.5 left-2 px-2 py-0.5 rounded-full leading-none"
+                  style={{ fontSize: fs(9), background: "rgba(0,0,0,0.42)", color: "#fff" }}
+                >
+                  {modalIdx + 1} / {modalPhotos.length}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setDetail(null); }}
+                aria-label="Close"
+                className="absolute flex items-center justify-center rounded-full"
+                style={{ top: 10, right: 10, width: 44, height: 44, background: "rgba(255,255,255,0.95)", border: 0, color: NEUTRAL.ink, cursor: "pointer" }}
               >
-                {modalPhotos[modalIdx].credit}
-              </div>
-            )}
-            {modalPhotos.length > 1 && (
-              <div
-                className="absolute bottom-1.5 left-2 px-2 py-0.5 rounded-full text-[calc(9px*var(--fs))] leading-none"
-                style={{ background: "rgba(0,0,0,0.42)", color: "#fff" }}
-              >
-                {modalIdx + 1} / {modalPhotos.length}
-              </div>
-            )}
-            <button
-              onClick={(e) => { e.stopPropagation(); setDetail(null); }}
-              aria-label="Close"
-              className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center"
-              style={{ background: "rgba(255,255,255,0.95)", color: "#16302B", fontWeight: 800 }}
-            >✕</button>
-          </div>
-          <div className="p-5">
-            {detail.category && (
-              <div className="text-[calc(12px*var(--fs))] font-semibold mb-1" style={{ color: "#C56B7A" }}>{detail.category}</div>
-            )}
-            <div className="font-serif text-[calc(24px*var(--fs))] leading-tight" style={{ color: "#16302B" }}>{detail.name}</div>
-            <div className="flex items-center gap-3 mt-2 text-[calc(13px*var(--fs))]" style={{ color: "#71827D" }}>
-              {detail.rating && <span>★ {detail.rating}</span>}
-              {Number.isFinite(detail.distanceMiles) && <span>{detail.distanceMiles.toFixed(1)} mi</span>}
-              {detail.freeToVisit && <span>Free</span>}
+                <X size={20} strokeWidth={2} aria-hidden="true" />
+              </button>
             </div>
-            {detail.whyVisit && (
-              <p className="mt-3 text-[calc(14px*var(--fs))] leading-relaxed" style={{ color: "#55635F" }}>{detail.whyVisit}</p>
-            )}
-            <div className="flex gap-2.5 mt-4">
-              <button
-                onClick={() => setDirsCard(detail)}
-                className="flex-1 py-3 rounded-xl font-semibold text-white text-[calc(14px*var(--fs))]"
-                style={{ background: "#17A38F" }}
-              >🧭 Directions</button>
-              <button
-                onClick={() => openFullPage(detail)}
-                className="flex-1 py-3 rounded-xl font-semibold text-[calc(14px*var(--fs))]"
-                style={{ background: "#F7F3EB", color: "#16302B", border: "1px solid #E6DFD0" }}
-              >Explore more</button>
+            <div style={{ padding: 20 }}>
+              {detail.category && (
+                <div className="font-mono uppercase" style={{ marginBottom: 4, fontSize: fs(10.5), letterSpacing: ".1em", color: Z.meta }}>{detail.category}</div>
+              )}
+              <div className="font-serif" style={{ fontSize: fs(24), lineHeight: 1.15, color: NEUTRAL.ink }}>{detail.name}</div>
+              {detailMeta && (
+                <div className="font-mono uppercase" style={{ marginTop: 6, fontSize: fs(11), letterSpacing: ".08em", color: Z.meta }}>{detailMeta}</div>
+              )}
+              {detail.whyVisit && (
+                <p style={{ margin: "12px 0 0", fontSize: fs(14), lineHeight: 1.55, color: NEUTRAL.ink2 }}>{detail.whyVisit}</p>
+              )}
+              <div className="flex" style={{ gap: 10, marginTop: 16 }}>
+                <button
+                  type="button"
+                  onClick={() => setDirsCard(detail)}
+                  className="flex-1 flex items-center justify-center"
+                  style={{ gap: 8, minHeight: 48, borderRadius: 12, border: 0, background: NEUTRAL.tealInk, color: NEUTRAL.white, fontSize: fs(14), fontWeight: 600, cursor: "pointer" }}
+                >
+                  <Navigation size={16} strokeWidth={2} aria-hidden="true" />
+                  Directions
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openFullPage(detail)}
+                  className="flex-1"
+                  style={{ minHeight: 48, borderRadius: 12, background: NEUTRAL.ivory2, color: NEUTRAL.ink, border: `1px solid ${NEUTRAL.lobbyLine}`, fontSize: fs(14), fontWeight: 600, cursor: "pointer" }}
+                >
+                  Explore more
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
 
-    {galleryOpen && (
-      <PhotoGalleryModal
-        photos={modalPhotos.map((p) => p.url)}
-        initialIndex={modalIdx}
-        isOpen
-        onClose={() => setGalleryOpen(false)}
-      />
-    )}
+      {galleryOpen && (
+        <PhotoGalleryModal
+          photos={modalPhotos.map((p) => p.url)}
+          initialIndex={modalIdx}
+          isOpen
+          onClose={() => setGalleryOpen(false)}
+        />
+      )}
 
-    {dirsCard && (
-      <MapAppSelector
-        isOpen
-        onClose={() => setDirsCard(null)}
-        destination={{ name: dirsCard.name, latitude: dirsCard.lat, longitude: dirsCard.lng }}
-        userLat={activeLat}
-        userLng={activeLng}
-      />
-    )}
+      {dirsCard && (
+        <MapAppSelector
+          isOpen
+          onClose={() => setDirsCard(null)}
+          destination={{ name: dirsCard.name, latitude: dirsCard.lat, longitude: dirsCard.lng }}
+          userLat={activeLat}
+          userLng={activeLng}
+        />
+      )}
     </>
   );
 }

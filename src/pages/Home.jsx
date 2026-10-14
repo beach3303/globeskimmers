@@ -15,7 +15,7 @@ import SuggestPlaceSection from "../components/home/SuggestPlaceSection";
 // ("Trips & escapes") and the YOUR TRIP zone (StayAnchor, MyTripCard,
 // WishlistCard) no longer mount on the phone Home. StayAnchor + WishlistCard
 // moved to MyTrip.jsx; the spot rows get a new home in the next slice.
-// HomeTablet still mounts its own set — untouched, tabled.
+// iPad gets the HomeRows folder ("Around you") in the same zone stack.
 import AllServicesSheet from "../components/home/AllServicesSheet";
 import NearbyServices from "../components/home/NearbyServices";
 import PassportHero from "../components/home/PassportHero";
@@ -33,7 +33,7 @@ import { countryCode } from "@/lib/countries";
 import { distanceUnit } from "@/lib/units";
 import { homeTimezoneForCountry } from "@/lib/homePlace";
 import { useIsTablet } from "@/lib/useIsTablet";
-import HomeTablet from "@/components/home/HomeTablet";
+import HomeRows from "@/components/home/HomeRows";
 import SmartSearchBar from "@/components/search/SmartSearchBar";
 import SmartSearchOverlay from "@/components/search/SmartSearchOverlay";
 import DestinationStrip from "@/components/search/DestinationStrip";
@@ -115,14 +115,13 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { locationMode, selectedLocation, currentGpsLocation, getActiveLocation, getCurrentLocation, switchToCurrentLocation, loading: locationLoading } = useLocation();
   const { profile, user: authUser, signInTick, bumpWelcomeSplashCount } = useAuth();
-  // iPad gets a dedicated tablet layout (HomeTablet); phone gets the fuller
-  // editorial layout below.
+  // iPad renders the same Home as the phone, in a 720px column, with the local
+  // time in the lobby, the inline services grid and the "Around you" rows.
   const isTablet = useIsTablet();
 
   const [user, setUser] = useState(null);
   const [localGreeting, setLocalGreeting] = useState(null);
   const [weatherInfo, setWeatherInfo] = useState(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [timezone, setTimezone] = useState(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [showSearch, setShowSearch] = useState(false); // Smart-Search spine overlay
@@ -274,13 +273,6 @@ export default function HomePage() {
     return () => { cancelled = true; };
      
   }, [locationMode, currentGpsLocation]);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   // One /passport/list read (there is no count-only route). listPassport never
   // throws: a failed read comes back as { error, stats: {} }, which stays an
@@ -561,46 +553,35 @@ export default function HomePage() {
       || activeLocation?.address?.city
       || (activeLocation?.coordinates ? 'Current location' : 'Set location'));
 
-  // Home-country flag: active when the Show Home Country Flag toggle is on and
-  // the home country resolves to a flag. iPad fills its greeting card with the
-  // w640 image. Phone shows a small h80 badge beside the greeting name — the
-  // phone's flag card was collapsed on 2026-09-03 (search above the fold), which
-  // had left the Settings toggle doing nothing on phone.
-  const homeFlagUrl = homeFlagCode ? `https://flagcdn.com/w640/${homeFlagCode}.png` : null;
-  const homeFlagBadgeUrl = homeFlagCode ? `https://flagcdn.com/h80/${homeFlagCode}.png` : null;
-  const flagActive = !!(showHomeFlag && homeFlagUrl);
-  // The lobby's badge beside the name (HomeLobby draws it).
-  const lobbyFlag = flagActive && homeFlagBadgeUrl ? { url: homeFlagBadgeUrl, country: profile?.home_country || '' } : null;
+  // Home-country flag: when the Show Home Country Flag toggle is on and the home
+  // country resolves to a flag, the lobby shows a small badge beside the name on
+  // phone and iPad alike (the iPad's 440px flag hero is gone).
+  const lobbyFlag = showHomeFlag && homeFlagCode
+    ? { url: `https://flagcdn.com/h80/${homeFlagCode}.png`, country: profile?.home_country || '' }
+    : null;
 
   // Clock info. The lobby shows the SELECTED/active place; these add where you
   // physically are (only when you've navigated away) and your home (when
   // toggled). Only rows whose timezone differs from the lobby's — and from each
-  // other — are kept, so nothing repeats. clockSources feeds the phone lobby's
-  // third line (it formats the times on its own tick); the `icon` field
-  // survives only for HomeTablet, whose clockRows contract is unchanged.
+  // other — are kept, so nothing repeats. clockSources feeds the lobby's third
+  // line, which formats the times on its own tick.
   const activeTz = timezone;
   const rawClockRows = [];
   if (physicalTz && physicalTz !== activeTz) {
-    rawClockRows.push({ key: 'here', icon: '📍', label: physicalLabel || 'Your location', tz: physicalTz, temp: null });
+    rawClockRows.push({ key: 'here', label: physicalLabel || 'Your location', tz: physicalTz, temp: null });
   }
   if (shouldShowHomeCountryTime && homeCountryInfo?.timezone && homeCountryInfo.timezone !== activeTz) {
-    rawClockRows.push({ key: 'home', icon: '🏠', label: homeCountryInfo.label || homeCountryInfo.country, tz: homeCountryInfo.timezone, temp: homeCountryWeather });
+    rawClockRows.push({ key: 'home', label: homeCountryInfo.label || homeCountryInfo.country, tz: homeCountryInfo.timezone, temp: homeCountryWeather });
   }
   const _seenTz = new Set();
   const clockSources = rawClockRows.filter((r) => (_seenTz.has(r.tz) ? false : (_seenTz.add(r.tz), true)));
-  const clockRows = clockSources
-    .map((r) => ({
-      key: r.key,
-      icon: r.icon,
-      label: r.label,
-      dateText: formatLocalDate(currentTime, r.tz),
-      timeText: formatLocalTime(currentTime, r.tz),
-      tempText: r.temp ? (tempUnit === 'C' ? `${r.temp.celsius}°C` : `${r.temp.fahrenheit}°F`) : null,
-    }));
 
   // The three-zone spine is IDENTICAL in both journey stacks; the only thing
   // journeyMode still gates on the phone is the DreamShelf (dream stack only).
   const isDreamStack = !["domestic", "international", "discovery"].includes(journeyMode);
+  // iPad: "Around you" leads the stamps at home, while discovering and while
+  // planning; on a trip (domestic, international) the stamps come first.
+  const rowsFirst = !["domestic", "international"].includes(journeyMode);
 
   // Distances in the zones follow the traveler's unit (Settings, else the country).
   const unit = distanceUnit(profile, countryCode(activeLocation?.address?.country) || activeLocation?.address?.countryCode);
@@ -618,40 +599,9 @@ export default function HomePage() {
       <AnimatePresence>
         {showWelcome && <WelcomeSplash onProceed={welcomeExplore} onTimeout={welcomeClose} />}
       </AnimatePresence>
-      {isTablet ? (
-        <HomeTablet
-          firstName={getFirstName()}
-          cityName={cityName}
-          placeText={placeText}
-          localGreeting={localGreeting}
-          weatherInfo={weatherInfo}
-          tempUnit={tempUnit}
-          toggleTempUnit={toggleTempUnit}
-          dateText={formatLocalDate(currentTime, timezone)}
-          timeText={formatLocalTime(currentTime, timezone)}
-          flagActive={flagActive}
-          homeFlagUrl={homeFlagUrl}
-          onLocation={() => setShowLocationPicker(true)}
-          onAction={handleQuickAction}
-          clockRows={clockRows}
-          journeyMode={journeyMode}
-          passportTotal={passport.total}
-          nearestStamp={nearestStamp}
-          dreamShelf={isDreamStack ? {
-            latitude: activeLocation?.coordinates?.latitude,
-            longitude: activeLocation?.coordinates?.longitude,
-            cityName,
-            cityTempF: weatherInfo?.fahrenheit ?? null,
-            onOpenActivity: openDreamActivity,
-          } : null}
-          destinationSearch={destSearch && !destDismissed ? destSearch : null}
-          onDismissDestination={() => setDestDismissed(true)}
-        />
-      ) : (
-      <>
-      {/* PHONE — the lobby (Home-Boxes L29-51): hello and the name, the date,
-          temperature and location pill, any extra clocks, then the search bar.
-          It paints at once; HomeLobby owns the 1 s clock. */}
+      {/* THE LOBBY (Home-Boxes L29-51): hello and the name, the date (on iPad
+          also the local time), temperature and location pill, any extra clocks,
+          then the search bar. It paints at once; HomeLobby owns the 1 s clock. */}
       <HomeLobby
         firstName={getFirstName()}
         localGreeting={localGreeting}
@@ -663,6 +613,7 @@ export default function HomePage() {
         placeText={placeText}
         onChangeLocation={() => setShowLocationPicker(true)}
         clockSources={clockSources}
+        showTime={isTablet}
       />
 
       {/* SMART-SEARCH SPINE — one search that routes into the right world.
@@ -689,9 +640,11 @@ export default function HomePage() {
         unit={unit}
         onOpen={() => { trackEvent('feature_used', { feature_name: 'passport_hero' }); navigate(createPageUrl('Passport')); }}
       />
-      <FriendsTravels />
-      <NearbyServices onAction={handleQuickAction} onAllServices={openAllServices} />
-      <StampsNearYou onAction={handleQuickAction} onNearest={setNearestStamp} />
+      <FriendsTravels wide={isTablet} />
+      <NearbyServices wide={isTablet} onAction={handleQuickAction} onAllServices={openAllServices} />
+      {isTablet && rowsFirst && <HomeRows unit={unit} onAction={handleQuickAction} />}
+      <StampsNearYou wide={isTablet} onAction={handleQuickAction} onNearest={setNearestStamp} />
+      {isTablet && !rowsFirst && <HomeRows unit={unit} onAction={handleQuickAction} />}
       {isDreamStack && (
         <DreamShelf
           latitude={activeLocation?.coordinates?.latitude}
@@ -702,16 +655,13 @@ export default function HomePage() {
           onOpenActivity={openDreamActivity}
         />
       )}
-      <SuggestPlaceSection />
+      <SuggestPlaceSection wide={isTablet} />
       <WanderlustLine />
-      </>
-      )}
 
       <SmartSearchOverlay isOpen={showSearch} onClose={() => setShowSearch(false)} />
 
-      {/* "All services" bottom sheet — every destination the two retired tile
-          grids offered, grouped. Phone-only in practice (only the chip row sets
-          showAllServices). */}
+      {/* "All services" — the eleven finders as crest tiles. Phone only in
+          practice: the iPad shows them inline in the services zone. */}
       <AllServicesSheet isOpen={showAllServices} onClose={() => setShowAllServices(false)} onAction={handleQuickAction} />
 
       <LocationModePicker
@@ -732,12 +682,12 @@ export default function HomePage() {
 // ── HomeLobby — the top of Home (Home-Boxes L29-51) ────────────────────────
 // Line 1: mono HELLO, the local greeting word, the name in teal serif italic and
 // the home-country flag. Line 2: the date, the temperature (tap for °C/°F) and the
-// location pill. Line 3, only when there is one: the extra clocks (where you are,
-// your home). Owns the 1 s tick so the rest of Home doesn't re-render every
+// location pill; on iPad the local time joins the date. Line 3, only when there
+// is one: the extra clocks (where you are, your home). Owns the 1 s tick so the rest of Home doesn't re-render every
 // second. Everything wraps at large text sizes instead of clipping.
 const DOT = <span aria-hidden="true" style={{ color: NEUTRAL.ink3 }}>·</span>;
 
-function HomeLobby({ firstName, localGreeting, flag, weatherInfo, tempUnit, onToggleTemp, timezone, placeText, onChangeLocation, clockSources }) {
+function HomeLobby({ firstName, localGreeting, flag, weatherInfo, tempUnit, onToggleTemp, timezone, placeText, onChangeLocation, clockSources, showTime = false }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -791,6 +741,12 @@ function HomeLobby({ firstName, localGreeting, flag, weatherInfo, tempUnit, onTo
         <div className="flex items-center justify-between" style={{ gap: 10, minHeight: 28, marginTop: 4 }}>
           <div className="flex flex-wrap items-center min-w-0" style={{ columnGap: 6, fontSize: fs(12), fontWeight: 500, lineHeight: '16px', color: NEUTRAL.ink2 }}>
             <span className="whitespace-nowrap">{formatLocalDate(now, timezone)}</span>
+            {showTime && (
+              <>
+                {DOT}
+                <span className="whitespace-nowrap">{formatLocalTime(now, timezone)}</span>
+              </>
+            )}
             {temp && (
               <>
                 {DOT}
