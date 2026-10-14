@@ -263,7 +263,8 @@ export function StampHereButton({ a, link: resolved, formatDistance = undefined,
       )}
       {!stamped && !refused && (
         <p style={{ marginTop: 6, fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink3, textAlign: "center" }}>
-          {kindWord} · Only at the place, by GPS ·{" "}
+          {/* Each separator stays with the words before it when the line wraps. */}
+          {kindWord}&nbsp;· Only at the place, by GPS&nbsp;·{" "}
           {/* A 44px hit area that keeps the line's height: the box's own margins take it back. */}
           <button type="button" onClick={() => setHowOpen((v) => !v)} aria-expanded={howOpen} aria-controls={howId}
             style={{ display: "inline-flex", alignItems: "center", minHeight: 44, margin: "-14px 0", padding: 0, background: "transparent", border: 0,

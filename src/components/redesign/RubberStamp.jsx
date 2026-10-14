@@ -71,6 +71,10 @@ function RubberStampWithRef(
   const Icon = s === 'stamped' ? Check : Stamp;
   const label = busy ? STAMP_LABEL.busy : done ? STAMP_LABEL.done : (children ?? STAMP_LABEL.here);
   const named = idle && typeof placeName === 'string' && placeName.trim() !== '';
+  // The icon travels with the label's first word, so a label that wraps at a large text
+  // size stays one centred block led by the icon.
+  const text = typeof label === 'string' ? label : '';
+  const cut = text.indexOf(' ');
   return (
     <button
       ref={ref}
@@ -85,7 +89,6 @@ function RubberStampWithRef(
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
         width: '100%',
         minHeight: 48,
         boxSizing: 'border-box',
@@ -118,16 +121,19 @@ function RubberStampWithRef(
           }}
         />
       )}
-      <Icon
-        size={18}
-        color={ink}
-        strokeWidth={2}
-        aria-hidden="true"
-        focusable="false"
-        style={{ flexShrink: 0, opacity: busy ? 0.7 : 1 }}
-      />
       <span style={{ minWidth: 0 }}>
-        {label}
+        <span style={{ whiteSpace: 'nowrap' }}>
+          <Icon
+            size={18}
+            color={ink}
+            strokeWidth={2}
+            aria-hidden="true"
+            focusable="false"
+            style={{ display: 'inline', verticalAlign: '-3px', marginRight: 8, opacity: busy ? 0.7 : 1 }}
+          />
+          {cut > 0 ? text.slice(0, cut) : label}
+        </span>
+        {cut > 0 ? text.slice(cut) : null}
         {named ? <span className="sr-only">, {placeName}</span> : null}
       </span>
     </button>
