@@ -19,6 +19,9 @@ Branch `new-look` (worktree `gs-new-look`). Updated 2026-10-14. **Nothing on thi
 | Box | The postcard box: every postcard sent to you, kept (founder, 2026-10-14) | `53d4d5f`, `7650530`, `e747556` |
 | Keep | Keep a card sent to everyone in the box (founder, 2026-10-14) | `18ee82b` migration, `aa8cb97`, `019c361` |
 | Shelf | Home's circle shelf: a stamp on a cream plate (founder picked B, 2026-10-14) | `cca31d5` |
+| Cloth | Your cloth saved (B1) and every face carrying its cloth and photo (B2) | `eca1c73` migration, `5ae3dc8` |
+| Visits | Someone's whole world on a visit (B3), with B4 and B5 | `c6d3c2a` |
+| City Board | Postcards to a city's public board, from travelers who were really there | `a5b2184` migration, `bb22e10`, `8d283f5` |
 
 ## S18: what the merge brought, and what changed after it
 
@@ -60,11 +63,15 @@ Settings, own Passport, Eat, Coffee, Things to Do and its place sheet, Convenien
 2. On the founder's go, merge `new-look` into `stamping-v2`, then `main`. The push deploys the
    worker, which carries this branch's worker commits: three for B10, finder honesty fields
    (`244ebee` money rows, `a77322a` weather fetch time and dates, `5cf7d8d` convenience 24 h),
-   then `53d4d5f` and `aa8cb97`, the postcard box and Keep. Probe the worker, including
-   `/postcards/box` and `/postcards/keep`.
-3. The same push carries `supabase/migrations/20261014160000_postcard_keeps.sql`, which
-   `deploy-migrations.yml` applies after the founder approves the `production` environment run.
-   Until it runs, the worker hides Keep and the box shows the cards addressed to you; nothing breaks.
+   then the postcard box and Keep (`53d4d5f`, `aa8cb97`), faces (`5ae3dc8`), visits with B4 and
+   B5 (`c6d3c2a`) and City Board (`bb22e10`). Probe the worker, including `/postcards/box`,
+   `/postcards/keep`, `/social/world` and `/city/board`.
+3. The same push carries three migrations, which `deploy-migrations.yml` applies together after
+   the founder approves the `production` environment run: `20261014160000_postcard_keeps.sql`,
+   `20261014170000_profile_cloth.sql` and `20261014180000_city_board.sql`. Until they run, nothing
+   breaks: Keep stays hidden, the cloth picker stays hidden, and boards say they open with the
+   next update. Each was tested on Postgres 17 (PGlite); the worker routes were tested by running
+   the worker file against a fake Supabase (visits 21 cases, postcards 17, City Board 14).
 4. Then the OTA (`npm run ota`, run by the founder). Never before the worker deploy and probe.
 
 Backend items, each on the founder's go. The new look already works without them, with honest
@@ -72,11 +79,11 @@ fallbacks:
 
 | Item | What | State |
 |---|---|---|
-| B1 | Cloth column on the owner's prefs row (Supabase migration) | Not written. The cloth picker stays hidden until it ships |
-| B2 | Faces carry cloth and avatar | Not built |
-| B3 | `POST /social/world` for visits, and the `world` flag (with B4, B5) | Not built. Visits work by slug through `/passport/public` |
-| B4 | Blotter read gate mirrors the write gate | Not built (ships with B3) |
-| B5 | Moderate profile text before visitors see it | Not built (before or with B3) |
+| B1 | Cloth column on the owner's prefs row (Supabase migration) | **Written** (`eca1c73`); applies with the push. The picker appears then |
+| B2 | Faces carry cloth and avatar | **Built** (`5ae3dc8`): only where a name already shows |
+| B3 | `POST /social/world` for visits, and the `world` flag (with B4, B5) | **Built** (`c6d3c2a`). Home country only on the bookplate, the default, until the founder decides |
+| B4 | Blotter read gate mirrors the write gate | **Built** (`c6d3c2a`) |
+| B5 | Moderate profile text before visitors see it | **Built** (`c6d3c2a`). Older bios, places and coffee orders stay out of visits |
 | B6 | Feed fields for envelope art and verification method | Not built. Envelopes print "Verified" alone |
 | B7 | Latest stamp per person in the follow list | Waits on the founder's privacy decision |
 | B8 | Blocking ends follows, filters feeds, advertises `block_v2` | **Live** since the go-live, 2026-10-13 |
