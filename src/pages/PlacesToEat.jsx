@@ -1,32 +1,13 @@
-                // ============================================================================
-// GLOBESKIMMERS — PlacesToEat v6.4
 // ============================================================================
-// FEATURES:
-//   ✅ Search bar (dish + restaurant text search)
-//   ✅ Cuisine quick-scroll (All/American/.../Filipino)
-//   ✅ Special categories: Trending, Local, Hidden Gems, Fine Dining, Budget, Late Night
-//   ✅ Advanced collapsible filters:
-//         Dietary (Vegetarian, Vegan, Halal, Kosher, Gluten-Free)
-//         Vibe (Photo-Worthy, Date Night, Family, Work-Friendly, Outdoor, Live Music, Groups)
-//         Seating & Parking (Google-confirmed ✅)
-//         Amenities (Outdoor seating, Drive-thru, Takeout, Dine-in)
-//         Open Now · Min Rating · Price Range · Radius
-//   ✅ Sort: Nearby · Best
-//   ✅ Trust labels: ✅ Google confirmed / ⚠️ Mentioned in reviews
-//   ✅ Photo carousel (swipe, up to 5 photos)
-//   ✅ Ranking badges: #1 gold / #2 silver / #3 bronze
-//   ✅ Smart badges: Hidden Gem, Late Night, Popular, Trending, Drive-Thru, Takeout Only
-//   ✅ Customer Favorites (top dishes from reviews)
-//   ✅ 5 Google reviews
-//   ✅ Best time to visit
-//   ✅ Parking with trust labels
-//   ✅ Seating with trust labels
-//   ✅ Drive-thru / Cash Only indicators
-//   ✅ Tap-to-call phone
-//   ✅ Website link
-//   ✅ Directions (Google / Apple / Waze)
-//   ✅ Leaflet map with numbered markers
-//   ✅ Load more (20 at a time)
+// GLOBESKIMMERS — Places to Eat (the new look: WORLD.eat, "Bistro Menu")
+// ============================================================================
+// The Bordeaux plate (count, title, location, unit) with the search, the quick
+// chips (Open now, Late night, Filters) and the cuisines; one note at a time;
+// then a numbered list of restaurant cards (Eat.dc.html L91-132): photo or
+// strip with the serif numeral, the worker's intent tier as a pill, the name
+// on its menu line, one facts line, at most three tags, the quiet rows, the
+// rubber stamp when you're here and one action row. Owned-first fetch, cache
+// keys, filters, presets and analytics are unchanged.
 // ============================================================================
 
 import React, { useState, useEffect, useRef, useMemo, useId } from "react";
@@ -52,10 +33,10 @@ import { WORLD, fs } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import FinderHeader from "@/components/finder/FinderHeader";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
-import FilterSheet from "@/components/finder/FilterSheet";
+import FilterSheet, { FilterGroupLabel } from "@/components/finder/FilterSheet";
 import FallbackDisclaimer, { fallbackNoteKind } from "@/components/finder/FallbackDisclaimer";
 import { WorldSearch, WorldChip, ChipRow, ResultLine, WorldNote } from "@/components/finder/FinderControls";
-import { WorldCard, worldGrid, NumberMark, FactsLine, RatingFact, WorldTag, TagRow, CardKicker, CardName, QuietRows, ActionRow } from "@/components/finder/FinderCard";
+import { WorldCard, worldGrid, NumberMark, FactsLine, RatingFact, WorldTag, TagRow, CardKicker, CardName, QuietRows, ActionRow, WorldSkeleton } from "@/components/finder/FinderCard";
 import { WorldStrip } from "@/components/finder/PhotoOrIcon";
 
 // iPad editorial design tokens (design handoff: "Places to Eat · iPad").
@@ -80,19 +61,6 @@ function photoSrc(photo, maxWidth = 800) {
 
 // The Eat world (Bordeaux plate, saffron accents): every colour on the page comes from it.
 const EAT = WORLD.eat;
-
-// ─── THEME ──────────────────────────────────────────────────────────────────
-const BLUE      = "#3B82F6";
-const BLUE_DARK = "#1E40AF";
-const BLUE_LT   = "#EFF6FF";
-const GOLD      = "#F59E0B";
-const CORAL     = "#FF6B6B";
-const GRAY      = "#64748B";
-const DARK      = "#1A2332";
-const GREEN     = "#4CAF50";
-const TEAL      = "#14B8A6";
-const PURPLE    = "#7C3AED";
-const ORANGE    = "#EA580C";
 
 // ─── CUISINE CATEGORIES ─────────────────────────────────────────────────────
 const CUISINES = [
@@ -769,32 +737,29 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
   );
 }
 
-// ─── FILTER CHIP ─────────────────────────────────────────────────────────────
-function Chip({ label, active, onClick, icon, color="#3B82F6" }) {
-  return <button onClick={onClick} style={{display:"flex",alignItems:"center",gap:"4px",padding:"6px 12px",borderRadius:"20px",border:active?`2px solid ${color}`:"1.5px solid #E2E8F0",background:active?`${color}12`:"#fff",color:active?color:GRAY,fontWeight:active?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit",flexShrink:0,whiteSpace:"nowrap"}}>{icon&&<span>{icon}</span>}{label}</button>;
-}
-
 // ─── MAP POPUP ────────────────────────────────────────────────────────────────
 function buildPopup(r, idx) {
-  const name    = r.displayName?.text||r.name||'Restaurant';
-  const address = r.formattedAddress||r.shortFormattedAddress||'';
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  const name    = esc(r.displayName?.text||r.name||'Restaurant');
+  const address = esc(r.formattedAddress||r.shortFormattedAddress||'');
   const phone   = r.nationalPhoneNumber||r.internationalPhoneNumber||'';
-  const photo   = r.photoUrl||r.photos?.[0]||null;
   const { isOpen, todayHours, is24Hours } = r;
+  // Words only: the open word in green or stamp red, never a coloured dot alone.
+  const openWord = is24Hours ? 'Open 24 hours' : isOpen===true ? 'Open' : isOpen===false ? 'Closed' : 'Hours not listed';
+  const openInk  = is24Hours||isOpen===true ? '#2E6B4E' : isOpen===false ? '#B0472F' : '#736657';
   return `
-    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:260px;position:relative;">
+    <div style="font-family:'Inter Tight',-apple-system,sans-serif;width:260px;position:relative;color:#16110D;">
       <div style="padding:12px;padding-top:14px;">
-        <div style="font-weight:700;font-size:calc(14px*var(--fs));color:#1A2332;margin-bottom:5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;" onclick="window.viewRestDetails&&window.viewRestDetails(${idx})">${name}</div>
-        <div style="font-size:11px;color:#64748B;margin-bottom:6px;">${address}</div>
-        <div style="font-size:calc(11px*var(--fs));padding:5px 8px;border-radius:6px;background:${is24Hours?'#E3F2FD':isOpen===true?'#F0FDF4':isOpen===false?'#FEF2F2':'#F5F5F5'};margin-bottom:6px;">
-          <span style="font-weight:700;color:${is24Hours?'#1565C0':isOpen===true?'#15803D':isOpen===false?'#DC2626':'#9E9E9E'};">${is24Hours?'🔄 Open 24/7':isOpen===true?'● Open':isOpen===false?'● Closed':'● Hours N/A'}</span>
-          ${todayHours&&!is24Hours?`<span style="color:#64748B;"> · ${todayHours}</span>`:''}
+        <div style="font-family:'Instrument Serif',Georgia,serif;font-size:calc(18px*var(--fs));line-height:1.15;margin-bottom:4px;cursor:pointer;text-decoration:underline;text-decoration-color:${EAT.line};text-underline-offset:3px;" onclick="window.viewRestDetails&&window.viewRestDetails(${idx})">${name}</div>
+        <div style="font-size:calc(11.5px*var(--fs));color:#736657;margin-bottom:6px;">${address}</div>
+        <div style="font-size:calc(12px*var(--fs));margin-bottom:6px;">
+          <span style="font-weight:600;color:${openInk};">${openWord}</span>${todayHours&&!is24Hours?`<span style="color:#736657;"> · ${esc(todayHours)}</span>`:''}
         </div>
-        ${r.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:8px;">★ <strong style="color:#1A2332;">${r.rating.toFixed(1)}</strong> <span style="color:#64748B;">(${(r.userRatingCount||0).toLocaleString()})</span><span style="color:#9E9E9E;font-size:calc(10px*var(--fs));"> Google</span>${r.distance?` · <span style="color:#3B82F6;">${r.distance}</span>`:''}</div>`:''}
-        ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;text-decoration:none;color:#3B82F6;font-size:calc(11px*var(--fs));font-weight:600;">📞 ${phone}</a>`:''}
+        ${r.rating?`<div style="font-size:calc(12px*var(--fs));margin-bottom:8px;"><span style="color:${EAT.star};">★</span> <strong>${r.rating.toFixed(1)}</strong> <span style="color:#736657;">(${(r.userRatingCount||0).toLocaleString()}) Google</span></div>`:''}
+        ${phone?`<a href="tel:${esc(phone)}" style="display:inline-flex;align-items:center;min-height:32px;margin-bottom:8px;color:${EAT.ink};font-size:calc(12px*var(--fs));font-weight:600;text-decoration:underline;text-underline-offset:2px;">Call ${esc(phone)}</a>`:''}
         <div style="display:flex;gap:8px;">
-          <button onclick="window.openDirFromMap&&window.openDirFromMap(${idx})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#3B82F6;color:#fff;font-weight:600;font-size:11px;cursor:pointer;">🧭 Directions</button>
-          <button onclick="window.viewRestDetails&&window.viewRestDetails(${idx})" style="flex:1;padding:8px;border:none;border-radius:7px;background:#F1F5F9;color:#1A2332;font-weight:600;font-size:11px;cursor:pointer;">📋 Details</button>
+          <button onclick="window.openDirFromMap&&window.openDirFromMap(${idx})" style="flex:1;min-height:40px;border:none;border-radius:10px;background:${EAT.cta};color:#fff;font-weight:600;font-size:calc(12px*var(--fs));cursor:pointer;">Directions</button>
+          <button onclick="window.viewRestDetails&&window.viewRestDetails(${idx})" style="flex:1;min-height:40px;border:1px solid ${EAT.line};border-radius:10px;background:#fff;color:#3A3128;font-weight:600;font-size:calc(12px*var(--fs));cursor:pointer;">Details</button>
         </div>
       </div>
     </div>`;
@@ -886,7 +851,7 @@ export default function PlacesToEat() {
   const [showLocPicker, setShowLocPicker] = useState(false);
   // Collapsible "You are here" tooltip on the map view. Expanded shows the
   // full 3-line card (heading + Current/Selected + city/state); collapsed
-  // shrinks to a "📍 You are here ⌄" pill that taps to expand.
+  // shrinks to a "You are here ⌄" pill that taps to expand.
   const [userPinExpanded, setUserPinExpanded] = useState(true);
   useEffect(() => {
     /** @type {any} */ (window)._gsPTEUserPin = () => setUserPinExpanded(e => !e);
@@ -1334,24 +1299,24 @@ export default function PlacesToEat() {
       mapInstanceRef.current=map; window.mapInstance=map;
       window.viewRestDetails=(i)=>{setViewMode("list");setTimeout(()=>cardRefs.current[i]?.scrollIntoView({behavior:"smooth",block:"center"}),150);};
       window.openDirFromMap=(i)=>{const r=filtered[i];r&&setDirModal({open:true,lat:r.lat,lng:r.lng,name:r.name,address:r.formattedAddress||r.shortFormattedAddress||r.vicinity||r.address||''});};
-      // User-location pin with collapsible "📍 You are here" tooltip below
+      // User-location pin with collapsible "You are here" tooltip below
       // (anti-overlap with restaurant popups above). Same pattern as
       // ThingsToDo TierMapOverlay + MoneyExchange map.
       const userMode = activeLocation?.mode === 'navigate' ? 'Selected location' : 'Current location';
       const userLabel = locationText || '';
       const userTooltipHtml = userPinExpanded
-        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsPTEUserPin&&window._gsPTEUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:calc(10px*var(--fs));font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:calc(12px*var(--fs));margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:calc(11px*var(--fs));margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:calc(10px*var(--fs));line-height:1.3;">${userLabel}</div></div>`
-        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsPTEUserPin&&window._gsPTEUserPin()"><span style="font-weight:700;color:#1A2332;font-size:calc(11px*var(--fs));">📍 You are here</span><span style="color:#64748B;font-size:calc(10px*var(--fs));font-weight:700;">⌄</span></div>`;
+        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsPTEUserPin&&window._gsPTEUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:calc(10px*var(--fs));font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:calc(12px*var(--fs));margin-bottom:2px;padding-right:24px;">You are here</div><div style="font-weight:700;color:#4285F4;font-size:calc(11px*var(--fs));margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:calc(10px*var(--fs));line-height:1.3;">${userLabel}</div></div>`
+        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsPTEUserPin&&window._gsPTEUserPin()"><span style="font-weight:700;color:#1A2332;font-size:calc(11px*var(--fs));">You are here</span><span style="color:#64748B;font-size:calc(10px*var(--fs));font-weight:700;">⌄</span></div>`;
       window.L.marker([lat,lng],{icon:window.L.divIcon({html:'<div style="width:14px;height:14px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',iconSize:[14,14],className:""})}).addTo(map).bindTooltip(userTooltipHtml,{permanent:true,direction:'bottom',opacity:1,offset:[0,12],className:'gs-user-tooltip',interactive:true});
       filtered.slice(0,displayCount).forEach((r,i)=>{
         if(!r.lat||!r.lng)return;
         const isSelected = i === selectedMapIndex;
-        const pinBg    = isSelected ? "#EA580C" : BLUE;
-        const pinShadow= isSelected ? "0 0 0 4px rgba(234,88,12,0.35), 0 3px 10px rgba(234,88,12,0.5)" : "0 2px 8px rgba(59,130,246,0.4)";
+        const pinBg    = EAT.ink;
+        const pinShadow= isSelected ? `0 0 0 4px ${EAT.star}, 0 3px 10px rgba(122,29,51,0.45)` : "0 2px 8px rgba(122,29,51,0.35)";
         const pinSize  = isSelected ? 38 : 30;
         const pinFont  = isSelected ? "14px" : "12px";
         const pinBorder= isSelected ? "3px solid #fff" : "2px solid #fff";
-        const marker = window.L.marker([r.lat,r.lng],{icon:window.L.divIcon({html:`<div style="width:${pinSize}px;height:${pinSize}px;background:${pinBg};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:${pinFont};box-shadow:${pinShadow};border:${pinBorder};">${i+1}</div>`,iconSize:[pinSize,pinSize],className:""})}).addTo(map).bindPopup(buildPopup(r,i),{maxWidth:270,autoPan:true,autoPanPaddingTopLeft:[0,160],autoPanPaddingBottomRight:[20,20],keepInView:true,className:"gs-rest-popup"});
+        const marker = window.L.marker([r.lat,r.lng],{icon:window.L.divIcon({html:`<div style="width:${pinSize}px;height:${pinSize}px;background:${pinBg};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',Georgia,serif;font-size:${pinFont};box-shadow:${pinShadow};border:${pinBorder};">${i+1}</div>`,iconSize:[pinSize,pinSize],className:""})}).addTo(map).bindPopup(buildPopup(r,i),{maxWidth:270,autoPan:true,autoPanPaddingTopLeft:[0,160],autoPanPaddingBottomRight:[20,20],keepInView:true,className:"gs-rest-popup"});
         if(isSelected) { marker.openPopup(); }
       });
     };
@@ -1439,30 +1404,27 @@ export default function PlacesToEat() {
            the loading branch so a no-location cold start can never show a spinner —
            `loading` starts true and the fetch effect bails before clearing it. */
         <div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}>
-          <FinderEmptyState catKey="food" icon={MapPin} title="Choose a location to search" reason="Use your current location or pick a city to find restaurants nearby" actionLabel="Choose location" onAction={()=>setShowLocPicker(true)}/>
+          <FinderEmptyState world="eat" icon={MapPin} title="Choose a location to search" reason="Use your current location or pick a city to find restaurants nearby" actionLabel="Choose location" onAction={()=>setShowLocPicker(true)}/>
         </div>
       ):loading?(
-        <div style={{textAlign:"center",padding:"60px 20px"}}>
-          <div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px",animation:"spin 2s linear infinite"}}>🍽️</div>
-          <div style={{color:GRAY,fontWeight:"600"}}>
-            {Object.values(filterDietary).some(Boolean)
-              ? `Searching for ${Object.entries(filterDietary).filter(([_,v])=>v).map(([k])=>k.charAt(0).toUpperCase()+k.slice(1)).join(' & ')} restaurants...`
-              : 'Finding restaurants...'}
-          </div>
+        <div style={isTablet?{maxWidth:1024,margin:"0 auto",padding:"16px 24px 0"}:{padding:"16px 16px 0"}}>
+          <WorldSkeleton world="eat" variant="card" count={isTablet?4:2} label={Object.values(filterDietary).some(Boolean)
+            ? `Searching for ${Object.entries(filterDietary).filter(([_,v])=>v).map(([k])=>k.charAt(0).toUpperCase()+k.slice(1)).join(' & ')} restaurants…`
+            : 'Finding restaurants…'}/>
         </div>
       ):error?(
         /* Was a dead "Expand Radius" button (every search already runs the full
            25-mile net). Honest actions instead: retry a failed load; move the
            search or clear filters/search on an empty result. */
         /^Failed/.test(error)
-          ? <div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}><FinderEmptyState catKey="food" icon={AlertCircle} title="Couldn't load restaurants" reason={error} actionLabel="Try again" onAction={handleRefresh} secondaryLabel="Search somewhere else" onSecondary={()=>setShowLocPicker(true)}/></div>
-          : <div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}><FinderEmptyState catKey="food" icon={SearchX} title="No restaurants found" reason={error} actionLabel="Search somewhere else" onAction={()=>setShowLocPicker(true)} secondaryLabel={(activeFilterCount>0||searchText)?"Clear filters":"Try again"} onSecondary={(activeFilterCount>0||searchText)?()=>{clearFilters();setSearchInput("");setSearchText("");}:handleRefresh}/></div>
+          ? <div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}><FinderEmptyState world="eat" icon={AlertCircle} title="Couldn't load restaurants" reason={error} actionLabel="Try again" onAction={handleRefresh} secondaryLabel="Search somewhere else" onSecondary={()=>setShowLocPicker(true)}/></div>
+          : <div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:"40px"}}><FinderEmptyState world="eat" icon={SearchX} title="No restaurants found" reason={error} actionLabel="Search somewhere else" onAction={()=>setShowLocPicker(true)} secondaryLabel={(activeFilterCount>0||searchText)?"Clear filters":"Try again"} onSecondary={(activeFilterCount>0||searchText)?()=>{clearFilters();setSearchInput("");setSearchText("");}:handleRefresh}/></div>
       ):viewMode==="list"?(
         <div style={isTablet
           ? {maxWidth:1024,margin:"0 auto",padding:"16px 24px 0",display:"flex",flexDirection:"column",gap:"30px"}
           : {width:"100%",padding:"16px 16px 0",display:"flex",flexDirection:"column",gap:"16px"}}>
           {filtered.length===0?(
-            <FinderEmptyState catKey="food" icon={SearchX} title="No matches" reason="Nothing here passes the current filters." actionLabel="Search somewhere else" onAction={()=>setShowLocPicker(true)} secondaryLabel={(activeFilterCount>0||searchText)?"Clear filters":undefined} onSecondary={(activeFilterCount>0||searchText)?()=>{clearFilters();setSearchInput("");setSearchText("");}:undefined}/>
+            <FinderEmptyState world="eat" icon={SearchX} title="No matches" reason="Nothing here passes the current filters." actionLabel="Search somewhere else" onAction={()=>setShowLocPicker(true)} secondaryLabel={(activeFilterCount>0||searchText)?"Clear filters":undefined} onSecondary={(activeFilterCount>0||searchText)?()=>{clearFilters();setSearchInput("");setSearchText("");}:undefined}/>
           ):(<>
             <ol aria-label="Places to eat" style={worldGrid(isTablet)}>
               {filtered.slice(0,displayCount).map((r,i)=>(
@@ -1489,54 +1451,54 @@ export default function PlacesToEat() {
       ):(
         <div style={{position:"relative"}}>
           <div ref={mapRef} style={{height:"calc(100vh - 200px)",width:"100%"}}/>
-          <button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"38px",height:"38px",border:"none",boxShadow:"0 2px 8px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(18px*var(--fs))",color:DARK}}>✕</button>
+          <button type="button" onClick={()=>setViewMode("list")} aria-label="Close the map" style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"12px",zIndex:1200,background:"#fff",borderRadius:"50%",width:44,height:44,border:`1px solid ${EAT.line}`,boxShadow:"0 2px 8px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:EAT.ink}}><X size={20} strokeWidth={2} aria-hidden="true"/></button>
         </div>
       )}
 
-      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}::-webkit-scrollbar{display:none}.gs-rest-popup .leaflet-popup-content-wrapper{border-radius:10px;padding:0;overflow:hidden}.gs-rest-popup .leaflet-popup-content{margin:0}`}</style>
+      <style>{`::-webkit-scrollbar{display:none}.gs-rest-popup .leaflet-popup-content-wrapper{border-radius:10px;padding:0;overflow:hidden}.gs-rest-popup .leaflet-popup-content{margin:0}`}</style>
 
       {/* FILTER SHEET — Bakery/Bars, Vibe, Dietary, Min Rating, Max Price + the
           trust legend, moved off the inline band (replaces the old accordion +
           its floating close FAB). */}
-      <FilterSheet open={filterSheetOpen} onClose={()=>setFilterSheetOpen(false)} title="Food filters" onClear={sheetFilterCount>0?clearSheetFilters:undefined}>
+      <FilterSheet world="eat" open={filterSheetOpen} onClose={()=>setFilterSheetOpen(false)} title="Food filters" onClear={sheetFilterCount>0?clearSheetFilters:undefined}>
         <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
           <div>
-            <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase font-semibold mb-2" style={{color:'#94A3B8'}}>More food types</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-              <Chip label="Bakery & Pastry" active={filterBakery} onClick={()=>setFilterBakery(!filterBakery)} color={TEAL}/>
-              <Chip label="Bars & Pubs" active={filterBars} onClick={()=>setFilterBars(!filterBars)} color={ORANGE}/>
-            </div>
+            <FilterGroupLabel>More food types</FilterGroupLabel>
+            <ChipRow wrap>
+              <WorldChip world="eat" label="Bakery and pastry" active={filterBakery} onClick={()=>setFilterBakery(!filterBakery)}/>
+              <WorldChip world="eat" label="Bars and pubs" active={filterBars} onClick={()=>setFilterBars(!filterBars)}/>
+            </ChipRow>
           </div>
           <div>
-            <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase font-semibold mb-2" style={{color:'#94A3B8'}}>Vibe</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-              {VIBE_OPTIONS.map(v=><Chip key={v.id} label={v.label} active={!!filterVibes[v.id]} onClick={()=>setFilterVibes(p=>({...p,[v.id]:!p[v.id]}))} color={PURPLE}/>)}
-            </div>
+            <FilterGroupLabel>Vibe</FilterGroupLabel>
+            <ChipRow wrap>
+              {VIBE_OPTIONS.map(v=><WorldChip key={v.id} world="eat" label={v.label} active={!!filterVibes[v.id]} onClick={()=>setFilterVibes(p=>({...p,[v.id]:!p[v.id]}))}/>)}
+            </ChipRow>
           </div>
           <div>
-            <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase font-semibold mb-2" style={{color:'#94A3B8'}}>Dietary</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-              {DIETARY_OPTIONS.map(d=><Chip key={d.id} label={d.label} active={!!filterDietary[d.id]} onClick={()=>setFilterDietary(p=>({...p,[d.id]:!p[d.id]}))} color={GREEN}/>)}
-            </div>
+            <FilterGroupLabel>Dietary</FilterGroupLabel>
+            <ChipRow wrap>
+              {DIETARY_OPTIONS.map(d=><WorldChip key={d.id} world="eat" label={d.label} active={!!filterDietary[d.id]} onClick={()=>setFilterDietary(p=>({...p,[d.id]:!p[d.id]}))}/>)}
+            </ChipRow>
           </div>
           <div>
-            <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase font-semibold mb-2" style={{color:'#94A3B8'}}>Min rating</div>
-            <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
-              {[{v:0,l:"Any"},{v:3.5,l:"3.5+"},{v:4.0,l:"4.0+"},{v:4.5,l:"4.5+"}].map(({v,l})=><Chip key={v} label={l} active={filterMinRating===v} onClick={()=>setFilterMinRating(v)}/>)}
-            </div>
+            <FilterGroupLabel>Minimum rating</FilterGroupLabel>
+            <ChipRow wrap>
+              {[{v:0,l:"Any"},{v:3.5,l:"3.5+"},{v:4.0,l:"4.0+"},{v:4.5,l:"4.5+"}].map(({v,l})=><WorldChip key={v} world="eat" label={l} active={filterMinRating===v} clearable={false} onClick={()=>setFilterMinRating(v)}/>)}
+            </ChipRow>
           </div>
           <div>
-            <div className="font-mono text-[calc(10px*var(--fs))] tracking-[0.12em] uppercase font-semibold mb-2" style={{color:'#94A3B8'}}>Max price</div>
-            <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
-              {[{v:0,l:"Any"},{v:1,l:"$"},{v:2,l:"$$"},{v:3,l:"$$$"},{v:4,l:"$$$$"}].map(({v,l})=><Chip key={v} label={l} active={filterMaxPrice===v} onClick={()=>setFilterMaxPrice(v)}/>)}
-            </div>
+            <FilterGroupLabel>Maximum price</FilterGroupLabel>
+            <ChipRow wrap>
+              {[{v:0,l:"Any"},{v:1,l:"$"},{v:2,l:"$$"},{v:3,l:"$$$"},{v:4,l:"$$$$"}].map(({v,l})=><WorldChip key={v} world="eat" label={l} active={filterMaxPrice===v} clearable={false} onClick={()=>setFilterMaxPrice(v)}/>)}
+            </ChipRow>
           </div>
-          {/* Trust legend — glosses the ✅/⚠️ marks the cards themselves render (TrustTag) */}
-          <div style={{padding:"10px 12px",background:"#F8FAFC",borderRadius:"8px",border:"1px solid #E8EDF2"}}>
-            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,marginBottom:"5px"}}>DATA TRUST GUIDE</div>
-            <div style={{fontSize:"calc(11px*var(--fs))",color:DARK,lineHeight:"1.7"}}>
-              <div>✅ <strong>Confirmed</strong> — Google Places API data (reliable)</div>
-              <div>⚠️ <strong>Reviews</strong> — Customer-reported, may have changed</div>
+          {/* The trust words the cards' More panel uses, glossed in plain words. */}
+          <div style={{padding:"12px 14px",background:EAT.wash,borderRadius:12}}>
+            <div className="font-mono uppercase" style={{fontSize:fs(10.5),letterSpacing:".12em",color:EAT.washInk,marginBottom:4}}>How sure we are</div>
+            <div style={{fontSize:fs(13),lineHeight:1.5,color:EAT.washInk}}>
+              <div><strong>Confirmed by Google</strong>: from the place&rsquo;s Google listing.</div>
+              <div><strong>Mentioned in reviews</strong>: what customers report, which may have changed.</div>
             </div>
           </div>
         </div>
