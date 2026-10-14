@@ -859,22 +859,39 @@ async function handleRestaurantSearch(request, env, ctx) {
 // real-time face of a store download — stores only report counts next day) and
 // every stamp. Transport: ntfy push when NTFY_TOPIC is set (free; the ntfy app
 // subscribes to the secret topic) and/or a Twilio SMS when TWILIO_SID,
-// TWILIO_TOKEN, TWILIO_FROM and FOUNDER_PHONE are set. Capped at 400/day so a
-// busy day can never flood a phone or a bill; never blocks the request.
+// TWILIO_TOKEN, TWILIO_FROM and FOUNDER_PHONE are set. Capped so a busy day
+// can never flood a phone or a bill, and no flood can silence a child-safety
+// report (go-live round 2): every alert except 'urgent' shares 400 a day;
+// 'urgent' (a child-safety report) has its own 50 a day and never counts
+// against the 400. opts.by (the reporter's user id, on report and block
+// alerts): one person's reports and blocks ring at most 10 times a day; what
+// they file still reaches Admin → Safety reports, just without a ring. Never
+// blocks the request.
 // opts.click (2026-10-13): where tapping the ntfy alert goes (ntfy's Click
 // header), e.g. an app deep link. SMS has no tap target, so Twilio ignores it.
 // A topic name on ntfy.sh is all anyone needs to read its alerts, so it is a
 // secret: never write it into this (public) repo. NTFY_TOKEN, when set, is an
 // ntfy.sh access token for a reserved topic that denies anonymous access; the
 // alert then carries it, and knowing the topic name is no longer enough.
+const BELL_DAILY_MAX = 400;
+const BELL_URGENT_DAILY_MAX = 50;
+const BELL_PER_REPORTER_MAX = 10;
 async function founderAlert(env, text, tag = 'bell', opts = {}) {
   try {
     if (!env.NTFY_TOPIC && !env.TWILIO_SID) return;
-    if (env.GLOBESKIMMERS_KV) {
-      const ck = `bell:cap:${new Date().toISOString().slice(0, 10)}`;
-      const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
-      if (n >= 400) return;
-      await env.GLOBESKIMMERS_KV.put(ck, String(n + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
+    const kv = env.GLOBESKIMMERS_KV;
+    if (kv) {
+      const day = new Date().toISOString().slice(0, 10);
+      // One more on a daily counter, or false when it is full.
+      const take = async (k, max) => {
+        const n = Number(await kv.get(k).catch(() => 0)) || 0;
+        if (n >= max) return false;
+        await kv.put(k, String(n + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
+        return true;
+      };
+      const by = typeof opts?.by === 'string' && opts.by ? opts.by : null;
+      if (by && !(await take(`bell:by:${by}:${day}`, BELL_PER_REPORTER_MAX))) return;
+      if (tag === 'urgent' ? !(await take(`bell:urgent:${day}`, BELL_URGENT_DAILY_MAX)) : !(await take(`bell:cap:${day}`, BELL_DAILY_MAX))) return;
     }
     const jobs = [];
     if (env.NTFY_TOPIC) {
@@ -15695,7 +15712,7 @@ async function handlePlaceReport(request, env, ctx) {
         hidden = Number(up?.meta?.changes) > 0;
       }
       if (ctx && (n === 1 || hidden)) {
-        ctx.waitUntil(founderAlert(env, `🚩 A place suggestion was reported${hidden ? ` ${n} times — hidden until you decide` : ''}: "${p.name}" (${reason}). Admin → Place suggestions → Reported.`, 'report'));
+        ctx.waitUntil(founderAlert(env, `🚩 A place suggestion was reported${hidden ? ` ${n} times — hidden until you decide` : ''}: "${p.name}" (${reason}). Admin → Place suggestions → Reported.`, 'report', { by: user.id }));
       }
       if (ctx) ctx.waitUntil(gbLogEvent(env, 'place_report', { place_id: id, reason, n, hidden }));
     }
@@ -16603,11 +16620,13 @@ async function handleSocialReport(request, env, ctx) {
     if (!w.ok) return jsonResponse({ error: 'Could not send the report' }, 502);
     if (ctx) {
       ctx.waitUntil(gbLogEvent(env, 'social_report', { kind, reason }));
-      // The founder hears about every report at once (Apple 1.2: act within
-      // 24 hours), a child-safety one loudest. Never a name or an id here:
-      // the alert topic is only as private as its name.
+      // The founder hears about a report at once (Apple 1.2: act within 24
+      // hours), a child-safety one loudest and on its own daily allowance;
+      // one reporter rings at most 10 times a day (founderAlert), and every
+      // report is filed either way. Never a name or an id in the text: the
+      // alert topic is only as private as its name.
       const urgent = reason === 'minor_safety';
-      ctx.waitUntil(founderAlert(env, `🚩 ${urgent ? 'CHILD SAFETY report (24h)' : 'Report'} · ${kind} · ${reason.replace('_', ' ')}. Admin → Safety reports.`, urgent ? 'urgent' : 'report'));
+      ctx.waitUntil(founderAlert(env, `🚩 ${urgent ? 'CHILD SAFETY report (24h)' : 'Report'} · ${kind} · ${reason.replace('_', ' ')}. Admin → Safety reports.`, urgent ? 'urgent' : 'report', { by: user.id }));
     }
     return jsonResponse({ ok: true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
@@ -17689,15 +17708,22 @@ async function handleSocialBlock(request, env, ctx) {
       target = (q.ok ? await q.json() : [])[0]?.user_id || null;
     }
     if (!target || !BL_UUID.test(target) || target === user.id) return jsonResponse({ error: 'Nothing to block' }, 400);
-    const w = await gbRest(env, 'user_blocks', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ user_id: user.id, blocked_user_id: target }) });
+    const w = await gbRest(env, 'user_blocks', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify({ user_id: user.id, blocked_user_id: target }) });
     if (!w.ok) return jsonResponse({ error: 'Could not block right now — try again' }, 502);
+    // Only a row that comes back is a new block: blocking someone already
+    // blocked files nothing and rings nothing (go-live round 2: every tap
+    // filed another open record and rang, so taps could flood the queue).
+    const made = await w.json().catch(() => null);
+    const fresh = Array.isArray(made) && made.length > 0;
     // A block tells the developer too (Apple 1.2): it files a safety record
     // (Admin → Safety reports) with the note the app sends — what the person
-    // was looking at — and rings the founder. The blocked person is never told.
-    if (ctx) {
+    // was looking at — and rings the founder (at most 10 rings a day for one
+    // blocker's reports and blocks, see founderAlert). The blocked person is
+    // never told.
+    if (ctx && fresh) {
       const note = `Blocked by a traveler. ${String(b.note || '').replace(/\s+/g, ' ').trim()}`.trim().slice(0, 500);
       ctx.waitUntil(gbRest(env, 'content_reports', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ reporter_id: user.id, kind: 'block', reason: 'other', ref: `user:${target}`, note }) }).catch(() => {}));
-      ctx.waitUntil(founderAlert(env, '🚩 A traveler blocked someone. Admin → Safety reports.', 'report'));
+      ctx.waitUntil(founderAlert(env, '🚩 A traveler blocked someone. Admin → Safety reports.', 'report', { by: user.id }));
     }
     const now = new Date().toISOString();
     await Promise.all([
