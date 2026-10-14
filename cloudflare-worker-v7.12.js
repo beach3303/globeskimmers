@@ -16380,6 +16380,19 @@ const FREEZE_PURGE_DAYS = 7;
 const FREEZE_SWEEP_MAX = 5;        // purges per daily run (~60 subrequests each); the rest wait a day
 const gbUnderAge = (sp) => sp?.social_tier === 'blocked';
 const gbUnderAgeResp = () => jsonResponse({ error: "GlobeSkimmers isn't available on this account", code: 'under_age' }, 403);
+// The private doors (go-live round 3): saved places and the wishlist
+// (/saves/pull, /saves/push), guestbook visit records, luggage and virtual
+// items. The under-13 clean-up deletes them once — and the frozen app's
+// cloud sync pushed them straight back, kept for good. A frozen account is
+// refused (gbUnderAgeResp) and so is one whose age can't be read
+// (gbAgeUnknownResp); teens and a birth year to confirm keep their travel
+// tools. null = the door is open.
+async function gbFrozenDoor(env, userId) {
+  const sp = await gbSocialProfile(env, userId).catch(() => undefined);
+  if (sp === undefined) return gbAgeUnknownResp();
+  if (gbUnderAge(sp)) return gbUnderAgeResp();
+  return null;
+}
 // Starts the purge clock (once). `now` is a parameter only for tests and the
 // daily scan; true when a new clock started.
 async function gbMarkFrozen(env, userId, now = new Date()) {
@@ -17162,6 +17175,8 @@ async function handleGearSet(request, env) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in first' }, 401);
+    const shut = await gbFrozenDoor(env, user.id);
+    if (shut) return shut;
     const b = await request.json().catch(() => ({}));
     const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
     const patch = { user_id: user.id, updated_at: new Date().toISOString() };
@@ -17236,6 +17251,8 @@ async function handleLuggageSet(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in first' }, 401);
+    const shut = await gbFrozenDoor(env, user.id);
+    if (shut) return shut;
     const b = await request.json().catch(() => ({}));
     const patch = { user_id: user.id, updated_at: new Date().toISOString() };
     if (b.active !== undefined) {
@@ -22950,6 +22967,8 @@ async function handleSavesPull(request, env) {
     const b = await request.json().catch(() => ({}));
     const kind = ['wishlist', 'places'].includes(b.kind) ? b.kind : null;
     if (!kind) return jsonResponse({ error: 'kind must be wishlist|places' }, 400);
+    const shut = await gbFrozenDoor(env, user.id);
+    if (shut) return shut;
     const res = await gbRest(env, `user_saves?user_id=eq.${user.id}&kind=eq.${kind}&select=data`, {});
     if (!res.ok) return jsonResponse({ data: [], error: `supabase ${res.status}` }, 502);
     const rows = await res.json().catch(() => []);
@@ -22964,6 +22983,8 @@ async function handleSavesPush(request, env) {
     const b = await request.json().catch(() => ({}));
     const kind = ['wishlist', 'places'].includes(b.kind) ? b.kind : null;
     if (!kind) return jsonResponse({ error: 'kind must be wishlist|places' }, 400);
+    const shut = await gbFrozenDoor(env, user.id);
+    if (shut) return shut;
     let data = Array.isArray(b.data) ? b.data : [];
     if (data.length > 500) data = data.slice(0, 500); // sane cap
     const res = await gbRest(env, 'user_saves?on_conflict=user_id,kind', {
@@ -23656,6 +23677,8 @@ async function handleGuestbookVisit(request, env) {
     const b = await request.json().catch(() => ({}));
     const entityId = gbClean(b.entity_id);
     if (!entityId) return jsonResponse({ error: 'entity_id required' }, 400);
+    const shut = await gbFrozenDoor(env, user.id);
+    if (shut) return shut;
     // Note: omit `signed` so we never reset an already-signed visit on upsert.
     await gbRest(env, 'guestbook_visits', {
       method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' },
