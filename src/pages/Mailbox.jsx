@@ -126,7 +126,9 @@ export default function MailboxPage() {
     setBusy(false);
     if (error) { showToast(error, "error"); return; }
     setHandleDraft("");
-    showToast(data.status === "pending" ? `Asked to follow @${data.handle} — they approve first` : `Following @${data.handle}`, "success");
+    // The worker names the handle (a muted answer included); what was typed is the fallback.
+    const who = data?.handle || h;
+    showToast(data?.status === "pending" ? `Asked to follow @${who} — they approve first` : `Following @${who}`, "success");
     load();
   };
   const respond = async (user_id, op) => { await socialFollow(op, { user_id }); load(); };
