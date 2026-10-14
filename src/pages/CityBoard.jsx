@@ -17,12 +17,13 @@ import { ChevronLeft, Mail, Stamp } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
-import { cityBoard, getHandle, getSocialProfile } from "@/lib/passport";
+import { blotterReadBoard, cityBoard, getHandle, getSocialProfile } from "@/lib/passport";
 import { AirmailChevron } from "@/components/redesign/ornaments";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { whenLabel } from "@/components/social/Envelope";
 import PostcardCard from "@/components/social/PostcardCard";
 import PostcardCompose from "@/components/passport/PostcardCompose";
+import { BlotterStrip } from "@/components/passport/Blotter";
 import TravelerSheet from "@/components/social/TravelerSheet";
 import ConfirmBirthdayNote from "@/components/social/ConfirmBirthdayNote";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
@@ -91,6 +92,9 @@ function Board({ city, country, onBack }) {
   const [me, setMe] = useState({ handle: null, name: null });
   const [traveler, setTraveler] = useState(null);
   const [compose, setCompose] = useState(false);
+  // The cards' likes and comments (the guestbook, 2026-10-14), read for every card shown.
+  const [book, setBook] = useState(null);
+  const readBook = (list) => blotterReadBoard((list || []).map((x) => x?.id)).then(setBook);
   const live = useRef(0);
 
   useEffect(() => {
@@ -106,6 +110,7 @@ function Board({ city, country, onBack }) {
     if (n !== live.current) return;
     setBoard(r);
     setOlder("idle");
+    readBook(r.rows);
   };
   useEffect(() => { load(); }, [city, country]);
   const retry = () => { setBoard(null); load(); };
@@ -120,7 +125,9 @@ function Board({ city, country, onBack }) {
     setOlder("idle");
     setBoard((b) => {
       const seen = new Set((b.rows || []).map((x) => x.id));
-      return { ...b, rows: [...(b.rows || []), ...(r.rows || []).filter((x) => !seen.has(x.id))], next: r.next };
+      const all = [...(b.rows || []), ...(r.rows || []).filter((x) => !seen.has(x.id))];
+      readBook(all);
+      return { ...b, rows: all, next: r.next };
     });
   };
 
@@ -176,7 +183,15 @@ function Board({ city, country, onBack }) {
         <h2 style={KICKER}>Newest first</h2>
         <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: 16, marginTop: 8, alignItems: "start" }}>
           {rows.map((r, i) => (
-            <PostcardCard key={r.id || `bc-${r.created_at}-${i}`} row={r} me={me.handle} meName={me.name || profile?.first_name || null} onReport={report} />
+            <div key={r.id || `bc-${r.created_at}-${i}`}>
+              <PostcardCard row={r} me={me.handle} meName={me.name || profile?.first_name || null} onReport={report} />
+              {r.id ? (
+                <div style={{ marginTop: 8 }}>
+                  <BlotterStrip postcardId={r.id} blotter={book} food={!!r.dish}
+                    ownerView={!!me.handle && lc(r.by?.handle) === lc(me.handle)} onChanged={() => readBook(board?.rows)} />
+                </div>
+              ) : null}
+            </div>
           ))}
         </div>
         {board.next ? (

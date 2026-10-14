@@ -98,12 +98,16 @@ function yummyTarget(stamps) {
 // ── The strip under a page: press stamps + open the Guestbook ───────────────
 // `photoId` points the strip at one photo (its reactions and comments)
 // instead of a page's stamps; `food` says that photo's food is the star.
-export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, photoId = null, food = false }) {
+// `postcardId` points it at a postcard on a city board (City Boards, 2026-10-14):
+// no slug, as the worker finds the card's sender itself; `food` = it names a dish.
+export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, photoId = null, postcardId = null, food = false }) {
   const [busy, setBusy] = useState(null);       // kind being pressed/peeled
   const [sheet, setSheet] = useState(false);
-  const targets = useMemo(() => (photoId ? [`ph:${photoId}`] : (stamps || []).map((s) => `st:${s.id}`)), [stamps, photoId]);
+  const one = postcardId ? `pc:${postcardId}` : photoId ? `ph:${photoId}` : null;
+  const targets = useMemo(() => (one ? [one] : (stamps || []).map((s) => `st:${s.id}`)), [stamps, one]);
   const lead = targets[0] || null;
-  const yumTarget = useMemo(() => (photoId ? (food ? `ph:${photoId}` : null) : yummyTarget(stamps)), [stamps, photoId, food]);
+  const yumTarget = useMemo(() => (one ? (food ? one : null) : yummyTarget(stamps)), [stamps, one, food]);
+  const item = postcardId ? "postcard" : photoId ? "photo" : null;
 
   const agg = useMemo(() => {
     const counts = {}, mine = new Set();
@@ -121,7 +125,7 @@ export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, phot
     [blotter, targets],
   );
 
-  if (!slug || !lead) return null;
+  if ((!slug && !postcardId) || !lead) return null;
   const hasAny = Object.keys(agg.counts).length > 0 || pageEntries.length > 0;
   // The owner's own booklet stays quiet until someone reacts.
   if (ownerView && !hasAny) return null;
@@ -164,19 +168,21 @@ export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, phot
         <button type="button" onClick={() => setSheet(true)}
           className="ml-auto rounded-xl px-2.5 py-1.5 active:scale-95 transition-transform"
           style={{ background: CARD, border: `1px solid ${RULE}`, fontFamily: MONO, fontSize: fs(9.5), fontWeight: 700, letterSpacing: ".06em", color: "#8A5410" }}>
-          {photoId ? "💬 COMMENTS" : "✍ GUESTBOOK"}{pageEntries.length ? ` · ${pageEntries.length}` : ""}
+          {item ? "💬 COMMENTS" : "✍ GUESTBOOK"}{pageEntries.length ? ` · ${pageEntries.length}` : ""}
         </button>
       </div>
       {sheet && (
         <GuestbookSheet slug={slug} targets={targets} lead={lead} entries={pageEntries}
-          ownerView={ownerView} onChanged={onChanged} onClose={() => setSheet(false)} forPhoto={!!photoId} />
+          ownerView={ownerView} onChanged={onChanged} onClose={() => setSheet(false)} item={item} />
       )}
     </>
   );
 }
 
 // ── The Guestbook sheet: signatures, doodles, co-signs ──────────────────────
-function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, onClose, forPhoto = false }) {
+function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, onClose, item = null }) {
+  // item: 'photo' or 'postcard' for one thing's comments, null for a page's guestbook.
+  const forPhoto = !!item;
   useDismissable(true, onClose);
   // Rewriting an old signature republishes it under your name, so a held
   // teen or an unconfirmed birthday gets no edit (the worker refuses it
@@ -230,7 +236,7 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
         <div className="flex items-center justify-between">
           <div>
             <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".2em", color: "#8A5410" }}>{forPhoto ? "Comments" : "The Guestbook"}</div>
-            <div style={{ fontFamily: SERIF, fontSize: fs(20), color: INK }}>{forPhoto ? "On this photo" : "Sign this page"}</div>
+            <div style={{ fontFamily: SERIF, fontSize: fs(20), color: INK }}>{item ? `On this ${item}` : "Sign this page"}</div>
           </div>
           <button onClick={onClose} aria-label="Close the guestbook" className="rounded-full p-2" style={{ background: CARD, border: `1px solid ${RULE}` }}>
             <X size={16} color={INK} />
@@ -240,7 +246,7 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
         <div className="mt-3">
           {entries.length === 0 && (
             <p style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(14.5), color: INK3 }}>
-              {forPhoto ? "No comments yet — be the first to leave a line or a little drawing." : "No signatures yet — be the first to leave a line or a little drawing."}
+              {forPhoto ? "No comments yet. Be the first to leave a line or a little drawing." : "No signatures yet. Be the first to leave a line or a little drawing."}
             </p>
           )}
           {entries.map((e) => (
@@ -315,14 +321,14 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
           </button>
         </div>
         <p className="mt-2" style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".06em", color: INK3 }}>
-          Signatures carry your @handle. The page&rsquo;s owner can sweep any entry.
+          {item === "postcard" ? "Comments carry your @handle. The postcard’s sender can sweep any comment." : "Signatures carry your @handle. The page’s owner can sweep any entry."}
         </p>
       </div>
 
       {pad && <DoodlePad onClose={() => setPad(false)} onPost={(dataUrl) => sign(dataUrl)} busy={busy} />}
       {aboutEntry && (
         <TravelerSheet person={{ user_id: aboutEntry.user_id || null, handle: aboutEntry.handle, name: aboutEntry.name, entry_id: aboutEntry.id }}
-          report={{ kind: "signature", slug, ref: `bl:${aboutEntry.id}`, note: `${forPhoto ? "Photo comment" : "Guestbook signature"}${aboutEntry.doodle ? " (a doodle)" : ""}${aboutEntry.body ? `: "${String(aboutEntry.body).slice(0, 300)}"` : ""}` }}
+          report={{ kind: "signature", slug, ref: `bl:${aboutEntry.id}`, note: `${item === "postcard" ? "Board postcard comment" : forPhoto ? "Photo comment" : "Guestbook signature"}${aboutEntry.doodle ? " (a doodle)" : ""}${aboutEntry.body ? `: "${String(aboutEntry.body).slice(0, 300)}"` : ""}` }}
           onClose={() => setAboutEntry(null)} onChanged={() => { setAboutEntry(null); onChanged?.(); }} />
       )}
 
