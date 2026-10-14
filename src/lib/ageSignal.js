@@ -32,7 +32,12 @@ const onIos = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 
 const onAndroid = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
 const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } };
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage off */ } };
-const within = (ms, p) => Promise.race([p, new Promise((res) => setTimeout(() => res(null), ms))]);
+// The answer, or null after ms or on a rejection (a build without the plugin); the timer goes
+// with the answer, so no 2-minute wait lingers.
+const within = (ms, p) => new Promise((res) => {
+  const t = setTimeout(() => res(null), ms);
+  Promise.resolve(p).then((v) => { clearTimeout(t); res(v); }, () => { clearTimeout(t); res(null); });
+});
 
 // { available, eligible, features, ageRatingCode } from the plugin, or null off iOS.
 export async function osAgeStatus() {
