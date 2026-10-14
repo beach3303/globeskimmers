@@ -19,8 +19,24 @@ export const GPS_VERIFY_RADIUS_M = 250;
 
 // Create/update a stamp. opts: { kind, entity_type, entity_id, name, city, region,
 // country, lat, lng, visited_on(YYYY-MM-DD), verified('gps'|'photo'|'self') }.
+// The after-stamp prompt (City Boards, 2026-10-14): a verified stamp in a city announces
+// itself as the window event 'gs:stamped' { city, country }, and BoardNudge offers that
+// city's board. A stamp verified by GPS announces at once; one waiting for its photo proof,
+// when a photo proves it (uploadStampPhoto). Prints added to a proven stamp never announce.
+const VERIFIED = new Set(['gps', 'photo_loc', 'photo_ai']);
+const awaitingProof = new Map(); // stamp id -> { city, country }
+function announceStamp(place) {
+  try { window.dispatchEvent(new CustomEvent('gs:stamped', { detail: place })); } catch { /* no window */ }
+}
+
 export async function addStamp(opts) {
   const { data, error } = await callWorker('passport/stamp', opts || {});
+  const city = String(opts?.city || '').trim();
+  const country = String(opts?.country || '').trim();
+  if (!error && data?.id && city && country) {
+    if (VERIFIED.has(data.verified)) announceStamp({ city, country });
+    else awaitingProof.set(data.id, { city, country });
+  }
   return { data, error };
 }
 
@@ -51,6 +67,11 @@ export async function listPassport() {
 // 'photo_loc' | 'photo_ai' | null and data.verified = the stamp's new status.
 export async function uploadStampPhoto({ stamp_id, image, caption, visited_on, content_type, exif }) {
   const { data, error } = await callWorker('passport/photo', { stamp_id, image, caption, visited_on, content_type, exif: exif || undefined });
+  const waiting = awaitingProof.get(stamp_id);
+  if (waiting && !error && data?.proof && VERIFIED.has(data.verified)) {
+    awaitingProof.delete(stamp_id);
+    announceStamp(waiting);
+  }
   return { data, error };
 }
 
@@ -318,6 +339,21 @@ export async function cityBoard({ city, country, before = null }) {
     rows: Array.isArray(data?.rows) ? data.rows : [],
     next: data?.next || null,
     can_post: data?.can_post === true,
+    held,
+    unavailable: data?.unavailable === true,
+    error: held ? null : error || data?.error || null,
+  };
+}
+// Every city board with postcards (City Boards, 2026-10-14), busiest first; q narrows by
+// city or country. { boards: [{ city, country, count, recent, last_at, cover }], held,
+// unavailable, error }: unavailable before the worker or its database function is there.
+export async function cityBoards(q = "") {
+  const query = String(q || "").trim();
+  const { data, error } = await callWorker('city/boards', query ? { q: query } : {});
+  if (data && data.path === '/city/boards') return { boards: [], held: null, unavailable: true, error: null };
+  const held = data?.code === 'teen_hold' ? data.held || 'teen' : null;
+  return {
+    boards: Array.isArray(data?.boards) ? data.boards : [],
     held,
     unavailable: data?.unavailable === true,
     error: held ? null : error || data?.error || null,

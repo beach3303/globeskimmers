@@ -11,6 +11,7 @@ import BrandBanner from "@/components/redesign/BrandBanner";
 import FloatingNav from "@/components/redesign/FloatingNav";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
 import BackToTop from "@/components/BackToTop";
+import BoardNudge from "@/components/passport/BoardNudge";
 import { PageGroundProvider, usePageGroundValue, usePageInk } from "@/components/redesign/PageGround";
 import { logEvent } from "@/lib/analytics";
 import "@/lib/cloudSync"; // starts Wishlist/Saved → account sync on sign-in (side-effect)
@@ -21,7 +22,7 @@ const BACK_TO_TOP_PAGES = new Set([
   "PlacesToEat", "CoffeeFinder", "ATMFinder", "RestroomFinder",
   "ConvenienceStore", "ThingsToDo", "Shopping", "MoneyExchange",
   "CultureInformation", "BasicPhrases", "Weather",
-  "Mailbox", "Postcards", "CityBoard", "Circle",
+  "Mailbox", "Postcards", "CityBoard", "CityBoards", "Circle",
 ]);
 
 // The bottom reserve under every page except Onboarding: the nav pill sits 22px above
@@ -41,6 +42,7 @@ const PAGE_GROUND = new Map(Object.entries({
   Mailbox: NEUTRAL.airmail,
   Postcards: NEUTRAL.airmail,
   CityBoard: NEUTRAL.airmail,
+  CityBoards: NEUTRAL.airmail,
   Profile: HARBOUR.paper,
   Circle: HARBOUR.paper,
   Traveler: HARBOUR.paper,
@@ -54,6 +56,7 @@ const PAGE_INK = new Map(Object.entries({
   Mailbox: NEUTRAL.airmailBlue,
   Postcards: NEUTRAL.airmailBlue,
   CityBoard: NEUTRAL.airmailBlue,
+  CityBoards: NEUTRAL.airmailBlue,
   Circle: HARBOUR.cloth,
 }));
 
@@ -223,6 +226,9 @@ function PageShell({ currentPageName, isOnboarding, children }) {
           <city>" travel nudge, and the one-time "auto-follow?" offer. */}
       <LocationMismatchSheet />
       <LocationAutoFollowOffer />
+
+      {/* After a verified stamp in a city: 'Send a postcard to Lisbon's board' (City Boards). */}
+      {!isOnboarding && <BoardNudge />}
     </div>
   );
 }

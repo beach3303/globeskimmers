@@ -4,7 +4,7 @@
  * This file is AUTO-GENERATED. Do not add imports or modify PAGES manually.
  * Pages are auto-registered when you create files in the ./pages/ folder.
  * (Stale: the Base44 plugin that generated it is gone. New pages are added to
- * PAGES by hand, as Circle, Traveler, Postcards and CityBoard were.)
+ * PAGES by hand, as Circle, Traveler, Postcards, CityBoard and CityBoards were.)
  * 
  * THE ONLY EDITABLE VALUE: mainPage
  * This controls which page is the landing page (shown when users visit the app).
@@ -55,6 +55,7 @@ import AdminAnalytics from './pages/AdminAnalytics';
 import BasicPhrases from './pages/BasicPhrases';
 import Circle from './pages/Circle';
 import CityBoard from './pages/CityBoard';
+import CityBoards from './pages/CityBoards';
 import CoffeeFinder from './pages/CoffeeFinder';
 import ConvenienceStore from './pages/ConvenienceStore';
 import CultureInformation from './pages/CultureInformation';
@@ -88,6 +89,7 @@ export const PAGES = {
     "BasicPhrases": BasicPhrases,
     "Circle": Circle,
     "CityBoard": CityBoard,
+    "CityBoards": CityBoards,
     "CoffeeFinder": CoffeeFinder,
     "ConvenienceStore": ConvenienceStore,
     "CultureInformation": CultureInformation,

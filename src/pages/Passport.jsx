@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { ChevronLeft, Loader2, Plus, Trash2, Calendar, RefreshCw, X, UserPlus } from "lucide-react";
-import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesign/constants";
+import { ChevronLeft, Loader2, Plus, Trash2, Calendar, RefreshCw, X, UserPlus, Mail } from "lucide-react";
+import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT, NEUTRAL } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
+import { cityBoardUrl, hasBoard } from "@/lib/boardLinks";
 import { showToast } from "@/components/Toast";
 import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead, socialFollow } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
@@ -708,7 +709,9 @@ function PassportInner() {
   const navigate = useNavigate();
   const isTablet = useIsTablet();
   const colWrap = isTablet ? "max-w-[820px]" : "max-w-md";
-  const { isAuthenticated, profile, user, socialTier } = useAuth();
+  const { isAuthenticated, profile, user, socialTier, socialTierReady } = useAuth();
+  // City boards are for adults whose age is known, as everywhere else.
+  const boardsOk = socialTierReady && !["blocked", "teen", "confirm"].includes(String(socialTier || ""));
   const isDev = isAdminEmail(user?.email); // sample-passport preview is admin-only
   const [loading, setLoading] = useState(true);
   const [stamps, setStamps] = useState([]);
@@ -1287,6 +1290,19 @@ function PassportInner() {
                 else setLightbox({ photos: [{ src: url }], index: 0, title: `I was here! ${openStamp.name}`, credit: openStamp.visited_on ? fmtDate(openStamp.visited_on) : null });
               }}
               fromName={holder} homeCity={profile?.home_city} readOnly={readOnly || preview} />
+            {/* A city stamp opens that city's board (City Boards, 2026-10-14). */}
+            {(() => {
+              const city = String(openStamp.city || (openStamp.kind === "city" ? openStamp.name : "") || "").trim();
+              if (preview || !boardsOk || !hasBoard(city, openStamp.country)) return null;
+              return (
+                <button type="button" onClick={() => { setOpenStampId(null); navigate(cityBoardUrl(city, openStamp.country)); }}
+                  className="mt-2 w-full rounded-xl font-semibold flex items-center justify-center gap-2"
+                  style={{ minHeight: 44, background: NEUTRAL.airmail, color: NEUTRAL.airmailBlue, border: `1px solid ${NEUTRAL.airmailLine}`, fontSize: fs(13) }}>
+                  <Mail size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
+                  Postcards from {city}
+                </button>
+              );
+            })()}
             <button onClick={() => setOpenStampId(null)} className="mt-2 w-full rounded-xl py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>Close</button>
           </div>
         </div>

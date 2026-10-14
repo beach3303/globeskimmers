@@ -15,8 +15,9 @@
 // still to complete) gets the note that lets it finish.
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronRight, Mail, Mailbox as MailboxIcon } from "lucide-react";
+import { ChevronRight, Globe, Mail, Mailbox as MailboxIcon } from "lucide-react";
 import { createPageUrl } from "@/utils";
+import { cityBoardsUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
 import { socialFeed, getHandle, getSocialProfile, setHandle, setAgeGate, splitDob, socialUnread, keepPostcard } from "@/lib/passport";
@@ -201,6 +202,22 @@ function PostcardBoxRow({ style = undefined }) {
   );
 }
 
+// 'Postcards from every city': the City Boards, busiest first (2026-10-14). Shown with or
+// without a feed, so someone new finds the boards too.
+function CityBoardsRow({ style = undefined }) {
+  return (
+    <Link to={cityBoardsUrl()}
+      style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 56, boxSizing: "border-box", padding: "8px 12px 8px 16px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16, textDecoration: "none", ...style }}>
+      <Globe size={20} strokeWidth={1.8} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: fs(15), fontWeight: 600, lineHeight: 1.3, color: NEUTRAL.ink }}>Postcards from every city</span>
+        <span style={{ display: "block", fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink3 }}>City boards, from travelers who were really there</span>
+      </span>
+      <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
+    </Link>
+  );
+}
+
 function MailboxBody() {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -269,6 +286,7 @@ function MailboxBody() {
             onMore={(r) => openTraveler(r, { kind: "profile", note: "Asked to follow me" })} />
         ) : null}
         {rows.length ? <PostcardBoxRow style={{ marginTop: GAP }} /> : null}
+        <CityBoardsRow style={{ marginTop: rows.length ? 8 : GAP }} />
 
         <section aria-label="Where your circle has been" style={{ marginTop: GAP }}>
           {!feed ? (
