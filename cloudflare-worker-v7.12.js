@@ -1587,6 +1587,11 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
     const rk = await fetch(`${SUPABASE_URL}/rest/v1/postcard_keeps?user_id=eq.${userId}`, { method: 'DELETE', headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, Prefer: 'return=minimal' } });
     if (!rk.ok && rk.status !== 404) failed.push('postcard_keeps');
   } catch { failed.push('postcard_keeps'); }
+  // Which App Store downloads were theirs (RESCIND_CONSENT lookups, 2026-10-14).
+  try {
+    const ra = await fetch(`${SUPABASE_URL}/rest/v1/app_store_links?user_id=eq.${userId}`, { method: 'DELETE', headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, Prefer: 'return=minimal' } });
+    if (!ra.ok && ra.status !== 404) failed.push('app_store_links');
+  } catch { failed.push('app_store_links'); }
 
   // 1f) Dish and drink posts (+ photos), and messages to place owners.
   const dishes = await rows('dish_posts', `place_dishes?user_id=eq.${userId}&select=photo_key`);
@@ -16613,7 +16618,9 @@ const gbNeedsConfirm = (sp) => sp?.social_tier === 'confirm';
 const GB_CONFIRM_MSG = 'Add the month and day of your birthday in Settings first';
 const gbConfirmResp = () => jsonResponse({ error: GB_CONFIRM_MSG, code: 'confirm_birthday', message: GB_CONFIRM_MSG }, 403);
 // The social doors' one check: a held teen, or a birth year still to confirm.
-const gbAgeHeld = (sp) => gbNeedsConfirm(sp) || gbTeenHold(sp);
+// A parent withdrew consent (App Store Server Notification RESCIND_CONSENT): held like a teen.
+const gbConsentRevoked = (sp) => !!sp?.consent_revoked_at;
+const gbAgeHeld = (sp) => gbNeedsConfirm(sp) || gbTeenHold(sp) || gbConsentRevoked(sp);
 const gbAgeHeldResp = (sp) => (gbNeedsConfirm(sp) ? gbConfirmResp() : gbTeenHoldResp());
 // Fail closed (founder, 2026-10-13): a profile read that failed is passed on
 // as `undefined`. A door refuses with this; a surface treats the owner as
@@ -16624,9 +16631,19 @@ const gbAgeUnknownResp = () => jsonResponse({ error: 'Couldn’t check your acco
 // gbTierRow) use gbUnderAge || gbAgeHeld instead: a missing row there means
 // "no profile", not a failed read.
 const gbOffSocial = (sp) => sp === undefined || gbUnderAge(sp) || gbAgeHeld(sp);
-// A bulk-read row with its tier DERIVED from the birthday, like gbSocialProfile.
-const gbTierRow = (r) => (r && r.birth_year ? { ...r, social_tier: socialTierFor(r.birth_year, r.country_at_gate, r.birth_md) || r.social_tier } : r);
-const GB_TIER_COLS = 'social_tier,birth_year,birth_md,country_at_gate';
+// The phone's own age answer (Apple's Declared Age Range, Google's Play Age Signals; teens plan
+// Phase 0) caps the birthday's tier: the younger wins. An under-13 answer is 'blocked' even
+// with no birthday yet; any other answer waits for the birthday, which is still required.
+// 'confirm' (a year-only birthday that could be 12) stays until the phone says under 13.
+const GB_TIER_ORDER = { blocked: 0, teen: 1, adult: 2 };
+const gbCapTier = (tier, os) => {
+  if (os === 'blocked') return 'blocked';
+  if (!tier || !(os in GB_TIER_ORDER) || !(tier in GB_TIER_ORDER)) return tier;
+  return GB_TIER_ORDER[os] < GB_TIER_ORDER[tier] ? os : tier;
+};
+// A bulk-read row with its tier DERIVED from the birthday and capped by the phone, like gbSocialProfile.
+const gbTierRow = (r) => (r ? { ...r, social_tier: gbCapTier(r.birth_year ? socialTierFor(r.birth_year, r.country_at_gate, r.birth_md) || r.social_tier : r.social_tier, r.os_tier) } : r);
+const GB_TIER_COLS = 'social_tier,birth_year,birth_md,country_at_gate,os_tier,consent_revoked_at';
 
 // Under-13 FREEZE (founder decisions 2026-10-11 and 2026-10-13, teens plan
 // §3): an under-13 birthday freezes the account at once — no stamps, photos
@@ -17177,8 +17194,8 @@ async function gbSocialProfile(env, userId) {
   const q = await gbRest(env, `social_profiles?user_id=eq.${userId}&select=*`, {});
   if (!q.ok) throw new Error('Couldn’t check your account — try again');
   const row = (await q.json())[0] || null;
-  if (row?.birth_year) {
-    const t = socialTierFor(row.birth_year, row.country_at_gate, row.birth_md);
+  if (row?.birth_year || row?.os_tier === 'blocked') {
+    const t = gbCapTier(row.birth_year ? socialTierFor(row.birth_year, row.country_at_gate, row.birth_md) : null, row.os_tier);
     if (t === 'blocked') await gbMarkFrozen(env, userId);
     else if (t && row.social_tier === 'blocked') await gbClearFrozen(env, userId, row.birth_year, row.birth_md);
     if (t && t !== row.social_tier) {
@@ -17213,6 +17230,43 @@ async function handleSocialAge(request, env, ctx) {
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
     const mine = await gbSocialProfile(env, user.id);
+    // The phone's own age answer (teens plan Phase 0): { os: { platform: 'ios' | 'android', lower,
+    // upper } } from Apple's Declared Age Range or Google's Play Age Signals. Only the tier it
+    // implies and its source are kept, never the range. The tier caps the birthday's (the
+    // younger wins); an under-13 answer freezes the account, birthday or not.
+    if (b.os && typeof b.os === 'object') {
+      const source = b.os.platform === 'ios' ? 'apple' : b.os.platform === 'android' ? 'google' : null;
+      if (!source) return jsonResponse({ error: 'Which phone?' }, 400);
+      const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Math.round(Number(v)));
+      const lower = num(b.os.lower), upper = num(b.os.upper);
+      const osTier = upper !== null && upper < 13 ? 'blocked'
+        : lower !== null && lower >= 18 ? 'adult'
+        : (lower !== null && lower >= 13) || (upper !== null && upper < 18) ? 'teen' : null;
+      if (!osTier) return jsonResponse({ ok: true, tier: mine?.social_tier || null, os_tier: null });
+      const born = mine?.birth_year ? socialTierFor(mine.birth_year, mine.country_at_gate, mine.birth_md) : null;
+      const tier = gbCapTier(born, osTier) || mine?.social_tier || null;
+      const at = new Date().toISOString();
+      const patch = { os_tier: osTier, os_source: source, os_checked_at: at, updated_at: at, ...(tier ? { social_tier: tier } : {}) };
+      const w = mine
+        ? await gbRest(env, `social_profiles?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) })
+        : await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, ...patch }) });
+      if (w.status === 400) return jsonResponse({ error: 'Not ready yet', code: 'os_unavailable' }, 503);
+      if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
+      if (tier === 'blocked') await gbMarkFrozen(env, user.id);
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_age_os', { source, os_tier: osTier, tier }));
+      return jsonResponse({ ok: true, tier, os_tier: osTier });
+    }
+    // Which App Store download this phone is (AppTransaction.appTransactionID): a parent's
+    // withdrawn consent (RESCIND_CONSENT) names it, so it is kept with the account.
+    if (b.app_transaction && typeof b.app_transaction === 'object') {
+      const id = String(b.app_transaction.id || '').trim();
+      if (!/^[0-9A-Za-z._-]{6,80}$/.test(id)) return jsonResponse({ error: 'Which download?' }, 400);
+      const environment = String(b.app_transaction.environment || '').slice(0, 20) || null;
+      const w = await gbRest(env, 'app_store_links?on_conflict=user_id,app_transaction_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ user_id: user.id, app_transaction_id: id, environment, seen_at: new Date().toISOString() }) });
+      if (w.status === 404) return jsonResponse({ ok: false, code: 'links_unavailable' }, 503);
+      if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
+      return jsonResponse({ ok: true });
+    }
     const MD_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
     // birth_md ('MM-DD') is part of the AGE now (founder, 2026-10-05: full
     // birthday, not just the year — a December-born 17-year-old must not
