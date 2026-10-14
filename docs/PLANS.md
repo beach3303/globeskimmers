@@ -831,9 +831,10 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   on branch `new-look` (off stamping-v2); nothing ships until stamping-v2 has merged and the founder says
   go (OTA). **2026-10-14: built and integrated.** All slices S1–S19 are on `new-look`, with stamping-v2
   merged in (d642f95) and checked: the gates pass and iOS 27 launches on iPad and iPhone. Nothing is
-  pushed. It waits on (1) iOS 1.0.4, and Play 1.0.8 if submitted, leaving review, (2) the founder's go,
-  then the worker deploy and probe before the OTA, and (3) approving the one migrations run that the
-  same push starts (postcard keeps, profile cloth, city board, home-city switch). **Decided 2026-10-14:** Home's circle
+  pushed. **Decided 2026-10-14: ship to everyone now**, without waiting for iOS 1.0.4 to leave review
+  (founder: "ship to everyone now"). Order: push to main (deploys the worker; the four migrations for
+  postcard keeps, profile cloth, city board and the home-city switch apply on their own about 20 seconds
+  later, with no approval step), probe the worker, then the founder's `npm run ota`. **Decided 2026-10-14:** Home's circle
   shelf is B, the stamp on a cream plate (founder: "B it is then"). **New 2026-10-14, built on
   new-look:** the postcard box keeps every postcard sent to you (founder: "i want to keep the postcards
   sent to me"), and Keep saves a card sent to everyone into it (founder: "yes thank you"); then, on

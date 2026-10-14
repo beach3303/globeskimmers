@@ -60,15 +60,18 @@ Settings, own Passport, Eat, Coffee, Things to Do and its place sheet, Convenien
 
 ## How it reaches phones, in order
 
-1. Not while a store build is in review: iOS 1.0.4, and Play 1.0.8 if it has been submitted.
+1. The founder chose on 2026-10-14 to ship to everyone now, while iOS 1.0.4 is in review
+   ("ship to everyone now"). A rejection would hold only that build; the new look reaches
+   phones by OTA either way.
 2. On the founder's go, merge `new-look` into `stamping-v2`, then `main`. The push deploys the
    worker, which carries this branch's worker commits: three for B10, finder honesty fields
    (`244ebee` money rows, `a77322a` weather fetch time and dates, `5cf7d8d` convenience 24 h),
    then the postcard box and Keep (`53d4d5f`, `aa8cb97`), faces (`5ae3dc8`), visits with B4 and
    B5 (`c6d3c2a`) and City Board (`bb22e10`). Probe the worker, including `/postcards/box`,
    `/postcards/keep`, `/social/world` and `/city/board`.
-3. The same push carries four migrations, which `deploy-migrations.yml` applies together after
-   the founder approves the `production` environment run: `20261014160000_postcard_keeps.sql`,
+3. The same push carries four migrations, which `deploy-migrations.yml` applies together about
+   20 seconds after the push, with no approval step (GitHub's reviewer gate isn't on this plan;
+   an automated check refuses destructive statements instead): `20261014160000_postcard_keeps.sql`,
    `20261014170000_profile_cloth.sql`, `20261014180000_city_board.sql` and
    `20261014190000_profile_show_home_city.sql`. Until they run, nothing breaks: Keep, the cloth
    picker and the home-city switch stay hidden, and boards say they open with the next update. Each was tested on Postgres 17 (PGlite); the worker routes were tested by running
