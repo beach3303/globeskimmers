@@ -428,6 +428,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
   const searchSeq = useRef(0);
   const dialogRef = useRef(null);
   const frameRef = useRef(null); // the dialog's positioning wrapper (its max height)
+  const inputRef = useRef(null);
   // The folder's parts, measured to fit the screen.
   const tabRef = useRef(null);
   const regionRef = useRef(null); // the title and the body (its parent is the folder box)
@@ -671,6 +672,12 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
   const retrySearch = (e) => {
     if (e && e.currentTarget === document.activeElement && dialogRef.current) dialogRef.current.focus({ preventScroll: true });
     if (searchable(searchQuery)) performSearch(searchQuery);
+  };
+
+  // The field's clear button, as on every finder's search field.
+  const clearSearch = () => {
+    setSearchQuery('');
+    if (inputRef.current) inputRef.current.focus();
   };
 
   const handleUseCurrentLocation = async () => {
@@ -926,9 +933,9 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
     // The persistent status line reads the outcome: searching, the count, or the
     // no-results words (an error note is role=alert and reads itself).
     const status = searching ? 'Searching…' : n > 0 ? `${n} ${n === 1 ? 'result' : 'results'}` : note?.kind === 'empty' ? note.text : '';
-    // Right of the text: the spinner while searching, else nothing (the placeholder gets
-    // the room).
-    const endSlot = searching;
+    // Right of the text: the spinner while searching, else the clear button while there
+    // is text, else nothing (the placeholder gets the room).
+    const endSlot = searching || searchQuery !== '';
     header = (
       <>
         {backAndClose(<>Choose a <em style={EM}>destination</em></>)}
@@ -948,6 +955,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
               style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
             />
             <input
+              ref={inputRef}
               id={inputId}
               type="text"
               value={searchQuery}
@@ -981,6 +989,33 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
                 focusable="false"
                 style={{ position: 'absolute', right: 14, top: '50%', marginTop: -8, pointerEvents: 'none' }}
               />
+            ) : searchQuery !== '' ? (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={clearSearch}
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: '50%',
+                  marginTop: -22,
+                  width: 44,
+                  height: 44,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 0,
+                  borderRadius: 14,
+                  background: 'transparent',
+                  border: 0,
+                  cursor: 'pointer',
+                  outlineOffset: -2,
+                }}
+              >
+                <span aria-hidden="true" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 999, background: K.fill }}>
+                  <X size={14} color={NEUTRAL.ink2} strokeWidth={2} aria-hidden="true" focusable="false" />
+                </span>
+              </button>
             ) : null}
           </div>
           <p role="status" className="sr-only">{status}</p>
