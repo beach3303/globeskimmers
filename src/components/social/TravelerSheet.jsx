@@ -196,7 +196,7 @@ export default function TravelerSheet({ person, list: listProp = null, report = 
                 <ul className="flex flex-col gap-1.5" style={{ marginTop: 10, paddingLeft: 18, listStyle: "disc", color: INK2, fontSize: fs(14), lineHeight: 1.45 }}>
                   <li>You stop following each other, and they can&rsquo;t follow you again.</li>
                   <li>Their stamps and postcards stop reaching you, and yours stop reaching them.</li>
-                  <li>Your passport looks private to them. They aren&rsquo;t told you blocked them.</li>
+                  <li>In the app, your passport looks private to them. They aren&rsquo;t told you blocked them.</li>
                 </ul>
                 <p style={{ fontSize: fs(12.5), color: INK3, lineHeight: 1.45, marginTop: 8 }}>
                   You can unblock them any time in Settings, under Privacy.

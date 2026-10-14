@@ -955,7 +955,7 @@ export default function SettingsPage() {
           <EdGroup kicker="Privacy" isTablet={isTablet}>
             {blockReady(social) && (
               <EdRow isTablet={isTablet} step={fontStep} icon={UserX} iconBg={CAT.food.ink} title="Blocked travelers"
-                desc="They can't follow you, see your passport or send you postcards, and they aren't told."
+                desc="In the app they can't follow you, see your passport or send you postcards. They aren't told."
                 control={{ below: true, node: <BlockedTravelers blocked={social.blocked} onChanged={() => setSocialTick((t) => t + 1)} /> }}
                 last={false}
               />

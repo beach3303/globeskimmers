@@ -60,7 +60,7 @@ export default function BlockedTravelers({ blocked, onChanged }) {
               {open && (
                 <div role="group" aria-label={`Unblock ${name}?`} className="mt-1 mb-1">
                   <p style={{ fontSize: fs(12.5), color: INK2, lineHeight: 1.45 }}>
-                    Unblock {name}? They&rsquo;ll be able to follow you and send you postcards again. The follows the block ended don&rsquo;t come back on their own.
+                    Unblock {name}? They&rsquo;ll be able to follow you, see your passport and send you postcards again. The follows the block ended don&rsquo;t come back on their own.
                   </p>
                   <div className="flex gap-2 mt-2">
                     <button type="button" onClick={() => setAsking(null)} disabled={busy === p.user_id}
