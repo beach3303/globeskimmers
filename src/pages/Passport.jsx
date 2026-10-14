@@ -896,7 +896,11 @@ function PassportInner() {
   };
   const blockClaim = async () => {
     if (!claim) return;
-    if (blockReady(claimList)) { setBlockingClaim(true); return; }
+    // Tapped before the list arrived: read it now, so a block_v2 worker never
+    // gets the one-tap block (and its tags-only toast) by accident.
+    let list = claimList;
+    if (!list) { list = (await socialFollow("list")).data || {}; setClaimList(list); }
+    if (blockReady(list)) { setBlockingClaim(true); return; }
     const { error } = await blockTagger(claim.token);
     claimDone();
     showToast(error || "Blocked. They can't tag you again.", error ? "error" : "success");
