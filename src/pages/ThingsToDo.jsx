@@ -13,14 +13,20 @@ import MapAppSelector from "@/components/MapAppSelector";
 import AttractionAIDetails from "@/components/AttractionAIDetails";
 import AttractionExtras from "@/components/attraction/AttractionExtras";
 import { stampRadiusFor } from "@/lib/stampRadius";
-import { metersBetween } from "@/lib/passport";
+import { metersBetween, listPassport } from "@/lib/passport";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import { logEvent } from "@/lib/analytics";
 import { logSearch, logZeroResults } from "@/lib/logSearch";
 import { matchesQuery } from "@/lib/searchText";
-import { SlidersHorizontal } from "lucide-react";
-import { CAT, WORLD } from "@/components/redesign/constants";
-import FinderHeader from "@/components/finder/FinderHeader";
+import {
+  SlidersHorizontal, Stamp, ChevronRight, ChevronDown, Compass, Palette, Telescope, Church, Trees, Waves, Fish,
+  FerrisWheel, Mountain, Castle, Landmark, Drama, TramFront, Route, Martini, Flower2, Binoculars, Music, Ship, Tent, Library,
+} from "lucide-react";
+import { CAT, WORLD, NEUTRAL, fs as fsx, rgba } from "@/components/redesign/constants";
+import FinderHeader, { finderColumnStyle } from "@/components/finder/FinderHeader";
+import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
+import { FactsLine, WorldTag, TagRow } from "@/components/finder/FinderCard";
+import { Contours } from "@/components/finder/motifs";
 import { WorldSearch, WorldChip, ChipRow, WorldSegmented } from "@/components/finder/FinderControls";
 import FilterSheet, { FilterToggleRow } from "@/components/finder/FilterSheet";
 import { useIsTablet } from "@/lib/useIsTablet";
@@ -627,7 +633,156 @@ function ActivityCardTablet({a,index,onMap,isHighlighted,cardRef,forceExpanded,u
 // Old verb keys stay so payloads cached before the change still color.
 const TRAVEL_COLORS={'100+ mi away':{bg:'#FEE2E2',color:'#DC2626'},'≈50–100 mi':{bg:'#FED7AA',color:'#C2410C'},'≈15–50 mi':{bg:'#FEF3C7',color:'#D97706'},'✈️ Flight / Ferry Required':{bg:'#FEE2E2',color:'#DC2626'},'✈️ Flights Required':{bg:'#FEE2E2',color:'#DC2626'},'🚗 Long Drive':{bg:'#FED7AA',color:'#C2410C'},'🚗 Drive':{bg:'#FEF3C7',color:'#D97706'},'🚗 Short Drive':{bg:'#D1FAE5',color:'#059669'},'🚗 Day Trip':{bg:'#FEF3C7',color:'#D97706'},'📍 Nearby':{bg:'#D1FAE5',color:'#059669'}};
 
-function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,cardRef=null,pinnedLabel=null,gpsLat=null,gpsLng=null,fmt=null}){
+const MONO="'JetBrains Mono', ui-monospace, Menlo, monospace";
+const SERIF="'Instrument Serif', Georgia, serif";
+
+// The place's own icon on a card without a photo (lucide, never an emoji), from the
+// words in its kind: an observatory's telescope, a gallery's palette, a funicular's
+// tram. The world's compass when nothing matches. First match wins.
+const PLACE_ICONS=[
+  [/observator|planetari/,Telescope],
+  [/museum|galler|\bart\b|exhibit/,Palette],
+  [/church|cathedral|basilica|chapel|temple|mosque|shrine|monaster|synagogue|religio/,Church],
+  [/castle|fortress|\bfort\b|palace|citadel/,Castle],
+  [/theme park|amusement|water park|funfair|carnival/,FerrisWheel],
+  [/aquarium|\bzoo\b|wildlife|safari/,Fish],
+  [/park|garden|forest|botanic|nature|trail|reserve/,Trees],
+  [/beach|coast|\bbay\b|lake|river|waterfall|harbou?r|marina/,Waves],
+  [/viewpoint|lookout|observation|tower|panoram/,Binoculars],
+  [/mountain|peak|volcano|hik|climb|adventure|zip/,Mountain],
+  [/theat|opera|perform|concert|\bshow\b/,Drama],
+  [/music|jazz|\bclub\b/,Music],
+  [/\bbar\b|\bpub\b|nightlife|lounge|brewer|winer/,Martini],
+  [/\bspa\b|wellness|\bbath|hammam|onsen|yoga/,Flower2],
+  [/tram|funicular|railway|train|cable car/,TramFront],
+  [/boat|cruise|ferry|\bship\b|sail/,Ship],
+  [/tour|walk/,Route],
+  [/camp/,Tent],
+  [/library|book/,Library],
+  [/monument|memorial|landmark|historic|ruin|archaeolog|statue|square|plaza|bridge/,Landmark],
+];
+function placeIcon(a){
+  const s=`${a.activityLabel||""} ${(a.types||[]).join(" ").replace(/_/g," ")} ${a.activityCategory||""}`.toLowerCase();
+  for(const [re,Icon] of PLACE_ICONS) if(re.test(s)) return Icon;
+  return Compass;
+}
+
+// What a card says it is: the worker's kind word ('Museum', 'Park'), else 'Attraction'.
+const kindOf=(a)=>String(a.activityLabel||"").replace(/[^\p{L}\p{N}&'’ ,.-]/gu,"").trim()||"Attraction";
+
+// The tags a card may carry, best first: the facts a traveler plans around. A strip
+// shows one; a full card up to three. (Every curated row is "photo worthy", so that
+// one says nothing and is left out.)
+const TOUR_WORDS={walking:"Walking tour",biking:"Bike tour",boating:"Boat tour"};
+const TAG_ORDER=[["isFree","Free entry"],["hasGuidedTour","Guided tours"],["isHiddenGem","Hidden gem"],["isBucketList","Bucket list"],["isFamilyFriendly","Family friendly"],["isAccessible","Accessible"],["isPetFriendly","Pet friendly"],["isGoodForCouples","For couples"],["isGoodForGroups","For groups"],["isAdventure","Adventure"]];
+const tagsOf=(a)=>[TOUR_WORDS[a.tourMode],...TAG_ORDER.filter(([k])=>a.props?.[k]===true).map(([,w])=>w)].filter(Boolean);
+
+// A rating shows only with its source: Google's, on the rows Google gave us. The
+// curated D1 rows' ratings and the planet DB's name no source, so they never show.
+const ratingOf=(a)=>(a._source==="d1"||a._source==="owned")?null:{rating:a.rating,source:"google"};
+
+// 'Oct 4', or 'Oct 4, 2025' from another year. A bare date is read at noon, so no
+// time zone moves it to the day before.
+function shortDate(d){
+  const t=new Date(/^\d{4}-\d{2}-\d{2}$/.test(String(d))?`${d}T12:00:00`:d);
+  if(!Number.isFinite(t.getTime())) return null;
+  const sameYear=t.getFullYear()===new Date().getFullYear();
+  return t.toLocaleDateString("en-US",sameYear?{month:"short",day:"numeric"}:{month:"short",day:"numeric",year:"numeric"});
+}
+
+// The passport mark on a strip card (ThingsToDo.dc.html L101, L127), from one passport
+// read and the official stamps around (D1, free):
+//   Collected · Oct 4  a stamp of this place is in your passport (by its id, or its name
+//                      in the same city), with the day you were there;
+//   You're here        your live GPS is inside its stamp area (the sheet's rubber stamp);
+//   Stamp here         it has an official stamp (by id, or the same name within 2 km).
+// Nothing otherwise: every place earns a typographic stamp in person, so the mark only
+// speaks when it has something to say.
+const normName=(s)=>String(s||"").normalize("NFKD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+function makeMarks(stamps,stampable){
+  const byId=new Map(),byName=[];
+  for(const st of stamps||[]){
+    const d=st.visited_on||st.created_at; if(!d) continue;
+    if(st.entity_id) byId.set(String(st.entity_id),d);
+    if(st.name&&st.city) byName.push({n:normName(st.name),c:normName(st.city),d});
+  }
+  const stampIds=new Set((stampable||[]).map((x)=>String(x.id)));
+  const stampNames=(stampable||[]).filter((x)=>x.name&&Number.isFinite(+x.lat)&&Number.isFinite(+x.lng)).map((x)=>({n:normName(x.name),lat:+x.lat,lng:+x.lng}));
+  return (a,here)=>{
+    const ids=[a.id,a.placeId].filter(Boolean).map(String);
+    const n=normName(a.displayName?.text||a.name);
+    let d=ids.map((i)=>byId.get(i)).find(Boolean)||null;
+    if(!d&&n){const addr=normName(a.formattedAddress);const hit=byName.find((x)=>x.n===n&&x.c&&addr.includes(x.c));if(hit)d=hit.d;}
+    const date=d?shortDate(d):null;
+    if(date) return {kind:"collected",date};
+    if(here) return {kind:"here"};
+    if(ids.some((i)=>stampIds.has(i))) return {kind:"stamp"};
+    if(n&&Number.isFinite(a.lat)&&Number.isFinite(a.lng)&&stampNames.some((x)=>x.n===n&&metersBetween(a.lat,a.lng,x.lat,x.lng)<=2000)) return {kind:"stamp"};
+    return null;
+  };
+}
+
+function PassportMark({mark}){
+  const solid=mark.kind!=="stamp";
+  const text=mark.kind==="collected"?`Collected · ${mark.date}`:mark.kind==="here"?"You’re here":"Stamp here";
+  return(
+    <span style={{position:"absolute",top:10,left:10,display:"inline-flex",alignItems:"center",gap:5,minHeight:24,maxWidth:"calc(100% - 20px)",boxSizing:"border-box",padding:"0 9px 0 7px",borderRadius:999,background:NEUTRAL.cream,border:`1px ${solid?"solid":"dashed"} ${NEUTRAL.stamp}`,fontFamily:MONO,fontSize:fsx(9.5),lineHeight:1.2,fontWeight:500,letterSpacing:".12em",textTransform:"uppercase",color:NEUTRAL.stamp,whiteSpace:"nowrap",overflow:"hidden"}}>
+      <Stamp size={12} color={NEUTRAL.stamp} strokeWidth={2} aria-hidden="true" style={{flexShrink:0}}/>{text}
+    </span>
+  );
+}
+
+// The poster band along a strip photo's foot (ThingsToDo.dc.html L102-106): a 24px fade
+// into 56px of lapis, the mono kicker in terracotta light and the serif name. It grows
+// upward with larger text instead of clipping.
+function PosterBand({kicker,name}){
+  return(
+    <div style={{position:"absolute",left:0,right:0,bottom:0}}>
+      <span aria-hidden="true" style={{position:"absolute",left:0,right:0,top:-24,height:24,background:`linear-gradient(180deg,${rgba(W.plate,0)} 0%,${W.plate} 100%)`}}/>
+      <div style={{minHeight:56,boxSizing:"border-box",padding:"9px 12px 8px",background:W.plate}}>
+        {kicker&&<div style={{fontFamily:MONO,fontSize:fsx(10),lineHeight:1.4,fontWeight:500,letterSpacing:".14em",textTransform:"uppercase",color:W.plateAccent,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{kicker}</div>}
+        <div style={{marginTop:2,fontFamily:SERIF,fontSize:fsx(20),lineHeight:1.2,color:W.plateTitle,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{name}</div>
+      </div>
+    </div>
+  );
+}
+
+// One strip card (ThingsToDo.dc.html L97-121): 240px wide (280 on iPad); a 4:3 photo,
+// or the lapis contours with the place's icon, under the poster band; then the facts
+// line (the open words in the place's own zone and a Google rating) and one tag. The
+// whole card is one button that opens the place's sheet.
+function StripCard({a,photos,isTablet,mark,isLocal,fmt,onOpen,cardRef}){
+  const name=a.displayName?.text||a.name||"Attraction";
+  const dist=Number.isFinite(a.distanceMiles)?fmt(a.distanceMiles):null;
+  const kicker=[kindOf(a),dist].filter(Boolean).join(" · ");
+  const Icon=placeIcon(a);
+  const width=isTablet?280:240;
+  const tag=tagsOf(a)[0]||null;
+  const rating=ratingOf(a);
+  const drawing=(
+    <>
+      <Contours world={W} variant="card"/>
+      <span aria-hidden="true" style={{position:"absolute",left:"50%",top:34,transform:"translateX(-50%)",display:"flex",alignItems:"center",justifyContent:"center",width:46,height:46,boxSizing:"border-box",borderRadius:999,background:W.plateTitle,border:`1px solid ${rgba(W.ink,0.22)}`}}>
+        <Icon size={22} color={W.ink} strokeWidth={2}/>
+      </span>
+    </>
+  );
+  return(
+    <button ref={cardRef} type="button" onClick={onOpen}
+      style={{flexShrink:0,display:"flex",flexDirection:"column",justifyContent:"flex-start",width,padding:0,textAlign:"left",background:NEUTRAL.white,border:`1px solid ${W.line}`,borderRadius:16,overflow:"hidden",boxShadow:W.cardShadow,cursor:"pointer",fontFamily:"inherit",color:NEUTRAL.ink}}>
+      <PhotoOrIcon world="todo" photos={photos} alt={name} aspect="4 / 3" icon={Icon} stripHeight={Math.round(width*3/4)} stripContent={drawing}>
+        {mark&&<PassportMark mark={mark}/>}
+        <PosterBand kicker={kicker} name={name}/>
+      </PhotoOrIcon>
+      <div style={{flex:1,padding:"10px 12px 12px"}}>
+        <FactsLine world="todo" place={a} isLocal={isLocal} items={[rating]}/>
+        {tag&&<TagRow max={1} style={{marginTop:8}}><WorldTag world="todo">{tag}</WorldTag></TagRow>}
+      </div>
+    </button>
+  );
+}
+
+function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,cardRef=null,pinnedLabel=null,gpsLat=null,gpsLng=null,fmt=null,markOf=null,isLocal=false}){
   const [dirs,setDirs]=useState(false);
   const [gallery,setGallery]=useState({open:false,idx:0});
   // fs()-style scaler for the editorial body (used at both widths now).
@@ -680,6 +835,9 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
   // 340px width / generous sizes; phone is a compact ~240px card. Fixed-width
   // flex child so the tier row scrolls horizontally.
   const photoH=t(220,150);   // tablet 220px, phone ~150px photo block
+  const stripBody=(
+    <StripCard a={a} photos={_photos} isTablet={isTablet} mark={markOf?markOf(a,here):null} isLocal={isLocal} fmt={fmtDist} onOpen={()=>setExpanded(true)} cardRef={cardRef}/>
+  );
   const editorialBody=(
     <div ref={cardRef} onClick={()=>setExpanded(true)} style={{flexShrink:0,width:fullWidth?"100%":t("340px","240px"),background:"#fff",borderRadius:t("24px","20px"),boxShadow:t("0 18px 40px -26px rgba(22,17,13,.4)","0 10px 26px -18px rgba(22,17,13,.4)"),overflow:"hidden",border:`1px solid ${ED_RULE}`,cursor:"pointer"}}>
       <div style={{position:"relative",height:fs(photoH),background:`linear-gradient(135deg,${a.activityColor||T.accent}40,${a.activityColor||T.accent}20)`}}>
@@ -717,7 +875,7 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
   );
   return(
     <>
-      {editorialBody}
+      {fullWidth?editorialBody:stripBody}
       <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",latitude:a.lat,longitude:a.lng}} userLat={userLat} userLng={userLng}/>
       <PhotoGalleryModal photos={_photos} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
       <AnimatePresence>
@@ -745,41 +903,39 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
   );
 }
 
-function TierSection({title,icon,items,userLat,userLng,isTablet,defaultCollapsed=false,gpsLat=null,gpsLng=null,fmt=null}){
-  const persona=usePersona();
-  const [collapsed,setCollapsed]=useState(defaultCollapsed);
-  if(!items?.length) return null;
-  // The tier strip is part of the editorial system at BOTH widths: serif header
-  // in the Things-To-Do magenta accent and a horizontally SCROLLABLE row of
-  // editorial TierCards (swipe left/right). Tablet gets the bigger header type +
-  // 340px cards; phone gets a compact header + ~240px editorial cards in the same
-  // scroll strip. Tier data + the full-screen detail-on-tap are unchanged.
-  const itemsLayout = isTablet
-    ? {display:"flex",gap:"20px",overflowX:"auto",paddingBottom:"10px",scrollbarWidth:"none"}
-    : {display:"flex",gap:"12px",overflowX:"auto",paddingBottom:"6px",scrollbarWidth:"none"};
+// A chapter's waypoint (ThingsToDo.dc.html L91-96): its number in a terracotta ring, the
+// mono title in lapis, the count, a chevron and the 32px terracotta rule. It opens and
+// closes its chapter; the numbers run across the chapters that show, with no gaps.
+function Waypoint({n,title,count,open,onToggle,controls,style=undefined}){
   return(
-    <div style={{marginBottom:isTablet?"30px":"16px"}}>
-      <div onClick={()=>setCollapsed(c=>!c)} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:collapsed?"0":(isTablet?"16px":"10px"),padding:"0 4px",cursor:"pointer"}}>
-        {isTablet?(
-          <>
-            <span style={{fontSize:"calc(24px*var(--fs))"}}>{icon}</span>
-            <span style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:"calc(28px*var(--fs))",color:ED_INK,lineHeight:1.1}}>{title}</span>
-            <span style={{fontSize:"calc(15px*var(--fs))",color:ED_TODO,fontWeight:700}}>({items.length})</span>
-            <span style={{marginLeft:"auto",fontSize:"calc(15px*var(--fs))",color:ED_INK3,fontWeight:"700"}}>{collapsed?"▶":"▼"}</span>
-          </>
-        ):(
-          <>
-            <span style={{fontSize:"calc(18px*var(--fs))"}}>{icon}</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>{title}</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({items.length})</span>
-            <span style={{marginLeft:"auto",fontSize:"calc(12px*var(--fs))",color:T.gray,fontWeight:"700"}}>{collapsed?"▶":"▼"}</span>
-          </>
-        )}
-      </div>
-      <AnimatePresence>{!collapsed&&(
-        <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-          <div style={itemsLayout}>{personaRank(items,persona).map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng} isTablet={isTablet} gpsLat={gpsLat} gpsLng={gpsLng} fmt={fmt}/>)}</div>
-        </motion.div>
-      )}</AnimatePresence>
-    </div>
+    <button type="button" aria-expanded={open} aria-controls={controls} onClick={onToggle}
+      style={{position:"relative",display:"flex",alignItems:"center",gap:10,width:"100%",minHeight:44,padding:"6px 0",background:"transparent",border:0,textAlign:"left",fontFamily:"inherit",cursor:"pointer",...style}}>
+      <span aria-hidden="true" style={{display:"flex",alignItems:"center",justifyContent:"center",width:26,height:26,flexShrink:0,boxSizing:"border-box",borderRadius:999,border:`1.5px solid ${W.accentText}`,fontFamily:MONO,fontSize:11,fontWeight:500,color:W.accentText}}>{String(n).padStart(2,"0")}</span>
+      <span style={{flex:1,minWidth:0,fontFamily:MONO,fontSize:fsx(11),lineHeight:1.35,fontWeight:500,letterSpacing:".14em",textTransform:"uppercase",color:W.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{title}</span>
+      <span style={{flexShrink:0,fontFamily:MONO,fontSize:fsx(11),color:NEUTRAL.ink3}}>({count})</span>
+      {open?<ChevronDown size={16} color={NEUTRAL.ink3} strokeWidth={2} aria-hidden="true" style={{flexShrink:0}}/>:<ChevronRight size={16} color={NEUTRAL.ink3} strokeWidth={2} aria-hidden="true" style={{flexShrink:0}}/>}
+      <span aria-hidden="true" style={{position:"absolute",left:36,bottom:3,width:32,height:2,background:W.accentText}}/>
+    </button>
+  );
+}
+
+// A chapter of strip cards (National icons, Regional must-see, Nearby attractions): its
+// waypoint and, open, a row of strip cards that scrolls sideways to the screen's edge,
+// re-ranked by "Who's traveling?". `after` spaces it from the chapter above: 4px under
+// a closed one, 22px under an open one.
+function Chapter({n,title,items,open,onToggle,after,userLat,userLng,isTablet,gpsLat=null,gpsLng=null,fmt=null,markOf=null,isLocal=false}){
+  const persona=usePersona();
+  const id=`ttd-chapter-${n}`;
+  if(!items?.length) return null;
+  return(
+    <section aria-label={title} style={{marginTop:after}}>
+      <Waypoint n={n} title={title} count={items.length} open={open} onToggle={onToggle} controls={id}/>
+      {open&&(
+        <div id={id} className="gs-noscroll" style={{display:"flex",gap:isTablet?16:12,marginTop:8,marginRight:isTablet?-24:-16,paddingRight:isTablet?24:16,paddingBottom:12,overflowX:"auto",overscrollBehaviorX:"contain"}}>
+          {personaRank(items,persona).map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng} isTablet={isTablet} gpsLat={gpsLat} gpsLng={gpsLng} fmt={fmt} markOf={markOf} isLocal={isLocal}/>)}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -830,7 +986,7 @@ export default function ThingsToDoFinder() {
   const [searchError,setSearchError]=useState(null); // callWorker envelope error for the last search — distinct from "no results"
   const cardRefs=useRef({});
   const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
-  const {activeLocation,currentGpsLocation}=useLocation();
+  const {activeLocation,currentGpsLocation,locationMode}=useLocation();
   const routerLocation=useRouterLocation();
   // "You're here" needs a reading from this app run — never a restored old fix.
   const liveGps=isLiveFix(currentGpsLocation,60*60*1000)?currentGpsLocation:null;
@@ -839,6 +995,30 @@ export default function ThingsToDoFinder() {
   const locLabel=getLocationLabel(activeLocation);
   const isCity=isCityLocation(activeLocation);
   const { unit, setUnit, formatDistance } = useDistanceUnit(activeLocation);
+  // Open words read the place's own clock; in current-location mode the device's is the place's.
+  const isLocal=locationMode==="current";
+
+  // Chapters open or closed (ThingsToDo.dc.html: National icons starts closed).
+  const [openCh,setOpenCh]=useState({national:false,regional:true,nearby:true,near:true});
+  const toggleCh=(k)=>setOpenCh((o)=>({...o,[k]:!o[k]}));
+  // The strips' passport marks (makeMarks): one passport read, and the official stamps
+  // around from D1 (free, no Google). Either read failing just leaves its marks off.
+  const [myStamps,setMyStamps]=useState(null);
+  const [stampable,setStampable]=useState(null);
+  useEffect(()=>{
+    let gone=false;
+    listPassport().then(({stamps,error})=>{if(!gone&&!error)setMyStamps(stamps);}).catch(()=>{});
+    return()=>{gone=true;};
+  },[]);
+  useEffect(()=>{
+    if(!Number.isFinite(lat)||!Number.isFinite(lng)) return undefined;
+    let gone=false;
+    callWorker("attractions/nearby",{latitude:lat,longitude:lng,radiusKm:100,limit:100,stampsOnly:true}).then(({data,error})=>{
+      if(!gone&&!error&&Array.isArray(data?.attractions)) setStampable(data.attractions.filter((x)=>x.tier!=="secret"));
+    }).catch(()=>{});
+    return()=>{gone=true;};
+  },[lat,lng]);
+  const markOf=useMemo(()=>makeMarks(myStamps,stampable),[myStamps,stampable]);
 
   useEffect(()=>{ setRadius(25); }, [activeLocation?.placeId]); // fixed wide net (radius filter removed app-wide)
 
@@ -1014,6 +1194,14 @@ export default function ThingsToDoFinder() {
   },[viewMode,cardsList,lat,lng,activePin]);
 
   const stats={total:cardsList.length};
+  // The chapters that show (browsing, no filter), numbered in this order with no gaps.
+  const showChapters=!submitted&&!browseFilterActive;
+  const chapterList=showChapters?[
+    {key:"national",title:`National icons · ${country}`,items:nationalIcons},
+    {key:"regional",title:`Regional must-see · ${region||city}`,items:regionalGems},
+    {key:"nearby",title:"Nearby attractions",items:nearbyAttractions},
+  ].filter((c)=>c.items.length>0):[];
+  const nearYouChapter=showChapters&&chapterList.length>0&&filtered.length>0;
   // The Filters chip counts what the sheet holds (Popular, Outdoor places): never the
   // category chips or Open now / Free entry, which show on their own chips.
   const sheetFilterCount=[outdoorOnly,popularOnly].filter(Boolean).length;
@@ -1129,15 +1317,13 @@ export default function ThingsToDoFinder() {
           existing "Fetching new spots" chip at the top covering
           ongoing background refresh state. */}
       {focusCard&&viewMode==="list"&&(
-        <div style={isTablet?{maxWidth:1024,margin:"0 auto",padding:"14px 24px 0"}:{padding:"14px 12px 0"}}>
+        <div style={{...finderColumnStyle(isTablet),paddingTop:14}}>
           <TierCard key={focusCard.id} a={focusCard} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={focusOpen} pinnedLabel={routerLocation.state?.focus?.from||null} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance}/>
         </div>
       )}
       {loading&&activities.length===0&&nationalIcons.length===0?(<TtdSkeleton/>)
       :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"calc(16px*var(--fs))"}}>{error}</div>{/* radius starts AT the 25mi ceiling here, so "Expand" would be a no-op — offer a plain retry instead (no forceRefresh: a retry mustn't bust caches). */}<button onClick={radius<25?()=>setRadius(r=>Math.min(r+5,25)):()=>setRefreshTick(t=>t+1)} style={{marginTop:"14px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{radius<25?"Expand Radius":"Try Again"}</button></div>)
-      :viewMode==="list"?(<div style={isTablet
-        ? {maxWidth:1024,margin:"0 auto",padding:"14px 24px 170px",display:"flex",flexDirection:"column",gap:"4px"}
-        : {padding:"14px 12px 100px",display:"flex",flexDirection:"column",gap:"4px"}}>
+      :viewMode==="list"?(<div style={{...finderColumnStyle(isTablet),paddingTop:14,paddingBottom:isTablet?170:100,display:"flex",flexDirection:"column"}}>
         {submitted&&(
           <div style={{marginBottom:"2px"}}>
             {filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Places matching &ldquo;{submitted}&rdquo;</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
@@ -1145,10 +1331,15 @@ export default function ThingsToDoFinder() {
           </div>
         )}
         {browseFilterActive&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🔧</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Filtered results</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
-        {!submitted&&!browseFilterActive&&<TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} defaultCollapsed/>}
-        {!submitted&&!browseFilterActive&&<TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} defaultCollapsed/>}
-        {!submitted&&!browseFilterActive&&<TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance}/>}
-        {!submitted&&!browseFilterActive&&(nationalIcons.length>0||regionalGems.length>0)&&filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px",padding:"0"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Near You</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
+        {chapterList.map((c,i)=>(
+          <Chapter key={c.key} n={i+1} title={c.title} items={c.items} open={openCh[c.key]} onToggle={()=>toggleCh(c.key)}
+            after={i===0?0:(openCh[chapterList[i-1].key]?14:4)} userLat={lat} userLng={lng} isTablet={isTablet}
+            gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} markOf={markOf} isLocal={isLocal}/>
+        ))}
+        {nearYouChapter&&(
+          <Waypoint n={chapterList.length+1} title="Near you" count={filtered.length} open={openCh.near} onToggle={()=>toggleCh("near")}
+            controls="ttd-near-you" style={{marginTop:openCh[chapterList[chapterList.length-1].key]?14:4}}/>
+        )}
         {/* Empty state */}
         {submitted
           ? (!tourBusy&&cardsList.length===0
@@ -1163,13 +1354,13 @@ export default function ThingsToDoFinder() {
 
         {/* Main cards — within-radius (both modes). When searching, the
             "a bit farther" divider is injected before the first beyond card. */}
-        <div style={{display:"flex",flexDirection:"column",gap:isTablet?"30px":"16px"}}>{cardsList.map((a,i)=>{
+        {(!nearYouChapter||openCh.near)&&<div id="ttd-near-you" style={{display:"flex",flexDirection:"column",gap:isTablet?"30px":"16px",marginTop:nearYouChapter?8:0}}>{cardsList.map((a,i)=>{
           const showBeyondHeader=submitted&&searchBeyond.length>0&&i===filtered.length;
           return (<React.Fragment key={a.id||i}>
             {showBeyondHeader&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:isTablet?"14px 4px 4px":"6px 4px 2px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🧭</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>A bit farther — worth the trip</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({searchBeyond.length})</span></div>}
-            <TierCard a={a} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={expandedIdx===i} cardRef={(el)=>cardRefs.current[i]=el} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance}/>
+            <TierCard a={a} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={expandedIdx===i} cardRef={(el)=>cardRefs.current[i]=el} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} markOf={markOf} isLocal={isLocal}/>
           </React.Fragment>);
-        })}</div>
+        })}</div>}
 
         {/* Results rendered but the search call failed — say so honestly. */}
         {submitted&&!tourBusy&&searchError&&cardsList.length>0&&(
