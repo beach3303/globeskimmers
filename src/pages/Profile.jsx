@@ -10,16 +10,17 @@
 //
 // Editing lives behind the pencil (founder, 2026-10-05: "don't leave the save button on
 // display constantly"): the bookplate takes the photo, name, about and website fields,
-// ON MY MAP takes its add fields and X chips, and Save / Cancel close the edit. A 13-17
-// account edits only the photo; the note explains why (the worker refuses their social
-// writes).
+// ON MY MAP takes its add fields and X chips, the cloth picker previews a new cloth on the
+// whole page, and Save / Cancel close the edit (Cancel puts the old cloth back). The cloth
+// saves on its own (public.profiles, not a social write), so a 13-17 account edits the
+// photo and the cloth; the note explains the rest (the worker refuses their social writes).
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
 import { listPassport, getHandle, getSocialProfile, setSocialProfile, getShareLink, setAvatar, luggageGet } from "@/lib/passport";
-import { useMyCloth } from "@/lib/cloth";
+import { useMyCloth, clothOf } from "@/lib/cloth";
 import { usePageGround } from "@/components/redesign/PageGround";
 import { Folder } from "@/components/redesign/Zone";
 import { NEUTRAL, ZONE, fs, rgba } from "@/components/redesign/constants";
@@ -34,6 +35,8 @@ import PassportFolder from "@/components/passport/PassportFolder";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import InviteButton from "@/components/passport/InviteButton";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
+import { initialOf } from "@/components/social/SocialMarks";
+import ClothPicker from "@/components/profile/ClothPicker";
 import useCircle from "@/lib/useCircle";
 
 const SHOW_VIRTUAL_ITEMS = true; // the founder's renders landed on R2 2026-10-05 — live
@@ -70,7 +73,9 @@ function Field({ label, children }) {
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { profile, socialTier, socialTierReady } = useAuth();
-  const cloth = useMyCloth();
+  const mine = useMyCloth();
+  const [previewCloth, setPreviewCloth] = useState(null); // the cloth on show while editing
+  const cloth = previewCloth ? clothOf(previewCloth) : mine;
   usePageGround(cloth.paper);
   const teen = socialTier === "teen";
 
@@ -130,9 +135,10 @@ export default function ProfilePage() {
     const s = social || { name: "", bio: "", website: "", favorites: [], dreams: [] };
     setName(s.name || fallbackName); setBio(s.bio); setWebsite(s.website);
     setFavorites(s.favorites); setDreams(s.dreams);
+    setPreviewCloth(null);
     setEdit(true);
   };
-  const cancelEdit = () => { setEdit(false); };
+  const cancelEdit = () => { setPreviewCloth(null); setEdit(false); };
 
   const pickAvatar = async (e) => {
     const f = e.target.files?.[0]; e.target.value = "";
@@ -152,20 +158,38 @@ export default function ProfilePage() {
     if (saving) return;
     const saved = social || { name: "", bio: "", website: "", favorites: [], dreams: [] };
     const site = withProtocol(website);
-    const changed = !teen && (
+    const socialChanged = !teen && (
       name.trim() !== (saved.name || "") || bio.trim() !== (saved.bio || "") || site !== (saved.website || "")
       || !sameList(favorites, saved.favorites) || !sameList(dreams, saved.dreams)
     );
-    if (!changed) { setEdit(false); return; }
+    const clothChanged = mine.supported && !!previewCloth && previewCloth !== mine.key;
+    if (!socialChanged && !clothChanged) { cancelEdit(); return; }
     setSaving(true);
-    // display_name rides every patch: the worker treats a patch without it (or bio,
-    // favorites, dreams) as a read.
-    const { profile: after, error } = await setSocialProfile({ display_name: name.trim(), bio: bio.trim(), website: site, favorites, dreams });
+    let ok = true;
+    let siteDropped = false;
+    if (socialChanged) {
+      // display_name rides every patch: the worker treats a patch without it (or bio,
+      // favorites, dreams) as a read.
+      const { profile: after, error } = await setSocialProfile({ display_name: name.trim(), bio: bio.trim(), website: site, favorites, dreams });
+      if (error) { ok = false; showToast(error, "error"); }
+      else {
+        const s = applySocial(after || { display_name: name.trim(), bio: bio.trim(), website: site, favorites, dreams });
+        siteDropped = !!site && !s.website;
+      }
+    }
+    if (clothChanged) {
+      // Saved only when the stored cloth reads back as the one chosen.
+      const { ok: clothOk, error } = await mine.save(previewCloth);
+      if (!clothOk) {
+        ok = false;
+        showToast(error === "not_signed_in" ? "Sign in again to save your cloth" : "Your cloth didn’t save. Try again.", "error");
+      }
+    }
     setSaving(false);
-    if (error) { showToast(error, "error"); return; }
-    const s = applySocial(after || { display_name: name.trim(), bio: bio.trim(), website: site, favorites, dreams });
+    if (!ok) return; // stay in edit, so a retry sends only what didn't save
+    setPreviewCloth(null);
     setEdit(false);
-    if (site && !s.website) showToast("Saved, but that website address didn’t work", "error");
+    if (siteDropped) showToast("Saved, but that website address didn’t work", "error");
     else showToast("Profile saved", "success");
   };
 
@@ -227,6 +251,10 @@ export default function ProfilePage() {
 
         {edit ? (
           <>
+            {mine.supported ? (
+              <ClothPicker value={cloth.key} onChange={setPreviewCloth} initial={initialOf(name || shown.name || fallbackName, handle.handle)}
+                style={{ marginTop: GAP }} />
+            ) : null}
             {!teen ? (
               <MapFolder editing favorites={favorites} dreams={dreams} onFavorites={setFavorites} onDreams={setDreams}
                 cloth={cloth.key} style={{ marginTop: GAP }} />
