@@ -1359,12 +1359,13 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
   // 1b) Guestbook. Their photos come DOWN first (Apple 5.1.1 / GDPR) and their
   //     PRIVATE visit records go. Account deletion keeps their PUBLIC notes,
   //     anonymized (keep the tip, drop the identity). A child's notes are
-  //     DELETED (go-live round 2): at the under-13 clean-up (keepAccount)
-  //     every note row goes, the ones the child had deleted themselves too
-  //     (a soft delete kept the text), once the photos the notes name are
-  //     gone; then every file under gb/<place>/<uid>/ goes, uploads that
-  //     never became a note included.
-  const child = keepAccount;
+  //     DELETED (go-live round 2): at the under-13 clean-up (keepAccount),
+  //     and when a frozen account is deleted at once from its frozen screen
+  //     (opts.child, see handleDeleteAccount), every note row goes, the ones
+  //     the child had deleted themselves too (a soft delete kept the text),
+  //     once the photos the notes name are gone; then every file under
+  //     gb/<place>/<uid>/ goes, uploads that never became a note included.
+  const child = keepAccount || opts.child === true;
   const gbPhotos = await rows('guestbook_photos', `guestbook_entries?user_id=eq.${userId}&photo_key=not.is.null&select=photo_key`);
   if (gbPhotos && await r2('guestbook_photos_r2', gbPhotos.map((r) => r.photo_key))) {
     if (child) await del('guestbook_entries', `guestbook_entries?user_id=eq.${userId}`);
@@ -1536,8 +1537,14 @@ async function handleDeleteAccount(request, env) {
 
     // 1b) An intent record first: if this request dies after the auth delete,
     //     the daily cron (purgeRetrySweep) still finishes the clean-up.
+    //     A frozen account (its under-13 purge clock, freeze:<uid>, is set)
+    //     deleted at once from its frozen screen loses its guestbook notes
+    //     too, as the 7-day clean-up would have deleted them (go-live round
+    //     2): child rides in the record, so a retry deletes them as well.
     const kv = env.GLOBESKIMMERS_KV;
-    if (kv) await kv.put(`purge:${userId}`, JSON.stringify({ at: new Date().toISOString(), failed_steps: ['pending'] })).catch(() => {});
+    const child = !!(kv && await kv.get(`freeze:${userId}`).catch(() => null));
+    const tagChild = child ? { child: true } : {};
+    if (kv) await kv.put(`purge:${userId}`, JSON.stringify({ at: new Date().toISOString(), failed_steps: ['pending'], ...tagChild })).catch(() => {});
 
     // 2) Hard-delete the auth user FIRST (cascades profiles + login_events). If
     //    it fails, nothing is purged: the age record and the blocks stay, so a
@@ -1557,10 +1564,10 @@ async function handleDeleteAccount(request, env) {
 
     // 2b) Then everything else. A step that failed stays queued (purge:<uid>)
     //     for the daily cron, so the account is never left half-deleted for good.
-    const purge = await gbPurgeUserContent(env, userId);
+    const purge = await gbPurgeUserContent(env, userId, { child });
     if (kv) {
       if (purge.ok) await kv.delete(`purge:${userId}`).catch(() => {});
-      else await kv.put(`purge:${userId}`, JSON.stringify({ at: new Date().toISOString(), failed_steps: purge.failed.slice(0, 12) })).catch(() => {});
+      else await kv.put(`purge:${userId}`, JSON.stringify({ at: new Date().toISOString(), failed_steps: purge.failed.slice(0, 12), ...tagChild })).catch(() => {});
     }
 
     // 3) Their member number and new-member mark go with the account
@@ -16460,7 +16467,8 @@ async function purgeRetrySweep(env, now = new Date()) {
         if (au && au.ok) { await kv.delete(name).catch(() => {}); continue; }   // still alive: its delete never happened
         if (!au || au.status !== 404) { out.failed++; continue; }              // couldn't tell: try tomorrow
         attempts++;
-        const res = await gbPurgeUserContent(env, userId);
+        // A frozen account deleted from its frozen screen keeps its child flag.
+        const res = await gbPurgeUserContent(env, userId, { child: rec.child === true });
         if (res.ok) { await kv.delete(name).catch(() => {}); out.done++; continue; }
         out.failed++;
         const tries = (Number(rec.tries) || 0) + 1;
