@@ -1400,6 +1400,7 @@ async function gbLegacyIndexPass(env, now = new Date()) {
   const marked = await marks();
   let cursor = (await kv.get('gbidx:cursor')) || undefined;
   for (let i = 0; i < GB_LEGACY_PASS_PAGES; i++) {
+    if (gbBudgetLeft(env) < 20) break;   // a page, its deletes and the cursor; the rest tomorrow
     const page = await env.MEDIA.list({ prefix: 'gb/', cursor, limit: 1000 });
     out.pages++;
     const rows = [], drop = [];
@@ -16747,7 +16748,7 @@ async function freezeScan(env, now = new Date()) {
   }
   let writes = 0;
   for (const r of rows) {
-    if (writes >= FREEZE_SCAN_MAX) break;
+    if (writes >= FREEZE_SCAN_MAX || gbBudgetLeft(env) < 10) break;
     if (!r.birth_year || !BL_UUID.test(String(r.user_id || ''))) continue;
     const t = socialTierFor(r.birth_year, r.country_at_gate, r.birth_md, now);
     if (!t) continue;
@@ -16783,8 +16784,21 @@ function gbPurgeMeta(rec) {
   const steps = Array.isArray(rec?.failed_steps) ? rec.failed_steps : [];
   return { k: rec?.child === true ? 'del' : rec?.src === 'orphan' || steps.includes('orphan') ? 'orphan' : 'del', ...(steps.includes('pending') ? { p: 1 } : {}), at: rec?.at };
 }
-// What is left of the daily run's KV + R2 allowance (see scheduled()); a
-// sweep run outside the cron has no limit here.
+// One allowance for the whole daily run (go-live round 3). Every cron job
+// runs in ONE scheduled invocation, and Cloudflare allows about 1,000
+// operations to KV and R2 together in one invocation (its example: 500 KV
+// reads and 500 R2 reads; D1 has its own 1,000 queries, and fetches 10,000 on
+// Workers Paid); past that every call throws, and sweeps would skip markers
+// and fail purges at random. scheduled() hands the jobs an env whose KV and R2
+// bindings count every call (gbBudgetEnv), and each sweep stops starting new
+// work when what is left can't cover it (gbBudgetLeft). A sweep run outside
+// the cron has no limit here.
+const CRON_KV_R2_BUDGET = 900;
+function gbBudgetEnv(env, max = CRON_KV_R2_BUDGET) {
+  const budget = { used: 0, max };
+  const counted = (b) => (b ? new Proxy(b, { get(t, p) { const v = t[p]; return typeof v === 'function' ? (...a) => { budget.used++; return v.apply(t, a); } : v; } }) : b);
+  return { ...env, GLOBESKIMMERS_KV: counted(env.GLOBESKIMMERS_KV), MEDIA: counted(env.MEDIA), __budget: budget };
+}
 const gbBudgetLeft = (env) => (env && env.__budget ? env.__budget.max - env.__budget.used : Infinity);
 const PURGE_VISIT_MAX = 50;          // records read or looked up a run
 const PURGE_LOOKUP_FAILS_MAX = 3;    // GoTrue answering nothing useful this many times in a row: try tomorrow
@@ -16944,7 +16958,7 @@ async function orphanScan(env, now = new Date()) {
     let after = i === cur?.i && BL_UUID.test(String(cur?.after || '')) ? String(cur.after).toLowerCase() : '';
     const RESERVE = 2;   // the cursor write, and one to spare
     scan: while (i < ORPHAN_SCAN_COLS.length) {
-      if (spent + 1 + RESERVE > ORPHAN_SCAN_BUDGET) break;
+      if (spent + 1 + RESERVE > ORPHAN_SCAN_BUDGET || gbBudgetLeft(env) < 10) break;
       const [table, col] = ORPHAN_SCAN_COLS[i];
       spent++; out.pages++;
       const q = await gbRest(env, `${table}?select=${col}&${col}=${after ? `gt.${after}` : 'not.is.null'}&order=${col}.asc&limit=1000`, {}).catch(() => null);
@@ -24822,41 +24836,47 @@ export default {
     }
   },
 
-  // Cron (wrangler.toml [triggers]: "0 15 * * *" = 15:00 UTC ≈ 7am PT) — Deal
-  // Radar sweep. FULLY caught: a sweep failure can never take the API down;
-  // the fetch handler above is untouched and completely independent of this.
+  // Cron (wrangler.toml [triggers]: "0 15 * * *" = 15:00 UTC ≈ 7am PT) — the
+  // daily jobs, each FULLY caught: a job's failure can never take the API
+  // down; the fetch handler above is untouched and completely independent.
   async scheduled(event, env, ctx) {
+    // One KV + R2 allowance for the whole run (gbBudgetEnv): every job below
+    // gets the same counted bindings, and the deletion and age work runs
+    // first, so nothing else can use up what it needs (go-live round 3).
+    const benv = gbBudgetEnv(env);
+    // The daily counters (gbDayCount) older than two days go.
+    try { await gbDayCountsPrune(benv); } catch (_e) { /* tomorrow's cron tries again */ }
+    // Under-age freeze: delete content of accounts frozen past the window.
+    try { await freezeSweep(benv); } catch (_e) { /* tomorrow's cron tries again */ }
+    // Deleted accounts whose clean-up had a failed step: finish it.
+    try { await purgeRetrySweep(benv); } catch (_e) { /* tomorrow's cron tries again */ }
+    // Every stored under-13 birthday gets its purge clock, opened or not.
+    try { await freezeScan(benv); } catch (_e) { /* tomorrow's cron tries again */ }
+    // Older guestbook uploads get their uploader index, once (resumable).
+    try { await gbLegacyIndexPass(benv); } catch (_e) { /* tomorrow's cron tries again */ }
+    // Accounts deleted before go-live that left rows behind: their clean-up is
+    // queued for purgeRetrySweep (at most ORPHAN_SCAN_BUDGET subrequests).
+    try { await orphanScan(benv); } catch (_e) { /* tomorrow's cron tries again */ }
+    // Deal Radar sweep. FULLY caught: a sweep failure can never take the API
+    // down; the fetch handler above is untouched and completely independent.
     try {
-      await dealRadarSweep(env, ctx);
+      await dealRadarSweep(benv, ctx);
     } catch (_e) {
       // swallow — sweep trouble is invisible to the API surface; the next
       // day's cron (or POST /deals/sweep) simply tries again
     }
     // The founder's morning digest — official store downloads (its own try).
     try {
-      await morningDigest(env);
+      await morningDigest(benv);
     } catch (_e) { /* a quiet morning; tomorrow's cron tries again */ }
     // Nightly demand-intel rollup + 180-day raw-event retention. Its OWN
     // try/catch: rollup trouble can never dent the sweep above or the cron.
     try {
-      await analyticsRollup(env);
+      await analyticsRollup(benv);
     } catch (_e) {
       // swallow — INSERT OR REPLACE makes any day safely replayable while its
       // raw events (kept 180d) still exist; a failed night costs nothing yet
     }
-    // The daily counters (gbDayCount) older than two days go.
-    try { await gbDayCountsPrune(env); } catch (_e) { /* tomorrow's cron tries again */ }
-    // Older guestbook uploads get their uploader index, once (resumable).
-    try { await gbLegacyIndexPass(env); } catch (_e) { /* tomorrow's cron tries again */ }
-    // Under-age freeze: delete content of accounts frozen past the window.
-    try { await freezeSweep(env); } catch (_e) { /* tomorrow's cron tries again */ }
-    // Deleted accounts whose clean-up had a failed step: finish it.
-    try { await purgeRetrySweep(env); } catch (_e) { /* tomorrow's cron tries again */ }
-    // Every stored under-13 birthday gets its purge clock, opened or not.
-    try { await freezeScan(env); } catch (_e) { /* tomorrow's cron tries again */ }
-    // Accounts deleted before go-live that left rows behind: their clean-up is
-    // queued for purgeRetrySweep (at most ORPHAN_SCAN_BUDGET subrequests).
-    try { await orphanScan(env); } catch (_e) { /* tomorrow's cron tries again */ }
   }
 };
 // CI test Mon May 11 06:28:51 PDT 2026
