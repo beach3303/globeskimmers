@@ -36,7 +36,11 @@ for PATTERN in "iPad Air 11-inch" "iPhone [0-9]+ Pro \\("; do
   xcrun simctl launch "$ID" "$BUNDLE" >/dev/null 2>&1 || { sleep 15; xcrun simctl launch "$ID" "$BUNDLE" >/dev/null; }
   sleep 20
   xcrun simctl io "$ID" screenshot "$DD-$ID.png" >/dev/null 2>&1
-  if xcrun simctl spawn "$ID" launchctl list | grep -q "$BUNDLE"; then echo "✅ $NAME: running after 20 s (screenshot $DD-$ID.png)"
+  # Read the whole list before searching it: with pipefail, `grep -q` closing the pipe at the
+  # first match kills launchctl (SIGPIPE) and failed the check while the app was running
+  # (iPhone 18 Pro, 2026-10-14; its screenshot showed the sign-in screen).
+  LIST=$(xcrun simctl spawn "$ID" launchctl list 2>/dev/null)
+  if grep -q "$BUNDLE" <<<"$LIST"; then echo "✅ $NAME: running after 20 s (screenshot $DD-$ID.png)"
   else
     echo "❌ $NAME: the app is not running 20 s after launch"
     xcrun simctl spawn "$ID" log show --last 2m --style compact --predicate 'eventMessage CONTAINS[c] "failed to launch" OR eventMessage CONTAINS[c] "SIGTRAP" OR eventMessage CONTAINS[c] "SIGABRT"' 2>/dev/null | tail -3

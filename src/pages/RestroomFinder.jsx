@@ -661,7 +661,8 @@ export default function RestroomFinderPage() {
       if (mapInstRef.current) mapInstRef.current.remove();
       markersRef.current = [];
       const map = window.L.map(mapRef.current).setView([lat, lng], 15);
-      window.L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { attribution: "© OSM © CARTO" }).addTo(map);
+      // OpenStreetMap's tiles, as on every other map (CARTO's now answer "API key required").
+      window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap contributors" }).addTo(map);
       mapInstRef.current = map;
       window._gsRRDirs = (i) => { if (filtered[i]) setDirectionsRR(filtered[i]); };
       window._gsRRView = (i) => { setActiveMapPin(i); setSheetExpanded(true); };
