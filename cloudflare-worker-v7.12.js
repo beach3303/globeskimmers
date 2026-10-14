@@ -16889,6 +16889,7 @@ async function handleSocialProfile(request, env, ctx) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+const REPORTS_DAILY_MAX = 30;
 // POST /social/report { slug?, kind, ref?, reason, note? } — Apple 1.2's
 // report door. minor_safety reports carry a 24h triage SLA (admin queue).
 // Report sits next to Block everywhere (2026-10-13), so a profile, a
@@ -16900,11 +16901,17 @@ async function handleSocialReport(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const reason = ['minor_safety', 'nudity', 'harassment', 'spam', 'other'].includes(b.reason) ? b.reason : 'other';
     const kind = ['passport', 'photo', 'tag', 'handle', 'profile', 'postcard', 'signature', 'stamp'].includes(b.kind) ? b.kind : 'passport';
+    // One person files at most REPORTS_DAILY_MAX reports a day (go-live
+    // round 3: with no limit, one account could bury a real child-safety
+    // report on the desk); past that the words point to email.
+    const n = await gbDayCount(env, `rep:${user.id}`);
+    if (n != null && n > REPORTS_DAILY_MAX) return jsonResponse({ error: 'You’ve sent a lot of reports today. If it’s urgent, email founder@globeskimmers.io' }, 429);
     const row = {
       reporter_id: user.id, kind, reason,
       subject_slug: b.slug ? String(b.slug).replace(/[^a-z0-9]/gi, '').slice(0, 24) : null,
       ref: b.ref ? String(b.ref).slice(0, 120) : null,
       note: b.note ? String(b.note).replace(/\s+/g, ' ').trim().slice(0, 500) : null,
+      status: 'open',
     };
     const w = await gbRest(env, 'content_reports', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
     if (!w.ok) return jsonResponse({ error: 'Could not send the report' }, 502);
@@ -16923,8 +16930,15 @@ async function handleSocialReport(request, env, ctx) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
-// POST /admin/reports { status? } — the triage queue. Same admin gate as the
-// other admin routes; resolve with { id, resolve: 'resolved' | 'dismissed' }.
+// POST /admin/reports { status?, before? } — the triage queue. Same admin
+// gate as the other admin routes; resolve with { id, resolve: 'resolved' |
+// 'dismissed' }. Open child-safety reports come in their own query, first,
+// up to 500 (go-live round 3: the desk loaded only the newest 100 open
+// reports, so a flood pushed a real one off it); the rest come 100 at a
+// time, newest first, and `before` (the created_at of the oldest one
+// shown) loads the next 100. { reports, total, urgent_total, next }: the
+// totals are of what matches, shown or not; next is the next page's
+// `before`, or null.
 async function handleAdminReports(request, env) {
   try {
     const denied = await requireAdmin(request, env);
@@ -16935,8 +16949,25 @@ async function handleAdminReports(request, env) {
       return jsonResponse({ ok: true });
     }
     const status = ['open', 'resolved', 'dismissed'].includes(b.status) ? b.status : 'open';
-    const q = await gbRest(env, `content_reports?status=eq.${status}&order=created_at.desc&limit=100&select=*`, {});
-    return jsonResponse({ reports: q.ok ? await q.json() : [] });
+    const before = typeof b.before === 'string' && /^\d{4}-\d{2}-\d{2}T[0-9:.]+(Z|[+-]\d{2}:\d{2})?$/.test(b.before) ? b.before : null;
+    const PAGE = 100;
+    const total = (r) => { const m = /\/(\d+)$/.exec(r.headers.get('content-range') || ''); return m ? Number(m[1]) : null; };
+    const urgentFirst = status === 'open' && !before;
+    const [uq, oq] = await Promise.all([
+      urgentFirst ? gbRest(env, 'content_reports?status=eq.open&reason=eq.minor_safety&order=created_at.desc&limit=500&select=*', { headers: { Prefer: 'count=exact' } }) : null,
+      gbRest(env, `content_reports?status=eq.${status}${status === 'open' ? '&reason=neq.minor_safety' : ''}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PAGE}&select=*`, { headers: { Prefer: 'count=exact' } }),
+    ]);
+    if ((uq && !uq.ok) || !oq.ok) return jsonResponse({ error: 'Couldn’t load the reports — try again', reports: [] }, 502);
+    const urgent = uq ? await uq.json() : [];
+    const rest = await oq.json();
+    const urgentTotal = uq ? total(uq) ?? urgent.length : null;
+    const restTotal = total(oq) ?? rest.length;
+    return jsonResponse({
+      reports: [...urgent, ...rest],
+      total: urgentFirst ? (urgentTotal || 0) + restTotal : restTotal,
+      urgent_total: urgentTotal,
+      next: rest.length === PAGE ? rest[rest.length - 1].created_at : null,
+    });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -18076,6 +18107,7 @@ async function gbBlockNotesDrop(env, userId) {
   } catch { return false; }
 }
 
+const BLOCK_RECORDS_DAILY_MAX = 30;
 // POST /social/block { user_id | handle | slug | postcard_id | token } —
 // block a traveler (Apple 1.2, founder 2026-10-13: blocking really blocks;
 // the follow list advertises it as features: ['block_v2']). Silent: they are
@@ -18121,7 +18153,18 @@ async function handleSocialBlock(request, env, ctx) {
       const q = await gbRest(env, `guestbook_entries?id=eq.${b.guestbook_entry_id}&select=user_id`, {});
       target = (q.ok ? await q.json() : [])[0]?.user_id || null;
     }
-    if (!target || !BL_UUID.test(target) || target === user.id) return jsonResponse({ error: 'Nothing to block' }, 400);
+    if (!target || !BL_UUID.test(target) || target.toLowerCase() === user.id) return jsonResponse({ error: 'Nothing to block' }, 400);
+    target = target.toLowerCase();
+    // An id sent as is must be an account's (go-live round 3: user_blocks has
+    // no foreign key, so any made-up uuid was blocked, filed a safety record
+    // and fed the orphan pass). A sign-in that answers 404 is no one; a
+    // lookup that can't be made lets the block through — blocking never waits
+    // on an outage.
+    if (b.user_id) {
+      const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY;
+      const au = key ? await fetch(`${GB_URL(env)}/auth/v1/admin/users/${target}`, { headers: { apikey: key, Authorization: `Bearer ${key}` } }).catch(() => null) : null;
+      if (au && au.status === 404) return jsonResponse({ error: 'Nothing to block' }, 400);
+    }
     const w = await gbRest(env, 'user_blocks', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify({ user_id: user.id, blocked_user_id: target }) });
     if (!w.ok) return jsonResponse({ error: 'Could not block right now — try again' }, 502);
     // Only a row that comes back is a new block: blocking someone already
@@ -18133,11 +18176,21 @@ async function handleSocialBlock(request, env, ctx) {
     // (Admin → Safety reports) with the note the app sends — what the person
     // was looking at — and rings the founder (at most 10 rings a day for one
     // blocker's reports and blocks, see founderAlert). The blocked person is
-    // never told.
+    // never told. One open record per pair (go-live round 3: block, unblock,
+    // block filed a new one every cycle): while the last one waits for review
+    // nothing more is filed or rung for that pair; and one person files at
+    // most BLOCK_RECORDS_DAILY_MAX a day (the blocks themselves always work).
+    // A check that can't be read files the record anyway.
     if (ctx && fresh) {
       const note = `Blocked by a traveler. ${String(b.note || '').replace(/\s+/g, ' ').trim()}`.trim().slice(0, 500);
-      ctx.waitUntil(gbRest(env, 'content_reports', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ reporter_id: user.id, kind: 'block', reason: 'other', ref: `user:${target}`, note }) }).catch(() => {}));
-      ctx.waitUntil(founderAlert(env, '🚩 A traveler blocked someone. Admin → Safety reports.', 'report', { by: user.id }));
+      ctx.waitUntil((async () => {
+        const oq = await gbRest(env, `content_reports?reporter_id=eq.${user.id}&kind=eq.block&ref=eq.${encodeURIComponent(`user:${target}`)}&status=eq.open&select=id&limit=1`, {}).catch(() => null);
+        if (oq && oq.ok && ((await oq.json().catch(() => [])) || []).length) return;
+        const n = await gbDayCount(env, `blk:${user.id}`);
+        if (n != null && n > BLOCK_RECORDS_DAILY_MAX) return;
+        await gbRest(env, 'content_reports', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ reporter_id: user.id, kind: 'block', reason: 'other', ref: `user:${target}`, note, status: 'open' }) });
+        await founderAlert(env, '🚩 A traveler blocked someone. Admin → Safety reports.', 'report', { by: user.id });
+      })().catch(() => {}));
     }
     // A minor's @handle that I already knew, for my blocked list
     // (gbBlockNoteKey): the one I typed, or the one my Following list showed
