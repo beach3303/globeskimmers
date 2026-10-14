@@ -11,6 +11,7 @@ import BrandBanner from "@/components/redesign/BrandBanner";
 import FloatingNav from "@/components/redesign/FloatingNav";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
 import BackToTop from "@/components/BackToTop";
+import BoardNudge from "@/components/passport/BoardNudge";
 import { PageGroundProvider, usePageGroundValue, usePageInk } from "@/components/redesign/PageGround";
 import { logEvent } from "@/lib/analytics";
 import "@/lib/cloudSync"; // starts Wishlist/Saved → account sync on sign-in (side-effect)
@@ -225,6 +226,9 @@ function PageShell({ currentPageName, isOnboarding, children }) {
           <city>" travel nudge, and the one-time "auto-follow?" offer. */}
       <LocationMismatchSheet />
       <LocationAutoFollowOffer />
+
+      {/* After a verified stamp in a city: 'Send a postcard to Lisbon's board' (City Boards). */}
+      {!isOnboarding && <BoardNudge />}
     </div>
   );
 }
