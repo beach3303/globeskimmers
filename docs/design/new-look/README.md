@@ -6,13 +6,16 @@ https://claude.ai/artifact/AArKJHwntKyYgLj5mfYsmn
 - **Home is option B, boxed zones** (`Home-Boxes.dc.html`), and B ships for everyone. Option A, colour
   bands (`Main.dc.html`), is built only as an admin-only preview behind the same switch.
 - **"Your circle"** is approved as the house word for the people you follow and who follow you.
+- **The location chooser is B, the Kraft Folder** (founder, 2026-10-13: "I choose attached - B").
+  `Location-B.dc.html` and `Location-B-Locating.dc.html` are the pick (slice S19); option A, the
+  Boarding Pass, is not built.
 - **Weather is Bluebird and ATMs is Carbon Copy** (founder, 2026-10-13). `Weather.dc.html` and
   `ATMs.dc.html` are those picks. The boards not chosen are not pinned and must not be used. Their final
   colours are in `bible.json` (finders `weather` and `atm`, and their WORLD tuples in
   `shared_finder_frame`) and in the Palettes board's 05 · ATMS and 07 · WEATHER blocks.
 
 ## What is here
-- 18 artboards (`*.dc.html`), copied byte for byte from the canvas source so the line numbers the build
+- 20 artboards (`*.dc.html`; S19 added the two Location-B boards), copied byte for byte from the canvas source so the line numbers the build
   plan cites still hold. They load the canvas runtime (`support.js`, `ds/`) and `/_blob/` images that
   exist only inside the canvas: open the canvas to see them drawn, and read these files for exact values.
 - `bible.json`: the design bible (finder worlds, zones, cloths, contrast pairs, states the boards don't draw).
@@ -40,5 +43,5 @@ https://claude.ai/artifact/AArKJHwntKyYgLj5mfYsmn
 
 ## Pages that keep today's look in this phase
 The Passport booklet, Settings (except helper text and the admin row), SavedLocations, LocalFavorite,
-SuggestPlace, Suggestions, Onboarding, AdminAnalytics, the search overlay, the location picker and the
-welcome splash.
+SuggestPlace, Suggestions, Onboarding, AdminAnalytics, the search overlay and the welcome splash. (The
+location chooser joined the new look with S19.)
