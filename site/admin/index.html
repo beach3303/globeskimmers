@@ -19,7 +19,7 @@
 <script type="module" src="admin.js"></script>
 </head>
 <body>
-<a class="skip" href="#main">Skip to the numbers</a>
+<a class="skip" id="skip" href="#main" hidden>Skip to the numbers</a>
 
 <div id="boot" class="boot" role="status"><span id="boot-text">Loading…</span></div>
 <noscript><p class="boot">This page needs JavaScript.</p></noscript>
@@ -48,7 +48,7 @@
       <button class="btn btn-primary" id="signin-submit" type="submit">Sign in</button>
     </form>
     <p class="auth-msg" id="signin-msg" role="alert" hidden></p>
-    <p class="auth-foot">On a shared computer, untick “Keep me signed in”: you’re then signed out when this tab closes.</p>
+    <p class="auth-foot">On a shared computer, untick “Keep me signed in”: closing or reloading this tab then signs you out. Press Sign out when you’re done either way.</p>
   </div>
 </main>
 
@@ -121,14 +121,14 @@
     <section class="sec" id="users" aria-labelledby="users-h">
       <p class="kick">Users</p>
       <h2 id="users-h">Where they’re from</h2>
-      <p class="lede">From the answers people give in the app. Blank answers aren’t counted.</p>
+      <p class="lede">From each account’s profile: home country is what people entered (it can be skipped), language comes from the phone unless changed in Settings, and age comes from the age gate. Blank values aren’t counted.</p>
       <div class="grid grid-3" id="users-grid"></div>
     </section>
 
     <section class="sec" id="searches" aria-labelledby="searches-h">
       <p class="kick">Searches</p>
       <h2 id="searches-h">What people look for</h2>
-      <p class="lede">From the app’s event log. The search text is exactly what people typed.</p>
+      <p class="lede">From the app’s event log: the text of each search, trimmed. Shopping’s category chips log their label as a search.</p>
       <div class="grid grid-2" id="searches-grid"></div>
     </section>
 
@@ -142,7 +142,7 @@
     <section class="sec" id="passport" aria-labelledby="passport-h">
       <p class="kick">Passport</p>
       <h2 id="passport-h">Stamps and the guestbook</h2>
-      <p class="lede">From the passport database itself, the lasting record. (The event log lost stamp events before Sep 28, 2026, so it isn’t used here.)</p>
+      <p class="lede">From the passport and guestbook tables as they are now (deleting an account removes its stamps). The event log lost stamp events before Sep 28, 2026, so it isn’t used here.</p>
       <div class="kpis kpis-4" id="passport-kpis"></div>
       <div class="grid grid-2" id="passport-grid"></div>
     </section>
@@ -150,15 +150,15 @@
     <section class="sec" id="items" aria-labelledby="items-h">
       <p class="kick">Virtual items</p>
       <h2 id="items-h">What travelers pick</h2>
-      <p class="lede">Laptops, drinks and travel buddies. “Now” is what’s on traveler profiles today; picks come from the event log, which keeps about 180 days.</p>
+      <p class="lede">Laptops, drinks and travel buddies. The tiles and “What they chose” are saved profiles today; “Picks per month” comes from the event log, which keeps about 180 days.</p>
       <div class="kpis kpis-4" id="items-kpis"></div>
       <div class="grid grid-2" id="items-grid"></div>
     </section>
 
     <section class="sec" id="messages" aria-labelledby="messages-h">
-      <p class="kick">Website messages</p>
-      <h2 id="messages-h">From the contact form</h2>
-      <p class="lede">Open messages sent from globeskimmers.io, newest first. Mark them handled in the app: this page only reads.</p>
+      <p class="kick">Messages</p>
+      <h2 id="messages-h">From the contact forms</h2>
+      <p class="lede">Open messages from the website’s contact form and the app’s Settings → Contact us, newest first. Mark them handled in the app: this page only reads.</p>
       <div class="grid" id="messages-grid"></div>
     </section>
 

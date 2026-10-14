@@ -153,13 +153,15 @@ function named(v, kind) {
   }
   return s;
 }
+// A label map read with a key from the server: own keys only, so "constructor" stays text.
+const own = (map, k) => (Object.prototype.hasOwnProperty.call(map, k) ? map[k] : undefined);
 const PROVIDERS = { apple: 'Apple', google: 'Google', email: 'Email', facebook: 'Facebook' };
 function providerName(p) {
   const k = String(p || '').trim();
-  return PROVIDERS[k.toLowerCase()] || (k ? k[0].toUpperCase() + k.slice(1) : '—');
+  return own(PROVIDERS, k.toLowerCase()) || (k ? k[0].toUpperCase() + k.slice(1) : '—');
 }
 const GEAR = { laptop: 'Laptop', tumbler: 'XL coffee tumbler', 'straw-bottle': 'XXL straw bottle', 'lid-bottle': 'Water bottle' };
-const gearName = (k) => GEAR[k] || String(k || '(unknown)');
+const gearName = (k) => own(GEAR, k) || String(k || '(unknown)');
 
 // ─── storage (each read and write may throw in a locked-down browser) ───────
 function store(kind) {
@@ -177,21 +179,23 @@ function drop(st, key) {
 
 // ─── session ────────────────────────────────────────────────────────────────
 // { access_token, refresh_token, expires_at (s), email, remember }. "Keep me
-// signed in" stores it in localStorage; otherwise in sessionStorage, which
-// ends with the tab. Supabase's provider tokens are never kept.
+// signed in" stores it in localStorage. Otherwise it lives in this page's
+// memory only: never sessionStorage, which a reopened tab ("Reopen closed tab",
+// "continue where you left off") restores, admin tokens included. Reloading or
+// closing the tab then signs this page out. Supabase's provider tokens are
+// never kept.
 const session = {
   cur: null,
   valid(s) { return !!(s && typeof s.access_token === 'string' && typeof s.refresh_token === 'string' && Number.isFinite(s.expires_at)); },
   load() {
-    for (const kind of ['session', 'local']) {
-      const s = readJSON(store(kind), KEY_SESSION);
-      if (this.valid(s)) { this.cur = { ...s, remember: kind === 'local' }; return this.cur; }
-    }
-    this.cur = null;
-    return null;
+    const s = readJSON(store('local'), KEY_SESSION);
+    this.cur = this.valid(s) ? { ...s, remember: true } : null;
+    return this.cur;
   },
+  // What another tab may have stored since (only a remembered session is shared).
   peek() {
-    const s = this.cur && readJSON(store(this.cur.remember ? 'local' : 'session'), KEY_SESSION);
+    if (!this.cur?.remember) return null;
+    const s = readJSON(store('local'), KEY_SESSION);
     return this.valid(s) ? s : null;
   },
   save(t, remember) {
@@ -200,8 +204,8 @@ const session = {
     const expires_at = Number.isFinite(Number(t.expires_at)) && Number(t.expires_at) > now ? Number(t.expires_at) : now + (Number(t.expires_in) || 3600);
     const email = String(t.user?.email || this.cur?.email || '');
     this.cur = { access_token: t.access_token, refresh_token: t.refresh_token, expires_at, email, remember: !!remember };
-    drop(store(remember ? 'session' : 'local'), KEY_SESSION);
-    writeJSON(store(remember ? 'local' : 'session'), KEY_SESSION, { access_token: t.access_token, refresh_token: t.refresh_token, expires_at, email });
+    if (remember) writeJSON(store('local'), KEY_SESSION, { access_token: t.access_token, refresh_token: t.refresh_token, expires_at, email });
+    else drop(store('local'), KEY_SESSION);
   },
   clear() {
     this.cur = null;
@@ -305,7 +309,10 @@ async function worker(path, body, retried) {
   }
   const err = data && typeof data === 'object' && typeof data.error === 'string' ? data.error : '';
   if (!res.ok || err || !data || typeof data !== 'object') {
-    const kind = res.status === 401 || res.status === 403 ? 'denied' : res.status === 404 ? 'missing' : !data && res.ok ? 'shape' : 'http';
+    // Only a 403 means "not an admin". A 401 that survives the refresh means the
+    // worker couldn't check the token with Supabase (an outage, a rate limit),
+    // which says nothing about this account.
+    const kind = res.status === 403 ? 'denied' : res.status === 401 ? 'unverified' : res.status === 404 ? 'missing' : !data && res.ok ? 'shape' : 'http';
     return fail(kind, res.status, err || (res.ok ? '' : `HTTP ${res.status}`));
   }
   return { ok: true, status: res.status, data };
@@ -355,9 +362,10 @@ function panel(slot, deps, render, opts) {
   panels.push(p);
   return p;
 }
+const hostOf = (p) => p.opts.host || p.slot.closest('.card, .kpi') || p.slot;
 async function runPanel(p) {
   const mine = gen;
-  const host = p.opts.host || p.slot.closest('.card, .kpi') || p.slot;
+  const host = hostOf(p);
   if (!p.slot.firstChild) p.slot.replaceChildren(...loadingState(p.opts.compact));
   host.classList.add('busy');
   host.setAttribute('aria-busy', 'true');
@@ -371,26 +379,49 @@ async function runPanel(p) {
   if (mine !== gen) return;
   host.classList.remove('busy');
   host.removeAttribute('aria-busy');
+  // A redraw removes whatever had focus inside it (a Try again, a Show all):
+  // the panel's heading takes focus instead of <body>, so nobody loses their place.
+  const hadFocus = p.slot.contains(document.activeElement);
+  p.slot.replaceChildren(...drawPanel(p, results));
+  if (hadFocus && !p.slot.contains(document.activeElement)) host.querySelector('h3')?.focus({ preventScroll: true });
+}
+// Each load explains a failed route once: the first panel that reads it (in
+// page order) shows the whole error and the one Try again; later panels point
+// back to it. A "not deployed yet" note gets its full text in the first card.
+const explained = new Map();   // dep key → the panel that explained it
+function drawPanel(p, results) {
   const retry = () => retryDeps(p.deps);
   const bad = results.find((r) => !r.ok);
   if (bad) {
-    const soon = p.opts.soon ? p.opts.soon(bad) : null;
-    p.slot.replaceChildren(soon ? soonState(soon, bad, p.opts.compact) : errorState(bad, retry, p.opts.compact));
     if (p.opts.onFail) p.opts.onFail(bad);
-    return;
+    const key = p.deps[results.indexOf(bad)]?.key || '';
+    const soon = p.opts.soon ? p.opts.soon(bad) : null;
+    if (soon) {
+      const full = !p.opts.compact && !explained.has('soon:' + key);
+      if (full) explained.set('soon:' + key, p);
+      return [soonState(soon, bad, !full)];
+    }
+    const first = explained.get(key);
+    if (first && first !== p) return [sameProblem(first)];
+    explained.set(key, p);
+    return [errorState(bad, retry, p.opts.compact)];
   }
   try {
     const out = p.render(...results.map((r) => r.data));
-    p.slot.replaceChildren(...[out].flat(Infinity).filter(Boolean));
+    return [out].flat(Infinity).filter(Boolean);
   } catch (e) {
-    p.slot.replaceChildren(errorState(fail(e instanceof Shape ? 'shape' : 'bug', 0, e?.message || String(e)), retry, p.opts.compact));
     if (p.opts.onFail) p.opts.onFail(null);
+    return [errorState(fail(e instanceof Shape ? 'shape' : 'bug', 0, e?.message || String(e)), retry, p.opts.compact)];
   }
+}
+function sameProblem(first) {
+  const name = (hostOf(first).querySelector('h3')?.textContent || '').trim();
+  return el('p', { class: 'kpi-err' }, el('b', { text: 'Couldn’t load.' }), name ? ` Same server problem as “${name}” above.` : ' Same server problem as above.');
 }
 function retryDeps(deps) {
   const keys = new Set(deps.map((d) => d.key));
-  keys.forEach((k) => cache.delete(k));
-  return Promise.all(panels.filter((p) => p.deps.some((d) => keys.has(d.key))).map(runPanel));
+  keys.forEach((k) => { cache.delete(k); explained.delete(k); explained.delete('soon:' + k); });
+  return Promise.all(panels.filter((p) => p.deps.some((d) => keys.has(d.key))).map(runPanel)).then(() => { if (!running) stampLoaded(); });
 }
 
 function loadingState(compact) {
@@ -401,6 +432,7 @@ const WHY = {
   network: 'Couldn’t reach the server. It may be down, or the connection dropped.',
   timeout: 'The server didn’t answer within 25 seconds.',
   denied: 'The server refused this request for this account.',
+  unverified: 'The server couldn’t confirm your sign-in.',
   missing: 'The server doesn’t have this route.',
   shape: 'The server’s answer wasn’t in the expected shape.',
   bug: 'Something went wrong in this page.',
@@ -410,6 +442,7 @@ function errorState(r, retry, compact) {
   const detail = r.message && r.message !== `HTTP ${r.status}` ? `Server said: ${r.message}` : r.status ? `HTTP ${r.status}` : '';
   if (compact) {
     return el('p', { class: 'kpi-err' }, el('b', { text: 'Couldn’t load. ' }), why,
+      detail && el('span', { class: 'detail', text: detail }),
       retry && el('button', { class: 'btn-link', type: 'button', text: 'Try again', onclick: retry }));
   }
   return el('div', { class: 'state state-error' }, icon('alert'),
@@ -433,7 +466,7 @@ function card(parent, { title, meta, def, wide, chart }) {
   const metaEl = meta ? el('p', { class: 'meta', text: meta }) : null;
   const body = el('div', { class: 'body' });
   const node = el('article', { class: 'card' + (wide ? ' span-all' : '') + (chart ? ' card-chart' : ''), 'aria-labelledby': id },
-    el('div', { class: 'card-head' }, el('div', null, el('h3', { id, text: title }), metaEl)),
+    el('div', { class: 'card-head' }, el('div', null, el('h3', { id, tabindex: '-1', text: title }), metaEl)),
     def && el('p', { class: 'def', text: def }),
     body);
   parent.append(node);
@@ -447,7 +480,7 @@ function tile(parent, { label, def }) {
   const pop = el('p', { class: 'pop', id: id + '-def', role: 'tooltip', hidden: true, text: def });
   const btn = el('button', { class: 'info', type: 'button', 'aria-expanded': 'false', 'aria-controls': id + '-def', 'aria-describedby': id + '-def', 'aria-label': `What “${label}” counts` },
     el('span', { 'aria-hidden': 'true', text: 'i' }));
-  const node = el('article', { class: 'kpi', 'aria-labelledby': id }, el('div', { class: 'kpi-head' }, el('h3', { class: 'kpi-label', id, text: label }), btn), body, pop);
+  const node = el('article', { class: 'kpi', 'aria-labelledby': id }, el('div', { class: 'kpi-head' }, el('h3', { class: 'kpi-label', id, tabindex: '-1', text: label }), btn), body, pop);
   let pinned = false;
   const open = (pin) => { closeTips(node); pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); pinned = pin; };
   const close = () => { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); pinned = false; };
@@ -455,6 +488,9 @@ function tile(parent, { label, def }) {
   btn.addEventListener('click', () => { if (pop.hidden || !pinned) open(true); else close(); });
   btn.addEventListener('mouseenter', () => { if (HOVER.matches && pop.hidden) open(false); });
   node.addEventListener('mouseleave', () => { if (!pinned) close(); });
+  // Tabbing on closes it, so it never covers the next tile's controls. (Focus
+  // dropping to nothing, like a click on the open definition, keeps it open.)
+  node.addEventListener('focusout', (e) => { if (e.relatedTarget instanceof Node && !node.contains(e.relatedTarget)) close(); });
   parent.append(node);
   return body;
 }
@@ -551,20 +587,47 @@ function barChart({ name, unit, points, colHead }) {
       return bar;
     });
     g.append(sv('line', { x1: left, x2: W - right, y1: baseY + 0.5, y2: baseY + 0.5, class: 'baseline' }));
-    // Label the peak (the latest one when tied): the axis and the tooltip carry the rest.
-    if (maxV > 0) {
-      const i = points.map((p) => p.value).lastIndexOf(maxV);
-      const cx = Math.min(W - right - 12, Math.max(left + 12, left + (i + 0.5) * slot));
-      g.append(sv('text', { x: cx, y: y(maxV) - 7, 'text-anchor': 'middle', class: 'peak', text: fmt(maxV) }));
+    // Numbers printed on the chart: every bar's where there's room; otherwise
+    // the peak (the latest one when tied) and the last bar (today, or this
+    // month so far). The tooltip and "Show the numbers" carry the rest.
+    const xOf = (i) => Math.min(W - right - 12, Math.max(left + 12, left + (i + 0.5) * slot));
+    // Mono digits are 0.6em wide: 6.6px for the 11px peak, 6.3px for the 10.5px others.
+    const textW = (i, px = 11) => fmt(points[i].value).length * px * 0.6 + 2;
+    const valueAt = (i, cls) => sv('text', { x: xOf(i), y: y(points[i].value) - 7, 'text-anchor': 'middle', class: cls, text: fmt(points[i].value) });
+    const peakAt = maxV > 0 ? points.map((p) => p.value).lastIndexOf(maxV) : -1;
+    if (slot >= Math.max(34, ...points.map((p, i) => textW(i) + 6))) points.forEach((p, i) => g.append(valueAt(i, i === peakAt ? 'peak' : 'val')));
+    else {
+      if (peakAt >= 0) g.append(valueAt(peakAt, 'peak'));
+      const last = n - 1;
+      if (last >= 0 && last !== peakAt) {
+        // Right-aligned to the chart's end and lifted above every bar it spans,
+        // so a narrow last bar's number never prints over a taller neighbour.
+        const x1 = left + n * slot, x0 = x1 - textW(last, 10.5);
+        let tallest = points[last].value;
+        for (let i = 0; i < n; i++) {
+          const b0 = left + i * slot + (slot - barW) / 2;
+          if (b0 < x1 && b0 + barW > x0) tallest = Math.max(tallest, points[i].value);
+        }
+        const ly = y(tallest) - 7;
+        // Left off only where it would print over the peak's number (the
+        // summary line above the chart says it too).
+        const px = xOf(peakAt), pw = peakAt >= 0 ? textW(peakAt) : 0;
+        const clash = peakAt >= 0 && x0 < px + pw / 2 && x1 > px - pw / 2 && Math.abs(ly - (y(maxV) - 7)) < 13;
+        if (!clash) g.append(sv('text', { x: x1, y: ly, 'text-anchor': 'end', class: 'val', text: fmt(points[last].value) }));
+      }
     }
     const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(plotW / 64))));
+    const leftmost = (n - 1) % every;
     for (let i = n - 1; i >= 0; i -= every) {
       const cx = Math.min(W - right - 22, Math.max(left + 22, left + (i + 0.5) * slot));
-      g.append(sv('text', { x: cx, y: H - 6, 'text-anchor': 'middle', class: 'tick', text: points[i].axis || points[i].label }));
+      // The leftmost tick carries the year ("Dec 2025"), so a short "Dec" is never ambiguous.
+      g.append(sv('text', { x: cx, y: H - 6, 'text-anchor': 'middle', class: 'tick', text: i === leftmost ? points[i].label : (points[i].axis || points[i].label) }));
     }
     g.addEventListener('pointermove', (e) => pointAt(e));
     g.addEventListener('pointerdown', (e) => pointAt(e));
-    g.addEventListener('pointerleave', () => { if (document.activeElement !== box) clear(); });
+    // Only a mouse leaving clears the reading: on touch, pointerleave comes
+    // with every lift, before the tap has even focused the chart.
+    g.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && document.activeElement !== box) clear(); });
     if (svg) svg.replaceWith(g); else box.prepend(g);
     svg = g;
     geo = { W, left, slot, y, baseY, cursor, bars };
@@ -672,6 +735,39 @@ function peakText(points, unit) {
   const p = points[points.map((q) => q.value).lastIndexOf(max)];
   return `Busiest: ${p.label} (${fmt(max)})`;
 }
+// " · today so far: N", from the UTC day still running (nothing when the window
+// doesn't reach it, or when the whole window is empty and already says so).
+function todayText(points) {
+  const p = points.find((q) => q.note === 'today so far');
+  return p && points.some((q) => q.value > 0) ? ` · today so far: ${fmt(p.value)}` : '';
+}
+
+// /admin-user-stats reads profiles (and age-gate records) in one unordered
+// select each, and PostgREST returns at most 1,000 rows: past that, everything
+// drawn from them comes from an arbitrary subset.
+const CAP = 1000;
+const usersCapped = (s) => num(s.totalUsers, 'the user count') >= CAP;
+const CAP_WARN = 'The server read only 1,000 accounts, in no set order, so these counts come from a subset and read low.';
+const CAP_AGE_WARN = 'The server reads at most 1,000 age-gate records, in no set order, so once there are more, these counts come from a subset and read low.';
+
+// Event keys as the founder would say them; the raw key stays beside each.
+const EVENT = {
+  page_view: 'Screen opened', session_start: 'App visit started', session_end: 'App visit ended',
+  search: 'Search', search_zero_results: 'Search, no results',
+  home_rows_view: 'Home rows shown', home_row_card_tap: 'Home card tapped', feature_used: 'Home shortcut used',
+  directions_tap: 'Directions tapped', ai_details_opened: 'AI details opened',
+  passport_stamp: 'Stamp collected', passport_share: 'Passport shared',
+  share_landing_view: 'Shared page viewed', share_landing_store: 'Store tap on a shared page',
+  guestbook_sign: 'Guestbook signed', dish_post: 'Food photo posted', owner_note: 'Owner message sent', postcard_send: 'Postcard sent',
+  wishlist_add: 'Added to wishlist', gear_select: 'Virtual item changed', buddy_add: 'Buddy added',
+};
+// "PlacesToEat" → "Places To Eat", "ATMFinder" → "ATM Finder".
+const words = (s) => String(s).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
+function cuisineName(c) {
+  const s = String(c).replace(/[_-]+/g, ' ').trim();
+  if (s === 'all') return 'Any cuisine';
+  return s ? s[0].toUpperCase() + s.slice(1) : '—';
+}
 
 // ─── the dashboard ──────────────────────────────────────────────────────────
 const DEF_ACTIVE = (win) => `Distinct people with any app event in the last ${win}, counting back from when this page loaded (not a calendar day). A signed-in person counts once; a signed-out visit counts once per session. The server’s own id also counts once when it logged events (stamps, guestbook posts), so this can read 1 or 2 high.`;
@@ -696,12 +792,15 @@ function build() {
     return t >= 1000 ? kpi(`${fmt(n)}+`, `${p}% of the first 1,000 read`) : kpi(fmt(n), `${p}% of accounts`);
   });
   const activeTile = (label, def, render) => panel(tile(k, { label, def }), [D.active], (d) => render(rowsOf(d, 'the active-user counts')[0] || {}), { compact: true });
-  activeTile('DAU', DEF_ACTIVE('24 hours'), (r) => kpi(fmt(num(r.dau, 'DAU')), 'last 24 hours'));
-  activeTile('WAU', DEF_ACTIVE('7 days'), (r) => kpi(fmt(num(r.wau, 'WAU')), 'last 7 days'));
-  activeTile('MAU', DEF_ACTIVE('30 days'), (r) => kpi(fmt(num(r.mau, 'MAU')), 'last 30 days'));
-  activeTile('Stickiness', 'DAU ÷ MAU: of the people active in the last 30 days, the share also active in the last 24 hours. Both are rolling windows.', (r) => {
-    const p = pctOf(num(r.dau, 'DAU'), num(r.mau, 'MAU'));
-    return p == null ? kpi('—', 'nobody active in 30 days', true) : kpi(`${p}%`, 'DAU ÷ MAU');
+  // Plain names on the tiles; the app's own terms (DAU, Stickiness, Day 1…)
+  // stay in the sub-line or the definition so the two pages can be matched.
+  activeTile('Active · 24 hours', DEF_ACTIVE('24 hours'), (r) => kpi(fmt(num(r.dau, 'DAU')), 'DAU · last 24 hours'));
+  activeTile('Active · 7 days', DEF_ACTIVE('7 days'), (r) => kpi(fmt(num(r.wau, 'WAU')), 'WAU · last 7 days'));
+  activeTile('Active · 30 days', DEF_ACTIVE('30 days'), (r) => kpi(fmt(num(r.mau, 'MAU')), 'MAU · last 30 days'));
+  activeTile('Daily habit', 'Of the people active in the last 30 days, the share also active in the last 24 hours (DAU ÷ MAU, the app’s “Stickiness”). Both are rolling windows.', (r) => {
+    const dau = num(r.dau, 'DAU'), mau = num(r.mau, 'MAU');
+    const p = pctOf(dau, mau);
+    return p == null ? kpi('—', 'nobody active in 30 days', true) : kpi(`${p}%`, `${fmt(dau)} of ${fmt(mau)} monthly ${plural(mau, 'user', 'users')}`);
   });
   const cohortTile = (label, def, field) => panel(tile(k, { label, def: `${def} ${DEF_COHORT}` }), [D.cohort], (d) => {
     const r = rowsOf(d, 'the retention cohort')[0] || {};
@@ -710,39 +809,46 @@ function build() {
     const n = sum(r[field], 'a retention count');
     return kpi(`${pctOf(n, total)}%`, `${fmt(n)} of ${fmt(total)} ${plural(total, 'device', 'devices')}`);
   }, { compact: true });
-  cohortTile('Return rate', 'Of the devices first seen in the last 90 days, the share that opened the app again more than 24 hours after their first visit. (The app’s older 7-day return rate isn’t shown: its server query can’t compute correctly.)', 'ever_returned');
-  cohortTile('Day 1', 'Of the devices first seen in the last 90 days, the share that came back 24 to 48 hours after their first visit. Devices first seen in the last 2 days can’t have yet but still count, so this reads a little low.', 'd1');
-  cohortTile('Day 7', 'Of the devices first seen in the last 90 days, the share that came back on day 7 exactly (7 to 8 days after their first visit). Devices first seen in the last 8 days still count, so this reads low.', 'd7');
-  cohortTile('Day 30+', 'Of the devices first seen in the last 90 days, the share that came back 30 or more days after their first visit. Devices first seen in the last 30 days still count, so this reads low.', 'd30_plus');
-  const totalsTile = (label, def, field, what) => panel(tile(k, { label, def }), [D.totals], (d) => {
+  // "Came back (ever)" is the app's own label for this field. It is not the
+  // app's "Return rate (7d)" tile, which reads 0% whatever happens.
+  cohortTile('Came back (ever)', 'Of the devices first seen in the last 90 days, the share that opened the app again more than 24 hours after their first visit (the app’s “Came back (ever)”). Devices first seen in the last 24 hours can’t have come back yet but still count, so this reads a little low. This is not the app’s “Return rate (7d)”: that server query is broken and always shows 0%.', 'ever_returned');
+  cohortTile('Back next day', 'Of the devices first seen in the last 90 days, the share that came back 24 to 48 hours after their first visit (the app’s “Day 1”). Devices first seen in the last 2 days can’t have yet but still count, so this reads a little low.', 'd1');
+  cohortTile('Back on day 7', 'Of the devices first seen in the last 90 days, the share that came back on day 7 exactly, 7 to 8 days after their first visit (the app’s “Week 1 (D7)”). Devices first seen in the last 8 days still count, so this reads low.', 'd7');
+  cohortTile('Back after 30+ days', 'Of the devices first seen in the last 90 days, the share that came back 30 or more days after their first visit (the app’s “Day 30+”). Devices first seen in the last 30 days still count, so this reads low.', 'd30_plus');
+  const totalsTile = (label, def, field, what, sub) => panel(tile(k, { label, def }), [D.totals], (d) => {
     const r = rowsOf(d, 'the 7-day totals')[0] || {};
-    return kpi(fmt(num(r[field], what)), 'last 7 days');
+    return kpi(fmt(num(r[field], what)), sub);
   }, { compact: true });
-  totalsTile('Sessions · 7d', 'Distinct app sessions with any event in the last 7 days (rolling). Signed-out sessions count, and so does the server’s own id.', 'unique_sessions', 'the session count');
-  totalsTile('Events · 7d', 'Every event the app and the server logged in the last 7 days (rolling): screens opened, taps, searches, stamps.', 'total_events', 'the event count');
+  totalsTile('App visits · 7 days', 'Distinct app sessions with any event in the last 7 days, rolling (the app’s “Sessions (7d)”). Signed-out sessions count, and so does the server’s own id.', 'unique_sessions', 'the session count', 'sessions, last 7 days');
+  totalsTile('Actions logged · 7 days', 'Every event the app and the server logged in the last 7 days, rolling (the app’s “Events (7d)”): screens opened, taps, searches, stamps.', 'total_events', 'the event count', 'events, last 7 days');
 
   // Trends
   const t = $('trends-grid');
   const signups = card(t, { title: 'Sign-ups per day', meta: 'Last 30 days · UTC days', def: 'New accounts, by the UTC day they were created. Deleted accounts drop out.', chart: true });
   panel(signups.body, [D.stats], (s) => {
+    const capped = usersCapped(s);
     const points = dailyPoints(listOf(s.signupsByDay, 'sign-ups per day'), 30, 'day', 'count');
     const total = points.reduce((a, p) => a + p.value, 0);
-    return [summary(fmt(total), `${plural(total, 'sign-up', 'sign-ups')} · ${peakText(points, ['sign-up', 'sign-ups'])}`),
-      chartBlock({ name: 'Sign-ups per day, last 30 days', unit: ['sign-up', 'sign-ups'], points, colHead: 'Day (UTC)', valueHead: 'Sign-ups' })];
+    const rest = `${peakText(points, ['sign-up', 'sign-ups'])}${todayText(points)}`;
+    return [capped
+      ? summary(`${fmt(total)}+`, `${plural(total, 'sign-up', 'sign-ups')} at least, from 1,000 of the accounts · ${rest}`)
+      : summary(fmt(total), `${plural(total, 'sign-up', 'sign-ups')} · ${rest}`),
+    chartBlock({ name: 'Sign-ups per day, last 30 days', unit: ['sign-up', 'sign-ups'], points, colHead: 'Day (UTC)', valueHead: 'Sign-ups' }),
+    capped && warn(CAP_WARN)];
   }, { soon: soonStats });
   const actives = card(t, { title: 'Active users per day', meta: 'Last 30 days · UTC days', def: 'Distinct people with any app event on each UTC day: signed-in people once, signed-out visits once per session, plus the server’s own id on days it logged events.', chart: true });
   panel(actives.body, [D.activeDays], (d) => {
     const points = dailyPoints(rowsOf(d, 'active users per day'), 30, 'day', 'active');
     const whole = points.filter((p) => !p.partial);
     const avg = whole.length ? Math.round(whole.reduce((a, p) => a + p.value, 0) / whole.length) : 0;
-    return [summary(fmt(avg), `a day on average (whole days) · ${peakText(points, ['active user', 'active users'])}`),
+    return [summary(fmt(avg), `a day on average (whole days) · ${peakText(points, ['active user', 'active users'])}${todayText(points)}`),
       chartBlock({ name: 'Active users per day, last 30 days', unit: ['active user', 'active users'], points, colHead: 'Day (UTC)', valueHead: 'Active users' })];
   });
   const events = card(t, { title: 'Events per day', meta: 'Last 14 days · UTC days', def: 'Every event the app and the server logged, by UTC day.', chart: true });
   panel(events.body, [D.eventDays], (d) => {
     const points = dailyPoints(rowsOf(d, 'events per day'), 14, 'day', 'count');
     const total = points.reduce((a, p) => a + p.value, 0);
-    return [summary(fmt(total), `${plural(total, 'event', 'events')} · ${peakText(points, ['event', 'events'])}`),
+    return [summary(fmt(total), `${plural(total, 'event', 'events')} · ${peakText(points, ['event', 'events'])}${todayText(points)}`),
       chartBlock({ name: 'Events per day, last 14 days', unit: ['event', 'events'], points, colHead: 'Day (UTC)', valueHead: 'Events' })];
   });
 
@@ -780,50 +886,69 @@ function build() {
 
   // Users
   const u = $('users-grid');
-  const countries = card(u, { title: 'Home countries', meta: 'Top 15 · people', def: 'The home country set in the app.' });
-  panel(countries.body, [D.stats], (s) => rankTable({ caption: 'Home countries', head: ['Country', 'People'], rows: listOf(s.byCountry, 'home countries'), label: (r) => named(r.label, 'region'), value: (r) => r.count, limit: 15, empty: 'Nobody has set a home country yet.' }), { soon: soonStats });
-  const langs = card(u, { title: 'Languages', meta: 'Top 15 · people', def: 'The language people chose for the app.' });
-  panel(langs.body, [D.stats], (s) => rankTable({ caption: 'Languages', head: ['Language', 'People'], rows: listOf(s.byLanguage, 'languages'), label: (r) => named(r.label, 'language'), value: (r) => r.count, limit: 15, empty: 'Nobody has chosen a language yet.' }), { soon: soonStats });
-  const ages = card(u, { title: 'Age mix', meta: 'People through the age gate', def: 'From the birth year people enter at the social age gate; only people who passed it count. If the server can’t read birth years it sends an empty list without saying so.' });
+  const countries = card(u, { title: 'Home countries', meta: 'Top 15 · people', def: 'The home country people entered in the app. It can be skipped.' });
+  panel(countries.body, [D.stats], (s) => [
+    rankTable({ caption: 'Home countries', head: ['Country', 'People'], rows: listOf(s.byCountry, 'home countries'), label: (r) => named(r.label, 'region'), value: (r) => r.count, limit: 15, empty: 'Nobody has set a home country yet.' }),
+    usersCapped(s) && warn(CAP_WARN)], { soon: soonStats });
+  const langs = card(u, { title: 'Languages', meta: 'Top 15 · people', def: 'The app language on each profile. Onboarding doesn’t ask: it copies the phone’s language, or English when the app doesn’t support it. People can change it in Settings.' });
+  panel(langs.body, [D.stats], (s) => [
+    rankTable({ caption: 'Languages', head: ['Language', 'People'], rows: listOf(s.byLanguage, 'languages'), label: (r) => named(r.label, 'language'), value: (r) => r.count, limit: 15, empty: 'No profile has a language yet.' }),
+    usersCapped(s) && warn(CAP_WARN)], { soon: soonStats });
+  const ages = card(u, { title: 'Age mix', meta: 'From the age gate', def: 'From the birth year entered at the age gate, including people it blocked (under 13, or under 16 in Australia). Age here is this year minus the birth year, so some people show a year older than they are. If the server can’t read birth years it sends an empty list without saying so.' });
   panel(ages.body, [D.stats], (s) => {
     const known = num(s.ageKnown, 'the age-gate count');
-    ages.setMeta(`${fmt(known)} through the age gate`);
-    return rankTable({ caption: 'Age mix', head: ['Age', 'People'], rows: listOf(s.ageMix, 'the age mix'), label: (r) => String(r.label), value: (r) => r.count, empty: 'Nobody through the age gate yet, or the server couldn’t read birth years (it doesn’t say which).' });
+    const mix = listOf(s.ageMix, 'the age mix');
+    // The server counts every valid birth year but has no bar below 13: that
+    // gap is the people the gate blocked for being under 13.
+    const inBars = mix.reduce((a, r) => a + num(r.count, 'a count'), 0);
+    const rows = known > inBars ? [{ label: 'Under 13 (blocked)', count: known - inBars }, ...mix] : mix;
+    ages.setMeta(known >= CAP ? '1,000+ gave a birth year' : known ? `${fmt(known)} gave a birth year` : 'No birth years came back');
+    return [rankTable({ caption: 'Age mix', head: ['Age', 'People'], rows, label: (r) => String(r.label), value: (r) => r.count, empty: 'No birth years yet, or the server couldn’t read them (it doesn’t say which).' }),
+      (known >= CAP || usersCapped(s)) && warn(CAP_AGE_WARN)];
   }, { soon: soonStats });
 
   // Searches
   const s = $('searches-grid');
-  const top = card(s, { title: 'Top searches', meta: 'Last 7 days · top 20', def: 'Text searches, by how often they were typed, with the average number of results each returned.' });
+  const top = card(s, { title: 'Top searches', meta: 'Last 7 days · top 20', def: 'Searches run in the last 7 days, by search text, with the average results each returned. A search logs again whenever its results reload (for example after a filter change), so this counts searches run, not people.' });
   panel(top.body, [D.searches], (d) => rankTable({ caption: 'Top searches, last 7 days', head: ['Search', 'Searches'], rows: rowsOf(d, 'top searches'),
     label: (r) => String(r.query ?? '(no text)'), value: (r) => r.hits,
-    extra: [{ head: 'Avg results', num: true, cell: (r) => (r.avg_results == null ? '—' : fmt(Math.round(num(r.avg_results, 'an average')))) }],
+    extra: [{ head: 'Results (avg)', num: true, cell: (r) => (r.avg_results == null ? '—' : fmt(Math.round(num(r.avg_results, 'an average')))) }],
     empty: 'No text searches in the last 7 days.' }));
-  const zero = card(s, { title: 'Searches with no results', meta: 'Last 30 days · top 20', def: 'What people typed when the app found nothing. Each one is a coverage gap worth a look.' });
+  const zero = card(s, { title: 'Searches with no results', meta: 'Last 30 days · top 20', def: 'Searches that came back empty. On Places to eat this also counts searches whose load failed (a timeout or server error) and filter-only browses with no text, so not every row is a coverage gap.' });
   panel(zero.body, [D.zero], (d) => rankTable({ caption: 'Searches with no results, last 30 days', head: ['Search', 'Searches'], rows: rowsOf(d, 'zero-result searches'),
     label: (r) => String(r.query ?? '(no text)'), value: (r) => r.hits,
-    extra: [{ head: 'Filter', cell: (r) => (r.cuisine ? String(r.cuisine) : '—') }],
+    extra: [{ head: 'Filter', cell: (r) => (r.cuisine ? cuisineName(r.cuisine) : '—') }],
     empty: 'No searches came back empty in the last 30 days.' }));
 
   // Screens & events
   const sc = $('screens-grid');
-  const pages = card(sc, { title: 'Screens opened', meta: 'Last 7 days · page views', def: 'How often each screen of the app was opened.' });
-  panel(pages.body, [D.pages], (d) => rankTable({ caption: 'Screens opened, last 7 days', head: ['Screen', 'Views'], rows: rowsOf(d, 'page views'), label: (r) => String(r.page || '(unknown)'), value: (r) => r.views, empty: 'No screens opened in the last 7 days.' }));
-  const types = card(sc, { title: 'Event types', meta: 'Last 7 days · events', def: 'Every kind of event the app and the server logged.' });
-  panel(types.body, [D.eventTypes], (d) => rankTable({ caption: 'Event types, last 7 days', head: ['Event', 'Count'], rows: rowsOf(d, 'event types'), label: (r) => String(r.event_type || '(unknown)'), value: (r) => r.count, empty: 'No events in the last 7 days.' }));
+  // These three log a page view of their own on top of the app frame's.
+  const TWICE = new Set(['PlacesToEat', 'CoffeeFinder', 'ThingsToDo']);
+  const pages = card(sc, { title: 'Screens opened', meta: 'Last 7 days · page views', def: 'Page-view events per screen. Places to eat, Coffee finder and Things to do log two per open (the app frame and the screen each log one), so they read about double. They’re marked ×2.' });
+  panel(pages.body, [D.pages], (d) => rankTable({ caption: 'Screens opened, last 7 days', head: ['Screen', 'Views'], rows: rowsOf(d, 'page views'),
+    label: (r) => (!r.page ? '(unknown)' : TWICE.has(r.page) ? [words(r.page), el('span', { class: 'code', text: '×2 per open' })] : words(r.page)),
+    value: (r) => r.views, empty: 'No screens opened in the last 7 days.' }));
+  const types = card(sc, { title: 'Event types', meta: 'Last 7 days · events', def: 'Every kind of event the app and the server logged, with its name in the event log beside it.' });
+  panel(types.body, [D.eventTypes], (d) => rankTable({ caption: 'Event types, last 7 days', head: ['Event', 'Count'], rows: rowsOf(d, 'event types'),
+    label: (r) => (own(EVENT, r.event_type) ? [own(EVENT, r.event_type), el('span', { class: 'code', text: String(r.event_type) })] : String(r.event_type || '(unknown)')),
+    value: (r) => r.count, empty: 'No events in the last 7 days.' }));
 
   // Passport
   const pk = $('passport-kpis');
-  const allTime = (label, def, field) => panel(tile(pk, { label, def: `${def} An exact count of every row ever, when this page loaded.` }), [D.overview], (o) => {
+  // Exact table counts, but not "every row ever": stamps leave with a deleted
+  // account, a new dish photo replaces the old row, and the guestbook keeps
+  // deleted and hidden notes. Each definition says which.
+  const allTime = (label, def, field) => panel(tile(pk, { label, def: `${def} Counted exactly when this page loaded.` }), [D.overview], (o) => {
     const v = o?.allTime?.[field];
     if (v === null) return kpi('—', 'the server couldn’t count these', true);
     return kpi(fmt(num(v, 'an all-time count')), 'all time');
   }, { compact: true });
-  allTime('Stamps', 'Passport stamps collected.', 'stamps');
-  allTime('Guestbook', 'Guestbook notes and doodles left on places.', 'guestbook');
-  allTime('Food photos', 'Photos people added of dishes, café items and store finds.', 'dish_photos');
-  allTime('Owner messages', 'Messages venue owners posted on their places.', 'owner_messages');
+  allTime('Stamps', 'Passport stamps that exist now. Deleting an account removes its stamps, and so does an under-age freeze at the age gate once its waiting period ends, so this can go down.', 'stamps');
+  allTime('Guestbook', 'Every guestbook note and doodle written, including ones later deleted, hidden by reports, or held or kept private by review. Notes from deleted accounts stay, anonymized.', 'guestbook');
+  allTime('Food photos', 'Dish, café and store-find photo posts on places now: one per traveler per dish per place (a new photo replaces the old one). Deleted posts are gone.', 'dish_photos');
+  allTime('Owner messages', 'Private messages travelers sent to a place’s owner. They’re never published. Messages held for review are included.', 'owner_messages');
   const pg = $('passport-grid');
-  const perMonth = card(pg, { title: 'Stamps per month', meta: 'Last 12 months · UTC months', def: 'Every stamp collected, by the UTC month it was collected in.', chart: true });
+  const perMonth = card(pg, { title: 'Stamps per month', meta: 'Last 12 months · UTC months', def: 'Stamps that exist now, by the UTC month each was collected in.', chart: true });
   panel(perMonth.body, [D.monthly], (pm) => {
     const months = listOf(pm.months, 'stamps per month');
     const since = String(pm.since || '').slice(0, 7);
@@ -848,7 +973,7 @@ function build() {
     }
     const rows = [...tally.entries()].sort((a, b) => b[1] - a[1]).map(([kind, n]) => ({ kind, n }));
     const KIND = { attraction: 'Attractions', city: 'Cities', airport: 'Airports', country: 'Countries', icon: 'Icons', wonder: 'Wonders' };
-    return rankTable({ caption: 'Stamps by kind, last 12 months', head: ['Kind', 'Stamps'], rows, label: (r) => KIND[r.kind] || r.kind, value: (r) => r.n, empty: 'No stamps in the last 12 months.' });
+    return rankTable({ caption: 'Stamps by kind, last 12 months', head: ['Kind', 'Stamps'], rows, label: (r) => own(KIND, r.kind) || String(r.kind), value: (r) => r.n, empty: 'No stamps in the last 12 months.' });
   });
   const places = card(pg, { title: 'Most-stamped places', meta: 'Last 12 months · top 10', def: 'Cities and places exclude airport and country stamps; countries count every stamp.', wide: true });
   panel(places.body, [D.overview], (o) => {
@@ -874,32 +999,40 @@ function build() {
 
   // Virtual items
   const ik = $('items-kpis');
-  const itemTile = (label, def, render) => panel(tile(ik, { label, def }), [D.gear], (g) => render(g.current || {}), { compact: true });
-  itemTile('Travelers with items', 'Travelers who have set up any virtual item, from their saved profiles today.', (c) => kpi(fmt(num(c.travelers, 'the traveler count')), 'set up today'));
-  itemTile('Laptops', 'Travelers with a laptop today.', (c) => kpi(fmt(num(c.laptop?.n, 'the laptop count')), 'on profiles today'));
-  itemTile('Drink containers', 'Travelers with a tumbler or bottle today.', (c) => kpi(fmt(num(c.drink?.n, 'the drink count')), 'on profiles today'));
+  // The server stops reading saved items at the first failed page and still
+  // answers with zeros. No saved items while the event log holds picks means
+  // that read failed, so the tiles show no number rather than a false 0.
+  const gearUnread = (g) => num(g.current?.travelers, 'the traveler count') === 0
+    && [g.events?.itemsByDay, g.events?.buddiesByDay].some((a) => Array.isArray(a) && a.length);
+  const itemTile = (label, def, render) => panel(tile(ik, { label, def }), [D.gear], (g) => {
+    if (gearUnread(g)) return kpi('—', 'not confirmed: picks are logged but no saved items came back', true);
+    return render(g.current || {});
+  }, { compact: true });
+  itemTile('Saved a setup', 'Travelers with a saved virtual-items record: anyone who saved an item, a buddy or just the shelf order. Someone who later removed every buddy still counts.', (c) => {
+    const n = num(c.travelers, 'the traveler count');
+    return kpi(fmt(n), `${plural(n, 'traveler', 'travelers')} today`);
+  });
+  itemTile('Laptops', 'Travelers who customized their laptop (color or stickers). Everyone else’s profile shows the default blue laptop, which isn’t counted.', (c) => kpi(fmt(num(c.laptop?.n, 'the laptop count')), 'customized'));
+  itemTile('Drink containers', 'Travelers who customized their drink (which one, its color or stickers). Everyone else’s profile shows the default blue tumbler, which isn’t counted.', (c) => kpi(fmt(num(c.drink?.n, 'the drink count')), 'customized'));
   itemTile('Travel buddies', 'Pets and buddies on profiles today, and how many travelers have one.', (c) => {
     const n = num(c.buddies?.n, 'the buddy count'), who = num(c.buddies?.travelers, 'the buddy traveler count');
     return kpi(fmt(n), `with ${fmt(who)} ${plural(who, 'traveler', 'travelers')}`);
   });
   const ig = $('items-grid');
-  const chosen = card(ig, { title: 'What they chose', meta: 'On profiles today', def: 'Today’s saved items, by type, color and species.' });
+  const chosen = card(ig, { title: 'What they chose', meta: 'On profiles today', def: 'Saved items on profiles today, by type, color and species. Default laptops and tumblers nobody customized aren’t counted.' });
   panel(chosen.body, [D.gear], (g) => {
+    // Empty lists here would be the same false zero as the tiles.
+    if (gearUnread(g)) return warn('No travelers with items, yet the app has logged item picks: the server may have failed to read saved items (it doesn’t report that).');
     const c = g.current || {};
     const list = (title, obj, labelOf) => el('div', null,
       rankTable({ caption: title, head: [title, 'Count'], rows: Object.entries(obj || {}).map(([key, n]) => ({ key, n: num(n, 'a count') })).sort((a, b) => b.n - a.n), label: (r) => labelOf(r.key), value: (r) => r.n, limit: 6, empty: `${title}: none yet.` }));
-    const out = [el('div', { class: 'cols cols-2' },
+    return el('div', { class: 'cols cols-2' },
       list('Drinks', c.drink?.variants, gearName),
       list('Laptop colors', c.laptop?.colors, String),
       list('Drink colors', c.drink?.colors, String),
-      list('Buddy species', c.buddies?.species, String))];
-    const picks = g.events?.itemsByDay;
-    if (num(c.travelers, 'the traveler count') === 0 && Array.isArray(picks) && picks.length) {
-      out.push(warn('No travelers with items, yet the app has logged item picks: the server may have failed to read saved items (it doesn’t report that).'));
-    }
-    return out;
+      list('Buddy species', c.buddies?.species, String));
   });
-  const picks = card(ig, { title: 'Picks per month', meta: 'Last 5 months · UTC months', def: 'Each time a traveler picked an item or added a buddy, from the event log (kept about 180 days).' });
+  const picks = card(ig, { title: 'Picks per month', meta: 'Last 5 months · UTC months', def: 'Every saved change to a laptop or drink (choosing it, its color, its stickers) and every buddy added, from the event log (kept about 180 days). One traveler can log many. Virtual items launched Oct 5, 2026, so earlier months are empty.' });
   panel(picks.body, [D.gear], (g) => {
     if (g.events == null) return emptyState('Pick history isn’t available: the server has no event log connected.');
     const items = listOf(g.events.itemsByMonth, 'item picks per month');
@@ -916,7 +1049,7 @@ function build() {
     return el('div', { class: 'scroll-x' }, el('table', { class: 'tbl tbl-matrix' },
       el('caption', { class: 'sr', text: 'Picks per month, last 5 UTC months' }),
       el('thead', null, el('tr', null, el('th', { scope: 'col', text: 'Item' }), months.map((mo) => el('th', { scope: 'col', class: 'n', text: monthLabel(mo).replace(/ \d{4}$/, '') + (mo === now ? '*' : '') })))),
-      el('tbody', null, rows.map((row) => el('tr', null, el('th', { scope: 'row', class: 'muted', text: row }), months.map((mo) => el('td', { class: 'n', text: fmt(grid.get(row).get(mo) || 0) }))))),
+      el('tbody', null, rows.map((row) => el('tr', null, el('th', { scope: 'row', text: row }), months.map((mo) => el('td', { class: 'n', text: fmt(grid.get(row).get(mo) || 0) }))))),
     ), el('p', { class: 'legend', text: '* this month so far' }));
   });
 
@@ -927,8 +1060,10 @@ function build() {
     const open = num(d.open, 'the open count'), total = num(d.total, 'the message total');
     msg.setMeta(`${fmt(open)} open · ${fmt(total)} in all · times in your time zone`);
     setMessageCount(open);
-    if (!list.length) return emptyState(total ? 'No open messages. Every message has been handled.' : 'No messages yet. The contact form on globeskimmers.io stores them here.');
-    return el('ul', { class: 'msgs' }, list.map((x) => el('li', { class: 'msg' },
+    if (!list.length) return emptyState(total ? 'No open messages. Every message has been handled.' : 'No messages yet. The website’s contact form and the app’s Contact us both land here.');
+    // The app's Settings → Contact us posts to the same inbox as the website.
+    const from = (page) => (page === 'app:contact-us' ? 'the app (Settings → Contact us)' : String(page).startsWith('/') ? CFG.apex + page : String(page));
+    return [el('ul', { class: 'msgs' }, list.map((x) => el('li', { class: 'msg' },
       el('div', { class: 'msg-head' },
         el('span', { class: 'name', text: x.name || '(no name)' }),
         x.who && el('span', { class: 'tag', text: x.who }),
@@ -936,7 +1071,9 @@ function build() {
         x.company && el('span', { class: 'co', text: x.company }),
         el('span', { class: 'when', text: localStamp(x.created_at) })),
       el('p', { class: 'msg-body', text: x.message || '' }),
-      x.page && el('p', { class: 'msg-page', text: `Sent from ${String(x.page).startsWith('/') ? CFG.apex + x.page : x.page}` }))));
+      x.page && el('p', { class: 'msg-page', text: `Sent from ${from(x.page)}` })))),
+    // The server sends the newest 50 by default; the count covers them all.
+    open > list.length && warn(`Showing the newest ${fmt(list.length)} of ${fmt(open)} open messages.`)];
   }, { onFail: () => setMessageCount(null) });
 }
 function mailLink(v) {
@@ -958,6 +1095,8 @@ function setMessageCount(n) {
 // ─── views ──────────────────────────────────────────────────────────────────
 function view(name) {
   for (const id of ['boot', 'signin', 'denied', 'app']) $(id).hidden = id !== name;
+  // The skip link leads into the dashboard, so it's a Tab stop only there.
+  $('skip').hidden = name !== 'app';
   closeTips(null);
   // Focus left behind in a view that just closed moves to the new view's heading.
   const at = document.activeElement;
@@ -979,40 +1118,66 @@ function authEnded(message) {
 // Nothing an admin saw stays in the page once they've signed out.
 function wipe() {
   gen += 1;
-  for (const p of panels) { p.slot.replaceChildren(); (p.slot.closest('.card, .kpi') || p.slot).classList.remove('busy'); }
+  for (const p of panels) {
+    p.slot.replaceChildren();
+    const host = hostOf(p);
+    host.classList.remove('busy');
+    host.removeAttribute('aria-busy');
+  }
   cache.clear();
+  explained.clear();
+  loadedAt = null;
   if (built) setMessageCount(null);
   $('who-email').textContent = '';
 }
 
 let running = false;
+let loadedAt = null;   // when the numbers on the page were requested (ISO); null until a full load finishes
+// "Loaded <time>", and how many panels show an error right now. Written only
+// once every panel has drawn, so it never vouches for numbers still on the way.
+function stampLoaded() {
+  if (!loadedAt || $('app').hidden) return;
+  const failed = panels.filter((p) => p.slot.querySelector('.state-error, .kpi-err')).length;
+  $('loaded').textContent = `Loaded ${localStamp(loadedAt)}` + (failed ? ` · ${failed} ${plural(failed, 'panel', 'panels')} couldn’t load` : '');
+}
 async function refreshAll() {
   if (running || !session.cur) return;
   running = true;
   const btn = $('refresh');
-  btn.disabled = true;
+  const first = !loadedAt;
+  // aria-disabled, not disabled: disabling the focused button drops focus to
+  // <body>. `running` already ignores a second press.
+  btn.setAttribute('aria-disabled', 'true');
   $('refresh-ic').classList.add('spin');
-  $('refresh-label').textContent = 'Refreshing';
-  $('loaded').textContent = 'Refreshing…';
+  $('refresh-label').textContent = first ? 'Loading' : 'Refreshing';
+  $('loaded').textContent = first ? 'Loading…' : `Refreshing… (numbers below are from ${localStamp(loadedAt)})`;
   try {
     cache.clear();
+    explained.clear();
     // The gate: one call first, so a non-admin never sees the dashboard.
     const mine = gen;
+    const at = new Date().toISOString();
     const gate = await get(D.active);
     if (mine !== gen || !session.cur) return;   // signed out while waiting
     if (!gate.ok && gate.kind === 'denied') { deniedView(gate); return; }
+    if (!gate.ok && gate.kind === 'unverified') {
+      signInView(`The server couldn’t confirm your sign-in${gate.message ? ` (it said: “${gate.message}”)` : ''}. Reload the page to try again, or sign in again.`);
+      return;
+    }
     if ($('app').hidden) { build(); view('app'); }
     $('who-email').textContent = session.cur.email || 'Signed in';
     $('tz').textContent = zoneLabel();
     $('utc-note').textContent = utcNote();
-    $('loaded').textContent = `Loaded ${localStamp(new Date().toISOString())}`;
     await Promise.all(panels.map(runPanel));
+    if (mine !== gen) return;
+    loadedAt = at;
+    stampLoaded();
   } catch (e) {
     if (e instanceof AuthEnded) authEnded(e.message);
     else { $('loaded').textContent = 'Couldn’t load.'; console.error(e); }
   } finally {
     running = false;
-    btn.disabled = false;
+    btn.removeAttribute('aria-disabled');
     $('refresh-ic').classList.remove('spin');
     $('refresh-label').textContent = 'Refresh';
   }
@@ -1068,8 +1233,15 @@ async function finishRedirect(params) {
   history.replaceState(null, '', location.pathname);
   const pending = readJSON(store('local'), KEY_PKCE);
   drop(store('local'), KEY_PKCE);
-  const error = params.get('error_description') || params.get('error');
-  if (error) { signInView(`Google sign-in didn’t finish: ${error.slice(0, 200)}`); return false; }
+  // Never show text from the address bar: anyone can put a sentence there (a
+  // fake "account locked" notice) and this card is where the admin trusts what
+  // it says. A known error code gets our own words; anything else a generic line.
+  const error = params.get('error');
+  if (error) {
+    const KNOWN = { access_denied: 'Google sign-in was cancelled.', server_error: 'Google sign-in failed. Please try again.', temporarily_unavailable: 'Google sign-in is busy. Try again in a minute.' };
+    signInView(own(KNOWN, error) || 'Google sign-in didn’t finish. Please try again.');
+    return false;
+  }
   if (!pending?.verifier || Date.now() - Number(pending.at || 0) > 15 * 60 * 1000) {
     signInView('That sign-in took too long or started in another browser. Please try again.');
     return false;
@@ -1103,10 +1275,11 @@ async function start() {
   $('refresh').addEventListener('click', () => refreshAll());
   $('signout').addEventListener('click', () => { signOut(); });
   $('denied-signout').addEventListener('click', () => { signOut(); });
-  // Another tab signed out (or refreshed the session): follow it.
+  // Another tab signed out, signed in without "Keep me signed in" (which
+  // removes the stored session), or refreshed the session: follow it.
   window.addEventListener('storage', (e) => {
     if (e.key !== KEY_SESSION || !session.cur?.remember) return;
-    if (!e.newValue) { if (session.cur) authEnded('You signed out in another tab.'); return; }
+    if (!e.newValue) { if (session.cur) authEnded('Another tab ended this sign-in. Please sign in again.'); return; }
     const s = readJSON(store('local'), KEY_SESSION);
     if (session.valid(s)) session.cur = { ...s, remember: true };
   });
