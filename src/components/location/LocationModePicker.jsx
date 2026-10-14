@@ -1,161 +1,723 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Navigation, Search, Loader2, AlertCircle, Crosshair, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+// LocationModePicker: the location chooser, printed as the Kraft Folder (option B, the
+// founder's pick on 2026-10-13; docs/design/new-look/Location-B.dc.html L192-245 and
+// Location-B-Locating.dc.html L237-240).
+//
+// It is Home's cold-open "Where would you like to explore?" and the "Change" sheet every
+// finder opens. A WHERE TO tab sits on a kraft folder (Home's services stock) that rises
+// from the bottom on phones. The places are rows on one white sheet, then an OR rule, then
+// "Explore where I am", the only solid button, under the thumb. Saved locations, search and
+// the confirmation are pages of the same folder. On iPad the folder is centred at 1:1.
+//
+// Props (unchanged): isOpen, onClose, coldOpen (Home's cold open: the question title, the
+// Continue row and "Don't ask again today"), lastLocation (the active place, for Continue),
+// onSnoozeToday, onPicked (optional: a pick is handed to the caller instead of switching
+// the app's location).
+//
+// Pages (mode): 'select', 'saved', 'search', 'info' (the 1.5 s "Now exploring" hold after
+// a search pick). Only the search page tracks the on-screen keyboard.
+//
+// Fitting the screen. How much of the folder stays put is decided from measured room,
+// never from a fixed screen size: the text size, a GPS note, a narrow phone, a landscape
+// screen and the keyboard all change it.
+//   pin     the title and the button stay put and only the sheet of rows scrolls, while it
+//           keeps about one and a half rows in view (the search page: one result row);
+//   foot    the button stays put and the title scrolls with the rows, while at least
+//           half a row shows under the title;
+//   scroll  the whole folder scrolls.
+// A scrolling sheet or folder fades out at its bottom edge while more is below it. On
+// phones the search page, and the confirmation that follows it, hang from the top of the
+// screen, so the field never moves as the keyboard rises or results arrive; while the
+// keyboard is up the folder reaches down to 16px above it.
+//
+// The sheet is a modal dialog: it is named by the page's title, focus moves into it on
+// open and on each page change and back to the opener on close, Tab stays inside it, and
+// Escape, a scrim tap or the global swipe-down close it. Android's back key goes back from
+// the saved and search pages, as the on-screen Back does, and closes it elsewhere. Closing
+// is instant.
+import React, { useState, useEffect, useLayoutEffect, useRef, useId } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import {
+  ArrowRight,
+  BedDouble,
+  Bookmark,
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  CircleAlert,
+  History as HistoryIcon,
+  Landmark,
+  LoaderCircle,
+  MapPin,
+  Navigation as NavigationIcon,
+  Plane,
+  Search,
+  SearchX,
+  ShoppingBag,
+  TrainFront,
+  Trees,
+  UtensilsCrossed,
+  X,
+} from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { App } from '@capacitor/app';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { useLocation } from './LocationContext';
 import { useIsTablet } from '@/lib/useIsTablet';
 import { useKeyboardOffset } from '@/lib/useKeyboardOffset';
 import { useDismissable } from '@/lib/dismissStack';
+import { useFontScale } from '@/components/a11y/FontScaleContext';
+import { NEUTRAL, ZONE, fs, rgba } from '@/components/redesign/constants';
+import { Folder, FolderTab } from '@/components/redesign/Zone';
 
-// Preset cities for one-tap testing in the coordinate-entry mode.
-// Order is roughly by global familiarity / common test scenarios so
-// the row reads predictably. Keep this list short — these chips are
-// shortcuts, not a city directory; the user can paste any lat/lng
-// they want in the input above.
-const PRESET_COORDS = [
-  { name: 'San Francisco', lat: 37.7749, lng: -122.4194 },
-  { name: 'New York',      lat: 40.7128, lng: -74.0060 },
-  { name: 'London',        lat: 51.5074, lng: -0.1278 },
-  { name: 'Tokyo',         lat: 35.6762, lng: 139.6503 },
-  { name: 'Manila',        lat: 14.5995, lng: 120.9842 },
-  { name: 'Sydney',        lat: -33.8688, lng: 151.2093 },
-];
+/** @typedef {import('react').CSSProperties} CSS */
 
-const PLACE_TYPE_ICONS = {
-  airport: '✈️',
-  hotel: '🏨',
-  restaurant: '🍽️',
-  shopping: '🛍️',
-  attraction: '🎭',
-  park: '🌳',
-  transit: '🚉',
-  current_location: '📍',
-  location: '📍'
+// The kraft stock: Home's services folder (fill, line, tab, umber accent, meta, chip line).
+const K = ZONE.services;
+
+// The italic word in every serif title.
+const EM = { fontStyle: 'italic', color: NEUTRAL.tealInk };
+
+// One line icon per place type; current_location, location and anything unknown get the pin.
+const PLACE_ICONS = {
+  airport: Plane,
+  hotel: BedDouble,
+  restaurant: UtensilsCrossed,
+  shopping: ShoppingBag,
+  attraction: Landmark,
+  park: Trees,
+  transit: TrainFront,
 };
+const iconFor = (placeType) =>
+  (typeof placeType === 'string' && Object.prototype.hasOwnProperty.call(PLACE_ICONS, placeType) ? PLACE_ICONS[placeType] : MapPin);
+
+// Saved entries, search results and the last place come from storage and the network: read
+// every field defensively, so one malformed entry can't blank the sheet.
+const str = (v) => (typeof v === 'string' ? v.trim() : '');
+const isEntry = (e) => e !== null && typeof e === 'object' && !Array.isArray(e);
+const nameOf = (entry) => str(entry.nickname) || str(entry.placeName);
+
+// "3 saved: Home, Hotel Avenida Palace, LAX", "5 saved: A, B, C and 2 more", or "2 saved"
+// when no entry has a name. The row is hidden at 0, so "0 saved" never prints.
+function savedLine(list) {
+  const n = list.length;
+  const shown = list.map(nameOf).filter(Boolean).slice(0, 3);
+  if (!shown.length) return `${n} saved`;
+  const more = n - shown.length;
+  return `${n} saved: ${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''}`;
+}
+
+// Search runs on more than 2 typed characters (spaces count, nothing is trimmed), but a
+// query of nothing but spaces is never sent.
+const searchable = (q) => q.length > 2 && q.trim() !== '';
+
+// What a failed "Explore where I am" says, by GeolocationPositionError code. The app has no
+// browser settings, so a denial on iOS and Android points to Settings instead.
+function gpsErrorText(error) {
+  const code = error?.code;
+  if (code === 1) {
+    return Capacitor.isNativePlatform()
+      ? 'Location access was denied. Turn on location for Globeskimmers in Settings, then try again.'
+      : 'Location access was denied. Please enable location permissions in your browser settings, then try again.';
+  }
+  if (code === 2) return 'Unable to determine your location. Please check your GPS/location settings and try again.';
+  if (code === 3) return 'Location request timed out. Please try again.';
+  return 'Unable to get your current location. Please try again or choose a location manually.';
+}
+
+const NO_RESULTS = 'No locations found. Please search for a specific address, landmark, or place.';
+const SEARCH_ERROR = 'Error searching. Please try again.';
+
+// The room rules (see the top of the file); the row sizes grow with the text size.
+const ROWS_MIN = 100; // about one and a half rows: the title and the button stay put
+const ROWS_PEEK = 32; // half a row: the button stays put and the title scrolls away
+const RESULT_MIN = 64; // one search result row under the pinned field
+const LAYOUTS = ['pin', 'foot', 'scroll']; // most to least pinned
+const FADE = 24; // the soft edge at the bottom of a scroller
+const SPRING = { type: 'spring', damping: 28, stiffness: 320 }; // today's entrance spring
+const NO_FADES = { sheet: false, region: false, box: false };
+
+// 100dvh follows the browser's toolbars; WebViews older than Chrome 108 take 100vh.
+const VH = typeof window !== 'undefined' && window.CSS && window.CSS.supports && window.CSS.supports('height', '100dvh') ? '100dvh' : '100vh';
+const SAFE_TOP = 'env(safe-area-inset-top, 0px)';
+const SAFE_BOTTOM = 'env(safe-area-inset-bottom, 0px)';
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+// The window's size while the sheet is open (rotation, split view), as one value.
+function useViewportSize(active) {
+  const [size, setSize] = useState(() => (typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : ''));
+  useEffect(() => {
+    if (!active || typeof window === 'undefined') return undefined;
+    const update = () => setSize(`${window.innerWidth}x${window.innerHeight}`);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [active]);
+  return size;
+}
+
+// Where the folder sits. Phone: at most today's 448px wide; the select and saved pages sit
+// 16px above the home indicator, under the thumb (top: false), and the search page and the
+// confirmation after it hang 12px below the top safe area (top: true), down to 16px above
+// the home indicator or the keyboard. iPad: a centred folder, at most 480px wide and 720px
+// tall, centred in the space above the keyboard. cap is the dialog's max height;
+// searchHeight, when set, is the search page's height (iPad: at most 600px; phone: the
+// whole space above the keyboard, so a tap under the results can't land on the scrim).
+function frameFor(isTablet, keyboardOffset, top) {
+  if (isTablet) {
+    const cap = keyboardOffset
+      ? `calc(${VH} - ${SAFE_TOP} - ${keyboardOffset + 48}px)`
+      : `min(720px, calc(${VH} - ${SAFE_TOP} - ${SAFE_BOTTOM} - 48px))`;
+    return {
+      overlay: {
+        alignItems: 'center',
+        paddingTop: `calc(${SAFE_TOP} + 24px)`,
+        paddingLeft: 24,
+        paddingRight: 24,
+        paddingBottom: keyboardOffset ? keyboardOffset + 24 : `calc(24px + ${SAFE_BOTTOM})`,
+      },
+      dialog: { width: 'min(480px, 100%)', margin: 'auto' },
+      cap,
+      searchHeight: `min(600px, ${cap})`,
+      shadow: `0 24px 48px -24px ${rgba(NEUTRAL.ink, 0.5)}`,
+      enter: { y: 24, opacity: 0 },
+    };
+  }
+  const cap = keyboardOffset
+    ? `calc(${VH} - ${SAFE_TOP} - ${keyboardOffset + (top ? 28 : 40)}px)`
+    : `calc(${VH} - ${SAFE_TOP} - ${SAFE_BOTTOM} - ${top ? 28 : 48}px)`;
+  return {
+    overlay: {
+      alignItems: 'stretch',
+      paddingTop: `calc(${SAFE_TOP} + 12px)`,
+      paddingLeft: 16,
+      paddingRight: 16,
+      paddingBottom: keyboardOffset ? keyboardOffset + 16 : `calc(16px + ${SAFE_BOTTOM})`,
+    },
+    // margin-top auto puts the sheet at the bottom, margin-bottom auto at the top.
+    dialog: { width: '100%', maxWidth: 448, alignSelf: 'center', ...(top ? { marginTop: 0, marginBottom: 'auto' } : { marginTop: 'auto' }) },
+    cap,
+    searchHeight: keyboardOffset ? cap : undefined,
+    // A folder that hangs from the top casts its shadow downward, as the iPad folder does.
+    shadow: top ? `0 24px 48px -24px ${rgba(NEUTRAL.ink, 0.5)}` : `0 -16px 36px -20px ${rgba(NEUTRAL.ink, 0.6)}`,
+    enter: { y: '100%', opacity: 0 },
+  };
+}
+
+function IconButton({ label, icon: Icon, onClick, margin }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className="active:opacity-60"
+      style={{
+        flex: 'none',
+        width: 44,
+        height: 44,
+        boxSizing: 'border-box',
+        margin,
+        padding: 0,
+        borderRadius: 999,
+        background: 'transparent',
+        border: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+      }}
+    >
+      <Icon size={18} color={K.accent} strokeWidth={2} aria-hidden="true" focusable="false" />
+    </button>
+  );
+}
+
+// The soft edge at the bottom of a scroller while more is below it. It lets taps through.
+/** @param {{ color: string, inset?: number, radius?: number | string }} props */
+function Fade({ color, inset = 0, radius = 0 }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        left: inset,
+        right: inset,
+        bottom: inset,
+        height: FADE,
+        borderRadius: radius,
+        background: `linear-gradient(${rgba(color, 0)}, ${color})`,
+        pointerEvents: 'none',
+      }}
+    />
+  );
+}
+
+// The white sheet that holds the rows (Location-B L204). When scroll is set the sheet
+// itself scrolls, so its border and rounded edge always frame the list, and it fades out
+// at the bottom while rows remain below (more). rowsRef measures the rows.
+function Sheet({ children, scroll = false, more = false, rowsRef = undefined, onScroll = undefined, style = undefined }) {
+  return (
+    <div
+      style={{
+        position: 'relative',
+        flex: scroll ? '0 1 auto' : 'none',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        borderRadius: 16,
+        background: NEUTRAL.white,
+        border: `1px solid ${K.chipLine}`,
+        ...style,
+      }}
+    >
+      <div
+        onScroll={onScroll}
+        style={scroll ? { flex: '0 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', scrollPaddingBottom: FADE } : { flex: 'none' }}
+      >
+        <div ref={rowsRef}>{children}</div>
+      </div>
+      {more ? <Fade color={NEUTRAL.white} /> : null}
+    </div>
+  );
+}
+
+// One row on the sheet (Location-B L205-228): a kraft disc with a teal line icon, the
+// words, and a trailing umber arrow (commits a place) or chevron (opens a page). Every
+// line wraps. The focus ring sits inside the clipped sheet, rounded at its corners.
+function Row({ icon: Icon, title, sub = '', kicker = '', kickerColor = NEUTRAL.ink3, extra = null, trail: Trail, onClick, first, last, top = false }) {
+  const corner = first && last ? '15px' : first ? '15px 15px 0 0' : last ? '0 0 15px 15px' : 0;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="bg-transparent active:!bg-zone-services-fill/50"
+      style={{
+        display: 'flex',
+        alignItems: top ? 'flex-start' : 'center',
+        gap: 12,
+        width: '100%',
+        minHeight: 64,
+        boxSizing: 'border-box',
+        margin: 0,
+        padding: '10px 12px',
+        borderStyle: 'solid',
+        borderColor: NEUTRAL.creamRule,
+        borderWidth: first ? 0 : '1px 0 0',
+        borderRadius: corner,
+        textAlign: 'left',
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        color: NEUTRAL.ink,
+        outlineOffset: -3,
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{ flex: 'none', width: 36, height: 36, borderRadius: 999, background: K.fill, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Icon size={18} color={NEUTRAL.tealInk} strokeWidth={2} aria-hidden="true" focusable="false" />
+      </span>
+      <span style={{ flex: 1, minWidth: 0, display: 'block' }}>
+        {kicker ? (
+          <span
+            className="font-mono"
+            style={{ display: 'block', fontSize: fs(10), fontWeight: 500, lineHeight: 14 / 10, letterSpacing: '.12em', textTransform: 'uppercase', color: kickerColor, overflowWrap: 'anywhere' }}
+          >
+            {kicker}
+          </span>
+        ) : null}
+        <span style={{ display: 'block', fontSize: fs(15), fontWeight: 600, lineHeight: 20 / 15, color: NEUTRAL.ink, overflowWrap: 'anywhere' }}>{title}</span>
+        {sub ? (
+          <span style={{ display: 'block', marginTop: 1, fontSize: fs(12.5), lineHeight: 16 / 12.5, color: NEUTRAL.ink3, overflowWrap: 'anywhere' }}>{sub}</span>
+        ) : null}
+        {extra}
+      </span>
+      <span aria-hidden="true" style={{ flex: 'none', display: 'flex', marginTop: top ? 9 : 0 }}>
+        <Trail size={18} color={K.accent} strokeWidth={2} aria-hidden="true" focusable="false" />
+      </span>
+    </button>
+  );
+}
+
+// A note on white (plan-authored; never red or orange): the icon in umber, the words in
+// ink-2. kind 'error' (CircleAlert) reads its words out as it appears (role=alert); kind
+// 'empty' (SearchX, no results) is read by the search page's status line instead. action,
+// when given, is one quiet outline button under the words (the house error card's action:
+// umber on white, never a solid fill), kept out of the alert so it isn't read twice.
+function Note({ kind = 'error', text, action = null, style = undefined }) {
+  const Icon = kind === 'error' ? CircleAlert : SearchX;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 10,
+        padding: 12,
+        borderRadius: 14,
+        background: NEUTRAL.white,
+        border: `1px solid ${K.chipLine}`,
+        ...style,
+      }}
+    >
+      <Icon size={18} color={K.accent} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flex: 'none' }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p role={kind === 'error' ? 'alert' : undefined} style={{ margin: 0, fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2, overflowWrap: 'anywhere' }}>
+          {text}
+        </p>
+        {action ? (
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="active:opacity-60"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 44,
+              maxWidth: '100%',
+              boxSizing: 'border-box',
+              margin: '10px 0 0',
+              padding: '4px 18px',
+              borderRadius: 14,
+              background: 'transparent',
+              border: `1px solid ${K.accent}`,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: fs(14),
+              fontWeight: 600,
+              lineHeight: 1.2,
+              textAlign: 'center',
+              color: K.accent,
+              overflowWrap: 'anywhere',
+            }}
+          >
+            {action.label}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 export default function LocationModePicker({ isOpen, onClose, coldOpen = false, lastLocation = null, onSnoozeToday, onPicked = null }) {
-  const {
-    locationMode,
-    selectedLocation,
-    switchToCurrentLocation,
-    switchToNavigateMode,
-    getCurrentLocation,
-    getSavedLocations,
-  } = useLocation();
-  // iPad: scale the whole picker up so its (phone-sized) text + controls read
-  // comfortably on the large canvas. zoom scales uniformly; the max-height is
-  // pulled in to compensate so the zoomed card still fits the viewport.
+  const { switchToCurrentLocation, switchToNavigateMode, getSavedLocations } = useLocation();
   const isTablet = useIsTablet();
+  const reduce = useReducedMotion();
+  const { scale } = useFontScale();
 
-  const [mode, setMode] = useState('select'); // 'select', 'search', 'coords', 'info'
-  // Keyboard-aware placement: only the text-input modes raise the keyboard.
-  // Track its height so the card floats centered in the visible area ABOVE the
-  // keyboard (input + results stay in view). See useKeyboardOffset.
-  const needsKeyboard = mode === 'search' || mode === 'coords';
+  const [mode, setMode] = useState('select'); // 'select', 'search', 'saved', 'info'
+  // Only the search page raises the keyboard; its height keeps the folder above it.
+  const needsKeyboard = mode === 'search';
   const keyboardOffset = useKeyboardOffset(isOpen && needsKeyboard);
+  const viewport = useViewportSize(isOpen);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [savedLocations, setSavedLocations] = useState([]);
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [coordsInput, setCoordsInput] = useState('');
-  const [coordsApplying, setCoordsApplying] = useState(false);
-  const [coordsError, setCoordsError] = useState('');
+  const [gpsError, setGpsError] = useState(''); // shown on the select page, above the button
+  const [note, setNote] = useState(null); // the search page's { kind: 'empty'|'error', text }
+  const [picked, setPicked] = useState(null); // the search result "Now exploring" names
+  const [layout, setLayout] = useState('pin'); // 'pin' | 'foot' | 'scroll' (see the top)
+  const [fades, setFades] = useState(NO_FADES);
+
+  // Only the newest search may show its reply: a reply for a query that has since changed,
+  // been cleared, or belongs to an earlier opening is dropped.
+  const searchSeq = useRef(0);
+  const dialogRef = useRef(null);
+  const frameRef = useRef(null); // the dialog's positioning wrapper (its max height)
+  const inputRef = useRef(null);
+  // The folder's parts, measured to fit the screen.
+  const tabRef = useRef(null);
+  const regionRef = useRef(null); // the title and the body (its parent is the folder box)
+  const scrollRef = useRef(null); // the region's scroller (layout 'foot')
+  const headerRef = useRef(null);
+  const bodyRef = useRef(null);
+  const footerRef = useRef(null);
+  const rowsRef = useRef(null); // the rows inside the sheet
+  // The page and layout now, for listeners that outlive a render (Android's back key, a
+  // late GPS fix, the ResizeObserver).
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+
+  const titleId = useId();
+  const subId = useId();
+  const inputId = useId();
+  const hintId = useId();
 
   useDismissable(isOpen, onClose);
+
+  // Android's back key does what the on-screen controls do: Back on the saved and search
+  // pages, otherwise Close (instead of leaving the finder under the chooser or, on a cold
+  // open with no history, the app). Capacitor turns the key's own behaviour off only while
+  // a listener is registered, so it is added on open and removed on close (as
+  // SuggestPlaceSection's useOverlayClose does).
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (!isOpen || Capacitor.getPlatform() !== 'android') return undefined;
+    let handle = null;
+    let gone = false;
+    const onBack = () => {
+      if (modeRef.current === 'saved' || modeRef.current === 'search') setMode('select');
+      else closeRef.current?.();
+    };
+    Promise.resolve(App.addListener('backButton', onBack))
+      .then((h) => { if (gone) h?.remove?.(); else handle = h; })
+      .catch(() => { /* the key keeps its own behaviour */ });
+    return () => {
+      gone = true;
+      handle?.remove?.();
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
       loadSavedLocations();
+      searchSeq.current += 1;
       setMode('select');
       setSearchQuery('');
       setSearchResults([]);
-      setErrorMessage('');
-      setCoordsInput('');
-      setCoordsError('');
+      setSearching(false);
+      setNote(null);
+      setGpsError('');
+      setPicked(null);
+    } else {
+      // Closed: the next opening starts on the select page from its first frame, so the
+      // folder doesn't replay the last page's move.
+      setMode('select');
     }
   }, [isOpen]);
 
+  // A GPS error belongs to the attempt beside it: leaving the select page drops it, so
+  // coming back doesn't read an old denial out again.
   useEffect(() => {
-    if (searchQuery.length > 2) {
+    if (mode !== 'select') setGpsError('');
+  }, [mode]);
+
+  useEffect(() => {
+    if (searchable(searchQuery)) {
       const timer = setTimeout(() => {
         performSearch(searchQuery);
       }, 500);
       return () => clearTimeout(timer);
-    } else {
-      setSearchResults([]);
-      setErrorMessage('');
     }
+    searchSeq.current += 1;
+    setSearchResults([]);
+    setSearching(false);
+    setNote(null);
+    return undefined;
   }, [searchQuery]);
 
-  // Saved locations come from on-device storage now (src/lib/savedLocations.js),
-  // so this is a synchronous read — no auth/network round-trip that could fail.
-  const loadSavedLocations = () => {
-    setSavedLocations(getSavedLocations());
+  // Focus moves into the dialog when it opens and back to the opener when it closes
+  // (FilterSheet's pattern).
+  useEffect(() => {
+    if (!isOpen || typeof document === 'undefined') return undefined;
+    const opener = document.activeElement;
+    const raf = requestAnimationFrame(() => {
+      if (dialogRef.current) dialogRef.current.focus({ preventScroll: true });
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      if (opener && opener instanceof HTMLElement && document.contains(opener)) opener.focus({ preventScroll: true });
+    };
+  }, [isOpen]);
+
+  // Each page change moves focus to the dialog, so the new title is read out and focus
+  // never falls to the page when the tapped row goes away. The keyboard is never raised
+  // here: the field is focused only by the traveler's own tap.
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const raf = requestAnimationFrame(() => {
+      if (dialogRef.current) dialogRef.current.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [mode, isOpen]);
+
+  // ── Fitting the screen (see the top of the file) ─────────────────────────
+  // Every size is read from the page as drawn: the dialog's max height, the tab, the
+  // folder's padding, the title band, the button band and the rows. upgrade false (a size
+  // change seen by the ResizeObserver) may only pin less, so a layout whose own change
+  // moves what it measured can't flip back and forth.
+  const fit = (upgrade) => {
+    const place = frameRef.current;
+    const region = regionRef.current;
+    const header = headerRef.current;
+    const body = bodyRef.current;
+    const box = region ? region.parentElement : null;
+    if (!place || !box || !header || !body) return;
+    const num = (v) => parseFloat(v) || 0;
+    const bs = window.getComputedStyle(box);
+    const cap = parseFloat(window.getComputedStyle(place).maxHeight);
+    const avail = (Number.isFinite(cap) ? cap : Infinity)
+      - (tabRef.current ? tabRef.current.offsetHeight : 0)
+      - num(bs.paddingTop) - num(bs.paddingBottom) - num(bs.borderTopWidth) - num(bs.borderBottomWidth);
+    const headerH = header.offsetHeight;
+    const footerH = footerRef.current ? footerRef.current.offsetHeight : 0;
+    const rows = rowsRef.current;
+    const sheet = rows && rows.parentElement ? rows.parentElement.parentElement : null; // rows, scroller, sheet
+    const rowsH = rows && sheet ? rows.offsetHeight + sheet.offsetHeight - sheet.clientHeight : 0;
+    const otherH = body.scrollHeight - (sheet ? sheet.offsetHeight : 0); // the body around the sheet
+    let next;
+    if (modeRef.current === 'search') {
+      // The field stays pinned while one result row fits under it (with the body's top
+      // padding and the results kicker), and while a hint or a note fits.
+      const room = avail - headerH + 1;
+      next = room >= 12 + (14 * scale + 8) + RESULT_MIN && room >= (rows ? 0 : otherH) ? 'pin' : 'scroll';
+    } else {
+      // The rows' room under the title and above the button. Below half a row the title
+      // and the rows would hide each other, so the whole folder scrolls instead.
+      const room = avail - headerH - footerH - otherH + 1;
+      if (room >= Math.min(rowsH, ROWS_MIN * scale)) next = 'pin';
+      else if (footerH > 0 && room >= Math.min(rowsH, ROWS_PEEK * scale)) next = 'foot';
+      else next = 'scroll';
+    }
+    const cur = layoutRef.current;
+    if (next !== cur && (upgrade || LAYOUTS.indexOf(next) > LAYOUTS.indexOf(cur))) setLayout(next);
   };
 
-  const performSearch = async (query) => {
-    setSearching(true);
-    setErrorMessage('');
-    
-    try {
-      const { data } = await callWorker(ROUTE.searchLocation, {
-        query: query
-      });
+  // Which scroller has more below it: only the one the layout uses.
+  const showFades = () => {
+    const cur = layoutRef.current;
+    const more = (el) => !!el && el.scrollHeight - el.scrollTop - el.clientHeight > 1;
+    const rows = rowsRef.current;
+    const region = regionRef.current;
+    const next = {
+      sheet: cur === 'pin' && more(rows ? rows.parentElement : null),
+      region: cur === 'foot' && more(scrollRef.current),
+      box: cur === 'scroll' && more(region ? region.parentElement : null),
+    };
+    setFades((prev) => (prev.sheet === next.sheet && prev.region === next.region && prev.box === next.box ? prev : next));
+  };
 
-      if (data.results && data.results.length > 0) {
-        setSearchResults(data.results);
-        setErrorMessage('');
+  const fitRef = useRef(fit);
+  fitRef.current = fit;
+  const fadesRef = useRef(showFades);
+  fadesRef.current = showFades;
+
+  const lastName = coldOpen && lastLocation?.placeType !== 'current_location'
+    ? str(lastLocation?.placeName) || str(lastLocation?.address?.city)
+    : '';
+  const hasRows = mode === 'select' || (mode === 'saved' && savedLocations.length > 0) || (mode === 'search' && searchResults.length > 0);
+
+  // Anything that changes the room or what has to fit in it: decided before paint.
+  useLayoutEffect(() => {
+    if (isOpen) fitRef.current(true);
+  }, [isOpen, mode, gpsError, keyboardOffset, viewport, scale, isTablet, coldOpen, lastName, savedLocations, searchResults, note, searchQuery, picked]);
+
+  // After every render the fades follow the scroller in use.
+  useLayoutEffect(() => {
+    if (isOpen) fadesRef.current();
+  });
+
+  // Sizes that change on their own (a web font arriving late) can only pin less.
+  useEffect(() => {
+    if (!isOpen || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => {
+      fitRef.current(false);
+      fadesRef.current();
+    });
+    [frameRef, tabRef, headerRef, bodyRef, footerRef, rowsRef].forEach((r) => {
+      if (r.current) ro.observe(r.current);
+    });
+    return () => ro.disconnect();
+  }, [isOpen, mode, hasRows]);
+
+  // A GPS failure on a screen too short to pin anything: show the note and the button it
+  // explains, which the whole-folder scroll may have left below the edge.
+  useLayoutEffect(() => {
+    if (!isOpen || !gpsError || layout !== 'scroll') return;
+    const box = regionRef.current ? regionRef.current.parentElement : null;
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [isOpen, gpsError, layout]);
+
+  // Saved locations come from on-device storage (src/lib/savedLocations.js), so this is a
+  // synchronous read. Entries that aren't objects are skipped.
+  const loadSavedLocations = () => {
+    const list = getSavedLocations();
+    setSavedLocations(Array.isArray(list) ? list.filter(isEntry) : []);
+  };
+
+  // An outage is never shown as "no results": callWorker doesn't throw, it returns
+  // { error } on a timeout, a network failure or a non-2xx reply (whose body may be HTML),
+  // and the worker answers HTTP 200 { error, results: [] } when Google can't search. Only a
+  // clean reply without results is "no results", in the worker's own words when it sends any.
+  const performSearch = async (query) => {
+    const seq = ++searchSeq.current;
+    setSearching(true);
+    setNote(null);
+
+    try {
+      const { data, error } = await callWorker(ROUTE.searchLocation, {
+        query: query,
+      });
+      if (seq !== searchSeq.current) return;
+
+      const rows = isEntry(data) && Array.isArray(data.results) ? data.results.filter(isEntry) : [];
+      if (error || !isEntry(data) || data.error) {
+        console.error('Error searching locations:', error || data?.error || data);
+        setSearchResults([]);
+        setNote({ kind: 'error', text: SEARCH_ERROR });
+      } else if (rows.length > 0) {
+        setSearchResults(rows);
+        setNote(null);
       } else {
         setSearchResults([]);
-        setErrorMessage(data.message || 'No locations found. Please search for a specific address, landmark, or place.');
+        setNote({ kind: 'empty', text: str(data.message) || NO_RESULTS });
       }
     } catch (error) {
+      if (seq !== searchSeq.current) return;
       console.error('Error searching locations:', error);
       setSearchResults([]);
-      setErrorMessage('Error searching. Please try again.');
+      setNote({ kind: 'error', text: SEARCH_ERROR });
+    } finally {
+      if (seq === searchSeq.current) setSearching(false);
     }
-    
-    setSearching(false);
+  };
+
+  // The error note's "Try again": the same query, at once. The button goes away with the
+  // note, so focus that was on it moves to the dialog instead of falling to the page.
+  const retrySearch = (e) => {
+    if (e && e.currentTarget === document.activeElement && dialogRef.current) dialogRef.current.focus({ preventScroll: true });
+    if (searchable(searchQuery)) performSearch(searchQuery);
+  };
+
+  // The field's clear button, as on every finder's search field.
+  const clearSearch = () => {
+    setSearchQuery('');
+    if (inputRef.current) inputRef.current.focus();
   };
 
   const handleUseCurrentLocation = async () => {
+    if (gpsLoading) return; // busy: the button stays focusable, so it ignores taps instead of disabling
     setGpsLoading(true);
-    setErrorMessage('');
-    
+    setGpsError('');
+
     try {
       // Don't pre-check permission - just try to get location
       // The browser will prompt if needed
       await switchToCurrentLocation();
-      onClose();
+      // A fix that arrives after the traveler moved on to another page (typing a search,
+      // the saved list, the confirmation) doesn't close the chooser under them; a pick
+      // there still replaces it.
+      if (modeRef.current === 'select') onClose();
     } catch (error) {
       console.error('Error using current location:', error);
-      
-      // Show user-friendly error based on error type
-      if (error.code === 1) {
-        // Permission denied
-        setErrorMessage('Location access was denied. Please enable location permissions in your browser settings, then try again.');
-      } else if (error.code === 2) {
-        // Position unavailable
-        setErrorMessage('Unable to determine your location. Please check your GPS/location settings and try again.');
-      } else if (error.code === 3) {
-        // Timeout
-        setErrorMessage('Location request timed out. Please try again.');
-      } else {
-        setErrorMessage('Unable to get your current location. Please try again or choose a location manually.');
-      }
+      // Shown beside the button it explains; the sheet stays open.
+      setGpsError(gpsErrorText(error));
     }
-    
+
     setGpsLoading(false);
   };
 
   const handleSelectNavigateLocation = (location) => {
     if (onPicked) { onPicked(location); onClose(); return; } // caller handles it (e.g. set-my-stay)
+    setPicked(location);
     setMode('info');
     setTimeout(async () => {
       await switchToNavigateMode(location);
@@ -169,489 +731,513 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
     onClose();
   };
 
-  // Parse "lat, lng" / "lat lng" / "lat,lng" into a coordinate pair,
-  // reverse-geocode for the city label, and switch to Navigate Mode.
-  // Useful for: simulator testing without a real GPS fix, power users
-  // who paste from Google Maps, and field testing at a specific point
-  // (no street address yet, just numbers from a GPS unit).
-  //
-  // The location object shape mirrors what searchLocation returns so
-  // the rest of the app (greeting headline, finders, "Detecting your
-  // location…" placeholder, saved-locations dedup) treats it
-  // identically to a searched-and-tapped result.
-  const handleApplyCoordinates = async () => {
-    setCoordsError('');
-
-    // Accept comma, comma+space, or just whitespace as the separator —
-    // Google Maps copies as "lat, lng" but pasted GPS readings often
-    // come as "lat lng" or "lat,lng" with no space.
-    const parts = coordsInput.trim().split(/[\s,]+/).filter(Boolean);
-    if (parts.length !== 2) {
-      setCoordsError('Enter two numbers separated by a comma (latitude, longitude).');
-      return;
-    }
-
-    const lat = Number(parts[0]);
-    const lng = Number(parts[1]);
-
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      setCoordsError('Both values must be numbers.');
-      return;
-    }
-    if (lat < -90 || lat > 90) {
-      setCoordsError('Latitude must be between -90 and 90.');
-      return;
-    }
-    if (lng < -180 || lng > 180) {
-      setCoordsError('Longitude must be between -180 and 180.');
-      return;
-    }
-
-    setCoordsApplying(true);
-
-    try {
-      const { data } = await callWorker(ROUTE.reverseGeocode, {
-        latitude: lat,
-        longitude: lng,
-      });
-
-      const formatted = [data.city, data.state_or_country].filter(Boolean).join(', ');
-      const location = {
-        // Same fallback chain LocationContext uses for GPS fixes — drop
-        // the literal placeholder strings, fall back to the bare
-        // coordinates if the geocoder returns nothing usable (e.g. a
-        // pin in the middle of an ocean).
-        placeName: data.city || data.state_or_country || data.country || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-        address: {
-          formatted: formatted || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-          city: data.city || '',
-          state: '',
-          postalCode: '',
-          country: data.country || data.state_or_country || '',
-        },
-        coordinates: { latitude: lat, longitude: lng },
-        placeType: 'location',
-      };
-
-      if (onPicked) { onPicked(location); onClose(); return; }
-      await switchToNavigateMode(location);
+  // Escape closes (not while an input method is composing: Escape cancels the composition
+  // there); Tab and Shift+Tab go round inside the dialog (focus on the dialog itself counts
+  // as before the first control).
+  const onKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+      e.stopPropagation();
       onClose();
-    } catch (error) {
-      console.error('Error applying coordinates:', error);
-      setCoordsError('Could not look up that location. Please try again.');
+      return;
     }
-
-    setCoordsApplying(false);
+    if (e.key !== 'Tab' || !dialogRef.current) return;
+    const els = [...dialogRef.current.querySelectorAll(FOCUSABLE)].filter((el) => el.getClientRects().length > 0);
+    const at = els.indexOf(document.activeElement);
+    if (!els.length || (e.shiftKey ? at <= 0 : at === -1 || at === els.length - 1)) {
+      e.preventDefault();
+      if (els.length) (e.shiftKey ? els[els.length - 1] : els[0]).focus();
+    }
   };
 
   if (!isOpen) return null;
 
-  // Placement: always vertically CENTER the card, but center it inside the
-  // space left ABOVE the keyboard (paddingBottom = keyboardOffset). This keeps
-  // the address bar near the middle of the screen while guaranteeing the input
-  // AND its result list stay visible above the keyboard on iPhone/iPad/Android.
-  // The card height is capped to that same visible area so results never hide
-  // behind the keyboard (divided by the iPad zoom factor so the cap holds when
-  // the card is scaled up).
-  const zoomFactor = isTablet ? 1.3 : 1;
-  const modalStyle = {
-    // Cap to the space between the top safe-area (notch) and the keyboard, using
-    // dvh so mobile browser chrome + the notch are respected — the pinned header
-    // stays visible and only the results list scrolls.
-    maxHeight: keyboardOffset
-      ? `calc((100dvh - env(safe-area-inset-top, 0px) - ${keyboardOffset + 40}px) / ${zoomFactor})`
-      : (isTablet ? '64vh' : `calc((100dvh - env(safe-area-inset-top, 0px) - 48px) / ${zoomFactor})`),
-    ...(isTablet ? { zoom: 1.3 } : {}),
-  };
+  // Phones: the search page and the confirmation after it hang from the top.
+  const top = !isTablet && (mode === 'search' || mode === 'info');
+  const frame = frameFor(isTablet, keyboardOffset, top);
+  const pin = layout === 'pin';
+  const foot = layout === 'foot';
+  const whole = layout === 'scroll';
+  /** @type {CSS} */
+  const column = { display: 'flex', flexDirection: 'column' };
+  /** @type {CSS} */
+  const regionStyle = whole ? { position: 'relative', flex: 'none', ...column } : { position: 'relative', flex: '1 1 auto', minHeight: 0, ...column };
+  // When the title band scrolls ('foot'), it reaches 12px into the folder's padding above
+  // and beside it: the Close button sits 8px out of the band (board L200) and its focus
+  // ring 4px further, and a scroller would clip both and scroll sideways by those 8px.
+  /** @type {CSS} */
+  const scrollStyle = foot
+    ? { flex: '1 1 auto', minHeight: 0, ...column, overflowY: 'auto', overscrollBehavior: 'contain', scrollPaddingBottom: FADE, margin: '-12px -12px 0', padding: '12px 12px 0' }
+    : whole ? { flex: 'none', ...column } : { flex: '1 1 auto', minHeight: 0, ...column };
+  /** @type {CSS} */
+  let bodyStyle = pin ? { flex: '1 1 auto', minHeight: 0, ...column } : { flex: 'none', ...column };
+  const edge = `1px solid ${K.line}`;
 
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-[9998] overflow-y-auto flex items-start justify-center px-3"
+  /** @type {(size: number, lineHeight: number) => CSS} */
+  const titleStyle = (size, lineHeight) => ({
+    flex: 1,
+    minWidth: 0,
+    margin: 0,
+    fontWeight: 400,
+    fontSize: fs(size),
+    lineHeight,
+    color: K.title,
+    overflowWrap: 'break-word',
+  });
+  /** @type {CSS} */
+  const subStyle = { margin: '6px 0 0', fontSize: fs(13), lineHeight: 18 / 13, color: K.meta, overflowWrap: 'anywhere' };
+  const backAndClose = (title) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <IconButton label="Back to location options" icon={ChevronLeft} onClick={() => setMode('select')} margin="-8px 0 -8px -8px" />
+      <h2 id={titleId} className="font-serif" style={titleStyle(24, 1.1)}>
+        {title}
+      </h2>
+      <IconButton label="Close" icon={X} onClick={onClose} margin="-8px -8px -8px 0" />
+    </div>
+  );
+
+  let padding = '18px 16px 16px';
+  let header = null;
+  let body = null;
+  let footer = null;
+  let described = subId;
+
+  if (mode === 'select') {
+    const rows = [];
+    // Cold-open only: one tap to resume a place you deliberately chose (a typed or searched
+    // destination). Hidden when you left off on your own current location: then "Explore
+    // where I am" is the same action. Consent-first: no early GPS.
+    if (lastName) {
+      rows.push({ key: 'continue', icon: HistoryIcon, title: `Continue exploring ${lastName}`, sub: 'Where you left off', trail: ArrowRight, onClick: onClose });
+    }
+    if (savedLocations.length > 0) {
+      rows.push({ key: 'saved', icon: Bookmark, title: 'Saved locations', sub: savedLine(savedLocations), trail: ChevronRight, onClick: () => setMode('saved') });
+    }
+    rows.push({ key: 'search', icon: Search, title: 'Choose a destination', sub: 'A city, an address or a landmark', trail: ChevronRight, onClick: () => setMode('search') });
+
+    padding = coldOpen ? '18px 16px 6px' : '18px 16px 16px';
+    header = (
+      <>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <h2 id={titleId} className="font-serif" style={titleStyle(28, 1.05)}>
+            {coldOpen ? (
+              <>Where would you like to <em style={EM}>explore</em>?</>
+            ) : (
+              <>Choose your <em style={EM}>starting point</em></>
+            )}
+          </h2>
+          {/* -8px below as well as above: the X stays on the first line, and a one-line
+              title keeps the board's 6px to the sub-line. */}
+          <IconButton label="Close" icon={X} onClick={onClose} margin="-8px -8px -8px 0" />
+        </div>
+        <p id={subId} style={subStyle}>Globeskimmers finds places near your starting point.</p>
+      </>
+    );
+    body = (
+      <Sheet scroll={pin} more={fades.sheet} rowsRef={rowsRef} onScroll={showFades} style={{ marginTop: 14 }}>
+        {rows.map(({ key, ...row }, i) => (
+          <Row key={key} {...row} first={i === 0} last={i === rows.length - 1} />
+        ))}
+      </Sheet>
+    );
+    footer = (
+      <>
+        <div style={{ minHeight: 40, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span aria-hidden="true" style={{ flex: 1, height: 1, background: K.rule }} />
+          <span className="font-mono" style={{ flex: 'none', fontSize: fs(10.5), fontWeight: 500, lineHeight: 14 / 10.5, letterSpacing: '.14em', color: K.kicker }}>
+            OR
+          </span>
+          <span aria-hidden="true" style={{ flex: 1, height: 1, background: K.rule }} />
+        </div>
+        {gpsError ? <Note text={gpsError} style={{ marginBottom: 10 }} /> : null}
+        {/* The board's only solid fill. While locating it stays full strength and
+            focusable (aria-disabled, the handler ignores taps); the rows stay tappable. */}
+        <button
+          type="button"
+          onClick={handleUseCurrentLocation}
+          aria-busy={gpsLoading ? 'true' : undefined}
+          aria-disabled={gpsLoading ? 'true' : undefined}
+          className={gpsLoading ? undefined : 'active:opacity-90'}
           style={{
-            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)',
-            paddingBottom: keyboardOffset ? keyboardOffset + 16 : 24,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            width: '100%',
+            minHeight: 56,
+            boxSizing: 'border-box',
+            margin: 0,
+            padding: '8px 16px',
+            borderRadius: 14,
+            background: K.accent,
+            border: 0,
+            cursor: gpsLoading ? 'default' : 'pointer',
+            fontFamily: 'inherit',
+            fontSize: fs(16),
+            fontWeight: 600,
+            lineHeight: 20 / 16,
+            textAlign: 'center',
+            color: NEUTRAL.cream,
           }}
         >
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-          />
-
-          <motion.div
-            initial={{ y: 40, opacity: 0, scale: 0.96 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 40, opacity: 0, scale: 0.96 }}
-            transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-            className="relative w-full max-w-md bg-white rounded-[24px] shadow-2xl overflow-hidden flex flex-col"
-            style={modalStyle}
+          <span aria-hidden="true" style={{ flex: 'none', display: 'flex' }}>
+            {gpsLoading ? (
+              <LoaderCircle size={18} color={NEUTRAL.cream} strokeWidth={2} className="motion-safe:animate-spin" aria-hidden="true" focusable="false" />
+            ) : (
+              <NavigationIcon size={18} color={NEUTRAL.cream} strokeWidth={2} aria-hidden="true" focusable="false" />
+            )}
+          </span>
+          <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{gpsLoading ? 'Getting location…' : 'Explore where I am'}</span>
+        </button>
+        {/* Announced here, not inside the busy button (aria-busy holds back what is inside it). */}
+        <p role="status" className="sr-only">{gpsLoading ? 'Getting location…' : ''}</p>
+        {/* Cold-open only: let frequent users silence today's chooser. */}
+        {coldOpen && (
+          <button
+            type="button"
+            onClick={() => { onSnoozeToday?.(); onClose(); }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%',
+              minHeight: 44,
+              boxSizing: 'border-box',
+              margin: '2px 0 0',
+              padding: '4px 8px',
+              borderRadius: 12,
+              background: 'transparent',
+              border: 0,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: fs(13),
+              fontWeight: 600,
+              lineHeight: 18 / 13,
+              textAlign: 'center',
+              color: K.accent,
+            }}
           >
-            {/* Mode Selection */}
-            {mode === 'select' && (
-              <>
-                <div className="bg-gradient-to-r from-[#3A6EA5] to-[#1E3150] text-white px-5 py-4 flex items-start justify-between flex-shrink-0">
-                  <div className="pr-3">
-                    <h2 className="text-[20px] font-bold">{coldOpen ? 'Where would you like to explore?' : 'Select Location Mode'}</h2>
-                    <p className="text-[12.5px] text-white/80 mt-0.5 leading-snug">
-                      Globeskimmers finds places near you. Where should we start?
-                    </p>
-                  </div>
-                  <button
-                    onClick={onClose}
-                    className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors flex-shrink-0"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-5">
-                  {/* Cold-open only: one tap to RESUME a place you deliberately chose
-                      (a typed/searched destination). Hidden when you left off on your
-                      own current location — then "Explore where I am" IS "continue where
-                      you left off," so a separate button is redundant (you're in Arcadia
-                      and left off in Arcadia = same action). Consent-first: no early GPS. */}
-                  {coldOpen && lastLocation?.placeType !== 'current_location' && (lastLocation?.placeName || lastLocation?.address?.city) && (
-                    <button
-                      onClick={onClose}
-                      className="w-full mb-4 bg-blue-50 border-2 border-blue-200 hover:bg-blue-100 rounded-xl px-4 py-3 flex items-center justify-between gap-3 transition-colors"
-                    >
-                      <span className="flex items-center gap-3 min-w-0">
-                        <span className="text-2xl flex-shrink-0">🧭</span>
-                        <span className="flex flex-col items-start leading-tight min-w-0">
-                          <span className="text-[15px] font-bold text-gray-900">Continue exploring {lastLocation.placeName || lastLocation.address?.city}</span>
-                          <span className="text-[12px] text-gray-500 font-medium">Continue where you left off</span>
+            Don’t ask again today
+          </button>
+        )}
+      </>
+    );
+  } else if (mode === 'saved') {
+    header = (
+      <>
+        {backAndClose(<>Saved <em style={EM}>locations</em></>)}
+        <p id={subId} style={subStyle}>Tap a place to navigate from it.</p>
+      </>
+    );
+    body = savedLocations.length === 0 ? (
+      <p style={{ flex: 'none', margin: 0, padding: '40px 0', textAlign: 'center', fontSize: fs(13), lineHeight: 18 / 13, color: K.meta }}>No saved locations yet.</p>
+    ) : (
+      <Sheet scroll={pin} more={fades.sheet} rowsRef={rowsRef} onScroll={showFades} style={{ marginTop: 14 }}>
+        {savedLocations.map((location, index) => (
+          <Row
+            key={index}
+            icon={iconFor(location.placeType)}
+            title={nameOf(location) || 'Saved place'}
+            sub={str(location.address?.formatted)}
+            trail={ArrowRight}
+            onClick={() => handleSelectSavedLocation(location)}
+            first={index === 0}
+            last={index === savedLocations.length - 1}
+          />
+        ))}
+      </Sheet>
+    );
+  } else if (mode === 'search') {
+    described = undefined;
+    const showHint = !searchable(searchQuery);
+    const n = searchResults.length;
+    // The persistent status line reads the outcome: searching, the count, or the
+    // no-results words (an error note is role=alert and reads itself).
+    const status = searching ? 'Searching…' : n > 0 ? `${n} ${n === 1 ? 'result' : 'results'}` : note?.kind === 'empty' ? note.text : '';
+    // Right of the text: the spinner while searching, else the clear button while there
+    // is text, else nothing (the placeholder gets the room).
+    const endSlot = searching || searchQuery !== '';
+    header = (
+      <>
+        {backAndClose(<>Choose a <em style={EM}>destination</em></>)}
+        {/* The field is pinned above the results, so results and the keyboard can't push
+            it off the screen. */}
+        <div style={{ marginTop: 12 }}>
+          <label htmlFor={inputId} style={{ display: 'block', marginBottom: 8, fontSize: fs(13), fontWeight: 600, lineHeight: 18 / 13, color: K.meta }}>
+            Enter a specific location
+          </label>
+          <div style={{ position: 'relative' }}>
+            <Search
+              size={18}
+              color={NEUTRAL.tealInk}
+              strokeWidth={2}
+              aria-hidden="true"
+              focusable="false"
+              style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+            />
+            <input
+              ref={inputRef}
+              id={inputId}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Place or address"
+              aria-describedby={showHint ? hintId : undefined}
+              className="placeholder:text-ink-3"
+              style={{
+                display: 'block',
+                width: '100%',
+                minHeight: 52,
+                boxSizing: 'border-box',
+                margin: 0,
+                padding: `0 ${endSlot ? 44 : 14}px 0 44px`,
+                borderRadius: 14,
+                background: NEUTRAL.white,
+                // Umber at 70%: the field's edge reaches 3:1 against the kraft.
+                border: `1px solid ${rgba(K.accent, 0.7)}`,
+                fontFamily: 'inherit',
+                fontSize: fs(16),
+                color: NEUTRAL.ink,
+              }}
+            />
+            {searching ? (
+              <LoaderCircle
+                size={16}
+                color={NEUTRAL.ink3}
+                strokeWidth={2}
+                className="motion-safe:animate-spin"
+                aria-hidden="true"
+                focusable="false"
+                style={{ position: 'absolute', right: 14, top: '50%', marginTop: -8, pointerEvents: 'none' }}
+              />
+            ) : searchQuery !== '' ? (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={clearSearch}
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: '50%',
+                  marginTop: -22,
+                  width: 44,
+                  height: 44,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 0,
+                  borderRadius: 14,
+                  background: 'transparent',
+                  border: 0,
+                  cursor: 'pointer',
+                  outlineOffset: -2,
+                }}
+              >
+                <span aria-hidden="true" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 999, background: K.fill }}>
+                  <X size={14} color={NEUTRAL.ink2} strokeWidth={2} aria-hidden="true" focusable="false" />
+                </span>
+              </button>
+            ) : null}
+          </div>
+          <p role="status" className="sr-only">{status}</p>
+        </div>
+      </>
+    );
+    // The hint sits in the body, under the field: it goes when results can come, so the
+    // pinned band above the results keeps one height while the traveler types.
+    bodyStyle = { ...bodyStyle, paddingTop: showHint ? 8 : 12 };
+    body = (
+      <>
+        {showHint ? (
+          <p id={hintId} style={{ flex: 'none', margin: 0, fontSize: fs(12.5), lineHeight: 16 / 12.5, color: K.meta }}>
+            Type at least 3 characters to search.
+          </p>
+        ) : null}
+        {note ? (
+          <Note
+            kind={note.kind}
+            text={note.text}
+            action={note.kind === 'error' ? { label: 'Try again', onClick: retrySearch } : null}
+            style={{ flex: 'none' }}
+          />
+        ) : null}
+        {n > 0 ? (
+          <>
+            <h3
+              className="font-mono"
+              style={{ flex: 'none', margin: '0 0 8px 4px', fontSize: fs(10.5), fontWeight: 500, lineHeight: 14 / 10.5, letterSpacing: '.14em', textTransform: 'uppercase', color: K.kicker }}
+            >
+              Search results
+            </h3>
+            <Sheet scroll={pin} more={fades.sheet} rowsRef={rowsRef} onScroll={showFades}>
+              {searchResults.map((result, index) => {
+                const isCity = result.granularity === 'city';
+                const type = str(result.placeType);
+                const name = str(result.placeName);
+                const address = str(result.address?.formatted);
+                return (
+                  <Row
+                    key={index}
+                    top
+                    icon={isCity ? Building2 : iconFor(type)}
+                    kicker={isCity ? 'City' : type && type !== 'location' ? type.replace('_', ' ') : ''}
+                    kickerColor={isCity ? K.kicker : NEUTRAL.ink3}
+                    title={name || address || 'Unnamed place'}
+                    sub={name ? address : ''}
+                    extra={
+                      isCity ? (
+                        <span style={{ display: 'block', marginTop: 2, fontSize: fs(12.5), fontWeight: 500, lineHeight: 16 / 12.5, color: NEUTRAL.tealInk }}>
+                          Search across the city
                         </span>
-                      </span>
-                      <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                    </button>
-                  )}
+                      ) : null
+                    }
+                    trail={ArrowRight}
+                    onClick={() => handleSelectNavigateLocation(result)}
+                    first={index === 0}
+                    last={index === n - 1}
+                  />
+                );
+              })}
+            </Sheet>
+          </>
+        ) : null}
+      </>
+    );
+  } else {
+    // info: the 1.5 s hold after a search pick. No buttons: it closes itself, and the
+    // scrim, Escape and the swipe still close it. Its body never scrolls by itself.
+    padding = '24px 20px 24px';
+    bodyStyle = { flex: 'none', display: 'block', textAlign: 'center' };
+    const pickedName = str(picked?.placeName) || str(picked?.address?.city);
+    body = (
+      <>
+        <motion.div
+          aria-hidden="true"
+          initial={reduce ? false : { scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          style={{
+            width: 56,
+            height: 56,
+            boxSizing: 'border-box',
+            margin: '0 auto',
+            borderRadius: 999,
+            background: NEUTRAL.white,
+            border: `1px solid ${K.chipLine}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <MapPin size={24} color={NEUTRAL.tealInk} strokeWidth={2} aria-hidden="true" focusable="false" />
+        </motion.div>
+        <h2 id={titleId} className="font-serif" style={{ ...titleStyle(28, 1.05), margin: '14px 0 0', textAlign: 'center' }}>
+          Now exploring <em style={EM}>{pickedName || 'your destination'}</em>
+        </h2>
+        <p id={subId} style={{ margin: '8px 0 0', fontSize: fs(13), lineHeight: 1.4, color: K.meta }}>
+          All features will now use your selected location for finding places and information.
+        </p>
+        <div role="status" style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <LoaderCircle size={16} color={NEUTRAL.tealInk} strokeWidth={2} className="motion-safe:animate-spin" aria-hidden="true" focusable="false" />
+          <span style={{ fontSize: fs(13), fontWeight: 600, lineHeight: 18 / 13, color: NEUTRAL.tealInk }}>Updating…</span>
+        </div>
+      </>
+    );
+  }
 
-                  <Button
-                    onClick={handleUseCurrentLocation}
-                    disabled={gpsLoading}
-                    className="w-full h-16 bg-gradient-to-r from-[#3A6EA5] to-[#4A7EBA] hover:opacity-90 text-white font-semibold mb-4 flex items-center justify-center gap-3 text-[16px]"
-                  >
-                    {gpsLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Navigation className="w-5 h-5" />
-                    )}
-                    {gpsLoading ? 'Getting Location...' : 'Explore where I am'}
-                  </Button>
+  return (
+    <div className="fixed inset-0 z-[9998] overflow-y-auto flex flex-col font-sans" style={frame.overlay}>
+      <motion.div
+        aria-hidden="true"
+        className="fixed inset-0"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.2 }}
+        onClick={onClose}
+        style={{ background: rgba(NEUTRAL.ink, 0.56), WebkitBackdropFilter: 'blur(4px)', backdropFilter: 'blur(4px)' }}
+      />
 
-                  <div className="relative my-4">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t border-gray-300" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-white px-3 text-gray-500 font-semibold">OR</span>
-                    </div>
-                  </div>
-
-                  {savedLocations.length > 0 && (
-                    <>
-                      {/* One tidy button instead of an inline list — opens a
-                          dedicated, scrollable saved-locations view (handles 10+
-                          cleanly). */}
-                      <button
-                        onClick={() => setMode('saved')}
-                        className="w-full bg-blue-50 border-2 border-blue-200 hover:bg-blue-100 rounded-xl px-4 py-3 flex items-center justify-between gap-3 transition-colors"
-                      >
-                        <span className="flex items-center gap-3 min-w-0">
-                          <span className="text-2xl flex-shrink-0">📌</span>
-                          <span className="flex flex-col items-start leading-tight min-w-0">
-                            <span className="text-[15px] font-bold text-gray-900">Saved Locations</span>
-                            <span className="text-[12px] text-gray-500 font-medium truncate">
-                              {savedLocations.length} saved · tap to pick one
-                            </span>
-                          </span>
-                        </span>
-                        <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                      </button>
-
-                      <div className="relative my-4">
-                        <div className="absolute inset-0 flex items-center">
-                          <span className="w-full border-t border-gray-300" />
-                        </div>
-                        <div className="relative flex justify-center text-xs uppercase">
-                          <span className="bg-white px-3 text-gray-500 font-semibold">or search new location</span>
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  <Button
-                    onClick={() => setMode('search')}
-                    className="w-full h-16 bg-white border-2 border-[#3A6EA5] text-[#3A6EA5] hover:bg-gray-50 font-semibold flex items-center justify-center gap-3 text-[16px]"
-                  >
-                    <MapPin className="w-5 h-5" />
-                    Choose a destination
-                  </Button>
-
-                  {/* Coordinate entry. Tertiary visual weight — most
-                      users won't need this, but it's invaluable for
-                      simulator testing and for power users who want to
-                      pin to an exact lat/lng (e.g., a GPS reading
-                      from a handheld unit, a Google Maps right-click
-                      paste, or a research / field-work coordinate).
-                      Reverse-geocodes the city so the home greeting
-                      reads "Hello [Name], in [City]" automatically. */}
-                  <button
-                    onClick={() => setMode('coords')}
-                    className="w-full mt-3 flex items-center justify-center gap-2 text-[12.5px] text-gray-500 hover:text-gray-700 font-medium transition-colors py-2"
-                  >
-                    <Crosshair className="w-4 h-4" />
-                    Or enter coordinates manually
-                  </button>
-
-                  {/* Cold-open only: let frequent users silence today's chooser. */}
-                  {coldOpen && (
-                    <button
-                      onClick={() => { onSnoozeToday?.(); onClose(); }}
-                      className="w-full mt-4 pt-3 border-t border-gray-100 text-[12.5px] text-gray-400 hover:text-gray-600 font-medium transition-colors py-1"
-                    >
-                      Don’t ask again today
-                    </button>
-                  )}
+      {/* The folder's place on the screen. On phones it glides between the bottom (select,
+          saved) and the top (search, the confirmation) instead of jumping; not on iPad, where
+          it stays centred, and not with reduced motion. It is a wrapper so the glide and the
+          dialog's own entrance never write the same transform. */}
+      <motion.div
+        ref={frameRef}
+        layout={reduce || isTablet ? false : 'position'}
+        layoutDependency={top}
+        transition={SPRING}
+        style={{
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          boxSizing: 'border-box',
+          maxHeight: frame.cap,
+          ...(mode === 'search' && frame.searchHeight ? { height: frame.searchHeight } : null),
+          ...frame.dialog,
+        }}
+      >
+        <motion.div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={described}
+          tabIndex={-1}
+          onKeyDown={onKeyDown}
+          initial={reduce ? { opacity: 0 } : frame.enter}
+          animate={{ y: 0, opacity: 1 }}
+          transition={reduce ? { duration: 0.15 } : SPRING}
+          style={{
+            position: 'relative',
+            flex: '1 1 auto',
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+            boxSizing: 'border-box',
+            outline: 'none',
+          }}
+        >
+          <div ref={tabRef} aria-hidden="true" style={{ flex: 'none' }}>
+            <FolderTab tone="services" size="home" as="p" style={{ borderTop: edge, borderLeft: edge, borderRight: edge }}>
+              Where to
+            </FolderTab>
+          </div>
+          <Folder
+            stock="services"
+            size="home"
+            padding={padding}
+            onScroll={showFades}
+            style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}
+            boxStyle={{
+              flex: '1 1 auto',
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              borderRadius: 22,
+              boxShadow: frame.shadow,
+              ...(whole ? { overflow: 'auto', overscrollBehavior: 'contain', scrollPaddingBottom: FADE } : null),
+            }}
+          >
+            <div ref={regionRef} style={regionStyle}>
+              <div ref={scrollRef} onScroll={showFades} style={scrollStyle}>
+                <div ref={headerRef} style={{ flex: 'none' }}>
+                  {header}
                 </div>
-              </>
-            )}
-
-            {/* Saved Locations Mode — a focused, scrollable list to pick one to
-                navigate from (handles 10+). The ✕ returns to the select screen
-                (Use current location / search another). */}
-            {mode === 'saved' && (
-              <>
-                <div className="bg-gradient-to-r from-[#3A6EA5] to-[#1E3150] text-white px-5 py-4 flex items-center justify-between flex-shrink-0">
-                  <h2 className="text-[20px] font-bold">Saved Locations</h2>
-                  <button
-                    onClick={() => setMode('select')}
-                    className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
-                    aria-label="Back to location options"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-5">
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Tap a place to navigate from it</p>
-                  {savedLocations.length === 0 ? (
-                    <p className="text-sm text-gray-500 text-center py-10">No saved locations yet.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {savedLocations.map((location, index) => (
-                        <button
-                          key={index}
-                          onClick={() => handleSelectSavedLocation(location)}
-                          className="w-full text-left p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-3 border-2 border-blue-200"
-                        >
-                          <span className="text-2xl flex-shrink-0">{PLACE_TYPE_ICONS[location.placeType] || '📍'}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 truncate">
-                              {location.nickname || location.placeName}
-                            </p>
-                            <p className="text-xs text-gray-500 truncate">
-                              {location.address.formatted}
-                            </p>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* Coords Mode */}
-            {mode === 'coords' && (
-              <>
-                <div className="bg-gradient-to-r from-[#3A6EA5] to-[#1E3150] text-white px-5 py-4 flex items-center justify-between flex-shrink-0">
-                  <h2 className="text-[20px] font-bold">Enter Coordinates</h2>
-                  <button
-                    onClick={() => setMode('select')}
-                    className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-5">
-                  <label className="text-sm font-semibold text-gray-700 mb-2 block">
-                    Latitude, Longitude
-                  </label>
-                  <div className="relative">
-                    <Crosshair className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="e.g. 37.7749, -122.4194"
-                      value={coordsInput}
-                      onChange={(e) => {
-                        setCoordsInput(e.target.value);
-                        if (coordsError) setCoordsError('');
-                      }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleApplyCoordinates(); }}
-                      className="pl-10 h-12 text-base"
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2 mb-4">
-                    Paste from Google Maps (right-click any point → coordinates).
-                    Latitude first (-90 to 90), then longitude (-180 to 180).
-                  </p>
-
-                  <div className="mb-4">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Common cities</p>
-                    <div className="flex flex-wrap gap-2">
-                      {PRESET_COORDS.map(p => (
-                        <button
-                          key={p.name}
-                          onClick={() => {
-                            setCoordsInput(`${p.lat}, ${p.lng}`);
-                            if (coordsError) setCoordsError('');
-                          }}
-                          className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-full font-medium text-gray-700 transition-colors"
-                        >
-                          {p.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {coordsError && (
-                    <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-2">
-                      <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm text-orange-800">{coordsError}</p>
-                    </div>
-                  )}
-
-                  <Button
-                    onClick={handleApplyCoordinates}
-                    disabled={coordsApplying || !coordsInput.trim()}
-                    className="w-full h-12 bg-gradient-to-r from-[#3A6EA5] to-[#4A7EBA] hover:opacity-90 text-white font-semibold disabled:opacity-50"
-                  >
-                    {coordsApplying ? (
-                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Looking up…</>
-                    ) : (
-                      'Use This Location'
-                    )}
-                  </Button>
-                </div>
-              </>
-            )}
-
-            {/* Search Mode */}
-            {mode === 'search' && (
-              <>
-                <div className="bg-gradient-to-r from-[#3A6EA5] to-[#1E3150] text-white px-5 py-4 flex items-center justify-between flex-shrink-0">
-                  <h2 className="text-[20px] font-bold">Search Location</h2>
-                  <button
-                    onClick={() => setMode('select')}
-                    className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                {/* Search input — PINNED above the scroll area so results + the
-                    on-screen keyboard can't push it off the top of the screen. */}
-                <div className="flex-shrink-0 px-5 pt-4 pb-3 border-b border-gray-100">
-                  <label className="text-sm font-semibold text-gray-700 mb-2 block">
-                    Enter a specific location
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      type="text"
-                      placeholder="Empire State Building, JFK Airport, hotel address..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10 h-12 text-base"
-                    />
-                    {searching && (
-                      <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
-                    )}
-                  </div>
-                </div>
-
-                {/* Results / messages — the only part that scrolls. */}
-                <div className="flex-1 overflow-y-auto px-5 py-4">
-
-                  {errorMessage && (
-                    <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-2">
-                      <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm text-orange-800">{errorMessage}</p>
-                    </div>
-                  )}
-
-                  {searchResults.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Search Results</p>
-                      <div className="space-y-2">
-                        {searchResults.map((result, index) => {
-                          const isCity = result.granularity === 'city';
-                          return (
-                            <button
-                              key={index}
-                              onClick={() => handleSelectNavigateLocation(result)}
-                              className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors flex items-start gap-3"
-                            >
-                              <span className="text-2xl flex-shrink-0">{isCity ? '🏙️' : (PLACE_TYPE_ICONS[result.placeType] || '📍')}</span>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="text-sm font-semibold text-gray-900">
-                                    {result.placeName}
-                                  </p>
-                                  {isCity && (
-                                    <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">CITY</span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-gray-600 mt-0.5">
-                                  {result.address.formatted}
-                                </p>
-                                <p className="text-xs text-gray-400 mt-1 capitalize">
-                                  {isCity ? 'Search across the city' : result.placeType.replace('_', ' ')}
-                                </p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* Info Mode */}
-            {mode === 'info' && (
-              <div className="p-8 text-center">
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-[#3A6EA5] to-[#4A7EBA] rounded-full flex items-center justify-center"
-                >
-                  <MapPin className="w-10 h-10 text-white" />
-                </motion.div>
-                
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Navigate Mode Activated</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  All features will now use your selected location for finding places and information.
-                </p>
-                
-                <div className="flex items-center justify-center gap-2">
-                  <Loader2 className="w-4 h-4 text-[#3A6EA5] animate-spin" />
-                  <span className="text-sm text-[#3A6EA5]">Updating...</span>
+                <div ref={bodyRef} style={bodyStyle}>
+                  {body}
                 </div>
               </div>
-            )}
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+              {fades.region ? <Fade color={K.fill} /> : null}
+            </div>
+            {footer ? (
+              <div ref={footerRef} style={{ flex: 'none' }}>
+                {footer}
+              </div>
+            ) : null}
+          </Folder>
+          {fades.box ? <Fade color={K.fill} inset={1} radius="0 0 21px 21px" /> : null}
+        </motion.div>
+      </motion.div>
+    </div>
   );
 }
