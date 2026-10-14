@@ -762,9 +762,12 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
   const column = { display: 'flex', flexDirection: 'column' };
   /** @type {CSS} */
   const regionStyle = whole ? { position: 'relative', flex: 'none', ...column } : { position: 'relative', flex: '1 1 auto', minHeight: 0, ...column };
+  // When the title band scrolls ('foot'), it reaches 12px into the folder's padding above
+  // and beside it: the Close button sits 8px out of the band (board L200) and its focus
+  // ring 4px further, and a scroller would clip both and scroll sideways by those 8px.
   /** @type {CSS} */
   const scrollStyle = foot
-    ? { flex: '1 1 auto', minHeight: 0, ...column, overflowY: 'auto', overscrollBehavior: 'contain', scrollPaddingBottom: FADE }
+    ? { flex: '1 1 auto', minHeight: 0, ...column, overflowY: 'auto', overscrollBehavior: 'contain', scrollPaddingBottom: FADE, margin: '-12px -12px 0', padding: '12px 12px 0' }
     : whole ? { flex: 'none', ...column } : { flex: '1 1 auto', minHeight: 0, ...column };
   /** @type {CSS} */
   let bodyStyle = pin ? { flex: '1 1 auto', minHeight: 0, ...column } : { flex: 'none', ...column };
