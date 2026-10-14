@@ -18283,24 +18283,28 @@ async function handlePassportTag(request, env, ctx) {
       name: stamp.name, city: stamp.city, region: stamp.region, country: stamp.country,
       lat: stamp.lat, lng: stamp.lng, visited_on: stamp.visited_on,
     };
-    // A blocked pair never exchanges invites — but the tagger is never
-    // told: the invite "sends" and simply expires on the other side.
-    if (row.to_user_id && await gbBlockedEither(env, user.id, row.to_user_id)) {
-      // Never reveal a block: the response looks exactly like a delivered tag.
-      return jsonResponse({ ok: true, status: 'created', token, to_handle: toHandle, muted: true });
-    }
-    // The recipient's rails, the same as a postcard's (founder, 2026-10-13):
-    // a frozen account, an unconfirmed birth year or a held teen is never
-    // tagged — the invite "sends" and lands nowhere, exactly like a block —
-    // and when the recipient's age can't be read, nothing is sent.
-    if (row.to_user_id) {
+    // A blocked pair never exchanges invites, and a frozen account, an
+    // unconfirmed birth year or a held teen is never tagged (the recipient's
+    // rails, the same as a postcard's; founder, 2026-10-13). The tagger is
+    // never told: such a tag is stored as a plain link invite — addressed to
+    // no account and no email, so it lands in nobody's inbox and its /t/ link
+    // behaves like any unclaimed one (accepting stays closed to a minor and
+    // to a blocked pair) — and the reply is a delivered tag's, with the same
+    // keys for the same request (go-live round 2: a missing url, or an
+    // ok/muted flag, told an adult that an email or @handle belonged to
+    // someone under 18). When the recipient's age can't be read, nothing is
+    // sent.
+    let muted = false;
+    if (row.to_user_id && await gbBlockedEither(env, user.id, row.to_user_id)) muted = true;
+    if (row.to_user_id && !muted) {
       const rsp = await gbSocialProfile(env, row.to_user_id).catch(() => undefined);
       if (rsp === undefined) return jsonResponse({ error: 'Couldn’t send right now — try again' }, 503);
-      if (gbUnderAge(rsp) || gbAgeHeld(rsp)) return jsonResponse({ ok: true, status: 'created', token, to_handle: toHandle, muted: true });
+      if (gbUnderAge(rsp) || gbAgeHeld(rsp)) muted = true;
     }
+    if (muted) { row.to_user_id = null; row.to_email = null; }
     const ins = await gbRest(env, 'passport_tags', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
     if (!ins.ok) return jsonResponse({ error: 'Could not create invite', details: await ins.text().catch(() => '') }, 502);
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_tag', { is_user: !!toUserId, via: toHandle ? 'handle' : 'link' }));
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_tag', { is_user: !!row.to_user_id, via: toHandle ? 'handle' : 'link' }));
     const origin = new URL(request.url).origin;
     return jsonResponse({ status: 'created', token, url: `${origin}/t/${token}`, to_handle: toHandle });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
