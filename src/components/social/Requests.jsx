@@ -158,7 +158,8 @@ export default function Requests({
                 borderTop: i ? `1px solid ${NEUTRAL.airmailHair}` : 0,
               }}
             >
-              <span style={{ flex: '1 1 160px', minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+              {/* 120px: the name, both answers and the '•••' share one line from 375px up (measured; 320 wraps). */}
+              <span style={{ flex: '1 1 120px', minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
                 <Face name={r.name} handle={h} avatar={r.avatar} cloth={r.cloth} size={32} />
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: 'block', fontSize: fs(14), fontWeight: 600, lineHeight: 1.3, overflowWrap: 'anywhere', color: NEUTRAL.ink }}>

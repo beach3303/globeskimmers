@@ -23,12 +23,13 @@
 //   onClick  the whole envelope becomes one <button>; href makes it an <a>; otherwise it
 //            is an <article> (full) or a <div> (compact), or `as`.
 //   onReport (row) => void. Someone else's envelope gets the report door: a 44px '•••'
-//            named 'Report Theo’s postcard' at its top right, beside the envelope's own
-//            button or link, never inside it (one control can't hold another). The card is
-//            then a frame (`as`, else article or div) that takes className and style; the
-//            rest of the props go on the inner button or link (on the frame when there is
-//            neither). The viewer's own rows get no door. Open <ReportSheet row={row}/> from
-//            it. Without onReport nothing changes.
+//            named 'Options for Theo' at its top right, beside the envelope's own button or
+//            link, never inside it (one control can't hold another). The card is then a
+//            frame (`as`, else article or div) that takes className and style; the rest of
+//            the props go on the inner button or link (on the frame when there is neither).
+//            The viewer's own rows get no door. Every caller opens production's
+//            TravelerSheet from it (Report, Unfollow, Block; go-live decision 6), hence the
+//            name. Without onReport nothing changes.
 //
 // The report door (principle 8: Report wherever another person's content shows):
 //   reportPayload(row)   what /social/report takes for a feed row. The feed sends no row id,
@@ -258,8 +259,9 @@ function reportSubject(row, me) {
 }
 
 /**
- * The report door on its own: a 44px button holding a '•••' disc, named 'Report Theo’s
- * postcard'. Nothing for the viewer's own row or without onReport. Position it yourself.
+ * The report door on its own: a 44px button holding a '•••' disc, named 'Options for Theo'
+ * (it opens the TravelerSheet). Nothing for the viewer's own row or without onReport.
+ * Position it yourself.
  * @param {{ row: any, me?: any, onReport?: (row: any, e: any) => void, className?: string, style?: CSS }} props
  */
 export function ReportControl({ row, me = undefined, onReport = undefined, className = undefined, style = undefined }) {
@@ -269,7 +271,7 @@ export function ReportControl({ row, me = undefined, onReport = undefined, class
   return (
     <button
       type="button"
-      aria-label={who === 'A traveler' ? `Report this ${what}` : `Report ${who}’s ${what}`}
+      aria-label={who === 'A traveler' ? `Options for this ${what}` : `Options for ${who}`}
       aria-haspopup="dialog"
       onClick={(e) => {
         e.stopPropagation();

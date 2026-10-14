@@ -27,6 +27,7 @@ import CircleOrbit from "@/components/social/CircleOrbit";
 import CircleList from "@/components/social/CircleList";
 import BlockedList from "@/components/social/BlockedList";
 import Requests from "@/components/social/Requests";
+import TravelerSheet from "@/components/social/TravelerSheet";
 import FollowByHandle, { workerMessage } from "@/components/social/FollowByHandle";
 import InviteButton from "@/components/passport/InviteButton";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
@@ -89,6 +90,7 @@ function CircleScreen({ mine, onBack }) {
   const [me, setMe] = useState({ handle: null, name: "", avatar: null });
   const [latest, setLatest] = useState(/** @type {Map<string, any>|null} */ (null));
   const [q, setQ] = useState("");
+  const [asking, setAsking] = useState(null); // the request whose options sheet is open
 
   useEffect(() => {
     let gone = false;
@@ -213,7 +215,8 @@ function CircleScreen({ mine, onBack }) {
             </div>
 
             {ready && circle.requests?.length ? (
-              <Requests rows={circle.requests} onAccept={answer("accept")} onDecline={answer("decline")} style={{ marginTop: 16 }} />
+              <Requests rows={circle.requests} onAccept={answer("accept")} onDecline={answer("decline")} style={{ marginTop: 16 }}
+                onMore={setAsking} />
             ) : null}
 
             <div id={`${ids}-panel`} role="tabpanel" aria-labelledby={`${ids}-tab-${tab}`} style={{ marginTop: 16 }}>
@@ -240,6 +243,11 @@ function CircleScreen({ mine, onBack }) {
 
         {ready ? <BlockedList circle={circle} cloth={mine.key} style={{ marginTop: 24 }} /> : null}
       </div>
+      {/* A request's '•••': production's sheet for Report and Block (go-live decision 6). */}
+      {asking ? (
+        <TravelerSheet person={asking} report={{ kind: "profile", note: "Asked to follow me (Circle)" }}
+          onClose={() => setAsking(null)} onChanged={() => { setAsking(null); circle.retry(); }} />
+      ) : null}
     </div>
   );
 }
