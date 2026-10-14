@@ -16519,7 +16519,10 @@ async function handleSocialAge(request, env, ctx) {
       if (ctx && mine?.birth_year) ctx.waitUntil(gbLogEvent(env, 'social_age_completed', { tier: patch.social_tier || null }));
       return jsonResponse({ set: !!mine?.birth_year, tier: patch.social_tier || mine?.social_tier || null, birth_md: md });
     }
-    if (b.birth_year === undefined) return jsonResponse({ set: !!mine?.birth_year, tier: mine?.social_tier || null, birth_md: mine?.birth_md || null, need_birthday: !!(mine?.birth_year && !mine?.birth_md) });
+    // birth_year is the owner's own record: the confirm sheet's neutral check
+    // reads the whole date back ("Is your birthday March 14, 2013?") so a
+    // typo in the year can be caught before the month and day lock it.
+    if (b.birth_year === undefined) return jsonResponse({ set: !!mine?.birth_year, tier: mine?.social_tier || null, birth_year: mine?.birth_year || null, birth_md: mine?.birth_md || null, need_birthday: !!(mine?.birth_year && !mine?.birth_md) });
     if (mine?.birth_year) return jsonResponse({ set: true, tier: mine.social_tier, locked: true, birth_md: mine?.birth_md || null });
     const md = MD_RE.test(String(b.birth_md || '')) ? String(b.birth_md) : null;
     if (!md) return jsonResponse({ error: 'Enter your full birthday' }, 400);
