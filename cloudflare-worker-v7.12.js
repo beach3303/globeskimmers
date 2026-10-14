@@ -8461,8 +8461,15 @@ function convProcessStore(place, userLat, userLng, cc) {
   else if (types.includes('gas_station')) category = 'gas_station';
   else if (types.includes('supermarket')) category = 'mini_market';
   const hours = place.currentOpeningHours || place.regularOpeningHours || {};
-  const isOpen = hours.openNow != null ? hours.openNow : null;
-  const is24h = (chain && chain.open_24h) || false;
+  const weekday = hours.weekdayDescriptions || [];
+  // The store's own clock: with it, open-now comes from the weekly hours (the cached
+  // openNow flag is however old the cache is).
+  const offset = Number.isFinite(place.utcOffsetMinutes) ? place.utcOffsetMinutes : null;
+  const live = offset == null ? null : gsOpenNow(weekday, offset);
+  const isOpen = live ?? (hours.openNow != null ? hours.openNow : null);
+  // Open 24 hours only when this store's own hours say so every day of the week: a
+  // chain's usual policy is not this store's hours (plenty of 7-Elevens close at night).
+  const is24h = weekday.length === 7 && weekday.every((l) => /open 24 hours/i.test(String(l)));
   const services = (chain && chain.services) || [];
   const photos = (place.photos || []).slice(0, 3);
   const catInfo = CONV_STORE_CATEGORIES[category] || { label: 'Store', icon: '🏪' };
@@ -8475,7 +8482,7 @@ function convProcessStore(place, userLat, userLng, cc) {
     category, category_label: catInfo.label, category_icon: catInfo.icon,
     location_context: context, location_context_label: locInfo.label, location_context_icon: locInfo.icon,
     is_in_gas_station: context === 'gas_station', is_standalone: context === 'standalone',
-    is_open: isOpen, is_24_hours: is24h, hours: hours.weekdayDescriptions || [],
+    is_open: isOpen, is_24_hours: is24h, hours: weekday, utcOffsetMinutes: offset,
     has_atm: services.includes('atm'), has_restroom: services.includes('restroom'),
     has_pharmacy: services.includes('pharmacy') || category === 'drugstore',
     has_hot_food: services.includes('hot_food'), has_coffee: services.includes('coffee'), has_fuel: services.includes('fuel'),
