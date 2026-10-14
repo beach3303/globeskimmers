@@ -1,114 +1,137 @@
-// FriendsTravels — the Home row that shows other humans (audit P1 #7: Home
-// was "socially silent"). Your people's newest verified stamps and postcards,
-// reverse-chronological, never ranked — the same feed Mailbox reads. Taps go
-// to Mailbox. At zero friends it becomes a small, dismissible invite.
+// FriendsTravels — Home's circle zone on the airmail stock (Home-Boxes L70-118): the
+// people you travel with. Your circle's newest stamps and postcards, newest first and
+// never ranked, from the same feed Mailbox reads; taps go to Mailbox. With no follows
+// yet it is a small invite you can hide.
+//
+// It shows nothing rather than something untrue:
+//   - nothing until AuthContext.socialTierReady, the feed and the circle have all
+//     settled, so no social UI flashes before the age tier is known;
+//   - nothing for anyone held from social (teen, the under-13 freeze, the birthday
+//     check), whether AuthContext or the feed's `held` says so;
+//   - nothing on any read error (never an empty or zero circle);
+//   - nothing in a quiet week when you already follow people, or once the invite
+//     is hidden.
+// Rows from people you blocked never show. Every envelope from someone else has the
+// report door (one ReportSheet for the zone); your own rows have none.
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ArrowRight, X } from "lucide-react";
 import { createPageUrl } from "@/utils";
-import { socialFeed, socialFollow } from "@/lib/passport";
+import { getHandle, socialFeed } from "@/lib/passport";
 import { useAuth } from "@/lib/AuthContext";
+import useCircle from "@/lib/useCircle";
+import { HomeZone } from "@/components/redesign/Zone";
+import { NEUTRAL, fs } from "@/components/redesign/constants";
+import Envelope, { ReportSheet } from "@/components/social/Envelope";
 
-const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
-const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
-const INK = "#16302B", INK2 = "#3F5A50", INK3 = "#71827D";
-const GREEN = "#2E6B4E", STAMP = "#B0472F";
 const DISMISS_KEY = "gs_friends_invite_dismissed";
+const HELD_TIERS = new Set(["teen", "blocked", "confirm"]);
+const BLUE = NEUTRAL.airmailBlue;
 
-const when = (iso) => {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 864e5);
-  if (days <= 0) return "today"; if (days === 1) return "yesterday"; if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-};
+const handleOf = (h) => String(h || "").trim().replace(/^@/, "").toLowerCase();
+const timeOf = (r) => Date.parse(r?.created_at) || 0;
 
 export default function FriendsTravels({ wide = false }) {
   const navigate = useNavigate();
-  const { socialTier } = useAuth();
-  const [rows, setRows] = useState(null);       // null = loading
-  const [following, setFollowing] = useState(0);
-  const [dismissed, setDismissed] = useState(() => { try { return localStorage.getItem(DISMISS_KEY) === "1"; } catch { return false; } });
+  const { socialTier, socialTierReady } = useAuth();
+  const circle = useCircle();
+  const [feed, setFeed] = useState(null); // null while loading: { rows, held, error }
+  const [me, setMe] = useState(null);
+  const [reporting, setReporting] = useState(null);
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem(DISMISS_KEY) === "1"; } catch { return false; }
+  });
+
+  const held = HELD_TIERS.has(socialTier);
 
   useEffect(() => {
+    if (!socialTierReady || held) return undefined;
     let gone = false;
     (async () => {
-      const [f, l] = await Promise.all([socialFeed(), socialFollow("list")]);
+      const [f, h] = await Promise.all([socialFeed(), getHandle().catch(() => ({ handle: null }))]);
       if (gone) return;
-      setRows(f.error ? [] : (f.rows || []).slice(0, 10));
-      setFollowing((l.data?.following || []).filter((x) => x.status === "accepted").length);
+      setFeed(f);
+      setMe(h?.handle || null);
     })();
     return () => { gone = true; };
-  }, []);
+  }, [socialTierReady, held]);
 
-  if (rows === null || socialTier === "teen") return null; // social is held until 18 — no invite, no feed
-  const pad = wide ? "pb-3" : "px-4 pb-3";
-  const box = wide ? "" : "max-w-md mx-auto";
+  if (!socialTierReady || held) return null;
+  if (feed === null || circle.status === "loading") return null;
+  if (feed.error || feed.held || circle.status === "error") return null;
+
   const toMailbox = () => navigate(createPageUrl("Mailbox"));
+  const blocked = circle.blockedHandles || new Set();
+  const rows = (Array.isArray(feed.rows) ? feed.rows : [])
+    .filter((r) => r && !blocked.has(handleOf(r.by?.handle)))
+    .sort((a, b) => timeOf(b) - timeOf(a))
+    .slice(0, 10);
 
   if (!rows.length) {
-    // Friends but a quiet week: stay out of the way. No friends: invite once.
-    if (following > 0 || dismissed) return null;
+    // A quiet week when you already follow people, or the invite was hidden: nothing.
+    // Follow counts are null until read, never a guessed 0.
+    const youFollow = circle.counts?.youFollow;
+    if (dismissed || youFollow == null || youFollow > 0) return null;
+    const hide = () => {
+      setDismissed(true);
+      try { localStorage.setItem(DISMISS_KEY, "1"); } catch { /* fine */ }
+    };
     return (
-      <div className={pad}>
-        <div className={box}>
-          <div className="relative rounded-[16px] px-4 py-3.5" style={{ background: "#FFFBF0", border: "1px solid #EAD9AE" }}>
-            <button type="button" aria-label="Hide this" onClick={() => { setDismissed(true); try { localStorage.setItem(DISMISS_KEY, "1"); } catch { /* fine */ } }}
-              className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "#fff", color: INK, fontSize: 12, fontWeight: 700, border: "1px solid #EAD9AE" }}>✕</button>
-            <div style={{ fontFamily: SERIF, fontSize: "calc(17px*var(--fs))", color: INK, lineHeight: 1.2, paddingRight: 24 }}>Travel is better with your people</div>
-            <p style={{ fontSize: "calc(12.5px*var(--fs))", color: INK2, lineHeight: 1.45, marginTop: 4 }}>
-              Follow friends and their real stamps and postcards land here — where they went, and whether they were really there.
-            </p>
-            <button type="button" onClick={toMailbox} className="mt-2.5 rounded-full px-3.5 py-2 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: "calc(12.5px*var(--fs))" }}>
-              Find or invite a friend →
-            </button>
-          </div>
+      <HomeZone zone="circle" label="Your circle" wide={wide}>
+        <div style={{ position: "relative" }}>
+          <button
+            type="button"
+            onClick={hide}
+            aria-label="Hide this"
+            className="flex items-center justify-center rounded-full"
+            style={{ position: "absolute", top: -10, right: -8, width: 44, height: 44, background: "transparent", border: 0, color: NEUTRAL.ink3, cursor: "pointer" }}
+          >
+            <X size={18} strokeWidth={2} aria-hidden="true" />
+          </button>
+          <h3 className="font-serif m-0" style={{ paddingRight: 36, fontWeight: 400, fontSize: fs(22), lineHeight: 1.15, color: NEUTRAL.ink }}>
+            Travel is better with your <em style={{ color: BLUE }}>circle</em>
+          </h3>
+          <p style={{ margin: "6px 0 0", fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}>
+            Follow the ones you travel with, and their real stamps and postcards land here: where they went, and whether they were really there.
+          </p>
+          <button
+            type="button"
+            onClick={toMailbox}
+            className="inline-flex items-center rounded-full"
+            style={{ marginTop: 12, minHeight: 44, gap: 8, padding: "0 18px", background: BLUE, border: 0, color: NEUTRAL.white, fontSize: fs(14), fontWeight: 600, cursor: "pointer" }}
+          >
+            Start your circle
+            <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
+          </button>
         </div>
-      </div>
+      </HomeZone>
     );
   }
 
   return (
-    <div className={pad}>
-      <div className={box}>
-        <div className="flex items-baseline justify-between mb-2 px-0.5 gap-3">
-          <div className="min-w-0">
-            <div style={{ fontFamily: SERIF, fontSize: "calc(19px*var(--fs))", lineHeight: 1.1, color: INK }}>Friends&rsquo; travels</div>
-            <div style={{ fontSize: "calc(12px*var(--fs))", color: INK3, marginTop: 2 }}>Everything here really happened</div>
-          </div>
-          <button type="button" onClick={toMailbox} className="flex-none font-semibold" style={{ color: "#17A38F", fontSize: "calc(12.5px*var(--fs))" }}>Mailbox →</button>
-        </div>
-        <div className="flex gap-3 overflow-x-auto pb-1.5" style={{ scrollbarWidth: "none" }}>
-          {rows.map((r, i) => {
-            const who = r.by?.name || (r.by?.handle ? `@${r.by.handle}` : "A traveler");
-            return (
-              <button key={i} type="button" onClick={toMailbox} className="flex-none text-left rounded-[14px] overflow-hidden"
-                style={{ width: "calc(190px*var(--fs))", background: "#fff", border: "1px solid rgba(22,17,13,.12)" }}>
-                {r.type === "postcard" && r.photo && (
-                  <img src={r.photo} alt="" loading="lazy" style={{ width: "100%", aspectRatio: "3 / 2", objectFit: "cover", display: "block" }} />
-                )}
-                <div className="px-3 py-2.5">
-                  <div className="truncate" style={{ fontFamily: MONO, fontSize: "calc(9.5px*var(--fs))", letterSpacing: ".06em", color: INK3, textTransform: "uppercase" }}>
-                    {who} · {when(r.created_at)}
-                  </div>
-                  {r.type === "postcard" ? (
-                    <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: "calc(15px*var(--fs))", color: INK, lineHeight: 1.25, marginTop: 3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                      {r.message ? `“${r.message}”` : `A postcard${r.place ? ` from ${r.place}` : ""}`}
-                    </div>
-                  ) : (
-                    <div style={{ fontFamily: SERIF, fontSize: "calc(16px*var(--fs))", color: INK, lineHeight: 1.2, marginTop: 3 }}>
-                      {r.kind === "airport" ? "landed at " : "stamped "}<b>{r.name}</b>
-                      {r.verified && <span title="Verified visit" style={{ color: GREEN, marginLeft: 5 }}>✓</span>}
-                    </div>
-                  )}
-                  {(r.city || r.country) && (
-                    <div className="truncate" style={{ fontFamily: MONO, fontSize: "calc(9.5px*var(--fs))", color: INK3, marginTop: 4, letterSpacing: ".04em" }}>
-                      {[r.city, r.country].filter(Boolean).join(", ").toUpperCase()}
-                    </div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
+    <HomeZone zone="circle" label="Your circle" wide={wide}>
+      <div className="flex items-center justify-between" style={{ gap: 12, minHeight: 24 }}>
+        <h3 className="font-serif m-0 min-w-0" style={{ fontWeight: 400, fontSize: fs(22), lineHeight: 1.1, color: NEUTRAL.ink }}>
+          Where your <em style={{ color: BLUE }}>circle</em> has been
+        </h3>
+        <button
+          type="button"
+          onClick={toMailbox}
+          className="flex-none inline-flex items-center"
+          style={{ gap: 4, minHeight: 44, margin: "-10px 0", padding: 0, background: "transparent", border: 0, fontSize: fs(13), fontWeight: 600, color: BLUE, cursor: "pointer" }}
+        >
+          Mailbox
+          <ArrowRight size={14} strokeWidth={2} aria-hidden="true" />
+        </button>
       </div>
-    </div>
+      <p style={{ margin: "2px 0 0", fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}>Everything here really happened</p>
+      {/* The envelopes bleed to the box's right edge and scroll sideways. */}
+      <div className="flex overflow-x-auto" style={{ gap: 12, marginTop: 12, marginRight: -16, paddingRight: 16, paddingBottom: 2, scrollbarWidth: "none" }}>
+        {rows.map((r, i) => (
+          <Envelope key={`${r.type}-${r.created_at}-${i}`} row={r} variant="compact" me={me} onClick={toMailbox} onReport={setReporting} />
+        ))}
+      </div>
+      <ReportSheet row={reporting} me={me} onClose={() => setReporting(null)} />
+    </HomeZone>
   );
 }
