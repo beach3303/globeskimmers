@@ -16570,6 +16570,23 @@ async function gbSocialProfile(env, userId) {
   return row;
 }
 
+// A birthday's month and day must exist (go-live round 2): the MM-DD pattern
+// alone let 02-31, 04-31 or 02-29 in a year without one become a stored,
+// locked birthday. null when the date is real (or not MM-DD at all: the
+// pattern check answers that), else the words for a 400. With no year known
+// yet, February 29 is allowed (the year, when it comes, is checked then).
+const GB_MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+function gbBirthdayDateError(md, year) {
+  const m = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.exec(String(md || ''));
+  if (!m) return null;
+  const mo = Number(m[1]), d = Number(m[2]);
+  const y = Math.round(Number(year));
+  const known = Number.isFinite(y) && y >= 1900;
+  if (d <= new Date(Date.UTC(known ? y : 2000, mo, 0)).getUTCDate()) return null;
+  if (mo === 2 && d === 29) return `${y} has no February 29 — check the year, month and day`;
+  return `There’s no ${GB_MONTH_NAMES[mo - 1]} ${d} — check the month and day`;
+}
+
 // POST /social/age { birth_year? } — read my gate state, or set it once.
 async function handleSocialAge(request, env, ctx) {
   try {
@@ -16589,6 +16606,8 @@ async function handleSocialAge(request, env, ctx) {
     if (completing) {
       const md = MD_RE.test(String(b.birth_md)) ? String(b.birth_md) : null;
       if (!md) return jsonResponse({ error: 'Use MM-DD' }, 400);
+      const notReal = gbBirthdayDateError(md, mine?.birth_year || b.birth_year);
+      if (notReal) return jsonResponse({ error: notReal }, 400);
       if (mine?.birth_md) return jsonResponse({ set: !!mine?.birth_year, tier: mine?.social_tier || null, birth_md: mine.birth_md, locked: true });
       const patch = { birth_md: md, updated_at: new Date().toISOString() };
       if (mine?.birth_year) patch.social_tier = socialTierFor(mine.birth_year, mine.country_at_gate, md) || mine.social_tier;
@@ -16609,6 +16628,8 @@ async function handleSocialAge(request, env, ctx) {
     if (mine?.birth_year) return jsonResponse({ set: true, tier: mine.social_tier, locked: true, birth_md: mine?.birth_md || null });
     const md = MD_RE.test(String(b.birth_md || '')) ? String(b.birth_md) : null;
     if (!md) return jsonResponse({ error: 'Enter your full birthday' }, 400);
+    const notReal = gbBirthdayDateError(md, b.birth_year);
+    if (notReal) return jsonResponse({ error: notReal }, 400);
     const country = request.headers.get('cf-ipcountry') || '';
     const tier = socialTierFor(b.birth_year, country, md);
     if (!tier) return jsonResponse({ error: 'Enter your full birthday' }, 400);
