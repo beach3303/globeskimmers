@@ -16607,8 +16607,7 @@ async function orphanScan(env, now = new Date()) {
     if (i >= ORPHAN_SCAN_COLS.length) { out.done = true; i = 0; after = ''; }
     spent++;
     await kv.put('orphans:cursor', JSON.stringify({ i, after, at: now.toISOString() })).catch(() => {});
-  } catch { out.failed++; }
-  out.spent = spent;
+  } catch { out.failed++; } finally { out.spent = spent; }
   return out;
 }
 // Names of travelers already deleted (go-live round 2): an account whose
