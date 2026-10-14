@@ -130,6 +130,8 @@ export default function ProfilePage() {
   }, []);
 
   const reloadLuggage = () => { luggageGet().then((d) => setLuggage(d)); };
+  // New prints from a photo packet show at once.
+  const reloadStamps = () => { listPassport().then((pp) => { if (pp.error) return; setStamps(pp.stamps || []); setStats(pp.stats || null); }); };
 
   const startEdit = () => {
     const s = social || { name: "", bio: "", website: "", favorites: [], dreams: [] };
@@ -289,7 +291,8 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {!edit && stamps ? <PhotoPackets stamps={stamps} title="Photo packets" className={`${COLUMN} mt-8`} /> : null}
+      {/* Your own packets take more prints, as on the Passport (founder, 2026-10-14). */}
+      {!edit && stamps ? <PhotoPackets stamps={stamps} title="Photo packets" owner onChanged={reloadStamps} className={`${COLUMN} mt-8`} /> : null}
     </div>
   );
 }

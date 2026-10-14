@@ -89,9 +89,12 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
           <div key={p.key} style={{ position: "relative" }}>
             <Envelope packet={p} onOpen={() => setOpen({ photos: p.photos, index: 0, city: p.city, range: p.range, packet: p })} />
             {owner && p.stampId && (
+              // A 44px target around the 28px badge on the envelope's corner.
               <button type="button" onClick={() => pickFor(p)} disabled={!!busyKey} aria-label={`Add prints to ${p.city}`}
-                style={{ position: "absolute", top: -4, right: -4, zIndex: 3, width: 28, height: 28, borderRadius: 999, background: "#fff", border: "1.5px solid #C9B583", display: "grid", placeItems: "center", boxShadow: "0 2px 6px rgba(0,0,0,.18)" }}>
-                {busyKey === p.key ? <Loader2 size={14} className="animate-spin" color="#8A6E33" /> : <Plus size={15} color="#8A6E33" strokeWidth={2.6} />}
+                style={{ position: "absolute", top: -12, right: -12, zIndex: 3, width: 44, height: 44, display: "grid", placeItems: "center", background: "transparent", border: 0, padding: 0 }}>
+                <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 999, background: "#fff", border: "1.5px solid #C9B583", display: "grid", placeItems: "center", boxShadow: "0 2px 6px rgba(0,0,0,.18)" }}>
+                  {busyKey === p.key ? <Loader2 size={14} className="animate-spin" color="#8A6E33" /> : <Plus size={15} color="#8A6E33" strokeWidth={2.6} />}
+                </span>
               </button>
             )}
           </div>
