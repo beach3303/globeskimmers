@@ -1582,6 +1582,11 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
     await del('postcards_received', `postcards?to_user_id=eq.${userId}`);
   }
   await del('user_follows', `user_follows?or=(follower_id.eq.${userId},followee_id.eq.${userId})`);
+  // Postcards they kept (2026-10-14); a worker that runs before that table exists has none.
+  try {
+    const rk = await fetch(`${SUPABASE_URL}/rest/v1/postcard_keeps?user_id=eq.${userId}`, { method: 'DELETE', headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, Prefer: 'return=minimal' } });
+    if (!rk.ok && rk.status !== 404) failed.push('postcard_keeps');
+  } catch { failed.push('postcard_keeps'); }
 
   // 1f) Dish and drink posts (+ photos), and messages to place owners.
   const dishes = await rows('dish_posts', `place_dishes?user_id=eq.${userId}&select=photo_key`);
@@ -18351,6 +18356,14 @@ async function handleSocialFeed(request, env) {
       for (const r of (p2.ok ? await p2.json() : [])) prof[r.user_id] = { ...(prof[r.user_id] || {}), ...gbTierRow(r) };
     }
     pcs = pcs.filter((p) => !blocked.has(p.sender_id) && (ids.includes(p.sender_id) ? profOk : pcProfOk) && !minor(p.sender_id));
+    // Which cards sent to everyone I kept in my postcard box (2026-10-14). Unreadable keeps
+    // (the table not there yet) leave `kept` off, and the app shows no Keep.
+    const bIds = pcs.filter((p) => p.to_user_id === null).map((p) => p.id);
+    let keptSet = null;
+    if (bIds.length) {
+      const kq = await gbRest(env, `postcard_keeps?user_id=eq.${user.id}&postcard_id=in.(${bIds.join(',')})&select=postcard_id`, {});
+      if (kq.ok) keptSet = new Set((await kq.json()).map((r) => r.postcard_id));
+    }
     // A traveler already deleted, whose clean-up hasn't reached them yet, is
     // never named (go-live round 2, gbPurgeQueued).
     const shownIds = [...new Set([...pcs.map((p) => p.sender_id), ...visible])];
@@ -18362,6 +18375,7 @@ async function handleSocialFeed(request, env) {
       message: p.message, place: p.place_name, city: p.city, country: p.country,
       dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
       to_me: p.to_user_id === user.id,
+      ...(p.to_user_id === null && keptSet ? { kept: keptSet.has(p.id) } : {}),
       by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id) },
     }));
     const dayAgo = Date.now() - 24 * 3600 * 1000;
@@ -18387,7 +18401,8 @@ async function handleSocialFeed(request, env) {
 
 // ── The postcard box (2026-10-14): every postcard sent to me, kept ─────────
 // The Mailbox feed shows only the newest 20 cards addressed to me; the box
-// pages back through all of them, newest first, PC_BOX_PAGE at a time.
+// pages back through all of them, and the cards sent to everyone that I kept
+// (postcard_keeps), newest first, PC_BOX_PAGE at a time.
 // `before` is the created_at of the last card the client holds, passed back
 // exactly as this route sent it. The feed's rails apply to every card: a held,
 // frozen or unconfirmed reader reads nothing; blocks hide the pair both ways;
@@ -18407,7 +18422,10 @@ async function handlePostcardBox(request, env) {
     if (!blocked) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
     const body = await request.json().catch(() => ({}));
     const before = typeof body?.before === 'string' && /^\d{4}-\d{2}-\d{2}T[0-9:.]+(Z|[+-]\d{2}:?\d{2})$/.test(body.before) ? body.before : null;
-    const q = await gbRest(env, `postcards?to_user_id=eq.${user.id}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {});
+    // The cards addressed to me and the ones I kept, in one ordered read (api.postcard_box).
+    // Before the keeps migration has run the function is missing (404): the addressed cards.
+    let q = await gbRest(env, 'rpc/postcard_box', { method: 'POST', body: JSON.stringify({ p_user: user.id, p_before: before, p_limit: PC_BOX_PAGE + 1 }) });
+    if (q.status === 404) q = await gbRest(env, `postcards?to_user_id=eq.${user.id}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {});
     if (!q.ok) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
     const got = await q.json();
     const page = got.slice(0, PC_BOX_PAGE);
@@ -18443,10 +18461,70 @@ async function handlePostcardBox(request, env) {
       photo: `${origin}/pc-photo/${p.photo_key}`,
       message: p.message, place: p.place_name, city: p.city, country: p.country,
       dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
-      to_me: true,
+      to_me: p.to_user_id === user.id,
+      ...(p.to_user_id === null ? { kept: true } : {}),
       by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id) },
     }));
     return jsonResponse({ rows, next });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// Keep a card someone sent to everyone who follows them in my postcard box, or let it
+// go (2026-10-14). { postcard_id, keep } → { ok, kept }. Keeping asks the feed's
+// question: is this a broadcast I could read right now (I follow the sender, no block
+// either way, the sender isn't a minor, their passport is public or we follow each
+// other, and a teen keeps a mutual friend's cards only)? Anything else answers as gone.
+// Letting go always works. A card addressed to me is in the box already. Before the
+// keeps table exists the answer is keep_unavailable, and the feed sends no `kept`, so
+// the app shows no Keep.
+async function handlePostcardKeep(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const mySp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (mySp === undefined) return jsonResponse({ error: 'Couldn’t check your account — try again', code: 'age_unknown' }, 503);
+    if (gbUnderAge(mySp)) return jsonResponse({ error: 'Not available', held: 'blocked' }, 403);
+    if (gbAgeHeld(mySp)) return jsonResponse({ error: 'Not available', held: gbNeedsConfirm(mySp) ? 'confirm' : 'teen' }, 403);
+    const body = await request.json().catch(() => ({}));
+    const pid = typeof body?.postcard_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.postcard_id) ? body.postcard_id.toLowerCase() : null;
+    if (!pid) return jsonResponse({ error: 'Which postcard?' }, 400);
+    const retry = () => jsonResponse({ error: 'That didn’t go through — try again' }, 503);
+    const unavailable = () => jsonResponse({ error: 'Keeping postcards opens with the next update', code: 'keep_unavailable' }, 503);
+    const gone = () => jsonResponse({ error: 'That postcard isn’t here any more' }, 404);
+    if (body.keep === false) {
+      const d = await gbRest(env, `postcard_keeps?user_id=eq.${user.id}&postcard_id=eq.${pid}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+      if (d.status === 404) return unavailable();
+      return d.ok ? jsonResponse({ ok: true, kept: false }) : retry();
+    }
+    const cq = await gbRest(env, `postcards?id=eq.${pid}&select=id,sender_id,to_user_id`, {});
+    if (!cq.ok) return retry();
+    const card = (await cq.json())[0];
+    if (!card) return gone();
+    if (card.to_user_id === user.id) return jsonResponse({ ok: true, kept: true, to_me: true });
+    if (card.to_user_id !== null || card.sender_id === user.id) return gone();
+    const sid = card.sender_id;
+    const blocked = await gbBlockSet(env, user.id);
+    if (!blocked) return retry();
+    if (blocked.has(sid)) return gone();
+    const [fq, bq, shq, spq] = await Promise.all([
+      gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${sid}&status=eq.accepted&select=followee_id`, {}),
+      gbRest(env, `user_follows?follower_id=eq.${sid}&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, {}),
+      gbRest(env, `passport_shares?user_id=eq.${sid}&select=visibility,is_public`, {}),
+      gbRest(env, `social_profiles?user_id=eq.${sid}&select=user_id,${GB_TIER_COLS}`, {}),
+    ]);
+    if (!fq.ok || !bq.ok || !shq.ok || !spq.ok) return retry();
+    const follows = (await fq.json()).length > 0;
+    const followsBack = (await bq.json()).length > 0;
+    const sh = (await shq.json())[0];
+    const spRow = (await spq.json())[0];
+    const tier = spRow ? gbTierRow(spRow) : null;
+    const minor = !!tier && (gbUnderAge(tier) || gbAgeHeld(tier));
+    const v = sh?.visibility || (sh?.is_public ? 'public' : 'private');
+    const mutual = follows && followsBack;
+    if (!follows || minor || !(v === 'public' || mutual) || (mySp?.social_tier === 'teen' && !mutual)) return gone();
+    const w = await gbRest(env, 'postcard_keeps', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ user_id: user.id, postcard_id: pid }) });
+    if (w.status === 404) return unavailable();
+    return w.ok ? jsonResponse({ ok: true, kept: true }) : retry();
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -24948,6 +25026,7 @@ export default {
       if (pathname === '/social/feed' && request.method === 'POST') return await handleSocialFeed(request, env);
       if (pathname === '/postcards/send' && request.method === 'POST') return await handlePostcardSend(request, env, ctx);
       if (pathname === '/postcards/box' && request.method === 'POST') return await handlePostcardBox(request, env);
+      if (pathname === '/postcards/keep' && request.method === 'POST') return await handlePostcardKeep(request, env);
       if (pathname === '/social/avatar' && request.method === 'POST') return await handleSocialAvatar(request, env, ctx);
       if (pathname === '/blotter/read' && request.method === 'POST') return await handleBlotterRead(request, env);
       if (pathname === '/blotter/mark' && request.method === 'POST') return await handleBlotterMark(request, env, ctx);
