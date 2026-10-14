@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { MapPin } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { trackEvent } from "../Layout";
@@ -17,9 +17,10 @@ import SuggestPlaceSection from "../components/home/SuggestPlaceSection";
 // moved to MyTrip.jsx; the spot rows get a new home in the next slice.
 // HomeTablet still mounts its own set — untouched, tabled.
 import AllServicesSheet from "../components/home/AllServicesSheet";
+import NearbyServices from "../components/home/NearbyServices";
 import PassportHero from "../components/home/PassportHero";
 import { getTravelMode } from "@/lib/homeContext";
-import { TEAL_DEEP, IVORY, IVORY_2, NEUTRAL, fs } from "../components/redesign/constants";
+import { IVORY, NEUTRAL, fs } from "../components/redesign/constants";
 import { useAuth } from "@/lib/AuthContext";
 import { extractFirstName } from "@/lib/extractFirstName";
 import { isLocationPermissionGranted } from "@/lib/geolocation";
@@ -29,6 +30,7 @@ import AirportArrivalPrompt from "@/components/AirportArrivalPrompt";
 import BorderCrossingPrompt from "@/components/BorderCrossingPrompt";
 import { ROUTE } from "@/lib/workerRoutes";
 import { countryCode } from "@/lib/countries";
+import { distanceUnit } from "@/lib/units";
 import { homeTimezoneForCountry } from "@/lib/homePlace";
 import { useIsTablet } from "@/lib/useIsTablet";
 import HomeTablet from "@/components/home/HomeTablet";
@@ -77,18 +79,6 @@ const HOME_CAPITAL_COORDS = {
 // Country name → ISO-2 code (flagcdn URLs) comes from the shared countries module
 // (countryCode), so EVERY country a user picks in Settings resolves to a flag —
 // not just the ~20 that used to be hardcoded here.
-
-// Finder chip row — ONE stable set of five (never shuffled by journey mode, per
-// the never-shuffle rule). The four lead finders navigate directly through
-// handleQuickAction (which owns ALL navigation — no routes invented here);
-// "All services" opens AllServicesSheet, which carries every destination the
-// two retired tile grids offered.
-const FINDER_CHIPS = [
-  { label: 'Eat', action: 'Places to Eat' },
-  { label: 'Coffee', action: 'Coffee' },
-  { label: 'Things to do', action: 'Things to Do' },
-  { label: 'Restrooms', action: 'Restroom' },
-];
 
 // Module-scoped so it survives Home re-mounts within one app session: the
 // signInTick of the last sign-in we already showed the welcome splash for. Keeps
@@ -155,9 +145,10 @@ export default function HomePage() {
   // Lowercase ISO-2 of the home country while the flag toggle is on and the
   // country resolves; both flag image URLs are derived from it at render.
   const [homeFlagCode, setHomeFlagCode] = useState(null);
-  // Masthead passport count — null while loading; null and 0 both render the
-  // quiet "PASSPORT →" (never a fake count, never a bare zero).
-  const [passportTotal, setPassportTotal] = useState(null);
+  // One /passport/list read feeds the passport zone and the stamp shelf:
+  // total (null while loading AND on error — never a fake 0), the newest stamp,
+  // and earnedIds (the entity ids you hold; null until loaded).
+  const [passport, setPassport] = useState({ total: null, newest: null, earnedIds: null, error: null });
   // The passport hero's "next stamp": the closest stampable place, reported up
   // by StampsNearYou (one fetch serves both surfaces).
   const [nearestStamp, setNearestStamp] = useState(null);
@@ -291,16 +282,27 @@ export default function HomePage() {
     return () => clearInterval(timer);
   }, []);
 
-  // One /passport/list read for the masthead count — the lightest existing
-  // passport endpoint (there is no count-only route). Signed-out the worker
-  // returns empty stats, never an error, so this stays quiet in every state.
+  // One /passport/list read (there is no count-only route). listPassport never
+  // throws: a failed read comes back as { error, stats: {} }, which stays an
+  // error here, never a total of 0.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const { stats } = await listPassport();
-        if (!cancelled) setPassportTotal(Number.isFinite(stats?.total) ? stats.total : 0);
-      } catch { if (!cancelled) setPassportTotal(0); }
+      let res;
+      try { res = await listPassport(); } catch (e) { res = { stamps: [], stats: {}, error: e?.message || 'failed' }; }
+      if (cancelled) return;
+      if (res.error) { setPassport({ total: null, newest: null, earnedIds: null, error: res.error }); return; }
+      const stamps = Array.isArray(res.stamps) ? res.stamps : [];
+      let newest = null;
+      for (const st of stamps) {
+        if (st && (!newest || (Date.parse(st.created_at) || 0) > (Date.parse(newest.created_at) || 0))) newest = st;
+      }
+      setPassport({
+        total: Number.isFinite(res.stats?.total) ? res.stats.total : stamps.length,
+        newest,
+        earnedIds: new Set(stamps.filter((st) => st && st.entity_id != null).map((st) => String(st.entity_id))),
+        error: null,
+      });
     })();
     return () => { cancelled = true; };
   }, []);
@@ -600,6 +602,14 @@ export default function HomePage() {
   // journeyMode still gates on the phone is the DreamShelf (dream stack only).
   const isDreamStack = !["domestic", "international", "discovery"].includes(journeyMode);
 
+  // Distances in the zones follow the traveler's unit (Settings, else the country).
+  const unit = distanceUnit(profile, countryCode(activeLocation?.address?.country) || activeLocation?.address?.countryCode);
+
+  const openAllServices = () => {
+    trackEvent('feature_used', { feature_name: 'all_services_sheet' });
+    setShowAllServices(true);
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen font-sans" style={{ background: IVORY }}>
@@ -625,7 +635,7 @@ export default function HomePage() {
           onAction={handleQuickAction}
           clockRows={clockRows}
           journeyMode={journeyMode}
-          passportTotal={passportTotal}
+          passportTotal={passport.total}
           nearestStamp={nearestStamp}
           dreamShelf={isDreamStack ? {
             latitude: activeLocation?.coordinates?.latitude,
@@ -665,80 +675,35 @@ export default function HomePage() {
         <DestinationStrip place={destSearch} onAction={handleQuickAction} onDismiss={() => setDestDismissed(true)} />
       )}
 
-      {/* THE TWO-ZONE HOME (founder clutter cut, 2026-09-20) — one spine,
-          identical in BOTH journey stacks (getTravelMode now gates only the
-          DreamShelf, which stays a dream-stack exclusive). Every row renders
-          NOTHING when its data allows nothing, so the zones self-compact:
-            NEARBY NOW  — finder chips → today's answer → stamps (+ planner
-              entry) → dated events;
-            then the dream shelf (dream stack) and the daily quote.
-          Gone from Home: the spot rows (HomeRows — to be re-homed on the
-          Nearby surface), "Worth the drive" (ExperiencesRow), "Trips &
-          escapes" (EscapesRow), and the YOUR TRIP zone, which now lives only
-          on the My Trip page. VibeBundles + WhereToStay stay OFF Home. */}
-
-      {/* PASSPORT HERO — the product leads (pivot, 2026-09-29). Built from
-          state Home already holds: the masthead's stamp count and the nearest
-          stampable place StampsNearYou reports up. Quiet ivory card: serif
-          count, mono next-stamp line, the whole card opens the Passport. */}
-      <PassportHero total={passportTotal} nearest={nearestStamp} onOpen={() => { trackEvent('feature_used', { feature_name: 'passport_hero' }); navigate(createPageUrl('Passport')); }} />
-
-      {/* ── FRIENDS' TRAVELS — the humans on Home (audit P1 #7) ───────── */}
+      {/* THE ZONES — one fixed order, each zone its own <section data-zone>
+          (bible.home.order): passport, your circle, nearby services, stamps
+          near you, the stamp shelf (dream stack only), local favorites, then
+          the closing quote. Each zone renders nothing when it has nothing
+          honest to show, so the stack self-compacts. Layout reserves the
+          bottom space for the floating nav. */}
+      <PassportHero
+        total={passport.total}
+        newest={passport.newest}
+        error={passport.error}
+        nearest={nearestStamp}
+        unit={unit}
+        onOpen={() => { trackEvent('feature_used', { feature_name: 'passport_hero' }); navigate(createPageUrl('Passport')); }}
+      />
       <FriendsTravels />
-
-      {/* ── ZONE 1: NEARBY NOW ─────────────────────────────────────────── */}
-      <ZoneKicker label="NEARBY NOW" />
-
-      {/* FINDER CHIPS — one stable horizontal row of five quiet pills at the
-          top of the zone (replaces BOTH old tile grids). Same set in every
-          journey mode (never shuffled); "All services" opens the sheet with
-          every destination the old grids offered. */}
-      <div className="px-4 pb-3">
-        <div className="max-w-md mx-auto flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-          {FINDER_CHIPS.map((c) => (
-            <FinderChip key={c.label} label={c.label} onClick={() => handleQuickAction(c.action)} />
-          ))}
-          <FinderChip
-            label="All services"
-            accent
-            onClick={() => {
-              trackEvent('feature_used', { feature_name: 'all_services_sheet' });
-              setShowAllServices(true);
-            }}
-          />
-        </div>
-      </div>
-
+      <NearbyServices onAction={handleQuickAction} onAllServices={openAllServices} />
       <StampsNearYou onAction={handleQuickAction} onNearest={setNearestStamp} />
-
-      {/* Dreamer's Corner, Deal Radar and the DREAM & PLAN kicker left on the
-          founder's 2026-09-30 cut. The dream stack (DreamShelf) and the daily
-          quote stay — the quotes are protected by name. */}
       {isDreamStack && (
         <DreamShelf
           latitude={activeLocation?.coordinates?.latitude}
           longitude={activeLocation?.coordinates?.longitude}
           cityName={cityName}
           cityTempF={weatherInfo?.fahrenheit ?? null}
+          earnedIds={passport.earnedIds}
           onOpenActivity={openDreamActivity}
         />
       )}
-
-      {/* SUGGEST A PLACE TO STAMP (founder, 2026-10-10): "Know a spot worth a
-          visit?" — locals and people who've been suggest a place; at 5 it is
-          reviewed for a Local favorite stamp. Just above the quotes. */}
       <SuggestPlaceSection />
-
-      {/* A quiet daily travel quote to close the scroll — encouragement, never
-          a sales line. Copyright-safe (public-domain authors + originals). */}
       <WanderlustLine />
-
-      {/* Bottom clearance for the FloatingNav pill. Home no longer mounts an
-          ad banner and the pill is no longer lifted here (Layout passes
-          liftForAd only on the finder pages), so this only needs to clear the
-          resting pill: 22px bottom offset + ~60px pill + a small gutter, plus
-          the home-indicator safe area. */}
-      <div aria-hidden style={{ height: 'calc(96px + env(safe-area-inset-bottom))' }} />
       </>
       )}
 
@@ -870,42 +835,3 @@ function HomeLobby({ firstName, localGreeting, flag, weatherInfo, tempUnit, onTo
     </div>
   );
 }
-
-// ── FinderChip — quiet pill in the finder row ──────────────────────────────
-// Ivory ground, 1px border, small sans label — no emoji, no tile color (per the
-// design doctrine's chip spec). `accent` tints the label teal for the one chip
-// that opens a sheet instead of navigating ("All services").
-function FinderChip({ label, accent = false, onClick }) {
-  return (
-    <motion.button
-      whileTap={{ scale: 0.96 }}
-      onClick={onClick}
-      className="flex-none rounded-full px-3.5 py-2 text-[calc(12.5px*var(--fs))] font-semibold whitespace-nowrap"
-      style={{ background: IVORY_2, border: '1px solid #E6DFD0', color: accent ? TEAL_DEEP : '#16110D' }}
-    >
-      {label}
-    </motion.button>
-  );
-}
-
-// ── ZoneKicker — full-width mono zone marker ───────────────────────────────
-// The three-zone Home's section labels ("NEARBY NOW" / "DREAM & PLAN" /
-// "YOUR TRIP") in the house kicker register (mono, 10.5px·--fs, 0.08em
-// tracking, #736657), with a hairline rule filling the rest of the width so
-// the marker reads full-bleed across the column.
-function ZoneKicker({ label }) {
-  return (
-    <div className="px-4 pt-1 pb-2">
-      <div className="max-w-md mx-auto flex items-center gap-3">
-        <span
-          className="flex-none font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] font-semibold whitespace-nowrap"
-          style={{ color: '#736657' }}
-        >
-          {label}
-        </span>
-        <span aria-hidden className="flex-1 h-px" style={{ background: '#E6DFD0' }} />
-      </div>
-    </div>
-  );
-}
-
