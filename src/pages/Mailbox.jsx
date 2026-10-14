@@ -232,7 +232,7 @@ export default function MailboxPage() {
                       </span>
                       <span className="flex-none" style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, marginTop: 2 }}>{when(a.at)}</span>
                     </button>
-                    <MoreBtn label={who} className="mt-0.5 mr-1" onClick={() => openTraveler(a.by, { kind: ACTIVITY_KIND[a.type] || "profile", note: clip(`Mailbox, ${when(a.at)}: ${who} ${text}`, 480) })} />
+                    <MoreBtn label={who} className="mt-0.5 mr-1" onClick={() => openTraveler({ ...a.by, entry_id: a.entry_id || null }, { kind: ACTIVITY_KIND[a.type] || "profile", note: clip(`Mailbox, ${when(a.at)}: ${who} ${text}`, 480) })} />
                   </div>
                 );
               })}

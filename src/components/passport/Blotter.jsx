@@ -315,7 +315,7 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
 
       {pad && <DoodlePad onClose={() => setPad(false)} onPost={(dataUrl) => sign(dataUrl)} busy={busy} />}
       {aboutEntry && (
-        <TravelerSheet person={{ user_id: aboutEntry.user_id || null, handle: aboutEntry.handle, name: aboutEntry.name }}
+        <TravelerSheet person={{ user_id: aboutEntry.user_id || null, handle: aboutEntry.handle, name: aboutEntry.name, entry_id: aboutEntry.id }}
           report={{ kind: "signature", slug, ref: `bl:${aboutEntry.id}`, note: `${forPhoto ? "Photo comment" : "Guestbook signature"}${aboutEntry.doodle ? " (a doodle)" : ""}${aboutEntry.body ? `: "${String(aboutEntry.body).slice(0, 300)}"` : ""}` }}
           onClose={() => setAboutEntry(null)} onChanged={() => { setAboutEntry(null); onChanged?.(); }} />
       )}

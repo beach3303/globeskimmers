@@ -8,12 +8,13 @@
 // the app shows no Block anywhere (an older worker's block only stopped tags).
 //
 // Who is behind a row: a block_v2 worker takes POST social/block with any of
-// { user_id | postcard_id | slug | handle } (and a tag's token). The follow
-// lists carry user_id; a Mailbox postcard carries its id; a shared passport
-// its link (slug); feed stamps, activity and guestbook entries their author's
-// @handle. A handle is first matched against the lists for a user_id, and the
-// steadiest id a row has is the one sent. Someone with none of these (no
-// handle, not in your lists) can still be reported.
+// { user_id | postcard_id | entry_id | slug | handle } (and a tag's token).
+// The follow lists and Mailbox activity lines carry user_id; a Mailbox
+// postcard carries its id; a passport signature its entry id (signing needs
+// no @handle, so it is the only name some signers have); a shared passport
+// its link (slug); feed stamps their author's @handle. A handle is first
+// matched against the lists for a user_id, and the steadiest id a row has is
+// the one sent. Someone with none of these can still be reported.
 
 export const hasFeature = (list, f) => Array.isArray(list?.features) && list.features.includes(f);
 export const blockReady = (list) => hasFeature(list, 'block_v2');
@@ -35,8 +36,8 @@ export function travelerIndex(list) {
 }
 
 // The person as the sheets use them: { user_id, handle, name, verified, seal,
-// slug, postcard_id }. Fills a missing user_id from the lists by handle;
-// never guesses from a display name (names aren't unique).
+// slug, postcard_id, entry_id }. Fills a missing user_id from the lists by
+// handle; never guesses from a display name (names aren't unique).
 export function resolveTraveler(person, list) {
   const p = person || {};
   const handle = normHandle(p.handle) || null;
@@ -49,6 +50,7 @@ export function resolveTraveler(person, list) {
     seal: p.seal || known?.seal || null,
     slug: p.slug || null,
     postcard_id: p.postcard_id || null,
+    entry_id: p.entry_id || null,
   };
 }
 
@@ -68,12 +70,13 @@ export function relationTo(person, list) {
 
 // What social/block is sent for this person, or null when Block can't be
 // offered here (no block_v2, or nothing to name them by). The steadiest id
-// wins: a user_id, then the postcard the row is, then the passport link,
-// then the @handle (a handle can change hands, rarely).
+// wins: a user_id, then the postcard or signature the row is, then the
+// passport link, then the @handle (a handle can change hands, rarely).
 export function blockTarget(person, list) {
   if (!person || !blockReady(list)) return null;
   if (person.user_id) return { user_id: String(person.user_id) };
   if (person.postcard_id) return { postcard_id: String(person.postcard_id) };
+  if (person.entry_id) return { entry_id: String(person.entry_id) };
   if (person.slug) return { slug: String(person.slug) };
   const h = normHandle(person.handle);
   return h ? { handle: h } : null;
