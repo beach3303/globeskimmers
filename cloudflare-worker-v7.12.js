@@ -932,7 +932,8 @@ async function founderAlert(env, text, tag = 'bell', opts = {}) {
 // one-time profiles backfill share one created_at. After that an account gets
 // the next number the first time it is seen: its new-member alert, a stamp
 // alert, or the admin list, which numbers the members it shows that have none,
-// oldest first. Deleting an account deletes its row (handleDeleteAccount).
+// oldest first. Deleting an account deletes its row, and so does the
+// under-13 clean-up (gbPurgeUserContent step 1l, retried like its other steps).
 const gbMemberLink = (n) => `globeskimmers://admin/members?m=${n}`;
 const MEMBER_NUMBERS_SQL = `CREATE TABLE IF NOT EXISTS member_numbers (
   n INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1478,19 +1479,18 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
     await call('login_events', `login_events?user_id=eq.${userId}`, { method: 'DELETE', headers: { Prefer: 'return=minimal', 'Content-Profile': 'public' } });
   }
 
-  // 1l) The member number (events D1, see gbMemberNumber) goes at the
-  //     under-13 clean-up too (go-live round 2): the bell's alerts named the
-  //     account by it. A table that doesn't exist yet is created empty, so
-  //     there is simply nothing to delete; a D1 error fails the step, which
-  //     is retried like the others.
-  if (keepAccount) {
-    try {
-      if (env.DB) {
-        await env.DB.prepare(MEMBER_NUMBERS_SQL).run();
-        await env.DB.prepare('DELETE FROM member_numbers WHERE user_id = ?1').bind(String(userId).toLowerCase()).run();
-      }
-    } catch { failed.push('member_number'); }
-  }
+  // 1l) The member number (events D1, see gbMemberNumber): the bell's
+  //     alerts named the account by it. It goes with the account and at the
+  //     under-13 clean-up (go-live round 2), as a step like the others, so a
+  //     failure is queued and retried (account deletion used to try it once,
+  //     best-effort, after the purge). A table that doesn't exist yet is
+  //     created empty, so there is simply nothing to delete.
+  try {
+    if (env.DB) {
+      await env.DB.prepare(MEMBER_NUMBERS_SQL).run();
+      await env.DB.prepare('DELETE FROM member_numbers WHERE user_id = ?1').bind(String(userId).toLowerCase()).run();
+    }
+  } catch { failed.push('member_number'); }
 
   // 1j) Their place suggestions (+ their photos in R2), likes, reports and
   //     daily counts (events D1). A place only they had suggested goes too —
@@ -1584,11 +1584,9 @@ async function handleDeleteAccount(request, env) {
       else await kv.put(`purge:${userId}`, JSON.stringify({ at: new Date().toISOString(), failed_steps: purge.failed.slice(0, 12), ...tagChild })).catch(() => {});
     }
 
-    // 3) Their member number and new-member mark go with the account
-    //    (best-effort). AUTOINCREMENT never gives the number to anyone else.
-    try {
-      if (env.DB) await env.DB.prepare('DELETE FROM member_numbers WHERE user_id = ?1').bind(String(userId).toLowerCase()).run();
-    } catch { /* no table yet, or D1 down */ }
+    // 3) Their member number went in the purge (step 1l, retried with the
+    //    rest; AUTOINCREMENT never gives the number to anyone else). Their
+    //    new-member mark goes too (best-effort).
     if (env.GLOBESKIMMERS_KV) {
       await env.GLOBESKIMMERS_KV.delete(`bell:user:${userId}`).catch(() => {});
       await env.GLOBESKIMMERS_KV.delete(`freeze:${userId}`).catch(() => {});   // nothing left to purge
