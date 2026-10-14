@@ -17408,8 +17408,11 @@ async function handleSocialFollow(request, env, ctx) {
     if (op === 'unblock') {
       // Deletes only MY block row — never the other direction's.
       const target = b.handle ? await gbHandleToUser(env, b.handle) : (b.user_id ? { user_id: String(b.user_id).replace(/[^0-9a-f-]/gi, '') } : null);
-      if (!target?.user_id) return jsonResponse({ error: 'Who?' }, 400);
-      await gbRest(env, `user_blocks?user_id=eq.${user.id}&blocked_user_id=eq.${target.user_id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+      if (!target?.user_id || !BL_UUID.test(target.user_id)) return jsonResponse({ error: 'Who?' }, 400);
+      const d = await gbRest(env, `user_blocks?user_id=eq.${user.id}&blocked_user_id=eq.${target.user_id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => null);
+      // A delete that failed says so, in words the app shows (go-live round 2:
+      // it answered ok:true and the block stayed).
+      if (!d || !d.ok) return jsonResponse({ error: 'Couldn’t unblock right now — try again' }, 502);
       if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_unblock', {}));
       return jsonResponse({ ok: true });
     }
@@ -17726,12 +17729,17 @@ async function handleSocialBlock(request, env, ctx) {
       ctx.waitUntil(founderAlert(env, '🚩 A traveler blocked someone. Admin → Safety reports.', 'report', { by: user.id }));
     }
     const now = new Date().toISOString();
-    await Promise.all([
+    const [fw, tw] = await Promise.all([
       // The follow edges end both ways — accepted or still a request.
-      gbRest(env, `user_follows?or=(and(follower_id.eq.${user.id},followee_id.eq.${target}),and(follower_id.eq.${target},followee_id.eq.${user.id}))`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
+      gbRest(env, `user_follows?or=(and(follower_id.eq.${user.id},followee_id.eq.${target}),and(follower_id.eq.${target},followee_id.eq.${user.id}))`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => null),
       // Pending invites die quietly, theirs to me and mine to them.
-      gbRest(env, `passport_tags?or=(and(from_user_id.eq.${target},to_user_id.eq.${user.id}),and(from_user_id.eq.${user.id},to_user_id.eq.${target}))&status=eq.pending`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'declined', revoked_at: now }) }),
+      gbRest(env, `passport_tags?or=(and(from_user_id.eq.${target},to_user_id.eq.${user.id}),and(from_user_id.eq.${user.id},to_user_id.eq.${target}))&status=eq.pending`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'declined', revoked_at: now }) }).catch(() => null),
     ]);
+    // The block row is in, but follows or invites that couldn't be ended are
+    // said in words the app shows (go-live round 2: this answered ok:true
+    // while the follows stayed). Trying again finishes the job, and a repeat
+    // block files no second record.
+    if (!fw || !fw.ok || !tw || !tw.ok) return jsonResponse({ error: 'Couldn’t finish blocking — try again' }, 502);
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_block', {}));
     return jsonResponse({ ok: true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
