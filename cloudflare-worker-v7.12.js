@@ -1450,7 +1450,10 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
     if (row?.birth_year && socialTierFor(row.birth_year, row.country_at_gate, row.birth_md) === 'blocked') child = true;
   }
   const gbPhotos = ageKnown ? await rows('guestbook_photos', `guestbook_entries?user_id=eq.${userId}&photo_key=not.is.null&select=photo_key`) : null;
-  if (gbPhotos && await r2('guestbook_photos_r2', gbPhotos.map((r) => r.photo_key))) {
+  // Only files this account uploaded (gbUploadOwner): a note that named
+  // someone else's goes without taking their file.
+  const myUploads = (list) => list.map((r) => r.photo_key).filter((k) => gbUploadOwner(k) === String(userId).toLowerCase());
+  if (gbPhotos && await r2('guestbook_photos_r2', myUploads(gbPhotos))) {
     if (child) await del('guestbook_entries', `guestbook_entries?user_id=eq.${userId}`);
     else {
       await call('guestbook_entries', `guestbook_entries?user_id=eq.${userId}`, {
@@ -13826,6 +13829,18 @@ const GB_KEY = (env) => env.SUPABASE_SERVICE_KEY || env.SUPABASE_SERVICE_ROLE_KE
 // Whole-word forms only: the old prefix match blocked "spicy", "spice", "niggle", "retardant".
 const GB_BLOCK = /\b(nigg(?:a|ah|as|az|er|ers|uh|uz)|faggots?|retards?|retarded|kikes?|spics?|chinks?|wetbacks?)\b/i;
 function gbClean(s) { return String(s || '').replace(/ /g, '').trim(); }
+// Whose guestbook upload a key is (go-live round 3). The upload door names
+// the uploader in the key: gb/<place id>/<uid>/<uuid>.<ext>. A note may
+// carry only its signer's own upload (gbUploadFile: exactly what the door
+// makes), and a note's delete, an account's purge or the admin desk deletes
+// only a file whose next-to-last segment is its note's author: every key is
+// public in a photo_url, and a note that named another traveler's file used
+// to delete it with itself. gbUploadOwner: the uploader's id, or null.
+const GB_UUID_SRC = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const GB_UPLOAD_RE = new RegExp(`^gb/.+/(${GB_UUID_SRC})/[^/]+$`, 'i');
+const GB_UPLOAD_FILE_RE = new RegExp(`/${GB_UUID_SRC}\\.(?:jpg|png|webp)$`, 'i');
+const gbUploadOwner = (key) => { const m = GB_UPLOAD_RE.exec(String(key || '')); return m ? m[1].toLowerCase() : null; };
+const gbUploadFile = (key, uid) => gbUploadOwner(key) === String(uid || '').toLowerCase() && GB_UPLOAD_FILE_RE.test(String(key));
 function gbRest(env, path, opts = {}) {
   return fetch(`${GB_URL(env)}/rest/v1/${path}`, {
     ...opts,
@@ -23231,10 +23246,11 @@ async function handleGuestbookSign(request, env, ctx) {
     });
 
     // Optional photo (already moderated + stored at /guestbook/photo-upload).
-    // Only trust a key that came from our own upload path (gb/ prefix).
+    // Only the signer's own upload (gbUploadOwner), and its URL is built
+    // here — the client's photo_url is never stored.
     let photoKey = gbClean(b.photo_key);
-    let photoUrl = String(b.photo_url || '').trim();
-    if (!photoKey.startsWith('gb/') || !/\/gb-photo\/gb\//.test(photoUrl)) { photoKey = ''; photoUrl = ''; }
+    if (!gbUploadFile(photoKey, user.id)) photoKey = '';
+    const photoUrl = photoKey ? `${new URL(request.url).origin}/gb-photo/${photoKey}` : '';
 
     const promptType = ['tip', 'favorite', 'musttry', 'shoutout', 'story', 'doodle'].includes(gbClean(b.prompt_type)) ? gbClean(b.prompt_type) : 'tip';
     const row = {
@@ -23322,7 +23338,8 @@ async function handleGuestbookDelete(request, env) {
     if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}` }, 502);
     const rows = await res.json();
     if (!rows.length) return jsonResponse({ error: 'Not found or not yours' }, 403);
-    if (photoKey && env.MEDIA) await env.MEDIA.delete(photoKey).catch(() => {});
+    // Only a file this traveler uploaded (gbUploadOwner).
+    if (photoKey && env.MEDIA && gbUploadOwner(photoKey) === String(user.id).toLowerCase()) await env.MEDIA.delete(photoKey).catch(() => {});
     return jsonResponse({ ok: true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -23688,8 +23705,10 @@ async function handleAdminGuestbook(request, env) {
       else return jsonResponse({ error: 'unknown op' }, 400);
       let photoKey = null;
       if (op === 'delete') {
-        const pq = await gbRest(env, `guestbook_entries?id=eq.${id}&select=photo_key`);
-        photoKey = pq.ok ? (await pq.json())[0]?.photo_key || null : null;
+        const pq = await gbRest(env, `guestbook_entries?id=eq.${id}&select=photo_key,user_id`);
+        const row = pq.ok ? (await pq.json())[0] : null;
+        // Only a file the note's author uploaded (gbUploadOwner).
+        photoKey = row?.photo_key && gbUploadOwner(row.photo_key) === String(row.user_id || '').toLowerCase() ? row.photo_key : null;
       }
       const w = await gbRest(env, `guestbook_entries?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
       if (!w.ok) return jsonResponse({ error: `Supabase ${w.status}` }, 502);
