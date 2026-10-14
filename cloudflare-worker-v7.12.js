@@ -16588,13 +16588,21 @@ async function gbFrozenDoor(env, userId) {
   if (gbUnderAge(sp)) return gbUnderAgeResp();
   return null;
 }
+// A freeze marker (go-live round 3) carries KV metadata { at, pa?, t? } —
+// when the clock started, when the account was cleaned up, the failed tries
+// — so the daily sweep decides from one listing which markers need work: a
+// cleaned-up marker (kept for the appeal desk) or one not yet due costs no
+// read at all.
+async function gbFreezePut(kv, userId, rec) {
+  await kv.put(`freeze:${userId}`, JSON.stringify(rec), { metadata: { at: String(rec.at || '').slice(0, 32), ...(rec.purged_at ? { pa: 1 } : {}), ...(rec.tries ? { t: Number(rec.tries) || 0 } : {}) } });
+}
 // Starts the purge clock (once). `now` is a parameter only for tests and the
 // daily scan; true when a new clock started.
 async function gbMarkFrozen(env, userId, now = new Date()) {
   const kv = env.GLOBESKIMMERS_KV; if (!kv || !userId) return false;
   const k = `freeze:${userId}`;
   if (await kv.get(k).catch(() => null)) return false;
-  await kv.put(k, JSON.stringify({ at: now.toISOString() })).catch(() => {});
+  await gbFreezePut(kv, userId, { at: now.toISOString() }).catch(() => {});
   await gbLogEvent(env, 'age_frozen', {}).catch(() => {});
   return true;
 }
@@ -16628,18 +16636,21 @@ async function gbClearFrozen(env, userId, birthYear, birthMd) {
 // purges starts its next run just after the last record it tried, wrapping
 // around, so records whose purge keeps failing take their turn like any
 // other instead of starving every record listed after them. `mark` is a KV
-// key outside the swept prefix that holds the last name tried.
-async function gbSweepOrder(kv, prefix, mark) {
-  const names = [];
+// key outside the swept prefix that holds the last name tried. Returns the
+// listed keys ({ name, metadata }) in that order (go-live round 3: the
+// metadata lets a sweep skip a record without reading it).
+async function gbSweepTurn(kv, prefix, mark) {
+  const listed = [];
   let cursor;
   do {
     const page = await kv.list({ prefix, cursor });
-    for (const k of page.keys) names.push(k.name);
+    for (const k of page.keys || []) listed.push(k);
     cursor = page.list_complete ? null : page.cursor;
   } while (cursor);
+  listed.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const after = await kv.get(mark).catch(() => null);
-  const i = after ? names.findIndex((n) => n > after) : -1;
-  return i > 0 ? [...names.slice(i), ...names.slice(0, i)] : names;
+  const i = after ? listed.findIndex((k) => k.name > after) : -1;
+  return i > 0 ? [...listed.slice(i), ...listed.slice(0, i)] : listed;
 }
 // Daily: delete the content of accounts frozen longer than FREEZE_PURGE_DAYS.
 // Right before deleting, the stored birthday is checked AGAIN — as of the day
@@ -16648,20 +16659,31 @@ async function gbSweepOrder(kv, prefix, mark) {
 // is removed instead; a child who has since turned 13 is still cleaned up.
 // If the check can't be made, nothing is deleted today. A purge with any
 // failed step keeps its marker and is tried again on a later run, in its
-// fair turn (gbSweepOrder) — purged_at is written only when every step
+// fair turn (gbSweepTurn) — purged_at is written only when every step
 // succeeded (the founder hears about a third failed try).
+// Markers without metadata (written before it existed) are read — at most
+// FREEZE_LEGACY_READS a run — and written back with it.
+const FREEZE_LEGACY_READS = 20;
 async function freezeSweep(env, now = new Date()) {
   const out = { purged: 0, cleared: 0, failed: 0 };
   const kv = env.GLOBESKIMMERS_KV; if (!kv) return out;
   const cutoff = now.getTime() - FREEZE_PURGE_DAYS * 86400000;
-  let attempts = 0, last = null;
-  for (const name of await gbSweepOrder(kv, 'freeze:', 'sweep:freeze')) {
-    if (attempts >= FREEZE_SWEEP_MAX) break;
+  const turn = await gbSweepTurn(kv, 'freeze:', 'sweep:freeze');
+  let attempts = 0, legacyReads = 0, last = null;
+  for (const { name, metadata } of turn) {
+    if (attempts >= FREEZE_SWEEP_MAX || gbBudgetLeft(env) < 5) break;
     try {
-      const rec = await kv.get(name, { type: 'json' }).catch(() => null);
-      if (!rec || rec.purged_at || !(Date.parse(rec.at || '') <= cutoff)) continue;
       const userId = name.slice('freeze:'.length);
       if (!BL_UUID.test(userId)) continue;
+      // From the listing: cleaned up, or not due yet — nothing to read.
+      if (metadata && metadata.at) {
+        if (metadata.pa || !(Date.parse(metadata.at) <= cutoff)) continue;
+      } else if (legacyReads >= FREEZE_LEGACY_READS) continue;   // its turn comes on a later run
+      else legacyReads++;
+      const rec = await kv.get(name, { type: 'json' }).catch(() => null);
+      if (!rec) continue;
+      if (!(metadata && metadata.at)) await gbFreezePut(kv, userId, rec).catch(() => {});   // written back with its metadata
+      if (rec.purged_at || !(Date.parse(rec.at || '') <= cutoff)) continue;
       let row;
       try {
         const q = await gbRest(env, `social_profiles?user_id=eq.${userId}&select=birth_year,birth_md`, {});
@@ -16674,17 +16696,18 @@ async function freezeSweep(env, now = new Date()) {
         await gbLogEvent(env, 'age_frozen_cleared', {}).catch(() => {});
         continue;
       }
+      if (gbBudgetLeft(env) < PURGE_KV_R2_COST) break;
       attempts++; last = name;
       const res = await gbPurgeUserContent(env, userId, { keepAccount: true });
       if (!res.ok) {
         out.failed++;
         const tries = (Number(rec.tries) || 0) + 1;
-        await kv.put(name, JSON.stringify({ ...rec, tries, last_try: now.toISOString(), failed_steps: res.failed.slice(0, 12) })).catch(() => {});
+        await gbFreezePut(kv, userId, { ...rec, tries, last_try: now.toISOString(), failed_steps: res.failed.slice(0, 12) }).catch(() => {});
         await gbLogEvent(env, 'age_frozen_purge_failed', { tries, steps: res.failed.slice(0, 12) }).catch(() => {});
         if (tries === 3) await founderAlert(env, `⚠️ An under-13 clean-up has failed 3 daily tries (steps: ${res.failed.slice(0, 6).join(', ')}). It keeps retrying — check the worker's SUPABASE_SERVICE_ROLE_KEY and R2.`, 'ops').catch(() => {});
         continue;
       }
-      await kv.put(name, JSON.stringify({ ...rec, purged_at: now.toISOString() })).catch(() => {});
+      await gbFreezePut(kv, userId, { ...rec, purged_at: now.toISOString() }).catch(() => {});
       out.purged++;
       await gbLogEvent(env, 'age_frozen_purged', {}).catch(() => {});
     } catch { out.failed++; /* one account never stops the sweep */ }
@@ -16785,17 +16808,7 @@ async function purgeRetrySweep(env, now = new Date()) {
   const out = { done: 0, failed: 0 };
   const kv = env.GLOBESKIMMERS_KV; if (!kv) return out;
   const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY;
-  const listed = [];
-  let cursor;
-  do {
-    const page = await kv.list({ prefix: 'purge:', cursor });
-    for (const k of page.keys || []) listed.push(k);
-    cursor = page.list_complete ? null : page.cursor;
-  } while (cursor);
-  listed.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  const after = await kv.get('sweep:purge').catch(() => null);
-  const i0 = after ? listed.findIndex((k) => k.name > after) : -1;
-  const turn = i0 > 0 ? [...listed.slice(i0), ...listed.slice(0, i0)] : listed;
+  const turn = await gbSweepTurn(kv, 'purge:', 'sweep:purge');
   let visits = 0;
   const items = [];
   for (const k of turn) {
