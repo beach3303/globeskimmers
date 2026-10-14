@@ -12348,6 +12348,9 @@ async function handleWeatherForecast(request, env) {
       }
       forecast.push({
         is_today: i === 0,
+        // The place's calendar date ('2026-10-14'), so a page can find today at the
+        // place even when a cached payload crosses its midnight.
+        iso_date: daily.time[i],
         day_of_week: dateObj.toLocaleDateString('en-US', { weekday: 'long' }),
         date: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         high_celsius: Math.round(Number(daily.temperature_2m_max[i])),
@@ -12366,7 +12369,9 @@ async function handleWeatherForecast(request, env) {
       });
     }
 
-    const payload = { timezone: d.timezone || 'UTC', current, forecast };
+    // updated_at: when this forecast was fetched (it rides in the 30-minute cache with
+    // it, so a cached answer keeps its true age).
+    const payload = { timezone: d.timezone || 'UTC', updated_at: new Date().toISOString(), current, forecast };
 
     if (kv) {
       await kv.put(cacheKey, JSON.stringify(payload), { expirationTtl: 1800 }).catch(() => {});
