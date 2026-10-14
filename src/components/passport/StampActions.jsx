@@ -95,9 +95,12 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   };
   const [compose, setCompose] = useState(false);
   const [following, setFollowing] = useState([]);
+  const [blocked, setBlocked] = useState([]);
   const openCompose = async () => {
     const { data } = await socialFollow("list");
     setFollowing(data?.following || []);
+    // Never offer someone you blocked as an address (PostcardCompose filters them out).
+    setBlocked(data?.blocked || []);
     setCompose(true);
   };
   useDismissable(true, onClose);
@@ -513,7 +516,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
             Close
           </button>
         </div>
-        <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={() => setCompose(false)} following={following}
+        <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={() => setCompose(false)} following={following} blocked={blocked}
         preset={{ image: null, place_name: stamp.name, city: stamp.city, country: stamp.country }} />
       <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPick} />
         {!readOnly && <p className="text-center mt-2" style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, letterSpacing: ".04em" }}>Stamp ink: {STAMP === "#B0472F" ? "passport red" : STAMP}</p>}
