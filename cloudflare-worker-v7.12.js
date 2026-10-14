@@ -16983,17 +16983,30 @@ async function orphanScan(env, now = new Date()) {
 // named or shown by face on someone else's page. Of `ids` (the ones that
 // would show a name or face WITHOUT a username: a deleted account's username
 // row goes first, and an account deleted before go-live has none), returns
-// those with a queued purge. At most 50 lookups a read; an id past that, or
-// one whose lookup fails, counts as queued. (A traveler whose social profile
-// is gone already shows no name or face: both come from it.)
+// those with a queued purge. One listing of the purge queue answers them all
+// (a page per 1,000 records; go-live round 3: one read per id, at most 50,
+// counted every id past the 50th as deleted, so live adults lost their names
+// on a busy page). When the queue can't be read to its end, every one of
+// `ids` counts as queued. (A traveler whose social profile is gone already
+// shows no name or face: both come from it.)
 async function gbPurgeQueued(env, ids) {
   const out = new Set();
   const kv = env.GLOBESKIMMERS_KV;
   if (!kv || !ids.length) return out;
-  for (const id of ids.slice(50)) out.add(id);
-  await Promise.all(ids.slice(0, 50).map(async (id) => {
-    try { if (await kv.get(`purge:${id}`)) out.add(id); } catch { out.add(id); }
-  }));
+  try {
+    const queued = new Set();
+    let cursor;
+    for (let i = 0; i < 10; i++) {
+      const page = await kv.list({ prefix: 'purge:', cursor });
+      for (const k of page.keys || []) queued.add(k.name.slice('purge:'.length).toLowerCase());
+      if (page.list_complete) {
+        for (const id of ids) if (queued.has(String(id).toLowerCase())) out.add(id);
+        return out;
+      }
+      cursor = page.cursor;
+    }
+  } catch { /* nobody is named, below */ }
+  for (const id of ids) out.add(id);
   return out;
 }
 // POST /admin/age-appeal { user_id, birth_year, birth_md, override? } — an
@@ -18894,12 +18907,6 @@ async function handleSocialUnread(request, env) {
     const who = {};
     for (const r of hs) who[r.user_id] = { handle: r.handle || null, verified: r.verified === true, seal: r.verified === true ? (r.seal || 'burgundy') : null };
     for (const r of ps) who[r.user_id] = { ...(who[r.user_id] || {}), name: r.display_name || null, teen: r.social_tier === 'teen' };
-    // A traveler already deleted, whose clean-up hasn't reached them yet, is
-    // never named in the list (go-live round 2, gbPurgeQueued); only looked
-    // up when the list itself is asked for.
-    if (b.activity === true || b.mark === true) {
-      for (const id of await gbPurgeQueued(env, Object.keys(who).filter((id) => !who[id].handle && who[id].name))) who[id] = { ...who[id], name: null };
-    }
     const stampName = Object.fromEntries(st.map((r) => [r.id, r.name]));
     const dayAgo = Date.now() - 864e5;
 
@@ -18922,6 +18929,13 @@ async function handleSocialUnread(request, env) {
         ...(i.to_me ? { to_me: true } : {}),
       }));
     const total = activity.filter((a) => a.unread).length;
+    // A traveler already deleted, whose clean-up hasn't reached them yet, is
+    // never named in the list (go-live round 2, gbPurgeQueued) — checked for
+    // the rows actually returned, and only when the list is asked for.
+    if (b.activity === true || b.mark === true) {
+      const gone = await gbPurgeQueued(env, [...new Set(activity.filter((a) => !a.by.handle && a.by.name).map((a) => a.by.user_id))]);
+      for (const a of activity) if (gone.has(a.by.user_id)) a.by.name = null;
+    }
 
     if (b.mark === true) {
       const now = new Date().toISOString();
