@@ -17651,6 +17651,11 @@ async function handleSocialBlock(request, env, ctx) {
       const q = await gbRest(env, `blotter_entries?id=eq.${b.entry_id}&select=author_user_id`, {});
       target = (q.ok ? await q.json() : [])[0]?.author_user_id || null;
     }
+    // A note on a place guestbook (its author is never returned either).
+    if (!target && b.guestbook_entry_id && BL_UUID.test(String(b.guestbook_entry_id))) {
+      const q = await gbRest(env, `guestbook_entries?id=eq.${b.guestbook_entry_id}&select=user_id`, {});
+      target = (q.ok ? await q.json() : [])[0]?.user_id || null;
+    }
     if (!target || !BL_UUID.test(target) || target === user.id) return jsonResponse({ error: 'Nothing to block' }, 400);
     const w = await gbRest(env, 'user_blocks', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ user_id: user.id, blocked_user_id: target }) });
     if (!w.ok) return jsonResponse({ error: 'Could not block right now — try again' }, 502);
@@ -22494,7 +22499,13 @@ async function handleGuestbookList(request, env) {
     if (!pub.ok) return jsonResponse({ error: `Supabase ${pub.status}`, details: await pub.text().catch(() => '') }, 502);
     const mine = own && own.ok ? await own.json() : [];
     const seen = new Set();
-    const rows = [...mine, ...(await pub.json())].filter((e) => (seen.has(e.id) ? false : seen.add(e.id)));
+    // A blocked pair doesn't see each other's notes, either way (go-live
+    // review, 2026-10-13: Block on the place guestbook); when the reader's
+    // blocks can't be read, only their own notes show.
+    const blocked = user ? await gbBlockSet(env, user.id) : new Set();
+    const rows = [...mine, ...(await pub.json())]
+      .filter((e) => (seen.has(e.id) ? false : seen.add(e.id)))
+      .filter((e) => (user && e.user_id === user.id) || (blocked && !blocked.has(e.user_id)));
     // A minor's note (from before the hold, or from an account since frozen
     // or unconfirmed) stays up as "A traveler" — no name, no home city — the
     // way the teens plan shows a teen (founder, 2026-10-13). When the authors'
