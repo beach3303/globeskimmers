@@ -16349,57 +16349,72 @@ async function gbClearFrozen(env, userId, birthYear, birthMd) {
   await gbLogEvent(env, 'age_frozen_cleared', {}).catch(() => {});
   return true;
 }
+// Fair turns (go-live round 2): a daily sweep that stops at FREEZE_SWEEP_MAX
+// purges starts its next run just after the last record it tried, wrapping
+// around, so records whose purge keeps failing take their turn like any
+// other instead of starving every record listed after them. `mark` is a KV
+// key outside the swept prefix that holds the last name tried.
+async function gbSweepOrder(kv, prefix, mark) {
+  const names = [];
+  let cursor;
+  do {
+    const page = await kv.list({ prefix, cursor });
+    for (const k of page.keys) names.push(k.name);
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  const after = await kv.get(mark).catch(() => null);
+  const i = after ? names.findIndex((n) => n > after) : -1;
+  return i > 0 ? [...names.slice(i), ...names.slice(0, i)] : names;
+}
 // Daily: delete the content of accounts frozen longer than FREEZE_PURGE_DAYS.
 // Right before deleting, the stored birthday is checked AGAIN — as of the day
 // the account was frozen (gbFrozenAsChild): a marker whose birthday was never
 // under 13 then (an appeal, a completed month and day, no age record left)
 // is removed instead; a child who has since turned 13 is still cleaned up.
-// If the check can't be made, nothing is deleted today. A purge with any failed step
-// keeps its marker and is tried again tomorrow — purged_at is written only
-// when every step succeeded (the founder hears about a third failed day).
+// If the check can't be made, nothing is deleted today. A purge with any
+// failed step keeps its marker and is tried again on a later run, in its
+// fair turn (gbSweepOrder) — purged_at is written only when every step
+// succeeded (the founder hears about a third failed try).
 async function freezeSweep(env, now = new Date()) {
   const out = { purged: 0, cleared: 0, failed: 0 };
   const kv = env.GLOBESKIMMERS_KV; if (!kv) return out;
   const cutoff = now.getTime() - FREEZE_PURGE_DAYS * 86400000;
-  let cursor, attempts = 0;
-  do {
-    const page = await kv.list({ prefix: 'freeze:', cursor });
-    for (const { name } of page.keys) {
-      if (attempts >= FREEZE_SWEEP_MAX) return out;
+  let attempts = 0, last = null;
+  for (const name of await gbSweepOrder(kv, 'freeze:', 'sweep:freeze')) {
+    if (attempts >= FREEZE_SWEEP_MAX) break;
+    try {
+      const rec = await kv.get(name, { type: 'json' }).catch(() => null);
+      if (!rec || rec.purged_at || !(Date.parse(rec.at || '') <= cutoff)) continue;
+      const userId = name.slice('freeze:'.length);
+      if (!BL_UUID.test(userId)) continue;
+      let row;
       try {
-        const rec = await kv.get(name, { type: 'json' }).catch(() => null);
-        if (!rec || rec.purged_at || !(Date.parse(rec.at || '') <= cutoff)) continue;
-        const userId = name.slice('freeze:'.length);
-        if (!BL_UUID.test(userId)) continue;
-        let row;
-        try {
-          const q = await gbRest(env, `social_profiles?user_id=eq.${userId}&select=birth_year,birth_md`, {});
-          if (!q.ok) throw new Error(String(q.status));
-          row = (await q.json())[0] || null;
-        } catch { out.failed++; continue; }   // couldn't check the age: no delete today
-        if (!gbFrozenAsChild(rec, row?.birth_year, row?.birth_md, now)) {
-          await kv.delete(name).catch(() => {});
-          out.cleared++;
-          await gbLogEvent(env, 'age_frozen_cleared', {}).catch(() => {});
-          continue;
-        }
-        attempts++;
-        const res = await gbPurgeUserContent(env, userId, { keepAccount: true });
-        if (!res.ok) {
-          out.failed++;
-          const tries = (Number(rec.tries) || 0) + 1;
-          await kv.put(name, JSON.stringify({ ...rec, tries, last_try: now.toISOString(), failed_steps: res.failed.slice(0, 12) })).catch(() => {});
-          await gbLogEvent(env, 'age_frozen_purge_failed', { tries, steps: res.failed.slice(0, 12) }).catch(() => {});
-          if (tries === 3) await founderAlert(env, `⚠️ An under-13 clean-up has failed 3 days running (steps: ${res.failed.slice(0, 6).join(', ')}). It retries daily — check the worker's SUPABASE_SERVICE_ROLE_KEY and R2.`, 'bell').catch(() => {});
-          continue;
-        }
-        await kv.put(name, JSON.stringify({ ...rec, purged_at: now.toISOString() })).catch(() => {});
-        out.purged++;
-        await gbLogEvent(env, 'age_frozen_purged', {}).catch(() => {});
-      } catch { out.failed++; /* one account never stops the sweep */ }
-    }
-    cursor = page.list_complete ? null : page.cursor;
-  } while (cursor);
+        const q = await gbRest(env, `social_profiles?user_id=eq.${userId}&select=birth_year,birth_md`, {});
+        if (!q.ok) throw new Error(String(q.status));
+        row = (await q.json())[0] || null;
+      } catch { out.failed++; continue; }   // couldn't check the age: no delete today
+      if (!gbFrozenAsChild(rec, row?.birth_year, row?.birth_md, now)) {
+        await kv.delete(name).catch(() => {});
+        out.cleared++;
+        await gbLogEvent(env, 'age_frozen_cleared', {}).catch(() => {});
+        continue;
+      }
+      attempts++; last = name;
+      const res = await gbPurgeUserContent(env, userId, { keepAccount: true });
+      if (!res.ok) {
+        out.failed++;
+        const tries = (Number(rec.tries) || 0) + 1;
+        await kv.put(name, JSON.stringify({ ...rec, tries, last_try: now.toISOString(), failed_steps: res.failed.slice(0, 12) })).catch(() => {});
+        await gbLogEvent(env, 'age_frozen_purge_failed', { tries, steps: res.failed.slice(0, 12) }).catch(() => {});
+        if (tries === 3) await founderAlert(env, `⚠️ An under-13 clean-up has failed 3 daily tries (steps: ${res.failed.slice(0, 6).join(', ')}). It keeps retrying — check the worker's SUPABASE_SERVICE_ROLE_KEY and R2.`, 'bell').catch(() => {});
+        continue;
+      }
+      await kv.put(name, JSON.stringify({ ...rec, purged_at: now.toISOString() })).catch(() => {});
+      out.purged++;
+      await gbLogEvent(env, 'age_frozen_purged', {}).catch(() => {});
+    } catch { out.failed++; /* one account never stops the sweep */ }
+  }
+  if (last) await kv.put('sweep:freeze', last).catch(() => {});
   return out;
 }
 // Daily: every stored birthday that is under 13 gets its purge clock — not
@@ -16458,38 +16473,37 @@ async function freezeScan(env, now = new Date()) {
 // purge:<uid> before it deletes the sign-in). Only a DELETED account is ever
 // cleaned up here: the sign-in is checked first, and while it is still alive
 // (its delete failed) the record is dropped and nothing is touched — the age
-// record and the blocks stay. A check that can't be made waits a day.
+// record and the blocks stay. A check that can't be made waits a day. Turns
+// are fair (gbSweepOrder): a record whose purge keeps failing never starves
+// the ones after it.
 async function purgeRetrySweep(env, now = new Date()) {
   const out = { done: 0, failed: 0 };
   const kv = env.GLOBESKIMMERS_KV; if (!kv) return out;
   const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY;
-  let cursor, attempts = 0;
-  do {
-    const page = await kv.list({ prefix: 'purge:', cursor });
-    for (const { name } of page.keys) {
-      if (attempts >= FREEZE_SWEEP_MAX) return out;
-      try {
-        const userId = name.slice('purge:'.length);
-        if (!BL_UUID.test(userId)) { await kv.delete(name).catch(() => {}); continue; }
-        const rec = (await kv.get(name, { type: 'json' }).catch(() => null)) || {};
-        // A deletion that is running right now finishes (or re-queues) itself.
-        if (Array.isArray(rec.failed_steps) && rec.failed_steps.includes('pending') && now.getTime() - Date.parse(rec.at || 0) < 3600000) continue;
-        if (!key) { out.failed++; continue; }
-        const au = await fetch(`${GB_URL(env)}/auth/v1/admin/users/${userId}`, { headers: { apikey: key, Authorization: `Bearer ${key}` } }).catch(() => null);
-        if (au && au.ok) { await kv.delete(name).catch(() => {}); continue; }   // still alive: its delete never happened
-        if (!au || au.status !== 404) { out.failed++; continue; }              // couldn't tell: try tomorrow
-        attempts++;
-        // A frozen account deleted from its frozen screen keeps its child flag.
-        const res = await gbPurgeUserContent(env, userId, { child: rec.child === true });
-        if (res.ok) { await kv.delete(name).catch(() => {}); out.done++; continue; }
-        out.failed++;
-        const tries = (Number(rec.tries) || 0) + 1;
-        await kv.put(name, JSON.stringify({ ...rec, tries, last_try: now.toISOString(), failed_steps: res.failed.slice(0, 12) })).catch(() => {});
-        if (tries === 3) await founderAlert(env, `⚠️ A deleted account's clean-up has failed 3 days running (steps: ${res.failed.slice(0, 6).join(', ')}). It retries daily — check the worker's SUPABASE_SERVICE_ROLE_KEY and R2.`, 'bell').catch(() => {});
-      } catch { out.failed++; /* one account never stops the sweep */ }
-    }
-    cursor = page.list_complete ? null : page.cursor;
-  } while (cursor);
+  let attempts = 0, last = null;
+  for (const name of await gbSweepOrder(kv, 'purge:', 'sweep:purge')) {
+    if (attempts >= FREEZE_SWEEP_MAX) break;
+    try {
+      const userId = name.slice('purge:'.length);
+      if (!BL_UUID.test(userId)) { await kv.delete(name).catch(() => {}); continue; }
+      const rec = (await kv.get(name, { type: 'json' }).catch(() => null)) || {};
+      // A deletion that is running right now finishes (or re-queues) itself.
+      if (Array.isArray(rec.failed_steps) && rec.failed_steps.includes('pending') && now.getTime() - Date.parse(rec.at || 0) < 3600000) continue;
+      if (!key) { out.failed++; continue; }
+      const au = await fetch(`${GB_URL(env)}/auth/v1/admin/users/${userId}`, { headers: { apikey: key, Authorization: `Bearer ${key}` } }).catch(() => null);
+      if (au && au.ok) { await kv.delete(name).catch(() => {}); continue; }   // still alive: its delete never happened
+      if (!au || au.status !== 404) { out.failed++; continue; }              // couldn't tell: try tomorrow
+      attempts++; last = name;
+      // A frozen account deleted from its frozen screen keeps its child flag.
+      const res = await gbPurgeUserContent(env, userId, { child: rec.child === true });
+      if (res.ok) { await kv.delete(name).catch(() => {}); out.done++; continue; }
+      out.failed++;
+      const tries = (Number(rec.tries) || 0) + 1;
+      await kv.put(name, JSON.stringify({ ...rec, tries, last_try: now.toISOString(), failed_steps: res.failed.slice(0, 12) })).catch(() => {});
+      if (tries === 3) await founderAlert(env, `⚠️ A deleted account's clean-up has failed 3 daily tries (steps: ${res.failed.slice(0, 6).join(', ')}). It keeps retrying — check the worker's SUPABASE_SERVICE_ROLE_KEY and R2.`, 'bell').catch(() => {});
+    } catch { out.failed++; /* one account never stops the sweep */ }
+  }
+  if (last) await kv.put('sweep:purge', last).catch(() => {});
   return out;
 }
 // POST /admin/age-appeal { user_id, birth_year, birth_md, override? } — an
