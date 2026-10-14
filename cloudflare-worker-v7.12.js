@@ -859,63 +859,118 @@ async function handleRestaurantSearch(request, env, ctx) {
 // real-time face of a store download — stores only report counts next day) and
 // every stamp. Transport: ntfy push when NTFY_TOPIC is set (free; the ntfy app
 // subscribes to the secret topic) and/or a Twilio SMS when TWILIO_SID,
-// TWILIO_TOKEN, TWILIO_FROM and FOUNDER_PHONE are set. Capped so a busy day
-// can never flood a phone or a bill, and no flood can silence a child-safety
-// report (go-live round 2): every alert except 'urgent' shares 400 a day;
-// 'urgent' (a child-safety report) has its own 50 a day and never counts
-// against the 400. opts.by (the reporter's user id, on report and block
-// alerts): one person's reports and blocks ring at most 10 times a day; what
-// they file still reaches Admin → Safety reports, just without a ring. Never
-// blocks the request.
+// TWILIO_TOKEN, TWILIO_FROM and FOUNDER_PHONE are set. Never blocks the request.
+// Capped so a busy day — or a script — can never flood a phone or a bill, and
+// so no kind of alert can silence another (go-live rounds 2 and 3): each tag
+// has its own daily allowance (BELL_CAPS) — 'urgent' (a child-safety report)
+// 50, 'report' (reports and blocks) 200, 'ops' (a clean-up that keeps
+// failing) 20, 'new' (downloads, new members, the morning digest) 100, and
+// everything else ('bell': stamps) 400. opts.by (the reporter's user id):
+// one person's reports and blocks ring at most 10 times a day, and their
+// child-safety reports at most 3 more on their own allowance, so neither a
+// run of ordinary blocks nor anyone's flood can use up someone's child-safety
+// ring. What is filed past a cap still reaches Admin → Safety reports, just
+// without a ring; the first alert past a tag's daily allowance rings once
+// instead, to say that tag is paused for the day. The counts are D1 rows
+// counted atomically (gbDayCount), so a burst of parallel requests can't
+// slip past them.
 // opts.click (2026-10-13): where tapping the ntfy alert goes (ntfy's Click
 // header), e.g. an app deep link. SMS has no tap target, so Twilio ignores it.
 // A topic name on ntfy.sh is all anyone needs to read its alerts, so it is a
 // secret: never write it into this (public) repo. NTFY_TOKEN, when set, is an
 // ntfy.sh access token for a reserved topic that denies anonymous access; the
 // alert then carries it, and knowing the topic name is no longer enough.
-const BELL_DAILY_MAX = 400;
-const BELL_URGENT_DAILY_MAX = 50;
+const BELL_CAPS = { urgent: 50, report: 200, ops: 20, new: 100, bell: 400 };
 const BELL_PER_REPORTER_MAX = 10;
+const BELL_URGENT_PER_REPORTER_MAX = 3;
+const BELL_PAUSED = {
+  urgent: 'Child-safety alerts paused for today after 50 — more are waiting in Admin → Safety reports.',
+  report: 'Report and block alerts paused for today after 200 — the rest are in Admin → Safety reports.',
+  ops: 'Clean-up alerts paused for today after 20.',
+  new: 'New download and new member alerts paused for today after 100.',
+  bell: 'Stamp alerts paused for today after 400.',
+};
 async function founderAlert(env, text, tag = 'bell', opts = {}) {
   try {
     if (!env.NTFY_TOPIC && !env.TWILIO_SID) return;
-    const kv = env.GLOBESKIMMERS_KV;
-    if (kv) {
-      const day = new Date().toISOString().slice(0, 10);
-      // One more on a daily counter, or false when it is full.
-      const take = async (k, max) => {
-        const n = Number(await kv.get(k).catch(() => 0)) || 0;
-        if (n >= max) return false;
-        await kv.put(k, String(n + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
-        return true;
-      };
-      const by = typeof opts?.by === 'string' && opts.by ? opts.by : null;
-      if (by && !(await take(`bell:by:${by}:${day}`, BELL_PER_REPORTER_MAX))) return;
-      if (tag === 'urgent' ? !(await take(`bell:urgent:${day}`, BELL_URGENT_DAILY_MAX)) : !(await take(`bell:cap:${day}`, BELL_DAILY_MAX))) return;
+    const bucket = Object.prototype.hasOwnProperty.call(BELL_CAPS, tag) ? tag : 'bell';
+    // The person first: past their own allowance, nothing of the day's is used.
+    const by = typeof opts?.by === 'string' && opts.by ? opts.by : null;
+    if (by) {
+      const urgent = bucket === 'urgent';
+      const mine = await gbDayCount(env, `bell:${urgent ? 'byu' : 'by'}:${by}`);
+      if (mine != null && mine > (urgent ? BELL_URGENT_PER_REPORTER_MAX : BELL_PER_REPORTER_MAX)) return;
     }
-    const jobs = [];
-    if (env.NTFY_TOPIC) {
-      // Only a plain printable-ASCII link can ride in a header; anything else is dropped, never the alert.
-      const click = typeof opts?.click === 'string' && /^[\x21-\x7e]{1,500}$/.test(opts.click) ? opts.click : null;
-      jobs.push(fetch(`https://ntfy.sh/${env.NTFY_TOPIC}`, {
-        method: 'POST', body: text,
-        headers: {
-          // 'report' (a report or a block) and 'urgent' (a child-safety report, 24h triage) stand out from stamp alerts.
-          Title: 'GlobeSkimmers', Tags: tag === 'new' ? 'tada' : tag === 'urgent' ? 'rotating_light' : tag === 'report' ? 'triangular_flag_on_post' : 'round_pushpin', Priority: tag === 'urgent' ? '5' : tag === 'new' || tag === 'report' ? '4' : '3',
-          ...(click ? { Click: click } : {}),
-          ...(env.NTFY_TOKEN ? { Authorization: `Bearer ${env.NTFY_TOKEN}` } : {}),
-        },
-      }));
+    const n = await gbDayCount(env, `bell:${bucket}`);
+    const cap = BELL_CAPS[bucket];
+    if (n != null && n > cap) {
+      if (n === cap + 1) await gbBellSend(env, `⚠️ ${BELL_PAUSED[bucket]}`, bucket === 'urgent' ? 'urgent' : 'ops');
+      return;
     }
-    if (env.TWILIO_SID && env.TWILIO_TOKEN && env.TWILIO_FROM && env.FOUNDER_PHONE) {
-      jobs.push(fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_SID}/Messages.json`, {
-        method: 'POST',
-        headers: { Authorization: 'Basic ' + btoa(`${env.TWILIO_SID}:${env.TWILIO_TOKEN}`), 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ To: env.FOUNDER_PHONE, From: env.TWILIO_FROM, Body: text }),
-      }));
-    }
-    await Promise.allSettled(jobs);
+    await gbBellSend(env, text, tag, opts);
   } catch { /* the bell never breaks the app */ }
+}
+// The transport: ntfy and/or Twilio, whichever are configured.
+async function gbBellSend(env, text, tag, opts = {}) {
+  const jobs = [];
+  if (env.NTFY_TOPIC) {
+    // Only a plain printable-ASCII link can ride in a header; anything else is dropped, never the alert.
+    const click = typeof opts?.click === 'string' && /^[\x21-\x7e]{1,500}$/.test(opts.click) ? opts.click : null;
+    jobs.push(fetch(`https://ntfy.sh/${env.NTFY_TOPIC}`, {
+      method: 'POST', body: text,
+      headers: {
+        // 'report' (a report or a block), 'ops' (a clean-up that keeps failing)
+        // and 'urgent' (a child-safety report, 24h triage) stand out from stamp alerts.
+        Title: 'GlobeSkimmers', Tags: tag === 'new' ? 'tada' : tag === 'urgent' ? 'rotating_light' : tag === 'report' ? 'triangular_flag_on_post' : tag === 'ops' ? 'warning' : 'round_pushpin', Priority: tag === 'urgent' ? '5' : tag === 'new' || tag === 'report' || tag === 'ops' ? '4' : '3',
+        ...(click ? { Click: click } : {}),
+        ...(env.NTFY_TOKEN ? { Authorization: `Bearer ${env.NTFY_TOKEN}` } : {}),
+      },
+    }));
+  }
+  if (env.TWILIO_SID && env.TWILIO_TOKEN && env.TWILIO_FROM && env.FOUNDER_PHONE) {
+    jobs.push(fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_SID}/Messages.json`, {
+      method: 'POST',
+      headers: { Authorization: 'Basic ' + btoa(`${env.TWILIO_SID}:${env.TWILIO_TOKEN}`), 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ To: env.FOUNDER_PHONE, From: env.TWILIO_FROM, Body: text }),
+    }));
+  }
+  await Promise.allSettled(jobs);
+}
+
+// ── Daily counters (go-live round 3) ────────────────────────────────────────
+// Caps that must hold under a burst — the bell, safety filings, uploads —
+// count in D1 (events DB), one row per counter per UTC day: an INSERT … ON
+// CONFLICT DO UPDATE … RETURNING is one atomic statement, so parallel requests
+// each get their own number (a KV read-then-write let a burst all read the
+// same count, and KV takes about one write a second per key). Returns the new
+// count, or null when nothing could count (a caller then lets the action
+// through: these are abuse caps, never what keeps the app working). Without
+// D1 the count falls back to KV, as before. Rows older than two days are
+// deleted by the daily cron (gbDayCountsPrune).
+const DAY_COUNTS_SQL = 'CREATE TABLE IF NOT EXISTS day_counts (k TEXT PRIMARY KEY, day TEXT NOT NULL, n INTEGER NOT NULL)';
+let DAY_COUNTS_READY = false;
+async function gbDayCount(env, name, now = new Date()) {
+  const day = now.toISOString().slice(0, 10);
+  if (env.DB) {
+    try {
+      if (!DAY_COUNTS_READY) { await env.DB.prepare(DAY_COUNTS_SQL).run(); DAY_COUNTS_READY = true; }
+      const r = await env.DB.prepare('INSERT INTO day_counts (k, day, n) VALUES (?1, ?2, 1) ON CONFLICT(k) DO UPDATE SET n = n + 1 RETURNING n').bind(`${name}:${day}`, day).first();
+      if (r && Number.isFinite(Number(r.n))) return Number(r.n);
+    } catch { /* KV below */ }
+  }
+  const kv = env.GLOBESKIMMERS_KV;
+  if (!kv) return null;
+  try {
+    const k = `cnt:${name}:${day}`;
+    const n = (Number(await kv.get(k)) || 0) + 1;
+    await kv.put(k, String(n), { expirationTtl: 2 * 86400 });
+    return n;
+  } catch { return null; }
+}
+async function gbDayCountsPrune(env, now = new Date()) {
+  if (!env.DB) return;
+  await env.DB.prepare(DAY_COUNTS_SQL).run();
+  await env.DB.prepare('DELETE FROM day_counts WHERE day < ?1').bind(new Date(now.getTime() - 2 * 86400000).toISOString().slice(0, 10)).run();
 }
 
 // ── Member numbers (founder, 2026-10-13) ────────────────────────────────────
@@ -1223,13 +1278,21 @@ async function handleLogEvent(request, env) {
       ).bind(...base).run();
     }
     // A device we've never seen before = someone just downloaded and opened
-    // the app. KV remembers forever; the alert fires once per phone.
+    // the app; the alert fires once per phone. KV remembers a phone's id for
+    // 400 days (go-live round 3: kept forever, a script with fresh ids wrote
+    // keys without end). This door needs no sign-in, so one internet address
+    // rings for at most 3 first opens a day (the 'new' allowance in
+    // founderAlert caps the rest): only a one-way hash of the address and the
+    // day is counted, and the count is deleted after two days. A phone past
+    // that limit is simply not remembered yet; it rings on a later open.
     try {
       const anon = String(body.anon_id || '').slice(0, 64);
       if (anon && env.GLOBESKIMMERS_KV && (env.NTFY_TOPIC || env.TWILIO_SID)) {
         const seen = await env.GLOBESKIMMERS_KV.get(`bell:dev:${anon}`);
-        if (!seen) {
-          await env.GLOBESKIMMERS_KV.put(`bell:dev:${anon}`, '1');
+        const ip = request.headers.get('cf-connecting-ip') || '';
+        const fromIp = !seen && ip ? await gbDayCount(env, `dl:${(await sha256Hex(`gs-dl:${new Date().toISOString().slice(0, 10)}:${ip}`)).slice(0, 32)}`) : null;
+        if (!seen && (fromIp == null || fromIp <= 3)) {
+          await env.GLOBESKIMMERS_KV.put(`bell:dev:${anon}`, '1', { expirationTtl: 400 * 86400 });
           const ua = String(body.ua_summary || '').slice(0, 60);
           const os = /iphone|ios|ipad/i.test(ua) ? 'iPhone' : /android/i.test(ua) ? 'Android' : (ua || 'unknown device');
           await founderAlert(env, `🎉 New download! First open on ${os}`, 'new');
@@ -16410,7 +16473,7 @@ async function freezeSweep(env, now = new Date()) {
         const tries = (Number(rec.tries) || 0) + 1;
         await kv.put(name, JSON.stringify({ ...rec, tries, last_try: now.toISOString(), failed_steps: res.failed.slice(0, 12) })).catch(() => {});
         await gbLogEvent(env, 'age_frozen_purge_failed', { tries, steps: res.failed.slice(0, 12) }).catch(() => {});
-        if (tries === 3) await founderAlert(env, `⚠️ An under-13 clean-up has failed 3 daily tries (steps: ${res.failed.slice(0, 6).join(', ')}). It keeps retrying — check the worker's SUPABASE_SERVICE_ROLE_KEY and R2.`, 'bell').catch(() => {});
+        if (tries === 3) await founderAlert(env, `⚠️ An under-13 clean-up has failed 3 daily tries (steps: ${res.failed.slice(0, 6).join(', ')}). It keeps retrying — check the worker's SUPABASE_SERVICE_ROLE_KEY and R2.`, 'ops').catch(() => {});
         continue;
       }
       await kv.put(name, JSON.stringify({ ...rec, purged_at: now.toISOString() })).catch(() => {});
@@ -16504,7 +16567,7 @@ async function purgeRetrySweep(env, now = new Date()) {
       out.failed++;
       const tries = (Number(rec.tries) || 0) + 1;
       await kv.put(name, JSON.stringify({ ...rec, tries, last_try: now.toISOString(), failed_steps: res.failed.slice(0, 12) })).catch(() => {});
-      if (tries === 3) await founderAlert(env, `⚠️ A deleted account's clean-up has failed 3 daily tries (steps: ${res.failed.slice(0, 6).join(', ')}). It keeps retrying — check the worker's SUPABASE_SERVICE_ROLE_KEY and R2.`, 'bell').catch(() => {});
+      if (tries === 3) await founderAlert(env, `⚠️ A deleted account's clean-up has failed 3 daily tries (steps: ${res.failed.slice(0, 6).join(', ')}). It keeps retrying — check the worker's SUPABASE_SERVICE_ROLE_KEY and R2.`, 'ops').catch(() => {});
     } catch { out.failed++; /* one account never stops the sweep */ }
   }
   if (last) await kv.put('sweep:purge', last).catch(() => {});
@@ -16848,10 +16911,11 @@ async function handleSocialReport(request, env, ctx) {
     if (ctx) {
       ctx.waitUntil(gbLogEvent(env, 'social_report', { kind, reason }));
       // The founder hears about a report at once (Apple 1.2: act within 24
-      // hours), a child-safety one loudest and on its own daily allowance;
-      // one reporter rings at most 10 times a day (founderAlert), and every
-      // report is filed either way. Never a name or an id in the text: the
-      // alert topic is only as private as its name.
+      // hours), a child-safety one loudest and on its own allowances: one
+      // reporter's reports and blocks ring at most 10 times a day, their
+      // child-safety reports at most 3 more (founderAlert), and every report
+      // is filed either way. Never a name or an id in the text: the alert
+      // topic is only as private as its name.
       const urgent = reason === 'minor_safety';
       ctx.waitUntil(founderAlert(env, `🚩 ${urgent ? 'CHILD SAFETY report (24h)' : 'Report'} · ${kind} · ${reason.replace('_', ' ')}. Admin → Safety reports.`, urgent ? 'urgent' : 'report', { by: user.id }));
     }
@@ -22900,20 +22964,13 @@ async function gbReviewNote(env, text, placeName) {
 async function gbNotifyFounder(env, subject, text, fromUserId = null) {
   if (!env.RESEND_API_KEY) return { sent: false, reason: 'no-key' };
   try {
-    const kv = env.GLOBESKIMMERS_KV;
-    if (kv) {
-      const day = new Date().toISOString().slice(0, 10);
-      if (fromUserId) {
-        const uk = `gb:notify:${fromUserId}:${day}`;
-        const un = Number(await kv.get(uk).catch(() => 0)) || 0;
-        if (un >= 3) return { sent: false, reason: 'user-cap' };   // one person can't drown the inbox
-        await kv.put(uk, String(un + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
-      }
-      const k = `gb:notify:${day}`;
-      const n = Number(await kv.get(k).catch(() => 0)) || 0;
-      if (n >= 30) return { sent: false, reason: 'cap' };
-      await kv.put(k, String(n + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
+    // Counted atomically (gbDayCount), so a burst can't slip past the caps.
+    if (fromUserId) {
+      const un = await gbDayCount(env, `gb:notify:${fromUserId}`);
+      if (un != null && un > 3) return { sent: false, reason: 'user-cap' };   // one person can't drown the inbox
     }
+    const n = await gbDayCount(env, 'gb:notify');
+    if (n != null && n > 30) return { sent: false, reason: 'cap' };
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -24379,6 +24436,8 @@ export default {
       // swallow — INSERT OR REPLACE makes any day safely replayable while its
       // raw events (kept 180d) still exist; a failed night costs nothing yet
     }
+    // The daily counters (gbDayCount) older than two days go.
+    try { await gbDayCountsPrune(env); } catch (_e) { /* tomorrow's cron tries again */ }
     // Under-age freeze: delete content of accounts frozen past the window.
     try { await freezeSweep(env); } catch (_e) { /* tomorrow's cron tries again */ }
     // Deleted accounts whose clean-up had a failed step: finish it.
