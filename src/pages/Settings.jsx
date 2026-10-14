@@ -848,7 +848,10 @@ export default function SettingsPage() {
                     ))}
                   </div>
                 )}
-                <div style={{ marginTop: 10 }}>
+                {/* A username or Seal request is a social act: not for a frozen
+                    account, a birth year to confirm or a held teen (the worker
+                    refuses them too, go-live round 3). */}
+                {!["blocked", "confirm", "teen"].includes(socialTier) && <div style={{ marginTop: 10 }}>
                   {!reqOpen ? (
                     <button type="button" onClick={() => setReqOpen(true)}
                       style={{ background: 'none', border: 0, padding: 0, color: ED_INK3, fontSize: 12, textDecoration: 'underline', textUnderlineOffset: 2 }}>
@@ -881,7 +884,7 @@ export default function SettingsPage() {
                       </div>
                     </div>
                   )}
-                </div>
+                </div>}
               </> ) }}
               last={false}
             />

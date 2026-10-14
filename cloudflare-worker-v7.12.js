@@ -18644,11 +18644,19 @@ async function handleSocialUnread(request, env) {
 
 // POST /social/request { kind, handle?, note? } — businesses/people may ask
 // for a username (often one we hold) or for the GlobeSkimmers Seal. Stored
-// for the founder's desk; capped at 3 open requests per account.
+// for the founder's desk; capped at 3 open requests per account. The same
+// age doors as claiming a username (go-live round 3: a frozen, unconfirmed
+// or held account, or one whose age couldn't be read, filed its email and a
+// free-text note here): under 13 can't send anything, and 13–17 get no
+// username.
 async function handleSocialRequest(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (sp === undefined) return gbAgeUnknownResp();
+    if (gbUnderAge(sp)) return gbUnderAgeResp();
+    if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
     const b = await request.json().catch(() => ({}));
     const kind = b.kind === 'seal' ? 'seal' : 'username';
     const handle = String(b.handle || '').toLowerCase().trim().replace(/^@/, '').slice(0, 20) || null;
