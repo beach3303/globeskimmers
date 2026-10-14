@@ -39,6 +39,7 @@ import SmartSearchOverlay from "@/components/search/SmartSearchOverlay";
 import DestinationStrip from "@/components/search/DestinationStrip";
 import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
 import FriendsTravels from "@/components/home/FriendsTravels";
+import CityBoardRow from "@/components/home/CityBoardRow";
 import { openAttraction } from "@/lib/openAttraction";
 
 // Translation mapping for greetings — shown next to the mono "Hello" kicker
@@ -641,6 +642,8 @@ export default function HomePage() {
         onOpen={() => { trackEvent('feature_used', { feature_name: 'passport_hero' }); navigate(createPageUrl('Passport')); }}
       />
       <FriendsTravels wide={isTablet} />
+      {/* City Board: 'Postcards from Lisbon', only when that board has something to show. */}
+      <CityBoardRow city={activeLocation?.address?.city} country={activeLocation?.address?.country} />
       <NearbyServices wide={isTablet} onAction={handleQuickAction} onAllServices={openAllServices} />
       {isTablet && rowsFirst && <HomeRows unit={unit} onAction={handleQuickAction} />}
       <StampsNearYou unit={unit} onAction={handleQuickAction} onNearest={setNearestStamp} />

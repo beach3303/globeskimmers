@@ -6,7 +6,7 @@
 // The new look (bible.word.lines): 'A postcard to your *circle*', on ivory with an airmail
 // edge; the chosen address in airmail blue, Send in stamp red with a lucide Send. No emoji.
 //
-//   <PostcardCompose open onClose onSent following followerCount preset toHandle blocked />
+//   <PostcardCompose open onClose onSent following followerCount preset toHandle blocked toCity />
 //   following      op:list `following` rows (or useCircle().acc): accepted people you follow
 //                  who have a handle become addresses, 12 at most.
 //   followerCount  how many follow you; at 0 'Everyone who follows me' has nowhere to go.
@@ -15,6 +15,9 @@
 //                  only that address.
 //   blocked        people you blocked (op:list `blocked` rows, user ids, handles, or a Set):
 //                  never offered as an address. A fixed address you blocked can't be sent to.
+//   toCity         { city, country }: a postcard to that city's public board (City Board).
+//                  The sheet reads 'A postcard to *Lisbon*', the address is the board alone,
+//                  and a line says who can see it. The worker checks you were really there.
 //
 // Sending keeps today's call and errors; the toasts use the circle wording ('Postcard sent to
 // everyone who follows you').
@@ -118,10 +121,10 @@ function Address({ on, onClick = undefined, children, fixed = false }) {
 /**
  * @param {{
  *   open?: boolean, onClose?: () => void, onSent?: () => void, following?: any[], preset?: any,
- *   followerCount?: number|null, toHandle?: string|null, blocked?: any,
+ *   followerCount?: number|null, toHandle?: string|null, blocked?: any, toCity?: { city: string, country: string }|null,
  * }} props
  */
-export default function PostcardCompose({ open = false, onClose = undefined, onSent = undefined, following = [], preset = undefined, followerCount = null, toHandle = null, blocked = undefined }) {
+export default function PostcardCompose({ open = false, onClose = undefined, onSent = undefined, following = [], preset = undefined, followerCount = null, toHandle = null, blocked = undefined, toCity = null }) {
   const fileRef = useRef(/** @type {HTMLInputElement|null} */ (null));
   const sheetRef = useRef(/** @type {HTMLDivElement|null} */ (null));
   const titleId = `pc-title-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -160,8 +163,10 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   const addresses = (Array.isArray(following) ? following : [])
     .filter((f) => f && f.handle && f.status === "accepted" && !isBlocked(f))
     .slice(0, 12);
-  const fixedBlocked = !!fixedTo && block.handles.has(fixedTo);
-  const nowhere = !fixedTo && to === "" && followerCount === 0;
+  const board = toCity && String(toCity.city || "").trim() && String(toCity.country || "").trim()
+    ? { city: String(toCity.city).trim(), country: String(toCity.country).trim() } : null;
+  const fixedBlocked = !board && !!fixedTo && block.handles.has(fixedTo);
+  const nowhere = !board && !fixedTo && to === "" && followerCount === 0;
   const canSend = !busy && !!image && !nowhere && !fixedBlocked;
 
   const pick = async (e) => {
@@ -176,18 +181,19 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     if (!image) { showToast("A postcard needs its photo", "error"); return; }
     if (nowhere || fixedBlocked) return;
     setBusy(true);
-    const address = fixedTo || to;
+    const address = board ? "" : fixedTo || to;
     const { error } = await sendPostcard({
       image, message,
-      place_name: place || preset?.place_name, city: preset?.city, country: preset?.country,
+      place_name: place || preset?.place_name, city: board?.city || preset?.city, country: board?.country || preset?.country,
       meta: dish ? { dish } : undefined,
       to_handle: address || undefined,
+      to_city: board || undefined,
     });
     setBusy(false);
     if (error === "age_required") { showToast("Set your birth year in Settings first (one time)", "error"); return; }
     if (error === "no_followers") { showToast("No one follows you yet. Address it to someone you follow, or invite someone to your circle first", "error"); return; }
     if (error) { showToast(workerMessage(error, "Couldn't send the postcard. Try again."), "error"); return; }
-    showToast(address ? `Postcard sent to @${address}` : "Postcard sent to everyone who follows you", "success");
+    showToast(board ? `Posted to ${board.city}’s board` : address ? `Postcard sent to @${address}` : "Postcard sent to everyone who follows you", "success");
     // The next postcard starts blank.
     setImage(preset?.image || null);
     setMessage("");
@@ -219,7 +225,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
         <div style={{ padding: "16px 20px calc(28px + env(safe-area-inset-bottom))" }}>
           <div style={{ fontFamily: MONO, fontSize: fs(9.5), lineHeight: 1.3, letterSpacing: ".2em", textTransform: "uppercase", color: NEUTRAL.stamp }}>Globeskimmers mail</div>
           <h3 id={titleId} style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(22), fontWeight: 400, lineHeight: 1.1, color: NEUTRAL.ink }}>
-            A postcard to your <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>circle</em>
+            A postcard to {board ? <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>{board.city}</em> : <>your <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>circle</em></>}
           </h3>
 
           {/* the front */}
@@ -271,7 +277,15 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
 
           {/* the address */}
           <div id={`${titleId}-to`} style={{ ...kicker, marginTop: 16 }}>To</div>
-          {fixedTo ? (
+          {board ? (
+            <div style={{ marginTop: 2 }}>
+              <Address on fixed>{board.city}’s board</Address>
+              <p style={{ display: "flex", alignItems: "flex-start", gap: 6, margin: "4px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
+                <Info size={14} strokeWidth={2} color={NEUTRAL.airmailBlue} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 2 }} />
+                <span>Everyone who opens {board.city}’s board can see it, with your name.</span>
+              </p>
+            </div>
+          ) : fixedTo ? (
             <div style={{ marginTop: 2 }}>
               <Address on fixed>@{fixedTo}</Address>
             </div>

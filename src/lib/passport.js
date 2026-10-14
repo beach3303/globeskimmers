@@ -300,10 +300,28 @@ export async function getAgeInfo() {
   return { set: !!data?.set, tier: data?.tier || null, birth_year: data?.birth_year || null, birth_md: data?.birth_md || null, error };
 }
 // Send a postcard: image (data URL from resizePhoto), message, the place
-// line, optional dish meta, and either to_handle or nothing (= followers).
-export async function sendPostcard({ image, message, place_name, city, country, meta, to_handle }) {
-  const { data, error } = await callWorker('postcards/send', { image, message, place_name, city, country, meta, to_handle });
+// line, optional dish meta, and either to_handle, to_city ({ city, country }:
+// that city's board, City Board) or nothing (= followers).
+export async function sendPostcard({ image, message, place_name, city, country, meta, to_handle, to_city }) {
+  const { data, error } = await callWorker('postcards/send', { image, message, place_name, city, country, meta, to_handle, to_city });
   return { data, error: error || data?.error || null };
+}
+// A city's board (City Board, 2026-10-14): postcards from travelers who were really
+// there, newest first, a page at a time (before = the previous page's `next`).
+// { rows, next, can_post, held, unavailable, error }: held for a held viewer, and
+// unavailable before the worker or its column is there, so the app shows no board.
+export async function cityBoard({ city, country, before = null }) {
+  const { data, error } = await callWorker('city/board', { city, country, ...(before ? { before } : {}) });
+  if (data && data.path === '/city/board') return { rows: [], next: null, can_post: false, held: null, unavailable: true, error: null };
+  const held = data?.code === 'teen_hold' ? data.held || 'teen' : null;
+  return {
+    rows: Array.isArray(data?.rows) ? data.rows : [],
+    next: data?.next || null,
+    can_post: data?.can_post === true,
+    held,
+    unavailable: data?.unavailable === true,
+    error: held ? null : error || data?.error || null,
+  };
 }
 // Avatar: moderated at upload, fail-closed; resolves the serving URL.
 export async function setAvatar(image) {
