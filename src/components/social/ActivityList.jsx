@@ -8,7 +8,7 @@
 //
 //   <ActivityList items onOpen className style />
 //   items    social/unread activity ({ type, by: { name, handle, verified, seal, cloth?,
-//            avatar? }, at, unread, to_me, place, reactions, photo, stamp, doodle, body }).
+//            avatar? }, at, unread, to_me, place, reactions, photo, stamp, board, doodle, body }).
 //            Hidden when empty.
 //   onOpen   (destination) => void, where destination is 'passport' or 'circle'.
 //   onMore   (item) => void: a 44px '•••' beside each row ('Options for {name}'), outside
@@ -38,11 +38,13 @@ export function activityLine(a) {
     case "postcard": return { who, text: a.to_me ? `sent you a postcard${from}` : `sent a postcard${from}` };
     case "reaction": {
       const marks = Array.isArray(a.reactions) ? a.reactions.join(" · ") : "";
-      const where = a.photo ? ` on your photo${a.stamp ? ` from ${a.stamp}` : ""}` : a.stamp ? ` on your ${a.stamp} page` : " on your passport";
+      // A board postcard (City Boards, 2026-10-14) carries `board`, its city.
+      const where = "board" in a ? ` on your postcard${a.board ? ` on ${a.board}’s board` : ""}` : a.photo ? ` on your photo${a.stamp ? ` from ${a.stamp}` : ""}` : a.stamp ? ` on your ${a.stamp} page` : " on your passport";
       return { who, text: `stamped ${marks}${where}` };
     }
     case "signature": {
       const words = a.body ? `: “${a.body}”` : "";
+      if ("board" in a) return { who, text: `${a.doodle && !a.body ? "doodled on" : "commented on"} your postcard${a.board ? ` on ${a.board}’s board` : ""}${words}` };
       if (a.photo) return { who, text: `${a.doodle && !a.body ? "doodled on" : "commented on"} your photo${a.stamp ? ` from ${a.stamp}` : ""}${words}` };
       return { who, text: `${a.doodle && !a.body ? "left a doodle on" : "signed"}${a.stamp ? ` your ${a.stamp} page` : " your passport"}${words}` };
     }

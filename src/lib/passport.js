@@ -404,6 +404,14 @@ export async function blotterRead(slug) {
   const { data } = await callWorker('blotter/read', { slug });
   return data && !data.error ? data : { targets: {}, entries: [] };
 }
+// The likes and comments on one board page's postcards (City Boards, 2026-10-14): the same
+// { targets, entries } shape, keyed 'pc:<id>'.
+export async function blotterReadBoard(postcardIds) {
+  const ids = (postcardIds || []).filter(Boolean).slice(0, 60);
+  if (!ids.length) return { targets: {}, entries: [] };
+  const { data } = await callWorker('blotter/read', { postcards: ids });
+  return data && !data.error ? data : { targets: {}, entries: [] };
+}
 // Press or peel one of the five reaction stamps (+ contextual 'yummy').
 export async function blotterMark(slug, target, kind, op) {
   const { data, error } = await callWorker('blotter/mark', { slug, target, kind, op });
