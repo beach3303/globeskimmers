@@ -18687,7 +18687,8 @@ async function handlePostcardKeep(request, env) {
 // share link, or by user_id when they are in the viewer's circle; unknown or
 // blocked either way → 404 no_person; a minor (or an age that can't be read) →
 // { unavailable: true }, so a visit never tells them apart from nobody.
-// Always: person (name, @handle, Seal, face, home country only), relation
+// Always: person (name, @handle, Seal, face, home country, and home city only if
+// they turned that on in Settings), relation
 // (self, i_follow, follows_me, inner) and private. When the passport is open to
 // the viewer (public, or the two follow each other: the /passport/public rule):
 // the shared booklet (ppShareStamps, no coordinates), their trunk and its flags,
@@ -18741,9 +18742,18 @@ async function handleSocialWorld(request, env) {
     const ownerSp = await gbSocialProfile(env, sid).catch(() => undefined);
     if (gbOffSocial(ownerSp)) return jsonResponse({ unavailable: true });
 
-    const [eq, pq, faceMap] = await Promise.all([
+    // Their home: the country always, the city only if they turned it on (founder,
+    // 2026-10-14: "A plus a switch to turn on city"). Before that column exists
+    // PostgREST answers 400, and the country alone is read.
+    const readHome = async () => {
+      const at = (cols) => gbRest(env, `profiles?id=eq.${sid}&select=${cols}`, { headers: { 'Accept-Profile': 'public' } });
+      let r = await at('home_country,home_city_country,home_city,show_home_city');
+      if (r.status === 400) r = await at('home_country,home_city_country');
+      return r.ok ? ((await r.json())[0] || {}) : {};
+    };
+    const [eq, prof, faceMap] = await Promise.all([
       gbRest(env, `user_follows?or=(and(follower_id.eq.${me},followee_id.eq.${sid}),and(follower_id.eq.${sid},followee_id.eq.${me}))&select=follower_id,status`, {}),
-      gbRest(env, `profiles?id=eq.${sid}&select=home_country,home_city_country`, { headers: { 'Accept-Profile': 'public' } }),
+      readHome(),
       gbFaces(env, [sid], origin),
     ]);
     if (!eq.ok) return retry();
@@ -18754,7 +18764,6 @@ async function handleSocialWorld(request, env) {
     const iFollow = mine ? (mine.status === 'pending' ? 'pending' : 'accepted') : null;
     const followsMe = theirs?.status === 'accepted';
     const inner = iFollow === 'accepted' && followsMe;
-    const prof = (pq.ok ? await pq.json() : [])[0] || {};
     const person = {
       user_id: sid,
       handle: share?.handle || null,
@@ -18763,8 +18772,8 @@ async function handleSocialWorld(request, env) {
       cloth: faceMap[sid]?.cloth || null,
       verified: share?.verified === true,
       seal: share?.verified === true ? (share.seal || 'burgundy') : null,
-      // Home country only, never the city (the visit default, founder decision pending).
       country: prof.home_country || null,
+      city: prof.show_home_city === true && prof.home_city ? prof.home_city : null,
     };
     const relation = { self: false, i_follow: iFollow, follows_me: followsMe, inner };
     const visible = !!share && (share.is_public === true || inner);
