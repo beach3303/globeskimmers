@@ -16,11 +16,24 @@
 // Pages (mode): 'select', 'saved', 'search', 'info' (the 1.5 s "Now exploring" hold after
 // a search pick). Only the search page tracks the on-screen keyboard.
 //
+// Fitting the screen. How much of the folder stays put is decided from measured room,
+// never from a fixed screen size: the text size, a GPS note, a narrow phone, a landscape
+// screen and the keyboard all change it.
+//   pin     the title and the button stay put and only the sheet of rows scrolls, while it
+//           keeps about one and a half rows in view (the search page: one result row);
+//   foot    the button stays put and the title scrolls with the rows, while at least
+//           half a row shows under the title;
+//   scroll  the whole folder scrolls.
+// A scrolling sheet or folder fades out at its bottom edge while more is below it. On
+// phones the search page, and the confirmation that follows it, hang from the top of the
+// screen, so the field never moves as the keyboard rises or results arrive; while the
+// keyboard is up the folder reaches down to 16px above it.
+//
 // The sheet is a modal dialog: it is named by the page's title, focus moves into it on
 // open and on each page change and back to the opener on close, Tab stays inside it, and
 // Escape, a scrim tap, the global swipe-down or Android's back key close it. Closing is
 // instant.
-import React, { useState, useEffect, useRef, useId } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useId } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   ArrowRight,
@@ -52,6 +65,7 @@ import { useLocation } from './LocationContext';
 import { useIsTablet } from '@/lib/useIsTablet';
 import { useKeyboardOffset } from '@/lib/useKeyboardOffset';
 import { useDismissable } from '@/lib/dismissStack';
+import { useFontScale } from '@/components/a11y/FontScaleContext';
 import { NEUTRAL, ZONE, fs, rgba } from '@/components/redesign/constants';
 import { Folder, FolderTab } from '@/components/redesign/Zone';
 
@@ -113,9 +127,14 @@ function gpsErrorText(error) {
 const NO_RESULTS = 'No locations found. Please search for a specific address, landmark, or place.';
 const SEARCH_ERROR = 'Error searching. Please try again.';
 
-// Below this visible height (a landscape phone, a small phone with the keyboard up) the
-// folder scrolls as one piece instead of pinning its title and button around the rows.
-const SHORT_VIEWPORT = 420;
+// The room rules (see the top of the file); the row sizes grow with the text size.
+const ROWS_MIN = 100; // about one and a half rows: the title and the button stay put
+const ROWS_PEEK = 32; // half a row: the button stays put and the title scrolls away
+const RESULT_MIN = 64; // one search result row under the pinned field
+const LAYOUTS = ['pin', 'foot', 'scroll']; // most to least pinned
+const FADE = 24; // the soft edge at the bottom of a scroller
+const SPRING = { type: 'spring', damping: 28, stiffness: 320 }; // today's entrance spring
+const NO_FADES = { sheet: false, region: false, box: false };
 
 // 100dvh follows the browser's toolbars; WebViews older than Chrome 108 take 100vh.
 const VH = typeof window !== 'undefined' && window.CSS && window.CSS.supports && window.CSS.supports('height', '100dvh') ? '100dvh' : '100vh';
@@ -124,24 +143,27 @@ const SAFE_BOTTOM = 'env(safe-area-inset-bottom, 0px)';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-// The window's height while the sheet is open (rotation, split view).
-function useViewportHeight(active) {
-  const [h, setH] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 0));
+// The window's size while the sheet is open (rotation, split view), as one value.
+function useViewportSize(active) {
+  const [size, setSize] = useState(() => (typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : ''));
   useEffect(() => {
     if (!active || typeof window === 'undefined') return undefined;
-    const update = () => setH(window.innerHeight);
+    const update = () => setSize(`${window.innerWidth}x${window.innerHeight}`);
     update();
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
   }, [active]);
-  return h;
+  return size;
 }
 
-// Where the folder sits. Phone: a bottom sheet 16px above the home indicator (or the
-// keyboard), at most today's 448px wide. iPad: a centred folder, at most 480px wide and
-// 720px tall, centred in the space above the keyboard. cap is the dialog's max height;
-// the search page is that tall (iPad: at most 600px) so its pinned field never jumps.
-function frameFor(isTablet, keyboardOffset) {
+// Where the folder sits. Phone: at most today's 448px wide; the select and saved pages sit
+// 16px above the home indicator, under the thumb (top: false), and the search page and the
+// confirmation after it hang 12px below the top safe area (top: true), down to 16px above
+// the home indicator or the keyboard. iPad: a centred folder, at most 480px wide and 720px
+// tall, centred in the space above the keyboard. cap is the dialog's max height;
+// searchHeight, when set, is the search page's height (iPad: at most 600px; phone: the
+// whole space above the keyboard, so a tap under the results can't land on the scrim).
+function frameFor(isTablet, keyboardOffset, top) {
   if (isTablet) {
     const cap = keyboardOffset
       ? `calc(${VH} - ${SAFE_TOP} - ${keyboardOffset + 48}px)`
@@ -162,8 +184,8 @@ function frameFor(isTablet, keyboardOffset) {
     };
   }
   const cap = keyboardOffset
-    ? `calc(${VH} - ${SAFE_TOP} - ${keyboardOffset + 40}px)`
-    : `calc(${VH} - ${SAFE_TOP} - ${SAFE_BOTTOM} - 48px)`;
+    ? `calc(${VH} - ${SAFE_TOP} - ${keyboardOffset + (top ? 28 : 40)}px)`
+    : `calc(${VH} - ${SAFE_TOP} - ${SAFE_BOTTOM} - ${top ? 28 : 48}px)`;
   return {
     overlay: {
       alignItems: 'stretch',
@@ -172,12 +194,12 @@ function frameFor(isTablet, keyboardOffset) {
       paddingRight: 16,
       paddingBottom: keyboardOffset ? keyboardOffset + 16 : `calc(16px + ${SAFE_BOTTOM})`,
     },
-    // margin-top auto puts the sheet at the bottom; if it ever outgrows the screen it
-    // overflows downward, where the overlay can still scroll to it.
-    dialog: { width: '100%', maxWidth: 448, alignSelf: 'center', marginTop: 'auto' },
+    // margin-top auto puts the sheet at the bottom, margin-bottom auto at the top.
+    dialog: { width: '100%', maxWidth: 448, alignSelf: 'center', ...(top ? { marginTop: 0, marginBottom: 'auto' } : { marginTop: 'auto' }) },
     cap,
-    searchHeight: cap,
-    shadow: `0 -16px 36px -20px ${rgba(NEUTRAL.ink, 0.6)}`,
+    searchHeight: keyboardOffset ? cap : undefined,
+    // A folder that hangs from the top casts its shadow downward, as the iPad folder does.
+    shadow: top ? `0 24px 48px -24px ${rgba(NEUTRAL.ink, 0.5)}` : `0 -16px 36px -20px ${rgba(NEUTRAL.ink, 0.6)}`,
     enter: { y: '100%', opacity: 0 },
   };
 }
@@ -210,11 +232,38 @@ function IconButton({ label, icon: Icon, onClick, margin }) {
   );
 }
 
-// The white sheet that holds the rows (Location-B L204).
-function Sheet({ children, style = undefined }) {
+// The soft edge at the bottom of a scroller while more is below it. It lets taps through.
+/** @param {{ color: string, inset?: number, radius?: number | string }} props */
+function Fade({ color, inset = 0, radius = 0 }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        left: inset,
+        right: inset,
+        bottom: inset,
+        height: FADE,
+        borderRadius: radius,
+        background: `linear-gradient(${rgba(color, 0)}, ${color})`,
+        pointerEvents: 'none',
+      }}
+    />
+  );
+}
+
+// The white sheet that holds the rows (Location-B L204). When scroll is set the sheet
+// itself scrolls, so its border and rounded edge always frame the list, and it fades out
+// at the bottom while rows remain below (more). rowsRef measures the rows.
+function Sheet({ children, scroll = false, more = false, rowsRef = undefined, onScroll = undefined, style = undefined }) {
   return (
     <div
       style={{
+        position: 'relative',
+        flex: scroll ? '0 1 auto' : 'none',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
         overflow: 'hidden',
         borderRadius: 16,
         background: NEUTRAL.white,
@@ -222,7 +271,13 @@ function Sheet({ children, style = undefined }) {
         ...style,
       }}
     >
-      {children}
+      <div
+        onScroll={onScroll}
+        style={scroll ? { flex: '0 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', scrollPaddingBottom: FADE } : { flex: 'none' }}
+      >
+        <div ref={rowsRef}>{children}</div>
+      </div>
+      {more ? <Fade color={NEUTRAL.white} /> : null}
     </div>
   );
 }
@@ -314,12 +369,13 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
   const { switchToCurrentLocation, switchToNavigateMode, getSavedLocations } = useLocation();
   const isTablet = useIsTablet();
   const reduce = useReducedMotion();
+  const { scale } = useFontScale();
 
   const [mode, setMode] = useState('select'); // 'select', 'search', 'saved', 'info'
   // Only the search page raises the keyboard; its height keeps the folder above it.
   const needsKeyboard = mode === 'search';
   const keyboardOffset = useKeyboardOffset(isOpen && needsKeyboard);
-  const viewportHeight = useViewportHeight(isOpen);
+  const viewport = useViewportSize(isOpen);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -329,11 +385,27 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
   const [gpsError, setGpsError] = useState(''); // shown on the select page, above the button
   const [note, setNote] = useState(null); // the search page's { kind: 'empty'|'error', text }
   const [picked, setPicked] = useState(null); // the search result "Now exploring" names
+  const [layout, setLayout] = useState('pin'); // 'pin' | 'foot' | 'scroll' (see the top)
+  const [fades, setFades] = useState(NO_FADES);
 
   // Only the newest search may show its reply: a reply for a query that has since changed,
   // been cleared, or belongs to an earlier opening is dropped.
   const searchSeq = useRef(0);
   const dialogRef = useRef(null);
+  const frameRef = useRef(null); // the dialog's positioning wrapper (its max height)
+  // The folder's parts, measured to fit the screen.
+  const tabRef = useRef(null);
+  const regionRef = useRef(null); // the title and the body (its parent is the folder box)
+  const scrollRef = useRef(null); // the region's scroller (layout 'foot')
+  const headerRef = useRef(null);
+  const bodyRef = useRef(null);
+  const footerRef = useRef(null);
+  const rowsRef = useRef(null); // the rows inside the sheet
+  // The page and layout now, for the ResizeObserver, which outlives a render.
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
 
   const titleId = useId();
   const subId = useId();
@@ -372,6 +444,10 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
       setNote(null);
       setGpsError('');
       setPicked(null);
+    } else {
+      // Closed: the next opening starts on the select page from its first frame, so the
+      // folder doesn't replay the last page's move.
+      setMode('select');
     }
   }, [isOpen]);
 
@@ -413,6 +489,103 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
     });
     return () => cancelAnimationFrame(raf);
   }, [mode, isOpen]);
+
+  // ── Fitting the screen (see the top of the file) ─────────────────────────
+  // Every size is read from the page as drawn: the dialog's max height, the tab, the
+  // folder's padding, the title band, the button band and the rows. upgrade false (a size
+  // change seen by the ResizeObserver) may only pin less, so a layout whose own change
+  // moves what it measured can't flip back and forth.
+  const fit = (upgrade) => {
+    const place = frameRef.current;
+    const region = regionRef.current;
+    const header = headerRef.current;
+    const body = bodyRef.current;
+    const box = region ? region.parentElement : null;
+    if (!place || !box || !header || !body) return;
+    const num = (v) => parseFloat(v) || 0;
+    const bs = window.getComputedStyle(box);
+    const cap = parseFloat(window.getComputedStyle(place).maxHeight);
+    const avail = (Number.isFinite(cap) ? cap : Infinity)
+      - (tabRef.current ? tabRef.current.offsetHeight : 0)
+      - num(bs.paddingTop) - num(bs.paddingBottom) - num(bs.borderTopWidth) - num(bs.borderBottomWidth);
+    const headerH = header.offsetHeight;
+    const footerH = footerRef.current ? footerRef.current.offsetHeight : 0;
+    const rows = rowsRef.current;
+    const sheet = rows && rows.parentElement ? rows.parentElement.parentElement : null; // rows, scroller, sheet
+    const rowsH = rows && sheet ? rows.offsetHeight + sheet.offsetHeight - sheet.clientHeight : 0;
+    const otherH = body.scrollHeight - (sheet ? sheet.offsetHeight : 0); // the body around the sheet
+    let next;
+    if (modeRef.current === 'search') {
+      // The field stays pinned while one result row fits under it (with the body's top
+      // padding and the results kicker), and while a hint or a note fits.
+      const room = avail - headerH + 1;
+      next = room >= 12 + (14 * scale + 8) + RESULT_MIN && room >= (rows ? 0 : otherH) ? 'pin' : 'scroll';
+    } else {
+      // The rows' room under the title and above the button. Below half a row the title
+      // and the rows would hide each other, so the whole folder scrolls instead.
+      const room = avail - headerH - footerH - otherH + 1;
+      if (room >= Math.min(rowsH, ROWS_MIN * scale)) next = 'pin';
+      else if (footerH > 0 && room >= Math.min(rowsH, ROWS_PEEK * scale)) next = 'foot';
+      else next = 'scroll';
+    }
+    const cur = layoutRef.current;
+    if (next !== cur && (upgrade || LAYOUTS.indexOf(next) > LAYOUTS.indexOf(cur))) setLayout(next);
+  };
+
+  // Which scroller has more below it: only the one the layout uses.
+  const showFades = () => {
+    const cur = layoutRef.current;
+    const more = (el) => !!el && el.scrollHeight - el.scrollTop - el.clientHeight > 1;
+    const rows = rowsRef.current;
+    const region = regionRef.current;
+    const next = {
+      sheet: cur === 'pin' && more(rows ? rows.parentElement : null),
+      region: cur === 'foot' && more(scrollRef.current),
+      box: cur === 'scroll' && more(region ? region.parentElement : null),
+    };
+    setFades((prev) => (prev.sheet === next.sheet && prev.region === next.region && prev.box === next.box ? prev : next));
+  };
+
+  const fitRef = useRef(fit);
+  fitRef.current = fit;
+  const fadesRef = useRef(showFades);
+  fadesRef.current = showFades;
+
+  const lastName = coldOpen && lastLocation?.placeType !== 'current_location'
+    ? str(lastLocation?.placeName) || str(lastLocation?.address?.city)
+    : '';
+  const hasRows = mode === 'select' || (mode === 'saved' && savedLocations.length > 0) || (mode === 'search' && searchResults.length > 0);
+
+  // Anything that changes the room or what has to fit in it: decided before paint.
+  useLayoutEffect(() => {
+    if (isOpen) fitRef.current(true);
+  }, [isOpen, mode, gpsError, keyboardOffset, viewport, scale, isTablet, coldOpen, lastName, savedLocations, searchResults, note, searchQuery, picked]);
+
+  // After every render the fades follow the scroller in use.
+  useLayoutEffect(() => {
+    if (isOpen) fadesRef.current();
+  });
+
+  // Sizes that change on their own (a web font arriving late) can only pin less.
+  useEffect(() => {
+    if (!isOpen || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => {
+      fitRef.current(false);
+      fadesRef.current();
+    });
+    [frameRef, tabRef, headerRef, bodyRef, footerRef, rowsRef].forEach((r) => {
+      if (r.current) ro.observe(r.current);
+    });
+    return () => ro.disconnect();
+  }, [isOpen, mode, hasRows]);
+
+  // A GPS failure on a screen too short to pin anything: show the note and the button it
+  // explains, which the whole-folder scroll may have left below the edge.
+  useLayoutEffect(() => {
+    if (!isOpen || !gpsError || layout !== 'scroll') return;
+    const box = regionRef.current ? regionRef.current.parentElement : null;
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [isOpen, gpsError, layout]);
 
   // Saved locations come from on-device storage (src/lib/savedLocations.js), so this is a
   // synchronous read. Entries that aren't objects are skipped.
@@ -512,12 +685,22 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
 
   if (!isOpen) return null;
 
-  const frame = frameFor(isTablet, keyboardOffset);
-  // Pinned: the title and the buttons stay put and only the middle scrolls. Short screens
-  // scroll the whole folder instead, so nothing is cut off.
-  const pinned = viewportHeight - keyboardOffset >= SHORT_VIEWPORT;
+  // Phones: the search page and the confirmation after it hang from the top.
+  const top = !isTablet && (mode === 'search' || mode === 'info');
+  const frame = frameFor(isTablet, keyboardOffset, top);
+  const pin = layout === 'pin';
+  const foot = layout === 'foot';
+  const whole = layout === 'scroll';
   /** @type {CSS} */
-  const bodyStyle = pinned ? { flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain' } : { flex: 'none' };
+  const column = { display: 'flex', flexDirection: 'column' };
+  /** @type {CSS} */
+  const regionStyle = whole ? { position: 'relative', flex: 'none', ...column } : { position: 'relative', flex: '1 1 auto', minHeight: 0, ...column };
+  /** @type {CSS} */
+  const scrollStyle = foot
+    ? { flex: '1 1 auto', minHeight: 0, ...column, overflowY: 'auto', overscrollBehavior: 'contain', scrollPaddingBottom: FADE }
+    : whole ? { flex: 'none', ...column } : { flex: '1 1 auto', minHeight: 0, ...column };
+  /** @type {CSS} */
+  let bodyStyle = pin ? { flex: '1 1 auto', minHeight: 0, ...column } : { flex: 'none', ...column };
   const edge = `1px solid ${K.line}`;
 
   /** @type {(size: number, lineHeight: number) => CSS} */
@@ -550,9 +733,6 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
   let described = subId;
 
   if (mode === 'select') {
-    const lastName = coldOpen && lastLocation?.placeType !== 'current_location'
-      ? str(lastLocation?.placeName) || str(lastLocation?.address?.city)
-      : '';
     const rows = [];
     // Cold-open only: one tap to resume a place you deliberately chose (a typed or searched
     // destination). Hidden when you left off on your own current location: then "Explore
@@ -567,7 +747,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
 
     padding = coldOpen ? '18px 16px 6px' : '18px 16px 16px';
     header = (
-      <div style={{ flex: 'none' }}>
+      <>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           <h2 id={titleId} className="font-serif" style={titleStyle(28, 1.05)}>
             {coldOpen ? (
@@ -576,22 +756,22 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
               <>Choose your <em style={EM}>starting point</em></>
             )}
           </h2>
-          <IconButton label="Close" icon={X} onClick={onClose} margin="-8px -8px 0 0" />
+          {/* -8px below as well as above: the X stays on the first line, and a one-line
+              title keeps the board's 6px to the sub-line. */}
+          <IconButton label="Close" icon={X} onClick={onClose} margin="-8px -8px -8px 0" />
         </div>
         <p id={subId} style={subStyle}>Globeskimmers finds places near your starting point.</p>
-      </div>
+      </>
     );
     body = (
-      <div style={bodyStyle}>
-        <Sheet style={{ marginTop: 14 }}>
-          {rows.map(({ key, ...row }, i) => (
-            <Row key={key} {...row} first={i === 0} last={i === rows.length - 1} />
-          ))}
-        </Sheet>
-      </div>
+      <Sheet scroll={pin} more={fades.sheet} rowsRef={rowsRef} onScroll={showFades} style={{ marginTop: 14 }}>
+        {rows.map(({ key, ...row }, i) => (
+          <Row key={key} {...row} first={i === 0} last={i === rows.length - 1} />
+        ))}
+      </Sheet>
     );
     footer = (
-      <div style={{ flex: 'none' }}>
+      <>
         <div style={{ minHeight: 40, display: 'flex', alignItems: 'center', gap: 12 }}>
           <span aria-hidden="true" style={{ flex: 1, height: 1, background: K.rule }} />
           <span className="font-mono" style={{ flex: 'none', fontSize: fs(10.5), fontWeight: 500, lineHeight: 14 / 10.5, letterSpacing: '.14em', color: K.kicker }}>
@@ -670,36 +850,32 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
             Don’t ask again today
           </button>
         )}
-      </div>
+      </>
     );
   } else if (mode === 'saved') {
     header = (
-      <div style={{ flex: 'none' }}>
+      <>
         {backAndClose(<>Saved <em style={EM}>locations</em></>)}
         <p id={subId} style={subStyle}>Tap a place to navigate from it.</p>
-      </div>
+      </>
     );
-    body = (
-      <div style={bodyStyle}>
-        {savedLocations.length === 0 ? (
-          <p style={{ margin: 0, padding: '40px 0', textAlign: 'center', fontSize: fs(13), lineHeight: 18 / 13, color: K.meta }}>No saved locations yet.</p>
-        ) : (
-          <Sheet style={{ marginTop: 14 }}>
-            {savedLocations.map((location, index) => (
-              <Row
-                key={index}
-                icon={iconFor(location.placeType)}
-                title={nameOf(location) || 'Saved place'}
-                sub={str(location.address?.formatted)}
-                trail={ArrowRight}
-                onClick={() => handleSelectSavedLocation(location)}
-                first={index === 0}
-                last={index === savedLocations.length - 1}
-              />
-            ))}
-          </Sheet>
-        )}
-      </div>
+    body = savedLocations.length === 0 ? (
+      <p style={{ flex: 'none', margin: 0, padding: '40px 0', textAlign: 'center', fontSize: fs(13), lineHeight: 18 / 13, color: K.meta }}>No saved locations yet.</p>
+    ) : (
+      <Sheet scroll={pin} more={fades.sheet} rowsRef={rowsRef} onScroll={showFades} style={{ marginTop: 14 }}>
+        {savedLocations.map((location, index) => (
+          <Row
+            key={index}
+            icon={iconFor(location.placeType)}
+            title={nameOf(location) || 'Saved place'}
+            sub={str(location.address?.formatted)}
+            trail={ArrowRight}
+            onClick={() => handleSelectSavedLocation(location)}
+            first={index === 0}
+            last={index === savedLocations.length - 1}
+          />
+        ))}
+      </Sheet>
     );
   } else if (mode === 'search') {
     described = undefined;
@@ -709,7 +885,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
     // no-results words (an error note is role=alert and reads itself).
     const status = searching ? 'Searching…' : n > 0 ? `${n} ${n === 1 ? 'result' : 'results'}` : note?.kind === 'empty' ? note.text : '';
     header = (
-      <div style={{ flex: 'none' }}>
+      <>
         {backAndClose(<>Choose a <em style={EM}>destination</em></>)}
         {/* The field is pinned above the results, so results and the keyboard can't push
             it off the screen. */}
@@ -762,27 +938,32 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
               />
             ) : null}
           </div>
-          {showHint ? (
-            <p id={hintId} style={{ margin: '8px 0 0', fontSize: fs(12.5), lineHeight: 16 / 12.5, color: K.meta }}>
-              Type at least 3 characters to search.
-            </p>
-          ) : null}
           <p role="status" className="sr-only">{status}</p>
         </div>
-      </div>
+      </>
     );
+    // The hint sits in the body, under the field: it goes when results can come, so the
+    // pinned band above the results keeps one height while the traveler types.
+    bodyStyle = { ...bodyStyle, paddingTop: showHint ? 8 : 12 };
     body = (
-      <div style={{ ...bodyStyle, paddingTop: 12 }}>
-        {note ? <Note kind={note.kind} text={note.text} style={{ marginBottom: n > 0 ? 12 : 0 }} /> : null}
+      <>
+        {showHint ? (
+          <p id={hintId} style={{ flex: 'none', margin: 0, fontSize: fs(12.5), lineHeight: 16 / 12.5, color: K.meta }}>
+            Type at least 3 characters to search.
+          </p>
+        ) : null}
+        {note ? (
+          <Note kind={note.kind} text={note.text} style={{ flex: 'none' }} />
+        ) : null}
         {n > 0 ? (
           <>
             <h3
               className="font-mono"
-              style={{ margin: '0 0 8px 4px', fontSize: fs(10.5), fontWeight: 500, lineHeight: 14 / 10.5, letterSpacing: '.14em', textTransform: 'uppercase', color: K.kicker }}
+              style={{ flex: 'none', margin: '0 0 8px 4px', fontSize: fs(10.5), fontWeight: 500, lineHeight: 14 / 10.5, letterSpacing: '.14em', textTransform: 'uppercase', color: K.kicker }}
             >
               Search results
             </h3>
-            <Sheet>
+            <Sheet scroll={pin} more={fades.sheet} rowsRef={rowsRef} onScroll={showFades}>
               {searchResults.map((result, index) => {
                 const isCity = result.granularity === 'city';
                 const type = str(result.placeType);
@@ -814,15 +995,16 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
             </Sheet>
           </>
         ) : null}
-      </div>
+      </>
     );
   } else {
     // info: the 1.5 s hold after a search pick. No buttons: it closes itself, and the
-    // scrim, Escape and the swipe still close it.
+    // scrim, Escape and the swipe still close it. Its body never scrolls by itself.
     padding = '24px 20px 24px';
+    bodyStyle = { flex: 'none', display: 'block', textAlign: 'center' };
     const pickedName = str(picked?.placeName) || str(picked?.address?.city);
     body = (
-      <div style={{ ...bodyStyle, textAlign: 'center' }}>
+      <>
         <motion.div
           aria-hidden="true"
           initial={reduce ? false : { scale: 0.8, opacity: 0 }}
@@ -852,7 +1034,7 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
           <LoaderCircle size={16} color={NEUTRAL.tealInk} strokeWidth={2} className="motion-safe:animate-spin" aria-hidden="true" focusable="false" />
           <span style={{ fontSize: fs(13), fontWeight: 600, lineHeight: 18 / 13, color: NEUTRAL.tealInk }}>Updating…</span>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -868,53 +1050,87 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
         style={{ background: rgba(NEUTRAL.ink, 0.56), WebkitBackdropFilter: 'blur(4px)', backdropFilter: 'blur(4px)' }}
       />
 
+      {/* The folder's place on the screen. On phones it glides between the bottom (select,
+          saved) and the top (search, the confirmation) instead of jumping; not on iPad, where
+          it stays centred, and not with reduced motion. It is a wrapper so the glide and the
+          dialog's own entrance never write the same transform. */}
       <motion.div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={described}
-        tabIndex={-1}
-        onKeyDown={onKeyDown}
-        initial={reduce ? { opacity: 0 } : frame.enter}
-        animate={{ y: 0, opacity: 1 }}
-        transition={reduce ? { duration: 0.15 } : { type: 'spring', damping: 28, stiffness: 320 }}
+        ref={frameRef}
+        layout={reduce || isTablet ? false : 'position'}
+        layoutDependency={top}
+        transition={SPRING}
         style={{
           position: 'relative',
           display: 'flex',
           flexDirection: 'column',
           minHeight: 0,
           boxSizing: 'border-box',
-          outline: 'none',
           maxHeight: frame.cap,
-          ...(mode === 'search' && pinned ? { height: frame.searchHeight } : null),
+          ...(mode === 'search' && frame.searchHeight ? { height: frame.searchHeight } : null),
           ...frame.dialog,
         }}
       >
-        <div aria-hidden="true" style={{ flex: 'none' }}>
-          <FolderTab tone="services" size="home" as="p" style={{ borderTop: edge, borderLeft: edge, borderRight: edge }}>
-            Where to
-          </FolderTab>
-        </div>
-        <Folder
-          stock="services"
-          size="home"
-          padding={padding}
-          style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}
-          boxStyle={{
+        <motion.div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={described}
+          tabIndex={-1}
+          onKeyDown={onKeyDown}
+          initial={reduce ? { opacity: 0 } : frame.enter}
+          animate={{ y: 0, opacity: 1 }}
+          transition={reduce ? { duration: 0.15 } : SPRING}
+          style={{
+            position: 'relative',
             flex: '1 1 auto',
-            minHeight: 0,
             display: 'flex',
             flexDirection: 'column',
-            borderRadius: 22,
-            boxShadow: frame.shadow,
-            ...(pinned ? null : { overflow: 'auto', overscrollBehavior: 'contain' }),
+            minHeight: 0,
+            boxSizing: 'border-box',
+            outline: 'none',
           }}
         >
-          {header}
-          {body}
-          {footer}
-        </Folder>
+          <div ref={tabRef} aria-hidden="true" style={{ flex: 'none' }}>
+            <FolderTab tone="services" size="home" as="p" style={{ borderTop: edge, borderLeft: edge, borderRight: edge }}>
+              Where to
+            </FolderTab>
+          </div>
+          <Folder
+            stock="services"
+            size="home"
+            padding={padding}
+            onScroll={showFades}
+            style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}
+            boxStyle={{
+              flex: '1 1 auto',
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              borderRadius: 22,
+              boxShadow: frame.shadow,
+              ...(whole ? { overflow: 'auto', overscrollBehavior: 'contain', scrollPaddingBottom: FADE } : null),
+            }}
+          >
+            <div ref={regionRef} style={regionStyle}>
+              <div ref={scrollRef} onScroll={showFades} style={scrollStyle}>
+                <div ref={headerRef} style={{ flex: 'none' }}>
+                  {header}
+                </div>
+                <div ref={bodyRef} style={bodyStyle}>
+                  {body}
+                </div>
+              </div>
+              {fades.region ? <Fade color={K.fill} /> : null}
+            </div>
+            {footer ? (
+              <div ref={footerRef} style={{ flex: 'none' }}>
+                {footer}
+              </div>
+            ) : null}
+          </Folder>
+          {fades.box ? <Fade color={K.fill} inset={1} radius="0 0 21px 21px" /> : null}
+        </motion.div>
       </motion.div>
     </div>
   );
