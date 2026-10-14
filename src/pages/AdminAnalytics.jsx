@@ -1010,12 +1010,23 @@ export default function AdminAnalytics() {
   // Messages sent from the website's contact form (worker /admin/contact).
   const [inbox, setInbox] = useState({ messages: [], open: 0, total: 0, error: null });
   // Social safety reports (Apple 1.2 queue). minor_safety rows carry the 24h
-  // triage SLA — they sort first and show an age tag.
-  const [reports, setReports] = useState({ rows: [], error: null });
+  // triage SLA — they sort first and show an age tag. The worker sends every
+  // open child-safety report first, the rest 100 at a time (go-live round 3):
+  // total counts them all, and next loads the older ones.
+  const [reports, setReports] = useState({ rows: [], error: null, total: null, next: null });
+  const sortReports = (rows) => rows.slice().sort((a, b) => (a.reason === 'minor_safety' ? -1 : 0) - (b.reason === 'minor_safety' ? -1 : 0) || String(b.created_at).localeCompare(String(a.created_at)));
   const loadReports = async () => {
     const { data, error } = await callWorker('admin/reports', { status: 'open' });
-    const rows = (data?.reports || []).slice().sort((a, b) => (a.reason === 'minor_safety' ? -1 : 0) - (b.reason === 'minor_safety' ? -1 : 0) || String(b.created_at).localeCompare(String(a.created_at)));
-    setReports({ rows, error: error || data?.error || null });
+    setReports({ rows: sortReports(data?.reports || []), error: error || data?.error || null, total: typeof data?.total === 'number' ? data.total : null, next: data?.next || null });
+  };
+  const loadOlderReports = async () => {
+    if (!reports.next) return;
+    const { data, error } = await callWorker('admin/reports', { status: 'open', before: reports.next });
+    if (error || data?.error) { setReports((v) => ({ ...v, error: error || data.error })); return; }
+    setReports((v) => {
+      const seen = new Set(v.rows.map((r) => r.id));
+      return { ...v, rows: sortReports([...v.rows, ...(data?.reports || []).filter((r) => !seen.has(r.id))]), next: data?.next || null };
+    });
   };
   const resolveReport = async (id, resolve) => {
     await callWorker('admin/reports', { id, resolve });
@@ -1417,7 +1428,7 @@ export default function AdminAnalytics() {
 
             <PlaceSuggestionsDesk refreshKey={generatedAt} />
 
-            <Section title={`🛡️ Safety reports — ${reports.rows.length} open`} icon={Mail} empty={reports.error ? `Couldn't load reports: ${reports.error}` : reports.rows.length === 0 ? 'No open reports. Every report from the app lands here, and so does every block (with what the person was looking at). Each one also rings your phone; a child-safety report gets 24h triage.' : null}>
+            <Section title={`🛡️ Safety reports — ${reports.total ?? reports.rows.length} open`} icon={Mail} empty={reports.error ? `Couldn't load reports: ${reports.error}` : reports.rows.length === 0 ? 'No open reports. Every report from the app lands here, and so does every block (with what the person was looking at). Each one also rings your phone; a child-safety report gets 24h triage.' : null}>
               {reports.rows.map((r) => (
                 <div key={r.id} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border || '#eee'}` }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', fontSize: 13 }}>
@@ -1432,6 +1443,11 @@ export default function AdminAnalytics() {
                   </div>
                 </div>
               ))}
+              {reports.next && (
+                <button type="button" onClick={loadOlderReports} style={{ marginTop: 8, fontSize: 12, color: COLORS.accent, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                  Showing {reports.rows.length} of {reports.total ?? '…'} — load older reports
+                </button>
+              )}
             </Section>
 
             <Section title={`✉️ Website messages — ${inbox.open} open`} icon={Mail} empty={inbox.error ? `Couldn't load messages: ${inbox.error}` : inbox.messages.length === 0 ? 'No messages from globeskimmers.io yet. The contact form stores them here.' : null}>
