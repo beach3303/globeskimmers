@@ -260,7 +260,7 @@ function TravelerWorld() {
           website={world.website || null}
           style={world.luggage ? { marginTop: GAP } : firstCard}
         />
-        <TravelerActions person={person} relation={rel} cloth={cloth.key} fallback={world.fallback} report={report}
+        <TravelerActions person={person} relation={rel} cloth={cloth.key} fallback={world.fallback} slug={worldSlug} report={report}
           onChanged={onChanged} style={{ marginTop: GAP }} />
         {world.private ? (
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: GAP, padding: 16, background: NEUTRAL.white, border: `1px solid ${cloth.line}`, borderRadius: 16 }}>

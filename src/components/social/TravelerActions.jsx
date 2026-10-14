@@ -11,12 +11,16 @@
 // them, Report always, and Block only where the worker can honour it (useCircle.canBlock)
 // and their user id is known. Unfollow, Cancel request and Block ask first
 // (UnfollowConfirm). Without a handle there is no Follow (the worker follows by handle).
+// On today's worker (fallback) the page knows only the share link, so Block goes through
+// production's TravelerSheet by slug, as production's friend view does (go-live decision 6).
 //
-//   <TravelerActions person relation cloth fallback report onChanged className style />
+//   <TravelerActions person relation cloth fallback slug report onChanged className style />
 //   person    { user_id, handle, name }.
 //   relation  useCircle().relationOf(person), else the world's: 'inner', 'following',
 //             'requested', 'follower', 'requesting', 'blocked' or null.
-//   fallback  today's worker by slug: no follow edges are known, so only the ••• with Report.
+//   fallback  today's worker by slug: no follow edges are known, so only the ••• with Report
+//             (and Block by the share link, below).
+//   slug      their passport's share link, for that Block.
 //   report    { payload, subject } for ReportSheet (reportTraveler in world.js).
 //   onChanged called after a follow, unfollow or block lands (the page reads again).
 //
@@ -35,6 +39,7 @@ import { ReportSheet } from "@/components/social/Envelope";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import PostcardCompose from "@/components/passport/PostcardCompose";
 import UnfollowConfirm from "@/components/social/UnfollowConfirm";
+import TravelerSheet from "@/components/social/TravelerSheet";
 
 /** @typedef {import('react').CSSProperties} CSS */
 
@@ -112,22 +117,24 @@ export function MoreMenu({ label, items, children = null, triggerStyle = undefin
 
 /**
  * @param {{
- *   person: any, relation?: string|null, cloth?: any, fallback?: boolean, report?: any,
+ *   person: any, relation?: string|null, cloth?: any, fallback?: boolean, slug?: string|null, report?: any,
  *   onChanged?: (what: string) => void, className?: string, style?: CSS,
  * }} props
  */
-export default function TravelerActions({ person, relation = null, cloth = undefined, fallback = false, report = null, onChanged = undefined, className = undefined, style = undefined }) {
+export default function TravelerActions({ person, relation = null, cloth = undefined, fallback = false, slug = null, report = null, onChanged = undefined, className = undefined, style = undefined }) {
   const circle = useCircle();
   const c = clothRow(cloth);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(/** @type {null|'unfollow'|'inner'|'cancel'|'block'} */ (null));
   const [reporting, setReporting] = useState(false);
   const [writing, setWriting] = useState(false);
+  const [blockingLink, setBlockingLink] = useState(false);
 
   const h = handleOf(person);
   const id = person?.user_id ? String(person.user_id) : null;
   const who = whoOf(person);
   const canBlock = !fallback && circle.canBlock && !!id;
+  const canBlockLink = !canBlock && circle.canBlock && !!slug;
   const changed = (what) => { if (typeof onChanged === "function") onChanged(what); };
 
   const follow = async () => {
@@ -159,6 +166,7 @@ export default function TravelerActions({ person, relation = null, cloth = undef
     rel === "requested" ? { key: "cancel", label: "Cancel request", onSelect: () => setConfirm("cancel") } : null,
     report ? { key: "report", label: "Report", onSelect: () => setReporting(true) } : null,
     canBlock ? { key: "block", label: "Block", danger: true, onSelect: () => setConfirm("block") } : null,
+    canBlockLink ? { key: "block", label: "Block", danger: true, onSelect: () => setBlockingLink(true) } : null,
   ].filter(Boolean);
   const moreLabel = `More options for ${who}`;
 
@@ -210,6 +218,11 @@ export default function TravelerActions({ person, relation = null, cloth = undef
       {showMore ? <MoreMenu label={moreLabel} items={items} /> : null}
       <UnfollowConfirm person={confirm ? person : null} mode={confirm || "unfollow"} busy={busy} onConfirm={act} onClose={() => setConfirm(null)} />
       <ReportSheet payload={reporting ? report?.payload : undefined} subject={report?.subject} onClose={() => setReporting(false)} />
+      {blockingLink ? (
+        <TravelerSheet person={{ slug, handle: h || null, name: String(person?.name ?? "").trim() || null }} start="block"
+          report={{ kind: "passport", slug }} onClose={() => setBlockingLink(false)}
+          onChanged={(what) => { setBlockingLink(false); changed(what === "blocked" ? "block" : what); }} />
+      ) : null}
       {h ? (
         <PostcardCompose open={writing} onClose={() => setWriting(false)} onSent={() => setWriting(false)} toHandle={h}
           following={circle.acc} followerCount={circle.counts?.followYou ?? null} blocked={circle.blocked} />
