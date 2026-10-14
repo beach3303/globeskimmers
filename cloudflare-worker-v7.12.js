@@ -14820,6 +14820,28 @@ async function ppHolder(env, userId) {
   } catch { return 'A traveler'; }
 }
 
+// Faces (B2, 2026-10-14): the cloth each traveler's world is bound in
+// (public.profiles.cloth, B1) and their photo (social_profiles.avatar_key),
+// for the faces lists, feeds, activity and passports draw. Callers pass only
+// the people they already name (adults, unblocked, not deleted), so a face
+// never shows where a name doesn't. Before the cloth column exists PostgREST
+// answers 400: no cloths, never an error. → { [user_id]: { cloth?, avatar? } }
+const GB_CLOTHS = new Set(['harbour', 'forest', 'saddle', 'plum', 'slate', 'ochre', 'lapis', 'graphite']);
+async function gbFaces(env, ids, origin) {
+  const list = [...new Set((ids || []).filter((id) => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)))].slice(0, 200);
+  const out = {};
+  if (!list.length) return out;
+  const inList = list.join(',');
+  const [cq, aq] = await Promise.all([
+    gbRest(env, `profiles?id=in.(${inList})&select=id,cloth`, { headers: { 'Accept-Profile': 'public' } }).catch(() => null),
+    gbRest(env, `social_profiles?user_id=in.(${inList})&select=user_id,avatar_key`, {}).catch(() => null),
+  ]);
+  const read = async (r) => { try { return r && r.ok ? await r.json() : []; } catch { return []; } };
+  for (const r of await read(cq)) if (GB_CLOTHS.has(r.cloth)) (out[r.id] = out[r.id] || {}).cloth = r.cloth;
+  for (const r of await read(aq)) if (r.avatar_key) (out[r.user_id] = out[r.user_id] || {}).avatar = `${origin}/av-photo/${r.avatar_key}`;
+  return out;
+}
+
 // Get-or-create the user's share row; toggle is_public if provided. Returns the link.
 async function handlePassportShare(request, env) {
   try {
@@ -14924,7 +14946,9 @@ async function handlePassportPublic(request, env) {
         // each by its id, never by its key (gbRowMedia).
         photos: (rest.photos || []).filter((p) => p.mod_status === 'ok').map((p) => ({ ...p, photo_url: `${origin}/pp-photo/p/${p.id}` })),
       }));
-    return jsonResponse({ holder, stamps: shared, stats: ppStats(shared) });
+    // The cloth the owner's world is bound in (B2), for the visit page's cover.
+    const holderCloth = (await gbFaces(env, [share.user_id], origin))[share.user_id]?.cloth || null;
+    return jsonResponse({ holder, holder_cloth: holderCloth, stamps: shared, stats: ppStats(shared) });
   } catch (e) { return jsonResponse({ error: e.message, private: true }, 500); }
 }
 
@@ -18042,6 +18066,8 @@ async function handleBlotterRead(request, env) {
       for (const id of gone) delete names[id];
     }
     const origin = new URL(request.url).origin;
+    // Their cloth (B2) for the people named here.
+    const faces = Object.keys(names).length ? await gbFaces(env, Object.keys(names), origin) : {};
     const byEntry = {};
     for (const c of cosigns) (byEntry[c.entry_id] = byEntry[c.entry_id] || []).push(c.user_id);
     const out = entries.map((e) => {
@@ -18052,6 +18078,7 @@ async function handleBlotterRead(request, env) {
         handle: names[e.author_user_id]?.handle || null,
         name: names[e.author_user_id]?.name || null,
         avatar: names[e.author_user_id]?.avatar_key ? `${origin}/av-photo/${names[e.author_user_id].avatar_key}` : null,
+        cloth: faces[e.author_user_id]?.cloth || null,
         body: e.body,
         doodle: e.doodle_key ? `${origin}/bl-doodle/e/${e.id}` : null,
         created_at: e.created_at,
@@ -18144,15 +18171,17 @@ async function handleSocialFollow(request, env, ctx) {
         }
         // A traveler already deleted, whose clean-up hasn't reached their
         // profile yet, is never named (gbPurgeQueued).
-        if (agesRead) for (const id of await gbPurgeQueued(env, Object.keys(who).filter((id) => !who[id].handle && who[id].name))) who[id] = { ...who[id], name: null };
+        if (agesRead) for (const id of await gbPurgeQueued(env, Object.keys(who).filter((id) => !who[id].handle && who[id].name))) who[id] = { ...who[id], name: null, gone: true };
       }
+      // Faces (B2) only for the people these lists may name: adults, ages read, not deleted.
+      const faces = agesRead ? await gbFaces(env, ids.filter((id) => !young.has(id) && !who[id]?.gone), new URL(request.url).origin) : {};
       const anon = { handle: null, name: null, verified: false, seal: null };
       const shape = (r, idKey) => {
         const id = r[idKey];
         const base = { user_id: id, status: r.status, since: r.created_at };
         if (!agesRead) return { ...base, ...anon };
         if (young.has(id)) return { ...base, ...anon, handle: idKey === 'followee_id' ? who[id]?.handle || null : null };
-        return { ...base, handle: who[id]?.handle || null, name: who[id]?.name || null, verified: who[id]?.verified === true, seal: who[id]?.seal || null };
+        return { ...base, handle: who[id]?.handle || null, name: who[id]?.name || null, verified: who[id]?.verified === true, seal: who[id]?.seal || null, ...(faces[id] || {}) };
       };
       // The @handles I already knew the people I blocked by (gbBlockNote): at most 100 reads.
       const notes = {};
@@ -18178,7 +18207,7 @@ async function handleSocialFollow(request, env, ctx) {
         // followed.
         following: following.map((r) => {
           const row = shape(r.status === 'muted' ? { ...r, status: 'accepted' } : r, 'followee_id');
-          return r.status === 'accepted' && followsMe.has(r.followee_id) ? row : { ...row, name: null, verified: false, seal: null };
+          return r.status === 'accepted' && followsMe.has(r.followee_id) ? row : { ...row, name: null, verified: false, seal: null, cloth: null, avatar: null };
         }),
         // My blocked list names no one and gives out no account id (go-live
         // final check: a name there told an adult from a minor): each row is
@@ -18369,6 +18398,8 @@ async function handleSocialFeed(request, env) {
     const shownIds = [...new Set([...pcs.map((p) => p.sender_id), ...visible])];
     const gone = await gbPurgeQueued(env, shownIds.filter((id) => !share[id]?.handle && prof[id]?.display_name));
     const nameOf = (id) => (gone.has(id) ? null : prof[id]?.display_name || null);
+    // Faces (B2) for the people this feed names; none for a deleted traveler.
+    const faces = await gbFaces(env, shownIds.filter((id) => !gone.has(id)), origin);
     const cardRows = pcs.map((p) => ({
       type: 'postcard', id: p.id, created_at: p.created_at,
       photo: `${origin}/pc-photo/${p.photo_key}`,
@@ -18376,7 +18407,7 @@ async function handleSocialFeed(request, env) {
       dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
       to_me: p.to_user_id === user.id,
       ...(p.to_user_id === null && keptSet ? { kept: keptSet.has(p.id) } : {}),
-      by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id) },
+      by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
     }));
     const dayAgo = Date.now() - 24 * 3600 * 1000;
     const stampRows = ((sq && sq.ok) ? await sq.json() : [])
@@ -18390,7 +18421,7 @@ async function handleSocialFeed(request, env) {
         visited_on: s.visited_on, created_at: s.created_at,
         verified: ['gps', 'photo_loc', 'photo_ai'].includes(s.verified),
         film: s.meta && s.meta.film ? { title: s.meta.film.title, year: s.meta.film.year } : null,
-        by: { handle: share[s.user_id]?.handle || null, name: nameOf(s.user_id) },
+        by: { handle: share[s.user_id]?.handle || null, name: nameOf(s.user_id), ...(faces[s.user_id] || {}) },
       }));
     const rows = [...cardRows, ...stampRows]
       .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
@@ -18456,6 +18487,8 @@ async function handlePostcardBox(request, env) {
     const gone = await gbPurgeQueued(env, senders.filter((id) => !share[id]?.handle && prof[id]?.display_name));
     const nameOf = (id) => (gone.has(id) ? null : prof[id]?.display_name || null);
     const origin = new URL(request.url).origin;
+    // Faces (B2) for the senders it names; none for a deleted traveler.
+    const faces = await gbFaces(env, senders.filter((id) => !gone.has(id) && !minor(id)), origin);
     const rows = kept.map((p) => ({
       type: 'postcard', id: p.id, created_at: p.created_at,
       photo: `${origin}/pc-photo/${p.photo_key}`,
@@ -18463,7 +18496,7 @@ async function handlePostcardBox(request, env) {
       dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
       to_me: p.to_user_id === user.id,
       ...(p.to_user_id === null ? { kept: true } : {}),
-      by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id) },
+      by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
     }));
     return jsonResponse({ rows, next });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
@@ -19247,6 +19280,9 @@ async function handleSocialUnread(request, env) {
     if (b.activity === true || b.mark === true) {
       const gone = await gbPurgeQueued(env, [...new Set(activity.filter((a) => !a.by.handle && a.by.name).map((a) => a.by.user_id))]);
       for (const a of activity) if (gone.has(a.by.user_id)) a.by.name = null;
+      // Faces (B2) for the people named in the list; none for a deleted traveler.
+      const faces = await gbFaces(env, activity.map((a) => a.by.user_id).filter((id) => !gone.has(id)), new URL(request.url).origin);
+      for (const a of activity) if (faces[a.by.user_id]) Object.assign(a.by, faces[a.by.user_id]);
     }
 
     if (b.mark === true) {

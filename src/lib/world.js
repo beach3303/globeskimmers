@@ -74,7 +74,8 @@ async function fromPublic(slug) {
       fallback: true,
       private: false,
       slug,
-      person: { user_id: null, handle: null, name: holder && holder !== 'A traveler' ? holder : null, avatar: null, cloth: null, verified: false, seal: null, country: null },
+      // holder_cloth: the owner's cloth (B2), so the page is bound in it even by share link.
+      person: { user_id: null, handle: null, name: holder && holder !== 'A traveler' ? holder : null, avatar: null, cloth: text(data.holder_cloth) || null, verified: false, seal: null, country: null },
       relation: null,
       stamps: data.stamps,
       stats: data.stats || null,
