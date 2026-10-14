@@ -17062,8 +17062,17 @@ async function handleBlotterRead(request, env) {
     if (!isOwner && gbOffSocial(await gbSocialProfile(env, share.user_id).catch(() => undefined))) return jsonResponse({ targets: {}, entries: [] });
     // Blocks hide the pair both ways (block_v2); a visitor whose blocks can't
     // be read sees nothing rather than everything.
-    const blockSet = user ? await gbBlockSet(env, user.id) : new Set();
+    const blockSet = user && !isOwner ? await gbBlockSet(env, user.id) : new Set();
     if (!isOwner && (!blockSet || blockSet.has(share.user_id))) return jsonResponse({ targets: {}, entries: [] });
+    // The page belongs to its owner (go-live review, 2026-10-13): the people
+    // the OWNER blocked vanish from it for every reader, and on their own
+    // pages the owner loses only them — someone who blocked the owner can
+    // never hide what they left there from the owner (who must see it to
+    // sweep it), while every other reader still could see it. Unreadable
+    // owner blocks show nothing.
+    const obq = await gbRest(env, `user_blocks?user_id=eq.${share.user_id}&select=blocked_user_id&limit=1000`, {});
+    if (!obq.ok) return jsonResponse({ targets: {}, entries: [] });
+    const ownerBlocked = new Set((await obq.json()).map((r) => r.blocked_user_id));
     const owner = share.user_id;
     const [mq, eq2] = await Promise.all([
       gbRest(env, `blotter_marks?owner_user_id=eq.${owner}&select=target,kind,user_id&limit=4000`, {}),
@@ -17095,7 +17104,7 @@ async function handleBlotterRead(request, env) {
       marks = marks.filter((m) => visible(String(m.target || '')));
       entries = entries.filter((e) => visible(String(e.target || '')));
     }
-    const hiddenIds = blockSet || new Set();
+    const hiddenIds = isOwner ? ownerBlocked : new Set([...blockSet, ...ownerBlocked]);
     entries = entries.filter((e) => !hiddenIds.has(e.author_user_id));
     const targets = {};
     for (const m of marks) {
@@ -17453,10 +17462,22 @@ async function gbMutualFriends(env, a, b) {
 // by (a block hides BOTH ways). null when the read fails, so callers can
 // fail closed.
 async function gbBlockSet(env, userId) {
+  const s = await gbBlockSets(env, userId);
+  return s ? s.either : null;
+}
+// The same read, split by direction: { either, mine } — mine is only the
+// people I blocked. On my OWN pages (my blotter, the Mailbox lines about
+// them) only my blocks hide anyone: someone who blocked me must never be
+// able to hide what they left there from me (go-live review, 2026-10-13).
+async function gbBlockSets(env, userId) {
   try {
     const q = await gbRest(env, `user_blocks?or=(user_id.eq.${userId},blocked_user_id.eq.${userId})&select=user_id,blocked_user_id&limit=1000`, {});
     if (!q.ok) return null;
-    return new Set((await q.json()).map((r) => (r.user_id === userId ? r.blocked_user_id : r.user_id)));
+    const rows = await q.json();
+    return {
+      either: new Set(rows.map((r) => (r.user_id === userId ? r.blocked_user_id : r.user_id))),
+      mine: new Set(rows.filter((r) => r.user_id === userId).map((r) => r.blocked_user_id)),
+    };
   } catch { return null; }
 }
 
@@ -17803,9 +17824,12 @@ async function handleSocialUnread(request, env) {
       gbRest(env, `passport_tags?to_user_id=eq.${me}&status=eq.pending&created_at=gte.${floor}&select=from_user_id,name,created_at&order=created_at.desc&limit=50`, {}).then(j),
     ]);
     // Blocks hide the pair both ways (block_v2, 2026-10-13), activity from
-    // before the block included; unreadable blocks count nothing.
-    const blocked = await gbBlockSet(env, me);
-    if (!blocked) return jsonResponse({ total: 0, activity: b.mark === true || b.activity === true ? [] : undefined });
+    // before the block included; unreadable blocks count nothing. Signatures
+    // and presses on MY pages hide only for the people I blocked: someone
+    // who blocked me can't hide from me what they left on my passport.
+    const blk = await gbBlockSets(env, me);
+    if (!blk) return jsonResponse({ total: 0, activity: b.mark === true || b.activity === true ? [] : undefined });
+    const blocked = blk.either;
     const fIds = following.map((r) => r.followee_id).filter((id) => id && !blocked.has(id));
     const broadcasts = fIds.length
       ? await gbRest(env, `postcards?to_user_id=is.null&sender_id=in.(${fIds.join(',')})&created_at=gte.${floor}&select=sender_id,place_name,created_at&order=created_at.desc&limit=50`, {}).then(j)
@@ -17827,7 +17851,10 @@ async function handleSocialUnread(request, env) {
     for (const r of entries) items.push({ type: 'signature', uid: r.author_user_id, target: r.target, body: r.body ? String(r.body).slice(0, 90) : null, doodle: !!r.doodle_key, at: r.created_at });
     for (const r of tags) items.push({ type: 'tag', uid: r.from_user_id, place: r.name || null, at: r.created_at });
 
-    for (let i = items.length - 1; i >= 0; i--) if (blocked.has(items[i].uid)) items.splice(i, 1);
+    for (let i = items.length - 1; i >= 0; i--) {
+      const onMyPages = items[i].type === 'signature' || items[i].type === 'reaction';
+      if ((onMyPages ? blk.mine : blocked).has(items[i].uid)) items.splice(i, 1);
+    }
     const uids = [...new Set(items.map((i) => i.uid).filter(Boolean))].slice(0, 200);
     const photoIds = [...new Set(items.map((i) => (i.target || '').startsWith('ph:') ? i.target.slice(3) : null).filter(Boolean))].slice(0, 200);
     const photoStamp = {};
