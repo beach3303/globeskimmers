@@ -14897,6 +14897,28 @@ async function handlePassportShare(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// What a shared booklet shows, for share links and visits alike: names, dates,
+// art and photos — never the exact coordinates of every visit (privacy audit
+// 2026-09-29: select=* leaked full-precision lat/lng of the owner's whole
+// history to anyone with the slug). City + country stay; the numbers go.
+// Nor where the stamper stood (founder, 2026-10-13; privacy §1: the stamp's
+// rough zone "only our team sees"): meta.presence and the old birthday flag
+// stay on the server, and so do account ids — the owner's and a tagger's (the
+// booklet shows the tagger by tagged_by_name/_handle).
+function ppShareStamps(stamps, origin) {
+  return (stamps || [])
+    .filter((st) => !st.hidden)
+    .map(({ lat, lng, note, note_public, meta, tagged_by, user_id, ...rest }) => ({
+      ...rest,
+      ...(meta && typeof meta === 'object' ? { meta: (({ presence, birthday, ...m }) => m)(meta) } : {}),
+      // A trip note is private unless its owner chose to share it.
+      ...(note_public && note ? { note, note_public: true } : {}),
+      // Fail-closed: another viewer sees only photos that PASSED moderation,
+      // each by its id, never by its key (gbRowMedia).
+      photos: (rest.photos || []).filter((p) => p.mod_status === 'ok').map((p) => ({ ...p, photo_url: `${origin}/pp-photo/p/${p.id}` })),
+    }));
+}
+
 // Read-only passport by slug. Public → anyone. Private → the owner and their
 // FRIENDS (mutual accepted follows) still see it in-app (founder, 2026-10-05:
 // "private is with self and friends"); everyone else gets { private: true }.
@@ -14927,25 +14949,7 @@ async function handlePassportPublic(request, env) {
     const holder = await ppHolder(env, share.user_id);
     const { stamps } = await ppLoad(env, share.user_id);
     const origin = new URL(request.url).origin;
-    // A shared booklet renders names, dates, art and photos — never the exact
-    // coordinates of every visit (privacy audit 2026-09-29: select=* leaked
-    // full-precision lat/lng of the owner's whole history to anyone with the
-    // slug). City + country stay; the numbers go.
-    // Nor where the stamper stood (founder, 2026-10-13; privacy §1: the
-    // stamp's rough zone "only our team sees"): meta.presence and the old
-    // birthday flag stay on the server, and so do account ids — the owner's
-    // and a tagger's (the booklet shows the tagger by tagged_by_name/_handle).
-    const shared = stamps
-      .filter((st) => !st.hidden)
-      .map(({ lat, lng, note, note_public, meta, tagged_by, user_id, ...rest }) => ({
-        ...rest,
-        ...(meta && typeof meta === 'object' ? { meta: (({ presence, birthday, ...m }) => m)(meta) } : {}),
-        // A trip note is private unless its owner chose to share it.
-        ...(note_public && note ? { note, note_public: true } : {}),
-        // Fail-closed: another viewer sees only photos that PASSED moderation,
-        // each by its id, never by its key (gbRowMedia).
-        photos: (rest.photos || []).filter((p) => p.mod_status === 'ok').map((p) => ({ ...p, photo_url: `${origin}/pp-photo/p/${p.id}` })),
-      }));
+    const shared = ppShareStamps(stamps, origin);
     // The cloth the owner's world is bound in (B2), for the visit page's cover.
     const holderCloth = (await gbFaces(env, [share.user_id], origin))[share.user_id]?.cloth || null;
     return jsonResponse({ holder, holder_cloth: holderCloth, stamps: shared, stats: ppStats(shared) });
@@ -17270,7 +17274,8 @@ async function handleSocialProfile(request, env, ctx) {
     const mine = await gbSocialProfile(env, user.id);
     const origin = new URL(request.url).origin;
     const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, website: p.website || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null };
-    if (b.display_name === undefined && b.bio === undefined && b.favorites === undefined && b.dreams === undefined) {
+    // A patch with only a website saves it (B5: it used to read as a read).
+    if (b.display_name === undefined && b.bio === undefined && b.favorites === undefined && b.dreams === undefined && b.website === undefined) {
       return jsonResponse({ profile: pick(mine) || null });
     }
     if (gbUnderAge(mine)) return gbUnderAgeResp();
@@ -17290,6 +17295,13 @@ async function handleSocialProfile(request, env, ctx) {
     }
     if (b.favorites !== undefined) patch.favorites = places(b.favorites);
     if (b.dreams !== undefined) patch.dreams = places(b.dreams);
+    // Words a visitor may read are checked first (B5, 2026-10-14): the name, the
+    // About you, and the places as one read. Text moderation fails open on an API
+    // error; the local list still blocks the worst.
+    if (patch.display_name && !(await gbModerate(env, patch.display_name)).allow) return jsonResponse({ error: 'Let’s keep your name kind. Try another.' }, 422);
+    if (patch.bio && !(await gbModerate(env, patch.bio)).allow) return jsonResponse({ error: 'Let’s keep About you kind. Try different words.' }, 422);
+    const placeWords = [...(patch.favorites || []), ...(patch.dreams || [])].map((x) => x.name).join('\n');
+    if (placeWords && !(await gbModerate(env, placeWords)).allow) return jsonResponse({ error: 'Let’s keep your places kind. Try different words.' }, 422);
     const w = mine
       ? await gbRest(env, `social_profiles?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) })
       : await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, ...patch }) });
@@ -17601,6 +17613,8 @@ async function handleGearSet(request, env) {
           // Top-3 coffee orders, free text in the traveler's own words
           // (founder, 2026-10-05 evening) — trimmed, capped, empties dropped.
           const cof = (Array.isArray(g.coffees) ? g.coffees : []).map((s) => String(s || '').trim().slice(0, 48)).filter(Boolean).slice(0, 3);
+          // Checked like pet names (B5, 2026-10-14).
+          if (cof.length && !(await gbModerate(env, cof.join('\n'))).allow) return jsonResponse({ error: 'Let’s keep coffee orders kind' }, 422);
           if (cof.length) o.coffees = cof;
         }
         const pls = [];
@@ -17980,7 +17994,9 @@ async function handleBlotterRead(request, env) {
     const share = await blShare(env, b.slug);
     if (!share) return jsonResponse({ targets: {}, entries: [] });
     const isOwner = !!(user && user.id === share.user_id);
-    if (!share.is_public && !isOwner) return jsonResponse({ targets: {}, entries: [] });
+    // A private page's marks and notes are open to its owner's FRIENDS (mutual
+    // accepted follows), as blGate lets them press and sign there (B4, 2026-10-14).
+    if (!share.is_public && !isOwner && !(user && await gbMutualFriends(env, user.id, share.user_id))) return jsonResponse({ targets: {}, entries: [] });
     // A minor's page (held, frozen, unconfirmed — or unknown) reads empty.
     if (!isOwner && gbOffSocial(await gbSocialProfile(env, share.user_id).catch(() => undefined))) return jsonResponse({ targets: {}, entries: [] });
     // Blocks hide the pair both ways (block_v2); a visitor whose blocks can't
@@ -18220,7 +18236,7 @@ async function handleSocialFollow(request, env, ctx) {
         // block_v2 (2026-10-13): POST /social/block ends follows both ways and
         // hides the pair from each other everywhere; the app shows Block only
         // when this is present.
-        features: ['block_v2'],
+        features: ['block_v2', 'world'],
       });
     }
 
@@ -18426,7 +18442,8 @@ async function handleSocialFeed(request, env) {
     const rows = [...cardRows, ...stampRows]
       .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
       .slice(0, 40);
-    return jsonResponse({ rows });
+    // 'world': faces may open someone's page (/social/world, B3).
+    return jsonResponse({ rows, features: ['world'] });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -18558,6 +18575,161 @@ async function handlePostcardKeep(request, env) {
     const w = await gbRest(env, 'postcard_keeps', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ user_id: user.id, postcard_id: pid }) });
     if (w.status === 404) return unavailable();
     return w.ok ? jsonResponse({ ok: true, kept: true }) : retry();
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// ── Visits (B3, 2026-10-14): someone's world, for the Traveler page ─────────
+// POST /social/world { handle | slug | user_id } → their page as this viewer may
+// see it. Sign-in required. A held, frozen or unconfirmed viewer is refused
+// (403 teen_hold), like every social door. The person is found by @handle, by
+// share link, or by user_id when they are in the viewer's circle; unknown or
+// blocked either way → 404 no_person; a minor (or an age that can't be read) →
+// { unavailable: true }, so a visit never tells them apart from nobody.
+// Always: person (name, @handle, Seal, face, home country only), relation
+// (self, i_follow, follows_me, inner) and private. When the passport is open to
+// the viewer (public, or the two follow each other: the /passport/public rule):
+// the shared booklet (ppShareStamps, no coordinates), their trunk and its flags,
+// their kit without coffee orders, and their circle's counts with the people the
+// viewer already knows there (adults only, never someone either side blocked).
+// Bio, favorites, dreams and coffee orders stay out: they were written before
+// B5's checks. Reads only.
+const WORLD_KNOWN_MAX = 12;
+async function handleSocialWorld(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const me = user.id;
+    const mySp = await gbSocialProfile(env, me).catch(() => undefined);
+    if (mySp === undefined) return jsonResponse({ error: 'Couldn’t check your account — try again', code: 'age_unknown' }, 503);
+    if (gbOffSocial(mySp)) return jsonResponse({ error: 'Not available', code: 'teen_hold' }, 403);
+    const b = await request.json().catch(() => ({}));
+    const origin = new URL(request.url).origin;
+    const retry = () => jsonResponse({ error: 'Couldn’t load right now — try again' }, 503);
+    const noPerson = () => jsonResponse({ error: 'no_person' }, 404);
+    const SHARE = 'user_id,slug,handle,is_public,verified,seal';
+    const handle = String(b.handle || '').trim().replace(/^@+/, '').toLowerCase();
+    const slug = String(b.slug || '').replace(/[^a-z0-9]/gi, '').slice(0, 24);
+    const uid = typeof b.user_id === 'string' && /^[0-9a-f-]{36}$/i.test(b.user_id) ? b.user_id.toLowerCase() : null;
+
+    // Who: by @handle, by share link, or by id within my circle.
+    let share = null;
+    let sid = null;
+    if (handle) {
+      if (!/^[a-z0-9_.]{2,30}$/.test(handle)) return noPerson();
+      const q = await gbRest(env, `passport_shares?handle=eq.${encodeURIComponent(handle)}&select=${SHARE}&limit=1`, {});
+      if (!q.ok) return retry();
+      share = (await q.json())[0] || null;
+    } else if (slug) {
+      const q = await gbRest(env, `passport_shares?slug=eq.${slug}&select=${SHARE}&limit=1`, {});
+      if (!q.ok) return retry();
+      share = (await q.json())[0] || null;
+    } else if (uid) {
+      const e = await gbRest(env, `user_follows?or=(and(follower_id.eq.${me},followee_id.eq.${uid}),and(follower_id.eq.${uid},followee_id.eq.${me}))&status=eq.accepted&select=follower_id&limit=1`, {});
+      if (!e.ok) return retry();
+      if (!(await e.json()).length) return noPerson();
+      const q = await gbRest(env, `passport_shares?user_id=eq.${uid}&select=${SHARE}&limit=1`, {});
+      if (!q.ok) return retry();
+      share = (await q.json())[0] || null;
+      sid = uid;
+    }
+    sid = share?.user_id || sid;
+    if (!sid) return noPerson();
+    if (sid === me) return jsonResponse({ person: { user_id: me, handle: share?.handle || null }, relation: { self: true, i_follow: null, follows_me: false, inner: false }, private: false });
+    if (await gbBlockedEither(env, me, sid, { failClosed: true })) return noPerson();
+    const ownerSp = await gbSocialProfile(env, sid).catch(() => undefined);
+    if (gbOffSocial(ownerSp)) return jsonResponse({ unavailable: true });
+
+    const [eq, pq, faceMap] = await Promise.all([
+      gbRest(env, `user_follows?or=(and(follower_id.eq.${me},followee_id.eq.${sid}),and(follower_id.eq.${sid},followee_id.eq.${me}))&select=follower_id,status`, {}),
+      gbRest(env, `profiles?id=eq.${sid}&select=home_country,home_city_country`, { headers: { 'Accept-Profile': 'public' } }),
+      gbFaces(env, [sid], origin),
+    ]);
+    if (!eq.ok) return retry();
+    const edges = await eq.json();
+    const mine = edges.find((r) => r.follower_id === me);
+    const theirs = edges.find((r) => r.follower_id === sid);
+    // A muted follow (op 'follow') reads as followed to the one who made it.
+    const iFollow = mine ? (mine.status === 'pending' ? 'pending' : 'accepted') : null;
+    const followsMe = theirs?.status === 'accepted';
+    const inner = iFollow === 'accepted' && followsMe;
+    const prof = (pq.ok ? await pq.json() : [])[0] || {};
+    const person = {
+      user_id: sid,
+      handle: share?.handle || null,
+      name: ownerSp?.display_name || null,
+      avatar: faceMap[sid]?.avatar || null,
+      cloth: faceMap[sid]?.cloth || null,
+      verified: share?.verified === true,
+      seal: share?.verified === true ? (share.seal || 'burgundy') : null,
+      // Home country only, never the city (the visit default, founder decision pending).
+      country: prof.home_country || null,
+    };
+    const relation = { self: false, i_follow: iFollow, follows_me: followsMe, inner };
+    const visible = !!share && (share.is_public === true || inner);
+    if (!visible) return jsonResponse({ person, relation, private: true });
+
+    // The open page: booklet, trunk, kit and circle, read together.
+    const count = (r) => { const m = String(r?.headers?.get('content-range') || '').match(/\/(\d+)$/); return m ? Number(m[1]) : null; };
+    const [{ stamps }, lq, gq, fq, rq, vq] = await Promise.all([
+      ppLoad(env, sid),
+      gbRest(env, `luggage_state?user_id=eq.${sid}&select=active,placements`, {}),
+      gbRest(env, `profile_gear?user_id=eq.${sid}&select=gear,buddies,layout`, {}),
+      gbRest(env, `user_follows?follower_id=eq.${sid}&status=eq.accepted&select=followee_id&limit=2000`, { headers: { Prefer: 'count=exact' } }),
+      gbRest(env, `user_follows?followee_id=eq.${sid}&status=eq.accepted&select=follower_id&limit=2000`, { headers: { Prefer: 'count=exact' } }),
+      gbRest(env, `user_follows?or=(follower_id.eq.${me},followee_id.eq.${me})&status=eq.accepted&select=follower_id,followee_id&limit=2000`, {}),
+    ]);
+    const shared = ppShareStamps(stamps, origin);
+    const lug = (lq.ok ? await lq.json() : [])[0];
+    const gearRow = (gq.ok ? await gq.json() : [])[0] || {};
+    const gear = gearRow.gear && typeof gearRow.gear === 'object' ? { ...gearRow.gear } : {};
+    // Coffee orders stay out of visits (written before B5's checks).
+    if (gear.drink && typeof gear.drink === 'object') gear.drink = (({ coffees, ...d }) => d)(gear.drink);
+    const theyFollow = new Set((fq.ok ? await fq.json() : []).map((r) => r.followee_id));
+    const followThem = new Set((rq.ok ? await rq.json() : []).map((r) => r.follower_id));
+    const innerCount = [...theyFollow].filter((id) => followThem.has(id)).length;
+
+    // The people this viewer already knows in their circle, on their rings.
+    const ring = (id) => (theyFollow.has(id) && followThem.has(id) ? 'inner' : theyFollow.has(id) ? 'following' : 'followers');
+    const myCircle = new Set((vq.ok ? await vq.json() : []).map((r) => (r.follower_id === me ? r.followee_id : r.follower_id)));
+    let known = [];
+    let knownCount = 0;
+    const blockSet = await gbBlockSet(env, me);
+    const candidates = [...myCircle].filter((id) => id !== sid && id !== me && (theyFollow.has(id) || followThem.has(id))).slice(0, 200);
+    if (blockSet && candidates.length) {
+      const ids = candidates.filter((id) => !blockSet.has(id));
+      const [hq, sq] = ids.length ? await Promise.all([
+        gbRest(env, `passport_shares?user_id=in.(${ids.join(',')})&select=user_id,handle`, {}),
+        gbRest(env, `social_profiles?user_id=in.(${ids.join(',')})&select=user_id,display_name,${GB_TIER_COLS}`, {}),
+      ]) : [null, null];
+      if (sq && sq.ok) {
+        const handles = Object.fromEntries((hq && hq.ok ? await hq.json() : []).map((r) => [r.user_id, r.handle]));
+        const adults = (await sq.json()).map(gbTierRow).filter((r) => !gbUnderAge(r) && !gbAgeHeld(r));
+        const gone = await gbPurgeQueued(env, adults.filter((r) => !handles[r.user_id] && r.display_name).map((r) => r.user_id));
+        const kept = adults.filter((r) => !gone.has(r.user_id));
+        knownCount = kept.length;
+        const order = { inner: 0, following: 1, followers: 2 };
+        const pick = kept.sort((x, y) => order[ring(x.user_id)] - order[ring(y.user_id)]).slice(0, WORLD_KNOWN_MAX);
+        const faces = await gbFaces(env, pick.map((r) => r.user_id), origin);
+        known = pick.map((r) => ({ handle: handles[r.user_id] || null, name: r.display_name || null, ...(faces[r.user_id] || {}), ring: ring(r.user_id) }));
+      }
+    }
+    // The viewer on their own ring, when they are in the circle at all.
+    if (theyFollow.has(me) || followThem.has(me)) {
+      const [myShare, myFace] = await Promise.all([
+        gbRest(env, `passport_shares?user_id=eq.${me}&select=handle&limit=1`, {}).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+        gbFaces(env, [me], origin),
+      ]);
+      known.push({ handle: myShare[0]?.handle || null, name: mySp?.display_name || null, ...(myFace[me] || {}), ring: ring(me), is_me: true });
+    }
+    return jsonResponse({
+      person, relation, private: false,
+      slug: share.slug,
+      stamps: shared, stats: ppStats(shared),
+      luggage: { active: lug?.active || 'classic', placements: lug?.placements || {} },
+      flags: { home_country: prof.home_country || null, home_city_country: prof.home_city_country || null },
+      gear: { gear, buddies: Array.isArray(gearRow.buddies) ? gearRow.buddies : [], layout: gearRow.layout || {} },
+      circle: { inner: innerCount, following: count(fq) ?? theyFollow.size, followers: count(rq) ?? followThem.size, known, known_count: knownCount },
+    });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -25063,6 +25235,7 @@ export default {
       if (pathname === '/postcards/send' && request.method === 'POST') return await handlePostcardSend(request, env, ctx);
       if (pathname === '/postcards/box' && request.method === 'POST') return await handlePostcardBox(request, env);
       if (pathname === '/postcards/keep' && request.method === 'POST') return await handlePostcardKeep(request, env);
+      if (pathname === '/social/world' && request.method === 'POST') return await handleSocialWorld(request, env);
       if (pathname === '/social/avatar' && request.method === 'POST') return await handleSocialAvatar(request, env, ctx);
       if (pathname === '/blotter/read' && request.method === 'POST') return await handleBlotterRead(request, env);
       if (pathname === '/blotter/mark' && request.method === 'POST') return await handleBlotterMark(request, env, ctx);
