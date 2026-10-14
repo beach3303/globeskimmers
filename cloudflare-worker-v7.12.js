@@ -17069,6 +17069,10 @@ async function handleAdminAgeAppeal(request, env, ctx) {
       return jsonResponse({ ok: true, user_id: uid, email, tier: sp.social_tier || null, birth_year: sp.birth_year ?? null, birth_md: sp.birth_md ?? null, country: sp.country_at_gate || null, frozen_at: rec?.at || null, purged_at: rec?.purged_at || null });
     }
     const md = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(String(b.birth_md || '')) ? String(b.birth_md) : null;
+    // A month and day that exist (go-live round 3: only /social/age checked;
+    // the desk refused 02-31 in the browser alone).
+    const notReal = md ? gbBirthdayDateError(md, b.birth_year) : null;
+    if (notReal) return jsonResponse({ error: notReal }, 400);
     const tier = uid && md ? socialTierFor(b.birth_year, null, md) : null;
     if (!tier) return jsonResponse({ error: 'user_id, birth_year and birth_md (MM-DD) required' }, 400);
     if (b.override !== true) {
