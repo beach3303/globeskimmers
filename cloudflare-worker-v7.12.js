@@ -883,7 +883,8 @@ async function founderAlert(env, text, tag = 'bell', opts = {}) {
       jobs.push(fetch(`https://ntfy.sh/${env.NTFY_TOPIC}`, {
         method: 'POST', body: text,
         headers: {
-          Title: 'GlobeSkimmers', Tags: tag === 'new' ? 'tada' : 'round_pushpin', Priority: tag === 'new' ? '4' : '3',
+          // 'report' (a report or a block) and 'urgent' (a child-safety report, 24h triage) stand out from stamp alerts.
+          Title: 'GlobeSkimmers', Tags: tag === 'new' ? 'tada' : tag === 'urgent' ? 'rotating_light' : tag === 'report' ? 'triangular_flag_on_post' : 'round_pushpin', Priority: tag === 'urgent' ? '5' : tag === 'new' || tag === 'report' ? '4' : '3',
           ...(click ? { Click: click } : {}),
           ...(env.NTFY_TOKEN ? { Authorization: `Bearer ${env.NTFY_TOKEN}` } : {}),
         },
@@ -16568,7 +16569,14 @@ async function handleSocialReport(request, env, ctx) {
     };
     const w = await gbRest(env, 'content_reports', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
     if (!w.ok) return jsonResponse({ error: 'Could not send the report' }, 502);
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_report', { kind, reason }));
+    if (ctx) {
+      ctx.waitUntil(gbLogEvent(env, 'social_report', { kind, reason }));
+      // The founder hears about every report at once (Apple 1.2: act within
+      // 24 hours), a child-safety one loudest. Never a name or an id here:
+      // the alert topic is only as private as its name.
+      const urgent = reason === 'minor_safety';
+      ctx.waitUntil(founderAlert(env, `🚩 ${urgent ? 'CHILD SAFETY report (24h)' : 'Report'} · ${kind} · ${reason.replace('_', ' ')}. Admin → Safety reports.`, urgent ? 'urgent' : 'report'));
+    }
     return jsonResponse({ ok: true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -17639,6 +17647,14 @@ async function handleSocialBlock(request, env, ctx) {
     if (!target || !BL_UUID.test(target) || target === user.id) return jsonResponse({ error: 'Nothing to block' }, 400);
     const w = await gbRest(env, 'user_blocks', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ user_id: user.id, blocked_user_id: target }) });
     if (!w.ok) return jsonResponse({ error: 'Could not block right now — try again' }, 502);
+    // A block tells the developer too (Apple 1.2): it files a safety record
+    // (Admin → Safety reports) with the note the app sends — what the person
+    // was looking at — and rings the founder. The blocked person is never told.
+    if (ctx) {
+      const note = `Blocked by a traveler. ${String(b.note || '').replace(/\s+/g, ' ').trim()}`.trim().slice(0, 500);
+      ctx.waitUntil(gbRest(env, 'content_reports', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ reporter_id: user.id, kind: 'block', reason: 'other', ref: `user:${target}`, note }) }).catch(() => {}));
+      ctx.waitUntil(founderAlert(env, '🚩 A traveler blocked someone. Admin → Safety reports.', 'report'));
+    }
     const now = new Date().toISOString();
     await Promise.all([
       // The follow edges end both ways — accepted or still a request.
