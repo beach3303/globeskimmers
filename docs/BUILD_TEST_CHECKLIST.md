@@ -1759,3 +1759,9 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   note) and /admin; then `npm run ota` (iOS and Android; one Capgo bundle). Then build 14 (`npm run cap:all`,
   scripts/ios-launch-check.sh; it must carry 3a73df2's official Sign in with Apple logo). After the first cron
   (15:00 UTC): KV gbidx:done is set and the purge: queue is small. No SQL to run.
+- **LIVE 2026-10-13 ~23:05 PT:** main 3f98d23 (f616eaa + stamping-v2 04ee004). Deploy Cloudflare Workers
+  run 38520460499 and Deploy website run 38520460438 both succeeded. Probes: /places/suggestions 404 before →
+  401 signed out / 200 signed in after; /social/follow op:list (demo account) lists features ['block_v2'];
+  /activities 200; /legal/terms has no drafting note; /admin, /, app-ads.txt 200. OTA run by the founder:
+  Capgo production channel = 1.0.2610140610 (iOS + Android). Still open: build 14 at the next App Store
+  submission (official SIWA artwork, 3a73df2) and the first-cron KV check above.
