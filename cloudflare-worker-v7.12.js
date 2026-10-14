@@ -16864,17 +16864,26 @@ async function purgeRetrySweep(env, now = new Date()) {
 // (KV orphans:cursor) keeps the column it reached and the last id done there.
 // Pages are keyset pages over distinct ids, so a user with a thousand rows
 // costs one page. A finished pass starts over on the next run.
+// Go-live round 3: never more orphan records waiting than ORPHAN_WAITING_MAX
+// (what the retry sweep clears in two runs — the queue no longer grows by 15
+// a day), and an id found only as someone's blocked id (an id any account
+// could make up, before blocking checked for an account) isn't queued for a
+// whole purge: its block rows are deleted with one call. That column comes
+// last, so planted ids never hold up real orphans in the other tables. A
+// listing too long to read to its end is logged, and said once a week.
 const ORPHAN_SCAN_COLS = [
   ['social_profiles', 'user_id'], ['blotter_entries', 'author_user_id'], ['blotter_cosigns', 'user_id'],
   ['blotter_marks', 'user_id'], ['postcards', 'sender_id'], ['place_dishes', 'user_id'], ['guestbook_entries', 'user_id'],
   ['blotter_entries', 'owner_user_id'], ['blotter_marks', 'owner_user_id'], ['postcards', 'to_user_id'],
-  ['user_follows', 'follower_id'], ['user_follows', 'followee_id'], ['user_blocks', 'user_id'], ['user_blocks', 'blocked_user_id'],
+  ['user_follows', 'follower_id'], ['user_follows', 'followee_id'], ['user_blocks', 'user_id'],
   ['owner_notes', 'user_id'], ['luggage_state', 'user_id'], ['profile_gear', 'user_id'], ['user_saves', 'user_id'],
   ['handle_requests', 'user_id'], ['passport_shares', 'user_id'], ['passport_stamps', 'user_id'], ['passport_stamp_photos', 'user_id'],
   ['passport_tags', 'from_user_id'], ['passport_tags', 'to_user_id'], ['guestbook_visits', 'user_id'],
+  ['user_blocks', 'blocked_user_id'],
 ];
 const ORPHAN_SCAN_BUDGET = 100;
 const ORPHAN_QUEUE_MAX = 20;
+const ORPHAN_WAITING_MAX = 10;      // 2 × FREEZE_SWEEP_MAX
 const ORPHAN_AUTH_PAGES_MAX = 40;   // 40 pages of up to 1000 sign-ins; more is a partial listing
 async function orphanScan(env, now = new Date()) {
   const out = { queued: 0, pages: 0, live: 0, spent: 0, done: false, failed: 0 };
@@ -16884,10 +16893,25 @@ async function orphanScan(env, now = new Date()) {
   const auth = { apikey: key, Authorization: `Bearer ${key}` };
   let spent = 0;
   try {
+    // 0) Room in the queue, or nothing to do today.
+    spent++;
+    const qpage = await kv.list({ prefix: 'purge:' });
+    const queued = new Set((qpage.keys || []).map((k) => k.name.slice('purge:'.length)));
+    out.waiting = (qpage.keys || []).filter((k) => k.metadata && k.metadata.k === 'orphan').length;
+    const room = Math.max(0, Math.min(ORPHAN_QUEUE_MAX, ORPHAN_WAITING_MAX - out.waiting));
+    if (!room) return out;
     // 1) Every live sign-in, or nothing is queued.
     const live = new Set();
     for (let page = 1; ; page++) {
-      if (page > ORPHAN_AUTH_PAGES_MAX) { out.failed++; return out; }
+      if (page > ORPHAN_AUTH_PAGES_MAX) {
+        out.failed++;
+        await gbLogEvent(env, 'orphan_scan_partial', { pages: page - 1 }).catch(() => {});
+        if (!(await kv.get('orphans:partial-alert').catch(() => 'unknown'))) {
+          await kv.put('orphans:partial-alert', now.toISOString(), { expirationTtl: 7 * 86400 }).catch(() => {});
+          await founderAlert(env, `⚠️ The orphan clean-up pass stops after ${ORPHAN_AUTH_PAGES_MAX} pages of sign-ins: there are more accounts than it reads, so it queues nothing. Raise ORPHAN_AUTH_PAGES_MAX.`, 'ops').catch(() => {});
+        }
+        return out;
+      }
       spent++;
       const r = await fetch(`${GB_URL(env)}/auth/v1/admin/users?page=${page}&per_page=1000`, { headers: auth }).catch(() => null);
       const body = r && r.ok ? await r.json().catch(() => null) : null;
@@ -16899,10 +16923,7 @@ async function orphanScan(env, now = new Date()) {
     }
     if (!live.size) { out.failed++; return out; }   // an empty list is a broken one
     out.live = live.size;
-    // 2) Ids already queued are left alone.
-    spent++;
-    const qpage = await kv.list({ prefix: 'purge:' });
-    const queued = new Set((qpage.keys || []).map((k) => k.name.slice('purge:'.length)));
+    // 2) Ids already queued are left alone (read in step 0).
     // 3) The columns, from where the last run stopped.
     spent++;
     const cur = await kv.get('orphans:cursor', { type: 'json' }).catch(() => null);
@@ -16921,13 +16942,20 @@ async function orphanScan(env, now = new Date()) {
       if (!Array.isArray(rows)) { out.failed++; break; }   // this page again next run
       const ids = [...new Set(rows.map((r) => String(r?.[col] || '').toLowerCase()).filter((id) => BL_UUID.test(id)))];
       const from = after;
+      const blockedOnly = table === 'user_blocks' && col === 'blocked_user_id';
       for (const id of ids) {
         if (!live.has(id) && !queued.has(id)) {
           // A lookup and maybe a check and a write: stop before the budget or the queue cap runs out.
-          if (out.queued >= ORPHAN_QUEUE_MAX || spent + 3 + RESERVE > ORPHAN_SCAN_BUDGET) break scan;
+          if (out.queued >= room || spent + 3 + RESERVE > ORPHAN_SCAN_BUDGET || gbBudgetLeft(env) < 5) break scan;
           spent++;
           const au = await fetch(`${GB_URL(env)}/auth/v1/admin/users/${id}`, { headers: auth }).catch(() => null);
-          if (au && au.status === 404) {
+          if (au && au.status === 404 && blockedOnly) {
+            // Only someone's blocked id: its block rows go, no purge.
+            spent++;
+            const d = await gbRest(env, `user_blocks?blocked_user_id=eq.${id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => null);
+            if (!d || !d.ok) { out.failed++; break scan; }
+            out.unblocked = (out.unblocked || 0) + 1;
+          } else if (au && au.status === 404) {
             spent++;
             const had = await kv.get(`purge:${id}`).catch(() => 'unknown');
             if (!had) {
