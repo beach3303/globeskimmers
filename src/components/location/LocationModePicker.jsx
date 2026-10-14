@@ -341,13 +341,14 @@ function Row({ icon: Icon, title, sub = '', kicker = '', kickerColor = NEUTRAL.i
 }
 
 // A note on white (plan-authored; never red or orange): the icon in umber, the words in
-// ink-2. kind 'error' (CircleAlert) is role=alert, read out as it appears; kind 'empty'
-// (SearchX, no results) is read by the search page's status line instead.
-function Note({ kind = 'error', text, style = undefined }) {
+// ink-2. kind 'error' (CircleAlert) reads its words out as it appears (role=alert); kind
+// 'empty' (SearchX, no results) is read by the search page's status line instead. action,
+// when given, is one quiet outline button under the words (the house error card's action:
+// umber on white, never a solid fill), kept out of the alert so it isn't read twice.
+function Note({ kind = 'error', text, action = null, style = undefined }) {
   const Icon = kind === 'error' ? CircleAlert : SearchX;
   return (
     <div
-      role={kind === 'error' ? 'alert' : undefined}
       style={{
         display: 'flex',
         alignItems: 'flex-start',
@@ -360,7 +361,41 @@ function Note({ kind = 'error', text, style = undefined }) {
       }}
     >
       <Icon size={18} color={K.accent} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flex: 'none' }} />
-      <p style={{ margin: 0, minWidth: 0, fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2, overflowWrap: 'anywhere' }}>{text}</p>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p role={kind === 'error' ? 'alert' : undefined} style={{ margin: 0, fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2, overflowWrap: 'anywhere' }}>
+          {text}
+        </p>
+        {action ? (
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="active:opacity-60"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 44,
+              maxWidth: '100%',
+              boxSizing: 'border-box',
+              margin: '10px 0 0',
+              padding: '4px 18px',
+              borderRadius: 14,
+              background: 'transparent',
+              border: `1px solid ${K.accent}`,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: fs(14),
+              fontWeight: 600,
+              lineHeight: 1.2,
+              textAlign: 'center',
+              color: K.accent,
+              overflowWrap: 'anywhere',
+            }}
+          >
+            {action.label}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -629,6 +664,13 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
     } finally {
       if (seq === searchSeq.current) setSearching(false);
     }
+  };
+
+  // The error note's "Try again": the same query, at once. The button goes away with the
+  // note, so focus that was on it moves to the dialog instead of falling to the page.
+  const retrySearch = (e) => {
+    if (e && e.currentTarget === document.activeElement && dialogRef.current) dialogRef.current.focus({ preventScroll: true });
+    if (searchable(searchQuery)) performSearch(searchQuery);
   };
 
   const handleUseCurrentLocation = async () => {
@@ -953,7 +995,12 @@ export default function LocationModePicker({ isOpen, onClose, coldOpen = false, 
           </p>
         ) : null}
         {note ? (
-          <Note kind={note.kind} text={note.text} style={{ flex: 'none' }} />
+          <Note
+            kind={note.kind}
+            text={note.text}
+            action={note.kind === 'error' ? { label: 'Try again', onClick: retrySearch } : null}
+            style={{ flex: 'none' }}
+          />
         ) : null}
         {n > 0 ? (
           <>
