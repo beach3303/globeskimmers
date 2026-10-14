@@ -16013,6 +16013,9 @@ async function handlePlaceReport(request, env, ctx) {
     const id = psId(b.id);
     const reason = String(b.reason || '');
     if (!id || !PS_REPORT_REASONS.has(reason)) return jsonResponse({ error: 'id and a known reason required' }, 400);
+    // The App's one daily report allowance (gbReportCapped).
+    const capped = await gbReportCapped(env, user.id);
+    if (capped) return capped;
     await psEnsure(env);
     const p = await env.DB.prepare("SELECT id, name, status FROM ps_places WHERE id = ? AND status IN ('open', 'approved', 'held')").bind(id).first();
     if (!p) return jsonResponse({ error: 'Not found' }, 404);
@@ -17242,6 +17245,16 @@ async function handleSocialProfile(request, env, ctx) {
 }
 
 const REPORTS_DAILY_MAX = 30;
+// The one daily allowance every report door in the App shares: travelers and
+// their posts here, guestbook notes and place suggestions too (go-live final
+// check: privacy §8 says "at most 30 reports a day in the App", and the
+// guestbook and place doors didn't count). A 429 with words, or null.
+async function gbReportCapped(env, userId) {
+  const n = await gbDayCount(env, `rep:${userId}`);
+  return n != null && n > REPORTS_DAILY_MAX
+    ? jsonResponse({ error: 'You’ve sent a lot of reports today. If it’s urgent, email founder@globeskimmers.io' }, 429)
+    : null;
+}
 // POST /social/report { slug?, kind, ref?, reason, note? } — Apple 1.2's
 // report door. minor_safety reports carry a 24h triage SLA (admin queue).
 // Report sits next to Block everywhere (2026-10-13), so a profile, a
@@ -17253,11 +17266,11 @@ async function handleSocialReport(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const reason = ['minor_safety', 'nudity', 'harassment', 'spam', 'other'].includes(b.reason) ? b.reason : 'other';
     const kind = ['passport', 'photo', 'tag', 'handle', 'profile', 'postcard', 'signature', 'stamp'].includes(b.kind) ? b.kind : 'passport';
-    // One person files at most REPORTS_DAILY_MAX reports a day (go-live
-    // round 3: with no limit, one account could bury a real child-safety
-    // report on the desk); past that the words point to email.
-    const n = await gbDayCount(env, `rep:${user.id}`);
-    if (n != null && n > REPORTS_DAILY_MAX) return jsonResponse({ error: 'You’ve sent a lot of reports today. If it’s urgent, email founder@globeskimmers.io' }, 429);
+    // One person files at most REPORTS_DAILY_MAX reports a day, across every
+    // report door (go-live round 3: with no limit, one account could bury a
+    // real child-safety report on the desk); past that the words point to email.
+    const capped = await gbReportCapped(env, user.id);
+    if (capped) return capped;
     const row = {
       reporter_id: user.id, kind, reason,
       subject_slug: b.slug ? String(b.slug).replace(/[^a-z0-9]/gi, '').slice(0, 24) : null,
@@ -23653,6 +23666,9 @@ async function handleGuestbookReport(request, env, ctx) {
     const id = gbClean(b.id);
     if (!BL_UUID.test(id)) return jsonResponse({ error: 'id required' }, 400);
     const reason = gbClean(b.reason).slice(0, 200) || null;
+    // The App's one daily report allowance (gbReportCapped).
+    const capped = await gbReportCapped(env, user.id);
+    if (capped) return capped;
     const ins = await gbRest(env, 'guestbook_reports', {
       method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
       body: JSON.stringify({ entry_id: id, reporter_id: user.id, reason }),
