@@ -2,12 +2,15 @@
 // (founder, 2026-10-11: freeze at once, purge after 7 days, access-only
 // appeal). Rendered by App.jsx in place of every route while the worker's age
 // gate answers tier 'blocked'. Its words match the worker (go-live, 2026-10-13;
-// round 2): the passport is hidden and every stamp, post and send is refused;
-// the worker's freezeSweep deletes the content after FREEZE_PURGE_DAYS,
-// guestbook notes included (until then they show without a name; the sign-in
-// account and age record stay for an appeal), or the person deletes the whole
-// account now, which deletes the guestbook notes too. The appeal restores
-// access only — nothing else.
+// round 2): the passport is hidden and every stamp, post and send is refused.
+// Until the clean-up, the guestbook notes show without a name. After
+// FREEZE_PURGE_DAYS the worker's freezeSweep runs gbPurgeUserContent with
+// keepAccount: the content goes, every guestbook note (deleted ones too) and
+// every guestbook upload included; the sign-in account, the age record and the
+// blocks stay, so an appeal can restore access, and the App's settings are left
+// as they were. "Delete my account now" deletes the whole account at once
+// (handleDeleteAccount), the guestbook notes and uploads too. An appeal corrects
+// the birthday and restores access only: nothing deleted comes back.
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { showToast } from '@/components/Toast';
@@ -60,7 +63,7 @@ export default function FrozenScreen() {
         <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${RULE}` }}>
           <p style={{ fontSize: fs(13), lineHeight: 1.5, color: INK2 }}>
             Entered the wrong birthday? Email <a href={appealHref} style={{ color: STAMP, textDecoration: 'underline' }}>{APPEAL_TO}</a> with the subject &ldquo;Age appeal&rdquo;.
-            An appeal can only restore access &mdash; nothing else about the account changes.
+            An appeal can only restore access &mdash; anything already deleted stays deleted.
           </p>
         </div>
         <button type="button" onClick={() => logout()} className="mt-4 w-full py-2" style={{ minHeight: 44, fontSize: fs(13.5), color: INK3, textDecoration: 'underline' }}>Sign out</button>
