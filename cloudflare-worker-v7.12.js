@@ -17224,6 +17224,129 @@ function gbBirthdayDateError(md, year) {
 }
 
 // POST /social/age { birth_year? } — read my gate state, or set it once.
+// ── App Store Server Notifications: RESCIND_CONSENT (teens plan Phase 0, 2026-10-14) ────
+// A parent or guardian withdrew consent for their child's use of the app. Apple stops the
+// app from launching; this holds the account's social side everywhere else. Apple signs
+// each notification (JWS, ES256) with a leaf certificate that chains through Apple's
+// intermediate to Apple Root CA - G3. The chain is checked with WebCrypto before anything
+// acts: the root is Apple's own (pinned by its SHA-256), each certificate is signed by the
+// next and within its dates, the leaf and intermediate carry Apple's marker extensions,
+// and the payload's signature is the leaf's. The App Store Connect URL to set is
+// https://<worker>/appstore/notifications (Version 2).
+const APPLE_ROOT_G3_SHA256 = '63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179';
+const APPLE_OID_LEAF = '1.2.840.113635.100.6.11.1';
+const APPLE_OID_INTERMEDIATE = '1.2.840.113635.100.6.2.1';
+const asB64 = (s) => String(s || '').replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(String(s || '').length / 4) * 4, '=');
+const b64Bytes = (s) => Uint8Array.from(atob(asB64(s)), (c) => c.charCodeAt(0));
+const b64Text = (s) => new TextDecoder().decode(b64Bytes(s));
+// DER: one element at pos → { tag, hdr, start, end }, and an element's children.
+function derAt(buf, pos) {
+  const tag = buf[pos];
+  let len = buf[pos + 1];
+  let off = pos + 2;
+  if (len & 0x80) { const n = len & 0x7f; len = 0; for (let i = 0; i < n; i++) len = len * 256 + buf[off + i]; off += n; }
+  return { tag, hdr: pos, start: off, end: off + len };
+}
+function derKids(buf, el) { const out = []; for (let p = el.start; p < el.end;) { const k = derAt(buf, p); out.push(k); p = k.end; } return out; }
+function derOid(bytes) {
+  const out = [Math.floor(bytes[0] / 40), bytes[0] % 40];
+  for (let i = 1, v = 0; i < bytes.length; i++) { v = v * 128 + (bytes[i] & 0x7f); if (!(bytes[i] & 0x80)) { out.push(v); v = 0; } }
+  return out.join('.');
+}
+function derTime(buf, el) {
+  const t = new TextDecoder().decode(buf.slice(el.start, el.end));
+  const m = el.tag === 0x17 ? /^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})Z$/.exec(t) : /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})Z$/.exec(t);
+  if (!m) return NaN;
+  const y = el.tag === 0x17 ? (Number(m[1]) < 50 ? 2000 : 1900) + Number(m[1]) : Number(m[1]);
+  return Date.UTC(y, Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]));
+}
+const EC_CURVES = { '1.2.840.10045.3.1.7': 'P-256', '1.3.132.0.34': 'P-384' };
+const EC_HASHES = { '1.2.840.10045.4.3.2': 'SHA-256', '1.2.840.10045.4.3.3': 'SHA-384' };
+// The parts of an X.509 certificate the chain check needs.
+function appleCert(der) {
+  const top = derAt(der, 0);
+  const [tbs, sigAlg, sigVal] = derKids(der, top);
+  const f = derKids(der, tbs);
+  const i = f[0].tag === 0xa0 ? 1 : 0;
+  const [notBefore, notAfter] = derKids(der, f[i + 3]);
+  const spki = f[i + 4 + 1];
+  const [alg] = derKids(der, spki);
+  const curveOid = derKids(der, alg)[1];
+  const extIdx = f.findIndex((x) => x.tag === 0xa3);
+  const oids = new Set();
+  if (extIdx >= 0) {
+    for (const ext of derKids(der, derKids(der, f[extIdx])[0])) { const id = derKids(der, ext)[0]; oids.add(derOid(der.slice(id.start, id.end))); }
+  }
+  const sigOid = derKids(der, sigAlg)[0];
+  return {
+    der, tbs: der.slice(tbs.hdr, tbs.end), spki: der.slice(spki.hdr, spki.end),
+    curve: EC_CURVES[derOid(der.slice(curveOid.start, curveOid.end))] || null,
+    hash: EC_HASHES[derOid(der.slice(sigOid.start, sigOid.end))] || null,
+    sig: der.slice(sigVal.start + 1, sigVal.end), // past the unused-bits byte
+    notBefore: derTime(der, notBefore), notAfter: derTime(der, notAfter), oids,
+  };
+}
+// A DER ECDSA signature as WebCrypto's r || s, each `size` bytes.
+function ecdsaRaw(sig, size) {
+  const [r, s] = derKids(sig, derAt(sig, 0));
+  const fit = (x) => { let b = sig.slice(x.start, x.end); while (b.length > size && b[0] === 0) b = b.slice(1); const o = new Uint8Array(size); o.set(b, size - b.length); return o; };
+  const out = new Uint8Array(size * 2); out.set(fit(r), 0); out.set(fit(s), size);
+  return out;
+}
+async function appleSignedBy(child, issuer) {
+  if (!child.hash || !issuer.curve) return false;
+  const key = await crypto.subtle.importKey('spki', issuer.spki, { name: 'ECDSA', namedCurve: issuer.curve }, false, ['verify']);
+  return crypto.subtle.verify({ name: 'ECDSA', hash: child.hash }, key, ecdsaRaw(child.sig, issuer.curve === 'P-384' ? 48 : 32), child.tbs);
+}
+// The payload of an Apple-signed JWS, or null when anything in it doesn't hold.
+// env.APPLE_ROOT_SHA256_TEST_ONLY adds a root for the worker's own tests; never set it live.
+async function verifyAppleJws(jws, env, now = Date.now()) {
+  try {
+    const parts = String(jws || '').split('.');
+    if (parts.length !== 3) return null;
+    const head = JSON.parse(b64Text(parts[0]));
+    if (head.alg !== 'ES256' || !Array.isArray(head.x5c) || head.x5c.length < 3) return null;
+    const [leaf, mid, root] = head.x5c.slice(0, 3).map((c) => appleCert(b64Bytes(c)));
+    const pins = [APPLE_ROOT_G3_SHA256, ...String(env?.APPLE_ROOT_SHA256_TEST_ONLY || '').split(',').filter(Boolean)];
+    const rootHash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', root.der))].map((x) => x.toString(16).padStart(2, '0')).join('');
+    if (!pins.includes(rootHash)) return null;
+    if (!leaf.oids.has(APPLE_OID_LEAF) || !mid.oids.has(APPLE_OID_INTERMEDIATE)) return null;
+    for (const c of [leaf, mid]) if (!(now >= c.notBefore && now <= c.notAfter)) return null;
+    if (!(await appleSignedBy(mid, root)) || !(await appleSignedBy(leaf, mid))) return null;
+    if (leaf.curve !== 'P-256') return null;
+    const key = await crypto.subtle.importKey('spki', leaf.spki, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    const ok = await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, b64Bytes(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
+    return ok ? JSON.parse(b64Text(parts[1])) : null;
+  } catch { return null; }
+}
+// POST /appstore/notifications { signedPayload }: Apple's server, no sign-in. A verified
+// RESCIND_CONSENT holds every account that used that download (consent_revoked_at);
+// anything unverified is refused; other types are acknowledged and left alone.
+async function handleAppStoreNotification(request, env, ctx) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const note = await verifyAppleJws(b.signedPayload, env);
+    if (!note) return jsonResponse({ error: 'unverified' }, 400);
+    const type = String(note.notificationType || '');
+    if (type !== 'RESCIND_CONSENT') return jsonResponse({ ok: true, type });
+    const app = note.appData || {};
+    if (app.bundleId && app.bundleId !== 'com.globeskimmers.app') return jsonResponse({ ok: true, ignored: 'bundle' });
+    const tx = await verifyAppleJws(app.signedAppTransactionInfo, env);
+    const txnId = tx && String(tx.appTransactionId || '');
+    if (!txnId) return jsonResponse({ error: 'unverified transaction' }, 400);
+    const q = await gbRest(env, `app_store_links?app_transaction_id=eq.${encodeURIComponent(txnId)}&select=user_id`, {});
+    if (!q.ok && q.status !== 404) return jsonResponse({ error: 'Couldn’t read the links' }, 503);
+    const users = q.ok ? [...new Set((await q.json()).map((r) => r.user_id))] : [];
+    const at = new Date().toISOString();
+    for (const u of users) {
+      const w = await gbRest(env, 'social_profiles?on_conflict=user_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ user_id: u, consent_revoked_at: at, updated_at: at }) });
+      if (!w.ok) return jsonResponse({ error: 'Couldn’t hold the account' }, 503); // Apple retries
+    }
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'consent_revoked', { accounts: users.length, environment: app.environment || null }));
+    return jsonResponse({ ok: true, accounts: users.length });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleSocialAge(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -25442,6 +25565,7 @@ export default {
       if (pathname === '/passport/sets' && request.method === 'POST') return await handlePassportSets(request, env);
       if (pathname === '/social/block' && request.method === 'POST') return await handleSocialBlock(request, env, ctx);
       if (pathname === '/social/age' && request.method === 'POST') return await handleSocialAge(request, env, ctx);
+      if (pathname === '/appstore/notifications' && request.method === 'POST') return await handleAppStoreNotification(request, env, ctx);
       if (pathname === '/social/profile' && request.method === 'POST') return await handleSocialProfile(request, env, ctx);
       if (pathname === '/social/report' && request.method === 'POST') return await handleSocialReport(request, env, ctx);
       if (pathname === '/social/follow' && request.method === 'POST') return await handleSocialFollow(request, env, ctx);
