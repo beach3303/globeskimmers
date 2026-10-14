@@ -1,12 +1,19 @@
 /**
- * BasicPhrasesPage - FIXED VERSION with Cloudflare TTS
- * 
- * FIXES:
- * 1. INSTANT LOADING - Uses preset phrases from Word document (no AI generation)
- * 2. NATIVE-SOUNDING TTS - Calls Cloudflare Worker with Neural2 voices
- * 3. CACHING - Browser caches translations (7 days) and audio (permanent)
- * 
- * CLOUDFLARE WORKER URL: https://globeskimmers-tts.maizasimeon.workers.dev
+ * BasicPhrases: Pocket Phrasebook (the new look, Phrases.dc.html; plan S14).
+ *
+ * The mustard plate (PHRASEBOOK · SPANISH, "Say it in Spanish", the place in mono, PLANNING
+ * when browsing elsewhere), one white language pill that opens a sheet with every option
+ * (the country's language or the local dialect; in English-speaking places, English only
+ * or a language to translate from), a search, and the situations: rows with a thumb-index
+ * tab (stamp red for allergies and emergencies) that open into hairline phrase rows, each
+ * with the meaning, the phrase in serif, a mustard speaker and how to say it.
+ *
+ * The data and audio are unchanged: preset English phrases, Supabase-seeded translations
+ * then the AI fallback with its caches, the Neural2 TTS worker with the browser voice as
+ * the last resort, the reverse mode (your language first, English to say) and English
+ * only. No emoji, no flags; every type on mustard is the ink.
+ *
+ * TTS worker: https://globeskimmers-tts.maizasimeon.workers.dev
  */
 
 import React, { useState, useEffect } from "react";
@@ -14,24 +21,25 @@ import { useAuth } from "@/lib/AuthContext";
 import { legacyUser } from "@/lib/legacyUser";
 import { invokeLLM } from "@/lib/callWorker";
 import { supabase } from "@/lib/supabaseClient";
-import { useNavigate } from "react-router-dom";
-import { createPageUrl } from "@/utils";
-import { ChevronDown, ChevronUp, Globe, Loader2, Volume2, Languages, Search, X, ChevronLeft, MapPin } from "lucide-react";
-import { CAT, IVORY, SHADOW_CARD_SOFT } from "@/components/redesign/constants";
-import { motion, AnimatePresence } from "framer-motion";
+import {
+  BedDouble, CarTaxiFront, Check, ChevronDown, Globe, Hash, Info, Languages, Map as MapIcon, MapPin, Search, SearchX,
+  ShoppingBasket, Siren, Volume2, Wallet, WheatOff,
+} from "lucide-react";
+import { WORLD, NEUTRAL, fs } from "@/components/redesign/constants";
 import { useLocation } from "../components/location/LocationContext";
+import { getLocationLabel } from "@/components/location/locationLabel";
 import LocationModePicker from "../components/location/LocationModePicker";
+import FinderHeader, { finderColumnStyle } from "@/components/finder/FinderHeader";
+import { WorldSearch, WorldNote } from "@/components/finder/FinderControls";
+import { WorldSkeleton } from "@/components/finder/FinderCard";
+import FinderEmptyState from "@/components/finder/FinderEmptyState";
+import FilterSheet, { FilterGroupLabel } from "@/components/finder/FilterSheet";
+import { ThumbIndex } from "@/components/finder/motifs";
 import { useIsTablet } from "@/lib/useIsTablet";
 
-// iPad editorial design tokens (design handoff: ivory canvas, Instrument Serif
-// display, JetBrains Mono UPPERCASE kickers, soft white cards w/ hairline rule).
-// Phrases color world: gold ink (CAT.phrases.ink #A37013). Phone layout never
-// reads these — every use is gated behind useIsTablet().
-const ED_SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
-const ED_MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
-const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
-const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)";
-const fs = (n) => `calc(${n}px*var(--fs))`;
+const W = WORLD.phrases;
+const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
+const SERIF = "'Instrument Serif', Georgia, serif";
 
 // ============================================================================
 // CLOUDFLARE WORKER URL - Your TTS endpoint
@@ -570,17 +578,19 @@ const DIALECT_TTS_FALLBACK = {
   'wuu': 'zh-CN', 'yue': 'yue-HK', 'ca': 'es-ES', 'eu': 'es-ES',
 };
 
+// The situations. icon: the lucide icon on the row's thumb-index tab; priority 'emergency'
+// stamps the tab red (allergies and emergencies).
 const PHRASE_CATEGORIES = [
-  { id: "basics", icon: "🌎", name: "Essential Basics", subtitle: "Polite & general communication", priority: "high" },
-  { id: "directions", icon: "🗺️", name: "Finding Your Way", subtitle: "Directions & locations", priority: "high" },
-  { id: "transportation", icon: "🚕", name: "Transportation", subtitle: "Taxi, bus, train, airport", priority: "high" },
-  { id: "accommodation", icon: "🏨", name: "Hotels & Lodging", subtitle: "Check-in, requests, problems", priority: "high" },
-  { id: "shopping", icon: "🛍️", name: "Shopping & Money", subtitle: "Prices, payment, exchange", priority: "high" },
-  { id: "grocery", icon: "🛒", name: "Market & Grocery Shopping", subtitle: "Basic food items list", priority: "medium" },
-  { id: "allergies", icon: "⚠️", name: "Food Allergies & Dietary Needs", subtitle: "Critical phrases for safe dining", priority: "emergency" },
-  { id: "emergencies", icon: "🚨", name: "Emergency Help", subtitle: "Safety, medical, critical assistance", priority: "emergency" },
-  { id: "locations", icon: "📍", name: "Key Locations & Services", subtitle: "Where to find things", priority: "medium" },
-  { id: "numbers", icon: "🔢", name: "Numbers & Counting", subtitle: "Quantities, dates, clarity", priority: "medium" }
+  { id: "basics", icon: Globe, name: "Essential Basics", subtitle: "Polite & general communication", priority: "high" },
+  { id: "directions", icon: MapIcon, name: "Finding Your Way", subtitle: "Directions & locations", priority: "high" },
+  { id: "transportation", icon: CarTaxiFront, name: "Transportation", subtitle: "Taxi, bus, train, airport", priority: "high" },
+  { id: "accommodation", icon: BedDouble, name: "Hotels & Lodging", subtitle: "Check-in, requests, problems", priority: "high" },
+  { id: "shopping", icon: Wallet, name: "Shopping & Money", subtitle: "Prices, payment, exchange", priority: "high" },
+  { id: "grocery", icon: ShoppingBasket, name: "Market & Grocery Shopping", subtitle: "Basic food items list", priority: "medium" },
+  { id: "allergies", icon: WheatOff, name: "Food Allergies & Dietary Needs", subtitle: "Critical phrases for safe dining", priority: "emergency" },
+  { id: "emergencies", icon: Siren, name: "Emergency Help", subtitle: "Safety, medical, critical assistance", priority: "emergency" },
+  { id: "locations", icon: MapPin, name: "Key Locations & Services", subtitle: "Where to find things", priority: "medium" },
+  { id: "numbers", icon: Hash, name: "Numbers & Counting", subtitle: "Quantities, dates, clarity", priority: "medium" }
 ];
 
 const ENGLISH_SPEAKING_COUNTRIES = [
@@ -593,75 +603,175 @@ const ENGLISH_SPEAKING_COUNTRIES = [
 // travel languages. Audio always plays the English equivalent, so any language
 // here works regardless of TTS voice support. Sorted by name.
 const AVAILABLE_LANGUAGES = [
-  { code: "ar", name: "Arabic", flag: "🇸🇦" },
-  { code: "bs", name: "Bosnian", flag: "🇧🇦" },
-  { code: "kea", name: "Cape Verdean Creole", flag: "🇨🇻" },
-  { code: "zh", name: "Chinese (Mandarin)", flag: "🇨🇳" },
-  { code: "hr", name: "Croatian", flag: "🇭🇷" },
-  { code: "cs", name: "Czech", flag: "🇨🇿" },
-  { code: "nl", name: "Dutch", flag: "🇳🇱" },
-  { code: "tl", name: "Filipino (Tagalog)", flag: "🇵🇭" },
-  { code: "fr", name: "French", flag: "🇫🇷" },
-  { code: "de", name: "German", flag: "🇩🇪" },
-  { code: "gn", name: "Guaraní", flag: "🇵🇾" },
-  { code: "ht", name: "Haitian Creole", flag: "🇭🇹" },
-  { code: "hi", name: "Hindi", flag: "🇮🇳" },
-  { code: "id", name: "Indonesian", flag: "🇮🇩" },
-  { code: "it", name: "Italian", flag: "🇮🇹" },
-  { code: "ja", name: "Japanese", flag: "🇯🇵" },
-  { code: "ko", name: "Korean", flag: "🇰🇷" },
-  { code: "ku", name: "Kurdish", flag: "🇮🇶" },
-  { code: "lo", name: "Lao", flag: "🇱🇦" },
-  { code: "ln", name: "Lingala", flag: "🇨🇩" },
-  { code: "ms", name: "Malay", flag: "🇲🇾" },
-  { code: "mi", name: "Māori", flag: "🇳🇿" },
-  { code: "no", name: "Norwegian", flag: "🇳🇴" },
-  { code: "pap", name: "Papiamento", flag: "🇨🇼" },
-  { code: "fa", name: "Persian (Farsi)", flag: "🇮🇷" },
-  { code: "pt", name: "Portuguese", flag: "🇵🇹" },
-  { code: "ru", name: "Russian", flag: "🇷🇺" },
-  { code: "es", name: "Spanish", flag: "🇪🇸" },
-  { code: "sv", name: "Swedish", flag: "🇸🇪" },
-  { code: "th", name: "Thai", flag: "🇹🇭" },
-  { code: "tr", name: "Turkish", flag: "🇹🇷" },
-  { code: "uz", name: "Uzbek", flag: "🇺🇿" },
-  { code: "vi", name: "Vietnamese", flag: "🇻🇳" },
-  { code: "wo", name: "Wolof", flag: "🇸🇳" }
+  { code: "ar", name: "Arabic" },
+  { code: "bs", name: "Bosnian" },
+  { code: "kea", name: "Cape Verdean Creole" },
+  { code: "zh", name: "Chinese (Mandarin)" },
+  { code: "hr", name: "Croatian" },
+  { code: "cs", name: "Czech" },
+  { code: "nl", name: "Dutch" },
+  { code: "tl", name: "Filipino (Tagalog)" },
+  { code: "fr", name: "French" },
+  { code: "de", name: "German" },
+  { code: "gn", name: "Guaraní" },
+  { code: "ht", name: "Haitian Creole" },
+  { code: "hi", name: "Hindi" },
+  { code: "id", name: "Indonesian" },
+  { code: "it", name: "Italian" },
+  { code: "ja", name: "Japanese" },
+  { code: "ko", name: "Korean" },
+  { code: "ku", name: "Kurdish" },
+  { code: "lo", name: "Lao" },
+  { code: "ln", name: "Lingala" },
+  { code: "ms", name: "Malay" },
+  { code: "mi", name: "Māori" },
+  { code: "no", name: "Norwegian" },
+  { code: "pap", name: "Papiamento" },
+  { code: "fa", name: "Persian (Farsi)" },
+  { code: "pt", name: "Portuguese" },
+  { code: "ru", name: "Russian" },
+  { code: "es", name: "Spanish" },
+  { code: "sv", name: "Swedish" },
+  { code: "th", name: "Thai" },
+  { code: "tr", name: "Turkish" },
+  { code: "uz", name: "Uzbek" },
+  { code: "vi", name: "Vietnamese" },
+  { code: "wo", name: "Wolof" }
 ];
+
+// ============================================================================
+// THE NEW LOOK: rows and controls (Phrases.dc.html L50-170)
+// ============================================================================
+
+// Phonetics without the [pointing] notes and ____ blanks the phrases carry.
+const cleanPhonetic = (text) => (text ? text.replace(/\[.*?\]/g, '').replace(/_+/g, '').replace(/\s+/g, ' ').trim() : '');
+
+// Formal and casual differ only when the data says so, or when the casual line is its own.
+function hasDifferentFormality(phrase) {
+  if (phrase.same_formality === true) return false;
+  if (phrase.same_formality === false) return true;
+  const formal = (phrase.formal_translation || '').toLowerCase().trim();
+  const casual = (phrase.casual_translation || '').toLowerCase().trim();
+  return formal !== casual && casual !== '';
+}
+
+// The mono chips ('Say it', 'Formal · polite', 'Casual', a search result's situation).
+function Chip({ children, small = false }) {
+  return (
+    <span style={{ flexShrink: 0, padding: small ? "1px 6px" : "2px 7px", borderRadius: 6, background: W.wash, color: W.washInk, fontFamily: MONO, fontSize: fs(small ? 9 : 9.5), fontWeight: 500, letterSpacing: ".1em", lineHeight: 1.47, textTransform: "uppercase", whiteSpace: "nowrap" }}>
+      {children}
+    </span>
+  );
+}
+
+// How to say it: the 'Say it' chip and the pronunciation in mono.
+function SayIt({ text }) {
+  if (!text) return null;
+  return (
+    <p style={{ margin: "4px 0 0", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+      <Chip>Say it</Chip>
+      <span style={{ minWidth: 0, fontFamily: MONO, fontSize: fs(12), lineHeight: 1.33, color: W.washInk, overflowWrap: "anywhere" }}>{text}</span>
+    </p>
+  );
+}
+
+// The 44px mustard speaker; ink while it plays.
+function Speaker({ text, playing, onClick }) {
+  return (
+    <button type="button" onClick={onClick} disabled={!!playing} aria-label={`Listen to ${text}`} aria-busy={playing || undefined}
+      style={{ flexShrink: 0, width: 44, height: 44, padding: 0, borderRadius: 999, background: playing ? W.ink : W.plate, border: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: playing ? "default" : "pointer" }}>
+      <Volume2 size={20} color={playing ? NEUTRAL.white : W.ink} strokeWidth={2} aria-hidden="true" className={playing ? "animate-pulse motion-reduce:animate-none" : undefined} />
+    </button>
+  );
+}
+
+const meaningStyle = { margin: 0, fontSize: fs(14), lineHeight: 1.36, color: NEUTRAL.ink2 };
+const phraseStyle = { margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(24), lineHeight: 1.17, color: W.ink, overflowWrap: "break-word" };
+
+// One phrase, as the open situation (or a search result) prints it. mode: 'normal' (the
+// meaning, then the phrase to say), 'reverse' (your language first, then the English to
+// say) or 'english' (English only). kicker: a search result's situation. inset: the 44px
+// left inset that lines rows up under a situation's name.
+function PhraseRow({ phrase, rowKey, mode, langCode, readCode, ttsCode, playingAudio, speak, kicker = null, inset = true, first = false }) {
+  const pad = { padding: inset ? "12px 14px 12px 44px" : "12px 14px", borderTop: first ? 0 : `1px solid ${W.line}` };
+  const head = kicker ? <p style={{ margin: "0 0 4px" }}><Chip small>{kicker}</Chip></p> : null;
+  if (mode === "english" || mode === "reverse") {
+    return (
+      <div style={pad}>
+        {head}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {mode === "reverse" ? <p lang={readCode} style={meaningStyle}>{phrase.formal_translation || phrase.translation}</p> : null}
+            <p lang="en" style={mode === "reverse" ? phraseStyle : { ...phraseStyle, margin: 0 }}>{phrase.english}</p>
+          </div>
+          <Speaker text={phrase.english} playing={playingAudio[rowKey]} onClick={() => speak(phrase.english, "en", rowKey)} />
+        </div>
+      </div>
+    );
+  }
+  const formal = phrase.formal_translation || phrase.translation;
+  if (!hasDifferentFormality(phrase)) {
+    return (
+      <div style={pad}>
+        {head}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={meaningStyle}>{phrase.english}</p>
+            {formal ? <p lang={langCode} style={phraseStyle}>{formal}</p> : null}
+          </div>
+          {formal ? <Speaker text={formal} playing={playingAudio[rowKey]} onClick={() => speak(formal, ttsCode, rowKey, phrase.audio_url)} /> : null}
+        </div>
+        <SayIt text={cleanPhonetic(phrase.formal_phonetic || phrase.phonetic)} />
+        {phrase.romanization ? <p style={{ margin: "4px 0 0", fontSize: fs(12), lineHeight: 1.4, color: NEUTRAL.ink3 }}>Romanized: {phrase.romanization}</p> : null}
+      </div>
+    );
+  }
+  const versions = [
+    { key: "formal", label: "Formal · polite", text: formal, phonetic: phrase.formal_phonetic || phrase.phonetic, audio: phrase.audio_url, roman: phrase.romanization },
+    { key: "casual", label: "Casual", text: phrase.casual_translation || formal, phonetic: phrase.casual_phonetic || phrase.formal_phonetic || phrase.phonetic },
+  ];
+  return (
+    <div style={pad}>
+      {head}
+      <p style={meaningStyle}>{phrase.english}</p>
+      {versions.map((v) => (
+        <div key={v.key} style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${W.line}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Chip small>{v.label}</Chip>
+              <p lang={langCode} style={{ ...phraseStyle, marginTop: 4 }}>{v.text}</p>
+            </div>
+            <Speaker text={v.text} playing={playingAudio[`${rowKey}_${v.key}`]} onClick={() => speak(v.text, ttsCode, `${rowKey}_${v.key}`, v.audio)} />
+          </div>
+          <SayIt text={cleanPhonetic(v.phonetic)} />
+          {v.roman ? <p style={{ margin: "4px 0 0", fontSize: fs(12), lineHeight: 1.4, color: NEUTRAL.ink3 }}>Romanized: {v.roman}</p> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// One choice in the language sheet: a full-width row, ticked when it is the one in use.
+function OptionRow({ title, sub = null, selected = false, onClick }) {
+  return (
+    <li>
+      <button type="button" onClick={onClick} aria-current={selected ? "true" : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 52, boxSizing: "border-box", padding: "8px 4px", background: "transparent", border: 0, borderBottom: `1px solid ${W.line}`, fontFamily: "inherit", textAlign: "left", cursor: "pointer" }}>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: "block", fontSize: fs(15), fontWeight: selected ? 600 : 400, lineHeight: 1.3, color: NEUTRAL.ink }}>{title}</span>
+          {sub ? <span style={{ display: "block", marginTop: 1, fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink3 }}>{sub}</span> : null}
+        </span>
+        {selected ? <Check size={18} color={W.ink} strokeWidth={2.4} aria-hidden="true" style={{ flexShrink: 0 }} /> : null}
+      </button>
+    </li>
+  );
+}
+
+const KICKER = { high: "Essential", medium: "Useful", emergency: "Priority" };
 
 export default function BasicPhrasesPage() {
   const { user: authUser, profile } = useAuth();
-  const navigate = useNavigate();
   const isTablet = useIsTablet();
-  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
-  // Editorial sizing tokens — same look at both widths, phone-tuned when !isTablet.
-  // Tablet keeps its larger handoff sizes; phone gets compact equivalents. Every
-  // value still flows through fs() so text-scaling grows (never clips) elements.
-  const ED = {
-    // big display headings / serif
-    display: isTablet ? 34 : 28,
-    displaySm: isTablet ? 30 : 26,
-    // section / card titles
-    title: isTablet ? 26 : 21,
-    titleMd: isTablet ? 23 : 20,
-    titleSm: isTablet ? 22 : 20,
-    titleXs: isTablet ? 20 : 18,
-    titleXxs: isTablet ? 19 : 17,
-    // body
-    body: isTablet ? 14.5 : 13.5,
-    body2: isTablet ? 14 : 13.5,
-    sub: isTablet ? 13 : 12.5,
-    note: isTablet ? 12.5 : 12,
-    // mono kickers
-    kicker: isTablet ? 11 : 10.5,
-    kickerSm: isTablet ? 10 : 10,
-    kickerXs: isTablet ? 9.5 : 9.5,
-    // card / surface radii
-    rCard: isTablet ? 18 : 18,
-    rCardLg: isTablet ? 22 : 20,
-    rChip: isTablet ? 14 : 14,
-    rInput: isTablet ? 12 : 12,
-  };
   const { activeLocation, locationMode, initialized } = useLocation();
   const [loading, setLoading] = useState(true);
   const [languageInfo, setLanguageInfo] = useState(null);
@@ -1488,621 +1598,184 @@ Return a JSON object with "phrases" array. Each phrase object needs:
     setIsSearching(false);
   };
 
-  const renderPhrases = (categoryPhrases) => {
-    if (!categoryPhrases || categoryPhrases.length === 0) {
-      return <p className="text-[calc(14px*var(--fs))] text-gray-500 p-4">No phrases available</p>;
-    }
+  // ==========================================================================
+  // RENDER: the new look
+  // ==========================================================================
+  const isEnglishOnly = isInEnglishCountry && !wantsTranslation;
+  const isReverseMode = !!(isInEnglishCountry && wantsTranslation && selectedTranslationLanguage);
+  const mode = isReverseMode ? "reverse" : isEnglishOnly ? "english" : "normal";
+  const activeName = getActiveLanguageName();
+  // 'Say it in Spanish'; 'Say it in English' for the reverse mode; the world's 'Say it
+  // like a local' where the phrases are English or the language is unknown.
+  const named = !isEnglishOnly && !isReverseMode && !!languageInfo && activeName !== "English" && activeName !== "Local language";
+  const title = isReverseMode ? { pre: "Say it in ", italic: "English", post: "" } : named ? { pre: "Say it in ", italic: activeName, post: "" } : undefined;
+  const kickerLanguage = !languageInfo ? null : isReverseMode ? `${selectedTranslationLanguage.name} to English` : activeName;
+  const placeName = activeLocation?.address?.city || activeLocation?.placeName || null;
+  const locationLabel = locationMode === "navigate" && placeName ? `Planning · ${placeName}` : getLocationLabel(activeLocation);
+  const hasOptions = !!languageInfo && (isInEnglishCountry || languageInfo.show_toggle);
+  const pillText = isInEnglishCountry ? (isReverseMode ? `${selectedTranslationLanguage.name} → English` : "English") : activeName;
+  const notes = [ttsWarning && useDialect ? ttsWarning.message : null, useDialect && languageInfo?.dialect_note ? languageInfo.dialect_note : null].filter(Boolean);
+  const noLocation = initialized && !activeLocation?.address;
+  const rowProps = { mode, langCode: getActiveLanguageCode(), readCode: selectedTranslationLanguage?.code, ttsCode: getActiveTTSCode(), playingAudio, speak: speakPhrase };
+  const pickDialect = (on) => { setUseDialect(on); setPhrases({}); setExpandedCategory(null); setShowLanguageDropdown(false); };
+  const pill = { display: "inline-flex", alignItems: "center", gap: 8, minHeight: 44, maxWidth: "100%", boxSizing: "border-box", padding: "0 14px", borderRadius: 999, background: NEUTRAL.white, border: `1px solid ${W.line}`, fontFamily: "inherit", fontSize: fs(14), fontWeight: 600, lineHeight: 1.2, color: W.ink };
+  const sectionKicker = { margin: 0, fontFamily: MONO, fontSize: fs(10.5), fontWeight: 500, letterSpacing: ".16em", lineHeight: 1.34, textTransform: "uppercase", color: W.accentText };
+  const sectionTitle = { margin: "4px 0 0", fontFamily: SERIF, fontWeight: 400, fontSize: fs(24), lineHeight: 1.12, color: W.ink };
 
-    const isEnglishOnly = isInEnglishCountry && !wantsTranslation;
-    const isReverseMode = isInEnglishCountry && wantsTranslation && selectedTranslationLanguage;
-    const ttsCode = getActiveTTSCode();
-
-    // Helper to clean phonetic text
-    const cleanPhonetic = (text) => {
-      if (!text) return '';
-      return text
-        .replace(/\[.*?\]/g, '')
-        .replace(/_+/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-    };
-
-    // Check if formal and casual are actually different
-    const hasDifferentFormality = (phrase) => {
-      // If same_formality is explicitly set, use it
-      if (phrase.same_formality === true) return false;
-      if (phrase.same_formality === false) return true;
-      
-      // Fallback: compare the actual translations
-      const formal = (phrase.formal_translation || '').toLowerCase().trim();
-      const casual = (phrase.casual_translation || '').toLowerCase().trim();
-      return formal !== casual && casual !== '';
-    };
-
-    // ── Editorial phrase rows ───────────────────────────────────────────────
-    // Same data, same speakPhrase actions, same formal/casual logic — restyled
-    // to the handoff: serif phrase (gold/ink), meaning in muted ink, tinted
-    // "Say it" / formality chips, gold round speaker. Renders at both widths;
-    // ED.* tokens supply phone-tuned sizing when !isTablet.
-    const GOLD = CAT.phrases.ink, GOLD_BG = CAT.phrases.bg;
-    const spk = isTablet ? 44 : 40;
-    const Speaker = ({ phraseKey, text, code, label, audioUrl }) => (
-      <button
-        onClick={() => speakPhrase(text, code, phraseKey, audioUrl)}
-        disabled={playingAudio[phraseKey]}
-        title={label}
-        aria-label={label}
-        className="flex-shrink-0 rounded-full flex items-center justify-center transition-all"
-        style={{
-          width: spk, height: spk,
-          background: playingAudio[phraseKey] ? GOLD : "#FFFFFF",
-          color: playingAudio[phraseKey] ? "#FFFFFF" : GOLD,
-          border: `1px solid ${playingAudio[phraseKey] ? GOLD : ED_RULE}`,
-        }}
-      >
-        <Volume2 className={`w-5 h-5 ${playingAudio[phraseKey] ? "animate-pulse" : ""}`} />
-      </button>
-    );
+  // A situation (Phrases.dc.html L50-58): the thumb-index tab, ESSENTIAL / USEFUL /
+  // PRIORITY, the serif name, the subtitle and a 44px chevron; open, its phrase rows.
+  const situation = (category) => {
+    const isOpen = expandedCategory === category.id;
+    const priority = category.priority === "emergency";
+    const panelId = `sit-${category.id}`;
+    const list = phrases[category.id] || [];
     return (
-      <div className={isTablet ? "px-5 pb-5 pt-1 space-y-3" : "px-3 pb-3 pt-1 space-y-2.5"}>
-        {categoryPhrases.map((phrase, index) => {
-          const showBothVersions = hasDifferentFormality(phrase);
-          const rowKey = `${expandedCategory}_${index}`;
-          return (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.02 }}
-              className="bg-white p-4"
-              style={{ borderRadius: ED.rCard, border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}
-            >
-              {isReverseMode ? (
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p style={{ color: ED_INK3, fontSize: fs(ED.body2), lineHeight: 1.4 }}>{phrase.formal_translation || phrase.translation}</p>
-                    <p className="font-semibold mt-1" style={{ color: GOLD, fontFamily: ED_SERIF, fontSize: fs(ED.titleSm), lineHeight: 1.15 }}>{phrase.english}</p>
-                  </div>
-                  <Speaker phraseKey={rowKey} text={phrase.english} code="en" label="Listen to pronunciation" />
-                </div>
-              ) : (
-                <>
-                  <p style={{ color: ED_INK2, fontSize: fs(ED.body), lineHeight: 1.4 }}>{phrase.english}</p>
-
-                  {!isEnglishOnly && (phrase.formal_translation || phrase.translation) && (
-                    <div className="mt-2.5 space-y-2.5">
-                      {!showBothVersions && (
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold" style={{ color: GOLD, fontFamily: ED_SERIF, fontSize: fs(ED.titleMd), lineHeight: 1.12 }}>
-                              {phrase.formal_translation || phrase.translation}
-                            </p>
-                            {(phrase.formal_phonetic || phrase.phonetic) && (
-                              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                <span className="uppercase rounded-full px-2 py-0.5 font-semibold" style={{ background: GOLD_BG, color: GOLD, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Say it</span>
-                                <span style={{ color: ED_INK2, fontSize: fs(ED.body2) }}>{cleanPhonetic(phrase.formal_phonetic || phrase.phonetic)}</span>
-                              </div>
-                            )}
-                            {phrase.romanization && (
-                              <p className="italic mt-1" style={{ color: ED_INK3, fontSize: fs(ED.note) }}>Romanized: {phrase.romanization}</p>
-                            )}
-                          </div>
-                          <Speaker phraseKey={rowKey} text={phrase.formal_translation || phrase.translation} code={ttsCode} label="Listen to pronunciation" audioUrl={phrase.audio_url} />
-                        </div>
-                      )}
-
-                      {showBothVersions && (
-                        <>
-                          <div className="p-3" style={{ borderRadius: ED.rChip, background: ED_IVORY2 }}>
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1 min-w-0">
-                                <span className="uppercase rounded-full px-2 py-0.5 font-semibold inline-block mb-1.5" style={{ background: "#FFFFFF", color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em", border: `1px solid ${ED_RULE}` }}>Formal · Polite</span>
-                                <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleSm), lineHeight: 1.12 }}>{phrase.formal_translation || phrase.translation}</p>
-                                {(phrase.formal_phonetic || phrase.phonetic) && (
-                                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                    <span className="uppercase font-semibold" style={{ color: GOLD, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Say it</span>
-                                    <span style={{ color: ED_INK2, fontSize: fs(ED.body2) }}>{cleanPhonetic(phrase.formal_phonetic || phrase.phonetic)}</span>
-                                  </div>
-                                )}
-                                {phrase.romanization && (
-                                  <p className="italic mt-1" style={{ color: ED_INK3, fontSize: fs(ED.note) }}>Romanized: {phrase.romanization}</p>
-                                )}
-                              </div>
-                              <Speaker phraseKey={`${rowKey}_formal`} text={phrase.formal_translation || phrase.translation} code={ttsCode} label="Listen to formal pronunciation" audioUrl={phrase.audio_url} />
-                            </div>
-                          </div>
-                          <div className="p-3" style={{ borderRadius: ED.rChip, background: ED_IVORY2 }}>
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1 min-w-0">
-                                <span className="uppercase rounded-full px-2 py-0.5 font-semibold inline-block mb-1.5" style={{ background: "#FFFFFF", color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em", border: `1px solid ${ED_RULE}` }}>Casual</span>
-                                <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleSm), lineHeight: 1.12 }}>{phrase.casual_translation || phrase.formal_translation || phrase.translation}</p>
-                                {(phrase.casual_phonetic || phrase.formal_phonetic || phrase.phonetic) && (
-                                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                    <span className="uppercase font-semibold" style={{ color: GOLD, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Say it</span>
-                                    <span style={{ color: ED_INK2, fontSize: fs(ED.body2) }}>{cleanPhonetic(phrase.casual_phonetic || phrase.formal_phonetic || phrase.phonetic)}</span>
-                                  </div>
-                                )}
-                              </div>
-                              <Speaker phraseKey={`${rowKey}_casual`} text={phrase.casual_translation || phrase.formal_translation || phrase.translation} code={ttsCode} label="Listen to casual pronunciation" />
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {isEnglishOnly && (
-                    <div className="flex items-center gap-2.5 mt-2.5">
-                      <Speaker phraseKey={rowKey} text={phrase.english} code="en" label="Tap to hear" />
-                      <span className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Tap to hear</span>
-                    </div>
-                  )}
-                </>
-              )}
-            </motion.div>
-          );
-        })}
-      </div>
+      <section key={category.id} aria-label={category.name}
+        style={{ position: "relative", overflow: "hidden", borderRadius: 16, background: NEUTRAL.white, border: `1px solid ${W.line}`, gridColumn: isOpen ? "1 / -1" : "auto" }}>
+        <button type="button" onClick={() => handleCategoryClick(category.id)} aria-expanded={isOpen} aria-controls={panelId}
+          style={{ position: "relative", display: "flex", alignItems: "center", width: "100%", minHeight: 72, boxSizing: "border-box", padding: "9px 8px 9px 44px", background: "transparent", border: 0, textAlign: "left", cursor: "pointer", fontFamily: "inherit", color: "inherit" }}>
+          <ThumbIndex icon={category.icon} priority={priority} />
+          <span style={{ display: "block", flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontFamily: MONO, fontSize: fs(9.5), fontWeight: 500, letterSpacing: ".14em", lineHeight: 1.37, textTransform: "uppercase", color: priority ? NEUTRAL.stamp : W.accentText }}>
+              {KICKER[category.priority] || "Useful"}
+            </span>
+            <span style={{ display: "block", marginTop: 1, fontFamily: SERIF, fontSize: fs(22), lineHeight: 1.1, color: W.ink }}>{category.name}</span>
+            <span style={{ display: "block", fontSize: fs(12.5), lineHeight: 1.3, color: NEUTRAL.ink3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{category.subtitle}</span>
+          </span>
+          <span aria-hidden="true" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, flexShrink: 0 }}>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, boxSizing: "border-box", borderRadius: 999, border: `1px solid ${W.line}` }}>
+              <ChevronDown size={16} color={W.ink} strokeWidth={2} style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
+            </span>
+          </span>
+        </button>
+        <div id={panelId} hidden={!isOpen}>
+          {isOpen ? (
+            loadingPhrases[category.id] ? (
+              <div style={{ padding: "4px 14px 8px 44px", borderTop: `1px solid ${W.line}` }}>
+                <WorldSkeleton world="phrases" variant="row" count={3} label={`Translating to ${activeName}`} />
+              </div>
+            ) : list.length ? (
+              list.map((phrase, index) => <PhraseRow key={index} phrase={phrase} rowKey={`${category.id}_${index}`} {...rowProps} />)
+            ) : (
+              <p style={{ margin: 0, padding: "14px 14px 14px 44px", borderTop: `1px solid ${W.line}`, fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
+                No phrases here yet. Try again in a moment.
+              </p>
+            )
+          ) : null}
+        </div>
+      </section>
     );
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-[#D8F3FF] to-[#FFFFFF] flex items-center justify-center">
-        <Loader2 className="w-12 h-12 text-[#088395] animate-spin" />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen font-sans" style={{ background: IVORY }}>
-      {/* HEADER */}
-      <div className="px-4 pt-2 pb-3">
-        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
-          <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{ background:'#FFFFFF', border:'1px solid #F0E9DC' }} aria-label="Back">
-            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
-          </button>
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]" style={{ background: CAT.phrases.bg, color: CAT.phrases.ink }}>
-            <Languages size={13} color={CAT.phrases.ink} strokeWidth={2} />
-            Basic Phrases
-          </div>
-          <div className="w-10 h-10" />
-        </div>
+    <div className="font-sans" style={{ background: W.paper, minHeight: "100vh", paddingTop: 12 }}>
+      {/* ── THE PLATE (Phrases.dc.html L26-41): no refresh; the place in mono. Under it the
+          language pill, one note (the dialect's voice and note) and the search. ── */}
+      <FinderHeader
+        world="phrases"
+        count={null}
+        kickerExtras={[kickerLanguage]}
+        title={title}
+        location={{ label: locationLabel, onChange: () => setShowLocationPicker(true), mono: true }}
+      >
+        {languageInfo ? (
+          hasOptions ? (
+            <button type="button" onClick={() => setShowLanguageDropdown(true)} aria-haspopup="dialog" aria-label={`Language: ${pillText}, change`} style={{ ...pill, cursor: "pointer" }}>
+              <Languages size={16} color={W.iconInk} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0 }} />
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pillText}</span>
+              <ChevronDown size={16} color={W.iconInk} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0 }} />
+            </button>
+          ) : (
+            <span style={pill}>
+              <Languages size={16} color={W.iconInk} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0 }} />
+              {pillText}
+            </span>
+          )
+        ) : null}
+        {notes.length ? (
+          <WorldNote world="phrases" icon={ttsWarning && useDialect ? Volume2 : Info} style={{ marginTop: 10 }}>
+            {notes.map((n) => <div key={n}>{n}</div>)}
+          </WorldNote>
+        ) : null}
+        <WorldSearch world="phrases" value={searchQuery} onChange={setSearchQuery} onSubmit={() => performSearch()} onClear={clearSearch}
+          placeholder="Search words or phrases…" label="Search words or phrases" submitLabel="Search phrases" submitIcon={Search}
+          style={{ marginTop: languageInfo || notes.length ? 12 : 0 }} />
+      </FinderHeader>
+
+      <div style={{ ...finderColumnStyle(isTablet), paddingBottom: 24 }}>
+        {noLocation ? (
+          <FinderEmptyState world="phrases" icon={MapPin} title="Choose a location" hint="Pick where you are or where you’re going, and the phrasebook speaks its language."
+            actionLabel="Choose a location" onAction={() => setShowLocationPicker(true)} style={{ marginTop: 20 }} />
+        ) : isSearching ? (
+          searchResults.length ? (
+            <section aria-label="Search results" style={{ marginTop: 20 }}>
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, padding: "0 2px" }}>
+                <div>
+                  <p style={sectionKicker}>Search</p>
+                  <h2 style={sectionTitle}>{searchResults.length} {searchResults.length === 1 ? "phrase" : "phrases"}</h2>
+                </div>
+                <button type="button" onClick={clearSearch}
+                  style={{ minHeight: 44, padding: "0 4px", background: "transparent", border: 0, fontFamily: "inherit", fontSize: fs(13), fontWeight: 600, color: W.ink, textDecoration: "underline", textUnderlineOffset: 3, cursor: "pointer" }}>
+                  Clear search
+                </button>
+              </div>
+              <div role="list" style={{ marginTop: 10, overflow: "hidden", borderRadius: 16, background: NEUTRAL.white, border: `1px solid ${W.line}` }}>
+                {searchResults.map((r, idx) => (
+                  <div role="listitem" key={`${r.categoryId}_${r.index}`}>
+                    <PhraseRow phrase={r} rowKey={`search_${idx}`} {...rowProps} kicker={r.categoryName} inset={false} first={idx === 0} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : searchQuery.trim() ? (
+            <FinderEmptyState world="phrases" icon={SearchX} title={`Nothing for “${searchQuery.trim()}”`} hint="Try a shorter word, or pick a situation."
+              actionLabel="Clear search" onAction={clearSearch} style={{ marginTop: 20 }} />
+          ) : null
+        ) : (
+          <>
+            <div style={{ marginTop: 28, padding: "0 2px" }}>
+              <p style={sectionKicker}>Phrasebook</p>
+              <h2 style={sectionTitle}>Pick a <em style={{ fontStyle: "italic" }}>situation</em></h2>
+            </div>
+            {loading || !languageInfo ? (
+              <WorldSkeleton world="phrases" variant="row" count={6} label="Opening the phrasebook" style={{ marginTop: 14 }} />
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: isTablet ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)", gap: isTablet ? 16 : 10, marginTop: 14, alignItems: "start" }}>
+                {PHRASE_CATEGORIES.map(situation)}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
-      <div
-        className={`${colWrap} mx-auto`}
-        style={{ padding: isTablet ? "8px 24px 170px" : "8px 16px 170px" }}
-      >
-        {/* LOCATION CARD */}
-        <button onClick={() => setShowLocationPicker(true)} className={`w-full flex items-center text-left mb-4 transition-transform active:scale-[0.99] ${isTablet ? "gap-3.5 px-5 py-4" : "gap-3 px-4 py-3.5"}`} style={{ borderRadius: ED.rCard, background:'#FFFFFF', border:`1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}>
-            <MapPin size={isTablet ? 20 : 18} color={CAT.phrases.ink} strokeWidth={2} className="flex-none" />
-            <div className="flex-1 min-w-0">
-              <div className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".14em" }}>Location</div>
-              <div className="font-semibold mt-0.5 truncate" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleSm), lineHeight: 1.1 }}>
-                {activeLocation?.placeName || activeLocation?.address?.city}
-              </div>
-              <div className="mt-0.5 truncate" style={{ color: ED_INK3, fontSize: fs(ED.sub) }}>
-                {activeLocation?.address?.city}, {activeLocation?.address?.country}
-              </div>
-            </div>
-            <span className="uppercase rounded-full px-3.5 py-2 font-semibold flex-none" style={{ background: CAT.phrases.bg, color: CAT.phrases.ink, fontFamily: ED_MONO, fontSize: fs(ED.kicker), letterSpacing: ".08em" }}>
-              Change
-            </span>
-        </button>
+      {/* The language sheet: every choice the old language card offered. */}
+      <FilterSheet world="phrases" open={showLanguageDropdown} onClose={() => setShowLanguageDropdown(false)} title="Language">
+        {isInEnglishCountry ? (
+          <>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              <OptionRow title="English only" sub="Phrases in English, read aloud" selected={!wantsTranslation} onClick={handleDisableTranslation} />
+            </ul>
+            <FilterGroupLabel style={{ marginTop: 18 }}>Translate from another language</FilterGroupLabel>
+            <p style={{ margin: "4px 0 6px", fontSize: fs(12.5), lineHeight: 1.4, color: NEUTRAL.ink3 }}>Your language first, then the English to say. The audio plays the English.</p>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              {AVAILABLE_LANGUAGES.map((language) => (
+                <OptionRow key={language.code} title={language.name}
+                  selected={wantsTranslation && selectedTranslationLanguage?.code === language.code} onClick={() => handleLanguageSelect(language)} />
+              ))}
+            </ul>
+          </>
+        ) : languageInfo?.show_toggle ? (
+          <>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              <OptionRow title={languageInfo.country_language} sub={`Official language of ${languageInfo.country}`} selected={!useDialect} onClick={() => pickDialect(false)} />
+              <OptionRow title={languageInfo.city_language} sub={`Local dialect in ${languageInfo.city || "this area"}`} selected={useDialect} onClick={() => pickDialect(true)} />
+            </ul>
+            {languageInfo.dialect_note ? <p style={{ margin: "12px 0 0", fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>{languageInfo.dialect_note}</p> : null}
+          </>
+        ) : null}
+      </FilterSheet>
 
-        {languageInfo && (
-          <div
-            className={isTablet ? "p-5 mb-4" : "p-4 mb-4"}
-            style={{ borderRadius: ED.rCard, background: "#FFFFFF", border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}
-          >
-            <div className="mb-4">
-              <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerSm), letterSpacing: ".14em" }}>
-                {isInEnglishCountry ? (wantsTranslation && selectedTranslationLanguage ? "Translating from" : "Language") : "Translating to"}
-              </p>
-              <div className="flex items-center gap-2.5 mt-1">
-                <Globe className="w-5 h-5 flex-none" style={{ color: CAT.phrases.ink }} />
-                <p style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.displaySm), lineHeight: 1.05 }}>
-                  {isInEnglishCountry
-                    ? (wantsTranslation && selectedTranslationLanguage
-                        ? `${selectedTranslationLanguage.name} → English`
-                        : "Phrases in English")
-                    : (useDialect ? languageInfo.city_language : languageInfo.country_language)}
-                </p>
-              </div>
-            </div>
-
-            {/* TTS Warning for dialects using fallback voice */}
-            {ttsWarning && useDialect && (
-              <div className="p-3 mb-3 flex items-start gap-2.5" style={{ borderRadius: ED.rChip, background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}>
-                <Languages className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: CAT.phrases.ink }} />
-                <p style={{ color: ED_INK2, fontSize: fs(ED.sub), lineHeight: 1.45 }}>{ttsWarning.message}</p>
-              </div>
-            )}
-
-            {/* English region — offer "Translate from another language": pick a
-                non-English language to see that language on top with the English
-                equivalent below (audio plays the English). Built for native
-                speakers of that language who want to practice/learn English.
-                Available to EVERYONE in an English region, not just non-English
-                home-country users. */}
-            {isInEnglishCountry && (
-              <div className="space-y-3">
-                {wantsTranslation && selectedTranslationLanguage ? (
-                  <div className="p-3.5" style={{ borderRadius: ED.rChip, background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}>
-                    <div className="flex items-center justify-between gap-3">
-                      <p style={{ color: ED_INK2, fontSize: fs(ED.body2) }}>
-                        Translating <strong style={{ color: ED_INK }}>{selectedTranslationLanguage.flag} {selectedTranslationLanguage.name}</strong> → English
-                      </p>
-                      <button onClick={handleDisableTranslation} className="uppercase flex-none" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerSm), letterSpacing: ".06em" }}>
-                        English only
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
-                    className="w-full px-4 py-3 font-semibold flex items-center justify-center gap-2 transition-colors hover:bg-black/[.02]"
-                    style={{ borderRadius: ED.rChip, background: "#FFFFFF", border: `1px solid ${CAT.phrases.ink}`, color: CAT.phrases.ink, fontSize: fs(ED.titleXxs) }}
-                  >
-                    <Languages className="w-4 h-4" />
-                    Translate from another language
-                  </button>
-                )}
-
-                <AnimatePresence>
-                  {showLanguageDropdown && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
-                      <div className="p-2 max-h-56 overflow-y-auto space-y-0.5" style={{ borderRadius: ED.rChip, background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}>
-                        {AVAILABLE_LANGUAGES.map(language => (
-                          <button key={language.code} onClick={() => handleLanguageSelect(language)}
-                            className="w-full px-3 py-2.5 text-left rounded-[10px] flex items-center gap-2.5 transition-colors hover:bg-white"
-                            style={{ color: ED_INK, fontSize: fs(ED.body) }}>
-                            <span>{language.flag}</span>
-                            <span>{language.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            )}
-
-            {/* Non-English country WITH dialect options - show toggle */}
-            {!isInEnglishCountry && languageInfo.show_toggle && (
-              <div className="space-y-3">
-                <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerSm), letterSpacing: ".12em" }}>Choose language</p>
-
-                {/* Two-option toggle */}
-                <div className="grid grid-cols-1 gap-2">
-                  {/* Country's main language option */}
-                  <button
-                    onClick={() => {
-                      setUseDialect(false);
-                      setPhrases({});
-                      setExpandedCategory(null);
-                    }}
-                    className="w-full py-3.5 px-4 text-left transition-all flex items-center gap-3"
-                    style={!useDialect
-                      ? { borderRadius: ED.rChip, background: CAT.phrases.bg, border: `1.5px solid ${CAT.phrases.ink}` }
-                      : { borderRadius: ED.rChip, background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}
-                  >
-                    <span className="text-2xl">{languageInfo.country_flag || '🌍'}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleXs), lineHeight: 1.1 }}>
-                        {languageInfo.country_language}
-                      </p>
-                      <p className="mt-0.5" style={{ color: ED_INK3, fontSize: fs(ED.note) }}>
-                        Official language of {languageInfo.country}
-                      </p>
-                    </div>
-                    {!useDialect && <span className="text-lg flex-none" style={{ color: CAT.phrases.ink }}>✓</span>}
-                  </button>
-
-                  {/* City/Regional dialect option */}
-                  <button
-                    onClick={() => {
-                      setUseDialect(true);
-                      setPhrases({});
-                      setExpandedCategory(null);
-                    }}
-                    className="w-full py-3.5 px-4 text-left transition-all flex items-center gap-3"
-                    style={useDialect
-                      ? { borderRadius: ED.rChip, background: CAT.phrases.bg, border: `1.5px solid ${CAT.phrases.ink}` }
-                      : { borderRadius: ED.rChip, background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}
-                  >
-                    <span className="text-2xl">📍</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleXs), lineHeight: 1.1 }}>
-                        {languageInfo.city_language}
-                      </p>
-                      <p className="mt-0.5" style={{ color: ED_INK3, fontSize: fs(ED.note) }}>
-                        Local dialect in {languageInfo.city || 'this area'}
-                      </p>
-                    </div>
-                    {useDialect && <span className="text-lg flex-none" style={{ color: CAT.phrases.ink }}>✓</span>}
-                  </button>
-                </div>
-
-                {/* Dialect note if available */}
-                {languageInfo.dialect_note && useDialect && (
-                  <p className="italic px-1" style={{ color: ED_INK3, fontSize: fs(ED.note) }}>
-                    ℹ️ {languageInfo.dialect_note}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Non-English country WITHOUT dialect options - just show the language */}
-            {!isInEnglishCountry && !languageInfo.show_toggle && (
-              <div className="p-3.5 flex items-center gap-3" style={{ borderRadius: ED.rChip, background: ED_IVORY2, border: `1px solid ${ED_RULE}` }}>
-                <span className="text-2xl">{languageInfo.country_flag || '🌍'}</span>
-                <div className="min-w-0">
-                  <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleXxs), lineHeight: 1.1 }}>
-                    {languageInfo.city_language || languageInfo.country_language}
-                  </p>
-                  <p className="mt-0.5" style={{ color: ED_INK3, fontSize: fs(ED.note) }}>
-                    Phrases will be translated to this language
-                  </p>
-                </div>
-              </div>
-            )}
-            </div>
-            )}
-
-            {/* Search Bar */}
-            <div className="p-4 mb-4" style={{ borderRadius: ED.rCard, background: "#FFFFFF", border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}>
-              <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4" style={{ color: ED_INK3 }} />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search for words or phrases..."
-                  className="w-full pl-11 pr-24 py-3 focus:outline-none"
-                  style={{ borderRadius: ED.rInput, background: ED_IVORY2, border: `1px solid ${ED_RULE}`, color: ED_INK, fontSize: fs(ED.titleXxs), fontFamily: ED_SERIF }}
-                />
-                <div className="absolute right-2.5 top-1/2 transform -translate-y-1/2 flex items-center gap-1.5">
-                  {searchQuery && (
-                    <button
-                      onClick={clearSearch}
-                      className="p-1.5 rounded-full transition-colors hover:bg-black/[.05]"
-                    >
-                      <X className="w-3.5 h-3.5" style={{ color: ED_INK3 }} />
-                    </button>
-                  )}
-                  <button
-                    onClick={performSearch}
-                    className="p-2 rounded-[10px] transition-opacity hover:opacity-90"
-                    style={{ background: CAT.phrases.ink }}
-                  >
-                    <Search className="w-3.5 h-3.5 text-white" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Search Results — editorial treatment (same data/actions), both widths. */}
-            {isSearching && searchResults.length > 0 && (() => {
-              const GOLD = CAT.phrases.ink, GOLD_BG = CAT.phrases.bg;
-              const cleanPhonetic = (text) => {
-                if (!text) return '';
-                return text.replace(/\[.*?\]/g, '').replace(/_+/g, '').replace(/\s+/g, ' ').trim();
-              };
-              const ttsCode = getActiveTTSCode();
-              const isReverseMode = isInEnglishCountry && wantsTranslation && selectedTranslationLanguage;
-              const isEnglishOnly = isInEnglishCountry && !wantsTranslation;
-              const spk = isTablet ? 44 : 40;
-              const Speaker = ({ phraseKey, text, code, label }) => (
-                <button
-                  onClick={() => speakPhrase(text, code, phraseKey)}
-                  disabled={playingAudio[phraseKey]}
-                  title={label}
-                  aria-label={label}
-                  className="flex-shrink-0 rounded-full flex items-center justify-center transition-all"
-                  style={{
-                    width: spk, height: spk,
-                    background: playingAudio[phraseKey] ? GOLD : "#FFFFFF",
-                    color: playingAudio[phraseKey] ? "#FFFFFF" : GOLD,
-                    border: `1px solid ${playingAudio[phraseKey] ? GOLD : ED_RULE}`,
-                  }}
-                >
-                  <Volume2 className={`w-5 h-5 ${playingAudio[phraseKey] ? "animate-pulse" : ""}`} />
-                </button>
-              );
-              return (
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-4" style={{ borderTop: `1px solid ${ED_RULE}`, paddingTop: 18 }}>
-                    <div>
-                      <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kicker), letterSpacing: ".16em" }}>Search</p>
-                      <h2 className="mt-1" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.displaySm), lineHeight: 1 }}>
-                        {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
-                      </h2>
-                    </div>
-                    <button
-                      onClick={clearSearch}
-                      className="flex items-center gap-1.5 rounded-full px-3.5 py-2 font-semibold transition-colors hover:bg-black/[.03]"
-                      style={{ color: GOLD, border: `1px solid ${ED_RULE}`, fontFamily: ED_MONO, fontSize: fs(ED.kicker), letterSpacing: ".08em" }}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      CLEAR
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    {searchResults.map((result, idx) => {
-                      const showBothVersions = result.formal_translation !== result.casual_translation && result.casual_translation && !result.same_formality;
-                      const meaning = result.formal_translation || result.translation;
-                      return (
-                        <motion.div
-                          key={idx}
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="bg-white p-4"
-                          style={{ borderRadius: ED.rCard, border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}
-                        >
-                          <div className="flex items-start justify-between gap-3 mb-2">
-                            <p className="flex-1 min-w-0" style={{ color: isReverseMode ? ED_INK3 : ED_INK2, fontSize: fs(ED.body), lineHeight: 1.4 }}>
-                              {isReverseMode ? meaning : result.english}
-                            </p>
-                            <span className="uppercase rounded-full px-2 py-0.5 font-semibold flex-none" style={{ background: GOLD_BG, color: GOLD, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>
-                              {result.categoryName}
-                            </span>
-                          </div>
-
-                          {isReverseMode ? (
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1 min-w-0">
-                                <p className="font-semibold" style={{ color: GOLD, fontFamily: ED_SERIF, fontSize: fs(ED.titleMd), lineHeight: 1.12 }}>{result.english}</p>
-                              </div>
-                              <Speaker phraseKey={`search_${idx}`} text={result.english} code="en" label="Listen to pronunciation" />
-                            </div>
-                          ) : isEnglishOnly ? (
-                            <div className="flex items-center gap-2.5">
-                              <Speaker phraseKey={`search_${idx}`} text={result.english} code="en" label="Tap to hear" />
-                              <span className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Tap to hear</span>
-                            </div>
-                          ) : !showBothVersions ? (
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1 min-w-0">
-                                <p className="font-semibold" style={{ color: GOLD, fontFamily: ED_SERIF, fontSize: fs(ED.titleMd), lineHeight: 1.12 }}>
-                                  {meaning}
-                                </p>
-                                {(result.formal_phonetic || result.phonetic) && (
-                                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                    <span className="uppercase rounded-full px-2 py-0.5 font-semibold" style={{ background: GOLD_BG, color: GOLD, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Say it</span>
-                                    <span style={{ color: ED_INK2, fontSize: fs(ED.body2) }}>{cleanPhonetic(result.formal_phonetic || result.phonetic)}</span>
-                                  </div>
-                                )}
-                              </div>
-                              <Speaker phraseKey={`search_${idx}`} text={meaning} code={ttsCode} label="Listen to pronunciation" />
-                            </div>
-                          ) : (
-                            <div className="space-y-2.5">
-                              <div className="p-3" style={{ borderRadius: ED.rChip, background: ED_IVORY2 }}>
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="flex-1 min-w-0">
-                                    <span className="uppercase rounded-full px-2 py-0.5 font-semibold inline-block mb-1.5" style={{ background: "#FFFFFF", color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em", border: `1px solid ${ED_RULE}` }}>Formal · Polite</span>
-                                    <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleSm), lineHeight: 1.12 }}>{result.formal_translation}</p>
-                                    {result.formal_phonetic && (
-                                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                        <span className="uppercase font-semibold" style={{ color: GOLD, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Say it</span>
-                                        <span style={{ color: ED_INK2, fontSize: fs(ED.body2) }}>{cleanPhonetic(result.formal_phonetic)}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                  <Speaker phraseKey={`search_${idx}_formal`} text={result.formal_translation} code={ttsCode} label="Listen to formal pronunciation" />
-                                </div>
-                              </div>
-                              <div className="p-3" style={{ borderRadius: ED.rChip, background: ED_IVORY2 }}>
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="flex-1 min-w-0">
-                                    <span className="uppercase rounded-full px-2 py-0.5 font-semibold inline-block mb-1.5" style={{ background: "#FFFFFF", color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em", border: `1px solid ${ED_RULE}` }}>Casual</span>
-                                    <p className="font-semibold" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.titleSm), lineHeight: 1.12 }}>{result.casual_translation}</p>
-                                    {result.casual_phonetic && (
-                                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                        <span className="uppercase font-semibold" style={{ color: GOLD, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".08em" }}>Say it</span>
-                                        <span style={{ color: ED_INK2, fontSize: fs(ED.body2) }}>{cleanPhonetic(result.casual_phonetic)}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                  <Speaker phraseKey={`search_${idx}_casual`} text={result.casual_translation} code={ttsCode} label="Listen to casual pronunciation" />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {isSearching && searchResults.length === 0 && searchQuery.trim() && (
-            <div className="p-7 mb-4 text-center" style={{ borderRadius: ED.rCard, background: "#FFFFFF", border: `1px solid ${ED_RULE}`, boxShadow: SHADOW_CARD_SOFT }}>
-              <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kicker), letterSpacing: ".12em" }}>No matches</p>
-              <p className="mt-1.5" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.displaySm), lineHeight: 1.1 }}>Nothing for "{searchQuery}"</p>
-              <button
-                onClick={clearSearch}
-                className="mt-3 uppercase font-semibold"
-                style={{ color: CAT.phrases.ink, fontFamily: ED_MONO, fontSize: fs(ED.kicker), letterSpacing: ".08em" }}
-              >
-                Clear search
-              </button>
-            </div>
-            )}
-
-            {!isSearching && (
-            <div>
-              {/* Editorial section header — mono kicker + serif display title */}
-              <div className="mt-1 mb-5" style={{ borderTop: `1px solid ${ED_RULE}`, paddingTop: 18 }}>
-                <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kicker), letterSpacing: ".16em" }}>Phrasebook</p>
-                <h2 className="mt-1" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.display), lineHeight: 1 }}>Pick a situation</h2>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: isTablet ? "1fr 1fr" : "1fr", gap: isTablet ? 16 : 12, alignItems: "start" }}>
-                {PHRASE_CATEGORIES.map((category) => {
-                  const isOpen = expandedCategory === category.id;
-                  const isEmergency = category.priority === 'emergency';
-                  return (
-                    <div
-                      key={category.id}
-                      className="bg-white overflow-hidden"
-                      style={{ borderRadius: ED.rCardLg, border: `1px solid ${isEmergency ? "#E9C3C0" : ED_RULE}`, boxShadow: SHADOW_CARD_SOFT, gridColumn: isOpen ? "1 / -1" : "auto" }}
-                    >
-                      <button onClick={() => handleCategoryClick(category.id)} className={`w-full flex items-center justify-between text-left transition-colors hover:bg-black/[.02] ${isTablet ? "px-5 py-5" : "px-4 py-4"}`}>
-                        <div className={`flex items-center min-w-0 ${isTablet ? "gap-3.5" : "gap-3"}`}>
-                          <span className="shrink-0 rounded-2xl flex items-center justify-center" style={{ width: isTablet ? 48 : 44, height: isTablet ? 48 : 44, background: CAT.phrases.bg, fontSize: isTablet ? 24 : 22, lineHeight: 1 }}>{category.icon}</span>
-                          <div className="min-w-0">
-                            <p className="uppercase" style={{ color: ED_INK3, fontFamily: ED_MONO, fontSize: fs(ED.kickerXs), letterSpacing: ".12em" }}>{isEmergency ? "Critical" : category.priority === 'high' ? "Essential" : "Useful"}</p>
-                            <p className="font-semibold mt-0.5" style={{ color: ED_INK, fontFamily: ED_SERIF, fontSize: fs(ED.title), lineHeight: 1.05, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{category.name}</p>
-                            <p className="mt-0.5 truncate" style={{ color: ED_INK3, fontSize: fs(ED.sub) }}>{category.subtitle}</p>
-                          </div>
-                        </div>
-                        <span className="shrink-0 ml-3 rounded-full flex items-center justify-center" style={{ width: 34, height: 34, border: `1px solid ${ED_RULE}`, color: CAT.phrases.ink }}>
-                          {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        </span>
-                      </button>
-
-                      <AnimatePresence>
-                        {isOpen && (
-                          <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden" style={{ borderTop: `1px solid ${ED_RULE}` }}>
-                            {loadingPhrases[category.id] ? (
-                              <div className="p-8 flex flex-col items-center">
-                                <Loader2 className="w-6 h-6 animate-spin mb-2" style={{ color: CAT.phrases.ink }} />
-                                <p style={{ color: ED_INK3, fontSize: fs(ED.body) }}>Translating to {getActiveLanguageName()}...</p>
-                              </div>
-                            ) : renderPhrases(phrases[category.id])}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            )}
-            </div>
-
-            <LocationModePicker isOpen={showLocationPicker} onClose={() => setShowLocationPicker(false)} />
-
-            {/* Floating Close Button - appears when category is expanded */}
-            {expandedCategory && (
-              <motion.button
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                onClick={() => {
-                  setExpandedCategory(null);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="fixed bottom-24 right-6 w-10 h-10 bg-white/50 backdrop-blur-sm rounded-full shadow-lg border border-gray-200/50 flex items-center justify-center hover:bg-white/70 transition-all z-40"
-                aria-label="Close category and scroll to top"
-              >
-                <X className="w-4 h-4 text-gray-600" />
-              </motion.button>
-            )}
+      <LocationModePicker isOpen={showLocationPicker} onClose={() => setShowLocationPicker(false)} />
     </div>
   );
 }
