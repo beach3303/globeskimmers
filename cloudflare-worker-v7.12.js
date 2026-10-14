@@ -1462,7 +1462,9 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
       });
     }
   }
-  if (child && uidOk) await r2Owned('guestbook_files', 'gb/');
+  if (child && uidOk) {
+    if (await r2Prefix('guestbook_files', `gb/u/${String(userId).toLowerCase()}/`)) await r2Owned('guestbook_files', 'gb/');
+  }
   await del('guestbook_visits', `guestbook_visits?user_id=eq.${userId}`);
 
   // 1c) Passport is PRIVATE (not public UGC) → fully DELETE the user's stamps +
@@ -13944,6 +13946,7 @@ async function gbModerateDoodle(env, base64, mediaType) {
   } catch { return { allow: false, reason: 'moderation-exception' }; }
 }
 
+const GB_UPLOADS_DAILY_MAX = 20;
 // Upload one guestbook photo → moderate → store in R2 → return a servable URL.
 // The client resizes to ~1280px JPEG before sending (keeps payload small). The photo
 // is NOT attached to an entry here; the returned {key,url} is passed to /guestbook/sign.
@@ -13980,6 +13983,12 @@ async function handleGuestbookPhotoUpload(request, env, ctx) {
     if (bytes.length > 4 * 1024 * 1024) return jsonResponse({ error: 'Photo too large (please pick a smaller image)' }, 400);
     if (bytes.length < 500) return jsonResponse({ error: 'That image is too small' }, 400);
 
+    // At most GB_UPLOADS_DAILY_MAX a day per account (go-live round 3: each
+    // upload is a paid moderation call and an R2 object, and there was no
+    // limit), counted before the moderation call.
+    const nUp = await gbDayCount(env, `gbup:${user.id}`);
+    if (nUp != null && nUp > GB_UPLOADS_DAILY_MAX) return jsonResponse({ error: 'That’s a lot of photos for one day — try again tomorrow' }, 429);
+
     // Moderate BEFORE storing (fails closed). Doodles get the drawing door.
     const isDoodle = b.doodle === true;
     const mod = isDoodle ? await gbModerateDoodle(env, data, mediaType) : await gbModeratePhoto(env, data, mediaType);
@@ -13989,7 +13998,11 @@ async function handleGuestbookPhotoUpload(request, env, ctx) {
     }
 
     const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
-    const key = `gb/${entityId}/${user.id}/${crypto.randomUUID()}.${ext}`;
+    // Stored under the uploader (go-live round 3): gb/u/<uid>/<uuid>.<ext>,
+    // so one account's files are one prefix, which the under-13 clean-up
+    // lists instead of all of gb/. Keys from before named the place first
+    // (gb/<place>/<uid>/…); gbUploadOwner reads both.
+    const key = `gb/u/${user.id}/${crypto.randomUUID()}.${ext}`;
     await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: mediaType, cacheControl: 'public, max-age=31536000, immutable' } });
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'guestbook_photo_upload', { entity_id: entityId, bytes: bytes.length }));
     const origin = new URL(request.url).origin;
