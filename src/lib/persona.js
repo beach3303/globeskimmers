@@ -13,11 +13,12 @@ import { logDiscover } from "@/lib/logDiscover";
 const KEY = "gs_persona_v1";
 export const CHANGE_EVENT = "gs:persona-changed";
 
+// Words only (the new look has no emoji).
 export const PERSONAS = [
-  { id: "solo", emoji: "🧍", label: "Solo" },
-  { id: "couple", emoji: "💑", label: "Couple" },
-  { id: "family", emoji: "👨‍👩‍👧", label: "Family" },
-  { id: "friends", emoji: "👥", label: "Friends" },
+  { id: "solo", label: "Solo" },
+  { id: "couple", label: "Couple" },
+  { id: "family", label: "Family" },
+  { id: "friends", label: "Friends" },
 ];
 
 // Which attraction `props` each persona favors (keys match the worker's props block).

@@ -2,9 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { useLocation, isLiveFix } from "@/components/location/LocationContext";
-import { getLocationLabel, isCityLocation, CITY_DISCLAIMER } from "@/components/location/locationLabel";
+import { getLocationLabel, isCityLocation } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
-import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
@@ -16,12 +15,14 @@ import AttractionExtras from "@/components/attraction/AttractionExtras";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { metersBetween } from "@/lib/passport";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
-import RefreshButton from "@/components/RefreshButton";
 import { logEvent } from "@/lib/analytics";
 import { logSearch, logZeroResults } from "@/lib/logSearch";
 import { matchesQuery } from "@/lib/searchText";
-import { ChevronLeft, MapPin, Star } from "lucide-react";
-import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
+import { SlidersHorizontal } from "lucide-react";
+import { CAT, WORLD } from "@/components/redesign/constants";
+import FinderHeader from "@/components/finder/FinderHeader";
+import { WorldSearch, WorldChip, ChipRow, WorldSegmented } from "@/components/finder/FinderControls";
+import FilterSheet, { FilterToggleRow } from "@/components/finder/FilterSheet";
 import { useIsTablet } from "@/lib/useIsTablet";
 import PersonaChooser from "@/components/PersonaChooser";
 import { usePersona, personaRank } from "@/lib/persona";
@@ -43,16 +44,24 @@ const ED_TODO = CAT.todo.ink; // #C5197A
 const T={teal:"#00BCD4",tealD:"#00838F",dark:"#1A2332",dark2:"#243447",gray:"#64748B",grayL:"#F1F5F9",green:"#4CAF50",blue:"#1565C0",blueL:"#E3F2FD",coral:"#FF6B6B",gold:"#FFB74D",
   accent:"#F59E0B",accentD:"#D97706",accentL:"#FFFBEB"};
 
+// The page's world (the new look's lapis, ThingsToDo.dc.html).
+const W = WORLD.todo;
+
+// The category chips, the second chip row (ThingsToDo.dc.html L71-79): one at a time,
+// tap again for all. ids are the worker's activityCategory values; the worker tags what
+// it fetched for a chip with that chip's id, and its own guess says 'tour' for 'tours'.
 const CATEGORIES=[
-  {id:"all",         label:"All",        icon:"⭐",color:T.accent},
-  {id:"culture",     label:"Culture",    icon:"🏛️",color:"#7C3AED"},
-  {id:"outdoor",     label:"Outdoors",   icon:"🌳",color:"#059669"},
-  {id:"entertainment",label:"Fun",       icon:"🎢",color:"#DC2626"},
-  {id:"nightlife",   label:"Nightlife",  icon:"🍻",color:"#1D4ED8"},
-  {id:"family",      label:"Family",     icon:"👨‍👩‍👧",color:"#D97706"},
-  {id:"wellness",    label:"Wellness",   icon:"♨️",color:"#DB2777"},
-  {id:"tours",       label:"Tours",      icon:"🗺️",color:"#0891B2"},
+  {id:"culture",       label:"Culture"},
+  {id:"outdoor",       label:"Outdoors"},
+  {id:"entertainment", label:"Fun"},
+  {id:"nightlife",     label:"Nightlife"},
+  {id:"family",        label:"Family"},
+  {id:"wellness",      label:"Wellness"},
+  {id:"tours",         label:"Tours"},
+  {id:"adventure",     label:"Adventure"},
 ];
+const inCategory=(a,c)=>a.activityCategory===c||(c==="tours"&&a.activityCategory==="tour");
+const ROW_FADE="linear-gradient(90deg,#000 calc(100% - 20px),transparent)";
 
 const PROP_TAGS=[
   {key:"isFree",           icon:"🆓",label:"Free Entry",      color:"#059669",bg:"#D1FAE5"},
@@ -781,7 +790,6 @@ export default function ThingsToDoFinder() {
   // modeled on PlacesToEat). Phone layout is unchanged — every tablet branch
   // is gated on this.
   const isTablet = useIsTablet();
-  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
   const [activities,setActivities]=useState([]);
   const [nationalIcons,setNationalIcons]=useState([]);
   const [regionalGems,setRegionalGems]=useState([]);
@@ -797,7 +805,8 @@ export default function ThingsToDoFinder() {
   const [openOnly,setOpenOnly]=useState(false);
   const [outdoorOnly,setOutdoorOnly]=useState(false);
   const [popularOnly,setPopularOnly]=useState(false);
-  const [showAdvanced,setShowAdvanced]=useState(false);
+  const [freeOnly,setFreeOnly]=useState(false);           // Free entry: props.isFree === true
+  const [sheetOpen,setSheetOpen]=useState(false);         // the Filters sheet (Popular, Outdoor places)
   const [locPicker,setLocPicker]=useState(false);
   const [dirsA,setDirsA]=useState(null);
   const [highlight,setHighlight]=useState(null);
@@ -938,18 +947,19 @@ export default function ThingsToDoFinder() {
   // owned pool (main list + all three tiers) and show one flat list. Otherwise
   // the toggles only touch the small main list and the big tier strips ignore
   // them, so filters look like they do nothing.
-  const browseFilterActive=!submitted&&(openOnly||outdoorOnly||popularOnly||category!=='all');
+  const browseFilterActive=!submitted&&(openOnly||freeOnly||outdoorOnly||popularOnly||category!=='all');
   const filtered=useMemo(()=>{
     let r=submitted?[...searchMerged]:(browseFilterActive?[...ownedPool]:[...activities]);
     // no radius cap — show all fetched, nearest-first (radius filter removed app-wide)
     if(openOnly)    r=r.filter(a=>a.isOpen===true);
+    if(freeOnly)    r=r.filter(a=>a.props?.isFree===true);
     if(outdoorOnly) r=r.filter(a=>a.props?.isOutdoor);
     if(popularOnly) r=r.filter(a=>{
       const isIconic=(a.types||[]).some(t=>['tourist_attraction','national_park','amusement_park','historical_landmark'].includes(t));
       const isHighlyRated=(a.userRatingCount||0)>=200&&(a.rating||0)>=4.0;
       return isIconic||isHighlyRated||a.props?.isBucketList;
     });
-    if(!submitted&&category!=='all') r=r.filter(a=>a.activityCategory===category); // category chip (client-side, across the pool)
+    if(!submitted&&category!=='all') r=r.filter(a=>inCategory(a,category)); // category chip (client-side, across the pool)
     // Nearest-first for the main "Near You" list (T1.7). The curated Icons /
     // Regional tiers render in their own strips, so fame is still surfaced there;
     // this list follows the app's closest-first standard. Search is already
@@ -957,7 +967,7 @@ export default function ThingsToDoFinder() {
     r.sort((a,b)=>(a.distanceMiles??999)-(b.distanceMiles??999));
     if(submitted&&fameFirst) r=rankByRating(r,{named:true}); // shared with the test suite (searchRank.js)
     return r;
-  },[activities,ownedPool,searchMerged,submitted,browseFilterActive,radius,openOnly,outdoorOnly,popularOnly,category,fameFirst]);
+  },[activities,ownedPool,searchMerged,submitted,browseFilterActive,radius,openOnly,freeOnly,outdoorOnly,popularOnly,category,fameFirst]);
 
   // "A bit farther — worth the trip": search matches just beyond the radius,
   // closest few. So an empty in-radius result still surfaces nearby options
@@ -1004,8 +1014,10 @@ export default function ThingsToDoFinder() {
   },[viewMode,cardsList,lat,lng,activePin]);
 
   const stats={total:cardsList.length};
-  const advFilterCount=[openOnly,outdoorOnly,popularOnly,category!=='all'].filter(Boolean).length;
-  const clearFilters=()=>{setOpenOnly(false);setOutdoorOnly(false);setPopularOnly(false);setCategory('all');};
+  // The Filters chip counts what the sheet holds (Popular, Outdoor places): never the
+  // category chips or Open now / Free entry, which show on their own chips.
+  const sheetFilterCount=[outdoorOnly,popularOnly].filter(Boolean).length;
+  const clearSheetFilters=()=>{setOutdoorOnly(false);setPopularOnly(false);};
 
   // Activity search handlers — state (q/submitted/tours/tourBusy) is declared
   // higher up with the rest of the component state (see note there).
@@ -1061,96 +1073,52 @@ export default function ThingsToDoFinder() {
   },[routerLocation.state?.focus?.id,routerLocation.search,lat,focusWaited]);
 
   return(
-    <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
-      {/* HEADER — redesign pattern */}
-      <div className="px-4 pt-2 pb-3">
-        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
-          <button onClick={()=>window.history.back()} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-[#EFE8D6]" style={{background:'#FFFFFF',border:'1px solid #F0E9DC'}} aria-label="Back">
-            <ChevronLeft size={18} color="#0F1419" strokeWidth={2.2} />
-          </button>
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-semibold text-[calc(12.5px*var(--fs))]" style={{background:CAT.todo.bg,color:CAT.todo.ink}}>
-            <Star size={13} color={CAT.todo.ink} strokeWidth={2} />
-            Things To Do
-          </div>
-          <RefreshButton onClick={handleRefresh} isRefreshing={loading} tone="light" title="Refresh activities" />
+    <div className="font-sans" style={{background:W.paper,minHeight:"100vh",paddingTop:12}}>
+
+      {/* ── THE PLATE + CONTROLS (ThingsToDo.dc.html L24-89): the lapis plate with the
+          count, the title, the location and the unit; under it the search, the two chip
+          rows (Open now, Free entry, Filters and List|Map; the categories) and "Who's
+          traveling?" while the chapters show. ── */}
+      <FinderHeader
+        world="todo"
+        count={stats.total>0?stats.total:null}
+        title={submitted?{pre:"",italic:submitted,post:" nearby"}:undefined}
+        onRefresh={handleRefresh}
+        refreshing={loading}
+        refreshTitle="Refresh things to do"
+        location={{label:locLabel,onChange:()=>setLocPicker(true)}}
+        unit={{value:unit,onChange:setUnit}}
+        isCity={isCity}
+        cityName={activeLocation?.address?.city||activeLocation?.placeName}
+      >
+        <WorldSearch
+          world="todo"
+          value={q}
+          onChange={setQ}
+          onSubmit={(text)=>runActivitySearch(String(text||""))}
+          onClear={clearSearch}
+          placeholder="Search anything to do: zip lining, snorkeling…"
+          label="Search things to do"
+          busy={tourBusy}
+        />
+        {/* Row 1 scrolls on its own, so List|Map stays in reach at any text size; a
+            chip that runs under it fades out rather than being cut. */}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
+          <ChipRow label="Quick filters" style={{flex:1,minWidth:0,paddingRight:20,WebkitMaskImage:ROW_FADE,maskImage:ROW_FADE}}>
+            <WorldChip world="todo" label="Open now" active={openOnly} onClick={()=>setOpenOnly(x=>!x)}/>
+            <WorldChip world="todo" label="Free entry" active={freeOnly} onClick={()=>setFreeOnly(x=>!x)}/>
+            <WorldChip world="todo" icon={SlidersHorizontal} label="Filters" count={sheetFilterCount} opensSheet onClick={()=>setSheetOpen(true)}/>
+          </ChipRow>
+          <WorldSegmented world="todo" mode="pressed" label="View" value={viewMode} onChange={setViewMode}
+            options={[{value:"list",label:"List"},{value:"map",label:"Map"}]}/>
         </div>
-      </div>
-
-      {/* LOCATION CARD */}
-      <div className={`px-4 ${colWrap} mx-auto pb-3`}>
-        <button onClick={()=>setLocPicker(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-left transition-transform active:scale-[0.99]" style={{background:'#FFFFFF',border:'1px solid #F0E9DC',boxShadow:'0 1px 0 rgba(15,20,25,.04), 0 8px 24px -12px rgba(15,20,25,.08)'}}>
-          <MapPin size={18} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
-          <div className="flex-1 min-w-0">
-            <div className="font-mono text-[calc(9.5px*var(--fs))] tracking-[0.14em] uppercase font-semibold" style={{color:'#94A3B8'}}>
-              {isCity ? '🏙️ City' : '📍 Location'}
-            </div>
-            <div className="font-bold text-[calc(14.5px*var(--fs))] text-[#0F1419] mt-0.5 truncate">{locLabel}</div>
-          </div>
-          <span className="px-2.5 py-1.5 rounded-[10px] font-bold text-[calc(11.5px*var(--fs))] flex-none" style={{background:CAT.todo.bg,color:CAT.todo.ink}}>
-            Change
-          </span>
-        </button>
-        {isCity && (
-          <div className="mt-2 px-3.5 py-2.5 rounded-[12px] text-[calc(12px*var(--fs))] leading-snug flex items-start gap-2" style={{background:CAT.weather.bg,color:CAT.weather.ink}}>
-            <span>💡</span>
-            <span>Showing places across {activeLocation?.address?.city || activeLocation?.placeName} — {CITY_DISCLAIMER}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Filters band */}
-      <div className={`px-4 ${colWrap} mx-auto pb-2`}>
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"14px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
-      </div>
-
-      {/* Activity search — any activity nearby */}
-      <div className={`px-4 ${colWrap} mx-auto pb-2`}>
-        <form onSubmit={(e)=>{e.preventDefault();runActivitySearch();}} style={{display:"flex",gap:"8px"}}>
-          <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search anything to do — zip lining, snorkeling…" autoCapitalize="none" style={{flex:1,minWidth:0,padding:"11px 14px",borderRadius:"12px",border:"1.5px solid #E2E8F0",fontSize:"calc(14px*var(--fs))",fontFamily:"inherit",color:T.dark,background:"#fff"}}/>
-          <button type="submit" disabled={!q.trim()||tourBusy} style={{padding:"11px 16px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(13px*var(--fs))",fontFamily:"inherit",cursor:"pointer",opacity:(!q.trim()||tourBusy)?0.6:1}}>{tourBusy?"…":"Search"}</button>
-          {submitted&&<button type="button" onClick={clearSearch} style={{padding:"11px 12px",borderRadius:"12px",border:"1.5px solid #E2E8F0",background:"#fff",color:T.gray,fontWeight:"700",fontSize:"calc(13px*var(--fs))",fontFamily:"inherit",cursor:"pointer"}}>✕</button>}
-        </form>
-      </div>
-
-      <div style={{background:"#fff",padding:"10px 14px",borderBottom:"1px solid #E8EDF2"}}>
-       <div className={`${colWrap} mx-auto`}>
-        <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:showAdvanced?"10px":0}}>
-          <button onClick={()=>setShowAdvanced(!showAdvanced)} style={{display:"flex",alignItems:"center",gap:"8px",flex:1,padding:"9px 14px",borderRadius:"10px",border:`1.5px solid ${showAdvanced||advFilterCount>0?T.accent:"#E2E8F0"}`,background:showAdvanced||advFilterCount>0?T.accentL:"#fff",color:showAdvanced||advFilterCount>0?T.accentD:T.gray,fontWeight:"600",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>
-            <span>🔧 Advanced Filters</span>
-            {advFilterCount>0&&<span style={{background:T.accent,color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"calc(11px*var(--fs))",fontWeight:"700"}}>{advFilterCount}</span>}
-            <span style={{marginLeft:"auto"}}>{showAdvanced?"▲":"▼"}</span>
-          </button>
-          <span style={{background:T.accent,color:"#fff",padding:"2px 9px",borderRadius:"10px",fontWeight:"800",fontSize:"calc(12px*var(--fs))"}}>{stats.total}</span>
-          <div style={{display:"flex",gap:"3px"}}>{["list","map"].map(v=><button key={v} onClick={()=>setViewMode(v)} style={{padding:"6px 11px",borderRadius:"8px",border:"none",background:viewMode===v?T.accent:"#E2E8F0",color:viewMode===v?"#fff":T.gray,fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{v==="list"?"List View":"Map View"}</button>)}</div>
-        </div>
-        <AnimatePresence>
-          {showAdvanced&&(
-            <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{background:"#F8FAFC",borderRadius:"12px",border:"1px solid #E8EDF2",padding:"12px"}}>
-                <div style={{fontSize:"calc(10px*var(--fs))",fontWeight:"700",color:T.gray,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Filters</div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-                  {[
-                    {label:"Open Now",icon:"🟢",active:openOnly,onClick:()=>setOpenOnly(x=>!x),color:T.green},
-                    {label:"Popular",icon:"🏛️",active:popularOnly,onClick:()=>setPopularOnly(x=>!x),color:T.accent},
-                    {label:"Outdoors",icon:"🌳",active:outdoorOnly,onClick:()=>setOutdoorOnly(x=>!x),color:"#059669"},
-                    {label:"Arts & Culture",icon:"🎭",active:category==='culture',onClick:()=>setCategory(category==='culture'?'all':'culture'),color:"#7C3AED"},
-                    {label:"Fun",icon:"🎢",active:category==='entertainment',onClick:()=>setCategory(category==='entertainment'?'all':'entertainment'),color:"#DC2626"},
-                    {label:"Adventure",icon:"⚡",active:category==='adventure',onClick:()=>setCategory(category==='adventure'?'all':'adventure'),color:"#DC2626"},
-                    {label:"Wellness",icon:"🧘",active:category==='wellness',onClick:()=>setCategory(category==='wellness'?'all':'wellness'),color:"#DB2777"},
-                    {label:"Family",icon:"👨‍👩‍👧",active:category==='family',onClick:()=>setCategory(category==='family'?'all':'family'),color:"#D97706"},
-                  ].map(f=>(
-                    <button key={f.label} onClick={f.onClick} style={{display:"inline-flex",alignItems:"center",gap:"5px",padding:"6px 12px",borderRadius:"20px",border:f.active?`2px solid ${f.color}`:"1.5px solid #E2E8F0",background:f.active?f.color+"12":"#fff",color:f.active?f.color:T.dark,fontWeight:f.active?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>
-                      <span style={{fontSize:"calc(14px*var(--fs))"}}>{f.icon}</span>{f.label}
-                    </button>
-                  ))}
-                </div>
-                {advFilterCount>0&&<button onClick={clearFilters} style={{padding:"7px",borderRadius:"8px",border:`1.5px solid ${T.coral}`,background:"#FFF5F5",color:T.coral,fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit",marginTop:"10px",width:"100%"}}>✕ Clear All ({advFilterCount})</button>}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-       </div>
-      </div>
+        <ChipRow label="Categories" bleed>
+          {CATEGORIES.map(c=>(
+            <WorldChip key={c.id} world="todo" label={c.label} active={category===c.id} onClick={()=>setCategory(category===c.id?"all":c.id)}/>
+          ))}
+        </ChipRow>
+        {!submitted&&!browseFilterActive&&(nationalIcons.length>0||regionalGems.length>0||nearbyAttractions.length>0)&&<PersonaChooser world="todo" style={{marginTop:6,maxWidth:560}}/>}
+      </FinderHeader>
 
       {/* Cold-load state: no cached results AND nothing fetched yet
           → show skeleton grid instead of a centered spinner. Lets
@@ -1177,7 +1145,6 @@ export default function ThingsToDoFinder() {
           </div>
         )}
         {browseFilterActive&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🔧</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Filtered results</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
-        {!submitted&&!browseFilterActive&&(nationalIcons.length>0||regionalGems.length>0||nearbyAttractions.length>0)&&<PersonaChooser/>}
         {!submitted&&!browseFilterActive&&<TierSection title={`National Icons · ${country}`} icon="🌟" items={nationalIcons} userLat={lat} userLng={lng} isTablet={isTablet} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} defaultCollapsed/>}
         {!submitted&&!browseFilterActive&&<TierSection title={`Regional Must-See · ${region||city}`} icon="💎" items={regionalGems} userLat={lat} userLng={lng} isTablet={isTablet} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} defaultCollapsed/>}
         {!submitted&&!browseFilterActive&&<TierSection title="Nearby Attractions" icon="📍" items={nearbyAttractions} userLat={lat} userLng={lng} isTablet={isTablet} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance}/>}
@@ -1214,10 +1181,12 @@ export default function ThingsToDoFinder() {
       </div>)
       :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(20px*var(--fs))",color:T.dark}}>✕</button></div>)}
 
-      {showAdvanced&&<button onClick={()=>setShowAdvanced(false)} style={{position:"fixed",bottom:"90px",right:"16px",zIndex:9999,width:"40px",height:"40px",borderRadius:"50%",border:"none",background:T.dark,color:"#fff",fontWeight:"700",fontSize:"calc(18px*var(--fs))",cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
       <style>{`::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:16px;padding:0;overflow:hidden;}.gs-popup .leaflet-popup-content{margin:0;}.gs-popup .leaflet-popup-tip-container{display:none;}`}</style>
       <MapAppSelector isOpen={!!dirsA} onClose={()=>setDirsA(null)} destination={dirsA?{name:dirsA.displayName?.text||dirsA.name,address:dirsA.formattedAddress||dirsA.shortFormattedAddress||dirsA.vicinity||dirsA.address||"",latitude:dirsA.lat,longitude:dirsA.lng}:null} userLat={lat} userLng={lng}/>
-      <AnimatePresence>{loading&&(activities.length>0||nationalIcons.length>0)&&(<motion.div initial={{opacity:0,y:-20,x:'-50%'}} animate={{opacity:1,y:0,x:'-50%'}} exit={{opacity:0,y:-20,x:'-50%'}} style={{position:"fixed",top:"24px",left:"50%",zIndex:9999,background:T.dark,color:"#fff",padding:"8px 16px",borderRadius:"24px",fontSize:"calc(13px*var(--fs))",fontWeight:"700",display:"flex",alignItems:"center",gap:"8px",boxShadow:"0 4px 12px rgba(0,0,0,0.2)"}}><motion.div animate={{rotate:360}} transition={{repeat:Infinity,duration:1,ease:"linear"}} style={{display:"inline-block"}}>⏳</motion.div>Fetching new spots...</motion.div>)}</AnimatePresence>
+      <FilterSheet world="todo" open={sheetOpen} onClose={()=>setSheetOpen(false)} title="Filters" onClear={sheetFilterCount>0?clearSheetFilters:undefined}>
+        <FilterToggleRow world="todo" label="Popular" description="Famous landmarks and places with 200+ reviews at 4.0 or higher" checked={popularOnly} onChange={setPopularOnly}/>
+        <FilterToggleRow world="todo" label="Outdoor places" description="Parks, beaches, viewpoints and other places outside" checked={outdoorOnly} onChange={setOutdoorOnly}/>
+      </FilterSheet>
       <LocationModePicker isOpen={locPicker} onClose={()=>setLocPicker(false)}/>
     </div>
   );
