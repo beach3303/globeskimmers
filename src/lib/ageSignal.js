@@ -58,8 +58,11 @@ export async function syncOsAge({ force = false } = {}) {
     if (!r || r.available === false) return null;
     if (r.declined) { write(ASKED_KEY, { at: now, declined: true }); return null; }
   } else {
-    try { r = await within(15000, ageSignals().check()); } catch { r = null; }
-    if (!r?.available || (r.lower == null && r.upper == null)) { write(ASKED_KEY, { at: now, none: true }); return null; }
+    // A build without the plugin rejects the call: nothing is remembered, so the first build
+    // that has it asks at once. Only Play's own answer of no signal waits a week.
+    try { r = await within(15000, ageSignals().check()); } catch { return null; }
+    if (!r) return null;
+    if (!r.available || (r.lower == null && r.upper == null)) { write(ASKED_KEY, { at: now, none: true }); return null; }
   }
   const { data, error } = await callWorker("social/age", { os: { platform, lower: r.lower ?? null, upper: r.upper ?? null } });
   if (error || !data || data.error) return null;
