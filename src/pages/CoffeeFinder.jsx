@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useId } from "react";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "@/components/location/LocationContext";
 import LocationModePicker from "@/components/location/LocationModePicker";
 import { getLocationLabel, isCityLocation } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
-import DistanceUnitToggle from "@/components/location/DistanceUnitToggle";
 import { callWorker } from "@/lib/callWorker";
 import { ROUTE } from "@/lib/workerRoutes";
 import { logEvent } from "@/lib/analytics";
@@ -16,48 +14,61 @@ import AIDetailsSection from "@/components/AIDetailsSection";
 import TravelerDishes from "@/components/finder/TravelerDishes";
 import { HereStamp } from "@/components/attraction/AttractionExtras";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
-import { Coffee as CoffeeIcon, SlidersHorizontal, Sparkles } from "lucide-react";
-import { CAT, TEAL_DEEP, IVORY } from "@/components/redesign/constants";
+import { Coffee as CoffeeIcon, SlidersHorizontal, Sparkles, Clock, Laptop, MapPin, ExternalLink, X } from "lucide-react";
+import { WORLD, fs } from "@/components/redesign/constants";
 import MapAppSelector from "@/components/MapAppSelector";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import CafeWorkProfileSection from "@/components/CafeWorkProfileSection";
 import { useIsTablet } from "@/lib/useIsTablet";
 import FinderHeader from "@/components/finder/FinderHeader";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
-import FilterSheet from "@/components/finder/FilterSheet";
+import FilterSheet, { FilterGroupLabel } from "@/components/finder/FilterSheet";
+import { WorldSearch, WorldChip, ChipRow, ResultLine } from "@/components/finder/FinderControls";
+import { WorldCard, worldGrid, NumberMark, FactsLine, RatingFact, CardKicker, CardName, QuietRows, ActionRow, WorldSkeleton } from "@/components/finder/FinderCard";
 import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
 import { pinInstitutions } from "@/lib/searchRank";
 
-// iPad editorial design tokens (design handoff — modeled on "Places to Eat · iPad").
-const ED_SERIF = '"Instrument Serif", Georgia, serif';
-const ED_INK = "#16110D", ED_INK2 = "#3A3128", ED_INK3 = "#736657";
-const ED_IVORY2 = "#EFE8D9", ED_RULE = "rgba(22,17,13,.10)";
-
-// ─── COLORS ────────────────────────────────────────────────────────────────
-const BROWN      = "#6F4E37";
-const BROWN_DARK = "#4A3728";
-const GRAY       = "#64748B";
-const DARK       = "#1A2332";
-// T1.8: Open Now is disabled until at least one shop in view has a known open
-// state (owned rows ship no hours; cards lift Google hours in as they load).
-const OPEN_NOW_HINT = "needs café hours — none loaded yet";
+// The Coffee world (espresso plate, ember accents, copper icons): every colour on the
+// page comes from it.
+const COF = WORLD.coffee;
+// T1.8: Open now waits until at least one café in view has known hours (owned rows
+// ship none; cards lift Google hours in as they load).
+const OPEN_NOW_HINT = "Open now works once café hours load";
 
 // ─── DRINK PATTERNS ────────────────────────────────────────────────────────
+// word: what the cup sleeve prints. Brewed never claims a method ("POUR-OVER").
 const DRINK_PATTERNS = {
-  espresso:  { namePatterns:['espresso','espresso bar','coffee bar','café','caffe'],  reviewKeywords:['espresso','latte','cappuccino','macchiato','cortado','flat white','americano','ristretto','doppio','crema'], icon:'☕', label:'Espresso',    color:'#4A3728', bg:'#F5F0EB' },
-  brewed:    { namePatterns:['coffee house','coffee shop','roaster','roastery'],      reviewKeywords:['drip coffee','brewed coffee','pour over','pour-over','chemex','v60','aeropress','french press','filter coffee','single origin'], icon:'🫖', label:'Brewed/Drip',color:'#6F4E37', bg:'#FDF5EF' },
-  iced:      { namePatterns:['iced','cold'],                                          reviewKeywords:['iced coffee','iced latte','cold coffee','iced americano','iced mocha','frappe','frappuccino','shaken espresso'], icon:'🧊', label:'Iced Coffee', color:'#0288D1', bg:'#E3F2FD' },
-  coldBrew:  { namePatterns:['cold brew'],                                            reviewKeywords:['cold brew','nitro','nitro cold brew','nitrogen','nitro coffee','cold brewed'], icon:'🥤', label:'Cold Brew',  color:'#1565C0', bg:'#E3F2FD' },
-  matcha:    { namePatterns:['matcha','tea house','tea room'],                        reviewKeywords:['matcha','matcha latte','ceremonial matcha','matcha green tea','whisked matcha'], icon:'🍵', label:'Matcha',      color:'#2E7D32', bg:'#E8F5E9' },
-  tea:       { namePatterns:['tea house','tea room','tea bar','boba','bubble tea'],   reviewKeywords:['loose leaf','chai','earl grey','boba','bubble tea','milk tea','thai tea','oolong'], icon:'🫖', label:'Tea',         color:'#7B1FA2', bg:'#F3E5F5' },
+  espresso:  { namePatterns:['espresso','espresso bar','coffee bar','café','caffe'],  reviewKeywords:['espresso','latte','cappuccino','macchiato','cortado','flat white','americano','ristretto','doppio','crema'], word:'ESPRESSO' },
+  brewed:    { namePatterns:['coffee house','coffee shop','roaster','roastery'],      reviewKeywords:['drip coffee','brewed coffee','pour over','pour-over','chemex','v60','aeropress','french press','filter coffee','single origin'], word:'BREWED' },
+  iced:      { namePatterns:['iced','cold'],                                          reviewKeywords:['iced coffee','iced latte','cold coffee','iced americano','iced mocha','frappe','frappuccino','shaken espresso'], word:'ICED' },
+  coldBrew:  { namePatterns:['cold brew'],                                            reviewKeywords:['cold brew','nitro','nitro cold brew','nitrogen','nitro coffee','cold brewed'], word:'COLD BREW' },
+  matcha:    { namePatterns:['matcha','tea house','tea room'],                        reviewKeywords:['matcha','matcha latte','ceremonial matcha','matcha green tea','whisked matcha'], word:'MATCHA' },
+  tea:       { namePatterns:['tea house','tea room','tea bar','boba','bubble tea'],   reviewKeywords:['loose leaf','chai','earl grey','boba','bubble tea','milk tea','thai tea','oolong'], word:'TEA' },
 };
 
+// A search that names a drink: which sleeve word to underline, and the word for the
+// title ("Your next *latte*"). First match wins.
+const DRINK_QUERY = [
+  { re:/\b(cold\s*brew|nitro)\b/i, key:'coldBrew' },
+  { re:/\bmatcha\b/i, key:'matcha' },
+  { re:/\b(iced\s*\w+|frapp\w*)\b/i, key:'iced' },
+  { re:/\b(latte|cappuccino|espresso|macchiato|cortado|flat\s*white|americano|mocha|ristretto|doppio)\b/i, key:'espresso' },
+  { re:/\b(pour[\s-]?over|drip|filter\s*coffee|chemex|v60|aeropress|french\s*press)\b/i, key:'brewed' },
+  { re:/\b(chai|boba|bubble\s*tea|milk\s*tea|oolong|earl\s*grey|tea)\b/i, key:'tea' },
+];
+function drinkOfQuery(query) {
+  const q = String(query || '');
+  for (const d of DRINK_QUERY) { const m = q.match(d.re); if (m) return { key: d.key, word: m[0].toLowerCase() }; }
+  return null;
+}
+
 // ─── AMENITY PATTERNS (review-detected only) ───────────────────────────────
+// word: how the "Good for working" row names it. 'food' isn't a work thing.
 const AMENITY_PATTERNS = {
-  wifi:    { keywords:['wifi','wi-fi','internet','free wifi','wireless'],           icon:'📶', label:'WiFi reported'     },
-  outlets: { keywords:['outlets','power outlets','plugs','charging','power strip'], icon:'🔌', label:'Outlets mentioned'  },
-  quiet:   { keywords:['quiet','peaceful','calm','serene'],                         icon:'🔇', label:'Quiet atmosphere'   },
-  food:    { keywords:['pastry','sandwich','breakfast','croissant','bagel','avocado toast'], icon:'🥐', label:'Food available' },
+  wifi:    { keywords:['wifi','wi-fi','internet','free wifi','wireless'],           word:'Wi-Fi'   },
+  outlets: { keywords:['outlets','power outlets','plugs','charging','power strip'], word:'outlets' },
+  quiet:   { keywords:['quiet','peaceful','calm','serene'],                         word:'quiet'   },
+  food:    { keywords:['pastry','sandwich','breakfast','croissant','bagel','avocado toast'], word:'food' },
 };
 
 // ─── CHAIN DETECTION ───────────────────────────────────────────────────────
@@ -143,12 +154,14 @@ function processShop(shop, userLat, userLng, isLocal) {
     cfg.reviewKeywords.forEach(kw=>{if(allText.includes(kw))score+=1;});
     if(score>=1)detectedDrinks[k]={confidence:score>=4?'high':'medium'};
   }
-  if(!detectedDrinks.espresso&&!detectedDrinks.brewed){detectedDrinks.espresso={confidence:'medium'};detectedDrinks.brewed={confidence:'medium'};}
+  // Nothing detected: assume a café serves espresso and brewed coffee, but only so a
+  // search can match it. Assumed drinks never print on the sleeve.
+  if(!detectedDrinks.espresso&&!detectedDrinks.brewed){detectedDrinks.espresso={confidence:'medium',assumed:true};detectedDrinks.brewed={confidence:'medium',assumed:true};}
 
   // Amenities (review-detected)
   const amenities = {};
   for (const [k,cfg] of Object.entries(AMENITY_PATTERNS)) {
-    if(cfg.keywords.some(kw=>allText.includes(kw)))amenities[k]={...cfg,available:true};
+    if(cfg.keywords.some(kw=>allText.includes(kw)))amenities[k]={...cfg,available:true,source:'reviews'};
   }
 
   // Parking — passed from Worker (source = 'api' or 'reviews')
@@ -161,49 +174,78 @@ function processShop(shop, userLat, userLng, isLocal) {
   const seatingSource     = seating?.source || (hasIndoorSeating!==null||hasOutdoorSeating!==null?'api':null);
 
   const chainFlag = isChainShop(name);
-  // Infer wifi for chains (virtually all chains offer wifi); review detection covers independents
-  if(chainFlag && !amenities.wifi) amenities.wifi={icon:'📶',label:'WiFi (chain)',available:true};
+  // A chain is assumed to have Wi-Fi for the Has Wi-Fi filter only: inferred, never
+  // "reported", so the card never cites it.
+  if(chainFlag && !amenities.wifi) amenities.wifi={word:'Wi-Fi',available:true,inferred:true};
   const hasWifi = !!amenities.wifi?.available;
 
   const specialtyFlag = isSpecialtyByName(name) || (!chainFlag && (shop.rating||0) >= 4.5 && (shop.userRatingCount||0) >= 50);
   let tier = specialtyFlag ? 1 : chainFlag ? 3 : 2;
 
-  const badges=[];
-  if(specialtyFlag)   badges.push({icon:'✨',label:'Specialty',    color:'#E65100',bg:'#FFF3E0'});
-  if(chainFlag)       badges.push({icon:'🏪',label:'Chain',        color:'#78909C',bg:'#ECEFF1'});
-  // No WiFi badge — WiFi now lives only inside the "Good for working" panel.
-  // hasWifi is still computed above for the "Has WiFi" quick filter.
+  // No badges: the card's kicker says SPECIALTY COFFEE or COFFEE CHAIN, and the
+  // specialty pill sits on the photo. hasWifi feeds the "Has Wi-Fi" filter only.
 
   // Normalize photo entries to URL strings. Google search (normalizePlace) returns
   // photo OBJECTS {url,thumbnail,full}; owned/enrich returns strings. The <img> needs
   // a string src, so objects silently failed → blank ☕ placeholder on real results.
   const photos = (shop.photos||(shop.photoUrl?[shop.photoUrl]:[]))
     .map(p=>typeof p==="string"?p:(p?.url||p?.full||p?.thumbnail||null)).filter(Boolean);
-  return { ...shop, lat, lng, name, distanceMiles, distance:distanceMiles?`${distanceMiles.toFixed(1)} mi`:null, isOpen:openStatus.isOpen, todayHours:openStatus.todayHours, is24Hours:openStatus.is24Hours, detectedDrinks, amenities, parking, seating, hasIndoorSeating, hasOutdoorSeating, seatingSource, hasWifi, isChain:chainFlag, isSpecialty:specialtyFlag, tier, badges:badges.slice(0,5), photos, photoUrl:photos[0]||null };
+  return { ...shop, lat, lng, name, distanceMiles, distance:distanceMiles?`${distanceMiles.toFixed(1)} mi`:null, isOpen:openStatus.isOpen, todayHours:openStatus.todayHours, is24Hours:openStatus.is24Hours, detectedDrinks, amenities, parking, seating, hasIndoorSeating, hasOutdoorSeating, seatingSource, hasWifi, isChain:chainFlag, isSpecialty:specialtyFlag, tier, photos, photoUrl:photos[0]||null };
 }
 
 // Directions handled by the shared <MapAppSelector> (address-aware destination +
 // "from my location / other address" origin picker) — see src/components/MapAppSelector.jsx
 
-// ─── COFFEE CARD · EDITORIAL (responsive: phone + iPad) ──────────────────────
-// Editorial card used at BOTH widths. Same props, same fields, same handlers
-// (drinks / amenities / seating / parking / phone / directions via the internal
-// MapAppSelector / CafeWorkProfileSection / AIDetailsSection / website). The
-// `isTablet` prop gates sizing only: tablet keeps the large editorial scale,
-// phone gets a compact, phone-tuned variant. Tokens/structure mirror
-// RestaurantCardTablet; only the café domain content + phone tuning differ.
-function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDistance, isTablet, isLocal, onHours, batchEnrich }) {
+// ─── THE CUP SLEEVE (Coffee.dc.html L86-90) ─────────────────────────────────
+// A 34px wash band with the drinks reviews or the name really mention, in mono,
+// split by ember dots. Assumed drinks never print; with none the sleeve is absent.
+// The drink you searched for is inverted with an ember underline.
+function DrinkSleeve({ drinks, searchedKey }) {
+  const keys = Object.entries(drinks || {}).filter(([k, v]) => v && !v.assumed && DRINK_PATTERNS[k]).map(([k]) => k);
+  if (!keys.length) return null;
+  return (
+    <p className="font-mono flex items-center justify-center flex-wrap"
+      style={{margin:0,minHeight:34,padding:"6px 12px",boxSizing:"border-box",background:COF.wash,columnGap:10,rowGap:4,fontSize:fs(10.5),lineHeight:1.2,fontWeight:500,letterSpacing:".14em",color:COF.washInk}}>
+      <span className="sr-only">Drinks: </span>
+      {keys.map((k, i) => (
+        <React.Fragment key={k}>
+          {i > 0 && <span aria-hidden="true" style={{width:4,height:4,borderRadius:999,background:COF.star,flex:"none"}}/>}
+          {k === searchedKey
+            ? <span style={{padding:"2px 6px",background:COF.ink,color:COF.plateTitle,borderBottom:`2px solid ${COF.star}`}}>{DRINK_PATTERNS[k].word}</span>
+            : <span>{DRINK_PATTERNS[k].word}</span>}
+        </React.Fragment>
+      ))}
+    </p>
+  );
+}
+
+// One hairline row in the card's More panel: a mono label, then plain words.
+function MoreRow({ label, children }) {
+  return (
+    <div style={{padding:"12px 0",borderTop:`1px solid ${COF.line}`}}>
+      <div className="font-mono uppercase" style={{fontSize:fs(10.5),letterSpacing:".12em",color:COF.iconInk,marginBottom:4}}>{label}</div>
+      <div style={{fontSize:fs(13.5),lineHeight:1.5,color:"#3A3128"}}>{children}</div>
+    </div>
+  );
+}
+
+// ─── COFFEE CARD (Coffee.dc.html L76-114) ───────────────────────────────────
+// The photo (or the espresso strip with the cup ring and the café's initial) with
+// the ring numeral and the SPECIALTY pill, the cup sleeve, the copper kicker, the
+// name, one facts line, the address, "Good for working", the quiet rows, the rubber
+// stamp when you're here and one action row with the ember Directions.
+function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance, isLocal, onHours, batchEnrich, searchedKey, cardRef }) {
   const [expanded,setExpanded]=useState(false);
   const [showDir,setShowDir]=useState(false);
   const [galleryOpen,setGalleryOpen]=useState(false);
   const [galleryStart,setGalleryStart]=useState(0);
   const [enriched,setEnriched]=useState(null);
-  // 3 real Google photos + hours for OWNED shops (owned records carry none) —
-  // (Website og:image was tried as a free rung and pulled for quality, so Google's
-  // real photos are the source.) T1.15: the parent batch-enriches all visible owned
-  // cafés in ONE worker call and hands this card its slice via `batchEnrich`
-  // (undefined = batch in flight — wait, don't double-call). A card the batch
-  // missed (null) falls back to its own single call; same per-item KV cache.
+  const moreId=useId();
+  // 3 real Google photos + hours for OWNED shops (owned records carry none).
+  // T1.15: the parent batch-enriches all visible owned cafés in ONE worker call and
+  // hands this card its slice via `batchEnrich` (undefined = batch in flight — wait,
+  // don't double-call). A card the batch missed (null) falls back to its own single
+  // call; same per-item KV cache.
   useEffect(()=>{
     if(enriched||shop.source!=='owned')return;
     const key=shop.id||shop.placeId;
@@ -211,7 +253,7 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
     if(batchEnrich){
       if(batchEnrich.matched){
         setEnriched(batchEnrich);
-        // T1.8: lift the Google hours to the list so Open Now / "· N open" can see them.
+        // T1.8: lift the Google hours to the list so Open now / "N open" can see them.
         if(batchEnrich.hours?.weekdayDescriptions?.length) onHours?.(key, batchEnrich);
       }
       return;
@@ -220,246 +262,130 @@ function CoffeeCardTablet({ shop, index, onShowOnMap, userLat, userLng, formatDi
       .then(({data})=>{
         if(!data||!data.matched) return;
         setEnriched(data);
-        // T1.8: lift the Google hours to the list so Open Now / "· N open" can see them.
         if(data.hours?.weekdayDescriptions?.length) onHours?.(key, data);
       }).catch(()=>{});
   },[batchEnrich]); // eslint-disable-line react-hooks/exhaustive-deps
-  const fs=(n)=>`calc(${n}px*var(--fs))`;
-  // Responsive size picker — `t` (tablet) keeps the current editorial sizes,
-  // `p` (phone) is the compact phone-tuned value. Every size below routes
-  // through z() so the card renders correctly at both widths while keeping fs()
-  // on all text (graceful growth via the 4-step glasses control).
-  const z=(t,p)=>isTablet?t:p;
-  // Category accent — this finder's OWN color world (canonical CAT.coffee.ink),
-  // NOT the Places-to-Eat coral. Used for the editorial kicker, the primary
-  // Directions button, the rank badge, and the Specialty tag, so the card reads
-  // as one coherent warm accent. The green "Open" bar and blue "phone" bar stay
-  // as-is (semantic colors shared across finders).
-  const ACCENT = CAT.coffee.ink; // #A85A2E
 
   const name    = shop.displayName?.text || shop.name || "Coffee Shop";
+  const placeId = shop.placeId || shop.id;
   const address = shop.shortFormattedAddress || shop.formattedAddress || "";
   const photos  = (enriched?.photos?.length ? enriched.photos : (shop.photos||(shop.photoUrl?[shop.photoUrl]:[])))
     .map(p=>typeof p==="string"?p:(p?.url||p?.full||p?.thumbnail||null)).filter(Boolean);
   const weekdays = enriched?.hours?.weekdayDescriptions?.length ? enriched.hours.weekdayDescriptions : (shop.currentOpeningHours?.weekdayDescriptions||[]);
-  // T1.5: Open/Closed is re-derived at render time with the same zone-aware policy
-  // as the list — never from `enriched.hours.openNow`, which for an owned shop is a
-  // Google boolean cached up to 90 days and wrong for any city but the user's own.
-  // The zone comes from the row (Google path) or, once the worker sends it, from
-  // enrich-owned; a navigated city with no zone yields no status (honest blank).
+  // T1.5: open words come from the hours in the place's own zone, never from a
+  // cached openNow; a navigated city with no zone gets "Hours not listed".
   const tzOff = shop.utcOffsetMinutes ?? enriched?.utcOffsetMinutes ?? null;
-  const st = computeOpenStatus(
-    enriched?.hours?.weekdayDescriptions?.length
-      ? { ...shop, currentOpeningHours:{ weekdayDescriptions:weekdays, openNow:enriched.hours.openNow }, utcOffsetMinutes:tzOff }
-      : shop,
-    isLocal);
-  const openNow = st.isOpen, todayHrs = st.todayHours, is24 = st.is24Hours;
-  const todayIdx = placeDayIndex(tzOff, isLocal); // "today" row in the weekly hours, in the place's zone
-  const phone   = shop.nationalPhoneNumber || shop.internationalPhoneNumber || "";
+  const openPlace = weekdays.length ? { ...shop, currentOpeningHours:{ weekdayDescriptions:weekdays }, utcOffsetMinutes:tzOff } : { ...shop, utcOffsetMinutes:tzOff };
+  const todayIdx = placeDayIndex(tzOff, isLocal); // "today" in the weekly hours, in the place's zone
+  const phone   = shop.nationalPhoneNumber || shop.internationalPhoneNumber || enriched?.nationalPhoneNumber || "";
   const parking = shop.parking;
-  const parkingConfirmed = parking?.source==='api';
-  const hasAnySeating = shop.hasIndoorSeating||shop.hasOutdoorSeating||shop.seating?.hasLoungeSeating||shop.seating?.hasBarSeating;
-  const seatingConfirmed = shop.seatingSource==='api';
-  // Café category kicker — coffee accent, same role as the cuisine kicker on Eat.
-  const kicker = shop.isSpecialty ? 'Specialty Coffee'
-    : shop.isChain ? 'Coffee Chain'
-    : (shop.primaryType
-        ? shop.primaryType.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())
-        : 'Café');
-  const openText = is24 ? 'Open 24/7' : (openNow===true ? 'Open' : openNow===false ? 'Closed' : '');
-
-  const Tag=({bg,color,children})=>(
-    <span style={{background:bg,color,borderRadius:"999px",padding:`${fs(z(9,6))} ${fs(z(16,11))}`,fontSize:fs(z(15.5,12.5)),fontWeight:600,whiteSpace:"nowrap"}}>{children}</span>
-  );
+  const rating  = enriched?.rating ?? shop.rating;
+  const ratingCount = enriched?.userRatingCount ?? shop.userRatingCount;
+  const kicker = shop.isSpecialty ? 'Specialty coffee'
+    : shop.isChain ? 'Coffee chain'
+    : (shop.primaryType ? shop.primaryType.replace(/_/g,' ') : 'Café');
+  // "Good for working" only from what reviews say (never a chain's assumed Wi-Fi).
+  const reported = ['wifi','outlets','quiet'].filter(k=>shop.amenities?.[k]?.available && shop.amenities[k].source==='reviews').map(k=>AMENITY_PATTERNS[k].word);
+  const seatingWords = [shop.hasIndoorSeating&&'Indoor', shop.hasOutdoorSeating&&'Outdoor', shop.seating?.hasLoungeSeating&&'Lounge', shop.seating?.hasBarSeating&&'Bar seats', shop.seating?.capacityNote].filter(Boolean);
+  const trust = (confirmed) => confirmed ? 'confirmed by Google' : 'mentioned in reviews';
+  const otherMentions = Object.entries(shop.amenities||{}).filter(([k,a])=>a.available&&a.source==='reviews'&&k!=='wifi').map(([k])=>AMENITY_PATTERNS[k]?.word).filter(Boolean);
+  const website = shop.websiteUri||shop.website;
+  const hasMore = !!(seatingWords.length || parking || otherMentions.length || weekdays.length || website);
+  const dist = shop.distanceMiles!=null ? formatDistance(shop.distanceMiles) : null;
 
   return (
-    <motion.div initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} transition={{delay:Math.min(index,8)*0.03}}
-      style={{background:"#fff",borderRadius:z("28px","20px"),overflow:"hidden",boxShadow:z("0 24px 50px -30px rgba(22,17,13,.4)","0 14px 30px -22px rgba(22,17,13,.34)"),border:`1px solid ${ED_RULE}`,minHeight:z("auto","320px")}}>
-
-      {/* Photo — PhotoOrIcon (first working photo, icon-on-tint fallback), rank
-          badge, Specialty tag + wishlist heart; tap opens the full gallery */}
-      <div style={{position:"relative"}}>
-        <PhotoOrIcon photos={photos} alt={name} fallbackIcon={CoffeeIcon} tint={CAT.coffee} height={z(360,200)} iconSize={z(56,44)}
-          onClick={photos.length?(i)=>{setGalleryStart(typeof i==="number"?i:0);setGalleryOpen(true);}:undefined}/>
-        <div style={{position:"absolute",top:fs(z(14,11)),left:fs(z(14,11)),background:ACCENT,color:"#fff",width:fs(z(38,30)),height:fs(z(38,30)),borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:fs(z(16,13)),boxShadow:"0 2px 8px rgba(0,0,0,0.25)",border:"2px solid #fff"}}>{index+1}</div>
-        <div style={{position:"absolute",top:fs(z(14,11)),right:fs(z(14,11)),display:"flex",alignItems:"center",gap:fs(8)}}>
-          {shop.tier===1&&<div style={{display:"inline-flex",alignItems:"center",gap:fs(4),background:"rgba(255,255,255,0.95)",padding:`${fs(z(4,3))} ${fs(z(11,9))}`,borderRadius:"8px",fontSize:fs(z(14,11.5)),fontWeight:700,color:ACCENT,boxShadow:"0 1px 4px rgba(0,0,0,0.12)"}}><Sparkles size={12} strokeWidth={2}/>Specialty</div>}
-        </div>
-      </div>
-
-      <div style={{padding:z(`${fs(28)} ${fs(32)} ${fs(32)}`,`${fs(16)} ${fs(16)} ${fs(18)}`)}}>
-        <div style={{color:ACCENT,fontWeight:600,fontSize:fs(z(17,13)),letterSpacing:"0.2px"}}>{kicker}</div>
-        <h3 style={{fontFamily:ED_SERIF,fontWeight:400,fontSize:fs(z(38,26)),lineHeight:1.04,color:ED_INK,margin:`${fs(z(4,3))} 0 0`,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{name}</h3>
-        {address&&<div style={{fontSize:fs(z(15.5,12.5)),color:ED_INK3,marginTop:fs(z(6,5))}}>{address}</div>}
-
-        {/* Say it / Translate / rating / distance / price */}
-        <div style={{display:"flex",gap:fs(z(16,10)),alignItems:"center",flexWrap:"wrap",marginTop:fs(z(12,9)),fontSize:fs(z(17,13)),color:ED_INK3}}>
-          <NameLanguageHelp placeId={shop.placeId||shop.id} name={name}/>
-          {/* T2.2: the stars are Google's — say so, quietly (muted word, no logo) */}
-          {shop.rating>0&&<span><span style={{color:"#E0922F"}}>★</span> <span style={{fontWeight:700,color:ED_INK2}}>{shop.rating}</span>{shop.userRatingCount>0&&<span> ({shop.userRatingCount.toLocaleString()})</span>}<span style={{fontSize:fs(z(11,10)),color:ED_INK3,marginLeft:fs(5),opacity:.8}}>Google</span></span>}
-          {shop.distanceMiles!=null&&<span>· {formatDistance(shop.distanceMiles)}</span>}
-          {shop.priceLevel&&<span>· {'$'.repeat(shop.priceLevel)}</span>}
-        </div>
-
-        {/* Drink + status pill tags */}
-        {(Object.keys(shop.detectedDrinks||{}).length>0||shop.badges?.some(b=>b.label!=='Specialty'))&&(
-          <div style={{display:"flex",gap:fs(z(10,7)),flexWrap:"wrap",marginTop:fs(z(16,12))}}>
-            {Object.entries(shop.detectedDrinks||{}).slice(0,4).map(([type])=>{const p=DRINK_PATTERNS[type];return p?<Tag key={type} bg={p.bg} color={p.color}>{p.icon} {p.label}</Tag>:null;})}
-            {shop.badges?.filter(b=>b.label!=='Specialty').map((b,i)=><Tag key={i} bg={b.bg} color={b.color}>{b.icon} {b.label}</Tag>)}
-          </div>
+    <WorldCard world="coffee" as="li" ref={cardRef}>
+      <PhotoOrIcon world="coffee" photos={photos} alt={name} name={name}
+        onClick={photos.length?(i)=>{setGalleryStart(typeof i==="number"?i:0);setGalleryOpen(true);}:undefined}>
+        <NumberMark n={index+1} world="coffee"/>
+        {shop.isSpecialty && (
+          <span className="font-mono uppercase inline-flex items-center"
+            style={{position:"absolute",right:12,top:12,gap:5,minHeight:24,boxSizing:"border-box",padding:"0 9px",borderRadius:999,background:COF.ink,border:"1px solid rgba(243,223,193,.4)",fontSize:fs(10),fontWeight:500,letterSpacing:".14em",lineHeight:1,color:COF.plateTitle}}>
+            <Sparkles size={11} strokeWidth={2} aria-hidden="true"/>Specialty
+          </span>
         )}
-
-        {/* Open bar — hidden until enrich resolves hours for owned shops */}
-        {openNow!==null&&openNow!==undefined&&(
-          <div style={{marginTop:fs(z(18,12)),background:openNow?"#E7F3EA":"#FBE0DC",borderRadius:z("16px","13px"),padding:`${fs(z(16,11))} ${fs(z(20,14))}`,fontSize:fs(z(18,13.5)),fontWeight:600,color:openNow?"#2E7D46":"#C2392F",display:"flex",alignItems:"center",gap:fs(z(11,9))}}>
-            <span style={{width:fs(z(10,9)),height:fs(z(10,9)),borderRadius:"50%",background:is24?"#00BCD4":(openNow?"#2E7D46":"#C2392F"),flexShrink:0}}/>
-            <span>{openText}</span>
-            {todayHrs&&!is24&&<span style={{color:ED_INK3,fontWeight:500}}>· {todayHrs}</span>}
-          </div>
-        )}
-
-        {/* Phone bar */}
-        {phone&&(
-          <a href={`tel:${phone}`} style={{marginTop:fs(z(14,10)),background:"#EFF4FB",borderRadius:z("16px","13px"),padding:`${fs(z(18,12))} ${fs(z(20,14))}`,display:"flex",alignItems:"center",gap:fs(z(14,11)),textDecoration:"none"}}>
-            <span style={{fontSize:fs(z(24,19))}}>📞</span>
-            <span><span style={{display:"block",fontSize:fs(z(20,13.5)),fontWeight:600,color:"#2E6FE0"}}>{phone}</span><span style={{fontSize:fs(z(15,12)),color:ED_INK3}}>Tap to call</span></span>
-          </a>
-        )}
-
-        {/* Good for working + AI details — on the front card, above the actions */}
-        <div style={{display:"flex",flexDirection:"column",gap:fs(z(12,10)),marginTop:fs(z(18,13))}}>
-          <CafeWorkProfileSection placeId={shop.placeId || shop.id} placeName={name} lat={shop.lat} lng={shop.lng}/>
-          <AIDetailsSection placeId={shop.placeId || shop.id} placeName={name} lat={shop.lat} lng={shop.lng} page="CoffeeFinder" kind="coffee"/>
-          <HereStamp place={{ id: shop.placeId || shop.id, name, lat: shop.lat, lng: shop.lng, types: shop.types, formattedAddress: shop.formattedAddress || shop.address }}/>
-          <TravelerDishes place={{ id: shop.placeId || shop.id, name, lat: shop.lat, lng: shop.lng }} kind="coffee"/>
+      </PhotoOrIcon>
+      <DrinkSleeve drinks={shop.detectedDrinks} searchedKey={searchedKey}/>
+      <div style={{padding:"12px 16px 16px"}}>
+        <CardKicker world="coffee">{kicker}</CardKicker>
+        <CardName world="coffee">{name}</CardName>
+        <div style={{marginTop:2}}><NameLanguageHelp placeId={placeId} name={name} world="coffee"/></div>
+        <FactsLine world="coffee" place={openPlace} isLocal={isLocal}
+          items={[dist, <RatingFact key="r" world="coffee" rating={rating} count={ratingCount} source="google"/>, shop.priceLevel?'$'.repeat(shop.priceLevel):null]}
+          style={{marginTop:4}}/>
+        {address && <p style={{margin:0,fontSize:fs(13),lineHeight:1.4,color:"#736657"}}>{address}</p>}
+        <div style={{marginTop:6}}>
+          <CafeWorkProfileSection placeId={placeId} placeName={name} lat={shop.lat} lng={shop.lng} world="coffee" reported={reported}/>
         </div>
-
-        {/* Actions */}
-        <div style={{display:"flex",gap:fs(z(12,8)),marginTop:fs(z(20,14))}}>
-          <button onClick={()=>setShowDir(true)} style={{flex:1,borderRadius:z("16px","13px"),padding:fs(z(15,11)),fontSize:fs(z(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ACCENT,color:"#fff"}}>Directions</button>
-          <button onClick={()=>onShowOnMap?.(index)} style={{flex:1,borderRadius:z("16px","13px"),padding:fs(z(15,11)),fontSize:fs(z(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:ED_IVORY2,color:ED_INK2}}>📍 Map</button>
-          <button onClick={()=>setExpanded(e=>!e)} style={{flex:1,borderRadius:z("16px","13px"),padding:fs(z(15,11)),fontSize:fs(z(18,14)),fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit",background:expanded?ED_INK:ED_IVORY2,color:expanded?"#fff":ED_INK2}}>{expanded?"Less ▴":"More ▾"}</button>
-        </div>
-
-        {/* Expanded details */}
-        <AnimatePresence>
-          {expanded&&(
-            <motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} style={{overflow:"hidden"}}>
-              <div style={{marginTop:fs(z(20,14)),display:"flex",flexDirection:"column",gap:fs(z(14,10))}}>
-
-                {(hasAnySeating||parking)&&(
-                  <div style={{display:"flex",gap:fs(z(14,10)),flexWrap:"wrap"}}>
-                    {hasAnySeating&&(
-                      <div style={{flex:"1 1 240px",padding:fs(z(16,13)),background:"#FAF7F0",borderRadius:z("16px","13px"),border:`1px solid ${ED_RULE}`}}>
-                        <div style={{display:"flex",alignItems:"center",gap:fs(8),marginBottom:fs(8)}}>
-                          <span style={{fontSize:fs(17),fontWeight:700,color:ED_INK}}>🪑 Seating</span>
-                          <span style={{fontSize:fs(12),fontWeight:700,color:seatingConfirmed?"#2E7D32":"#E65100",background:seatingConfirmed?"#E8F5E9":"#FFF3E0",padding:`${fs(1)} ${fs(7)}`,borderRadius:"6px"}}>{seatingConfirmed?"✅ Google confirmed":"⚠️ Not confirmed"}</span>
-                        </div>
-                        <div style={{display:"flex",flexWrap:"wrap",gap:fs(6)}}>
-                          {shop.hasIndoorSeating&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🏠 Indoor</span>}
-                          {shop.hasOutdoorSeating&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🌿 Outdoor</span>}
-                          {shop.seating?.hasLoungeSeating&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🛋️ Lounge</span>}
-                          {shop.seating?.hasBarSeating&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🪑 Bar seats</span>}
-                          {shop.seating?.capacityNote&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>📐 {shop.seating.capacityNote}</span>}
-                        </div>
-                      </div>
-                    )}
-                    {parking&&(
-                      <div style={{flex:"1 1 240px",padding:fs(z(16,13)),background:"#FAF7F0",borderRadius:z("16px","13px"),border:`1px solid ${ED_RULE}`}}>
-                        <div style={{display:"flex",alignItems:"center",gap:fs(8),marginBottom:fs(8)}}>
-                          <span style={{fontSize:fs(17),fontWeight:700,color:ED_INK}}>🅿️ Parking</span>
-                          <span style={{fontSize:fs(12),fontWeight:700,color:parkingConfirmed?"#2E7D32":"#E65100",background:parkingConfirmed?"#E8F5E9":"#FFF3E0",padding:`${fs(1)} ${fs(7)}`,borderRadius:"6px"}}>{parkingConfirmed?"✅ Google confirmed":"⚠️ Mentioned in reviews"}</span>
-                        </div>
-                        {parking.noParking?(
-                          <div style={{fontSize:fs(15),color:"#C2392F"}}>{parking.noParkingNote}</div>
-                        ):(
-                          <div style={{display:"flex",flexWrap:"wrap",gap:fs(6)}}>
-                            {parking.details?.length>0?parking.details.map((d,i)=>(
-                              <span key={i} style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>{d.icon} {d.label}{d.free===true?' · Free':d.free===false&&!d.cost?' · Paid':''}</span>
-                            )):<span style={{fontSize:fs(15),color:ED_INK3}}>Parking available nearby</span>}
-                            {parking.valetCost&&<span style={{fontSize:fs(15),color:ED_INK3,background:"#fff",border:`1px solid ${ED_RULE}`,padding:`${fs(3)} ${fs(10)}`,borderRadius:"8px"}}>🎩 Valet {parking.valetCost}</span>}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Review-detected amenities (always ⚠️ reported); WiFi lives in the work panel only */}
-                {Object.entries(shop.amenities||{}).some(([k,a])=>a.available&&k!=='wifi')&&(
-                  <div style={{display:"flex",flexWrap:"wrap",gap:fs(8)}}>
-                    {Object.entries(shop.amenities).filter(([k,a])=>a.available&&k!=='wifi').map(([k,a])=>(
-                      <span key={k} title="Mentioned in customer reviews — call ahead to confirm" style={{display:"flex",alignItems:"center",gap:fs(5),background:"#FFFBF0",border:"1px solid #FED7AA",padding:`${fs(4)} ${fs(12)}`,borderRadius:"8px",fontSize:fs(15),fontWeight:600,color:"#92400E",cursor:"default"}}>
-                        {a.icon} {a.label} <span style={{color:"#D97706",fontSize:fs(13)}}>·reported</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Daily hours — open with the card (More), collapse with Less */}
-                {weekdays.length>0&&(
-                  <div style={{padding:fs(z(16,13)),background:"#FAF7F0",borderRadius:z("16px","13px")}}>
-                    <div style={{fontSize:fs(13),fontWeight:700,color:ED_INK3,letterSpacing:"0.5px",marginBottom:fs(8)}}>🕐 DAILY HOURS</div>
-                    <div>
-                      {weekdays.map((day,i)=>{
-                        const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                        const isToday=todayIdx>=0&&DAY.findIndex(d=>day.startsWith(d))===todayIdx;
-                        return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:`${fs(4)} 0`,fontSize:fs(15),fontWeight:isToday?700:400,color:isToday?TEAL_DEEP:ED_INK2,borderBottom:i<6?`1px solid ${ED_RULE}`:"none"}}>
-                          <span>{day.split(':')[0]}</span><span>{day.split(':').slice(1).join(':').trim()}</span>
-                        </div>;
-                      })}
+        <QuietRows world="coffee" style={{marginTop:4}}>
+          <AIDetailsSection world="coffee" placeId={placeId} placeName={name} lat={shop.lat} lng={shop.lng} page="CoffeeFinder" kind="coffee"/>
+          <TravelerDishes world="coffee" variant="row" place={{id:placeId,name,lat:shop.lat,lng:shop.lng}} kind="coffee"/>
+        </QuietRows>
+        <HereStamp place={{ id: placeId, name, lat: shop.lat, lng: shop.lng, types: shop.types, formattedAddress: shop.formattedAddress || shop.address }} formatDistance={formatDistance}/>
+        <ActionRow world="coffee" name={name} onDirections={()=>setShowDir(true)} onMap={()=>onShowOnMap?.(index)} phone={phone}
+          onMore={hasMore?()=>setExpanded(e=>!e):undefined} moreExpanded={hasMore?expanded:undefined} moreControls={hasMore?moreId:undefined}
+          style={{marginTop:4}}/>
+        {hasMore && expanded && (
+          <div id={moreId} style={{marginTop:12}}>
+            {seatingWords.length>0 && <MoreRow label="Seating">{seatingWords.join(' · ')} <span style={{color:"#736657"}}>({trust(shop.seatingSource==='api')})</span></MoreRow>}
+            {parking && (
+              <MoreRow label="Parking">
+                {parking.noParking ? parking.noParkingNote : <>{(parking.details?.length ? parking.details.map(d=>`${d.label}${d.free===true?' (free)':d.free===false&&!d.cost?' (paid)':''}`) : ['Parking available nearby']).join(' · ')}{parking.valetCost?` · Valet ${parking.valetCost}`:''} <span style={{color:"#736657"}}>({trust(parking.source==='api')})</span></>}
+              </MoreRow>
+            )}
+            {otherMentions.length>0 && <MoreRow label="Reviews mention">{otherMentions.join(', ')} <span style={{color:"#736657"}}>(call ahead to confirm)</span></MoreRow>}
+            {weekdays.length>0 && (
+              <MoreRow label="Hours">
+                {weekdays.map((day,i)=>{
+                  const DAY=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                  const isToday=todayIdx>=0&&DAY.findIndex(d=>day.startsWith(d))===todayIdx;
+                  return (
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",gap:12,padding:"2px 0",fontWeight:isToday?700:400,color:isToday?COF.accentText:"#3A3128"}}>
+                      <span>{day.split(':')[0]}</span><span style={{textAlign:"right"}}>{day.split(':').slice(1).join(':').trim()}</span>
                     </div>
-                  </div>
-                )}
-
-                {/* Website */}
-                {(shop.websiteUri||shop.website)&&(
-                  <a href={shop.websiteUri||shop.website} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:fs(12),padding:fs(z(16,13)),background:"#F3E8FF",borderRadius:z("16px","13px"),textDecoration:"none",color:"#7C3AED"}}>
-                    <span style={{fontSize:fs(22)}}>🌐</span>
-                    <span><span style={{display:"block",fontWeight:600,fontSize:fs(16)}}>Visit Website</span><span style={{fontSize:fs(14),color:ED_INK3}}>Menu &amp; info</span></span>
-                  </a>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                  );
+                })}
+              </MoreRow>
+            )}
+            {website && (
+              <MoreRow label="Website">
+                <a href={website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center"
+                  style={{gap:6,minHeight:44,margin:"-12px 0",color:COF.accentText,fontWeight:600,textDecoration:"underline",textUnderlineOffset:2}}>
+                  Menu and info<ExternalLink size={14} strokeWidth={2} aria-hidden="true"/>
+                </a>
+              </MoreRow>
+            )}
+          </div>
+        )}
       </div>
       <MapAppSelector isOpen={showDir} onClose={()=>setShowDir(false)} destination={{name, address, latitude:shop.lat, longitude:shop.lng}} userLat={userLat} userLng={userLng}/>
       {galleryOpen&&<PhotoGalleryModal photos={photos} initialIndex={galleryStart} isOpen onClose={()=>setGalleryOpen(false)}/>}
-    </motion.div>
+    </WorldCard>
   );
 }
 
-// ─── FILTER PILL ───────────────────────────────────────────────────────────
-function FilterPill({ label, active, onClick, emoji, disabled, title }) {
-  return <button onClick={onClick} disabled={disabled} title={title} style={{padding:"7px 14px",borderRadius:"20px",border:active?`2px solid ${BROWN}`:"1.5px solid #E2E8F0",background:active?`${BROWN}15`:"#fff",color:active?BROWN:GRAY,fontWeight:active?"700":"500",fontSize:"calc(13px*var(--fs))",cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.45:1,whiteSpace:"nowrap",fontFamily:"inherit",flexShrink:0}}>{emoji&&<span style={{marginRight:"4px"}}>{emoji}</span>}{label}</button>;
-}
-function ToggleChip({ label, active, onClick, icon, disabled, title }) {
-  return <button onClick={onClick} disabled={disabled} title={title} style={{display:"flex",alignItems:"center",gap:"5px",padding:"6px 12px",borderRadius:"8px",border:active?`1.5px solid ${BROWN}`:"1.5px solid #E2E8F0",background:active?`${BROWN}12`:"#fff",color:active?BROWN_DARK:GRAY,fontWeight:active?"700":"500",fontSize:"calc(12px*var(--fs))",cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.45:1,fontFamily:"inherit",whiteSpace:"nowrap"}}>{icon&&<span>{icon}</span>}{label}</button>;
-}
-
 // ─── MAP POPUP ─────────────────────────────────────────────────────────────
+// Words only (no emoji), the café's text escaped; the window.* bridges stay.
 function buildMapPopup(shop, index) {
-  const name    = shop.displayName?.text || shop.name || "Coffee Shop";
-  const address = shop.formattedAddress  || shop.shortFormattedAddress || "";
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  const name    = esc(shop.displayName?.text || shop.name || "Coffee Shop");
+  const address = esc(shop.formattedAddress  || shop.shortFormattedAddress || "");
   const phone   = shop.nationalPhoneNumber || shop.internationalPhoneNumber || null;
   const { isOpen, todayHours, is24Hours } = shop;
-  const parkingLine = shop.parking&&!shop.parking.noParking ? `<div style="font-size:11px;color:#64748B;margin-top:4px;">🅿️ ${shop.parking.details?.[0]?.label||'Parking available'} <span style="color:${shop.parking.source==='api'?'#2E7D32':'#E65100'};font-weight:700;">${shop.parking.source==='api'?'✅':'⚠️'}</span></div>` : '';
-  const seatingLine = (shop.hasIndoorSeating||shop.hasOutdoorSeating) ? `<div style="font-size:11px;color:#64748B;margin-top:2px;">🪑 ${[shop.hasIndoorSeating&&'Indoor',shop.hasOutdoorSeating&&'Outdoor'].filter(Boolean).join(' & ')} seating <span style="color:${shop.seatingSource==='api'?'#2E7D32':'#E65100'};font-weight:700;">${shop.seatingSource==='api'?'✅':'⚠️'}</span></div>` : '';
+  const openWord = is24Hours ? 'Open 24 hours' : isOpen===true ? 'Open' : isOpen===false ? 'Closed' : 'Hours not listed';
+  const openInk  = is24Hours||isOpen===true ? '#2E6B4E' : isOpen===false ? '#B0472F' : '#736657';
   return `
-    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:260px;position:relative;">
+    <div style="font-family:'Inter Tight',-apple-system,sans-serif;width:260px;position:relative;color:#16110D;">
       <div style="padding:12px;padding-top:14px;">
-        <div onclick="window.viewPlaceDetails&&window.viewPlaceDetails(${index})" style="font-weight:700;font-size:calc(15px*var(--fs));color:#1A2332;margin-bottom:6px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding-right:26px;">${name}</div>
-        <div style="font-size:12px;color:#64748B;margin-bottom:6px;padding:6px 8px;background:#F8FAFC;border-radius:6px;">📍 ${address}</div>
-        <div style="font-size:calc(12px*var(--fs));margin-bottom:6px;padding:6px 10px;border-radius:6px;background:${is24Hours?'#E3F2FD':isOpen===true?'#E8F5E9':isOpen===false?'#FFEBEE':'#F5F5F5'};">
-          <span style="font-weight:700;color:${is24Hours?'#1565C0':isOpen===true?'#2E7D32':isOpen===false?'#D32F2F':'#9E9E9E'};">${is24Hours?'🔄 Open 24/7':isOpen===true?'● Open':isOpen===false?'● Closed':'● Hours N/A'}</span>
-          ${todayHours&&!is24Hours?`<span style="color:#64748B;"> · ${todayHours}</span>`:''}
+        <div onclick="window.viewPlaceDetails&&window.viewPlaceDetails(${index})" style="font-family:'Instrument Serif',Georgia,serif;font-size:calc(18px*var(--fs));line-height:1.15;margin-bottom:4px;cursor:pointer;text-decoration:underline;text-decoration-color:${COF.line};text-underline-offset:3px;padding-right:26px;">${name}</div>
+        <div style="font-size:calc(11.5px*var(--fs));color:#736657;margin-bottom:6px;">${address}</div>
+        <div style="font-size:calc(12px*var(--fs));margin-bottom:6px;">
+          <span style="font-weight:600;color:${openInk};">${openWord}</span>${todayHours&&!is24Hours?`<span style="color:#736657;"> · ${esc(todayHours)}</span>`:''}
         </div>
-        ${parkingLine}${seatingLine}
-        ${phone?`<a href="tel:${phone}" style="display:flex;align-items:center;gap:8px;margin:8px 0;padding:7px 10px;background:#E3F2FD;border-radius:6px;text-decoration:none;color:#1565C0;font-size:calc(12px*var(--fs));"><span>📞</span><span style="font-weight:600;">${phone}</span></a>`:''}
-        <div style="display:flex;gap:8px;margin-top:8px;">
-          <button onclick="window.openDirectionsFromMap&&window.openDirectionsFromMap(${index})" style="flex:1;padding:9px;border:none;border-radius:8px;background:#6F4E37;color:#fff;font-weight:600;font-size:12px;cursor:pointer;">🧭 Directions</button>
-          <button onclick="window.viewPlaceDetails&&window.viewPlaceDetails(${index})" style="flex:1;padding:9px;border:none;border-radius:8px;background:#F1F5F9;color:#1A2332;font-weight:600;font-size:12px;cursor:pointer;">📋 Details</button>
+        ${phone?`<a href="tel:${esc(phone)}" style="display:inline-flex;align-items:center;min-height:32px;margin-bottom:8px;color:${COF.accentText};font-size:calc(12px*var(--fs));font-weight:600;text-decoration:underline;text-underline-offset:2px;">Call ${esc(phone)}</a>`:''}
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button onclick="window.openDirectionsFromMap&&window.openDirectionsFromMap(${index})" style="flex:1;min-height:40px;border:none;border-radius:10px;background:${COF.cta};color:${COF.ctaInk};font-weight:700;font-size:calc(12px*var(--fs));cursor:pointer;">Directions</button>
+          <button onclick="window.viewPlaceDetails&&window.viewPlaceDetails(${index})" style="flex:1;min-height:40px;border:1px solid ${COF.line};border-radius:10px;background:#fff;color:#3A3128;font-weight:600;font-size:calc(12px*var(--fs));cursor:pointer;">Details</button>
         </div>
       </div>
     </div>
@@ -502,7 +428,7 @@ export default function CoffeeFinderPage() {
   useEffect(() => { logEvent('page_view', {}, 'CoffeeFinder'); }, []);
   const [directionsShop,setDirectionsShop] = useState(null);
   const [filterSheetOpen,setFilterSheetOpen] = useState(false);
-  const [quickFilter,setQuickFilter]   = useState("all");
+  const [filterSpecialty,setFilterSpecialty]   = useState(false);
   const [sortBy,setSortBy]             = useState("nearby");
   const [filterOpenNow,setFilterOpenNow]       = useState(false);
   const [filterShopType,setFilterShopType]     = useState("all");
@@ -542,7 +468,9 @@ export default function CoffeeFinderPage() {
     setRadius(25); // fixed wide net (radius filter removed app-wide)
   }, [activeLocation?.placeId]);
 
-  const activeFilterCount = [quickFilter!=="all",filterOpenNow,filterShopType!=="all",filterWifi,filterWork,filterOutlets,filterQuiet,filterAC].filter(Boolean).length;   // quick pills count too — a pill-only empty list deserves the Clear-filters action
+  const activeFilterCount = [filterOpenNow,filterSpecialty,filterShopType!=="all",filterWifi,filterWork,filterOutlets,filterQuiet,filterAC].filter(Boolean).length;   // inline chips count too — a chip-only empty list deserves the Clear-filters action
+  // The Filters chip counts only what lives in the sheet.
+  const sheetFilterCount = [filterShopType!=="all",filterWifi,filterOutlets,filterQuiet,filterAC].filter(Boolean).length;
   const workFilterActive = filterWork||filterOutlets||filterQuiet||filterAC;
 
   // Lazily fetch work-profiles for the nearest cafes when a work filter is on.
@@ -613,7 +541,7 @@ export default function CoffeeFinderPage() {
   const hoursKnown = listBase.some(s=>typeof s.isOpen==='boolean');
   // A stale Open Now toggle would filter everything away while hours are unknown —
   // drop it (the pill is disabled meanwhile) rather than show an empty list.
-  useEffect(()=>{ if(!hoursKnown){ if(quickFilter==='open') setQuickFilter('all'); if(filterOpenNow) setFilterOpenNow(false); } },[hoursKnown]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{ if(!hoursKnown && filterOpenNow) setFilterOpenNow(false); },[hoursKnown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Batch enrich results (declared before `filtered`, which drops cafés the
   // lookup reports closed for good).
@@ -628,9 +556,9 @@ export default function CoffeeFinderPage() {
       base=within.length?within:searchMerged.slice(0,8);
     } else base=shopsWithHours;
     let r=[...base];
-    if(quickFilter==="open"&&hoursKnown) r=r.filter(s=>s.isOpen===true);
-    if(quickFilter==="specialty")    r=r.filter(s=>s.isSpecialty);
+    // Open now and Specialty combine (AND).
     if(filterOpenNow&&hoursKnown) r=r.filter(s=>s.isOpen===true);
+    if(filterSpecialty)  r=r.filter(s=>s.isSpecialty);
     if(filterWifi)          r=r.filter(s=>s.hasWifi);
     if(filterShopType==="chain")      r=r.filter(s=>s.isChain);
     if(filterShopType==="specialty")  r=r.filter(s=>s.isSpecialty);
@@ -651,7 +579,7 @@ export default function CoffeeFinderPage() {
     if(submitted) r=pinInstitutions(r);
     r=r.filter(s=>!ownedEnrich[s.id||s.placeId]?.closed); // Google says it closed for good
     return r;
-  },[ownedEnrich,shopsWithHours,searchMerged,submitted,radius,quickFilter,sortBy,filterOpenNow,hoursKnown,filterWifi,filterShopType,filterWork,filterOutlets,filterQuiet,filterAC,workProfiles]);
+  },[ownedEnrich,shopsWithHours,searchMerged,submitted,radius,filterSpecialty,sortBy,filterOpenNow,hoursKnown,filterWifi,filterShopType,filterWork,filterOutlets,filterQuiet,filterAC,workProfiles]);
 
   // ── T1.15: BATCH ENRICH VISIBLE OWNED CAFÉS ──────────────────────────────
   // Was: every owned card fired its own /places/enrich-owned on mount (one call
@@ -675,7 +603,7 @@ export default function CoffeeFinderPage() {
     })();
   },[filtered]);
 
-  const clearFilters=()=>{setFilterOpenNow(false);setFilterShopType("all");setFilterWifi(false);setFilterWork(false);setFilterOutlets(false);setFilterQuiet(false);setFilterAC(false);};
+  const clearFilters=()=>{setFilterOpenNow(false);setFilterSpecialty(false);setFilterShopType("all");setFilterWifi(false);setFilterWork(false);setFilterOutlets(false);setFilterQuiet(false);setFilterAC(false);};
 
   const runSearch=async(explicitQuery)=>{
     const query=(typeof explicitQuery==='string'?explicitQuery:q).trim(); if(!query) return;
@@ -720,17 +648,17 @@ export default function CoffeeFinderPage() {
       const userMode=activeLocation?.mode==='navigate'?'Selected location':'Current location';
       const userLabel=locationText||'';
       const userTooltipHtml=userPinExpanded
-        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsCFUserPin&&window._gsCFUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:calc(10px*var(--fs));font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:calc(12px*var(--fs));margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:calc(11px*var(--fs));margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:calc(10px*var(--fs));line-height:1.3;">${userLabel}</div></div>`
-        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsCFUserPin&&window._gsCFUserPin()"><span style="font-weight:700;color:#1A2332;font-size:calc(11px*var(--fs));">📍 You are here</span><span style="color:#64748B;font-size:calc(10px*var(--fs));font-weight:700;">⌄</span></div>`;
+        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsCFUserPin&&window._gsCFUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:calc(10px*var(--fs));font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:calc(12px*var(--fs));margin-bottom:2px;padding-right:24px;">You are here</div><div style="font-weight:700;color:#4285F4;font-size:calc(11px*var(--fs));margin-bottom:2px;">${userMode}</div><div style="color:#64748B;font-size:calc(10px*var(--fs));line-height:1.3;">${userLabel}</div></div>`
+        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsCFUserPin&&window._gsCFUserPin()"><span style="font-weight:700;color:#1A2332;font-size:calc(11px*var(--fs));">You are here</span><span style="color:#64748B;font-size:calc(10px*var(--fs));font-weight:700;">⌄</span></div>`;
       window.L.marker([lat,lng],{icon:window.L.divIcon({html:'<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',iconSize:[16,16],className:""})}).addTo(map).bindTooltip(userTooltipHtml,{permanent:true,direction:'bottom',opacity:1,offset:[0,12],className:'gs-user-tooltip',interactive:true});
       filtered.forEach((s,i)=>{
         if(!s.lat||!s.lng)return;
         const isSelected = i === selectedMapIndex;
-        const pinBg = isSelected ? "#FF6B35" : BROWN;
+        const pinBg = COF.ink;
         const pinSize = isSelected ? 36 : 28;
         const pinBorder = isSelected ? "3px solid #fff" : "2px solid #fff";
-        const pinShadow = isSelected ? "0 0 0 3px rgba(255,107,53,0.4), 0 3px 10px rgba(255,107,53,0.5)" : "0 2px 8px rgba(111,78,55,0.4)";
-        const marker = window.L.marker([s.lat,s.lng],{icon:window.L.divIcon({html:`<div style="width:${pinSize}px;height:${pinSize}px;background:${pinBg};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:${isSelected?14:12}px;box-shadow:${pinShadow};border:${pinBorder};">${i+1}</div>`,iconSize:[pinSize,pinSize],className:""})}).addTo(map).bindPopup(buildMapPopup(s,i),{maxWidth:270,autoPan:true,autoPanPaddingTopLeft:[0,160],autoPanPaddingBottomRight:[20,20],keepInView:true,className:"gs-popup"});
+        const pinShadow = isSelected ? `0 0 0 4px ${COF.star}, 0 3px 10px rgba(43,27,18,0.45)` : "0 2px 8px rgba(43,27,18,0.35)";
+        const marker = window.L.marker([s.lat,s.lng],{icon:window.L.divIcon({html:`<div style="width:${pinSize}px;height:${pinSize}px;background:${pinBg};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',Georgia,serif;font-size:${isSelected?16:14}px;box-shadow:${pinShadow};border:${pinBorder};">${i+1}</div>`,iconSize:[pinSize,pinSize],className:""})}).addTo(map).bindPopup(buildMapPopup(s,i),{maxWidth:270,autoPan:true,autoPanPaddingTopLeft:[0,160],autoPanPaddingBottomRight:[20,20],keepInView:true,className:"gs-popup"});
         if(isSelected) setTimeout(()=>marker.openPopup(),300);
       });
     };
@@ -738,148 +666,164 @@ export default function CoffeeFinderPage() {
     return()=>{delete window.mapInstance;delete window.viewPlaceDetails;delete window.openDirectionsFromMap;if(mapInstanceRef.current){mapInstanceRef.current.remove();mapInstanceRef.current=null;}};
   },[viewMode,filtered,lat,lng,selectedMapIndex,userPinExpanded,locationText,activeLocation?.mode]);
 
+  // ── THE TITLE: the part of the day where the café is ────────────────────
+  // 'Your morning|afternoon|evening cup' (5-11, 11-17, 17-5). The hour is the device
+  // clock only in current-location mode; otherwise the place's own (the first
+  // loaded row with Google's utcOffsetMinutes). No offset: 'Your next cup'. A search
+  // that names a drink: 'Your next latte'. Re-read when the app comes back.
+  const [clockTick,setClockTick]=useState(0);
+  useEffect(()=>{
+    const onVis=()=>{ if(document.visibilityState==='visible') setClockTick(t=>t+1); };
+    document.addEventListener('visibilitychange',onVis);
+    return()=>document.removeEventListener('visibilitychange',onVis);
+  },[]);
+  const searchedDrink = submitted ? drinkOfQuery(submitted) : null;
+  const plateTitle = useMemo(()=>{
+    if(searchedDrink) return { pre:'Your next ', italic:searchedDrink.word, post:'' };
+    let hour=null;
+    if(isLocal) hour=new Date().getHours();
+    else {
+      const off=[...searchShops,...shopsWithHours].map(x=>x?.utcOffsetMinutes).find(v=>Number.isFinite(v));
+      if(Number.isFinite(off)) hour=new Date(Date.now()+off*60000).getUTCHours();
+    }
+    if(hour==null) return { pre:'Your next ', italic:'cup', post:'' };
+    const part = hour>=5&&hour<11 ? 'morning' : hour>=11&&hour<17 ? 'afternoon' : 'evening';
+    return { pre:'Your ', italic:part, post:' cup' };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[searchedDrink?.word,isLocal,searchShops,shopsWithHours,clockTick]);
+
   const stats={total:filtered.length,open:filtered.filter(s=>s.isOpen===true).length,specialty:filtered.filter(s=>s.tier===1).length,withParking:filtered.filter(s=>s.parking&&!s.parking.noParking).length};
 
+  const showCount = !(!lat||!lng||loading||error);   /* stale-count rule: never show the previous location's number mid-refetch */
+  const wide25 = formatDistance(25);
   return (
-    <div className="font-sans" style={{background:IVORY,minHeight:"100vh"}}>
-      {/* HEADER — shared FinderHeader (back chevron · Coffee pill · mono count ·
-          refresh), location card + city disclaimer inside; search/filter band
-          rides along as children. The page keeps owning LocationModePicker. */}
+    <div className="font-sans" style={{background:COF.paper,minHeight:"100vh",paddingTop:12}}>
+      {/* THE PLATE + CONTROLS (Coffee.dc.html L20-71): the espresso plate with the
+          count and a title that follows the café's time of day; under it the café or
+          drink search, one chip row and the result line. */}
       <FinderHeader
-        catKey="coffee"
-        icon={CoffeeIcon}
-        title="Coffee Finder"
-        count={(!lat||!lng||loading||error)?null:stats.total}   /* stale-count rule: never show the previous location's number mid-refetch */
+        world="coffee"
+        count={showCount?stats.total:null}
+        title={plateTitle}
         onBack={()=>fromPlacesToEat ? navigate(-1) : navigate(createPageUrl("Home"))}
         onRefresh={handleRefresh}
         refreshing={loading}
         refreshTitle="Refresh coffee shops"
-        onChangeLocation={()=>setShowLocPicker(true)}
-        locationLabel={locationText}
+        location={{ label: locationText, onChange: ()=>setShowLocPicker(true) }}
+        unit={{ value: unit, onChange: setUnit }}
         isCity={isCity}
         cityName={activeLocation?.address?.city || activeLocation?.placeName}
       >
-        {/* Substats — the specialty/open/parking counts as one honest mono line */}
-        {!loading&&!error&&(stats.specialty>0||stats.open>0||stats.withParking>0)&&(
-          <div className="font-mono uppercase font-semibold" style={{fontSize:"calc(10.5px*var(--fs))",letterSpacing:"0.12em",color:"#736657",marginBottom:"8px"}}>
-            {[
-              stats.specialty>0&&`${stats.specialty} specialty`,
-              stats.open>0&&`${stats.open} open`,
-              stats.withParking>0&&`${stats.withParking} parking`,
-            ].filter(Boolean).join(" · ")}
-          </div>
-        )}
-
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"10px"}}><DistanceUnitToggle unit={unit} setUnit={setUnit} variant="light" /></div>
-
-        {/* Café / drink search */}
-        <form onSubmit={(e)=>{e.preventDefault();runSearch();}} style={{display:"flex",gap:"8px",margin:"8px 0 2px"}}>
-          <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search a café or a drink — latte, matcha, cold brew…" autoCapitalize="none" style={{flex:1,minWidth:0,padding:"11px 14px",borderRadius:"12px",border:"1.5px solid #E2E8F0",fontSize:"calc(14px*var(--fs))",fontFamily:"inherit",color:DARK,background:"#fff"}}/>
-          <button type="submit" disabled={!q.trim()||searchBusy} style={{padding:"11px 16px",borderRadius:"12px",border:"none",background:BROWN,color:"#fff",fontWeight:"700",fontSize:"calc(13px*var(--fs))",fontFamily:"inherit",cursor:"pointer",opacity:(!q.trim()||searchBusy)?0.6:1}}>{searchBusy?"…":"Search"}</button>
-          {submitted&&<button type="button" onClick={clearSearch} style={{padding:"11px 12px",borderRadius:"12px",border:"1.5px solid #E2E8F0",background:"#fff",color:GRAY,fontWeight:"700",fontSize:"calc(13px*var(--fs))",fontFamily:"inherit",cursor:"pointer"}}>✕</button>}
-        </form>
-
-        {/* Quick filters — two inline toggles; everything else lives in the sheet */}
-        <div style={{display:"flex",gap:"8px",overflowX:"auto",padding:"4px 0 8px",scrollbarWidth:"none",alignItems:"center"}}>
-          <FilterPill label="Open Now" active={quickFilter==="open"} onClick={()=>setQuickFilter(f=>f==="open"?"all":"open")} disabled={!hoursKnown} title={!hoursKnown?`Open Now ${OPEN_NOW_HINT}`:undefined}/>
-          <FilterPill label="Specialty" active={quickFilter==="specialty"} onClick={()=>setQuickFilter(f=>f==="specialty"?"all":"specialty")}/>
-          <button onClick={()=>setFilterSheetOpen(true)} style={{display:"flex",alignItems:"center",gap:"5px",padding:"7px 14px",borderRadius:"20px",border:activeFilterCount>0?`2px solid ${BROWN}`:"1.5px solid #E2E8F0",background:activeFilterCount>0?`${BROWN}15`:"#fff",color:activeFilterCount>0?BROWN:GRAY,fontWeight:activeFilterCount>0?"700":"500",fontSize:"calc(13px*var(--fs))",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",flexShrink:0}}>
-            <SlidersHorizontal size={13} strokeWidth={2}/>
-            Filters
-            {activeFilterCount>0&&<span style={{background:BROWN,color:"#fff",borderRadius:"10px",padding:"1px 7px",fontSize:"calc(11px*var(--fs))",fontWeight:"700"}}>{activeFilterCount}</span>}
-          </button>
-        </div>
-        {!hoursKnown&&listBase.length>0&&!loading&&<div style={{fontSize:"calc(11px*var(--fs))",color:GRAY,margin:"-4px 0 8px"}}>Open Now {OPEN_NOW_HINT}</div>}
+        <WorldSearch
+          world="coffee"
+          value={q}
+          onChange={setQ}
+          onSubmit={(text)=>runSearch(text)}
+          onClear={clearSearch}
+          placeholder="Search a café or a drink…"
+          label="Search a café or a drink, like latte, matcha or cold brew"
+          busy={searchBusy}
+          inputProps={{ autoCapitalize: "none" }}
+        />
+        <ChipRow label="Quick filters" style={{marginTop:10}}>
+          <WorldChip world="coffee" icon={Clock} label="Open now" active={filterOpenNow} onClick={()=>setFilterOpenNow(v=>!v)} disabled={!hoursKnown} hint={!hoursKnown?OPEN_NOW_HINT:undefined}/>
+          <WorldChip world="coffee" icon={Sparkles} label="Specialty" active={filterSpecialty} onClick={()=>setFilterSpecialty(v=>!v)}/>
+          <WorldChip world="coffee" icon={Laptop} label="Good for work" active={filterWork} onClick={()=>setFilterWork(v=>!v)}/>
+          <WorldChip world="coffee" icon={SlidersHorizontal} label="Filters" count={sheetFilterCount} opensSheet onClick={()=>setFilterSheetOpen(true)}/>
+        </ChipRow>
+        <ResultLine live items={showCount?[{count:stats.specialty,label:"specialty"},{count:stats.open,label:"open"}]:[]}/>
+        {!hoursKnown&&listBase.length>0&&!loading&&<ResultLine>{OPEN_NOW_HINT}</ResultLine>}
       </FinderHeader>
 
       {(!lat||!lng)?(
         /* T1.4: no location yet (first run, nothing restored) — a clear ask plus
-           the same picker the header "Change" opens, instead of a spinner or a
-           misleading "No matches found". */
-        <div style={{textAlign:"center",padding:"60px 20px"}}>
-          <div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px"}}>📍</div>
-          <div style={{fontWeight:"600",color:DARK,marginBottom:"8px"}}>Choose a location to search</div>
-          <div style={{fontSize:"calc(13px*var(--fs))",color:GRAY,marginBottom:"14px"}}>Use where you are now, or pick a city to plan ahead.</div>
-          <button onClick={()=>setShowLocPicker(true)} style={{padding:"11px 20px",borderRadius:"12px",border:"none",background:BROWN,color:"#fff",fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Choose location</button>
+           the same picker the plate's "Change" opens, never a spinner. */
+        <div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:16}}>
+          <FinderEmptyState world="coffee" icon={MapPin} title="Choose a location to search" reason="Use where you are now, or pick a city to plan ahead." actionLabel="Choose location" onAction={()=>setShowLocPicker(true)}/>
         </div>
       ):loading?(
-        <div style={{textAlign:"center",padding:"60px 20px"}}><div style={{fontSize:"calc(40px*var(--fs))",marginBottom:"12px",animation:"pulse 1.5s infinite"}}>☕</div><div style={{color:GRAY,fontWeight:"600"}}>Finding coffee shops...</div></div>
+        <div style={isTablet?{maxWidth:1024,margin:"0 auto",padding:"16px 24px 0"}:{padding:"16px 16px 0"}}>
+          <WorldSkeleton world="coffee" variant="card" count={isTablet?4:2} label="Finding coffee shops…"/>
+        </div>
       ):error?(
-        <div style={{padding:"24px 16px 100px"}}>
-          <FinderEmptyState catKey="coffee" icon={CoffeeIcon} title="Couldn't load coffee shops" reason={error} actionLabel="Try again" onAction={handleRefresh}/>
+        <div className={`px-4 ${colWrap} mx-auto`} style={{paddingTop:16}}>
+          <FinderEmptyState world="coffee" icon={CoffeeIcon} title="Couldn't load coffee shops" reason={error} actionLabel="Try again" onAction={handleRefresh} secondaryLabel="Search somewhere else" onSecondary={()=>setShowLocPicker(true)}/>
         </div>
       ):viewMode==="list"?(
         <div style={isTablet
-          ? {maxWidth:1024,margin:"0 auto",padding:"0 24px 170px",display:"flex",flexDirection:"column",gap:"30px"}
-          : {width:"100%",padding:"0 12px 100px",display:"flex",flexDirection:"column",gap:"16px"}}>
-          {submitted&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"-4px 0 2px"}}><span style={{fontSize:"calc(16px*var(--fs))"}}>☕</span><span style={{fontWeight:"800",fontSize:"calc(14px*var(--fs))",color:DARK}}>Caf&eacute;s matching &ldquo;{submitted}&rdquo;</span><span style={{fontSize:"calc(12px*var(--fs))",color:GRAY}}>({filtered.length})</span></div>}
+          ? {maxWidth:1024,margin:"0 auto",padding:"16px 24px 0",display:"flex",flexDirection:"column",gap:"16px"}
+          : {width:"100%",padding:"16px 16px 0",display:"flex",flexDirection:"column",gap:"12px"}}>
+          {submitted&&(
+            <ResultLine>{`Cafés matching “${submitted}” · ${filtered.length}`}</ResultLine>
+          )}
           {filtered.length===0?(
             (searchBusy||workBusy)?(
-              <div style={{textAlign:"center",padding:"40px 20px",background:"#fff",borderRadius:"12px"}}><div style={{fontSize:"calc(32px*var(--fs))",marginBottom:"10px",animation:"pulse 1.5s infinite"}}>☕</div><div style={{fontWeight:"600",color:GRAY}}>{workBusy?"Checking cafés for work-friendliness…":"Searching cafés…"}</div></div>
+              <ResultLine live>{workBusy?"Checking cafés for work-friendliness…":"Searching cafés…"}</ResultLine>
             ):(
             <FinderEmptyState
-              catKey="coffee"
+              world="coffee"
               icon={CoffeeIcon}
-              title={submitted?`No cafés for "${submitted}"`:"No cafés match"}
-              reason={submitted?"Try a different drink or café name, or search another spot":activeFilterCount>0?"Nothing within 25 miles matches these filters":"Nothing found within 25 miles of this location"}
+              title={submitted?`No cafés for “${submitted}”`:"No cafés match"}
+              reason={submitted?"Try a different drink or café name, or search another spot.":activeFilterCount>0?`Nothing within ${wide25} matches these filters.`:`Nothing found within ${wide25} of this location.`}
               actionLabel="Search somewhere else"
               onAction={()=>setShowLocPicker(true)}
               secondaryLabel={activeFilterCount>0?"Clear filters":submitted?"Clear search":undefined}
               onSecondary={activeFilterCount>0?clearFilters:submitted?clearSearch:undefined}
             />
             )
-          ):filtered.map((shop,i)=>{
-            const Card = CoffeeCardTablet;
-            return (
-            <div key={shop.id||i} ref={el=>cardRefs.current[i]=el}><Card shop={shop} index={i} onShowOnMap={handleShowOnMap} userLat={lat} userLng={lng} formatDistance={formatDistance} isTablet={isTablet} isLocal={isLocal} onHours={handleCardHours} batchEnrich={ownedEnrich[shop.id||shop.placeId]}/></div>
-          );})}
+          ):(
+            <ol aria-label="Coffee shops" style={worldGrid(isTablet)}>
+              {filtered.map((shop,i)=>(
+                <CoffeeCard key={shop.id||i} cardRef={el=>{cardRefs.current[i]=el;}} shop={shop} index={i} onShowOnMap={handleShowOnMap} userLat={lat} userLng={lng}
+                  formatDistance={formatDistance} isLocal={isLocal} onHours={handleCardHours} batchEnrich={ownedEnrich[shop.id||shop.placeId]} searchedKey={searchedDrink?.key||null}/>
+              ))}
+            </ol>
+          )}
         </div>
       ):(
         <div style={{position:"relative"}}>
           <div ref={mapRef} style={{height:"calc(100vh - 260px)",width:"100%"}}/>
-          <button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"40px",height:"40px",border:"none",boxShadow:"0 2px 8px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(20px*var(--fs))",color:DARK}}>✕</button>
+          <button type="button" onClick={()=>setViewMode("list")} aria-label="Close the map" style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"12px",zIndex:1200,background:"#fff",borderRadius:"50%",width:44,height:44,border:`1px solid ${COF.line}`,boxShadow:"0 2px 8px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:COF.ink}}><X size={20} strokeWidth={2} aria-hidden="true"/></button>
         </div>
       )}
 
-      {/* FILTER SHEET — WiFi / shop type / good-for-working moved off the inline band */}
-      <FilterSheet open={filterSheetOpen} onClose={()=>setFilterSheetOpen(false)} title="Coffee filters" onClear={activeFilterCount>0?clearFilters:undefined}>
+      {/* FILTER SHEET — shop type, Wi-Fi and the work details. Open now, Specialty
+          and Good for work live in the chip row. */}
+      <FilterSheet world="coffee" open={filterSheetOpen} onClose={()=>setFilterSheetOpen(false)} title="Coffee filters" onClear={sheetFilterCount>0?()=>{setFilterShopType("all");setFilterWifi(false);setFilterOutlets(false);setFilterQuiet(false);setFilterAC(false);}:undefined}>
         <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
           <div>
-            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Status</div>
-            <ToggleChip label="Open Now" active={filterOpenNow} onClick={()=>setFilterOpenNow(!filterOpenNow)} disabled={!hoursKnown} title={!hoursKnown?`Open Now ${OPEN_NOW_HINT}`:undefined}/>
+            <FilterGroupLabel>Shop type</FilterGroupLabel>
+            <ChipRow wrap>
+              {[{v:"all",l:"All"},{v:"specialty",l:"Specialty only"},{v:"chain",l:"Chains only"}].map(({v,l})=><WorldChip key={v} world="coffee" label={l} active={filterShopType===v} clearable={false} onClick={()=>setFilterShopType(v)}/>)}
+            </ChipRow>
           </div>
           <div>
-            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Shop Type</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-              {[{v:"all",l:"All"},{v:"specialty",l:"Specialty Only"},{v:"chain",l:"Chains Only"}].map(({v,l})=><ToggleChip key={v} label={l} active={filterShopType===v} onClick={()=>setFilterShopType(v)}/>)}
-            </div>
+            <FilterGroupLabel>Wi-Fi</FilterGroupLabel>
+            <ChipRow wrap>
+              <WorldChip world="coffee" label="Has Wi-Fi" active={filterWifi} onClick={()=>setFilterWifi(!filterWifi)}/>
+            </ChipRow>
           </div>
           <div>
-            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>WiFi</div>
-            <ToggleChip label="Has WiFi" active={filterWifi} onClick={()=>setFilterWifi(!filterWifi)}/>
+            <FilterGroupLabel>Working</FilterGroupLabel>
+            <ChipRow wrap>
+              <WorldChip world="coffee" label="Outlets" active={filterOutlets} onClick={()=>setFilterOutlets(!filterOutlets)}/>
+              <WorldChip world="coffee" label="Quiet" active={filterQuiet} onClick={()=>setFilterQuiet(!filterQuiet)}/>
+              <WorldChip world="coffee" label="Air conditioning" active={filterAC} onClick={()=>setFilterAC(!filterAC)}/>
+            </ChipRow>
+            <div style={{fontSize:fs(12),color:"#736657",marginTop:6,lineHeight:1.4}}>Estimated from customer reviews{workBusy?" · checking cafés…":""}. Call ahead to confirm.</div>
           </div>
-          <div>
-            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"8px"}}>Good for working</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
-              <ToggleChip label="Good for work" active={filterWork} onClick={()=>setFilterWork(!filterWork)}/>
-              <ToggleChip label="Outlets" active={filterOutlets} onClick={()=>setFilterOutlets(!filterOutlets)}/>
-              <ToggleChip label="Quiet" active={filterQuiet} onClick={()=>setFilterQuiet(!filterQuiet)}/>
-              <ToggleChip label="A/C" active={filterAC} onClick={()=>setFilterAC(!filterAC)}/>
-            </div>
-            <div style={{fontSize:"calc(10.5px*var(--fs))",color:GRAY,marginTop:"6px",lineHeight:1.4}}>Estimated from customer reviews{workBusy?" · checking cafés…":""} — call ahead to confirm.</div>
-          </div>
-          {/* Trust legend — glosses the ✅/⚠️ badges the cards themselves render */}
-          <div style={{padding:"10px 12px",background:"#fff",borderRadius:"8px",border:"1px solid #E8EDF2"}}>
-            <div style={{fontSize:"calc(11px*var(--fs))",fontWeight:"700",color:GRAY,marginBottom:"6px"}}>DATA TRUST GUIDE</div>
-            <div style={{fontSize:"calc(11px*var(--fs))",color:DARK,lineHeight:"1.7"}}>
-              <div>✅ <strong>Google confirmed</strong> — from Google Places API (reliable)</div>
-              <div>⚠️ <strong>Mentioned in reviews</strong> — customer-reported, may have changed</div>
-              <div style={{marginTop:"4px",color:GRAY}}>For critical needs (accessibility, event-day parking), always call ahead.</div>
+          {/* The trust words the cards' More panel uses, glossed in plain words. */}
+          <div style={{padding:"12px 14px",background:COF.wash,borderRadius:12}}>
+            <div className="font-mono uppercase" style={{fontSize:fs(10.5),letterSpacing:".12em",color:COF.washInk,marginBottom:4}}>How sure we are</div>
+            <div style={{fontSize:fs(13),lineHeight:1.5,color:COF.washInk}}>
+              <div><strong>Confirmed by Google</strong>: from the café&rsquo;s Google listing.</div>
+              <div><strong>Mentioned in reviews</strong>: what customers report, which may have changed.</div>
+              <div style={{marginTop:4}}>For anything critical, like accessibility or event-day parking, call ahead.</div>
             </div>
           </div>
         </div>
       </FilterSheet>
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:12px;padding:0;overflow:hidden}.gs-popup .leaflet-popup-content{margin:0}`}</style>
+      <style>{`::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:12px;padding:0;overflow:hidden}.gs-popup .leaflet-popup-content{margin:0}`}</style>
       <LocationModePicker isOpen={showLocPicker} onClose={()=>setShowLocPicker(false)}/>
       <MapAppSelector
         isOpen={!!directionsShop}

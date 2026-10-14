@@ -1,97 +1,86 @@
 /**
- * CafeWorkProfileSection — collapsible "💻 GOOD FOR WORKING" panel for coffee
- * cards. Lazy-fetches a review-derived work-friendliness profile (wifi, power
- * outlets, work tables, AC, seating comfort, noise) via
- * base44.functions.invoke('getCafeWorkProfile') → Worker /cafe-work-profile,
- * which is cached permanently in D1 (pay Haiku once per cafe, ever). Honest by
- * design: anything the reviews don't mention shows as omitted/unknown, with a
- * "based on reviews" disclaimer.
+ * CafeWorkProfileSection — the "Good for working" row on coffee cards (the new look:
+ * Coffee.dc.html L95, in the world's copper). A 44px row with a lucide Laptop:
+ *   - when reviews already mention work things (`reported`: words like 'Wi-Fi',
+ *     'outlets', 'quiet'), it says "Good for working: Wi-Fi, outlets (from reviews)";
+ *   - otherwise "Good for working?" with "Tap to check".
+ * Tapping opens the review-derived work profile (wifi, power outlets, work tables, AC,
+ * seating comfort, noise), lazy-fetched from the Worker's /cafe-work-profile, which is
+ * cached permanently in D1 (pay Haiku once per café, ever). Honest by design: anything
+ * the reviews don't mention is left out, in words and never emoji, with a "based on
+ * customer reviews" line. A chain's assumed Wi-Fi is never passed in as `reported`.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
+import { ChevronDown, Laptop } from 'lucide-react';
 import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { logEvent } from '@/lib/analytics';
-
-const TEAL = '#0E7C73';
-const GRAY = '#64748B';
-const DARK = '#1A2332';
-const BG = '#ECFEFF';
-const BORDER = '#A5F3EF';
-const SHIMMER = '#CFFAFE';
+import { NEUTRAL, fs, worldOf } from '@/components/redesign/constants';
 
 const VERDICT = {
-  great:     { icon: '💻', label: 'Great for working',   color: '#065F46', bg: '#D1FAE5' },
-  ok:        { icon: '👍', label: 'OK for working',       color: '#1E40AF', bg: '#DBEAFE' },
-  not_ideal: { icon: '🙅', label: 'Not ideal for work',   color: '#9A3412', bg: '#FFEDD5' },
-  unknown:   { icon: '🤷', label: 'Not enough info yet',  color: '#475569', bg: '#F1F5F9' },
+  great:     'Great for working',
+  ok:        'OK for working',
+  not_ideal: 'Not ideal for work',
+  unknown:   'Not enough information yet',
 };
-const STATUS_ICON = { yes: '✅', limited: '🟡', no: '❌', unknown: '·' };
-const PILL = { fontSize: '11px', color: '#475569', background: '#fff', border: '1px solid #E2E8F0', padding: '2px 8px', borderRadius: '6px' };
+const STATUS_WORD = { yes: 'yes', limited: 'limited', no: 'no' };
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-function Chip({ icon, label, status, note }) {
-  if (!status || status === 'unknown') return null;
+function Fact({ label, status, note }) {
+  if (!status || !STATUS_WORD[status]) return null;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', color: DARK, marginBottom: '4px' }}>
-      <span>{STATUS_ICON[status] || '·'}</span>
-      <span style={{ fontWeight: '600' }}>{icon} {label}</span>
-      {note ? <span style={{ color: GRAY }}>— {note}</span> : null}
+    <div style={{ fontSize: fs(13), lineHeight: 1.5, color: NEUTRAL.ink2 }}>
+      <span style={{ fontWeight: 600, color: NEUTRAL.ink }}>{label}:</span> {STATUS_WORD[status]}
+      {note ? <span style={{ color: NEUTRAL.ink3 }}> ({note})</span> : null}
     </div>
   );
 }
 
-function Body({ loading, error, d }) {
+function Body({ loading, error, d, w }) {
   if (loading) {
     return (
-      <div>
-        {[80, 66, 72].map((w, i) => (
-          <div key={i} style={{ height: '12px', width: `${w}%`, background: `linear-gradient(90deg,${SHIMMER} 0%,${BORDER} 50%,${SHIMMER} 100%)`, backgroundSize: '200% 100%', borderRadius: '4px', marginBottom: '8px', animation: 'gsShimmer 1.2s ease-in-out infinite' }} />
+      <div aria-hidden="true">
+        {[80, 66, 72].map((pct, i) => (
+          <div key={i} style={{ height: 12, width: `${pct}%`, background: w.wash, borderRadius: 4, marginBottom: 8 }} />
         ))}
-        <style>{`@keyframes gsShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
       </div>
     );
   }
-  if (error) return <div style={{ fontSize: '12px', color: '#B91C1C' }}>Couldn't load work info. {error}</div>;
+  if (error) return <div style={{ fontSize: fs(13), color: NEUTRAL.stamp }}>Couldn&rsquo;t load the work details. Try again in a moment.</div>;
   if (!d) return null;
 
-  const v = VERDICT[d.laptopFriendly] || VERDICT.unknown;
-  const anyChip = ['wifi', 'outlets', 'tables', 'ac'].some((k) => d[k]?.status && d[k].status !== 'unknown');
+  const verdict = VERDICT[d.laptopFriendly] || VERDICT.unknown;
+  const extras = [
+    d.seatingComfort && d.seatingComfort !== 'unknown' ? `${cap(d.seatingComfort)} seating` : null,
+    d.noise && d.noise !== 'unknown' ? cap(d.noise) : null,
+    d.bestForWork ? `Best time: ${d.bestForWork}` : null,
+  ].filter(Boolean);
 
   return (
-    <div>
-      <div style={{ marginBottom: '10px' }}>
-        <span style={{ display: 'inline-block', fontSize: '12px', fontWeight: '700', padding: '3px 10px', background: v.bg, color: v.color, borderRadius: '9999px' }}>
-          {v.icon} {v.label}
-        </span>
-      </div>
-      {d.summary && <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK, marginBottom: '10px' }}>{d.summary}</div>}
-      {anyChip && (
-        <div style={{ marginBottom: '8px' }}>
-          <Chip icon="📶" label="WiFi" status={d.wifi?.status} note={d.wifi?.note} />
-          <Chip icon="🔌" label="Outlets" status={d.outlets?.status} note={d.outlets?.note} />
-          <Chip icon="🪑" label="Work tables" status={d.tables?.status} note={d.tables?.note} />
-          <Chip icon="❄️" label="Air conditioning" status={d.ac?.status} note={d.ac?.note} />
-        </div>
-      )}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
-        {d.seatingComfort && d.seatingComfort !== 'unknown' && <span style={PILL}>🛋️ {cap(d.seatingComfort)} seating</span>}
-        {d.noise && d.noise !== 'unknown' && <span style={PILL}>🔉 {cap(d.noise)}</span>}
-        {d.bestForWork && <span style={PILL}>⏰ Best: {d.bestForWork}</span>}
-      </div>
-      <div style={{ fontSize: '10.5px', color: GRAY, fontStyle: 'italic' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div className="font-mono uppercase" style={{ fontSize: fs(10.5), letterSpacing: '.12em', color: w.iconInk }}>{verdict}</div>
+      {d.summary && <div style={{ fontSize: fs(13.5), lineHeight: 1.5, color: NEUTRAL.ink2 }}>{d.summary}</div>}
+      <Fact label="Wi-Fi" status={d.wifi?.status} note={d.wifi?.note} />
+      <Fact label="Outlets" status={d.outlets?.status} note={d.outlets?.note} />
+      <Fact label="Work tables" status={d.tables?.status} note={d.tables?.note} />
+      <Fact label="Air conditioning" status={d.ac?.status} note={d.ac?.note} />
+      {extras.length > 0 && <div style={{ fontSize: fs(13), color: NEUTRAL.ink2 }}>{extras.join(' · ')}</div>}
+      <div style={{ fontSize: fs(12), color: NEUTRAL.ink3 }}>
         {d.laptopFriendly === 'unknown'
-          ? "Not enough reviews mention working here yet."
-          : 'Based on customer reviews — call ahead to confirm.'}
+          ? 'Not enough reviews mention working here yet.'
+          : 'Based on customer reviews. Call ahead to confirm.'}
       </div>
     </div>
   );
 }
 
-export default function CafeWorkProfileSection({ placeId, placeName, lat, lng, page = 'CoffeeFinder' }) {
+export default function CafeWorkProfileSection({ placeId, placeName, lat, lng, page = 'CoffeeFinder', world = 'coffee', reported = [] }) {
+  const w = (world && typeof world === 'object' ? world : worldOf(world)) || worldOf('coffee');
   const [open, setOpen] = useState(false);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const bodyId = useId();
 
   const onToggle = () => {
     const next = !open;
@@ -116,13 +105,36 @@ export default function CafeWorkProfileSection({ placeId, placeName, lat, lng, p
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, placeId]);
 
+  const words = Array.isArray(reported) ? reported.filter(Boolean) : [];
+  const fromProfile = data && (data.laptopFriendly === 'great' || data.laptopFriendly === 'ok');
+
   return (
-    <div style={{ padding: '12px 14px', background: BG, borderRadius: '10px', border: `1px solid ${BORDER}` }}>
-      <button onClick={onToggle} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
-        <span style={{ fontSize: '11px', fontWeight: '700', color: TEAL, letterSpacing: '0.5px' }}>💻 GOOD FOR WORKING</span>
-        <span style={{ fontSize: '11px', color: TEAL }}>{open ? '▲' : '▼'}</span>
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={bodyId}
+        className="flex items-center w-full text-left"
+        style={{ gap: 8, minHeight: 44, padding: 0, background: 'transparent', border: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: fs(13), lineHeight: 1.35, color: NEUTRAL.ink2 }}
+      >
+        <Laptop size={16} color={w.iconInk} strokeWidth={2} aria-hidden="true" style={{ flex: 'none' }} />
+        <span className="flex-1 min-w-0">
+          {words.length > 0 ? (
+            <>Good for working: {words.join(', ')} <span style={{ color: NEUTRAL.ink3 }}>(from reviews)</span></>
+          ) : fromProfile ? (
+            <>Good for working <span style={{ color: NEUTRAL.ink3 }}>(from reviews)</span></>
+          ) : (
+            <>Good for working? <span style={{ color: w.iconInk, fontWeight: 600 }}>Tap to check</span></>
+          )}
+        </span>
+        <ChevronDown size={16} color={w.iconInk} strokeWidth={2} aria-hidden="true" style={{ flex: 'none', transform: open ? 'rotate(180deg)' : 'none' }} />
       </button>
-      {open && <div style={{ marginTop: '10px' }}><Body loading={loading} error={error} d={data} /></div>}
+      {open && (
+        <div id={bodyId} style={{ padding: '12px 14px', marginTop: 4, background: NEUTRAL.white, border: `1px solid ${w.line}`, borderRadius: 12 }}>
+          <Body loading={loading} error={error} d={data} w={w} />
+        </div>
+      )}
     </div>
   );
 }
