@@ -19,7 +19,7 @@ import SuggestPlaceSection from "../components/home/SuggestPlaceSection";
 import AllServicesSheet from "../components/home/AllServicesSheet";
 import PassportHero from "../components/home/PassportHero";
 import { getTravelMode } from "@/lib/homeContext";
-import { TEAL_DEEP, IVORY, IVORY_2 } from "../components/redesign/constants";
+import { TEAL_DEEP, IVORY, IVORY_2, NEUTRAL, fs } from "../components/redesign/constants";
 import { useAuth } from "@/lib/AuthContext";
 import { extractFirstName } from "@/lib/extractFirstName";
 import { isLocationPermissionGranted } from "@/lib/geolocation";
@@ -28,7 +28,6 @@ import { listPassport } from "@/lib/passport";
 import AirportArrivalPrompt from "@/components/AirportArrivalPrompt";
 import BorderCrossingPrompt from "@/components/BorderCrossingPrompt";
 import { ROUTE } from "@/lib/workerRoutes";
-import FontScaleButton from "@/components/a11y/FontScaleButton";
 import { countryCode } from "@/lib/countries";
 import { homeTimezoneForCountry } from "@/lib/homePlace";
 import { useIsTablet } from "@/lib/useIsTablet";
@@ -103,6 +102,25 @@ let coldOpenAsked = false;
 // (profile.welcome_splash_count) — see AuthContext.bumpWelcomeSplashCount.
 const WELCOME_MAX = 10;
 
+// Times and dates in a place's own timezone (the lobby, its clock rows and the iPad layout).
+function formatLocalTime(date, tz) {
+  if (!tz) return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  try {
+    return date.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true });
+  } catch {
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  }
+}
+
+function formatLocalDate(date, tz) {
+  if (!tz) return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
+  try {
+    return date.toLocaleDateString('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: '2-digit' });
+  } catch {
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
+  }
+}
+
 export default function HomePage() {
   const navigate = useNavigate();
   const { locationMode, selectedLocation, currentGpsLocation, getActiveLocation, getCurrentLocation, switchToCurrentLocation, loading: locationLoading } = useLocation();
@@ -112,7 +130,6 @@ export default function HomePage() {
   const isTablet = useIsTablet();
 
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [localGreeting, setLocalGreeting] = useState(null);
   const [weatherInfo, setWeatherInfo] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -352,10 +369,10 @@ export default function HomePage() {
           activeLocation.placeName || activeLocation.address?.city
         );
       }
-      setLoading(false);
     } catch (error) {
+      // AuthGate handles auth — never bounce to Base44 login. The lobby has already
+      // painted; the temperature just doesn't appear.
       console.error("Error loading user or weather:", error);
-      setLoading(false); // AuthGate handles auth — never bounce to Base44 login
     }
   };
 
@@ -441,24 +458,6 @@ export default function HomePage() {
     return "Traveler";
   };
 
-  const formatLocalTime = (date, tz) => {
-    if (!tz) return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    try {
-      return date.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true });
-    } catch (e) {
-      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    }
-  };
-
-  const formatLocalDate = (date, tz) => {
-    if (!tz) return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
-    try {
-      return date.toLocaleDateString('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: '2-digit' });
-    } catch (e) {
-      return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
-    }
-  };
-
   const handleQuickAction = (actionLabel) => {
     trackEvent('feature_used', { feature_name: actionLabel.toLowerCase().replace(/\s+/g, '_') });
     const routes = {
@@ -524,19 +523,9 @@ export default function HomePage() {
 
   const toggleTempUnit = () => setTempUnit((prev) => (prev === 'C' ? 'F' : 'C'));
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: IVORY }}>
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-          className="w-16 h-16 border-4 rounded-full"
-          style={{ borderColor: TEAL_DEEP, borderTopColor: 'transparent' }}
-        />
-      </div>
-    );
-  }
-
+  // No full-page spinner: the lobby paints at once from the profile, and the
+  // temperature, flag and clock rows appear when their data arrives (the weather
+  // call alone can take up to its 25 s timeout).
   const activeLocation = getActiveLocation();
   // Greeting headline uses the CITY of the selected location, not its full
   // place name. For an airport like "Mactan-Cebu International Airport
@@ -559,16 +548,16 @@ export default function HomePage() {
     || activeLocation?.address?.region
     || cleanPlaceName(activeLocation?.placeName)
     || '';
-  // Location chip below the greeting keeps the full place name so the user
-  // can confirm exactly which location they're on. When the GPS pin has
-  // no real label (offshore, mid-ocean, brand-new GPS lock before
-  // geocode completes), show "Detecting your location…" instead of
-  // "Set location" — the user IS at a location, we just don't have a
-  // name yet, and the prior "Set location" copy implied the user had to
-  // do something.
-  const placeText = cleanPlaceName(activeLocation?.placeName)
-    || activeLocation?.address?.city
-    || (activeLocation?.coordinates ? 'Detecting your location…' : 'Set location');
+  // The lobby's location pill keeps the full place name so you can confirm
+  // exactly where you are. While LocationContext is still loading it says
+  // "Finding you…"; a GPS fix with no name yet (offshore, or a fresh lock before
+  // the reverse geocode) says "Current location", never a truncated
+  // "Detecting your locati…"; no place at all says "Set location".
+  const placeText = locationLoading
+    ? 'Finding you…'
+    : (cleanPlaceName(activeLocation?.placeName)
+      || activeLocation?.address?.city
+      || (activeLocation?.coordinates ? 'Current location' : 'Set location'));
 
   // Home-country flag: active when the Show Home Country Flag toggle is on and
   // the home country resolves to a flag. iPad fills its greeting card with the
@@ -578,28 +567,15 @@ export default function HomePage() {
   const homeFlagUrl = homeFlagCode ? `https://flagcdn.com/w640/${homeFlagCode}.png` : null;
   const homeFlagBadgeUrl = homeFlagCode ? `https://flagcdn.com/h80/${homeFlagCode}.png` : null;
   const flagActive = !!(showHomeFlag && homeFlagUrl);
-  // Phone badge: sized to the serif name, scaled with the font setting, seated on
-  // the text baseline. A hairline drop-shadow edge follows the flag's own shape
-  // (no empty box around Nepal's pennant) and keeps white-field flags (Japan,
-  // South Korea) visible on the ivory masthead. A failed image load hides itself
-  // instead of a broken glyph (keyed by URL so a later country change remounts it).
-  const flagBadge = flagActive && homeFlagBadgeUrl ? (
-    <img
-      key={homeFlagBadgeUrl}
-      src={homeFlagBadgeUrl}
-      alt={`${profile?.home_country || 'Home country'} flag`}
-      className="inline-block align-baseline mx-1 rounded-[3px]"
-      style={{ height: 'calc(15px * var(--fs))', width: 'auto', filter: 'drop-shadow(0 0 0.5px rgba(22,17,13,.6))' }}
-      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-    />
-  ) : null;
+  // The lobby's badge beside the name (HomeLobby draws it).
+  const lobbyFlag = flagActive && homeFlagBadgeUrl ? { url: homeFlagBadgeUrl, country: profile?.home_country || '' } : null;
 
-  // Clock info. The hero shows the SELECTED/active place; these add where you
+  // Clock info. The lobby shows the SELECTED/active place; these add where you
   // physically are (only when you've navigated away) and your home (when
-  // toggled). Only rows whose timezone differs from the hero — and from each
-  // other — are kept, so nothing repeats. On the phone these FOLD into
-  // masthead line 2 as plain text (no emoji); the `icon` field survives only
-  // for HomeTablet, whose clockRows contract is unchanged.
+  // toggled). Only rows whose timezone differs from the lobby's — and from each
+  // other — are kept, so nothing repeats. clockSources feeds the phone lobby's
+  // third line (it formats the times on its own tick); the `icon` field
+  // survives only for HomeTablet, whose clockRows contract is unchanged.
   const activeTz = timezone;
   const rawClockRows = [];
   if (physicalTz && physicalTz !== activeTz) {
@@ -609,8 +585,8 @@ export default function HomePage() {
     rawClockRows.push({ key: 'home', icon: '🏠', label: homeCountryInfo.label || homeCountryInfo.country, tz: homeCountryInfo.timezone, temp: homeCountryWeather });
   }
   const _seenTz = new Set();
-  const clockRows = rawClockRows
-    .filter((r) => (_seenTz.has(r.tz) ? false : (_seenTz.add(r.tz), true)))
+  const clockSources = rawClockRows.filter((r) => (_seenTz.has(r.tz) ? false : (_seenTz.add(r.tz), true)));
+  const clockRows = clockSources
     .map((r) => ({
       key: r.key,
       icon: r.icon,
@@ -663,101 +639,21 @@ export default function HomePage() {
         />
       ) : (
       <>
-      {/* PHONE — editorial Home (Phase-1a-lite): greeting header → clock stack →
-          Smart-Search spine → finder chip row (+ All-services sheet) → the
-          journey-ordered Discover stack. Single max-w-md column. Presentation
-          only — every handler / data field below is reused exactly as the
-          tablet layout consumes it (tablet converges later). */}
-      {/* COMPACT HERO HEADER ----------------------------------------------
-          Replaces the 330px flag greeting card: one serif greeting line with
-          the glasses kept on the right, then a date · temp · location row.
-          No fixed height, no flag layers (the home flag, when toggled on, is
-          a small badge beside the name) — the search bar now sits well
-          within the first viewport. Every handler/data field below is the
-          card's, just reflowed. */}
-      <div className="px-4 pt-2 pb-3">
-        <div className="max-w-md mx-auto">
-          {/* LINE 1 — mono "Hello" kicker (no wave — emoji-free masthead; the
-              local-language greeting word stays) flowing into the serif name
-              (italic) and "in {city}" (regular serif) as one wrappable line;
-              the quiet mono passport line (→ Passport) and FontScaleButton
-              share the far right. */}
-          <div className="flex items-start justify-between gap-2">
-            <p className="flex-1 min-w-0 leading-snug">
-              <span className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))]" style={{ color: '#736657' }}>Hello</span>
-              {localGreeting && (
-                <span className="font-serif italic text-[calc(14px*var(--fs))]" style={{ color: TEAL_DEEP }}>
-                  {' '}{localGreeting.charAt(0).toUpperCase() + localGreeting.slice(1)}
-                </span>
-              )}
-              {getFirstName() && (
-                <span className="font-serif italic text-[calc(22px*var(--fs))]" style={{ color: TEAL_DEEP }}>
-                  {/* nowrap keeps the flag on the name's line, so a wrap can never
-                      strand it before "in {city}" as if it were that city's (an
-                      inline-block still let it drop to a line of its own at larger
-                      text sizes). */}
-                  {' '}<span className="whitespace-nowrap">{getFirstName()}{flagBadge}</span>
-                </span>
-              )}
-              {cityName && (
-                <span className="font-serif text-[calc(22px*var(--fs))]">
-                  <span style={{ color: '#3A3128' }}> in </span>
-                  <span style={{ color: '#16110D' }}>{cityName}</span>
-                </span>
-              )}
-            </p>
-            <div className="flex-none flex items-center gap-2">
-              {/* Quiet mono passport line — a real count or the plain arrow,
-                  never a fake number and never a bare "0". */}
-              <button
-                onClick={() => handleQuickAction('Passport')}
-                className="font-mono uppercase tracking-[0.08em] text-[calc(10.5px*var(--fs))] whitespace-nowrap"
-                style={{ color: '#736657' }}
-                aria-label="Open your passport"
-              >
-                {passportTotal ? `PASSPORT · ${passportTotal}` : 'PASSPORT →'}
-              </button>
-              <FontScaleButton />
-            </div>
-          </div>
-
-          {/* LINE 2 — date · temp toggle (plain "72°F" text, °C/°F on tap —
-              the Cloud glyph is gone) · the clock stack's surviving info folded
-              in as muted "{place} {time}" segments (emoji-free; rows whose
-              timezone matches the hero were already dropped upstream; folded
-              rows drop their date for compactness — the time carries the
-              signal) · location pill ("Change" opens LocationModePicker).
-              MASTHEAD IS HARD-CAPPED AT 2 LINES: no flex-wrap — long segments
-              truncate instead of reflowing. */}
-          <div className="mt-2 flex items-center gap-x-2">
-            <div className="flex items-center gap-1.5 min-w-0 text-[calc(12px*var(--fs))] font-medium" style={{ color: '#3A3128' }}>
-              <span className="whitespace-nowrap flex-none">{formatLocalDate(currentTime, timezone)}</span>
-              {weatherInfo && Number.isFinite(weatherInfo.celsius) && Number.isFinite(weatherInfo.fahrenheit) && (
-                <>
-                  <span className="flex-none" style={{ opacity: 0.4 }}>·</span>
-                  <button onClick={toggleTempUnit} className="whitespace-nowrap flex-none">
-                    {tempUnit === 'C' ? `${weatherInfo.celsius}°C` : `${weatherInfo.fahrenheit}°F`}
-                  </button>
-                </>
-              )}
-              {clockRows.map((r) => (
-                <span key={r.key} className="truncate min-w-0" style={{ color: '#8A93A6' }}>
-                  {'· '}{r.label} {r.timeText}{r.tempText ? ` ${r.tempText}` : ''}
-                </span>
-              ))}
-            </div>
-            <button
-              onClick={() => setShowLocationPicker(true)}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 flex-none max-w-[55%] min-w-0"
-              style={{ background: '#F7F4EC' }}
-            >
-              <MapPin size={14} color={TEAL_DEEP} strokeWidth={2} className="flex-none" />
-              <span className="text-[calc(11.5px*var(--fs))] font-semibold truncate" style={{ color: '#16110D' }}>{placeText}</span>
-              <span className="text-[calc(10.5px*var(--fs))] underline underline-offset-2 flex-none" style={{ color: TEAL_DEEP }}>Change</span>
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* PHONE — the lobby (Home-Boxes L29-51): hello and the name, the date,
+          temperature and location pill, any extra clocks, then the search bar.
+          It paints at once; HomeLobby owns the 1 s clock. */}
+      <HomeLobby
+        firstName={getFirstName()}
+        localGreeting={localGreeting}
+        flag={lobbyFlag}
+        weatherInfo={weatherInfo}
+        tempUnit={tempUnit}
+        onToggleTemp={toggleTempUnit}
+        timezone={timezone}
+        placeText={placeText}
+        onChangeLocation={() => setShowLocationPicker(true)}
+        clockSources={clockSources}
+      />
 
       {/* SMART-SEARCH SPINE — one search that routes into the right world.
           Briefly removed 2026-10-06, restored 2026-10-07 once the audit's four
@@ -864,6 +760,113 @@ export default function HomePage() {
       {/* Arrival stamps — airport (domestic + international) + land/boat border crossings */}
       {profile?.onboarding_completed && !showWelcome && <AirportArrivalPrompt />}
       {profile?.onboarding_completed && !showWelcome && <BorderCrossingPrompt />}
+    </div>
+  );
+}
+
+// ── HomeLobby — the top of Home (Home-Boxes L29-51) ────────────────────────
+// Line 1: mono HELLO, the local greeting word, the name in teal serif italic and
+// the home-country flag. Line 2: the date, the temperature (tap for °C/°F) and the
+// location pill. Line 3, only when there is one: the extra clocks (where you are,
+// your home). Owns the 1 s tick so the rest of Home doesn't re-render every
+// second. Everything wraps at large text sizes instead of clipping.
+const DOT = <span aria-hidden="true" style={{ color: NEUTRAL.ink3 }}>·</span>;
+
+function HomeLobby({ firstName, localGreeting, flag, weatherInfo, tempUnit, onToggleTemp, timezone, placeText, onChangeLocation, clockSources }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const temp = weatherInfo && Number.isFinite(weatherInfo.celsius) && Number.isFinite(weatherInfo.fahrenheit) ? weatherInfo : null;
+  const tempText = temp ? (tempUnit === 'C' ? `${temp.celsius}°C` : `${temp.fahrenheit}°F`) : '';
+  const tempLabel = temp
+    ? (tempUnit === 'C'
+      ? `${temp.celsius} degrees Celsius. Switch to Fahrenheit`
+      : `${temp.fahrenheit} degrees Fahrenheit. Switch to Celsius`)
+    : '';
+  const greeting = localGreeting ? localGreeting.charAt(0).toUpperCase() + localGreeting.slice(1) : '';
+  const placeLabel = placeText === 'Finding you…'
+    ? 'Finding your location. Change location'
+    : `Location: ${placeText}. Change location`;
+  const clocks = (clockSources || []).map((r) => {
+    const t = r.temp ? (tempUnit === 'C' ? ` ${r.temp.celsius}°C` : ` ${r.temp.fahrenheit}°F`) : '';
+    return { key: r.key, text: `${r.label} ${formatLocalTime(now, r.tz)}${t}` };
+  });
+
+  return (
+    <div className="px-4 pt-3">
+      <div className="max-w-md mx-auto md:max-w-[720px]">
+        {/* LINE 1 */}
+        <p className="m-0 flex flex-wrap items-baseline" style={{ columnGap: 8, minHeight: 28 }}>
+          <span className="font-mono uppercase" style={{ fontSize: fs(10.5), letterSpacing: '.12em', color: NEUTRAL.ink3 }}>Hello</span>
+          {greeting && (
+            <span className="font-serif italic" style={{ fontSize: fs(14), color: NEUTRAL.brandTeal }}>{greeting}</span>
+          )}
+          {firstName && (
+            <span className="font-serif italic" style={{ fontSize: fs(24), lineHeight: '28px', color: NEUTRAL.brandTeal, overflowWrap: 'anywhere' }}>{firstName}</span>
+          )}
+          {flag && (
+            // A hairline drop-shadow follows the flag's own shape (no box around
+            // Nepal's pennant) and keeps white-field flags visible on the ivory.
+            // A failed load hides itself; keyed by URL so a new country remounts it.
+            <img
+              key={flag.url}
+              src={flag.url}
+              alt={flag.country ? `Home country: ${flag.country}` : 'Home country flag'}
+              className="self-center rounded-[3px]"
+              style={{ height: fs(15), width: 'auto', filter: 'drop-shadow(0 0 0.5px rgba(22,17,13,.6))' }}
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          )}
+        </p>
+
+        {/* LINE 2 */}
+        <div className="flex items-center justify-between" style={{ gap: 10, minHeight: 28, marginTop: 4 }}>
+          <div className="flex flex-wrap items-center min-w-0" style={{ columnGap: 6, fontSize: fs(12), fontWeight: 500, lineHeight: '16px', color: NEUTRAL.ink2 }}>
+            <span className="whitespace-nowrap">{formatLocalDate(now, timezone)}</span>
+            {temp && (
+              <>
+                {DOT}
+                <button
+                  type="button"
+                  onClick={onToggleTemp}
+                  aria-label={tempLabel}
+                  className="whitespace-nowrap"
+                  // A 44px target around a short "16°C": the padding widens it and the
+                  // matching negative margin keeps the text where the board puts it.
+                  style={{ height: 44, minWidth: 44, margin: '-8px -10px', padding: '0 10px', background: 'transparent', border: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
+                >
+                  {tempText}
+                </button>
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onChangeLocation}
+            aria-label={placeLabel}
+            className="flex items-center min-w-0"
+            style={{ flex: '0 1 auto', maxWidth: '62%', height: 44, margin: '-8px 0', padding: 0, background: 'transparent', border: 0, cursor: 'pointer' }}
+          >
+            <span className="inline-flex items-center min-w-0 rounded-full" style={{ gap: 6, minHeight: 28, padding: '0 12px 0 10px', background: NEUTRAL.ivory2 }}>
+              <MapPin size={14} color={NEUTRAL.brandTeal} strokeWidth={2} aria-hidden="true" className="flex-none" />
+              <span className="truncate" style={{ fontSize: fs(11.5), fontWeight: 600, lineHeight: 1.2, color: NEUTRAL.ink }}>{placeText}</span>
+              <span className="flex-none underline" style={{ fontSize: fs(10.5), lineHeight: 1.2, color: NEUTRAL.tealInk, textUnderlineOffset: 2 }}>Change</span>
+            </span>
+          </button>
+        </div>
+
+        {/* LINE 3 — the extra clocks, only when there are any */}
+        {clocks.length > 0 && (
+          <p className="m-0 flex flex-wrap" style={{ columnGap: 6, marginTop: 2, fontSize: fs(12), lineHeight: '16px', color: NEUTRAL.ink3 }}>
+            {clocks.map((c, i) => (
+              <span key={c.key} className="whitespace-nowrap">{i > 0 ? '· ' : ''}{c.text}</span>
+            ))}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
