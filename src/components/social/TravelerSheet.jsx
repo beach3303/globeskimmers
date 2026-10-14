@@ -62,10 +62,15 @@ export default function TravelerSheet({ person, list: listProp = null, report = 
   const target = list ? blockTarget(who, list) : null;
   const loading = !list;
 
+  // The person's @handle or id, as a report or block note names them.
+  const byWho = who.handle ? `@${who.handle}` : who.user_id ? `user:${who.user_id}` : null;
   const doBlock = async () => {
     if (!target || busy) return;
     setBusy(true); setErr(null);
-    const { ok, error } = await blockTraveler(target);
+    // A block files a safety record for our team too (Apple 1.2): it carries
+    // what the person was looking at, the same note a Report from here sends.
+    const note = [report?.note, byWho ? `(by ${byWho})` : null].filter(Boolean).join(" ").slice(0, 480);
+    const { ok, error } = await blockTraveler(note ? { ...target, note } : target);
     setBusy(false);
     if (!ok) { setErr(error); return; }
     showToast(`${name} is blocked`, "success");
@@ -96,7 +101,7 @@ export default function TravelerSheet({ person, list: listProp = null, report = 
     if (busy) return;
     // The person by default; a caller adds what it is about (a postcard, an
     // entry…). When the ref points at the thing, the note still names the person.
-    const by = who.handle ? `@${who.handle}` : who.user_id ? `user:${who.user_id}` : null;
+    const by = byWho;
     const r = { kind: "profile", ref: by, ...(report || {}) };
     const note = [r.note, by && r.ref !== by ? `(by ${by})` : null].filter(Boolean).join(" ");
     setBusy(true); setErr(null);

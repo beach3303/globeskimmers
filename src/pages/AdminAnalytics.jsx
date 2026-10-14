@@ -1371,11 +1371,11 @@ export default function AdminAnalytics() {
 
             <PlaceSuggestionsDesk refreshKey={generatedAt} />
 
-            <Section title={`🛡️ Safety reports — ${reports.rows.length} open`} icon={Mail} empty={reports.error ? `Couldn't load reports: ${reports.error}` : reports.rows.length === 0 ? 'No open reports. Shared-passport reports land here; a child-safety reason gets 24h triage.' : null}>
+            <Section title={`🛡️ Safety reports — ${reports.rows.length} open`} icon={Mail} empty={reports.error ? `Couldn't load reports: ${reports.error}` : reports.rows.length === 0 ? 'No open reports. Every report from the app lands here, and so does every block (with what the person was looking at). Each one also rings your phone; a child-safety report gets 24h triage.' : null}>
               {reports.rows.map((r) => (
                 <div key={r.id} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border || '#eee'}` }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', fontSize: 13 }}>
-                    <span style={{ fontWeight: 700, color: r.reason === 'minor_safety' ? '#B0472F' : COLORS.dark, textTransform: 'uppercase', fontSize: 11, letterSpacing: '.06em' }}>{r.reason === 'minor_safety' ? '⚠️ CHILD SAFETY — 24H' : r.reason}</span>
+                    <span style={{ fontWeight: 700, color: r.reason === 'minor_safety' ? '#B0472F' : COLORS.dark, textTransform: 'uppercase', fontSize: 11, letterSpacing: '.06em' }}>{r.reason === 'minor_safety' ? '⚠️ CHILD SAFETY — 24H' : r.kind === 'block' ? '🚫 A block' : r.reason}</span>
                     <span style={{ color: COLORS.gray, fontSize: 12 }}>{r.kind}{r.subject_slug ? ` · /p/${r.subject_slug}` : ''}{r.ref ? ` · ${r.ref}` : ''}</span>
                     <span style={{ color: COLORS.gray, marginLeft: 'auto', fontSize: 12 }}>{String(r.created_at || '').slice(0, 16).replace('T', ' ')}</span>
                   </div>
