@@ -1,34 +1,31 @@
 /**
- * AtmAIDetails — ATM Finder "🤖 AI DETAILS" panel.
+ * AtmAIDetails: the "AI details" disclosure on ATM cards (the new look, plan S11 detail 5;
+ * Carbon Copy).
  *
- * FORK of AIDetailsSection.jsx (Phase A2 of the ATM redesign).
- * ATM-only renderer; PlacesToEat / Coffee / Restroom keep using the
- * shared AIDetailsSection.jsx. Forked so the ATM layout (Card
- * Compatibility, Fees, Withdrawal Calculator, Limits, Location, Safety)
- * can evolve without touching the restaurant flow.
+ * A fork of AIDetailsSection.jsx for ATMs: PlacesToEat, Coffee and Restrooms keep their
+ * own panels, so the ATM layout (card compatibility, fees, the withdrawal calculator,
+ * limits, location, safety) can evolve without touching theirs.
  *
- * Phase A2 scope: presentation restructure ONLY.
- *   - Still calls the existing getAIDetails Base44 function with
- *     kind='atm'. Consumes the v7 shared JSON shape today.
- *   - ATM-specific sections (Card Compatibility, Fees, Withdrawal
- *     Limits, Location Context, Safety) render as "call to confirm"
- *     stubs in this phase since the shared prompt doesn't generate
- *     that data yet.
- *   - The Withdrawal Calculator slot is a placeholder anchor — Phase
- *     A4 wires it to live exchange rates + primary_banking_currency.
- *   - Best ATM Nearby ranking (section 8 of the spec) is intentionally
- *     OUT of this component — it belongs on the ATMFinder list view,
- *     scheduled for Phase A5.
+ * Look: a quiet row (Sparkles in the world's icon ink, 'AI details', aria-expanded and
+ * aria-controls); the body opens under it on white with the world line. Mono labels in
+ * carbon, plain words, lucide icons; the worth tiers stepped by lightness and said in
+ * words; where each fact comes from as mono text; every size on fs() and every control a
+ * 44px target. No lilac, no emoji (flags included). `world`: a WORLD row or key (ATMs'
+ * Carbon Copy by default).
  *
- * Honesty rules in render:
- *   - Each fact carries a source-tier stamp.
- *   - "Call to confirm" stamps are interactive: tap opens the venue's
- *     website (when known) in a new tab.
- *   - Sections with no data are silently absent rather than filled with
- *     fluff — per the same handoff honesty principle as the Things-To-Do
- *     redesign.
+ * Data (unchanged): /atm-ai-details (cardCompatibility, atmOperatorFee, withdrawalLimits,
+ * locationContext, safety, verifiedFacts, _sources), fetched on the first open; the
+ * calculator reads live rates from /exchange-rate and the traveler's
+ * primary_banking_currency.
+ *
+ * Honesty rules: each fact says where it comes from; "call to confirm" opens the ATM's
+ * website (in the in-app browser) when there is one; a section with no data is absent,
+ * not filled; the calculator says when the operator fee isn't confirmed.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
+import {
+  BookOpen, Check, CreditCard, Flag, Globe, Landmark, Sparkles, Star, TriangleAlert, X,
+} from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { legacyUser } from '@/lib/legacyUser';
 import { supabase } from '@/lib/supabaseClient';
@@ -36,20 +33,24 @@ import { callWorker } from '@/lib/callWorker';
 import { ROUTE } from '@/lib/workerRoutes';
 import { logEvent } from '@/lib/analytics';
 import { openPartner } from '@/lib/openPartner';
+import { SOURCE_META, makeSourceFor } from '@/lib/sourceMeta';
+import { NEUTRAL, fs } from '@/components/redesign/constants';
+import { worldRow } from '@/components/finder/FinderControls';
+import { QuietRow, QuietPanel } from '@/components/finder/FinderCard';
 
-// Palette — matches AIDetailsSection / AttractionAIDetails so the panel
-// reads consistently across the app.
-const DARK = '#1A2332';
-const GRAY = '#64748B';
-const GRAY_DEEP = '#475569';
-const PURPLE = '#6D28D9';
-const PURPLE_LIGHT = '#DDD6FE';
-const PURPLE_BG = '#F5F3FF';
-const PURPLE_SHIMMER = '#EDE9FE';
-const DIVIDER = '#E5E7EB';
+/** @typedef {import('react').CSSProperties} CSS */
 
-// Shared key with the restaurant + attraction panels so the one-time
-// GS-Verdict subtitle explainer is shown to a given user at most once.
+const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
+
+/**
+ * A style object that may carry CSS custom properties (--w-wash).
+ * @param {Record<string, any>} o
+ * @returns {CSS}
+ */
+const css = (o) => o;
+
+// One key shared with the restaurant and attraction panels: the GS verdict subtitle is
+// shown to a traveler at most once.
 const GS_VERDICT_HELPER_KEY = 'gs_verdict_helper_seen';
 function readVerdictHelperSeen() {
   try { return localStorage.getItem(GS_VERDICT_HELPER_KEY) === '1'; }
@@ -59,108 +60,83 @@ function markVerdictHelperSeen() {
   try { localStorage.setItem(GS_VERDICT_HELPER_KEY, '1'); } catch { /* ignore */ }
 }
 
-// Source-tier stamp palette — one entry per tier the Worker's /atm-ai-details
-// `_sources` map can return. 'estimated' is pattern-based model output, so it
-// is labelled as an AI estimate — never as review-derived (honest UX).
-const STAMP_STYLES = {
-  verified:  { label: 'Verified',           bg: '#DCFCE7', color: '#166534' },
-  confirmed: { label: 'operator-confirmed', bg: '#DCFCE7', color: '#166534' },
-  reported:  { label: 'reported',           bg: '#E0E7FF', color: '#3730A3' },
-  reviews:   { label: 'from reviews',       bg: '#FEF3C7', color: '#92400E' },
-  estimated: { label: 'AI estimate',        bg: '#FEF3C7', color: '#92400E' },
-  call:      { label: 'call to confirm',    bg: '#DBEAFE', color: '#1E40AF' },
-};
+// The panel's shared type, in the world's colours.
+const styles = (w) => ({
+  /** @type {CSS} */
+  label: { display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', marginBottom: 6, fontFamily: MONO, fontSize: fs(10.5), lineHeight: 1.34, fontWeight: 500, letterSpacing: '.12em', textTransform: 'uppercase', color: w.ink },
+  /** @type {CSS} */
+  body: { fontSize: fs(13), lineHeight: 1.5, color: NEUTRAL.ink },
+  /** @type {CSS} */
+  box: { background: NEUTRAL.white, border: `1px solid ${w.line}`, borderRadius: 12, padding: '10px 12px' },
+});
 
-function SourceStamp({ tier, onClick }) {
-  const s = STAMP_STYLES[tier];
+// Where a fact comes from, as mono text: Verified in the open green, the rest muted;
+// "call to confirm" is a 44px link to the ATM's website when there is one.
+function SourceStamp({ tier, onClick = null, w }) {
+  const s = SOURCE_META[tier];
   if (!s) return null;
-  const interactive = tier === 'call' && typeof onClick === 'function';
-  return (
-    <span
-      onClick={interactive ? onClick : undefined}
-      role={interactive ? 'button' : undefined}
-      tabIndex={interactive ? 0 : undefined}
-      style={{
-        display: 'inline-block',
-        fontSize: '10px',
-        fontWeight: '600',
-        padding: '1px 6px',
-        background: s.bg,
-        color: s.color,
-        borderRadius: '4px',
-        marginLeft: '6px',
-        cursor: interactive ? 'pointer' : 'default',
-        textDecoration: interactive ? 'underline dotted' : 'none',
-        verticalAlign: 'middle',
-      }}
-    >
-      {s.label}
-    </span>
-  );
+  /** @type {CSS} */
+  const word = { marginLeft: 8, fontFamily: MONO, fontSize: fs(10), fontWeight: 500, letterSpacing: '.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' };
+  if (tier === 'call' && typeof onClick === 'function') {
+    return (
+      <button type="button" onClick={onClick}
+        style={{ ...word, display: 'inline-flex', alignItems: 'center', minHeight: 44, margin: '-14px 0 -14px 8px', padding: 0, background: 'transparent', border: 0, color: w.ink, textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer', verticalAlign: 'baseline' }}>
+        {s.label}
+      </button>
+    );
+  }
+  const sure = tier === 'verified' || tier === 'confirmed';
+  return <span style={{ ...word, color: sure ? NEUTRAL.open : NEUTRAL.ink3 }}>{s.label}</span>;
 }
 
-// Worth-It badge palette — same 5-tier vocabulary as the restaurant and
-// attraction panels so the brand stays consistent. The Worker decides
-// which tier suits a given ATM (Phase A3 will tune the prompt's mapping
-// for ATM-specific signals: bank-branch + 24/7 + low-fee → worth_the_stop,
-// outdoor + unknown-network → know_before_you_go, etc.).
-const WORTH_LABELS = {
-  worth_the_stop:       { icon: '💎', label: 'Top-Tier ATM',         bg: '#DCFCE7', color: '#166534' },
-  strong_nearby_pick:   { icon: '✅', label: 'Solid Nearby ATM',     bg: '#DBEAFE', color: '#1E40AF' },
-  craving_match:        { icon: '🏦', label: 'Specialist (Bank ATM)', bg: '#FCE7F3', color: '#9D174D' },
-  know_before_you_go:   { icon: '⚠️', label: 'Know Before You Go',   bg: '#FEF3C7', color: '#92400E' },
-  better_if_convenient: { icon: '↪️', label: 'Better If Convenient', bg: '#F1F5F9', color: '#475569' },
+// The worth tiers, stepped by lightness so they read without colour: solid, wash,
+// outline, dashed (a caution, in stamp red) and plain. The words carry the meaning.
+const WORTH = {
+  worth_the_stop:       { label: 'Top-tier ATM',          step: 'solid' },
+  strong_nearby_pick:   { label: 'Solid nearby ATM',      step: 'wash' },
+  craving_match:        { label: 'Specialist (bank ATM)', step: 'outline' },
+  know_before_you_go:   { label: 'Know before you go',    step: 'caution' },
+  better_if_convenient: { label: 'Better if convenient',  step: 'plain' },
 };
+function worthStyle(step, w) {
+  switch (step) {
+    case 'solid': return { background: w.ink, color: NEUTRAL.white, border: `1px solid ${w.ink}` };
+    case 'wash': return { background: w.wash, color: w.washInk, border: `1px solid ${w.wash}` };
+    case 'outline': return { background: NEUTRAL.white, color: w.ink, border: `1px solid ${w.ink}` };
+    case 'caution': return { background: NEUTRAL.white, color: NEUTRAL.stamp, border: `1px dashed ${NEUTRAL.stamp}` };
+    default: return { background: 'transparent', color: NEUTRAL.ink2, border: `1px solid ${w.line}` };
+  }
+}
 
-// Currencies for the Withdrawal Calculator picker. Top travel currencies
-// — small enough to scroll without a search box. Spec says nationality
-// is NOT a proxy for banking currency; the user picks both sides
-// explicitly (defaulting to their primary_banking_currency from Settings).
+// Currencies for the calculator's pickers: the top travel currencies, short enough to
+// scroll without a search. Nationality is never a proxy for the banking currency; the
+// traveler picks both sides (the first defaults to their primary_banking_currency).
 const CALC_CURRENCIES = [
-  { code: 'USD', name: 'US Dollar',           flag: '🇺🇸' },
-  { code: 'EUR', name: 'Euro',                flag: '🇪🇺' },
-  { code: 'GBP', name: 'British Pound',       flag: '🇬🇧' },
-  { code: 'JPY', name: 'Japanese Yen',        flag: '🇯🇵' },
-  { code: 'AUD', name: 'Australian Dollar',   flag: '🇦🇺' },
-  { code: 'CAD', name: 'Canadian Dollar',     flag: '🇨🇦' },
-  { code: 'CHF', name: 'Swiss Franc',         flag: '🇨🇭' },
-  { code: 'SGD', name: 'Singapore Dollar',    flag: '🇸🇬' },
-  { code: 'HKD', name: 'Hong Kong Dollar',    flag: '🇭🇰' },
-  { code: 'NZD', name: 'New Zealand Dollar',  flag: '🇳🇿' },
-  { code: 'THB', name: 'Thai Baht',           flag: '🇹🇭' },
-  { code: 'PHP', name: 'Philippine Peso',     flag: '🇵🇭' },
-  { code: 'IDR', name: 'Indonesian Rupiah',   flag: '🇮🇩' },
-  { code: 'MYR', name: 'Malaysian Ringgit',   flag: '🇲🇾' },
-  { code: 'VND', name: 'Vietnamese Dong',     flag: '🇻🇳' },
-  { code: 'CNY', name: 'Chinese Yuan',        flag: '🇨🇳' },
-  { code: 'KRW', name: 'South Korean Won',    flag: '🇰🇷' },
-  { code: 'INR', name: 'Indian Rupee',        flag: '🇮🇳' },
-  { code: 'MXN', name: 'Mexican Peso',        flag: '🇲🇽' },
-  { code: 'BRL', name: 'Brazilian Real',      flag: '🇧🇷' },
-  { code: 'AED', name: 'UAE Dirham',          flag: '🇦🇪' },
-  { code: 'TRY', name: 'Turkish Lira',        flag: '🇹🇷' },
-  { code: 'ZAR', name: 'South African Rand',  flag: '🇿🇦' },
+  { code: 'USD', name: 'US Dollar' }, { code: 'EUR', name: 'Euro' }, { code: 'GBP', name: 'British Pound' },
+  { code: 'JPY', name: 'Japanese Yen' }, { code: 'AUD', name: 'Australian Dollar' }, { code: 'CAD', name: 'Canadian Dollar' },
+  { code: 'CHF', name: 'Swiss Franc' }, { code: 'SGD', name: 'Singapore Dollar' }, { code: 'HKD', name: 'Hong Kong Dollar' },
+  { code: 'NZD', name: 'New Zealand Dollar' }, { code: 'THB', name: 'Thai Baht' }, { code: 'PHP', name: 'Philippine Peso' },
+  { code: 'IDR', name: 'Indonesian Rupiah' }, { code: 'MYR', name: 'Malaysian Ringgit' }, { code: 'VND', name: 'Vietnamese Dong' },
+  { code: 'CNY', name: 'Chinese Yuan' }, { code: 'KRW', name: 'South Korean Won' }, { code: 'INR', name: 'Indian Rupee' },
+  { code: 'MXN', name: 'Mexican Peso' }, { code: 'BRL', name: 'Brazilian Real' }, { code: 'AED', name: 'UAE Dirham' },
+  { code: 'TRY', name: 'Turkish Lira' }, { code: 'ZAR', name: 'South African Rand' },
 ];
 
-const CALC_SAMPLE_TIERS = [50, 100, 200, 500, 1000];  // "Withdraw From"-currency amounts. ATM Max appended dynamically when known.
+const CALC_SAMPLE_TIERS = [50, 100, 200, 500, 1000]; // amounts in the "withdraw from" currency; the ATM's max is added when known
 
-// Card networks we recognize. Phase A3 will populate
-// details.cardCompatibility with an array of these (with confidence per
-// network). For now we render a stub row of all 9 marked "unknown" so
-// the user can see the section's shape.
+// The card networks we recognize (details.cardCompatibility names them).
 const CARD_NETWORKS = [
-  { key: 'visa',         label: 'Visa' },
-  { key: 'mastercard',   label: 'Mastercard' },
-  { key: 'plus',         label: 'Plus' },
-  { key: 'cirrus',       label: 'Cirrus' },
-  { key: 'maestro',      label: 'Maestro' },
-  { key: 'unionpay',     label: 'UnionPay' },
-  { key: 'jcb',          label: 'JCB' },
-  { key: 'discover',     label: 'Discover' },
-  { key: 'amex',         label: 'American Express' },
+  { key: 'visa', label: 'Visa' }, { key: 'mastercard', label: 'Mastercard' }, { key: 'plus', label: 'Plus' },
+  { key: 'cirrus', label: 'Cirrus' }, { key: 'maestro', label: 'Maestro' }, { key: 'unionpay', label: 'UnionPay' },
+  { key: 'jcb', label: 'JCB' }, { key: 'discover', label: 'Discover' }, { key: 'amex', label: 'American Express' },
 ];
 
-export default function AtmAIDetails({ placeId, placeName, page }) {
+/**
+ * @param {{ placeId?: string, placeName?: string, page?: string, world?: any }} props
+ */
+export default function AtmAIDetails({ placeId, placeName, page, world = 'atm' }) {
+  const w = worldRow(world);
+  const bodyId = useId();
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -171,9 +147,8 @@ export default function AtmAIDetails({ placeId, placeName, page }) {
     const next = !open;
     setOpen(next);
     if (next) {
-      // variant='atm_v2' (A3) — switched to dedicated /atm-ai-details
-      // endpoint with richer ATM schema. Same event name so the existing
-      // ATM analytics queries keep working through the version bump.
+      // variant 'atm_v2': the dedicated /atm-ai-details endpoint; the same event name
+      // keeps the ATM analytics queries working.
       logEvent('ai_details_opened', {
         placeId, placeName, kind: 'atm', variant: 'atm_v2',
       }, page || 'ATMFinder');
@@ -187,11 +162,6 @@ export default function AtmAIDetails({ placeId, placeName, page }) {
     if (!placeId) return;
     setLoading(true);
     setError(null);
-    // Phase A3: dedicated /atm-ai-details endpoint that returns the
-    // richer ATM schema (cardCompatibility, atmOperatorFee, withdrawalLimits,
-    // locationContext, safety, dccWarning, verifiedFacts, _sources).
-    // Same ai_details_fetched event name so the existing ATM analytics
-    // queries (atm_ai_details_paid_by_day_14d etc.) keep working.
     callWorker(ROUTE.getAtmAIDetails, { placeId })
       .then(({ data }) => {
         if (data?.error) {
@@ -214,120 +184,100 @@ export default function AtmAIDetails({ placeId, placeName, page }) {
   }, [open, placeId]);
 
   return (
-    <div style={{ padding: '12px 14px', background: PURPLE_BG, borderRadius: '10px', border: `1px solid ${PURPLE_LIGHT}` }}>
-      <button
-        onClick={onToggle}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}
-      >
-        <span style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.5px' }}>🤖 AI DETAILS</span>
-        <span style={{ fontSize: '11px', color: PURPLE }}>{open ? '▲' : '▼'}</span>
-      </button>
-      {open && (
-        <div style={{ marginTop: '10px' }}>
-          <Body loading={loading} error={error} details={details} showVerdictHelper={showVerdictHelper} />
-        </div>
-      )}
-    </div>
+    <>
+      <QuietRow world={w} icon={Sparkles} expanded={open} controls={bodyId} onClick={onToggle}>
+        AI details
+      </QuietRow>
+      <QuietPanel world={w} id={bodyId} order={2} hidden={!open} style={{ padding: '14px 16px' }}>
+        {open ? <Body loading={loading} error={error} details={details} showVerdictHelper={showVerdictHelper} w={w} /> : null}
+      </QuietPanel>
+    </>
   );
 }
 
-function Body({ loading, error, details, showVerdictHelper }) {
-  if (loading) return <Shimmer />;
-  if (error) return <div style={{ fontSize: '12px', color: '#B91C1C' }}>AI Details unavailable right now. {error}</div>;
+function Body({ loading, error, details, showVerdictHelper, w }) {
+  if (loading) {
+    return (
+      <div role="status" aria-label="Loading AI details" style={css({ display: 'flex', flexDirection: 'column', gap: 8, '--w-wash': w.wash })}>
+        {[88, 72, 80, 66, 75].map((pct, i) => (
+          <span key={i} className="gs-shimmer" aria-hidden="true" style={{ display: 'block', height: 12, width: `${pct}%`, borderRadius: 4 }} />
+        ))}
+      </div>
+    );
+  }
+  if (error) return <div role="alert" style={{ fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.stamp }}>AI details unavailable right now. {error}</div>;
   if (!details) return null;
 
   const websiteUri = details.websiteUri || null;
   const callConfirm = websiteUri ? () => openPartner(websiteUri) : null;
-
-  // The Worker tags each field's provenance in _sources. Anything it did NOT
-  // tag (older cache entries, fields the model left unmarked) is still
-  // model-written copy, so default to 'estimated' ("AI estimate") — only the
-  // Worker may claim a field came "from reviews".
-  const sourcesMap = (details && typeof details._sources === 'object' && details._sources) || {};
-  const sourceFor = (key, fallback = 'estimated') => sourcesMap[key] || fallback;
+  // Any field the Worker didn't tag is model-written: an AI estimate.
+  const sourceFor = makeSourceFor(details);
+  const host = websiteUri ? websiteUri.replace(/^https?:\/\//, '').replace(/\/$/, '') : null;
 
   return (
     <div>
-      <ZoneVerdict details={details} showVerdictHelper={showVerdictHelper} sourceFor={sourceFor} />
-      <ZoneCalculator details={details} />
-      <ZoneFees details={details} callConfirm={callConfirm} sourceFor={sourceFor} />
-      <ZoneCardCompatibility details={details} callConfirm={callConfirm} sourceFor={sourceFor} />
-      <ZoneLimits details={details} callConfirm={callConfirm} sourceFor={sourceFor} />
-      <ZoneLocation details={details} sourceFor={sourceFor} />
-      <ZoneSafety details={details} callConfirm={callConfirm} sourceFor={sourceFor} />
-      <DepthMore details={details} sourceFor={sourceFor} />
-      {websiteUri && (
-        <div style={{ marginTop: '12px', fontSize: '12px', color: GRAY }}>
+      <ZoneVerdict details={details} showVerdictHelper={showVerdictHelper} sourceFor={sourceFor} w={w} />
+      <ZoneCalculator details={details} w={w} />
+      <ZoneFees details={details} callConfirm={callConfirm} sourceFor={sourceFor} w={w} />
+      <ZoneCardCompatibility details={details} callConfirm={callConfirm} sourceFor={sourceFor} w={w} />
+      <ZoneLimits details={details} callConfirm={callConfirm} sourceFor={sourceFor} w={w} />
+      <ZoneLocation details={details} sourceFor={sourceFor} w={w} />
+      <ZoneSafety details={details} callConfirm={callConfirm} sourceFor={sourceFor} w={w} />
+      <DepthMore details={details} sourceFor={sourceFor} w={w} />
+      {host && (
+        <p style={{ margin: '12px 0 0', fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.ink3 }}>
           For more information, visit{' '}
-          <a href={websiteUri} target="_blank" rel="noopener noreferrer" style={{ color: PURPLE, textDecoration: 'underline' }}>
-            {websiteUri.replace(/^https?:\/\//, '').replace(/\/$/, '')}
-          </a>
-        </div>
+          <button type="button" onClick={() => openPartner(websiteUri)}
+            style={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, margin: '-14px 0', padding: 0, background: 'transparent', border: 0, fontFamily: 'inherit', fontSize: 'inherit', color: w.ink, textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer', overflowWrap: 'anywhere', textAlign: 'left' }}>
+            {host}
+          </button>
+        </p>
       )}
     </div>
   );
 }
 
-function Shimmer() {
-  return (
-    <div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {[88, 72, 80, 66, 75].map((w, i) => (
-          <div
-            key={i}
-            style={{
-              height: '12px',
-              width: `${w}%`,
-              background: `linear-gradient(90deg,${PURPLE_SHIMMER} 0%,${PURPLE_LIGHT} 50%,${PURPLE_SHIMMER} 100%)`,
-              backgroundSize: '200% 100%',
-              borderRadius: '4px',
-              animation: 'gsShimmer 1.2s ease-in-out infinite',
-            }}
-          />
-        ))}
-      </div>
-      <style>{`@keyframes gsShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
-    </div>
-  );
-}
-
 // ============================================================================
-// Section 1 — GS VERDICT
+// GS verdict
 // ============================================================================
 
-function ZoneVerdict({ details, showVerdictHelper, sourceFor }) {
-  const worthTag = details.worthIt && WORTH_LABELS[details.worthIt];
-  const hasVerdict = (details.gsStars != null || details.gsRedFlag || details.gsVerdict || worthTag);
+function ZoneVerdict({ details, showVerdictHelper, sourceFor, w }) {
+  const st = styles(w);
+  const worth = details.worthIt && WORTH[details.worthIt];
+  const stars = Math.min(5, Math.max(0, Math.round(Number(details.gsStars) || 0)));
+  const hasVerdict = (details.gsStars != null || details.gsRedFlag || details.gsVerdict || worth);
   if (!hasVerdict) return null;
   return (
-    <div style={{ marginBottom: '12px', paddingBottom: '10px', borderBottom: `1px solid ${PURPLE_LIGHT}` }}>
-      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: showVerdictHelper ? '2px' : '6px' }}>💯 GS VERDICT</div>
+    <div style={{ marginBottom: 12, paddingBottom: 10, borderBottom: `1px solid ${w.line}` }}>
+      <div style={{ ...st.label, marginBottom: showVerdictHelper ? 2 : 6 }}>GS verdict</div>
       {showVerdictHelper && (
-        <div style={{ fontSize: '11px', color: GRAY, fontStyle: 'italic', marginBottom: '8px' }}>
-          Globeskimmers' traveler-fit take on this ATM.
+        <div style={{ fontSize: fs(12), color: NEUTRAL.ink3, fontStyle: 'italic', marginBottom: 8 }}>
+          Globeskimmers&rsquo; traveler-fit take on this ATM.
         </div>
       )}
-      {worthTag && (
-        <div style={{ marginBottom: '8px' }}>
-          <span style={{
-            display: 'inline-block', fontSize: '12px', fontWeight: '600',
-            padding: '3px 10px', background: worthTag.bg, color: worthTag.color, borderRadius: '9999px',
-          }}>
-            {worthTag.icon} {worthTag.label}
+      {worth && (
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', minHeight: 24, boxSizing: 'border-box', padding: '2px 10px', borderRadius: 999, fontSize: fs(12), fontWeight: 600, ...worthStyle(worth.step, w) }}>
+            {worth.label}
           </span>
         </div>
       )}
-      {(details.gsStars != null && details.gsStars > 0) || details.gsRedFlag ? (
-        <div style={{ fontSize: '13px', marginBottom: '4px' }}>
-          {details.gsRedFlag
-            ? <strong>🚩</strong>
-            : <strong style={{ letterSpacing: '1px' }}>{'⭐'.repeat(Math.min(5, Math.max(0, details.gsStars)))}</strong>}
+      {details.gsRedFlag ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, fontSize: fs(13), fontWeight: 600, color: NEUTRAL.stamp }}>
+          <Flag size={14} color={NEUTRAL.stamp} strokeWidth={2} aria-hidden="true" focusable="false" />
+          Red flag
+        </div>
+      ) : stars > 0 ? (
+        <div role="img" aria-label={`${stars} out of 5`} style={{ display: 'flex', alignItems: 'center', gap: 2, marginBottom: 4 }}>
+          {Array.from({ length: stars }, (_, i) => (
+            <Star key={i} size={14} color={w.star} fill={w.star} strokeWidth={1.5} aria-hidden="true" focusable="false" />
+          ))}
         </div>
       ) : null}
       {details.gsVerdict && (
-        <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>
+        <div style={st.body}>
           {details.gsVerdict}
-          <SourceStamp tier={sourceFor('gsVerdict')} />
+          <SourceStamp tier={sourceFor('gsVerdict')} w={w} />
         </div>
       )}
     </div>
@@ -335,22 +285,15 @@ function ZoneVerdict({ details, showVerdictHelper, sourceFor }) {
 }
 
 // ============================================================================
-// Section 4 — WITHDRAWAL CALCULATOR
+// Withdrawal calculator
 // ============================================================================
-// Defaults the "Withdraw From" currency to the user's primary_banking_currency
-// (Phase A1 field). The "Receive" currency defaults to the ATM's local
-// currency derived from atmOperatorFee.currency when known, else USD with
-// a picker. Live rate via getExchangeRate (1-hour module-level cache to
-// avoid redundant calls when the user toggles sample tiers).
+// "Withdraw from" defaults to the traveler's primary_banking_currency; "receive" to the
+// ATM's local currency when the Worker knows it, else USD. Live rates from the Worker's
+// /exchange-rate (the Money page's handler), cached an hour in this module.
 
-// Module-level rate cache. Keyed by `${from}>${to}`. We never persist —
-// fresh per app load, which is conservative for accuracy.
 const RATE_CACHE = new Map();
-const RATE_TTL_MS = 60 * 60 * 1000;  // 1 hour
-// Live rate via the Cloudflare Worker POST /exchange-rate (the same handler the
-// Money Exchange page uses; returns { exchange_rate }). Base44's getExchangeRate
-// 403s on native (no Base44 session), which left rate=null → "Gross estimate —".
-// callWorker works on web AND native (CapacitorHttp).
+const RATE_TTL_MS = 60 * 60 * 1000;
+// callWorker works on web and native (Base44's getExchangeRate 403'd on native).
 async function fetchRate(from, to) {
   if (!from || !to) return null;
   if (from === to) return 1;
@@ -373,44 +316,39 @@ function formatLocal(amount, currency, opts) {
   const { dp } = opts || {};
   const fractionDigits = typeof dp === 'number'
     ? dp
-    // No-decimal currencies — JPY/KRW/VND/IDR/HUF/CLP rarely show cents on ATMs.
+    // Currencies an ATM rarely shows cents for.
     : (currency && /^(JPY|KRW|VND|IDR|HUF|CLP)$/.test(currency)) ? 0
     : (amount >= 1000 ? 0 : 2);
-  return `${amount.toLocaleString(undefined, { maximumFractionDigits: fractionDigits, minimumFractionDigits: fractionDigits === 0 ? 0 : 0 })} ${currency || ''}`.trim();
+  return `${amount.toLocaleString(undefined, { maximumFractionDigits: fractionDigits, minimumFractionDigits: 0 })} ${currency || ''}`.trim();
 }
 
-function ZoneCalculator({ details }) {
-  // Lazy-load the user profile (once per panel open) so we can read
-  // primary_banking_currency. Avoid a top-of-Body load to keep the
-  // calculator self-contained.
+function ZoneCalculator({ details, w }) {
+  const st = styles(w);
   const { user: authUser, profile } = useAuth();
   const [user, setUser] = useState(null);
   useEffect(() => { setUser(legacyUser(authUser, profile)); }, [authUser, profile]);
 
-  // Defaults. fromCurrency = user.primary_banking_currency (fallback to
-  // preferred_currencies[0], then USD). toCurrency = ATM's local currency
-  // when Phase A3 populated atmOperatorFee.currency, else USD.
   const defaultFrom = user?.primary_banking_currency || user?.preferred_currencies?.[0] || 'USD';
   const defaultTo = details?.atmOperatorFee?.currency || details?.withdrawalLimits?.currency || 'USD';
   const [fromCurrency, setFromCurrency] = useState(defaultFrom);
   const [toCurrency, setToCurrency] = useState(defaultTo);
-  // Sync the from/to defaults when user / details land after first render.
-  useEffect(() => { if (user && fromCurrency === 'USD' && defaultFrom !== 'USD') setFromCurrency(defaultFrom); }, [user]);  // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (defaultTo !== 'USD') setToCurrency(defaultTo); }, [defaultTo]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // The defaults land after the first render.
+  useEffect(() => { if (user && fromCurrency === 'USD' && defaultFrom !== 'USD') setFromCurrency(defaultFrom); }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (defaultTo !== 'USD') setToCurrency(defaultTo); }, [defaultTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [amount, setAmount] = useState(100);
   const [rate, setRate] = useState(null);
   const [rateLoading, setRateLoading] = useState(false);
   const [usdRef, setUsdRef] = useState(false);
   const [usdRate, setUsdRate] = useState(null);
+  const fromId = useId(), toId = useId(), amountId = useId();
 
-  // Fetch the primary rate whenever the pair changes.
   useEffect(() => {
     let cancelled = false;
     setRate(null);
-    if (fromCurrency === toCurrency) { setRate(1); return; }
+    if (fromCurrency === toCurrency) { setRate(1); return undefined; }
     setRateLoading(true);
-    fetchRate(fromCurrency, toCurrency).then(r => {
+    fetchRate(fromCurrency, toCurrency).then((r) => {
       if (cancelled) return;
       setRate(r);
       setRateLoading(false);
@@ -418,63 +356,51 @@ function ZoneCalculator({ details }) {
     return () => { cancelled = true; };
   }, [fromCurrency, toCurrency]);
 
-  // USD reference rate (only when toggled and the destination isn't already USD).
+  // The USD reference, when asked for and the destination isn't USD already.
   useEffect(() => {
-    if (!usdRef || toCurrency === 'USD') { setUsdRate(null); return; }
+    if (!usdRef || toCurrency === 'USD') { setUsdRate(null); return undefined; }
     let cancelled = false;
-    fetchRate('USD', toCurrency).then(r => { if (!cancelled) setUsdRate(r); });
+    fetchRate('USD', toCurrency).then((r) => { if (!cancelled) setUsdRate(r); });
     return () => { cancelled = true; };
   }, [usdRef, toCurrency]);
 
-  // Tiers — include the ATM Max as a final tier when known.
+  // The ATM's max, in the "from" currency, as a last tier when known.
   const atmMaxLocal = details?.withdrawalLimits?.perTransaction || null;
-  // Convert ATM-max-in-LOCAL into FROM-currency for the tier button.
   const atmMaxFrom = (atmMaxLocal && rate && rate > 0) ? Math.floor(atmMaxLocal / rate) : null;
-  const tiers = atmMaxFrom
-    ? [...CALC_SAMPLE_TIERS.filter(t => t < atmMaxFrom), atmMaxFrom]
-    : CALC_SAMPLE_TIERS;
+  const tiers = atmMaxFrom ? [...CALC_SAMPLE_TIERS.filter((t) => t < atmMaxFrom), atmMaxFrom] : CALC_SAMPLE_TIERS;
 
-  // Computed amounts.
   const grossLocal = (rate && Number.isFinite(amount)) ? amount * rate : null;
-  const operatorFeeLocal = details?.atmOperatorFee?.amount && details?.atmOperatorFee?.currency === toCurrency
-    ? details.atmOperatorFee.amount
-    : null;
-  const netLocal = (grossLocal != null && operatorFeeLocal != null)
-    ? Math.max(0, grossLocal - operatorFeeLocal)
-    : grossLocal;
-  const usdEquiv = (usdRef && grossLocal != null && usdRate)
-    ? grossLocal / usdRate
-    : null;
-
+  const operatorFeeLocal = details?.atmOperatorFee?.amount && details?.atmOperatorFee?.currency === toCurrency ? details.atmOperatorFee.amount : null;
+  const netLocal = (grossLocal != null && operatorFeeLocal != null) ? Math.max(0, grossLocal - operatorFeeLocal) : grossLocal;
+  const usdEquiv = (usdRef && grossLocal != null && usdRate) ? grossLocal / usdRate : null;
   const needsBankingCurrencyPrompt = user && !user.primary_banking_currency;
+  /** @type {CSS} */
+  const fieldLabel = { display: 'block', marginBottom: 4, fontFamily: MONO, fontSize: fs(10), fontWeight: 500, letterSpacing: '.1em', textTransform: 'uppercase', color: NEUTRAL.ink3 };
 
   return (
-    <div style={{ marginBottom: '14px', padding: '12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${PURPLE_LIGHT}` }}>
-      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '8px' }}>
-        🧮 WITHDRAWAL CALCULATOR
-      </div>
+    <div style={{ ...st.box, marginBottom: 14, padding: 12 }}>
+      <div style={st.label}>Withdrawal calculator</div>
 
       {needsBankingCurrencyPrompt && (
-        <BankingCurrencyPrompt user={user} onSet={(code) => { setUser({ ...user, primary_banking_currency: code }); setFromCurrency(code); }} />
+        <BankingCurrencyPrompt user={user} w={w} onSet={(code) => { setUser({ ...user, primary_banking_currency: code }); setFromCurrency(code); }} />
       )}
 
-      {/* From / To picker row. */}
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px' }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '10px', color: GRAY, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '3px' }}>Withdraw From</div>
-          <CurrencyPicker value={fromCurrency} onChange={setFromCurrency} />
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <label htmlFor={fromId} style={fieldLabel}>Withdraw from</label>
+          <CurrencyPicker id={fromId} value={fromCurrency} onChange={setFromCurrency} w={w} />
         </div>
-        <div style={{ paddingTop: '16px', fontSize: '16px', color: PURPLE }}>→</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '10px', color: GRAY, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '3px' }}>Receive</div>
-          <CurrencyPicker value={toCurrency} onChange={setToCurrency} />
+        <span aria-hidden="true" style={{ paddingBottom: 12, fontSize: fs(15), color: w.ink }}>→</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <label htmlFor={toId} style={fieldLabel}>Receive</label>
+          <CurrencyPicker id={toId} value={toCurrency} onChange={setToCurrency} w={w} />
         </div>
       </div>
 
-      {/* Amount input + tiers. */}
-      <div style={{ marginBottom: '10px' }}>
-        <div style={{ fontSize: '10px', color: GRAY, fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '3px' }}>Amount ({fromCurrency})</div>
+      <div style={{ marginBottom: 10 }}>
+        <label htmlFor={amountId} style={fieldLabel}>Amount ({fromCurrency})</label>
         <input
+          id={amountId}
           type="number"
           inputMode="numeric"
           min={0}
@@ -483,115 +409,86 @@ function ZoneCalculator({ details }) {
             const n = Number(e.target.value);
             setAmount(Number.isFinite(n) && n >= 0 ? n : 0);
           }}
-          style={{ width: '100%', padding: '8px 10px', fontSize: '14px', borderRadius: '6px', border: `1px solid ${DIVIDER}`, fontFamily: 'inherit', marginBottom: '6px', boxSizing: 'border-box' }}
+          style={{ width: '100%', minHeight: 44, boxSizing: 'border-box', padding: '8px 10px', borderRadius: 10, border: `1px solid ${w.line}`, background: NEUTRAL.white, fontFamily: 'inherit', fontSize: fs(15), color: NEUTRAL.ink }}
         />
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 6, marginTop: 2 }}>
           {tiers.map((t, i) => {
             const isMax = atmMaxFrom && t === atmMaxFrom;
             const active = amount === t;
             return (
-              <button
-                key={`${t}-${i}`}
-                type="button"
-                onClick={() => setAmount(t)}
-                style={{
-                  fontSize: '12px', padding: '4px 10px',
-                  background: active ? PURPLE : '#F1F5F9',
-                  color: active ? '#FFFFFF' : DARK,
-                  border: `1px solid ${active ? PURPLE : DIVIDER}`,
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontWeight: '600',
-                  fontFamily: 'inherit',
-                }}
-              >
-                {isMax ? `Max · ${formatLocal(t, fromCurrency)}` : `${t.toLocaleString()} ${fromCurrency}`}
+              <button key={`${t}-${i}`} type="button" aria-pressed={active} onClick={() => setAmount(t)}
+                style={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, padding: 0, background: 'transparent', border: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', minHeight: 30, boxSizing: 'border-box', padding: '0 10px', borderRadius: 8, border: `1px solid ${active ? w.ink : w.line}`, background: active ? w.ink : NEUTRAL.white, color: active ? NEUTRAL.white : NEUTRAL.ink2, fontSize: fs(12.5), fontWeight: 600 }}>
+                  {isMax ? `Max · ${formatLocal(t, fromCurrency)}` : `${t.toLocaleString()} ${fromCurrency}`}
+                </span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Result rows. */}
-      <div style={{ background: PURPLE_BG, borderRadius: '6px', padding: '10px 12px', fontSize: '13px', color: DARK, lineHeight: '1.6' }}>
+      <div role="status" aria-live="polite" style={{ position: 'relative', padding: '10px 12px', borderRadius: 10, background: w.receipt || w.wash, fontSize: fs(13), lineHeight: 1.6, color: NEUTRAL.ink }}>
+        <span aria-hidden="true" style={{ position: 'absolute', top: 0, left: 10, right: 10, borderTop: `1px dashed ${w.tearLine || w.line}` }} />
         <ResultRow label="Gross estimate" value={rateLoading ? 'Loading rate…' : formatLocal(grossLocal, toCurrency)} bold />
-        {operatorFeeLocal != null && (
-          <ResultRow label={`ATM operator fee`} value={`− ${formatLocal(operatorFeeLocal, toCurrency)}`} muted />
-        )}
-        {operatorFeeLocal != null && (
-          <ResultRow label="Estimated cash received" value={formatLocal(netLocal, toCurrency)} bold accent />
-        )}
+        {operatorFeeLocal != null && <ResultRow label="ATM operator fee" value={`− ${formatLocal(operatorFeeLocal, toCurrency)}`} muted />}
+        {operatorFeeLocal != null && <ResultRow label="Estimated cash received" value={formatLocal(netLocal, toCurrency)} bold accent />}
         {operatorFeeLocal == null && (
-          <div style={{ fontSize: '11px', color: GRAY, marginTop: '4px' }}>
-            Operator fee not confirmed — actual cash received may be lower than the gross estimate.
+          <div style={{ marginTop: 4, fontSize: fs(11.5), color: NEUTRAL.ink3 }}>
+            Operator fee not confirmed: the cash you receive may be less than the gross estimate.
           </div>
         )}
         {rate != null && rate !== 1 && (
-          <div style={{ fontSize: '11px', color: GRAY, marginTop: '6px' }}>
+          <div style={{ marginTop: 6, fontSize: fs(11.5), color: NEUTRAL.ink3 }}>
             1 {fromCurrency} ≈ {rate.toLocaleString(undefined, { maximumFractionDigits: 4 })} {toCurrency}
           </div>
         )}
       </div>
 
-      {/* USD reference toggle. */}
       {toCurrency !== 'USD' && (
-        <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <label style={{ fontSize: '12px', color: GRAY_DEEP, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-            <input type="checkbox" checked={usdRef} onChange={(e) => setUsdRef(e.target.checked)} />
+        <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 44, fontSize: fs(12.5), color: NEUTRAL.ink2, cursor: 'pointer' }}>
+            <input type="checkbox" checked={usdRef} onChange={(e) => setUsdRef(e.target.checked)} style={{ width: 18, height: 18, accentColor: w.ink }} />
             Show USD reference
           </label>
-          {usdRef && usdEquiv != null && (
-            <span style={{ fontSize: '12px', color: GRAY_DEEP }}>
-              ≈ {formatLocal(usdEquiv, 'USD')}
-            </span>
-          )}
+          {usdRef && usdEquiv != null && <span style={{ fontSize: fs(12.5), color: NEUTRAL.ink2 }}>≈ {formatLocal(usdEquiv, 'USD')}</span>}
         </div>
       )}
 
-      <div style={{ fontSize: '10px', color: GRAY, marginTop: '8px', lineHeight: '1.4' }}>
-        Possible bank/card foreign-transaction fees not included. Decline ATM-side currency conversion (DCC) for a better rate.
+      <div style={{ marginTop: 6, fontSize: fs(11), lineHeight: 1.45, color: NEUTRAL.ink3 }}>
+        Your bank&rsquo;s or card&rsquo;s foreign-transaction fees aren&rsquo;t included. If the ATM offers to convert to your home currency (DCC), decline for a better rate.
       </div>
     </div>
   );
 }
 
-function CurrencyPicker({ value, onChange }) {
+function CurrencyPicker({ id, value, onChange, w }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      style={{
-        width: '100%', padding: '6px 8px', fontSize: '13px',
-        borderRadius: '6px', border: `1px solid ${DIVIDER}`,
-        background: '#FFFFFF', fontFamily: 'inherit', boxSizing: 'border-box',
-      }}
-    >
-      {CALC_CURRENCIES.find(c => c.code === value) ? null : (
-        // Allow exotic currencies the Worker may return (e.g. RON) to render
-        // even when not in our short list.
+    <select id={id} value={value} onChange={(e) => onChange(e.target.value)}
+      style={{ width: '100%', minHeight: 44, boxSizing: 'border-box', padding: '6px 8px', borderRadius: 10, border: `1px solid ${w.line}`, background: NEUTRAL.white, fontFamily: 'inherit', fontSize: fs(13.5), color: NEUTRAL.ink }}>
+      {CALC_CURRENCIES.find((c) => c.code === value) ? null : (
+        // A currency the Worker returns that isn't on the short list (RON, say) still shows.
         <option value={value}>{value}</option>
       )}
-      {CALC_CURRENCIES.map(c => (
-        <option key={c.code} value={c.code}>{c.flag} {c.code} — {c.name}</option>
-      ))}
+      {CALC_CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} · {c.name}</option>)}
     </select>
   );
 }
 
 function ResultRow({ label, value, bold, accent, muted }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', color: muted ? GRAY_DEEP : (accent ? '#166534' : DARK) }}>
-      <span style={{ fontSize: '12px' }}>{label}</span>
-      <span style={{ fontWeight: bold ? '700' : '500', fontSize: bold ? '15px' : '13px' }}>{value}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, color: muted ? NEUTRAL.ink2 : (accent ? NEUTRAL.open : NEUTRAL.ink) }}>
+      <span style={{ fontSize: fs(12.5) }}>{label}</span>
+      <span style={{ fontWeight: bold ? 700 : 500, fontSize: bold ? fs(15) : fs(13) }}>{value}</span>
     </div>
   );
 }
 
-function BankingCurrencyPrompt({ user, onSet }) {
+function BankingCurrencyPrompt({ user, onSet, w }) {
   const { refreshProfile } = useAuth();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState(user?.preferred_currencies?.[0] || 'USD');
   const [saving, setSaving] = useState(false);
+  const pickId = useId();
 
   const save = async () => {
     setSaving(true);
@@ -602,35 +499,30 @@ function BankingCurrencyPrompt({ user, onSet }) {
       onSet?.(picked);
       setOpen(false);
     } catch (_e) {
-      // Silent fail — user can retry from Settings.
+      // Fine to fail quietly: Settings can set it.
     }
     setSaving(false);
   };
+  /** @type {CSS} */
+  const btn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 44, padding: '0 14px', borderRadius: 10, fontFamily: 'inherit', fontSize: fs(13), fontWeight: 600, cursor: 'pointer' };
 
   if (!open) {
     return (
-      <div style={{
-        marginBottom: '10px', padding: '8px 10px',
-        background: '#FEF3C7', border: '1px solid #FDE68A',
-        borderRadius: '6px', fontSize: '12px', color: '#92400E',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px',
-      }}>
-        <span>Set your Primary Banking Currency for accurate estimates.</span>
-        <button onClick={() => setOpen(true)} style={{ fontSize: '12px', padding: '3px 10px', background: '#92400E', color: '#FFFFFF', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', flexShrink: 0 }}>
-          Set now
-        </button>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10, padding: '6px 6px 6px 12px', borderRadius: 10, background: w.wash, color: w.washInk, fontSize: fs(12.5), lineHeight: 1.4 }}>
+        <span>Set your main banking currency for estimates that fit you.</span>
+        <button type="button" onClick={() => setOpen(true)} style={{ ...btn, flexShrink: 0, background: NEUTRAL.white, color: w.ink, border: `1px solid ${w.line}` }}>Set now</button>
       </div>
     );
   }
   return (
-    <div style={{ marginBottom: '10px', padding: '10px', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '6px' }}>
-      <div style={{ fontSize: '11px', fontWeight: '700', color: '#92400E', marginBottom: '6px' }}>Which currency does your main travel card or bank account use?</div>
-      <CurrencyPicker value={picked} onChange={setPicked} />
-      <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
-        <button onClick={save} disabled={saving} style={{ flex: 1, fontSize: '12px', padding: '6px 10px', background: '#166534', color: '#FFFFFF', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600' }}>
+    <div style={{ marginBottom: 10, padding: 10, borderRadius: 10, background: w.wash }}>
+      <label htmlFor={pickId} style={{ display: 'block', marginBottom: 6, fontSize: fs(12.5), fontWeight: 600, color: w.washInk }}>Which currency does your main travel card or bank account use?</label>
+      <CurrencyPicker id={pickId} value={picked} onChange={setPicked} w={w} />
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <button type="button" onClick={save} disabled={saving} style={{ ...btn, flex: 1, background: w.cta, color: w.ctaInk, border: 0 }}>
           {saving ? 'Saving…' : 'Save'}
         </button>
-        <button onClick={() => setOpen(false)} style={{ fontSize: '12px', padding: '6px 10px', background: '#FFFFFF', color: '#92400E', border: '1px solid #FDE68A', borderRadius: '4px', cursor: 'pointer', fontWeight: '600' }}>
+        <button type="button" onClick={() => setOpen(false)} style={{ ...btn, background: NEUTRAL.white, color: NEUTRAL.ink2, border: `1px solid ${w.line}` }}>
           Cancel
         </button>
       </div>
@@ -639,115 +531,91 @@ function BankingCurrencyPrompt({ user, onSet }) {
 }
 
 // ============================================================================
-// Section 3 — FEES (Operator / Bank / Foreign Transaction / DCC warning)
+// Fees (the operator's, your bank's, foreign transaction, DCC)
 // ============================================================================
 
-function ZoneFees({ details, callConfirm, sourceFor }) {
+function ZoneFees({ details, callConfirm, sourceFor, w }) {
+  const st = styles(w);
   const fee = details.atmOperatorFee || null;
-  const operatorLine = fee?.amount != null && fee?.currency
-    ? `${formatMoney(fee.amount, fee.currency)} per withdrawal`
-    : null;
+  const operatorLine = fee?.amount != null && fee?.currency ? `${formatMoney(fee.amount, fee.currency)} per withdrawal` : null;
   const operatorTier = fee?.confidence === 'confirmed' ? 'verified'
     : fee?.confidence === 'reported' ? 'reported'
     : fee?.confidence === 'estimated' ? 'estimated'
     : 'call';
 
   return (
-    <div style={{ marginBottom: '14px' }}>
-      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>💸 FEES</div>
-      <div style={{ background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}`, overflow: 'hidden' }}>
-        {/* A. ATM operator fee */}
-        <FeeRow
-          icon="🏧" label="ATM Operator Fee"
-          value={operatorLine || 'Unknown — check the ATM screen before confirming.'}
-          stamp={operatorTier}
-          onCallConfirm={callConfirm}
-        />
-        {/* B. Your bank's foreign ATM fee */}
-        <FeeRow
-          icon="🏦" label="Your Bank's Foreign ATM Fee"
-          value="Your home bank may charge a foreign ATM fee. Add your bank or card in Settings to estimate this."
-          stamp="call"
-          onCallConfirm={callConfirm}
-        />
-        {/* C. Foreign transaction / currency conversion fee */}
-        <FeeRow
-          icon="🌐" label="Foreign Transaction Fee"
-          value="Many banks charge 0%–3% when the transaction is processed in a foreign currency. Some travel cards charge 0%."
-          stamp="call"
-          onCallConfirm={callConfirm}
-        />
-        {/* D. DCC warning — static general guidance we wrote, not review-derived
-            and not AI, so it carries no provenance stamp. */}
-        <FeeRow
-          icon="⚠️" label="Dynamic Currency Conversion"
-          value="If the ATM asks 'convert to your home currency?' — decline. Choose local currency for a better rate."
-          isLast
-        />
+    <div style={{ marginBottom: 14 }}>
+      <div style={st.label}>Fees</div>
+      <div style={{ background: NEUTRAL.white, borderRadius: 12, border: `1px solid ${w.line}`, overflow: 'hidden' }}>
+        <FeeRow w={w} icon={CreditCard} label="ATM operator fee"
+          value={operatorLine || 'Unknown: check the ATM screen before you confirm.'}
+          stamp={operatorTier} onCallConfirm={callConfirm} />
+        <FeeRow w={w} icon={Landmark} label="Your bank’s foreign ATM fee"
+          value="Your home bank may charge a foreign ATM fee. Add your bank or card in Settings to estimate it."
+          stamp="call" onCallConfirm={callConfirm} />
+        <FeeRow w={w} icon={Globe} label="Foreign transaction fee"
+          value="Many banks charge 0–3% when a withdrawal is in a foreign currency. Some travel cards charge nothing."
+          stamp="call" onCallConfirm={callConfirm} />
+        {/* General guidance we wrote: not from reviews and not AI, so no source. */}
+        <FeeRow w={w} icon={TriangleAlert} label="Dynamic currency conversion"
+          value="If the ATM asks to convert to your home currency, decline: choose the local currency for a better rate." isLast />
       </div>
-      {/* Phase-stub note when no real data is wired yet. */}
       {!fee && (
-        <div style={{ fontSize: '11px', color: GRAY, marginTop: '6px', lineHeight: '1.4' }}>
-          Specific fee details for this ATM will appear here once the Phase A3 prompt is deployed.<SourceStamp tier={sourceFor('atmOperatorFee')} />
+        <div style={{ marginTop: 6, fontSize: fs(11.5), lineHeight: 1.45, color: NEUTRAL.ink3 }}>
+          This ATM&rsquo;s own fee isn&rsquo;t known yet.<SourceStamp tier={sourceFor('atmOperatorFee')} w={w} />
         </div>
       )}
     </div>
   );
 }
 
-function FeeRow({ icon, label, value, stamp, onCallConfirm, isLast }) {
+function FeeRow({ w, icon: Icon, label, value, stamp = undefined, onCallConfirm = null, isLast = false }) {
   return (
-    <div style={{ padding: '10px 12px', borderBottom: isLast ? 'none' : `1px solid ${DIVIDER}` }}>
-      <div style={{ fontSize: '12px', fontWeight: '700', color: DARK, marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <span>{icon}</span>{label}
-        <SourceStamp tier={stamp} onClick={stamp === 'call' ? onCallConfirm : null} />
+    <div style={{ padding: '10px 12px', borderBottom: isLast ? 'none' : `1px solid ${w.line}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 3, fontSize: fs(12.5), fontWeight: 600, color: NEUTRAL.ink }}>
+        <Icon size={15} color={w.iconInk} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
+        {label}
+        {stamp ? <SourceStamp tier={stamp} onClick={stamp === 'call' ? onCallConfirm : null} w={w} /> : null}
       </div>
-      <div style={{ fontSize: '12px', color: GRAY_DEEP, lineHeight: '1.5' }}>{value}</div>
+      <div style={{ fontSize: fs(12.5), lineHeight: 1.5, color: NEUTRAL.ink2 }}>{value}</div>
     </div>
   );
 }
 
 function formatMoney(amount, currency) {
-  // Minimal formatter; the calculator in A4 will do proper locale formatting.
   const num = typeof amount === 'number' ? amount : Number(amount);
   if (!Number.isFinite(num)) return '—';
   return `${num.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${currency}`;
 }
 
 // ============================================================================
-// Section 2 — CARD COMPATIBILITY
+// Card compatibility
 // ============================================================================
 
-function ZoneCardCompatibility({ details, callConfirm, sourceFor }) {
-  // details.cardCompatibility (added in A3) is expected to be one of:
-  //   - array of network keys with confidence: [{ network: 'visa', accepted: true|false }, ...]
-  //   - undefined/null when the Worker hasn't tagged this ATM yet
+function ZoneCardCompatibility({ details, callConfirm, sourceFor, w }) {
+  const st = styles(w);
+  // details.cardCompatibility: [{ network, accepted }], or nothing when the Worker
+  // hasn't tagged this ATM.
   const list = Array.isArray(details.cardCompatibility) ? details.cardCompatibility : null;
-  const accepted = list ? new Set(list.filter(n => n?.accepted).map(n => n.network)) : null;
+  const accepted = list ? new Set(list.filter((n) => n?.accepted).map((n) => n.network)) : null;
   const tier = list ? sourceFor('cardCompatibility') : 'call';
-
   return (
-    <div style={{ marginBottom: '14px' }}>
-      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
-        💳 CARD COMPATIBILITY
-        <SourceStamp tier={tier} onClick={tier === 'call' ? callConfirm : null} />
-      </div>
+    <div style={{ marginBottom: 14 }}>
+      <div style={st.label}>Card compatibility<SourceStamp tier={tier} onClick={tier === 'call' ? callConfirm : null} w={w} /></div>
       {!list ? (
-        <div style={{ fontSize: '13px', color: GRAY_DEEP, lineHeight: '1.5', padding: '10px 12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}` }}>
-          Compatibility not confirmed for this ATM. Most international debit cards using Visa, Mastercard, Plus, or Cirrus may work.
+        <div style={{ ...st.box, ...st.body, color: NEUTRAL.ink2 }}>
+          Compatibility not confirmed for this ATM. Most international debit cards on Visa, Mastercard, Plus or Cirrus may work.
         </div>
       ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {CARD_NETWORKS.map(n => {
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {CARD_NETWORKS.map((n) => {
             const ok = accepted.has(n.key);
+            const Icon = ok ? Check : X;
             return (
-              <span key={n.key} style={{
-                fontSize: '12px', padding: '4px 10px', borderRadius: '9999px',
-                background: ok ? '#DCFCE7' : '#F1F5F9',
-                color: ok ? '#166534' : '#94A3B8',
-                fontWeight: '500',
-                textDecoration: ok ? 'none' : 'line-through',
-              }}>{ok ? '✅ ' : '•'} {n.label}</span>
+              <span key={n.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 26, boxSizing: 'border-box', padding: '0 9px', borderRadius: 8, fontSize: fs(12), fontWeight: 600, background: ok ? w.wash : NEUTRAL.white, color: ok ? w.washInk : NEUTRAL.ink3, border: `1px solid ${ok ? w.wash : w.line}`, textDecoration: ok ? 'none' : 'line-through' }}>
+                <Icon size={12} color={ok ? w.washInk : NEUTRAL.ink3} strokeWidth={2.5} aria-label={ok ? 'Accepted' : 'Not accepted'} />
+                {n.label}
+              </span>
             );
           })}
         </div>
@@ -757,182 +625,138 @@ function ZoneCardCompatibility({ details, callConfirm, sourceFor }) {
 }
 
 // ============================================================================
-// Section 5 — WITHDRAWAL LIMITS
+// Withdrawal limits
 // ============================================================================
 
-function ZoneLimits({ details, callConfirm, sourceFor }) {
+function ZoneLimits({ details, callConfirm, sourceFor, w }) {
+  const st = styles(w);
   const limits = details.withdrawalLimits || null;
   const tier = limits ? sourceFor('withdrawalLimits') : 'call';
+  /** @type {CSS} */
+  const kind = { marginRight: 6, fontFamily: MONO, fontSize: fs(10), fontWeight: 500, letterSpacing: '.1em', textTransform: 'uppercase', color: w.ink };
   return (
-    <div style={{ marginBottom: '14px' }}>
-      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
-        📊 WITHDRAWAL LIMITS
-        <SourceStamp tier={tier} onClick={tier === 'call' ? callConfirm : null} />
-      </div>
-      <div style={{ padding: '10px 12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}`, fontSize: '13px', color: DARK, lineHeight: '1.5' }}>
-        {limits?.perTransaction != null && (
-          <div><strong style={{ fontSize: '11px', textTransform: 'uppercase', color: PURPLE, letterSpacing: '0.4px', marginRight: '6px' }}>Per transaction</strong>{formatMoney(limits.perTransaction, limits.currency || '')}</div>
-        )}
-        {limits?.daily != null && (
-          <div style={{ marginTop: '4px' }}><strong style={{ fontSize: '11px', textTransform: 'uppercase', color: PURPLE, letterSpacing: '0.4px', marginRight: '6px' }}>Daily</strong>{formatMoney(limits.daily, limits.currency || '')}</div>
-        )}
-        {!limits && (
-          <div style={{ color: GRAY_DEEP }}>Limit not confirmed. The ATM will display the maximum before you confirm a withdrawal.</div>
-        )}
-        {limits?.dependsOnCard && (
-          <div style={{ fontSize: '12px', color: GRAY_DEEP, marginTop: '4px' }}>Limits may vary based on your home bank or card.</div>
-        )}
+    <div style={{ marginBottom: 14 }}>
+      <div style={st.label}>Withdrawal limits<SourceStamp tier={tier} onClick={tier === 'call' ? callConfirm : null} w={w} /></div>
+      <div style={{ ...st.box, ...st.body }}>
+        {limits?.perTransaction != null && <div><span style={kind}>Per withdrawal</span>{formatMoney(limits.perTransaction, limits.currency || '')}</div>}
+        {limits?.daily != null && <div style={{ marginTop: 4 }}><span style={kind}>Daily</span>{formatMoney(limits.daily, limits.currency || '')}</div>}
+        {!limits && <div style={{ color: NEUTRAL.ink2 }}>Limit not confirmed. The ATM shows its maximum before you confirm a withdrawal.</div>}
+        {limits?.dependsOnCard && <div style={{ marginTop: 4, fontSize: fs(12.5), color: NEUTRAL.ink2 }}>Limits may vary with your home bank or card.</div>}
       </div>
     </div>
   );
 }
 
 // ============================================================================
-// Section 6 — LOCATION CONTEXT
+// Location
 // ============================================================================
 
-function ZoneLocation({ details, sourceFor }) {
-  // Phase A2 reuses the existing 'vibe' field — for kind='atm' the shared
-  // prompt already places the physical location description there
-  // (cloudflare-worker-v7.12.js:1743). Phase A3 will add a richer
-  // locationContext object with venue type + sub-location.
+function ZoneLocation({ details, sourceFor, w }) {
+  const st = styles(w);
+  // locationContext when the Worker has it; the older 'vibe' field carried the same.
   const loc = details.locationContext || details.vibe || null;
   if (!loc) return null;
   const text = typeof loc === 'string' ? loc : loc.summary || '';
   if (!text) return null;
   return (
-    <div style={{ marginBottom: '14px' }}>
-      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
-        📍 LOCATION
-        <SourceStamp tier={sourceFor(details.locationContext ? 'locationContext' : 'vibe')} />
-      </div>
-      <div style={{ fontSize: '13px', color: DARK, lineHeight: '1.5', padding: '10px 12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}` }}>
-        {text}
-      </div>
+    <div style={{ marginBottom: 14 }}>
+      <div style={st.label}>Location<SourceStamp tier={sourceFor(details.locationContext ? 'locationContext' : 'vibe')} w={w} /></div>
+      <div style={{ ...st.box, ...st.body }}>{text}</div>
     </div>
   );
 }
 
 // ============================================================================
-// Section 7 — SAFETY & CONVENIENCE
+// Safety and convenience
 // ============================================================================
 
-function ZoneSafety({ details, callConfirm, sourceFor }) {
-  // Phase A2: render a single-line summary derived from the existing
-  // verdict + open-status fields. A3 will provide a structured `safety`
-  // object with concrete flags (indoor, well_lit, security_guard, etc.).
-  const safety = details.safety || null;
-  if (safety && typeof safety === 'object') {
-    const flags = [
-      { key: 'indoor',          label: 'Indoors',           good: true },
-      { key: 'wellLit',         label: 'Well-lit',          good: true },
-      { key: 'securityGuard',   label: 'Security on-site',  good: true },
-      { key: 'bankBranch',      label: 'Bank branch',       good: true },
-      { key: 'cameras',         label: 'Cameras',           good: true },
-      { key: 'highFootTraffic', label: 'Busy area',         good: true },
-      { key: 'open24h',         label: 'Open 24/7',         good: true },
-      { key: 'skimmerReports',  label: 'Skimmer reports',   good: false },
-    ].filter(f => safety[f.key] != null);
-    if (flags.length === 0) {
-      return (
-        <SafetyBlock summary="Safety info not reported for this ATM. Use the same caution you would at any unfamiliar ATM." stamp="call" onCallConfirm={callConfirm} />
-      );
-    }
+// Each flag in words either way: what a yes says and what a no says.
+const SAFETY_FLAGS = [
+  { key: 'indoor', yes: 'Indoors', no: 'Outdoors', good: true },
+  { key: 'wellLit', yes: 'Well-lit', no: 'Poorly lit', good: true },
+  { key: 'securityGuard', yes: 'Security on site', no: 'No security on site', good: true },
+  { key: 'bankBranch', yes: 'Bank branch', no: 'Not a bank branch', good: true },
+  { key: 'cameras', yes: 'Cameras', no: 'No cameras', good: true },
+  { key: 'highFootTraffic', yes: 'Busy area', no: 'Quiet area', good: true },
+  { key: 'open24h', yes: 'Open 24/7', no: 'Not open 24/7', good: true },
+  { key: 'skimmerReports', yes: 'Skimmer reports', no: 'No skimmer reports', good: false },
+];
+
+function ZoneSafety({ details, callConfirm, sourceFor, w }) {
+  const st = styles(w);
+  const safety = details.safety && typeof details.safety === 'object' ? details.safety : null;
+  const flags = safety ? SAFETY_FLAGS.filter((f) => safety[f.key] != null) : [];
+  if (!flags.length) {
     return (
-      <div style={{ marginBottom: '14px' }}>
-        <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
-          🛡️ SAFETY & CONVENIENCE
-          <SourceStamp tier={sourceFor('safety')} />
-        </div>
-        <div style={{ padding: '10px 12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}`, display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {flags.map(f => {
-            const present = !!safety[f.key];
-            const positive = f.good ? present : !present;
-            return (
-              <span key={f.key} style={{
-                fontSize: '12px', padding: '4px 10px', borderRadius: '9999px',
-                background: positive ? '#DCFCE7' : '#FEE2E2',
-                color: positive ? '#166534' : '#991B1B',
-                fontWeight: '500',
-              }}>
-                {positive ? '✅' : '⚠️'} {f.label}
-              </span>
-            );
-          })}
+      <div style={{ marginBottom: 14 }}>
+        <div style={st.label}>Safety and convenience<SourceStamp tier="call" onClick={callConfirm} w={w} /></div>
+        <div style={{ ...st.box, ...st.body, color: NEUTRAL.ink2 }}>
+          Safety info isn&rsquo;t reported for this ATM. Take the care you would at any unfamiliar ATM.
         </div>
       </div>
     );
   }
-  // No structured safety yet — fall back to a calm placeholder.
   return (
-    <SafetyBlock summary="Safety info not reported for this ATM. Use the same caution you would at any unfamiliar ATM." stamp="call" onCallConfirm={callConfirm} />
-  );
-}
-
-function SafetyBlock({ summary, stamp, onCallConfirm }) {
-  return (
-    <div style={{ marginBottom: '14px' }}>
-      <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '6px' }}>
-        🛡️ SAFETY & CONVENIENCE
-        <SourceStamp tier={stamp} onClick={stamp === 'call' ? onCallConfirm : null} />
-      </div>
-      <div style={{ padding: '10px 12px', background: '#FFFFFF', borderRadius: '8px', border: `1px solid ${DIVIDER}`, fontSize: '13px', color: GRAY_DEEP, lineHeight: '1.5' }}>
-        {summary}
+    <div style={{ marginBottom: 14 }}>
+      <div style={st.label}>Safety and convenience<SourceStamp tier={sourceFor('safety')} w={w} /></div>
+      <div style={{ ...st.box, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {flags.map((f) => {
+          const present = !!safety[f.key];
+          const positive = f.good ? present : !present;
+          const Icon = positive ? Check : TriangleAlert;
+          return (
+            <span key={f.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 26, boxSizing: 'border-box', padding: '0 9px', borderRadius: 8, fontSize: fs(12), fontWeight: 600, background: positive ? w.wash : NEUTRAL.white, color: positive ? w.washInk : NEUTRAL.stamp, border: `1px ${positive ? 'solid' : 'dashed'} ${positive ? w.wash : NEUTRAL.stamp}` }}>
+              <Icon size={12} color={positive ? w.washInk : NEUTRAL.stamp} strokeWidth={2.5} aria-hidden="true" />
+              {present ? f.yes : f.no}
+            </span>
+          );
+        })}
       </div>
     </div>
   );
 }
 
 // ============================================================================
-// Depth — "More" tap
+// More detail
 // ============================================================================
 
-function DepthMore({ details, sourceFor }) {
+function DepthMore({ details, sourceFor, w }) {
+  const st = styles(w);
   const [open, setOpen] = useState(false);
+  const id = useId();
   const rows = [
-    { sourceKey: 'bestTime',      icon: '⏰', label: 'BEST TIME',      value: details.bestTime },
-    { sourceKey: 'crowd',         icon: '👥', label: 'CROWD',          value: details.crowd },
-    { sourceKey: 'travelerNotes', icon: '🌍', label: 'TRAVELER NOTES', value: details.travelerNotes },
-    { sourceKey: 'value',         icon: '💰', label: 'PRICING NOTE',   value: details.value },
-  ].filter(r => r.value);
+    { sourceKey: 'bestTime', label: 'Best time', value: details.bestTime },
+    { sourceKey: 'crowd', label: 'Crowd', value: details.crowd },
+    { sourceKey: 'travelerNotes', label: 'Traveler notes', value: details.travelerNotes },
+    { sourceKey: 'value', label: 'Pricing note', value: details.value },
+  ].filter((r) => r.value);
   const goodToKnow = Array.isArray(details.goodToKnow) ? details.goodToKnow.filter(Boolean) : [];
   if (rows.length === 0 && goodToKnow.length === 0) return null;
   return (
-    <div style={{ marginBottom: '4px' }}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
-          background: 'transparent', border: 'none', padding: '8px 0', cursor: 'pointer', fontFamily: 'inherit',
-        }}
-      >
-        <span style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.5px' }}>📖 MORE DETAIL</span>
-        <span style={{ fontSize: '11px', color: PURPLE }}>{open ? '▲' : '▼'}</span>
-      </button>
-      {open && (
-        <div style={{ paddingTop: '6px' }}>
-          {goodToKnow.length > 0 && (
-            <div style={{ marginBottom: '10px' }}>
-              <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '4px' }}>
-                📌 GOOD TO KNOW<SourceStamp tier={sourceFor('goodToKnow')} />
+    <div style={{ marginBottom: 4, borderTop: `1px solid ${w.line}` }}>
+      <QuietRow world={w} icon={BookOpen} expanded={open} controls={id} onClick={() => setOpen((o) => !o)} chevron>
+        More detail
+      </QuietRow>
+      <div id={id} hidden={!open} style={{ paddingTop: 4 }}>
+        {open ? (
+          <>
+            {goodToKnow.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={st.label}>Good to know<SourceStamp tier={sourceFor('goodToKnow')} w={w} /></div>
+                <ul style={{ margin: 0, paddingLeft: 18, ...st.body }}>
+                  {goodToKnow.map((g, i) => <li key={i}>{g}</li>)}
+                </ul>
               </div>
-              <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', lineHeight: '1.5', color: DARK }}>
-                {goodToKnow.map((g, i) => <li key={i}>{g}</li>)}
-              </ul>
-            </div>
-          )}
-          {rows.map(r => (
-            <div key={r.label} style={{ marginBottom: '10px' }}>
-              <div style={{ fontSize: '11px', fontWeight: '700', color: PURPLE, letterSpacing: '0.4px', marginBottom: '3px' }}>
-                {r.icon} {r.label}
+            )}
+            {rows.map((r) => (
+              <div key={r.label} style={{ marginBottom: 10 }}>
+                <div style={st.label}>{r.label}</div>
+                <div style={st.body}>{r.value}<SourceStamp tier={sourceFor(r.sourceKey)} w={w} /></div>
               </div>
-              <div style={{ fontSize: '13px', lineHeight: '1.5', color: DARK }}>
-                {r.value}<SourceStamp tier={sourceFor(r.sourceKey)} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }
