@@ -23,8 +23,10 @@
 //        openState result; or pass place (a row; openStateFor reads its hours and
 //        utcOffsetMinutes) and isLocal (current-location mode) and it is worked out here;
 //        null prints 'Hours not listed'; false leaves the open word out (a row with no
-//        hours to speak of). items: the other fragments (distance, <RatingFact/>, price),
-//        falsy dropped.
+//        hours to speak of). items: the other fragments (distance, <RatingFact/> or a
+//        { rating, count, source } object, price). An item that would print nothing is
+//        dropped with its '·': falsy, blank, a bare 0, or a rating with no value or no named
+//        source (owned rows carry none), so a missing fact never leaves a gap.
 //   ratingText({ rating, count, source })  '★ 4.5 (1,910) Google', or null when there is no
 //        rating or no known source (source 'google' or 'globeskimmers'/'gs'). A rating with
 //        no named source is never shown.
@@ -245,9 +247,31 @@ const TONE = {
 };
 
 /**
+ * One facts-line item as it will print, or null when it would print nothing: falsy, blank
+ * or a bare 0 (never a zero fragment), a <RatingFact/> whose rating ratingText would hide,
+ * and a { rating, count, source } object (drawn as a RatingFact when it has a rating and a
+ * named source). Any other plain object prints nothing rather than throwing.
+ * @param {any} x
+ * @param {any} world
+ */
+function factOf(x, world) {
+  if (!given(x)) return null;
+  if (typeof x === 'string') return x.trim() ? x : null;
+  if (typeof x === 'number') return Number.isFinite(x) && x !== 0 ? x : null;
+  if (React.isValidElement(x)) return x.type === RatingFact && !ratingParts(/** @type {any} */ (x.props)) ? null : x;
+  if (Array.isArray(x)) {
+    const parts = x.map((y) => factOf(y, world)).filter((y) => y != null);
+    return parts.length ? React.Children.toArray(parts) : null;
+  }
+  if (typeof x === 'object')
+    return ratingParts(x) ? <RatingFact world={world} rating={x.rating} value={x.value} count={x.count} source={x.source} /> : null;
+  return x;
+}
+
+/**
  * @param {{ world?: any, open?: any, place?: any, isLocal?: boolean, items?: any[], className?: string, style?: CSS }} props
  */
-export function FactsLine({ world: _world = undefined, open = undefined, place = undefined, isLocal = false, items = [], className = undefined, style = undefined }) {
+export function FactsLine({ world = undefined, open = undefined, place = undefined, isLocal = false, items = [], className = undefined, style = undefined }) {
   const frags = [];
   if (open !== false) {
     const state = open === undefined && place ? openStateFor(place, { isLocal }) : open;
@@ -259,10 +283,11 @@ export function FactsLine({ world: _world = undefined, open = undefined, place =
     );
   }
   (Array.isArray(items) ? items : []).forEach((x, i) => {
-    if (given(x))
+    const fact = factOf(x, world);
+    if (fact != null)
       frags.push(
         <span key={`f${i}`} style={{ display: 'inline-flex', alignItems: 'center' }}>
-          {x}
+          {fact}
         </span>,
       );
   });
