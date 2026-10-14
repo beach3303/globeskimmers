@@ -1333,6 +1333,107 @@ async function handleLogEvent(request, env) {
 // ({ ok, failed }) so the sweeps retry. Photos come down BEFORE the rows that
 // name them, and a row group whose photos failed is kept, so a retry can
 // still find them.
+// ── Guestbook uploads from before the per-uploader prefix (go-live round 3) ──
+// Uploads used to be stored as gb/<place id>/<uid>/<file>; now they go under
+// gb/u/<uid>/, so the older keys are a fixed set. A child clean-up that read
+// all of gb/ for them cost one R2 list per 1,000 uploads (anyone's), and past
+// 50,000 it failed every day. A one-time pass in the daily cron
+// (gbLegacyIndexPass, resumable: KV gbidx:cursor, then gbidx:done) records
+// each older key with its uploader in D1 (gb_legacy); after it, a child's
+// older files are one D1 read. Until it has finished, a clean-up reads gb/
+// itself when that takes at most GB_LEGACY_INLINE_PAGES pages, and otherwise
+// leaves the mark gbsweep:<uid>: the pass deletes a marked uploader's files
+// as it reaches them, and the ones it had already indexed when it finishes.
+// (A clean-up counts as done when it has left the mark.)
+const GB_LEGACY_SQL = 'CREATE TABLE IF NOT EXISTS gb_legacy (key TEXT PRIMARY KEY, uid TEXT NOT NULL)';
+const GB_LEGACY_UID_SQL = 'CREATE INDEX IF NOT EXISTS gb_legacy_uid ON gb_legacy (uid)';
+const GB_LEGACY_INLINE_PAGES = 3;
+const GB_LEGACY_PASS_PAGES = 20;
+const gbIsLegacyUpload = (key) => !String(key || '').startsWith('gb/u/') && !!gbUploadOwner(key);
+// One uploader's older files: deleted, or left to the pass. False when a
+// step failed (the clean-up retries); throws are failures too.
+async function gbLegacyFilesDrop(env, userId) {
+  const u = String(userId).toLowerCase();
+  const kv = env.GLOBESKIMMERS_KV;
+  if (!env.MEDIA || typeof env.MEDIA.list !== 'function') return true;
+  if (kv && await kv.get('gbidx:done')) {
+    if (!env.DB) return false;
+    await env.DB.prepare(GB_LEGACY_SQL).run();
+    const { results } = await env.DB.prepare('SELECT key FROM gb_legacy WHERE uid = ?1').bind(u).all();
+    const keys = (results || []).map((r) => r.key);
+    for (let i = 0; i < keys.length; i += 1000) await env.MEDIA.delete(keys.slice(i, i + 1000));
+    await env.DB.prepare('DELETE FROM gb_legacy WHERE uid = ?1').bind(u).run();
+    return true;
+  }
+  let cursor;
+  for (let i = 0; i < GB_LEGACY_INLINE_PAGES; i++) {
+    const page = await env.MEDIA.list({ prefix: 'gb/', cursor, limit: 1000 });
+    const mine = (page.objects || []).map((o) => o.key).filter((k) => gbIsLegacyUpload(k) && gbUploadOwner(k) === u);
+    if (mine.length) await env.MEDIA.delete(mine);
+    if (!page.truncated) return true;
+    cursor = page.cursor;
+  }
+  if (!kv) return false;
+  await kv.put(`gbsweep:${u}`, new Date().toISOString());
+  return true;
+}
+// An account deleted on the adult path: its never-posted older uploads stay
+// (privacy §6), its index rows go.
+async function gbLegacyIndexForget(env, userId) {
+  if (!env.DB || !env.GLOBESKIMMERS_KV || !(await env.GLOBESKIMMERS_KV.get('gbidx:done'))) return;
+  await env.DB.prepare(GB_LEGACY_SQL).run();
+  await env.DB.prepare('DELETE FROM gb_legacy WHERE uid = ?1').bind(String(userId).toLowerCase()).run();
+}
+// Daily, until done: up to GB_LEGACY_PASS_PAGES pages of gb/ a run.
+async function gbLegacyIndexPass(env, now = new Date()) {
+  const out = { pages: 0, indexed: 0, swept: 0, done: false };
+  const kv = env.GLOBESKIMMERS_KV;
+  if (!kv || !env.DB || !env.MEDIA || typeof env.MEDIA.list !== 'function') return out;
+  if (await kv.get('gbidx:done')) { out.done = true; return out; }
+  await env.DB.prepare(GB_LEGACY_SQL).run();
+  await env.DB.prepare(GB_LEGACY_UID_SQL).run();
+  const marks = async () => {
+    const set = new Set(); let c;
+    do { const p = await kv.list({ prefix: 'gbsweep:', cursor: c }); for (const k of p.keys || []) set.add(k.name.slice('gbsweep:'.length)); c = p.list_complete ? null : p.cursor; } while (c);
+    return set;
+  };
+  const marked = await marks();
+  let cursor = (await kv.get('gbidx:cursor')) || undefined;
+  for (let i = 0; i < GB_LEGACY_PASS_PAGES; i++) {
+    const page = await env.MEDIA.list({ prefix: 'gb/', cursor, limit: 1000 });
+    out.pages++;
+    const rows = [], drop = [];
+    for (const { key } of page.objects || []) {
+      if (!gbIsLegacyUpload(key)) continue;
+      const u = gbUploadOwner(key);
+      if (marked.has(u)) drop.push(key); else rows.push({ k: key, u });
+    }
+    if (drop.length) { await env.MEDIA.delete(drop); out.swept += drop.length; }
+    for (let j = 0; j < rows.length; j += 250) {
+      await env.DB.prepare("INSERT OR IGNORE INTO gb_legacy (key, uid) SELECT json_extract(value, '$.k'), json_extract(value, '$.u') FROM json_each(?1)").bind(JSON.stringify(rows.slice(j, j + 250))).run();
+    }
+    out.indexed += rows.length;
+    if (!page.truncated) {
+      // Done: a marked uploader's files the pass had indexed before the mark go too.
+      for (const u of await marks()) {
+        const { results } = await env.DB.prepare('SELECT key FROM gb_legacy WHERE uid = ?1').bind(u).all();
+        const keys = (results || []).map((r) => r.key);
+        for (let j = 0; j < keys.length; j += 1000) await env.MEDIA.delete(keys.slice(j, j + 1000));
+        await env.DB.prepare('DELETE FROM gb_legacy WHERE uid = ?1').bind(u).run();
+        await kv.delete(`gbsweep:${u}`);
+        out.swept += keys.length;
+      }
+      await kv.put('gbidx:done', now.toISOString());
+      await kv.delete('gbidx:cursor');
+      out.done = true;
+      return out;
+    }
+    cursor = page.cursor;
+    await kv.put('gbidx:cursor', cursor);
+  }
+  return out;
+}
+
 // The personal columns of public.profiles a freeze clears (step 1k); the
 // settings columns (units, currency, language, toggles) stay.
 const GB_PROFILE_PERSONAL_COLS = [
@@ -1395,31 +1496,6 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
     } catch { failed.push(step); return false; }
   };
   const uidOk = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(userId));
-  // Every object under `prefix` whose next-to-last path segment is this
-  // user's id. A guestbook upload is gb/<place id>/<uid>/<file>, and the
-  // place id is whatever id the app had at upload (not always the note's
-  // canonical one), so a user's files share no single prefix: the gb/ list
-  // is read and filtered. At most 50 pages; past that the step fails (and
-  // is retried) rather than claim it finished.
-  const r2Owned = async (step, prefix) => {
-    if (!env.MEDIA || typeof env.MEDIA.list !== 'function') return true;
-    const uid = String(userId).toLowerCase();
-    try {
-      let cursor;
-      for (let i = 0; i < 50; i++) {
-        const page = await env.MEDIA.list({ prefix, cursor, limit: 1000 });
-        const keys = (page.objects || []).map((o) => o.key).filter((k) => {
-          const parts = String(k || '').split('/');
-          return parts.length >= 4 && parts[parts.length - 2].toLowerCase() === uid;
-        });
-        if (keys.length) await env.MEDIA.delete(keys);
-        if (!page.truncated) return true;
-        cursor = page.cursor;
-      }
-      failed.push(step); return false;
-    } catch { failed.push(step); return false; }
-  };
-
   // 1b) Guestbook. Their photos come DOWN first (Apple 5.1.1 / GDPR) and their
   //     PRIVATE visit records go. Account deletion keeps their PUBLIC notes,
   //     anonymized (keep the tip, drop the identity). A child's notes are
@@ -1462,8 +1538,16 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
       });
     }
   }
+  //     The files: the uploader's own prefix (gb/u/<uid>/), then the older
+  //     keys, which name the place first (gbLegacyFilesDrop: one D1 read once
+  //     they are indexed). An adult's never-posted uploads stay; their index
+  //     rows go.
   if (child && uidOk) {
-    if (await r2Prefix('guestbook_files', `gb/u/${String(userId).toLowerCase()}/`)) await r2Owned('guestbook_files', 'gb/');
+    if (await r2Prefix('guestbook_files', `gb/u/${String(userId).toLowerCase()}/`)) {
+      try { if (!(await gbLegacyFilesDrop(env, userId))) failed.push('guestbook_files'); } catch { failed.push('guestbook_files'); }
+    }
+  } else if (uidOk && ageKnown) {
+    try { await gbLegacyIndexForget(env, userId); } catch { failed.push('guestbook_index'); }
   }
   await del('guestbook_visits', `guestbook_visits?user_id=eq.${userId}`);
 
@@ -24588,6 +24672,8 @@ export default {
     }
     // The daily counters (gbDayCount) older than two days go.
     try { await gbDayCountsPrune(env); } catch (_e) { /* tomorrow's cron tries again */ }
+    // Older guestbook uploads get their uploader index, once (resumable).
+    try { await gbLegacyIndexPass(env); } catch (_e) { /* tomorrow's cron tries again */ }
     // Under-age freeze: delete content of accounts frozen past the window.
     try { await freezeSweep(env); } catch (_e) { /* tomorrow's cron tries again */ }
     // Deleted accounts whose clean-up had a failed step: finish it.
