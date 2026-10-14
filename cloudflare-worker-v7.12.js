@@ -23553,8 +23553,10 @@ async function handleGuestbookSign(request, env, ctx) {
     if (!res.ok) return jsonResponse({ error: `Supabase ${res.status}`, details: await res.text().catch(() => '') }, 502);
     const created = (await res.json())[0];
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'guestbook_sign', { entity_type: entityType, entity_id: entityId, place: entityName, prompt: row.prompt_type, verified, held }));
+    // The email names no one (privacy §2: a notice never includes your name;
+    // go-live round 3 dropped its "From:" line): the desk shows the note.
     if (held && ctx) ctx.waitUntil(gbNotifyFounder(env, `Guestbook note to review — ${entityName || 'a place'}`,
-      `A note on ${entityName || entityId} is waiting for you in the Admin Portal (Settings → Admin Portal → Guestbook review).\n\nFrom: ${row.display_name}\nWhy it was held: ${row.review_reason}\n\n"${text}"\n\nIt stays private until you approve it.`, user.id));
+      `A note on ${entityName || entityId} is waiting for you in the Admin Portal (Settings → Admin Portal → Guestbook review).\n\nWhy it was held: ${row.review_reason}\n\n"${text}"\n\nIt stays private until you approve it.`, user.id));
     return jsonResponse({ entry: created, held });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
