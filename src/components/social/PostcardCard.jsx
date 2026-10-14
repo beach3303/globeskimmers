@@ -52,7 +52,9 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
     <article aria-label={`Postcard from ${from === "You" ? "you" : from}${place ? `, ${place}` : ""}`} className={className}
       style={{ position: "relative", background: NEUTRAL.cream, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 14, overflow: "hidden", boxShadow: `0 10px 22px -18px ${rgba(NEUTRAL.ink, 0.45)}`, ...style }}>
       <div style={{ margin: "8px 8px 0", borderRadius: 8, overflow: "hidden", aspectRatio: "3 / 2", background: NEUTRAL.airmailHair }}>
+        {/* A photo that can't load leaves the plain airmail panel, never a broken-image icon. */}
         <img src={row.photo} alt={place ? `Postcard from ${place}` : "A postcard"} loading="lazy" decoding="async"
+          onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
           style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
       </div>
       <div style={{ padding: "12px 16px" }}>
