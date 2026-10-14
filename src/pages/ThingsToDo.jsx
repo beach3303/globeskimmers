@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
+import { useLocation as useRouterLocation } from "react-router-dom";
 import { useLocation, isLiveFix } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
@@ -21,26 +21,23 @@ import { matchesQuery } from "@/lib/searchText";
 import {
   SlidersHorizontal, Stamp, ChevronRight, ChevronDown, Compass, Palette, Telescope, Church, Trees, Waves, Fish,
   FerrisWheel, Mountain, Castle, Landmark, Drama, TramFront, Route, Martini, Flower2, Binoculars, Music, Ship, Tent, Library,
-  X, Heart, TriangleAlert, Sunrise, Clock,
+  X, Heart, TriangleAlert, Sunrise, Clock, MapPin, WifiOff, SearchX, RotateCcw,
 } from "lucide-react";
 import { WORLD, NEUTRAL, fs as fsx, rgba } from "@/components/redesign/constants";
 import FinderHeader, { finderColumnStyle } from "@/components/finder/FinderHeader";
 import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
-import { WorldCard, worldGrid, NumberMark, FactsLine, WorldTag, TagRow, CardKicker, CardName, ActionRow } from "@/components/finder/FinderCard";
+import { WorldCard, worldGrid, NumberMark, FactsLine, WorldTag, TagRow, CardKicker, CardName, ActionRow, WorldSkeleton, ratingText } from "@/components/finder/FinderCard";
+import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import { openStateFor } from "@/lib/openState";
 import { useOverlayClose } from "@/components/home/SuggestPlaceSection";
 import { Contours } from "@/components/finder/motifs";
-import { WorldSearch, WorldChip, ChipRow, WorldSegmented } from "@/components/finder/FinderControls";
+import { WorldSearch, WorldChip, ChipRow, WorldSegmented, ResultLine, WorldNote } from "@/components/finder/FinderControls";
 import FilterSheet, { FilterToggleRow } from "@/components/finder/FilterSheet";
 import { useIsTablet } from "@/lib/useIsTablet";
 import PersonaChooser from "@/components/PersonaChooser";
 import { usePersona, personaRank } from "@/lib/persona";
 import { expandActivityQuery, fameFirstThings } from "@/lib/searchPlan";
 import { sortByRating as rankByRating } from "@/lib/searchRank";
-
-
-const T={teal:"#00BCD4",tealD:"#00838F",dark:"#1A2332",dark2:"#243447",gray:"#64748B",grayL:"#F1F5F9",green:"#4CAF50",blue:"#1565C0",blueL:"#E3F2FD",coral:"#FF6B6B",gold:"#FFB74D",
-  accent:"#F59E0B",accentD:"#D97706",accentL:"#FFFBEB"};
 
 // The page's world (the new look's lapis, ThingsToDo.dc.html).
 const W = WORLD.todo;
@@ -60,8 +57,6 @@ const CATEGORIES=[
 ];
 const inCategory=(a,c)=>a.activityCategory===c||(c==="tours"&&a.activityCategory==="tour");
 const ROW_FADE="linear-gradient(90deg,#000 calc(100% - 20px),transparent)";
-
-
 
 // Synonym map for fuzzy/conceptual activity searches — concrete terms (zipline,
 // kayaking, ATV) already match Google well, but vague ones return junk. We expand
@@ -110,164 +105,86 @@ function writeTtdCache(lat, lng, category, radius, data) {
   }
 }
 
-// ── Skeleton placeholder cards ───────────────────────────────────────
-// Replaces the previous centered-spinner state with a grey-card
-// preview of the layout the user is about to see. Eye anchors land
-// in the right places immediately, so when real data arrives, the
-// page doesn't feel like it just appeared — it feels like it filled
-// in. Combined with the localStorage cache (instant cached render on
-// repeat opens), the page reads as "fast" even when the backend is
-// still chewing on 36+ queries behind the scenes.
-//
-// `shimmer` is the moving-highlight animation. Subtle on purpose —
-// strong shimmers feel busier than they help. The CSS gradient slides
-// at 1.4s loop, matching the polish on Instagram / Linear's skeletons.
-function SkeletonCard({ tall = false }) {
-  return (
-    <div
-      aria-hidden
-      style={{
-        background: "#fff",
-        borderRadius: 16,
-        padding: 12,
-        boxShadow: "0 1px 0 rgba(15,20,25,.04), 0 6px 14px -10px rgba(15,20,25,.06)",
-        overflow: "hidden",
-      }}
-    >
-      <div className="gs-shimmer" style={{ height: tall ? 140 : 110, borderRadius: 12, marginBottom: 10 }} />
-      <div className="gs-shimmer" style={{ height: 14, borderRadius: 6, marginBottom: 8, width: "72%" }} />
-      <div className="gs-shimmer" style={{ height: 11, borderRadius: 6, marginBottom: 6, width: "92%" }} />
-      <div className="gs-shimmer" style={{ height: 11, borderRadius: 6, width: "55%" }} />
+// ── Loading: the strips' and cards' shapes, shimmering on the lapis wash ──
+function TtdLoading({isTablet}){
+  const bleed=isTablet?-24:-16;
+  return(
+    <div style={{...finderColumnStyle(isTablet),paddingTop:14,paddingBottom:100}}>
+      <WorldSkeleton world="todo" variant="strip" count={isTablet?4:2} label="Loading things to do" style={{marginRight:bleed}}/>
+      <WorldSkeleton world="todo" variant="strip" count={isTablet?4:2} style={{marginTop:22,marginRight:bleed}}/>
+      <WorldSkeleton world="todo" variant="card" count={2} style={{marginTop:22}}/>
     </div>
   );
 }
 
-function SkeletonStrip({ count = 4 }) {
-  return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: `repeat(${count}, minmax(160px, 1fr))`,
-      gap: 10,
-      overflowX: "auto",
-      paddingBottom: 4,
-    }}>
-      {Array.from({ length: count }).map((_, i) => <SkeletonCard key={i} />)}
-    </div>
-  );
+// ── Maps: lapis pins, word-only popups ───────────────────────────────────
+// Text for Leaflet's HTML strings: names and addresses come from Google and from owners,
+// so every one is escaped.
+const esc=(t)=>String(t??"").replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const mapFs=(px)=>`calc(${px}px * var(--fs, 1))`;
+// A lapis pin with a terracotta-light ring around its content (the card's number, or a
+// cream dot); the place picked is larger.
+function pinHtml(inner,active){
+  const sz=active?34:28;
+  return `<div style="width:${sz}px;height:${sz}px;box-sizing:border-box;border-radius:50%;background:${W.plate};border:${active?3:2}px solid ${W.plateAccent};box-shadow:0 3px 10px ${rgba(W.plate,0.45)};display:flex;align-items:center;justify-content:center;color:${W.plateTitle};font:500 ${active?13:11}px/1 ${MONO};">${inner}</div>`;
+}
+const PIN_DOT=`<span style="display:block;width:10px;height:10px;border-radius:50%;background:${W.plateTitle};"></span>`;
+// Where you are: the blue dot every map uses.
+const YOU_HTML='<div style="width:14px;height:14px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>';
+const X_SVG=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${NEUTRAL.ink3}" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`;
+// A place's popup, in words: the kind and distance, the name (the place's card, when
+// viewCall is given), the open words in the place's zone with a Google rating, the
+// address; then Directions (solid) and Details. The buttons call the page's window
+// bridges.
+function popupHtml(a,{isLocal,fmt,closeCall,viewCall=null,dirsCall}){
+  const name=a.displayName?.text||a.name||"Attraction";
+  const os=openStateFor(a,{isLocal});
+  const tone={open:NEUTRAL.open,closed:NEUTRAL.stamp,muted:NEUTRAL.ink3}[os.tone]||NEUTRAL.ink2;
+  const r=ratingOf(a);
+  const rt=r?ratingText({rating:r.rating,source:r.source}):null;
+  const dist=Number.isFinite(a.distanceMiles)?fmt(a.distanceMiles):null;
+  const addr=a.formattedAddress||a.shortFormattedAddress||"";
+  const btn=(call,label,solid)=>`<button onclick="${call}" style="flex:1;min-height:44px;border:${solid?"0":`1px solid ${W.line}`};border-radius:12px;background:${solid?W.cta:"#fff"};color:${solid?W.ctaInk:NEUTRAL.ink2};font-weight:600;font-size:${mapFs(13)};cursor:pointer;font-family:inherit;">${label}</button>`;
+  const nameStyle=`font-family:${SERIF};font-size:${mapFs(20)};line-height:1.15;color:${NEUTRAL.ink};`;
+  return `<div style="width:256px;position:relative;font-family:inherit;">`
+    +`<button onclick="${closeCall}" aria-label="Close" style="position:absolute;top:4px;right:4px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer;">${X_SVG}</button>`
+    +`<div style="padding:14px 16px 16px;">`
+    +`<div style="padding-right:36px;font-family:${MONO};font-size:${mapFs(10)};line-height:1.4;letter-spacing:.12em;text-transform:uppercase;color:${W.ink};">${esc(kindOf(a))}${dist?` · ${esc(dist)}`:""}</div>`
+    +(viewCall
+      ?`<button onclick="${viewCall}" style="display:block;margin:4px 0 0;padding:0 30px 0 0;border:0;background:transparent;text-align:left;cursor:pointer;${nameStyle}">${esc(name)}</button>`
+      :`<div style="margin-top:4px;padding-right:30px;${nameStyle}">${esc(name)}</div>`)
+    +`<div style="margin-top:6px;font-size:${mapFs(13)};line-height:1.4;color:${NEUTRAL.ink2};"><span style="font-weight:600;color:${tone};">${esc(os.word)}</span>${rt?` · ${esc(rt)}`:""}</div>`
+    +(addr?`<div style="margin-top:4px;font-size:${mapFs(12.5)};line-height:1.4;color:${NEUTRAL.ink3};">${esc(addr)}</div>`:"")
+    +`<div style="display:flex;gap:8px;margin-top:12px;">${btn(dirsCall,"Directions",true)}${viewCall?btn(viewCall,"Details",false):""}</div>`
+    +`</div></div>`;
 }
 
-function TtdSkeleton() {
-  return (
-    <div style={{ padding: "10px 12px 100px" }}>
-      <div style={{ display:"flex", alignItems:"center", gap:8, margin:"4px 4px 10px" }}>
-        <div className="gs-shimmer" style={{ width: 22, height: 22, borderRadius: "50%" }} />
-        <div className="gs-shimmer" style={{ width: 200, height: 16, borderRadius: 6 }} />
-      </div>
-      <div style={{ marginBottom: 16 }}><SkeletonStrip count={3} /></div>
-
-      <div style={{ display:"flex", alignItems:"center", gap:8, margin:"4px 4px 10px" }}>
-        <div className="gs-shimmer" style={{ width: 22, height: 22, borderRadius: "50%" }} />
-        <div className="gs-shimmer" style={{ width: 180, height: 16, borderRadius: 6 }} />
-      </div>
-      <div style={{ marginBottom: 16 }}><SkeletonStrip count={3} /></div>
-
-      <div style={{ display:"flex", alignItems:"center", gap:8, margin:"4px 4px 10px" }}>
-        <div className="gs-shimmer" style={{ width: 22, height: 22, borderRadius: "50%" }} />
-        <div className="gs-shimmer" style={{ width: 100, height: 16, borderRadius: 6 }} />
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <SkeletonCard tall /><SkeletonCard tall /><SkeletonCard tall /><SkeletonCard tall />
-      </div>
-
-      {/* Shimmer keyframes — scoped to elements with .gs-shimmer so we
-          don't accidentally animate anything else. Linear-gradient
-          moves left to right at 1.4s loop; the background size of 200%
-          keeps the moving highlight always inside the visible area. */}
-      <style>{`
-        .gs-shimmer {
-          background: linear-gradient(90deg, #EEF2F6 0%, #F8FAFC 50%, #EEF2F6 100%);
-          background-size: 200% 100%;
-          animation: gs-shimmer 1.4s linear infinite;
-        }
-        @keyframes gs-shimmer {
-          0%   { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-function openStatus(p){
-  const h=p.currentOpeningHours?.weekdayDescriptions||p.hours||[];
-  if(!h.length) return {isOpen:p.isOpen??null,label:p.isOpen===true?"Open Now":p.isOpen===false?"Closed":"Hours Unknown",is24H:false,today:""};
-  const days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-  const ent=h.find((x)=>x?.toLowerCase().startsWith(days[new Date().getDay()].toLowerCase()));
-  if(!ent) return {isOpen:null,label:"Hours Unknown",is24H:false,today:""};
-  const txt=ent.split(":").slice(1).join(":").trim();
-  if(txt.toLowerCase()==="closed") return {isOpen:false,label:"Closed Today",is24H:false,today:"Closed"};
-  const cur=new Date().getHours()*60+new Date().getMinutes();
-  const open=txt.split(",").some((seg)=>{
-    const m=seg.match(/(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)\s*[–\-]\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)/i);
-    if(!m) return false;
-    const tm=(s)=>{const n=s.trim().toUpperCase(),r=n.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/);if(!r)return 0;let h=+r[1];const mm=r[2]?+r[2]:0;if(r[3]==="PM"&&h!==12)h+=12;if(r[3]==="AM"&&h===12)h=0;return h*60+mm;};
-    let o=tm(m[1]),c=tm(m[2]);if(c<=o)c+=1440;return cur>=o&&cur<c;
-  });
-  return {isOpen:open,label:open?"Open Now":"Closed Now",is24H:false,today:txt};
-}
-
-// TierMapOverlay — fullscreen modal map for the National Icons / Regional
-// Must-See "Map" button. Renders ON TOP of the TierCard's expanded modal
-// (which stays mounted underneath), so the X here closes the overlay and
-// returns the user to the same expanded card they were viewing.
-// Shows two pins:
-//   1. User location pin labeled "Current location" or "Selected location"
-//      with the city/state from getLocationLabel(activeLocation).
-//   2. Destination pin with activity icon + popup card containing name,
-//      address, rating, open status, and travel-distance label.
-// The popup card has its OWN X (top-right corner of the popup) which is
-// the single close affordance — no separate overlay X. Closing the popup
-// (via the in-popup X) also closes the overlay → returns to the expanded
-// modal underneath. Wired via window._gsTDCloseTierMap which the popup
-// HTML calls on click.
-function TierMapOverlay({activity:a,userLat,userLng,onClose}){
+// TierMapOverlay: a full-screen map of one place, opened from its sheet, which stays
+// mounted underneath (closing the map comes back to the same sheet). Two pins: where
+// you are (the blue dot, with your location mode and place in a tooltip below it, so it
+// never meets the popup above the other pin) and the place (lapis, terracotta-light
+// ring) with its word-only popup open. Close (44px) top right; "Show both pins" refits
+// the view and reopens the popup.
+function TierMapOverlay({activity:a,userLat,userLng,onClose,isLocal=false,fmt}){
   const mapRef=useRef(null);
   const mapInst=useRef(null);
   const destMkRef=useRef(null);
   const {activeLocation}=useLocation();
-  const navigate=useNavigate();
   const userLocLabel=getLocationLabel(activeLocation);
   const userLocMode=activeLocation?.mode==='navigate'?'Selected location':'Current location';
-  // "You are here" tooltip can be collapsed to a small pill ("📍 You are
-  // here ⌄") to give the map more breathing room. Tap the pill to expand
-  // back to the full card. Wired via window._gsTDToggleUserPin.
-  const [userExpanded,setUserExpanded]=useState(true);
-  // P1 — Directions modal opened from the destination popup. The modal
-  // shows Google Maps / Apple Maps / Waze buttons that deep-link out to
-  // the user's preferred maps app.
+  // The maps chooser, opened from the popup's Directions.
   const [showDirs,setShowDirs]=useState(false);
   useEffect(()=>{
-    // Expose onClose + user-pin collapse toggle + directions opener +
-    // transportation-info navigation to popup inline-HTML buttons.
-    // Cleared on unmount so they don't leak between activity changes.
+    // The popup's buttons are HTML: they reach React through these bridges.
     /** @type {any} */ (window)._gsTDCloseTierMap=onClose;
-    /** @type {any} */ (window)._gsTDToggleUserPin=()=>setUserExpanded(e=>!e);
     /** @type {any} */ (window)._gsTDOpenDirs=()=>setShowDirs(true);
     return()=>{
       delete /** @type {any} */ (window)._gsTDCloseTierMap;
-      delete /** @type {any} */ (window)._gsTDToggleUserPin;
       delete /** @type {any} */ (window)._gsTDOpenDirs;
     };
-  },[onClose,a,navigate]);
-  // "Reset view" handler — re-fits bounds to both pins AND re-opens the
-  // destination popup. Used when the user pans/zooms away or closes the
-  // popup. The user-pin tooltip is permanent so always visible regardless.
-  // Padding is intentionally generous (~200px each side) so both popup
-  // CARDS — not just the pins — stay fully on-screen. The destination
-  // popup is ~270px wide × ~200px tall above its pin; the user tooltip
-  // is ~180px wide × ~80px tall below its pin. Without generous padding,
-  // cards near map edges get clipped. maxZoom:11 keeps the view zoomed
-  // out enough that the cards have breathing room.
+  },[onClose]);
+  // Generous padding keeps both cards (the popup above its pin, the tooltip below the
+  // other) on screen; maxZoom 11 leaves them room.
   const FIT_PADDING={padding:[200,180],maxZoom:11};
   const resetView=()=>{
     if(!mapInst.current||!destMkRef.current) return;
@@ -276,71 +193,19 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
   };
   useEffect(()=>{
     if(!mapRef.current||!a?.lat||!a?.lng||userLat==null||userLng==null) return;
+    const fmtDist=fmt||((d)=>`${d.toFixed(1)} mi`);
     const init=()=>{
       if(mapInst.current) mapInst.current.remove();
       const map=window.L.map(mapRef.current);
       window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OSM"}).addTo(map);
       mapInst.current=map;
-      // ── USER LOCATION PIN ────────────────────────────────────────────────
-      // Uses a Leaflet TOOLTIP (not popup) with permanent:true + direction:
-      // 'bottom'. This solves the popup-overlap bug: popups all default to
-      // anchor above their marker, so when the two pins are close on screen
-      // (e.g. Disneyland + Haneda) the popups stacked on top of each other.
-      // The tooltip is anchored BELOW the user pin, so it can never collide
-      // with the destination popup above its pin. Tooltip is compact and
-      // always visible — no collapse needed at this size.
-      // Internationally aware via getLocationLabel: shows "Pensacola, FL"
-      // for US, "Kyoto, Japan" for Japan, "Manila, Philippines" etc.
-      // **REUSE pattern**: when we wire overlay-style maps for PlacesToEat /
-      // CoffeeFinder / ATMFinder / Money / Restroom, the user pin should
-      // ALSO be a permanent tooltip with direction:'bottom' for the same
-      // anti-collision reason.
-      const userMk=window.L.marker([userLat,userLng],{icon:window.L.divIcon({html:`<div style="width:16px;height:16px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.35);"></div>`,iconSize:[16,16],className:""})}).addTo(map);
-      // Collapsible tooltip: expanded = full card with title/mode/label and
-      // a ⌃ collapse button top-right; collapsed = compact "📍 You are
-      // here ⌄" pill that taps to expand. interactive:true so the inline
-      // toggle button receives clicks instead of passing through to the map.
-      const userTooltipHtml=userExpanded
-        ? `<div style="font-family:-apple-system,sans-serif;padding:6px 8px;min-width:160px;position:relative;"><button onclick="window._gsTDToggleUserPin&&window._gsTDToggleUserPin()" aria-label="Collapse" style="position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:calc(10px*var(--fs));font-weight:800;display:flex;align-items:center;justify-content:center;font-family:inherit;">⌃</button><div style="font-weight:800;color:#1A2332;font-size:calc(12px*var(--fs));margin-bottom:2px;padding-right:24px;">📍 You are here</div><div style="font-weight:700;color:#4285F4;font-size:calc(11px*var(--fs));margin-bottom:2px;">${userLocMode}</div><div style="color:#64748B;font-size:calc(10px*var(--fs));line-height:1.3;">${userLocLabel||''}</div></div>`
-        : `<div style="font-family:-apple-system,sans-serif;padding:5px 9px;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="window._gsTDToggleUserPin&&window._gsTDToggleUserPin()"><span style="font-weight:700;color:#1A2332;font-size:calc(11px*var(--fs));">📍 You are here</span><span style="color:#64748B;font-size:calc(10px*var(--fs));font-weight:700;">⌄</span></div>`;
-      userMk.bindTooltip(userTooltipHtml,{permanent:true,direction:'bottom',opacity:1,offset:[0,12],className:'gs-user-tooltip',interactive:true});
-      // ── DESTINATION PIN ──────────────────────────────────────────────────
-      const color=a.activityColor||T.accent;
-      const sz=40;
-      const destMk=window.L.marker([a.lat,a.lng],{icon:window.L.divIcon({html:`<div style="width:${sz}px;height:${sz}px;background:${color};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 4px 16px ${color}90;border:3px solid #fff;">${a.activityIcon||"⭐"}</div>`,iconSize:[sz,sz],className:""})}).addTo(map);
+      const userMk=window.L.marker([userLat,userLng],{icon:window.L.divIcon({html:YOU_HTML,iconSize:[14,14],className:""})}).addTo(map);
+      userMk.bindTooltip(`<div style="padding:6px 9px;min-width:140px;font-family:inherit;"><div style="font-weight:600;color:${NEUTRAL.ink};font-size:${mapFs(12)};">You are here</div><div style="margin-top:1px;font-weight:600;color:${W.ink};font-size:${mapFs(11)};">${esc(userLocMode)}</div>${userLocLabel?`<div style="margin-top:1px;color:${NEUTRAL.ink3};font-size:${mapFs(10.5)};line-height:1.3;">${esc(userLocLabel)}</div>`:""}</div>`,
+        {permanent:true,direction:'bottom',opacity:1,offset:[0,12],className:'gs-user-tooltip',interactive:false});
+      const destMk=window.L.marker([a.lat,a.lng],{icon:window.L.divIcon({html:pinHtml(PIN_DOT,true),iconSize:[34,34],className:""})}).addTo(map);
       destMkRef.current=destMk;
-      const distMi=a.distanceMiles||0;
-      const travelTxt=a.travelType||(distMi>100?'100+ mi away':distMi>50?'≈50–100 mi':distMi>15?'≈15–50 mi':'📍 Nearby');
-      const distStr=`${distMi.toFixed(1)} mi`;
-      const st=openStatus(a);
-      const stColor=st.isOpen===true?"#15803D":st.isOpen===false?"#DC2626":"#9E9E9E";
-      const stBg=st.isOpen===true?"#F0FDF4":st.isOpen===false?"#FEF2F2":"#F5F5F5";
-      // Destination popup card with its own close X in the top-right corner.
-      // Default Leaflet anchor is ABOVE the marker. With the user-pin tooltip
-      // below its marker, the two never collide regardless of how close the
-      // pins are on screen.
-      // closeButton:false disables Leaflet's default X (we use a custom-
-      // styled one). autoClose:false + closeOnClick:false prevent the
-      // popup from being accidentally dismissed by panning or clicking the
-      // map. The custom X calls window._gsTDCloseTierMap → closes the
-      // WHOLE overlay (returns to expanded card modal).
-      // Status row now includes today's open/close hours when available
-      // (st.today is the parsed "9:00 AM – 10:00 PM" string from openStatus).
-      // Format: "Closed Now · 9:00 AM – 10:00 PM" so user sees BOTH whether
-      // it's open right now AND the actual hours for today.
-      const statusHtml=st.today
-        ? `<span style="font-weight:700;color:${stColor};font-size:calc(12px*var(--fs));">${st.label}</span><span style="color:#64748B;margin-left:6px;font-size:calc(12px*var(--fs));">· ${st.today}</span>`
-        : `<span style="font-weight:700;color:${stColor};font-size:calc(12px*var(--fs));">${st.label}</span>`;
-      // Directions button (always shown) — opens the maps chooser sheet
-      // ON TOP of this overlay.
-      const ctaButtonsHtml=`<div style="display:flex;gap:6px;margin-top:8px;">
-        <button onclick="window._gsTDOpenDirs&&window._gsTDOpenDirs()" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px;border:none;border-radius:8px;background:linear-gradient(135deg,#D97706,#F59E0B);color:#fff;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;">🧭 Directions</button>
-      </div>`;
-      destMk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:250px;padding:12px 14px;position:relative;"><button onclick="window._gsTDCloseTierMap&&window._gsTDCloseTierMap()" aria-label="Close" style="position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#1A2332;font-size:14px;font-weight:800;z-index:10;display:flex;align-items:center;justify-content:center;font-family:inherit;">✕</button><div style="font-weight:700;font-size:calc(15px*var(--fs));color:#1A2332;margin-bottom:5px;line-height:1.3;padding-right:30px;">${a.displayName?.text||a.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${a.formattedAddress||''}</div>${a.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:7px;">★ <strong style="color:#1A2332;">${a.rating}</strong>${a.userRatingCount>0?` <span style="color:#64748B;">(${a.userRatingCount})</span>`:""}</div>`:""}<div style="font-size:calc(12px*var(--fs));padding:6px 9px;border-radius:7px;background:${stBg};margin-bottom:8px;">${statusHtml}</div><div style="font-size:12px;padding:7px 10px;border-radius:7px;background:#FEF3C7;color:#92400E;font-weight:700;">${travelTxt} · ${distStr}</div>${ctaButtonsHtml}</div>`,{maxWidth:270,closeButton:false,autoClose:false,closeOnClick:false});
-      // Fit both pins into view + auto-open destination popup. Uses the
-      // shared FIT_PADDING (200px top/bottom, 180px left/right) so BOTH
-      // popup cards stay fully on-screen even when one pin is near the
-      // viewport edge. The user tooltip is permanent so it's always visible.
+      destMk.bindPopup(popupHtml(a,{isLocal,fmt:fmtDist,closeCall:"window._gsTDCloseTierMap&&window._gsTDCloseTierMap()",dirsCall:"window._gsTDOpenDirs&&window._gsTDOpenDirs()"}),
+        {maxWidth:280,className:"gs-popup",closeButton:false,autoClose:false,closeOnClick:false});
       map.fitBounds([[userLat,userLng],[a.lat,a.lng]],FIT_PADDING);
       setTimeout(()=>destMk.openPopup(),300);
     };
@@ -349,41 +214,24 @@ function TierMapOverlay({activity:a,userLat,userLng,onClose}){
       const sc=document.createElement("script"); sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; sc.onload=init; document.head.appendChild(sc);
     } else init();
     return()=>{ if(mapInst.current){mapInst.current.remove();mapInst.current=null;} };
-  },[a,userLat,userLng,userLocLabel,userLocMode,userExpanded]);
+  },[a,userLat,userLng,userLocLabel,userLocMode,isLocal,fmt]);
   return(
-    <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-      style={{position:"fixed",inset:0,background:"#000",zIndex:10001,display:"flex",flexDirection:"column"}}>
+    <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} role="dialog" aria-modal="true" aria-label={`Map of ${a.displayName?.text||a.name||"the place"}`}
+      style={{position:"fixed",inset:0,background:NEUTRAL.ink,zIndex:10001,display:"flex",flexDirection:"column"}}>
       <div ref={mapRef} style={{flex:1,width:"100%"}}/>
-      {/* Close X — this overlay is a fullscreen fixed inset:0 modal that
-          COVERS the brand banner, and the only dismiss control was the ✕
-          inside the destination Leaflet popup (which disappears if the popup
-          is closed). Add a standalone always-visible close button wired to
-          the same onClose handler. zIndex 10006 sits above the reset button
-          (10003) and the directions modal wrapper (10005). */}
-      <button onClick={onClose} aria-label="Close map" style={{position:"absolute",top:"calc(env(safe-area-inset-top) + 14px)",right:"14px",zIndex:10006,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(20px*var(--fs))",color:T.dark}}>✕</button>
-      {/* Reset view — restores the default "both pins centered + destination
-          card open" state. Useful after user pans/zooms away or closes the
-          destination popup. User pin tooltip is permanent so always visible. */}
-      <button onClick={resetView} aria-label="Show both pins" style={{position:"absolute",bottom:"24px",left:"16px",zIndex:10003,padding:"10px 14px",borderRadius:"22px",border:"none",background:"rgba(255,255,255,0.96)",color:T.dark,fontSize:"calc(13px*var(--fs))",fontWeight:"700",cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.3)",display:"flex",alignItems:"center",gap:"6px",fontFamily:"inherit"}}>
-        <span style={{fontSize:"calc(15px*var(--fs))"}}>↺</span> Show both pins
+      <button type="button" onClick={onClose} aria-label="Close map"
+        style={{position:"absolute",top:"calc(env(safe-area-inset-top) + 14px)",right:14,zIndex:10006,display:"flex",alignItems:"center",justifyContent:"center",width:44,height:44,padding:0,border:0,borderRadius:999,background:NEUTRAL.white,boxShadow:"0 3px 12px rgba(22,17,13,.25)",cursor:"pointer"}}>
+        <X size={20} color={NEUTRAL.ink} strokeWidth={2} aria-hidden="true"/>
       </button>
-      {/* Directions modal (P1). Rendered inside the overlay so its
-          z-index (9999 from the Directions component) stacks correctly
-          relative to this overlay (10001) — wait, that's lower. Use
-          a wrapper that bumps the modal above the overlay backdrop. */}
+      <button type="button" onClick={resetView}
+        style={{position:"absolute",bottom:24,left:16,zIndex:10003,display:"flex",alignItems:"center",gap:6,minHeight:44,padding:"0 14px",border:0,borderRadius:999,background:"rgba(255,255,255,.96)",boxShadow:"0 2px 12px rgba(22,17,13,.3)",color:NEUTRAL.ink,fontFamily:"inherit",fontSize:fsx(13),fontWeight:600,cursor:"pointer"}}>
+        <RotateCcw size={16} color={W.iconInk} strokeWidth={2} aria-hidden="true"/> Show both pins
+      </button>
+      {/* The maps chooser over the map (the overlay sits at 10001). */}
       <div style={{position:"fixed",inset:0,zIndex:10005,pointerEvents:showDirs?'auto':'none'}}>
-        <MapAppSelector
-          isOpen={showDirs}
-          onClose={()=>setShowDirs(false)}
-          destination={{
-            name:a.displayName?.text||a.name,
-            address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",
-            latitude:a.lat,
-            longitude:a.lng,
-          }}
-          userLat={userLat}
-          userLng={userLng}
-        />
+        <MapAppSelector isOpen={showDirs} onClose={()=>setShowDirs(false)}
+          destination={{name:a.displayName?.text||a.name,address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",latitude:a.lat,longitude:a.lng}}
+          userLat={userLat} userLng={userLng}/>
       </div>
     </motion.div>
   );
@@ -730,7 +578,7 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {mapOpen&&(<TierMapOverlay activity={a} userLat={userLat} userLng={userLng} onClose={()=>setMapOpen(false)}/>)}
+        {mapOpen&&(<TierMapOverlay activity={a} userLat={userLat} userLng={userLng} onClose={()=>setMapOpen(false)} isLocal={isLocal} fmt={fmtDist}/>)}
       </AnimatePresence>
     </>
   );
@@ -1027,20 +875,22 @@ export default function ThingsToDoFinder() {
       mapInst.current=map; window._gsTDMapInst=map;
       window._gsTDView=(i)=>{map.closePopup();setViewMode("list");setExpandedIdx(i);setHighlight(i);setTimeout(()=>cardRefs.current[i]?.scrollIntoView({behavior:"smooth",block:"center"}),150);setTimeout(()=>setHighlight(null),2800);};
       window._gsTDDirs=(i)=>setDirsA(cardsList[i]);
-      window.L.marker([lat,lng],{icon:window.L.divIcon({html:'<div style="width:14px;height:14px;background:#4285F4;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',iconSize:[14,14],className:""})}).addTo(map).bindTooltip('<div style="font-family:-apple-system,sans-serif;padding:5px 9px;"><span style="font-weight:700;color:#1A2332;font-size:calc(11px*var(--fs));">📍 You are here</span></div>',{permanent:true,direction:'bottom',opacity:1,offset:[0,12],className:'gs-user-tooltip',interactive:false});
+      window.L.marker([lat,lng],{icon:window.L.divIcon({html:YOU_HTML,iconSize:[14,14],className:""})}).addTo(map)
+        .bindTooltip(`<div style="padding:5px 9px;font-family:inherit;font-weight:600;color:${NEUTRAL.ink};font-size:${mapFs(11)};">You are here</div>`,{permanent:true,direction:'bottom',opacity:1,offset:[0,12],className:'gs-user-tooltip',interactive:false});
+      // Each card's pin carries its number from the list.
       cardsList.forEach((a,i)=>{
         if(!a.lat||!a.lng) return;
-        const active=activePin===i; const color=active?"#FF6B35":a.activityColor||T.accent; const sz=active?36:30;
-        const mk=window.L.marker([a.lat,a.lng],{icon:window.L.divIcon({html:`<div style="width:${sz}px;height:${sz}px;background:${color};color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:${active?14:12}px;box-shadow:0 3px 12px ${color}70;border:${active?3:2}px solid #fff;">${a.activityIcon||"⭐"}</div>`,iconSize:[sz,sz],className:""})}).addTo(map);
-        const st=openStatus(a);
-        mk.bindPopup(`<div style="font-family:-apple-system,sans-serif;width:260px;position:relative;"><button onclick="window._gsTDMapInst?.closePopup()" style="position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;color:#64748B;font-size:13px;z-index:10;">✕</button><div style="padding:12px 14px;"><div onclick="window._gsTDView&&window._gsTDView(${i})" style="font-weight:700;font-size:calc(15px*var(--fs));color:#1A2332;margin-bottom:5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding-right:26px;line-height:1.3;">${a.displayName?.text||a.name}</div><div style="font-size:12px;color:#64748B;margin-bottom:7px;">📍 ${a.formattedAddress||''}</div>${a.rating?`<div style="font-size:12px;color:#F59E0B;margin-bottom:7px;">★ <strong style="color:#1A2332;">${a.rating}</strong>${a.userRatingCount>0?` <span style="color:#64748B;">(${a.userRatingCount})</span>`:""}</div>`:""}<div style="font-size:calc(12px*var(--fs));padding:6px 9px;border-radius:7px;background:${st.isOpen===true?"#F0FDF4":st.isOpen===false?"#FEF2F2":"#F5F5F5"};margin-bottom:10px;"><span style="font-weight:700;color:${st.isOpen===true?"#15803D":st.isOpen===false?"#DC2626":"#9E9E9E"};font-size:calc(12px*var(--fs));">${st.label}</span></div><div style="display:flex;gap:8px;"><button onclick="window._gsTDDirs&&window._gsTDDirs(${i})" style="flex:1;padding:9px;border:none;border-radius:8px;background:#3B82F6;color:#fff;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit;">🧭 Directions</button><button onclick="window._gsTDView&&window._gsTDView(${i})" style="flex:1;padding:9px;border:none;border-radius:8px;background:#F1F5F9;color:#1A2332;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit;">📋 Details</button></div></div></div>`,{maxWidth:280,className:"gs-popup",autoPanPaddingTopLeft:[0,160],autoPanPaddingBottomRight:[20,20],keepInView:true});
+        const active=activePin===i; const sz=active?34:28;
+        const mk=window.L.marker([a.lat,a.lng],{icon:window.L.divIcon({html:pinHtml(esc(i+1),active),iconSize:[sz,sz],className:""})}).addTo(map);
+        mk.bindPopup(popupHtml(a,{isLocal,fmt:formatDistance,closeCall:"window._gsTDMapInst&&window._gsTDMapInst.closePopup()",viewCall:`window._gsTDView&&window._gsTDView(${i})`,dirsCall:`window._gsTDDirs&&window._gsTDDirs(${i})`}),
+          {maxWidth:280,className:"gs-popup",closeButton:false,autoPanPaddingTopLeft:[0,160],autoPanPaddingBottomRight:[20,20],keepInView:true});
         mk.on("popupopen",()=>setActivePin(i)); markers.current[i]=mk;
       });
       if(activePin!==null) setTimeout(()=>markers.current[activePin]?.openPopup(),200);
     };
     if(!window.L){const lk=document.createElement("link");lk.rel="stylesheet";lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(lk);const sc=document.createElement("script");sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";sc.onload=init;document.head.appendChild(sc);}else init();
     return()=>{delete window._gsTDMapInst;delete window._gsTDView;delete window._gsTDDirs;if(mapInst.current){mapInst.current.remove();mapInst.current=null;}};
-  },[viewMode,cardsList,lat,lng,activePin]);
+  },[viewMode,cardsList,lat,lng,activePin,isLocal,unit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stats={total:cardsList.length};
   // The chapters that show (browsing, no filter), numbered in this order with no gaps.
@@ -1055,6 +905,7 @@ export default function ThingsToDoFinder() {
   // category chips or Open now / Free entry, which show on their own chips.
   const sheetFilterCount=[outdoorOnly,popularOnly].filter(Boolean).length;
   const clearSheetFilters=()=>{setOutdoorOnly(false);setPopularOnly(false);};
+  const clearAllFilters=()=>{setOpenOnly(false);setFreeOnly(false);setCategory("all");clearSheetFilters();};
 
   // Activity search handlers — state (q/submitted/tours/tourBusy) is declared
   // higher up with the rest of the component state (see note there).
@@ -1155,6 +1006,10 @@ export default function ThingsToDoFinder() {
           ))}
         </ChipRow>
         {!submitted&&!browseFilterActive&&(nationalIcons.length>0||regionalGems.length>0||nearbyAttractions.length>0)&&<PersonaChooser world="todo" style={{marginTop:6,maxWidth:560}}/>}
+        {submitted&&(tourBusy&&cardsList.length===0
+          ? <ResultLine live>Searching&hellip;</ResultLine>
+          : cardsList.length>0&&<ResultLine live items={[{count:cardsList.length,label:`for “${submitted}”`}]}/>)}
+        {browseFilterActive&&filtered.length>0&&<ResultLine live items={[{count:filtered.length,label:filtered.length===1?"place matches":"places match"}]}/>}
       </FinderHeader>
 
       {/* Cold-load state: no cached results AND nothing fetched yet
@@ -1170,58 +1025,64 @@ export default function ThingsToDoFinder() {
           <TierCard key={focusCard.id} a={focusCard} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth forceOpen={focusOpen} pinnedLabel={routerLocation.state?.focus?.from||null} gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} markOf={markOf} isLocal={isLocal}/>
         </div>
       )}
-      {loading&&activities.length===0&&nationalIcons.length===0?(<TtdSkeleton/>)
-      :error?(<div style={{textAlign:"center",padding:"70px 24px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"14px"}}>😕</div><div style={{color:T.coral,fontWeight:"700",fontSize:"calc(16px*var(--fs))"}}>{error}</div>{/* radius starts AT the 25mi ceiling here, so "Expand" would be a no-op — offer a plain retry instead (no forceRefresh: a retry mustn't bust caches). */}<button onClick={radius<25?()=>setRadius(r=>Math.min(r+5,25)):()=>setRefreshTick(t=>t+1)} style={{marginTop:"14px",padding:"12px 24px",borderRadius:"12px",border:"none",background:`linear-gradient(135deg,${T.accentD},${T.accent})`,color:"#fff",fontWeight:"700",fontSize:"calc(14px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>{radius<25?"Expand Radius":"Try Again"}</button></div>)
-      :viewMode==="list"?(<div style={{...finderColumnStyle(isTablet),paddingTop:14,paddingBottom:isTablet?170:100,display:"flex",flexDirection:"column"}}>
-        {submitted&&(
-          <div style={{marginBottom:"2px"}}>
-            {filtered.length>0&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>📍</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Places matching &ldquo;{submitted}&rdquo;</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
-            {tourBusy&&filtered.length===0&&<div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",padding:"6px 4px"}}>Searching nearby…</div>}
-          </div>
-        )}
-        {browseFilterActive&&<div style={{display:"flex",alignItems:"center",gap:"8px",margin:"4px 4px 8px"}}><span style={{fontSize:"calc(18px*var(--fs))"}}>🔧</span><span style={{fontWeight:"800",fontSize:"calc(15px*var(--fs))",color:T.dark}}>Filtered results</span><span style={{fontSize:"calc(12px*var(--fs))",color:T.gray}}>({filtered.length})</span></div>}
-        {chapterList.map((c,i)=>(
-          <Chapter key={c.key} n={i+1} title={c.title} items={c.items} open={openCh[c.key]} onToggle={()=>toggleCh(c.key)}
-            after={i===0?0:(openCh[chapterList[i-1].key]?14:4)} userLat={lat} userLng={lng} isTablet={isTablet}
-            gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} markOf={markOf} isLocal={isLocal}/>
-        ))}
-        {nearYouChapter&&(
-          <Waypoint n={chapterList.length+1} title="Near you" count={filtered.length} open={openCh.near} onToggle={()=>toggleCh("near")}
-            controls="ttd-near-you" style={{marginTop:openCh[chapterList[chapterList.length-1].key]?14:4}}/>
-        )}
-        {/* Empty state */}
-        {submitted
-          ? (!tourBusy&&cardsList.length===0
-              ? (searchError
-                  /* The worker call failed — that is not "nothing nearby". Honest retry state. */
-                  ? <div style={{textAlign:"center",padding:"40px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"12px"}}>📡</div><div style={{fontWeight:"800",fontSize:"calc(17px*var(--fs))",color:T.dark}}>Couldn&rsquo;t reach the server</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Check your connection and try again.</div><button onClick={()=>runActivitySearch(submitted)} style={{marginTop:"14px",padding:"10px 22px",borderRadius:"12px",border:"none",background:T.accent,color:"#fff",fontWeight:"700",fontSize:"calc(13px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Try Again</button></div>
-                  : <div style={{textAlign:"center",padding:"40px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(48px*var(--fs))",marginBottom:"12px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(17px*var(--fs))",color:T.dark}}>Nothing for &ldquo;{submitted}&rdquo; nearby</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>Try a broader term or a wider radius.</div></div>)
-              : null)
-          : (filtered.length===0&&(browseFilterActive||(nationalIcons.length===0&&regionalGems.length===0))
-              ? <div style={{textAlign:"center",padding:"50px 24px",background:"#fff",borderRadius:"20px"}}><div style={{fontSize:"calc(52px*var(--fs))",marginBottom:"14px"}}>🔍</div><div style={{fontWeight:"800",fontSize:"calc(18px*var(--fs))",color:T.dark}}>No matches</div><div style={{color:T.gray,fontSize:"calc(13px*var(--fs))",marginTop:"6px"}}>{browseFilterActive?"No spots match these filters — try clearing one or widening your radius":"Try a different category or expand your radius"}</div></div>
-              : null)}
+      {(!Number.isFinite(lat)||!Number.isFinite(lng))?(
+        /* No location yet (first run, GPS denied): ask for one; never a spinner. */
+        <div style={{...finderColumnStyle(isTablet),paddingTop:28}}>
+          <FinderEmptyState world="todo" icon={MapPin} title="Choose a location to explore" reason="Use your current location or pick a city to see things to do nearby." actionLabel="Choose location" onAction={()=>setLocPicker(true)}/>
+        </div>
+      ):loading&&activities.length===0&&nationalIcons.length===0&&regionalGems.length===0&&nearbyAttractions.length===0?(
+        <TtdLoading isTablet={isTablet}/>
+      ):error?(
+        /* A failed read is never "nothing here"; an empty answer says so plainly. The
+           list always starts at the 25-mile ceiling, so there is no radius to widen. */
+        <div style={{...finderColumnStyle(isTablet),paddingTop:28}}>
+          {/reach the server|took too long|^Failed/i.test(error)
+            ? <FinderEmptyState world="todo" icon={WifiOff} title="Couldn’t load things to do" reason={error} actionLabel="Try again" onAction={()=>setRefreshTick((t)=>t+1)} secondaryLabel="Search somewhere else" onSecondary={()=>setLocPicker(true)}/>
+            : <FinderEmptyState world="todo" icon={SearchX} title="Nothing to do found here yet" reason="We couldn’t find attractions around this location." actionLabel="Search somewhere else" onAction={()=>setLocPicker(true)} secondaryLabel="Try again" onSecondary={()=>setRefreshTick((t)=>t+1)}/>}
+        </div>
+      ):viewMode==="list"?(
+        <div style={{...finderColumnStyle(isTablet),paddingTop:14,paddingBottom:isTablet?170:100,display:"flex",flexDirection:"column"}}>
+          {chapterList.map((c,i)=>(
+            <Chapter key={c.key} n={i+1} title={c.title} items={c.items} open={openCh[c.key]} onToggle={()=>toggleCh(c.key)}
+              after={i===0?0:(openCh[chapterList[i-1].key]?14:4)} userLat={lat} userLng={lng} isTablet={isTablet}
+              gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} markOf={markOf} isLocal={isLocal}/>
+          ))}
+          {nearYouChapter&&(
+            <Waypoint n={chapterList.length+1} title="Near you" count={filtered.length} open={openCh.near} onToggle={()=>toggleCh("near")}
+              controls="ttd-near-you" style={{marginTop:openCh[chapterList[chapterList.length-1].key]?14:4}}/>
+          )}
 
-        {/* Main cards — within-radius (both modes). When searching, the
-            "a bit farther" divider is injected before the first beyond card. */}
-        {(!nearYouChapter||openCh.near)&&cardsList.length>0&&(
-          <ol id="ttd-near-you" aria-label={submitted?`Places for ${submitted}`:"Things to do near you"} style={{...worldGrid(isTablet),marginTop:nearYouChapter?8:0}}>
-            {cardsList.map((a,i)=>(
-              <TierCard key={a.id||a.placeId||i} a={a} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth inList n={i+1}
-                onMap={()=>handleMap(i)} highlighted={highlight===i} forceOpen={expandedIdx===i} cardRef={(el)=>{cardRefs.current[i]=el;}}
-                gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} markOf={markOf} isLocal={isLocal}/>
-            ))}
-          </ol>
-        )}
+          {/* A search: its shapes while it runs; then an honest empty or failed state. */}
+          {submitted&&tourBusy&&cardsList.length===0&&<WorldSkeleton world="todo" variant="card" count={2} label={`Searching for ${submitted}`}/>}
+          {submitted&&!tourBusy&&cardsList.length===0&&(searchError
+            ? <FinderEmptyState world="todo" icon={WifiOff} title="Couldn’t reach the server" reason="Check your connection and try again." actionLabel="Try again" onAction={()=>runActivitySearch(submitted)} secondaryLabel="Clear search" onSecondary={clearSearch}/>
+            : <FinderEmptyState world="todo" icon={SearchX} title={`Nothing for “${submitted}” nearby`} reason="Try a broader word, or search somewhere else." actionLabel="Search somewhere else" onAction={()=>setLocPicker(true)} secondaryLabel="Clear search" onSecondary={clearSearch}/>)}
+          {/* Browsing: filters that leave nothing, or a place with nothing listed. */}
+          {!submitted&&filtered.length===0&&(browseFilterActive||chapterList.length===0)&&(
+            <FinderEmptyState world="todo" icon={SearchX} title="No matches" reason={browseFilterActive?"Nothing here passes these filters.":"Nothing to do found around here yet."}
+              actionLabel="Search somewhere else" onAction={()=>setLocPicker(true)} secondaryLabel={browseFilterActive?"Clear filters":undefined} onSecondary={browseFilterActive?clearAllFilters:undefined}/>
+          )}
 
-        {/* Results rendered but the search call failed — say so honestly. */}
-        {submitted&&!tourBusy&&searchError&&cardsList.length>0&&(
-          <div style={{marginTop:"14px",padding:"10px 14px",borderRadius:"12px",background:"#FFF5F5",border:`1px solid ${T.coral}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px"}}>
-            <span style={{color:T.coral,fontWeight:"600",fontSize:"calc(12.5px*var(--fs))"}}>Couldn&rsquo;t reach the server for more results.</span>
-            <button onClick={()=>runActivitySearch(submitted)} style={{flexShrink:0,padding:"7px 12px",borderRadius:"8px",border:"none",background:T.coral,color:"#fff",fontWeight:"700",fontSize:"calc(12px*var(--fs))",cursor:"pointer",fontFamily:"inherit"}}>Try again</button>
-          </div>
-        )}
-      </div>)
-      :(<div style={{position:"relative"}}><div ref={mapRef} style={{height:"calc(100vh - 230px)",width:"100%"}}/><button onClick={()=>setViewMode("list")} style={{position:"fixed",top:"calc(50px + env(safe-area-inset-top) + 10px)",right:"14px",zIndex:1200,background:"#fff",borderRadius:"50%",width:"42px",height:"42px",border:"none",boxShadow:"0 3px 12px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"calc(20px*var(--fs))",color:T.dark}}>✕</button></div>)}
+          {(!nearYouChapter||openCh.near)&&cardsList.length>0&&(
+            <ol id="ttd-near-you" aria-label={submitted?`Places for ${submitted}`:"Things to do near you"} style={{...worldGrid(isTablet),marginTop:nearYouChapter?8:0}}>
+              {cardsList.map((a,i)=>(
+                <TierCard key={a.id||a.placeId||i} a={a} userLat={lat} userLng={lng} isTablet={isTablet} fullWidth inList n={i+1}
+                  onMap={()=>handleMap(i)} highlighted={highlight===i} forceOpen={expandedIdx===i} cardRef={(el)=>{cardRefs.current[i]=el;}}
+                  gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} markOf={markOf} isLocal={isLocal}/>
+              ))}
+            </ol>
+          )}
+
+          {/* Results showing, but the search call failed: said, with a retry. */}
+          {submitted&&!tourBusy&&searchError&&cardsList.length>0&&(
+            <WorldNote world="todo" icon={WifiOff} title="Couldn’t reach the server for more results" action={{label:"Try again",onClick:()=>runActivitySearch(submitted)}} style={{marginTop:14}}/>
+          )}
+        </div>
+      ):(
+        <div style={{...finderColumnStyle(isTablet),paddingTop:12,paddingBottom:100}}>
+          <div ref={mapRef} role="region" aria-label="Map of things to do" style={{height:"calc(100vh - 260px)",minHeight:320,width:"100%",boxSizing:"border-box",borderRadius:16,overflow:"hidden",border:`1px solid ${W.line}`}}/>
+        </div>
+      )}
 
       <style>{`::-webkit-scrollbar{display:none}.gs-popup .leaflet-popup-content-wrapper{border-radius:16px;padding:0;overflow:hidden;}.gs-popup .leaflet-popup-content{margin:0;}.gs-popup .leaflet-popup-tip-container{display:none;}`}</style>
       <MapAppSelector isOpen={!!dirsA} onClose={()=>setDirsA(null)} destination={dirsA?{name:dirsA.displayName?.text||dirsA.name,address:dirsA.formattedAddress||dirsA.shortFormattedAddress||dirsA.vicinity||dirsA.address||"",latitude:dirsA.lat,longitude:dirsA.lng}:null} userLat={lat} userLng={lng}/>
