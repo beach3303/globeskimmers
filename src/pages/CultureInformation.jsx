@@ -1,16 +1,23 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { fetchCulture } from "@/lib/callWorker";
-import { useNavigate } from "react-router-dom";
-import { createPageUrl } from "@/utils";
-import { Loader2, Navigation, RefreshCw, ChevronLeft, ChevronDown, ChevronRight, Compass, AlertTriangle, ExternalLink } from "lucide-react";
-import { CAT, IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT } from "@/components/redesign/constants";
+import {
+  AlertTriangle, Bird, BookOpen, Cake, Camera, Check, ChevronDown, Clock, Compass, ExternalLink, Globe, Handshake, Info, Landmark,
+  Languages, Leaf, Lightbulb, MapPin, Medal, Mountain, Navigation, PartyPopper, RefreshCw, Sandwich, ScrollText, ShieldAlert,
+  ShieldCheck, ShoppingBag, Sparkles, Sun, Ticket, TrainFront, Utensils, X,
+} from "lucide-react";
+import { WORLD, NEUTRAL } from "@/components/redesign/constants";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "../components/location/LocationContext";
+import { getLocationLabel } from "@/components/location/locationLabel";
 import LocationModePicker from "../components/location/LocationModePicker";
+import FinderHeader, { finderColumnStyle } from "@/components/finder/FinderHeader";
+import { WorldSkeleton } from "@/components/finder/FinderCard";
+import { WorldNote } from "@/components/finder/FinderControls";
+import FinderEmptyState from "@/components/finder/FinderEmptyState";
+import { AccessionTag } from "@/components/finder/motifs";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useDismissable } from "@/lib/dismissStack";
-
 // ============================================================================
 // Cultural Info — two-layer (Country / City / Nearby Region) traveler guide.
 //
@@ -24,39 +31,23 @@ import { useDismissable } from "@/lib/dismissStack";
 // (city leadership 1d, travel advisory 1d, safety 30d, national leadership 30d)
 // show "May have changed — tap to refresh" when stale instead of posing as
 // current. The ONLY real links are the curated government advisory list below.
+//
+// The new look (Culture.dc.html; plan S15): the olive plate with the section index,
+// catalogue entries with fixed accession numbers ('No. 07', from the catalog order),
+// one-tone blocks (do and don't as hairline rows, warnings in stamp red) and each
+// government's own travel advisory named. No emoji, no layer colours.
 // ============================================================================
 
 const CACHE_VERSION = "v2";
 
-// ---- redesign design tokens (handoff: iPad redesign) -----------------------
-// The font stack is loaded in index.html (Instrument Serif / Inter Tight /
-// JetBrains Mono). Apply inline so fidelity never depends on tailwind config.
-const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
-const SANS = '"Inter Tight", ui-sans-serif, system-ui, -apple-system, sans-serif';
-const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
-const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657", RULE = "rgba(22,17,13,.10)";
+// ---- the new look: Museum Catalogue -----------------------------------------
+const W = WORLD.culture;
+const SERIF = "'Instrument Serif', Georgia, serif";
+const SANS = "'Inter Tight', ui-sans-serif, system-ui, -apple-system, sans-serif";
+const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
+const INK = NEUTRAL.ink, INK2 = NEUTRAL.ink2, INK3 = NEUTRAL.ink3, RULE = W.line, STAMP = NEUTRAL.stamp;
 // Respect the app-wide text-scale variable, with a safe 1 fallback.
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
-
-// Per-layer color world: Country = culture brown, City = teal, Region = emerald.
-const LAYER = {
-  country: { ink: CAT.culture.ink, bg: CAT.culture.bg },
-  city: { ink: TEAL_DEEP, bg: "#D2EFEC" },
-  region: { ink: "#2E7D46", bg: "#E7F3EA" },
-};
-
-// Badge / chip palette — soft tint background + saturated text (handoff pills).
-// Foregrounds darkened so small badge text clears WCAG 4.5:1 on its own tint.
-const TONE = {
-  teal: ["#D2EFEC", "#0B6A62"], amber: ["#FCEAC9", "#8A5410"],
-  green: ["#E7F3EA", "#266A3B"], rose: ["#FBE0DC", "#A82C24"],
-  violet: ["#EAE0FA", "#6D29D9"], slate: ["#EFE8D9", "#736657"],
-  blue: ["#EAF0FB", "#205FCF"],
-};
-// Amber "note" surface for warnings / disclaimers (handoff .note). ink darkened
-// to clear 4.5:1 on the tint — it carries safety / advisory copy.
-const NOTE = { bg: "#FBEFD7", border: "#EBD9AE", ink: "#7E601F" };
-
 // ---- small utils -----------------------------------------------------------
 const slug = (s) =>
   String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
@@ -122,10 +113,10 @@ function purgeLegacyCache() {
 
 // ---- curated travel-advisory sources (the ONLY real source_urls) ----------
 const ADVISORY_SOURCES = [
-  { flag: "🇺🇸", label: "US", url: "https://travel.state.gov/content/travel/en/traveladvisories/traveladvisories.html" },
-  { flag: "🇬🇧", label: "UK", url: "https://www.gov.uk/foreign-travel-advice" },
-  { flag: "🇨🇦", label: "Canada", url: "https://travel.gc.ca/travelling/advisories" },
-  { flag: "🇦🇺", label: "Australia", url: "https://www.smartraveller.gov.au/" },
+  { name: "U.S. State Department", url: "https://travel.state.gov/content/travel/en/traveladvisories/traveladvisories.html" },
+  { name: "UK FCDO", url: "https://www.gov.uk/foreign-travel-advice" },
+  { name: "Government of Canada", url: "https://travel.gc.ca/travelling/advisories" },
+  { name: "Australia (Smartraveller)", url: "https://www.smartraveller.gov.au/" },
 ];
 
 // ---- schema helpers --------------------------------------------------------
@@ -177,7 +168,8 @@ const ANIMAL_ITEM = {
 
 // ============================================================================
 // SECTION CATALOG. layer ∈ country | city. Each bundle is one cached Haiku call.
-// `cards` describe presentation; a card/block renders only when it has data.
+// `cards` describe presentation (icon: the entry's lucide icon); a card/block
+// renders only when it has data.
 // `fallback: true` → if the city bundle comes back empty, refetch at region
 // scope and show under "Nearby Region".
 // ============================================================================
@@ -186,7 +178,7 @@ const COUNTRY_BUNDLES = [
     id: "country_leadership", layer: "country", ttlDays: 30, volatile: true,
     prompt: (p) => `List the current top national leaders of ${p} (3-5): for each give position (e.g. President, Prime Minister, Monarch), full name, and a short title. Use full names and proper titles.${HONESTY(p)}`,
     schema: objOf({ leaders: arrOf({ position: STR, name: STR, title: STR }) }),
-    cards: [{ id: "leaders", title: "National Leadership", icon: "🏛️", blocks: [{ kind: "leaders", field: "leaders" }] }],
+    cards: [{ id: "leaders", title: "National Leadership", icon: Landmark, blocks: [{ kind: "leaders", field: "leaders" }] }],
   },
   {
     id: "country_basics", layer: "country", ttlDays: 365,
@@ -198,18 +190,18 @@ const COUNTRY_BUNDLES = [
       basic_greetings: arrOf({ phrase: STR, meaning: STR }), major_products_exports: STRARR,
     }),
     cards: [
-      { id: "about", title: "About the Country", icon: "🌎", blocks: [
+      { id: "about", title: "About the Country", icon: Globe, blocks: [
         { kind: "text", field: "national_food_culture", label: "Food culture" },
         { kind: "text", field: "national_pride", label: "National pride" },
         { kind: "motto", field: "motto" },
       ] },
-      { id: "religion", title: "Religion", icon: "🕌", blocks: [{ kind: "pairs", field: "religion" }] },
-      { id: "lang", title: "Language", icon: "🗣️", blocks: [
+      { id: "religion", title: "Religion", icon: BookOpen, blocks: [{ kind: "pairs", field: "religion" }] },
+      { id: "lang", title: "Language", icon: Languages, blocks: [
         { kind: "kv", fields: [{ label: "Official", field: "official_language" }, { label: "English", field: "english_level" }, { label: "Writing", field: "writing_system" }] },
         { kind: "chips", field: "common_second_languages", label: "Also spoken" },
         { kind: "phrases", field: "basic_greetings", label: "Basic greetings" },
       ] },
-      { id: "products", title: "Famous Products & Exports", icon: "🛍️", blocks: [{ kind: "chips", field: "major_products_exports" }] },
+      { id: "products", title: "Famous Products & Exports", icon: ShoppingBag, blocks: [{ kind: "chips", field: "major_products_exports" }] },
     ],
   },
   {
@@ -221,9 +213,9 @@ const COUNTRY_BUNDLES = [
       national_street_foods: arrOf({ name: STR, description: STR }),
     }),
     cards: [
-      { id: "dishes", title: "National Dishes", icon: "🍽️", blocks: [{ kind: "cards", field: "national_dishes" }] },
-      { id: "desserts", title: "National Desserts & Sweets", icon: "🍰", blocks: [{ kind: "cards", field: "national_desserts" }] },
-      { id: "street", title: "National Street Food", icon: "🍢", blocks: [{ kind: "cards", field: "national_street_foods" }] },
+      { id: "dishes", title: "National Dishes", icon: Utensils, blocks: [{ kind: "cards", field: "national_dishes" }] },
+      { id: "desserts", title: "National Desserts & Sweets", icon: Cake, blocks: [{ kind: "cards", field: "national_desserts" }] },
+      { id: "street", title: "National Street Food", icon: Sandwich, blocks: [{ kind: "cards", field: "national_street_foods" }] },
     ],
   },
   {
@@ -235,9 +227,9 @@ const COUNTRY_BUNDLES = [
       festivals: arrOf({ name: STR, date: STR, description: STR }),
     }),
     cards: [
-      { id: "history", title: "History", icon: "📜", blocks: [{ kind: "cards", field: "history_highlights" }] },
-      { id: "heroes", title: "National Heroes", icon: "🏅", blocks: [{ kind: "cards", field: "national_heroes" }] },
-      { id: "festivals", title: "Festivals & Celebrations", icon: "🎉", blocks: [{ kind: "cards", field: "festivals" }] },
+      { id: "history", title: "History", icon: ScrollText, blocks: [{ kind: "cards", field: "history_highlights" }] },
+      { id: "heroes", title: "National Heroes", icon: Medal, blocks: [{ kind: "cards", field: "national_heroes" }] },
+      { id: "festivals", title: "Festivals & Celebrations", icon: PartyPopper, blocks: [{ kind: "cards", field: "festivals" }] },
     ],
   },
   {
@@ -250,13 +242,13 @@ const COUNTRY_BUNDLES = [
       etiquette: objOf({ do: STRARR, dont: STRARR }),
     }),
     cards: [
-      { id: "climate", title: "Climate", icon: "☀️", blocks: [
+      { id: "climate", title: "Climate", icon: Sun, blocks: [
         { kind: "kv", fields: [{ label: "Climate", field: "type" }, { label: "Best time", field: "best_time_to_visit" }] },
         { kind: "chips", field: "what_to_pack", label: "What to pack" },
       ] },
-      { id: "nature", title: "Nature Icons", icon: "🌿", blocks: [{ kind: "cards", field: "nature_icons" }] },
-      { id: "wildlife", title: "Wildlife", icon: "🦜", blocks: [{ kind: "cards", field: "wildlife" }] },
-      { id: "etiquette", title: "Etiquette", icon: "🤝", blocks: [{ kind: "dodont", field: "etiquette" }] },
+      { id: "nature", title: "Nature Icons", icon: Mountain, blocks: [{ kind: "cards", field: "nature_icons" }] },
+      { id: "wildlife", title: "Wildlife", icon: Bird, blocks: [{ kind: "cards", field: "wildlife" }] },
+      { id: "etiquette", title: "Etiquette", icon: Handshake, blocks: [{ kind: "dodont", field: "etiquette" }] },
     ],
   },
   {
@@ -264,7 +256,7 @@ const COUNTRY_BUNDLES = [
     aiLabel: true, // safety-critical + purely model-written → say so in the card header
     prompt: (p) => `Provide a traveler safety overview for ${p}: a short overview, 3-6 common_scams travelers face, and 3-6 general safety_tips.${HONESTY(p)}`,
     schema: objOf({ overview: STR, common_scams: STRARR, safety_tips: STRARR }),
-    cards: [{ id: "safety", title: "Safety", icon: "🛟", blocks: [
+    cards: [{ id: "safety", title: "Safety", icon: ShieldCheck, blocks: [
       { kind: "text", field: "overview" },
       { kind: "bullets", field: "common_scams", label: "Common scams" },
       { kind: "bullets", field: "safety_tips", label: "Safety tips" },
@@ -274,7 +266,7 @@ const COUNTRY_BUNDLES = [
     id: "country_advisory", layer: "country", ttlDays: 1, volatile: true,
     prompt: (p) => `Summarize the general travel advisory picture for ${p} for international travelers: an overall_level (e.g. "Exercise normal precautions" / "Increased caution" / "Reconsider travel"), a 1-2 sentence summary, 3-6 key_risks, areas_to_avoid (if any), and brief entry_exit_notes. This is a general summary, not official guidance.${HONESTY(p)}`,
     schema: objOf({ overall_level: STR, summary: STR, key_risks: STRARR, areas_to_avoid: STRARR, entry_exit_notes: STR }),
-    cards: [{ id: "advisory", title: "Travel Advisory", icon: "⚠️", kind: "advisory", blocks: [] }],
+    cards: [{ id: "advisory", title: "Travel Advisory", icon: ShieldAlert, kind: "advisory", blocks: [] }],
   },
 ];
 
@@ -291,7 +283,7 @@ const CITY_BUNDLES = [
       food_markets: arrOf({ name: STR, short_description: STR, where_to_try: STR }),
       local_drinks: arrOf({ name: STR, short_description: STR }), beginner_friendly_foods: STRARR,
     }),
-    cards: [{ id: "food", title: "Best Food in This City", icon: "🍽️", summaryField: true, blocks: [
+    cards: [{ id: "food", title: "Best Food in This City", icon: Utensils, summaryField: true, blocks: [
       { kind: "cards", field: "top_10_city_foods" },
       { kind: "cards", field: "local_specialty_dishes", label: "Local specialties" },
       { kind: "chips", field: "best_breakfast_foods", label: "Best breakfast" },
@@ -311,7 +303,7 @@ const CITY_BUNDLES = [
       traditional_sweets: arrOf({ name: STR, description: STR }),
       bakery_cafe_notes: STR, seasonal_desserts: STRARR, festival_sweets: STRARR, grocery_store_sweets: STRARR,
     }),
-    cards: [{ id: "desserts", title: "Desserts, Bakeries & Pastries", icon: "🍰", blocks: [
+    cards: [{ id: "desserts", title: "Desserts, Bakeries & Pastries", icon: Cake, blocks: [
       { kind: "cards", field: "top_city_desserts" },
       { kind: "cards", field: "local_pastries", label: "Local pastries" },
       { kind: "cards", field: "traditional_sweets", label: "Traditional sweets" },
@@ -330,7 +322,7 @@ const CITY_BUNDLES = [
       street_drinks: STRARR, night_market_foods: STRARR, convenience_store_snacks: STRARR,
       safe_first_street_food: STRARR, food_safety_notes: STRARR,
     }),
-    cards: [{ id: "street", title: "Street Food & Snack Trail", icon: "🍢", blocks: [
+    cards: [{ id: "street", title: "Street Food & Snack Trail", icon: Sandwich, blocks: [
       { kind: "cards", field: "top_10_city_street_foods" },
       { kind: "cards", field: "top_10_local_snacks", label: "Local snacks" },
       { kind: "chips", field: "street_drinks", label: "Street drinks" },
@@ -349,7 +341,7 @@ const CITY_BUNDLES = [
       local_brands: STRARR, products_cheaper_locally: STRARR, where_to_buy: STRARR,
       authenticity_tips: STRARR, tourist_markup_warning: STR,
     }),
-    cards: [{ id: "products", title: "Made Here: Brags & Best Buys", icon: "🛍️", summaryField: true, blocks: [
+    cards: [{ id: "products", title: "Made Here: Brags & Best Buys", icon: ShoppingBag, summaryField: true, blocks: [
       { kind: "cards", field: "city_brags", label: "City brags" },
       { kind: "cards", field: "local_crafts", label: "Local crafts" },
       { kind: "cards", field: "best_souvenirs", label: "Best souvenirs" },
@@ -369,7 +361,7 @@ const CITY_BUNDLES = [
       hidden_gems: arrOf({ name: STR, why_it_matters: STR, neighborhood_or_area: STR }),
       tourist_trap_warning: STR,
     }),
-    cards: [{ id: "attractions", title: "Must-Visit Places", icon: "📍", summaryField: true, blocks: [
+    cards: [{ id: "attractions", title: "Must-Visit Places", icon: MapPin, summaryField: true, blocks: [
       { kind: "cards", field: "top_10_city_attractions" },
       { kind: "cards", field: "hidden_gems", label: "Hidden gems" },
       { kind: "warn", field: "tourist_trap_warning", label: "Tourist-trap warning" },
@@ -384,7 +376,7 @@ const CITY_BUNDLES = [
       best_months: STRARR, months_to_avoid: STRARR, shoe_recommendation: STR,
       clothing_recommendation: STR, safety_warning: STR, permit_required: STR,
     }),
-    cards: [{ id: "nature", title: "Nature Near This City", icon: "🌿", blocks: [
+    cards: [{ id: "nature", title: "Nature Near This City", icon: Mountain, blocks: [
       { kind: "cards", field: "nearby_nature_icons" },
       { kind: "cards", field: "day_trips", label: "Best day trips" },
       { kind: "chips", field: "best_months", label: "Best months" },
@@ -403,7 +395,7 @@ const CITY_BUNDLES = [
       dangerous_animals: arrOf({ name: STR, description: STR, safety_note: STR }),
       best_wildlife_areas_nearby: STRARR, best_season: STR, responsible_wildlife_rules: STRARR,
     }),
-    cards: [{ id: "wildlife", title: "Wildlife You Might See Nearby", icon: "🐒", noteField: true, blocks: [
+    cards: [{ id: "wildlife", title: "Wildlife You Might See Nearby", icon: Bird, noteField: true, blocks: [
       { kind: "cards", field: "common_city_animals", label: "Around the city" },
       { kind: "cards", field: "nearby_wildlife", label: "On day trips nearby" },
       { kind: "chips", field: "marine_life_nearby", label: "Marine life" },
@@ -423,7 +415,7 @@ const CITY_BUNDLES = [
       food_ordering_phrases: arrOf({ phrase: STR, meaning: STR }),
       politeness_phrases: arrOf({ phrase: STR, meaning: STR }),
     }),
-    cards: [{ id: "local", title: "Language, Dialect & Local Phrases", icon: "🗣️", blocks: [
+    cards: [{ id: "local", title: "Language, Dialect & Local Phrases", icon: Languages, blocks: [
       { kind: "kv", fields: [{ label: "Local dialect", field: "local_dialect" }, { label: "Accent", field: "accent_notes" }] },
       { kind: "text", field: "difference_from_national", label: "Different from the national language" },
       { kind: "phrases", field: "useful_phrases", label: "Useful phrases" },
@@ -435,7 +427,7 @@ const CITY_BUNDLES = [
     id: "city_facts", layer: "city", ttlDays: 180,
     prompt: (p) => `Provide getting-around info and local facts for ${p}: a transport_overview of how locals get around, transport_tips (etiquette/behavior travelers should know — fares, tipping, ride-hail norms, tap-on/off), getting_around modes available, and the approximate city_population.${HONESTY(p)}`,
     schema: objOf({ transport_overview: STR, transport_tips: STRARR, getting_around: STRARR, city_population: STR }),
-    cards: [{ id: "facts", title: "Getting Around & Local Facts", icon: "🚉", blocks: [
+    cards: [{ id: "facts", title: "Getting Around & Local Facts", icon: TrainFront, blocks: [
       { kind: "text", field: "transport_overview" },
       { kind: "chips", field: "getting_around", label: "How to get around" },
       { kind: "bullets", field: "transport_tips", label: "Transport tips" },
@@ -450,7 +442,7 @@ const CITY_BUNDLES = [
       late_night_food: arrOf({ name: STR, where_to_find: STR, hours_note: STR }),
       late_night_areas: STRARR, things_closing_early_warning: STR,
     }),
-    cards: [{ id: "rhythm", title: "Dining Hours & Late-Night Eats", icon: "🕘", blocks: [
+    cards: [{ id: "rhythm", title: "Dining Hours & Late-Night Eats", icon: Clock, blocks: [
       { kind: "text", field: "dining_hours_overview" },
       { kind: "kv", fields: [{ label: "Typical meal times", field: "typical_meal_times" }] },
       { kind: "cards", field: "late_night_food", label: "Late-night eats" },
@@ -466,7 +458,7 @@ const CITY_BUNDLES = [
       overview: STR, common_scams: arrOf({ name: STR, description: STR, how_to_avoid: STR }),
       neighborhoods_to_be_careful: STRARR, general_safety_tips: STRARR, emergency_number: STR,
     }),
-    cards: [{ id: "safety", title: "Neighborhood Safety & Scams", icon: "🛟", blocks: [
+    cards: [{ id: "safety", title: "Neighborhood Safety & Scams", icon: ShieldCheck, blocks: [
       { kind: "text", field: "overview" },
       { kind: "cards", field: "common_scams", label: "Common scams" },
       { kind: "chips", field: "neighborhoods_to_be_careful", label: "Be extra alert in" },
@@ -479,7 +471,7 @@ const CITY_BUNDLES = [
     cadenceNote: "Leadership info is refreshed about weekly — tap refresh for the latest.",
     prompt: (p) => `List current local government leaders for ${p} (use full names + proper titles): the mayor, deputy/vice mayor, and the governor or regional leader if relevant, plus city_council_or_equivalent members. Provide them as a leaders list (title, name).${HONESTY(p)}`,
     schema: objOf({ leaders: arrOf({ title: STR, name: STR }), city_council_or_equivalent: STRARR }),
-    cards: [{ id: "gov", title: "City Leadership & Government", icon: "🏛️", blocks: [
+    cards: [{ id: "gov", title: "City Leadership & Government", icon: Landmark, blocks: [
       { kind: "leaders", field: "leaders" },
       { kind: "chips", field: "city_council_or_equivalent", label: "Council / local body" },
     ] }],
@@ -487,32 +479,32 @@ const CITY_BUNDLES = [
 ];
 
 // ============================================================================
-// Presentational components
+// Presentational components (the new look: Museum Catalogue, Culture.dc.html)
 // ============================================================================
-function Badge({ children, tone = "teal" }) {
-  const [bg, color] = TONE[tone] || TONE.teal;
+
+// A badge: one tone (the olive wash), words kept. A warning badge is stamp red.
+function Badge({ children, warn = false }) {
   return (
-    <span style={{ background: bg, color, fontSize: fs(10.5), fontFamily: SANS }}
-      className="px-2.5 py-0.5 rounded-full font-semibold leading-tight">{children}</span>
+    <span style={{ display: "inline-flex", alignItems: "center", minHeight: 22, boxSizing: "border-box", padding: "1px 8px", borderRadius: 6, background: warn ? NEUTRAL.white : W.wash, border: `1px solid ${warn ? STAMP : W.wash}`, color: warn ? STAMP : W.washInk, fontFamily: MONO, fontSize: fs(9.5), fontWeight: 500, letterSpacing: ".1em", lineHeight: 1.3, textTransform: "uppercase" }}>
+      {children}
+    </span>
   );
 }
 
-function ChipRow({ items, tone }) {
-  const [bg, color] = tone ? (TONE[tone] || TONE.slate) : [IVORY_2, INK2];
+const chipStyle = { display: "inline-flex", alignItems: "center", gap: 8, padding: "4px 10px", borderRadius: 999, background: W.wash, color: W.washInk, fontFamily: SANS, fontSize: fs(12.5), lineHeight: 1.35, fontWeight: 500 };
+
+function ChipRow({ items }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {items.filter(hasData).map((it, i) => (
-        <span key={i} style={{ background: bg, color, fontSize: fs(11.5), fontFamily: SANS }}
-          className="px-2.5 py-1 rounded-full font-medium">{it}</span>
-      ))}
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      {items.filter(hasData).map((it, i) => <span key={i} style={chipStyle}>{it}</span>)}
     </div>
   );
 }
 
 // Chip variant for plain-text items (products / exports / where-to-buy) that
-// can carry a leading 60px tappable Wikipedia thumb. Each item renders as a
-// wider rounded pill; when it has no Wikipedia image it degrades gracefully to
-// a plain text pill (no empty box). Layout-safe on phone + tablet.
+// can carry a leading tappable Wikipedia thumb. Each item renders as a wider
+// rounded pill; when it has no Wikipedia image it degrades gracefully to a
+// plain text pill (no empty box). Layout-safe on phone + tablet.
 function ThumbChip({ label }) {
   const cached = _wikiThumbCache.get(label);
   const [entry, setEntry] = useState(cached && typeof cached === "object" ? cached : null);
@@ -523,16 +515,10 @@ function ThumbChip({ label }) {
     return () => { alive = false; };
   }, [label]);
   const url = thumbUrlOf(entry);
-  if (!url) {
-    return (
-      <span style={{ background: IVORY_2, color: INK2, fontSize: fs(12.5), fontFamily: SANS }}
-        className="px-3 py-2 rounded-full font-medium">{label}</span>
-    );
-  }
+  if (!url) return <span style={{ ...chipStyle, padding: "6px 12px" }}>{label}</span>;
   const enlarge = () => openLightbox && openLightbox(biggerWikiSrc(entry), label);
   return (
-    <span style={{ background: IVORY_2, color: INK2, fontSize: fs(12.5), fontFamily: SANS }}
-      className="inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full font-medium">
+    <span style={{ ...chipStyle, padding: "4px 12px 4px 4px" }}>
       <img src={url} alt={label || ""} loading="lazy"
         role="button" tabIndex={0}
         onClick={enlarge}
@@ -547,36 +533,37 @@ function ThumbChip({ label }) {
 
 function ThumbChips({ items }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
       {items.filter(hasData).map((it, i) => <ThumbChip key={i} label={it} />)}
     </div>
   );
 }
 
-// Small inline meta line used throughout ItemCard (📍 where, 💡 tip, ⚠️ safety…).
-function Meta({ show, color, icon, italic, children }) {
+// A small meta line in ItemCard: an olive lucide icon and the words (safety in stamp red).
+function Meta({ show, icon: Icon = null, warn = false, italic = false, children }) {
   if (!show) return null;
   return (
-    <p className={`mt-1 ${italic ? "italic" : ""}`} style={{ color, fontSize: fs(12), lineHeight: 1.45 }}>
-      {icon ? `${icon} ` : ""}{children}
+    <p style={{ margin: "4px 0 0", display: "flex", alignItems: "flex-start", gap: 6, color: warn ? STAMP : INK2, fontSize: fs(12.5), lineHeight: 1.45, fontStyle: italic ? "italic" : "normal" }}>
+      {Icon ? <Icon size={13} color={warn ? STAMP : W.iconInk} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0, marginTop: 3 }} /> : null}
+      <span style={{ minWidth: 0 }}>{children}</span>
     </p>
   );
 }
 
-// Badges derived from an item's boolean / category fields.
+// Badges derived from an item's boolean / category fields: [words, warn].
 function itemBadges(it) {
   const out = [];
-  if (it.is_city_brag) out.push(["City Brag", "amber"]);
-  if (it.is_quality_buy) out.push(["Quality Buy", "violet"]);
-  if (it.is_cheaper_locally || it.price_advantage === "cheaper_locally") out.push(["Cheaper Locally", "green"]);
-  if (it.is_good_souvenir) out.push(["Great Gift", "teal"]);
-  if (it.beginner_friendly) out.push(["Beginner-Friendly", "green"]);
-  if (it.family_friendly) out.push(["Family Friendly", "teal"]);
-  if (it.vegetarian_possible) out.push(["Veg Possible", "green"]);
-  if (hasData(it.creator_photo_tip) || hasData(it.photo_tip)) out.push(["Creator Friendly", "violet"]);
-  if (hasData(it.customs_warning)) out.push(["Check Customs", "rose"]);
-  if (it.likelihood === "common") out.push(["Commonly Seen", "green"]);
-  if (it.quality_level) out.push([it.quality_level.replace(/_/g, " "), "slate"]);
+  if (it.is_city_brag) out.push(["City brag", false]);
+  if (it.is_quality_buy) out.push(["Quality buy", false]);
+  if (it.is_cheaper_locally || it.price_advantage === "cheaper_locally") out.push(["Cheaper locally", false]);
+  if (it.is_good_souvenir) out.push(["Great gift", false]);
+  if (it.beginner_friendly) out.push(["Beginner-friendly", false]);
+  if (it.family_friendly) out.push(["Family friendly", false]);
+  if (it.vegetarian_possible) out.push(["Veg possible", false]);
+  if (hasData(it.creator_photo_tip) || hasData(it.photo_tip)) out.push(["Creator friendly", false]);
+  if (hasData(it.customs_warning)) out.push(["Check customs", true]);
+  if (it.likelihood === "common") out.push(["Commonly seen", false]);
+  if (it.quality_level) out.push([it.quality_level.replace(/_/g, " "), false]);
   return out;
 }
 
@@ -995,48 +982,47 @@ function WikidataLeaders({ country, fallback }) {
   const gov = (royals ? all.slice(1) : all).slice(0, 6);
 
   const label = (text) => (
-    <p className="mb-2 uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em" }}>{text}</p>
+    <p style={{ margin: "0 0 8px", fontFamily: MONO, fontSize: fs(9.5), fontWeight: 500, letterSpacing: ".12em", textTransform: "uppercase", color: INK3 }}>{text}</p>
   );
   const row = (l, key) => (
-    <div key={key} className="flex items-center gap-3">
+    <div key={key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
       <LeaderPhoto src={l.img} name={l.name} />
-      <div className="min-w-0">
-        <p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>{l.position || l.title}</p>
-        <p className="font-semibold" style={{ color: INK, fontFamily: SERIF, fontSize: fs(18) }}>{l.name}{!fromWikidata && hasData(l.title) && l.position ? ` · ${l.title}` : ""}</p>
+      <div style={{ minWidth: 0 }}>
+        <p style={{ margin: 0, fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".1em", textTransform: "uppercase", color: INK3 }}>{l.position || l.title}</p>
+        <p style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(19), lineHeight: 1.2, color: INK }}>{l.name}{!fromWikidata && hasData(l.title) && l.position ? ` · ${l.title}` : ""}</p>
       </div>
     </div>
   );
 
   return (
-    <div className="space-y-4">
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {royals && (
         <div>
-          {label("👑 Monarchy · line of succession")}
-          <div className="space-y-3">{royals.map((l, i) => row(l, `r${i}`))}</div>
+          {label("Monarchy · line of succession")}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>{royals.map((l, i) => row(l, `r${i}`))}</div>
         </div>
       )}
       <div>
         {royals && label("Government")}
-        <div className="space-y-3">{gov.map((l, i) => row(l, `g${i}`))}</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>{gov.map((l, i) => row(l, `g${i}`))}</div>
       </div>
       {fromWikidata && (
-        <p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>Source: Wikidata · current</p>
+        <p style={{ margin: 0, fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", textTransform: "uppercase", color: INK3 }}>Source: Wikidata · current</p>
       )}
     </div>
   );
 }
 
-// Generic rich item card — renders whichever optional fields are present.
+// Generic rich item card: renders whichever optional fields are present.
 function ItemCard({ it, showThumb = false }) {
   const title = it.name || it.term || "";
   const desc = it.short_description || it.description || it.why_visit || it.why_it_matters || it.why_worth_buying_here || it.why_this_city_is_known_for_it;
   const chips = [it.flavor_tags, it.texture_tags, it.main_ingredients, it.activities].filter(Array.isArray).flat().filter(hasData);
   const scalarChips = [
-    it.spice_level && `🌶 ${it.spice_level}`, it.sweetness_level && `🍬 ${it.sweetness_level}`,
-    it.price_level && `💰 ${it.price_level}`, it.difficulty_level && `⛰ ${it.difficulty_level}`,
-    it.crowd_level && `👥 ${it.crowd_level}`, it.common_meal_time, it.best_time_to_visit || it.best_time_or_season,
-    (it.month || it.date) && `📅 ${it.month || it.date}`,
-    it.recommended_duration, it.distance_from_city && `📍 ${it.distance_from_city}`, it.type, it.category, it.animal_type,
+    it.spice_level && `Spice ${it.spice_level}`, it.sweetness_level && `Sweetness ${it.sweetness_level}`,
+    it.price_level && `Price ${it.price_level}`, it.difficulty_level && `Difficulty ${it.difficulty_level}`,
+    it.crowd_level && `Crowds ${it.crowd_level}`, it.common_meal_time, it.best_time_to_visit || it.best_time_or_season,
+    it.month || it.date, it.recommended_duration, it.distance_from_city, it.type, it.category, it.animal_type,
     it.likelihood && it.likelihood !== "common" && `${it.likelihood} to see`,
   ].filter(hasData);
   const where = it.where_to_try || it.where_to_find || it.where_to_buy || it.best_places_to_buy || it.neighborhood_or_area || it.where_seen;
@@ -1045,39 +1031,39 @@ function ItemCard({ it, showThumb = false }) {
   const photo = it.photo_tip || it.creator_photo_tip;
   const badges = itemBadges(it);
   const content = (
-    <div className="min-w-0 flex-1">
-      <div className="flex items-baseline gap-2 flex-wrap">
-        {hasData(it.rank) && <span className="font-bold" style={{ color: INK3, fontFamily: MONO, fontSize: fs(11) }}>#{it.rank}</span>}
-        <p className="font-semibold" style={{ color: INK, fontFamily: SANS, fontSize: fs(15) }}>{title}</p>
-        {hasData(it.local_name) && it.local_name !== title && <span className="italic" style={{ color: INK3, fontFamily: SERIF, fontSize: fs(15.5) }}>{it.local_name}</span>}
+    <div style={{ minWidth: 0, flex: 1 }}>
+      <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", columnGap: 8 }}>
+        {hasData(it.rank) && <span style={{ fontFamily: MONO, fontSize: fs(11), fontWeight: 500, color: W.accentText }}>No. {it.rank}</span>}
+        <p style={{ margin: 0, fontFamily: SANS, fontSize: fs(15), fontWeight: 600, lineHeight: 1.3, color: INK }}>{title}</p>
+        {hasData(it.local_name) && it.local_name !== title && <span style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(16), color: INK3 }}>{it.local_name}</span>}
       </div>
-      {hasData(desc) && <p className="mt-1" style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.45 }}>{desc}</p>}
-      {badges.length > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{badges.map(([t, tone], i) => <Badge key={i} tone={tone}>{t}</Badge>)}</div>}
-      {scalarChips.length > 0 && <p className="mt-2" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".02em" }}>{scalarChips.join("  ·  ")}</p>}
-      {chips.length > 0 && <div className="mt-2"><ChipRow items={chips} /></div>}
+      {hasData(desc) && <p style={{ margin: "4px 0 0", fontSize: fs(13.5), lineHeight: 1.45, color: INK2 }}>{desc}</p>}
+      {badges.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>{badges.map(([t, warn], i) => <Badge key={i} warn={warn}>{t}</Badge>)}</div>}
+      {scalarChips.length > 0 && <p style={{ margin: "8px 0 0", fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".02em", lineHeight: 1.5, color: INK3 }}>{scalarChips.join("  ·  ")}</p>}
+      {chips.length > 0 && <div style={{ marginTop: 8 }}><ChipRow items={chips} /></div>}
       {Array.isArray(it.accomplishments) && it.accomplishments.filter(hasData).length > 0 && (
-        <ul className="mt-2 space-y-1">{it.accomplishments.filter(hasData).map((a, i) => (
-          <li key={i} className="flex gap-1.5" style={{ color: INK2, fontSize: fs(12.5) }}><span className="font-bold" style={{ color: TEAL_DEEP }}>•</span><span>{a}</span></li>
-        ))}</ul>
+        <ul style={{ listStyle: "none", margin: "8px 0 0", padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+          {it.accomplishments.filter(hasData).map((a, i) => <Bullet key={i} small>{a}</Bullet>)}
+        </ul>
       )}
-      <Meta show={hasData(it.significance)} color={TEAL_DEEP}>{it.significance}</Meta>
-      <Meta show={hasData(it.fun_fact)} color={NOTE.ink} icon="💡" italic>{it.fun_fact}</Meta>
-      <Meta show={hasData(where)} color={INK3} icon="📍">{where}</Meta>
-      <Meta show={hasData(it.ticket_or_reservation_note)} color={INK3} icon="🎟">{it.ticket_or_reservation_note}</Meta>
-      <Meta show={hasData(it.hours_note)} color={INK3} icon="🕘">{it.hours_note}</Meta>
-      <Meta show={hasData(it.conservation_note)} color="#2E7D46" icon="🌱">{it.conservation_note}</Meta>
-      <Meta show={hasData(safety)} color="#C2392F" icon="⚠️">{safety}</Meta>
-      <Meta show={hasData(photo)} color="#7C3AED" icon="📸">{photo}</Meta>
-      <Meta show={hasData(tip)} color={INK2} icon="💡" italic>{tip}</Meta>
+      <Meta show={hasData(it.significance)}>{it.significance}</Meta>
+      <Meta show={hasData(it.fun_fact)} icon={Sparkles} italic>{it.fun_fact}</Meta>
+      <Meta show={hasData(where)} icon={MapPin}>{where}</Meta>
+      <Meta show={hasData(it.ticket_or_reservation_note)} icon={Ticket}>{it.ticket_or_reservation_note}</Meta>
+      <Meta show={hasData(it.hours_note)} icon={Clock}>{it.hours_note}</Meta>
+      <Meta show={hasData(it.conservation_note)} icon={Leaf}>{it.conservation_note}</Meta>
+      <Meta show={hasData(safety)} icon={AlertTriangle} warn>{safety}</Meta>
+      <Meta show={hasData(photo)} icon={Camera}>{photo}</Meta>
+      <Meta show={hasData(tip)} icon={Lightbulb} italic>{tip}</Meta>
     </div>
   );
   return (
-    <div className="pb-3.5 last:pb-0" style={{ borderBottom: `1px solid ${RULE}` }}>
+    <div style={{ paddingTop: 12, borderTop: `1px solid ${RULE}` }}>
       {showThumb ? (
         // Food / wildlife items: optional Wikipedia thumb on the LEFT. WikiThumb
         // renders null while loading / when no image exists, so the row simply
-        // falls back to text-only — identical to the no-thumb layout.
-        <div className="flex items-start gap-3">
+        // falls back to text-only, identical to the no-thumb layout.
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
           <WikiThumb name={it.name} />
           {content}
         </div>
@@ -1088,10 +1074,23 @@ function ItemCard({ it, showThumb = false }) {
   );
 }
 
-// A mono uppercase eyebrow used to label blocks (handoff kicker treatment).
-const Kicker = ({ children }) => (
-  <p className="mb-2 uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em" }}>{children}</p>
+// A mono uppercase label over a block (Culture.dc.html L74).
+const Kicker = ({ children, warn = false }) => (
+  <p style={{ margin: "0 0 6px", display: "flex", alignItems: "center", gap: 6, fontFamily: MONO, fontSize: fs(9.5), fontWeight: 500, letterSpacing: ".12em", lineHeight: 1.37, textTransform: "uppercase", color: warn ? STAMP : INK3 }}>
+    {warn ? <AlertTriangle size={12} color={STAMP} strokeWidth={2.4} aria-hidden="true" /> : null}
+    {children}
+  </p>
 );
+
+// One bullet: an olive dot and the words.
+function Bullet({ children, small = false }) {
+  return (
+    <li style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: fs(small ? 12.5 : 14), lineHeight: 1.45, color: INK2 }}>
+      <span aria-hidden="true" style={{ flexShrink: 0, width: 5, height: 5, marginTop: "0.55em", borderRadius: 999, background: W.ink }} />
+      <span style={{ minWidth: 0 }}>{children}</span>
+    </li>
+  );
+}
 
 // Fields whose 'cards' items show a tappable Wikipedia thumbnail. Covers food /
 // desserts / street food / snacks / wildlife PLUS national heroes, nature icons
@@ -1124,21 +1123,20 @@ const THUMB_CHIP_FIELDS = new Set([
 ]);
 
 // Renders one block within a card. Returns null when the block has no data.
-// `wikidataCountry` is set ONLY for the national-leadership card — when present,
+// `wikidataCountry` is set ONLY for the national-leadership card: when present,
 // a `leaders` block fetches the CURRENT office holders live from Wikidata and
-// falls back to the AI `leaders` data. No other card passes it, so every other
-// card (including city leadership) renders exactly as before.
+// falls back to the AI `leaders` data. No other card passes it.
 function Block({ block, data, wikidataCountry }) {
   const { kind, field, label } = block;
   if (kind === "kv") {
     const rows = (block.fields || []).filter((f) => hasData(data[f.field]));
     if (!rows.length) return null;
     return (
-      <div className="space-y-2.5">
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {rows.map((f, i) => (
           <div key={i}>
-            <span className="uppercase block" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>{f.label}</span>
-            <span className="font-medium" style={{ color: INK, fontSize: fs(13.5) }}>{data[f.field]}</span>
+            <Kicker>{f.label}</Kicker>
+            <p style={{ margin: "-2px 0 0", fontSize: fs(15), lineHeight: 1.45, color: INK2 }}>{data[f.field]}</p>
           </div>
         ))}
       </div>
@@ -1149,65 +1147,121 @@ function Block({ block, data, wikidataCountry }) {
   const Label = label ? <Kicker>{label}</Kicker> : null;
   switch (kind) {
     case "text":
-      return <div>{Label}<p style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.5 }}>{val}</p></div>;
+      return <div>{Label}<p style={{ margin: 0, fontSize: fs(15), lineHeight: 1.47, color: INK2 }}>{val}</p></div>;
     case "motto":
-      return <div><p className="italic" style={{ color: INK, fontFamily: SERIF, fontSize: fs(19) }}>“{val}”</p>{hasData(data.motto_english) && <p className="mt-0.5" style={{ color: INK3, fontSize: fs(12) }}>{data.motto_english}</p>}</div>;
+      return (
+        <div>
+          <p style={{ margin: 0, fontFamily: SERIF, fontStyle: "italic", fontSize: fs(20), lineHeight: 1.25, color: INK }}>“{val}”</p>
+          {hasData(data.motto_english) && <p style={{ margin: "2px 0 0", fontSize: fs(12.5), color: INK3 }}>{data.motto_english}</p>}
+        </div>
+      );
     case "stat":
       return (
-        <div className="inline-flex items-baseline gap-2.5 rounded-2xl px-3.5 py-2.5" style={{ background: IVORY_2 }}>
-          <span className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>{label}</span>
-          <span className="font-bold" style={{ color: INK, fontFamily: SERIF, fontSize: fs(20) }}>{val}</span>
+        <div>
+          <Kicker>{label}</Kicker>
+          <p style={{ margin: 0, fontFamily: SERIF, fontSize: fs(String(val).length > 10 ? 28 : 40), lineHeight: 1, color: INK }}>{val}</p>
         </div>
       );
     case "warn":
       return (
-        <div className="flex items-start gap-2 rounded-2xl p-3" style={{ background: NOTE.bg, border: `1px solid ${NOTE.border}` }}>
-          <AlertTriangle size={14} style={{ color: NOTE.ink, marginTop: 2 }} className="shrink-0" />
-          <p style={{ color: NOTE.ink, fontSize: fs(12), lineHeight: 1.45 }}>{label ? <b>{label}: </b> : null}{val}</p>
+        <div>
+          <Kicker warn>{label || "Warning"}</Kicker>
+          <p style={{ margin: 0, fontSize: fs(14), lineHeight: 1.47, color: INK2 }}>{val}</p>
         </div>
       );
     case "chips":
       return <div>{Label}{THUMB_CHIP_FIELDS.has(field) ? <ThumbChips items={val} /> : <ChipRow items={val} />}</div>;
     case "bullets":
-      return <div>{Label}<ul className="space-y-1.5">{val.filter(hasData).map((b, i) => (
-        <li key={i} className="flex items-start gap-2" style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.45 }}><span className="font-bold mt-0.5" style={{ color: TEAL_DEEP }}>•</span><span>{b}</span></li>
-      ))}</ul></div>;
-    case "pairs":
-      return <div>{Label}<div className="space-y-2">{val.filter(hasData).map((p, i) => (
-        <div key={i} className="flex justify-between items-center" style={{ fontSize: fs(13.5) }}><span style={{ color: INK2 }}>{p.name || p.term || p.label}</span><span className="font-bold" style={{ color: INK, fontFamily: MONO, fontSize: fs(12.5) }}>{p.percentage || p.value}</span></div>
-      ))}</div></div>;
-    case "phrases":
-      return <div>{Label}<div className="space-y-2">{val.filter((p) => hasData(p.phrase)).map((p, i) => (
-        <div key={i}><span className="font-semibold" style={{ color: INK, fontFamily: SERIF, fontSize: fs(17) }}>{p.phrase}</span>{hasData(p.meaning) && <span style={{ color: INK3, fontSize: fs(13.5) }}> — {p.meaning}</span>}</div>
-      ))}</div></div>;
-    case "dodont":
       return (
-        <div className="space-y-3">
-          {hasData(val.do) && <div className="rounded-2xl p-3.5" style={{ background: TONE.green[0] }}>
-            <p className="font-bold mb-2 uppercase" style={{ color: TONE.green[1], fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".06em" }}>✅ Do</p>
-            <ul className="space-y-1.5">{val.do.filter(hasData).map((r, i) => (
-              <li key={i} className="flex items-start gap-2" style={{ fontSize: fs(13) }}><span className="font-bold mt-0.5" style={{ color: TONE.green[1] }}>•</span><span style={{ color: INK2 }}>{r}</span></li>
-            ))}</ul></div>}
-          {hasData(val.dont) && <div className="rounded-2xl p-3.5" style={{ background: TONE.rose[0] }}>
-            <p className="font-bold mb-2 uppercase" style={{ color: TONE.rose[1], fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".06em" }}>🚫 Don't</p>
-            <ul className="space-y-1.5">{val.dont.filter(hasData).map((r, i) => (
-              <li key={i} className="flex items-start gap-2" style={{ fontSize: fs(13) }}><span className="font-bold mt-0.5" style={{ color: TONE.rose[1] }}>•</span><span style={{ color: INK2 }}>{r}</span></li>
-            ))}</ul></div>}
+        <div>
+          {Label}
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+            {val.filter(hasData).map((b, i) => <Bullet key={i}>{b}</Bullet>)}
+          </ul>
         </div>
       );
+    case "pairs":
+      // A mono table: the name, then its share (Culture.dc.html's tipping rows, L141-142).
+      return (
+        <div>
+          {Label}
+          {val.filter(hasData).map((p, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, minHeight: 34, borderTop: i ? `1px solid ${RULE}` : 0, fontFamily: MONO }}>
+              <span style={{ fontSize: fs(9.5), fontWeight: 500, letterSpacing: ".1em", textTransform: "uppercase", color: INK3 }}>{p.name || p.term || p.label}</span>
+              <span style={{ fontSize: fs(12), color: INK }}>{p.percentage || p.value}</span>
+            </div>
+          ))}
+        </div>
+      );
+    case "phrases":
+      return (
+        <div>
+          {Label}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {val.filter((p) => hasData(p.phrase)).map((p, i) => (
+              <p key={i} style={{ margin: 0, display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 10 }}>
+                <span style={{ fontFamily: SERIF, fontSize: fs(20), lineHeight: 1.25, color: INK }}>{p.phrase}</span>
+                {hasData(p.meaning) && <span style={{ fontSize: fs(13.5), color: INK3 }}>{p.meaning}</span>}
+              </p>
+            ))}
+          </div>
+        </div>
+      );
+    case "dodont": {
+      // Do and don't as hairline rows (Culture.dc.html L100-107): DO with an olive check,
+      // DON'T with a stamp-red cross.
+      const rows = [
+        ...(Array.isArray(val.do) ? val.do.filter(hasData).map((r) => ["do", r]) : []),
+        ...(Array.isArray(val.dont) ? val.dont.filter(hasData).map((r) => ["dont", r]) : []),
+      ];
+      return (
+        <div>
+          {rows.map(([k, r], i) => {
+            const isDo = k === "do";
+            const Icon = isDo ? Check : X;
+            const color = isDo ? W.ink : STAMP;
+            return (
+              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: i ? 10 : 0, paddingTop: i ? 10 : 0, borderTop: i ? `1px solid ${RULE}` : 0 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5, width: fs(62), flexShrink: 0, marginTop: 3, fontFamily: MONO, fontSize: fs(10.5), fontWeight: 500, letterSpacing: ".14em", color }}>
+                  <Icon size={12} color={color} strokeWidth={2.5} aria-hidden="true" />{isDo ? "DO" : "DON’T"}
+                </span>
+                <span style={{ minWidth: 0, fontSize: fs(14), lineHeight: 1.57, color: INK2 }}>{r}</span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
     case "leaders":
       // National-leadership card only: fetch CURRENT leaders live from Wikidata,
       // falling back to the AI list. Every other leaders block (city gov) keeps
-      // the original AI-only rendering below.
+      // the AI-only rendering below.
       if (wikidataCountry) {
         return <div>{Label}<WikidataLeaders country={wikidataCountry} fallback={val} /></div>;
       }
-      return <div>{Label}<div className="space-y-2.5">{val.filter((l) => hasData(l.name)).map((l, i) => (
-        <div key={i}><p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>{l.position || l.title}</p><p className="font-semibold" style={{ color: INK, fontSize: fs(14.5) }}>{l.name}{hasData(l.title) && l.position ? ` · ${l.title}` : ""}</p></div>
-      ))}</div></div>;
+      return (
+        <div>
+          {Label}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {val.filter((l) => hasData(l.name)).map((l, i) => (
+              <div key={i}>
+                <p style={{ margin: 0, fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".1em", textTransform: "uppercase", color: INK3 }}>{l.position || l.title}</p>
+                <p style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(19), lineHeight: 1.2, color: INK }}>{l.name}{hasData(l.title) && l.position ? ` · ${l.title}` : ""}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
     case "cards": {
       const showThumb = THUMB_FIELDS.has(field);
-      return <div>{Label}<div className="space-y-3.5">{val.filter((x) => hasData(x?.name)).map((it, i) => <ItemCard key={i} it={it} showThumb={showThumb} />)}</div></div>;
+      return (
+        <div>
+          {Label}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {val.filter((x) => hasData(x?.name)).map((it, i) => <ItemCard key={i} it={it} showThumb={showThumb} />)}
+          </div>
+        </div>
+      );
     }
     default:
       return null;
@@ -1217,159 +1271,199 @@ function Block({ block, data, wikidataCountry }) {
 function FreshnessLine({ meta, volatile }) {
   if (!meta) return null;
   const updated = fmtDate(meta.last_verified_at);
-  if (meta.stale && volatile) {
-    return <p className="mt-1 font-semibold" style={{ color: NOTE.ink, fontFamily: MONO, fontSize: fs(10) }}>⚠ May have changed — tap refresh</p>;
-  }
-  if (updated) return <p className="mt-1 uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em" }}>Updated {updated}</p>;
+  const line = { margin: 0, fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", lineHeight: 1.4, textTransform: "uppercase" };
+  if (meta.stale && volatile) return <p style={{ ...line, color: STAMP }}>May have changed · tap refresh</p>;
+  if (updated) return <p style={{ ...line, color: INK3 }}>Updated {updated}</p>;
   return null;
 }
 
-function SectionCard({ card, bundle, state, layer, onRefresh, wikidataCountry }) {
+// Does a card have anything to show? (Every card but the advisory hides without data.)
+function cardHasData(card, data) {
+  return (card.blocks || []).some((b) => (b.kind === "kv" ? (b.fields || []).some((f) => hasData(data?.[f.field])) : hasData(data?.[b.field])));
+}
+const cardVisible = (card, state) => card.kind === "advisory" || state?.status === "loading" || cardHasData(card, state?.data || {});
+
+// A catalogue entry (Culture.dc.html L62-80): the accession tag, the serif title, the
+// card's icon; summary and notes; the blocks; the freshness and AI lines at its foot.
+// `n` is the entry's accession number, fixed by the catalog order.
+function SectionCard({ card, bundle, state, layer, onRefresh, wikidataCountry, n, anchorId }) {
   const [open, setOpen] = useState(true); // default = expanded
   const data = state?.data || {};
-  // Card renders only if at least one block has data (advisory always renders).
+  if (!cardVisible(card, state)) return null;
   const blocksWithData = (card.blocks || []).filter((b) =>
     b.kind === "kv" ? (b.fields || []).some((f) => hasData(data[f.field])) : hasData(data[b.field])
   );
-  if (card.kind !== "advisory" && blocksWithData.length === 0 && state?.status !== "loading") return null;
-
-  const world = LAYER[layer] || LAYER.country;
   const bodyId = `culture-card-${layer}-${bundle.id}-${card.id}`;
-  const Chevron = open ? ChevronDown : ChevronRight;
+  const Icon = card.icon || null;
   // Only volatile / time-sensitive bundles get a per-card refresh button
   // (advisory, national + city leadership, country + city safety). Evergreen
-  // cards rely on the global "Refresh all" header button instead.
+  // cards rely on the plate's refresh instead.
   const showRefresh = bundle.volatile === true && typeof onRefresh === "function";
+  const busy = state?.status === "loading";
+  const foot = state?.meta || bundle.aiLabel === true;
   return (
-    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-[22px] overflow-hidden"
-      style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
-      <div className="p-5">
-        {/* Header row toggles the body open/closed. Freshness / cadence stay
-            visible here even when collapsed. The refresh button (volatile
-            bundles only) sits just LEFT of the collapse chevron. */}
-        <div className="w-full flex items-start gap-3 text-left">
-          <button type="button" onClick={() => setOpen((o) => !o)}
-            aria-expanded={open} aria-controls={bodyId}
-            className="flex-1 min-w-0 flex items-start gap-3 text-left">
-            <div className="shrink-0 rounded-2xl flex items-center justify-center"
-              style={{ width: 44, height: 44, background: world.bg, fontSize: 22, lineHeight: 1 }}>{card.icon}</div>
-            <div className="min-w-0 flex-1">
-              <h3 className="leading-tight" style={{ color: INK, fontFamily: SERIF, fontSize: fs(23) }}>{card.title}</h3>
-              {card.summaryField && hasData(bundle.summary) && <p className="mt-0.5" style={{ color: INK3, fontSize: fs(13) }}>{bundle.summary}</p>}
-              {card.noteField && hasData(bundle.note) && <p className="mt-0.5 italic" style={{ color: INK3, fontSize: fs(12) }}>{bundle.note}</p>}
-              {hasData(bundle.cadenceNote) && <p className="mt-1" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10) }}>🔄 {bundle.cadenceNote}</p>}
-              <FreshnessLine meta={state?.meta} volatile={bundle.volatile} />
-              {/* Honest UX: bundles flagged aiLabel carry AI-written advice a
-                  traveler might act on — label it and ask them to verify. */}
-              {bundle.aiLabel === true && <p className="mt-1" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10) }}>AI estimate — verify locally</p>}
-            </div>
+    <section id={anchorId} aria-labelledby={`${bodyId}-title`}
+      style={{ scrollMarginTop: "calc(112px + env(safe-area-inset-top))", boxSizing: "border-box", background: NEUTRAL.white, border: `1px solid ${RULE}`, borderRadius: 16, padding: 18 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, paddingBottom: 12, borderBottom: `1px solid ${RULE}` }}>
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={bodyId}
+          style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, minHeight: 44, padding: 0, background: "transparent", border: 0, textAlign: "left", fontFamily: "inherit", cursor: "pointer" }}>
+          <AccessionTag n={n} />
+          <span id={`${bodyId}-title`} style={{ flex: 1, minWidth: 0, fontFamily: SERIF, fontSize: fs(22), lineHeight: 1.18, color: INK }}>{card.title}</span>
+          {Icon ? <Icon size={18} color={W.iconInk} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0 }} /> : null}
+          <ChevronDown size={16} color={INK3} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
+        </button>
+        {showRefresh && (
+          <button type="button" onClick={(e) => { e.stopPropagation(); onRefresh(); }} disabled={busy} aria-label="Refresh this section"
+            style={{ flexShrink: 0, width: 44, height: 44, padding: 0, background: "transparent", border: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: busy ? "default" : "pointer" }}>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, boxSizing: "border-box", borderRadius: 999, border: `1px solid ${RULE}` }}>
+              <RefreshCw size={14} color={W.iconInk} strokeWidth={2} aria-hidden="true" className={busy ? "animate-spin motion-reduce:animate-none" : undefined} />
+            </span>
           </button>
-          <div className="flex items-center gap-2 shrink-0">
-            {showRefresh && (
-              <button type="button" onClick={(e) => { e.stopPropagation(); onRefresh(); }}
-                disabled={state?.status === "loading"} title="Refresh this section" aria-label="Refresh this section"
-                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors hover:bg-black/5"
-                style={{ border: `1px solid ${RULE}` }}>
-                <RefreshCw className={`w-3.5 h-3.5 ${state?.status === "loading" ? "animate-spin" : ""}`} style={{ color: INK3 }} strokeWidth={2} />
-              </button>
-            )}
-            <button type="button" onClick={() => setOpen((o) => !o)}
-              aria-expanded={open} aria-controls={bodyId} aria-label={open ? "Collapse section" : "Expand section"}
-              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors hover:bg-black/5"
-              style={{ border: `1px solid ${RULE}` }}>
-              <Chevron className="w-4 h-4" style={{ color: INK3 }} strokeWidth={2.2} />
-            </button>
-          </div>
-        </div>
-
-        <AnimatePresence initial={false}>
-          {open && (
-            <motion.div id={bodyId}
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden">
-              <div className="pt-3.5">
-                {card.kind === "advisory" ? (
-                  <AdvisoryBody data={data} state={state} />
-                ) : state?.status === "loading" && blocksWithData.length === 0 ? (
-                  <div className="flex items-center gap-2 py-2" style={{ color: INK3, fontSize: fs(13) }}><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
-                ) : (
-                  <div className="space-y-4">{blocksWithData.map((b, i) => <Block key={i} block={b} data={data} wikidataCountry={wikidataCountry} />)}</div>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        )}
       </div>
-    </motion.div>
+      {card.summaryField && hasData(bundle.summary) && <p style={{ margin: "10px 0 0", fontSize: fs(13), lineHeight: 1.45, color: INK3 }}>{bundle.summary}</p>}
+      {card.noteField && hasData(bundle.note) && <p style={{ margin: "8px 0 0", fontSize: fs(12.5), lineHeight: 1.45, fontStyle: "italic", color: INK3 }}>{bundle.note}</p>}
+      {hasData(bundle.cadenceNote) && <p style={{ margin: "8px 0 0", fontFamily: MONO, fontSize: fs(10), lineHeight: 1.45, color: INK3 }}>{bundle.cadenceNote}</p>}
+
+      <div id={bodyId} hidden={!open}>
+        {open ? (
+          <div style={{ paddingTop: 14 }}>
+            {card.kind === "advisory" ? (
+              <AdvisoryBody data={data} state={state} />
+            ) : busy && blocksWithData.length === 0 ? (
+              <WorldSkeleton world="culture" variant="row" count={2} label={`Loading ${card.title}`} />
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {blocksWithData.map((b, i) => <Block key={i} block={b} data={data} wikidataCountry={wikidataCountry} />)}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      {foot ? (
+        <div style={{ display: "flex", flexWrap: "wrap", columnGap: 12, rowGap: 2, marginTop: 14 }}>
+          <FreshnessLine meta={state?.meta} volatile={bundle.volatile} />
+          {/* Honest UX: bundles flagged aiLabel carry AI-written advice a traveler might
+              act on; say so and ask them to verify. */}
+          {bundle.aiLabel === true && <p style={{ margin: 0, fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".04em", lineHeight: 1.4, color: INK3 }}>AI estimate — verify locally</p>}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
+// The advisory entry: the honest caveat, the summary, then each government's own advisory.
 function AdvisoryBody({ data, state }) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-start gap-2 rounded-2xl p-3" style={{ background: NOTE.bg, border: `1px solid ${NOTE.border}` }}>
-        <AlertTriangle size={16} style={{ color: NOTE.ink, marginTop: 2 }} className="shrink-0" />
-        <p style={{ color: NOTE.ink, fontSize: fs(12), lineHeight: 1.5 }}>
-          <b>Advisories can change daily.</b> This summary refreshes only about once a day and may be behind today's situation. Before and during your trip, always check official travel guidance online — your government's travel advisory, linked below — for day-to-day accuracy.
-        </p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {ADVISORY_SOURCES.map((s) => (
-          <a key={s.label} href={s.url} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium transition-colors"
-            style={{ background: IVORY_2, color: INK2, border: `1px solid ${RULE}`, fontSize: fs(12) }}>
-            <span>{s.flag}</span>{s.label}<ExternalLink size={10} style={{ color: INK3 }} />
-          </a>
-        ))}
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <p style={{ margin: 0, fontSize: fs(13.5), lineHeight: 1.48, color: INK2 }}>
+        Advisories can change daily. This summary refreshes about once a day and may be behind today’s situation. Check your government’s travel advisory before and during your trip.
+      </p>
       {state?.status === "loading" && !hasData(data.summary) ? (
-        <div className="flex items-center gap-2 py-1" style={{ color: INK3, fontSize: fs(13) }}><Loader2 className="w-4 h-4 animate-spin" /> Loading summary…</div>
+        <WorldSkeleton world="culture" variant="row" count={1} label="Loading the advisory summary" />
       ) : (
         <>
-          {hasData(data.overall_level) && <p className="font-bold" style={{ color: INK, fontFamily: SERIF, fontSize: fs(19) }}>{data.overall_level}</p>}
-          {hasData(data.summary) && <p style={{ color: INK2, fontSize: fs(13.5), lineHeight: 1.5 }}>{data.summary}</p>}
+          {hasData(data.overall_level) && <p style={{ margin: 0, fontFamily: SERIF, fontSize: fs(21), lineHeight: 1.2, color: INK }}>{data.overall_level}</p>}
+          {hasData(data.summary) && <p style={{ margin: 0, fontSize: fs(14), lineHeight: 1.47, color: INK2 }}>{data.summary}</p>}
           {hasData(data.key_risks) && <Block block={{ kind: "bullets", field: "key_risks", label: "Key risks" }} data={data} />}
           {hasData(data.areas_to_avoid) && <Block block={{ kind: "chips", field: "areas_to_avoid", label: "Areas to avoid" }} data={data} />}
           {hasData(data.entry_exit_notes) && <Block block={{ kind: "text", field: "entry_exit_notes", label: "Entry / exit" }} data={data} />}
         </>
       )}
-    </div>
-  );
-}
-
-function Divider({ icon, label, sublabel, layer = "country" }) {
-  const world = LAYER[layer] || LAYER.country;
-  return (
-    <div className="pt-5 pb-1">
-      <div className="flex items-center gap-2.5">
-        <span className="rounded-xl flex items-center justify-center" style={{ width: 34, height: 34, background: world.bg, fontSize: 18, lineHeight: 1 }}>{icon}</span>
-        <h2 className="leading-none" style={{ color: INK, fontFamily: SERIF, fontSize: fs(25) }}>{label}</h2>
+      <div>
+        {ADVISORY_SOURCES.map((s) => (
+          <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer"
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, minHeight: 44, borderTop: `1px solid ${RULE}`, fontSize: fs(13.5), fontWeight: 600, color: W.ink, textDecoration: "underline", textUnderlineOffset: 3 }}>
+            {s.name}
+            <ExternalLink size={14} color={W.iconInk} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0 }} />
+          </a>
+        ))}
       </div>
-      {sublabel && <p className="mt-2 uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em" }}>{sublabel}</p>}
     </div>
   );
 }
 
-// On tablet, lay a layer's SectionCards into TWO independent column stacks
-// (masonry) so a short card beside a tall one never leaves a blank hole in the
-// middle — each column packs to its own content. Cards keep their left/right
-// reading order (even index → left, odd → right), and the assignment is fixed,
-// so collapsing/expanding one card never makes the others jump columns. On
-// phone, render bare so they stay direct children of the parent `space-y-4`
-// stack (phone layout byte-identical).
+// A layer's divider (Culture.dc.html L56-60): one mono line and a hairline, then when it
+// was last checked; an optional honest line under it.
+function Divider({ label, updated = null, sublabel = null }) {
+  return (
+    <div style={{ marginTop: 18 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <h2 style={{ margin: 0, fontFamily: MONO, fontSize: fs(10.5), fontWeight: 500, letterSpacing: ".12em", lineHeight: 1.34, textTransform: "uppercase", color: W.ink }}>{label}</h2>
+        <span aria-hidden="true" style={{ flex: 1, minWidth: 12, height: 1, background: RULE }} />
+        {updated ? <span style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", textTransform: "uppercase", color: INK3, whiteSpace: "nowrap" }}>Updated {updated}</span> : null}
+      </div>
+      {sublabel ? <p style={{ margin: "6px 0 0", fontSize: fs(12.5), lineHeight: 1.45, color: INK3 }}>{sublabel}</p> : null}
+    </div>
+  );
+}
+
+// On tablet, lay a layer's entries into TWO independent column stacks (masonry) so a
+// short entry beside a tall one never leaves a blank hole. Entries keep their reading
+// order (even index left, odd right), and the assignment is fixed, so collapsing one
+// never makes the others jump columns. On phone, one column.
 function CardGrid({ isTablet, children }) {
-  if (!isTablet) return <>{children}</>;
   const items = React.Children.toArray(children);
+  if (!isTablet) return <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>{items}</div>;
   const left = items.filter((_, i) => i % 2 === 0);
   const right = items.filter((_, i) => i % 2 === 1);
   return (
-    <div className="grid grid-cols-2 gap-5 items-start">
-      <div className="flex flex-col gap-5">{left}</div>
-      <div className="flex flex-col gap-5">{right}</div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16, alignItems: "start", marginTop: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>{left}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>{right}</div>
     </div>
+  );
+}
+
+// The entries' accession numbers: fixed once from the catalog order, so a number never
+// moves while sections load, hide or fall back to the region.
+const ACCESSION = (() => {
+  const m = new Map();
+  let n = 0;
+  [...COUNTRY_BUNDLES, ...CITY_BUNDLES].forEach((b) => b.cards.forEach((c) => m.set(`${b.id}:${c.id}`, ++n)));
+  return m;
+})();
+const anchorOf = (bundle, card, layer) => `culture-no-${ACCESSION.get(`${bundle.id}:${card.id}`)}${layer === "region" ? "-region" : ""}`;
+
+// The section index (Culture.dc.html L45-52): 'No.' then each entry on the page, linked.
+// variant 'plate' prints it on the plate; 'pinned' is the chip row that stays under the
+// banner once the plate's index has scrolled away.
+function SectionIndex({ entries, variant = "plate", navRef = null, hidden = false }) {
+  const go = (e, id) => {
+    e.preventDefault();
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  if (!entries.length) return null;
+  if (variant === "pinned") {
+    return (
+      <nav aria-label="Guide sections" aria-hidden={hidden || undefined} className="gs-noscroll"
+        style={{ display: "flex", alignItems: "center", gap: 6, overflowX: "auto", padding: "4px 16px", margin: "0 -16px", background: W.paper, borderBottom: `1px solid ${RULE}`, visibility: hidden ? "hidden" : "visible" }}>
+        {entries.map((e) => (
+          <a key={e.id} href={`#${e.id}`} onClick={(ev) => go(ev, e.id)} tabIndex={hidden ? -1 : undefined}
+            style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", minHeight: 44, textDecoration: "none" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 32, boxSizing: "border-box", padding: "0 10px", borderRadius: 999, background: NEUTRAL.white, border: `1px solid ${RULE}`, fontFamily: MONO, fontSize: fs(10.5), fontWeight: 500, letterSpacing: ".06em", textTransform: "uppercase", color: W.ink, whiteSpace: "nowrap" }}>
+              <span style={{ color: W.accentText }}>{String(e.n).padStart(2, "0")}</span>{e.title}
+            </span>
+          </a>
+        ))}
+      </nav>
+    );
+  }
+  return (
+    <nav ref={navRef} aria-label="Guide sections" className="gs-noscroll"
+      style={{ display: "flex", alignItems: "center", gap: 6, overflowX: "auto", minHeight: 44, marginTop: 4, borderTop: `1px solid ${W.plateLink}33`, fontFamily: MONO, fontSize: fs(10), fontWeight: 500, letterSpacing: ".06em", textTransform: "uppercase", color: W.plateLink, whiteSpace: "nowrap" }}>
+      <span aria-hidden="true">No.</span>
+      {entries.map((e, i) => (
+        <React.Fragment key={e.id}>
+          {i > 0 ? <span aria-hidden="true">·</span> : null}
+          <a href={`#${e.id}`} onClick={(ev) => go(ev, e.id)} style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", minHeight: 44, color: W.plateLink, textDecoration: "none" }}>
+            {String(e.n).padStart(2, "0")} {e.title}
+          </a>
+        </React.Fragment>
+      ))}
+    </nav>
   );
 }
 
@@ -1377,9 +1471,7 @@ function CardGrid({ isTablet, children }) {
 // PAGE
 // ============================================================================
 export default function CultureInformationPage() {
-  const navigate = useNavigate();
   const isTablet = useIsTablet();
-  const colWrap = isTablet ? "max-w-[1024px]" : "max-w-md";
   const { activeLocation, locationMode, initialized, switchToCurrentLocation } = useLocation();
   const [loading, setLoading] = useState(true);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
@@ -1469,108 +1561,102 @@ export default function CultureInformationPage() {
     const res = await fetchOne(bundle, scope, true);
     setter((prev) => ({ ...prev, [bundle.id]: res.error ? { status: "error", error: res.error } : { status: "ok", data: res.data, meta: res.meta } }));
   }, [fetchOne]);
-
-  if (!initialized || (loading && Object.keys(results).length === 0)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: IVORY, fontFamily: SANS }}>
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: TEAL_DEEP }} />
-          <p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(11), letterSpacing: ".1em" }}>Loading culture guide…</p>
-        </div>
-      </div>
-    );
-  }
+  // ==========================================================================
+  // RENDER: the new look
+  // ==========================================================================
+  // The plate's index scrolls away with the plate; the pinned copy shows from then on.
+  const plateIndexRef = useRef(null);
+  const [pinIndex, setPinIndex] = useState(false);
+  const hasIndex = !!geo.country && Object.keys(results).length > 0;
+  useEffect(() => {
+    const el = plateIndexRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return undefined;
+    const io = new IntersectionObserver(([e]) => setPinIndex(!e.isIntersecting && e.boundingClientRect.top < 0), { threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasIndex]);
 
   const cityName = geo.city || geo.country;
   const regionFallbacksToShow = CITY_BUNDLES.filter((b) => b.fallback && regionResults[b.id]?.status === "ok");
+  const layerEntries = (bundles, layer, store) =>
+    bundles.flatMap((bundle) => bundle.cards.filter((card) => cardVisible(card, store[bundle.id])).map((card) => ({ bundle, card, layer, state: store[bundle.id] })));
+  const countryEntries = layerEntries(COUNTRY_BUNDLES, "country", results);
+  const cityEntries = layerEntries(CITY_BUNDLES, "city", results);
+  const regionEntries = layerEntries(regionFallbacksToShow, "region", regionResults);
+  const indexEntries = [...countryEntries, ...cityEntries, ...regionEntries].map((e) => ({
+    id: anchorOf(e.bundle, e.card, e.layer), n: ACCESSION.get(`${e.bundle.id}:${e.card.id}`), title: e.card.title,
+  }));
+  // A layer's 'Updated': the oldest check among its loaded sections.
+  const oldest = (entries) => {
+    const times = entries.map((e) => Date.parse(e.state?.meta?.last_verified_at)).filter(Number.isFinite);
+    return times.length ? fmtDate(new Date(Math.min(...times)).toISOString()) : null;
+  };
+  const entryOf = (e) => (
+    <SectionCard key={`${e.layer}_${e.bundle.id}_${e.card.id}`} card={e.card} bundle={e.bundle} layer={e.layer} state={e.state}
+      n={ACCESSION.get(`${e.bundle.id}:${e.card.id}`)} anchorId={anchorOf(e.bundle, e.card, e.layer)}
+      onRefresh={() => refreshSection(e.bundle, e.layer)}
+      wikidataCountry={e.bundle.id === "country_leadership" ? geo.country : undefined} />
+  );
+  const starting = !initialized || (loading && Object.keys(results).length === 0);
+  const placeLabel = locationMode === "navigate" && cityName ? `Planning · ${cityName}` : getLocationLabel(activeLocation);
+  const useHere = locationMode === "navigate" ? (
+    <button type="button" onClick={() => switchToCurrentLocation()} aria-label="Use current location"
+      style={{ flexShrink: 0, marginLeft: "auto", width: 44, height: 44, padding: 0, boxSizing: "border-box", borderRadius: 999, background: W.plateCircle.bg, border: `1px solid ${W.plateCircle.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+      <Navigation size={18} color={W.plateCircle.icon} strokeWidth={2} aria-hidden="true" />
+    </button>
+  ) : null;
 
   return (
     <LightboxProvider>
-    <div className="min-h-screen" style={{ background: IVORY, fontFamily: SANS }}>
-      {/* HEADER */}
-      <div className="px-4 pt-2 pb-3">
-        <div className={`${colWrap} mx-auto flex items-center justify-between`}>
-          <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-black/5" style={{ background: "#FFFFFF", border: `1px solid ${RULE}` }} aria-label="Back">
-            <ChevronLeft size={18} color={INK} strokeWidth={2.2} />
-          </button>
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full uppercase" style={{ background: CAT.culture.bg, color: CAT.culture.ink, fontFamily: MONO, fontSize: fs(11), letterSpacing: ".08em", fontWeight: 500 }}>
-            <Compass size={13} color={CAT.culture.ink} strokeWidth={2} /> Cultural Info
-          </div>
-          <button onClick={() => loadAll(true)} className="w-10 h-10 rounded-full flex items-center justify-center transition-colors hover:bg-black/5" style={{ background: "#FFFFFF", border: `1px solid ${RULE}` }} title="Refresh all">
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} color={INK} strokeWidth={2} />
-          </button>
-        </div>
-      </div>
+    <div className="font-sans" style={{ background: W.paper, minHeight: "100vh", paddingTop: 12 }}>
+      {/* ── THE PLATE (Culture.dc.html L26-53): the country in the kicker, the place in
+          mono (PLANNING when browsing elsewhere, with a way back to here), and the
+          section index; the one note under it. ── */}
+      <FinderHeader
+        world="culture"
+        count={null}
+        kickerExtras={[geo.country || null]}
+        onRefresh={geo.country ? () => loadAll(true) : undefined}
+        refreshing={loading}
+        refreshTitle="Refresh guide"
+        location={{ label: placeLabel, onChange: () => setShowLocationPicker(true), mono: true, icon: Compass, trailing: useHere }}
+        belowTitle={<SectionIndex entries={indexEntries} navRef={plateIndexRef} />}
+        hint={geo.country ? <WorldNote world="culture" icon={Info}>Customs vary — when in doubt, ask politely.</WorldNote> : undefined}
+      />
 
-      {/* COUNTRY TITLE */}
-      <div className={`px-4 ${colWrap} mx-auto pb-2 text-center`}>
-        <h1 className="italic leading-none" style={{ fontFamily: SERIF, fontSize: fs(38), color: CAT.culture.ink }}>{geo.country || "Your destination"}</h1>
-        <p className="uppercase mt-2 font-semibold" style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: "0.16em", color: INK3 }}>Traveler's Culture Guide</p>
-      </div>
-
-      <div className={`${colWrap} mx-auto`}>
-        {/* Location display */}
-        <div className="px-4 mb-3">
-          <div className="bg-white rounded-[22px] p-4" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="shrink-0 rounded-2xl flex items-center justify-center" style={{ width: 42, height: 42, background: LAYER.city.bg, fontSize: 20, lineHeight: 1 }}>{locationMode === "current" ? "📍" : "🧭"}</div>
-                <div className="flex-1 min-w-0">
-                  <p className="truncate" style={{ fontFamily: SERIF, fontSize: fs(22), color: INK, lineHeight: 1.1 }}>{cityName}</p>
-                  {hasData(geo.country) && <p className="truncate uppercase mt-0.5" style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".06em", color: INK3 }}>{geo.country}</p>}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {locationMode === "navigate" && (
-                  <button onClick={() => switchToCurrentLocation()} className="p-2 rounded-xl transition-colors hover:brightness-95" style={{ background: LAYER.city.bg }} title="Use Current Location">
-                    <Navigation className="w-4 h-4" style={{ color: TEAL_DEEP }} />
-                  </button>
-                )}
-                <button onClick={() => setShowLocationPicker(true)} className="font-bold underline underline-offset-2 shrink-0" style={{ color: TEAL_DEEP, fontSize: fs(13) }}>Change</button>
-              </div>
-            </div>
+      <div style={{ ...finderColumnStyle(isTablet), paddingBottom: 24 }}>
+        {/* The pinned index: no height of its own, it sticks under the banner. */}
+        <div style={{ position: "sticky", top: "calc(50px + env(safe-area-inset-top))", zIndex: 20, height: 0 }}>
+          <div style={{ position: "absolute", left: 0, right: 0, top: 0, opacity: pinIndex ? 1 : 0, transition: "opacity .15s", pointerEvents: pinIndex ? "auto" : "none" }}>
+            <SectionIndex entries={indexEntries} variant="pinned" hidden={!pinIndex} />
           </div>
         </div>
 
-        <div className="px-4 py-4 space-y-4 pb-24">
-          {/* 🌎 COUNTRY ESSENTIALS */}
-          <Divider icon="🌎" label="Country Essentials" layer="country" sublabel={`The big picture of ${geo.country || "the country"}.`} />
-          <CardGrid isTablet={isTablet}>
-            {COUNTRY_BUNDLES.flatMap((bundle) =>
-              bundle.cards.map((card) => (
-                <SectionCard key={`${bundle.id}_${card.id}`} card={card} bundle={bundle} layer="country"
-                  state={results[bundle.id]} onRefresh={() => refreshSection(bundle, "country")}
-                  wikidataCountry={bundle.id === "country_leadership" ? geo.country : undefined} />
-              ))
-            )}
-          </CardGrid>
+        {initialized && !geo.country ? (
+          <FinderEmptyState world="culture" icon={MapPin} title="Choose a location" hint="Pick where you are or where you’re going, and the guide fills in its customs."
+            actionLabel="Choose a location" onAction={() => setShowLocationPicker(true)} style={{ marginTop: 20 }} />
+        ) : starting ? (
+          <div style={{ marginTop: 18 }}>
+            <p role="status" style={{ margin: "0 0 10px", fontFamily: MONO, fontSize: fs(10.5), fontWeight: 500, letterSpacing: ".12em", textTransform: "uppercase", color: INK3 }}>Loading culture guide…</p>
+            <WorldSkeleton world="culture" variant="entry" count={3} />
+          </div>
+        ) : (
+          <>
+            <Divider label={`Country essentials · ${geo.country}`} updated={oldest(countryEntries)} />
+            <CardGrid isTablet={isTablet}>{countryEntries.map(entryOf)}</CardGrid>
 
-          {/* 📍 CITY LOCAL GUIDE */}
-          <Divider icon="📍" label="City Local Guide" layer="city" sublabel={`Specific to ${cityName}.`} />
-          <CardGrid isTablet={isTablet}>
-            {CITY_BUNDLES.flatMap((bundle) =>
-              bundle.cards.map((card) => (
-                <SectionCard key={`${bundle.id}_${card.id}`} card={card} bundle={bundle} layer="city"
-                  state={results[bundle.id]} onRefresh={() => refreshSection(bundle, "city")} />
-              ))
-            )}
-          </CardGrid>
+            <Divider label={`City local guide · ${cityName}`} updated={oldest(cityEntries)} />
+            <CardGrid isTablet={isTablet}>{cityEntries.map(entryOf)}</CardGrid>
 
-          {/* 🧭 NEARBY REGION (fallback) */}
-          {regionFallbacksToShow.length > 0 && (
-            <>
-              <Divider icon="🧭" label="Nearby Region" layer="region" sublabel={`Not specific to ${cityName} — shown for the surrounding region.`} />
-              <CardGrid isTablet={isTablet}>
-                {regionFallbacksToShow.flatMap((bundle) =>
-                  bundle.cards.map((card) => (
-                    <SectionCard key={`region_${bundle.id}_${card.id}`} card={card} bundle={bundle} layer="region"
-                      state={regionResults[bundle.id]} onRefresh={() => refreshSection(bundle, "region")} />
-                  ))
-                )}
-              </CardGrid>
-            </>
-          )}
-        </div>
+            {regionEntries.length > 0 && (
+              <>
+                <Divider label={`Nearby region · ${regionLabel || cityName}`} updated={oldest(regionEntries)}
+                  sublabel={`Not specific to ${cityName}: shown for the surrounding region.`} />
+                <CardGrid isTablet={isTablet}>{regionEntries.map(entryOf)}</CardGrid>
+              </>
+            )}
+          </>
+        )}
       </div>
 
       <LocationModePicker isOpen={showLocationPicker} onClose={() => setShowLocationPicker(false)} />
