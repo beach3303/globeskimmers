@@ -485,6 +485,12 @@ function NewestMembers({ focus, refreshKey }) {
 // (/admin/age-appeal, admin only) recomputes the tier from it and lifts the
 // freeze. It restores access only: anything already deleted stays deleted.
 // A birthday that is still under 13 is refused here, before anything is sent.
+// The mail's body can be edited by its sender and account ids aren't secret,
+// so Review first looks the account up (lookup: true — its email, stored
+// birthday, tier, frozen since) and Restore waits for a tick that the mail
+// came from that address. The worker corrects only a frozen or unconfirmed
+// account unless "correct it anyway" is ticked (override: an adult who
+// mistyped a teen birthday).
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const APPEAL_TIER = {
   adult: 'Access restored · adult',
@@ -493,12 +499,16 @@ const APPEAL_TIER = {
   confirm: 'Saved · the app will ask for the month and day',
 };
 const longDate = (y, md) => new Date(Date.UTC(y, Number(md.slice(0, 2)) - 1, Number(md.slice(3, 5)))).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+const shortDay = (iso) => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null; };
 function AgeAppealDesk() {
   const [idText, setIdText] = React.useState('');
   const [dob, setDob] = React.useState('');          // 'YYYY-MM-DD' from the date field
   const [asking, setAsking] = React.useState(false); // the confirm step is showing
   const [busy, setBusy] = React.useState(false);
   const [res, setRes] = React.useState(null);        // { tier, id } | { error }
+  const [look, setLook] = React.useState(null);      // the lookup: { email, tier, birth_year, birth_md, frozen_at, purged_at } | { error }
+  const [fromThem, setFromThem] = React.useState(false); // "The appeal mail came from this address"
+  const [anyway, setAnyway] = React.useState(false);     // "correct it anyway" (override) for an account that isn't frozen
   const id = (UUID_RE.exec(idText) || [''])[0].toLowerCase(); // a pasted "Account ID: …" line works too
   const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob);
   const year = parts ? Number(parts[1]) : null;
@@ -506,12 +516,25 @@ function AgeAppealDesk() {
   const age = parts ? ageOnDate(year, md) : null;
   const tooYoung = age != null && age < 13;
   const ready = !!id && age != null && !tooYoung && !busy;
-  const edit = (fn) => (e) => { fn(e.target.value); setAsking(false); setRes(null); };
-  const send = async () => {
+  const edit = (fn) => (e) => { fn(e.target.value); setAsking(false); setRes(null); setLook(null); setFromThem(false); setAnyway(false); };
+  // An appeal is for a frozen account (or one with a birth year to confirm);
+  // anything else is changed only on purpose.
+  const frozenNow = !!look && !look.error && (look.tier === 'blocked' || look.tier === 'confirm' || !!look.frozen_at);
+  const canRestore = !!look && !look.error && fromThem && (frozenNow || anyway) && !busy;
+  const review = async () => {
     if (!ready) return;
+    setBusy(true); setRes(null); setLook(null); setFromThem(false); setAnyway(false);
+    const { data, error } = await callWorker('admin/age-appeal', { user_id: id, lookup: true });
+    setBusy(false);
+    const err = error || data?.error || (data?.ok ? null : 'No answer came back');
+    setLook(err ? { error: err } : data);
+    setAsking(true);
+  };
+  const send = async () => {
+    if (!ready || !canRestore) return;
     setBusy(true); setRes(null);
-    const { data, error } = await callWorker('admin/age-appeal', { user_id: id, birth_year: year, birth_md: md });
-    setBusy(false); setAsking(false);
+    const { data, error } = await callWorker('admin/age-appeal', { user_id: id, birth_year: year, birth_md: md, ...(frozenNow ? {} : { override: true }) });
+    setBusy(false); setAsking(false); setLook(null); setFromThem(false); setAnyway(false);
     const err = error || data?.error || (data?.ok ? null : 'No answer came back');
     if (err) { setRes({ error: err }); return; }
     setRes({ tier: data.tier || null, id });
@@ -531,19 +554,42 @@ function AgeAppealDesk() {
         <input type="date" value={dob} onChange={edit(setDob)} aria-label="Corrected birthday" min="1900-01-01" max={today()}
           style={{ ...field, flex: '0 1 170px' }} />
         {!asking && (
-          <button type="button" onClick={() => setAsking(true)} disabled={!ready} style={{ ...primary, opacity: ready ? 1 : 0.5, cursor: ready ? 'pointer' : 'default' }}>Review</button>
+          <button type="button" onClick={review} disabled={!ready} style={{ ...primary, opacity: ready ? 1 : 0.5, cursor: ready ? 'pointer' : 'default' }}>{busy ? 'Looking up…' : 'Review'}</button>
         )}
       </div>
       {idText.trim() && !id && <div role="alert" style={{ fontSize: 12, color: COLORS.red, marginTop: 6 }}>That isn&rsquo;t an account ID. It looks like 8-4-4-4-12 letters and digits.</div>}
       {tooYoung && <div role="alert" style={{ fontSize: 12, color: COLORS.red, marginTop: 6 }}>That birthday is under 13 too, so an appeal can&rsquo;t restore access. The account stays frozen.</div>}
-      {asking && ready && (
+      {asking && ready && look?.error && (
+        <div role="alert" style={{ marginTop: 10, fontSize: 12.5, color: COLORS.red }}>
+          Couldn&rsquo;t look that account up: {look.error}{' '}
+          <button type="button" onClick={() => { setAsking(false); setLook(null); }} style={{ ...xbtn, minHeight: 44, padding: '8px 14px', fontSize: 13, marginLeft: 6 }}>Back</button>
+        </div>
+      )}
+      {asking && ready && look && !look.error && (
         <div role="group" aria-label="Confirm the appeal" style={{ marginTop: 10, padding: 12, borderRadius: 10, background: `${COLORS.accent}0D`, border: `1px solid ${COLORS.accent}33` }}>
-          <div style={{ fontSize: 13, color: COLORS.dark, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12.5, color: COLORS.gray, lineHeight: 1.5 }}>
+            <b style={{ color: COLORS.dark }}>{look.email || 'No email on the account'}</b>
+            {' · stored birthday '}{look.birth_year || '????'}-{look.birth_md || '??-??'}
+            {' · '}{look.tier === 'blocked' ? 'frozen (under 13)' : look.tier === 'confirm' ? 'birth year to confirm' : look.tier || 'no tier'}
+            {look.frozen_at ? ` · frozen since ${shortDay(look.frozen_at)}` : ''}
+            {look.purged_at ? ` · content deleted ${shortDay(look.purged_at)}` : ''}
+          </div>
+          <div style={{ fontSize: 13, color: COLORS.dark, lineHeight: 1.5, marginTop: 6 }}>
             Restore access for <code style={{ fontSize: 12 }}>{id}</code>, born {longDate(year, md)} (age {age}{age < 18 ? ': teen hold' : ''})?
           </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 44, fontSize: 13, color: COLORS.dark, cursor: 'pointer' }}>
+            <input type="checkbox" checked={fromThem} onChange={(e) => setFromThem(e.target.checked)} style={{ width: 18, height: 18 }} />
+            The appeal mail came from this address
+          </label>
+          {!frozenNow && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 44, fontSize: 13, color: COLORS.red, cursor: 'pointer' }}>
+              <input type="checkbox" checked={anyway} onChange={(e) => setAnyway(e.target.checked)} style={{ width: 18, height: 18 }} />
+              This account isn&rsquo;t frozen. Correct its birthday anyway
+            </label>
+          )}
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button type="button" onClick={send} disabled={busy} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>{busy ? 'Restoring…' : 'Yes, restore access'}</button>
-            <button type="button" onClick={() => setAsking(false)} disabled={busy} style={{ ...xbtn, minHeight: 44, padding: '8px 14px', fontSize: 13 }}>Cancel</button>
+            <button type="button" onClick={send} disabled={!canRestore} style={{ ...primary, opacity: canRestore ? 1 : 0.5, cursor: canRestore ? 'pointer' : 'default' }}>{busy ? 'Restoring…' : frozenNow ? 'Yes, restore access' : 'Yes, correct the birthday'}</button>
+            <button type="button" onClick={() => { setAsking(false); setLook(null); setFromThem(false); setAnyway(false); }} disabled={busy} style={{ ...xbtn, minHeight: 44, padding: '8px 14px', fontSize: 13 }}>Cancel</button>
           </div>
         </div>
       )}
