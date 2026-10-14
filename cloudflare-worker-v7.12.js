@@ -17666,7 +17666,9 @@ async function blGate(env, user, share, opts) {
   // (founder, 2026-10-05) — so a friend can sign a private guestbook. A block
   // kills the follow edges, so a blocked viewer fails this and sees Not found.
   if (!share.is_public && !(await gbMutualFriends(env, user.id, share.user_id))) return 'Not found';
-  if (await gbBlockedEither(env, user.id, share.user_id)) return 'Not available';
+  // A blocked pair answers like a page that isn't there (privacy §8: blocking
+  // is silent; go-live round 3: 'Not available' told the blocked side).
+  if (await gbBlockedEither(env, user.id, share.user_id)) return 'Not found';
   // The visitor: pressing, signing and co-signing are social acts, closed to
   // a frozen, unconfirmed or held account (taking your own back is not).
   if (opts && (opts.identity || opts.actor)) {
@@ -17852,7 +17854,7 @@ async function handleBlotterCosign(request, env, ctx) {
     const share = await blShareByOwner(env, e0.owner_user_id);
     const gate = await blGate(env, user, share, b.op === 'lift' ? {} : { identity: true });
     if (gate) return blGateResp(gate);
-    if (user.id !== e0.author_user_id && await gbBlockedEither(env, user.id, e0.author_user_id)) return jsonResponse({ error: 'Not available' }, 403);
+    if (user.id !== e0.author_user_id && await gbBlockedEither(env, user.id, e0.author_user_id)) return jsonResponse({ error: 'Not found' }, 404);
     if (b.op === 'lift') {
       await gbRest(env, `blotter_cosigns?entry_id=eq.${id}&user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
     } else {
