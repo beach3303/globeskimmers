@@ -3,11 +3,13 @@
 // plus the door to add yours. A post needs proof you're here (GPS at the place
 // or the photo's own location tag) and passes photo review before anyone sees
 // it; posts never carry a name. Loads only when the card scrolls into view.
+// Every photo can be reported from the viewer (Apple 1.2: Report on all UGC).
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { showToast } from "@/components/Toast";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import { listDishes, addDish, deleteDish } from "@/lib/dishes";
+import { reportShared } from "@/lib/passport";
 import { readPhotoExif } from "@/lib/photoExif";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { getCurrentPositionSmart } from "@/lib/geolocation";
@@ -62,7 +64,7 @@ export default function TravelerDishes({ place, kind = "restaurant" }) {
             {dishes.slice(0, 3).map((d, i) => (
               <div key={i} className="flex items-center gap-3">
                 <button type="button" aria-label={`Photos of ${d.dish}`} className="flex-none"
-                  onClick={() => setView({ photos: d.photos.map((p) => ({ src: p.url })), index: 0, title: d.dish })}>
+                  onClick={() => setView({ photos: d.photos.map((p) => ({ id: p.id, src: p.url })), index: 0, title: d.dish })}>
                   <img src={d.photos[0]?.url} alt="" loading="lazy" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 10, border: `1px solid ${RULE}`, display: "block" }} />
                 </button>
                 <div className="min-w-0">
@@ -108,8 +110,52 @@ export default function TravelerDishes({ place, kind = "restaurant" }) {
       )}
       {view && (
         <PhotoLightbox photos={view.photos} index={view.index} title={view.title} credit="Shared by travelers who were here"
-          onClose={() => setView(null)} onIndexChange={(i) => setView((v) => (v ? { ...v, index: i } : v))} />
+          onClose={() => setView(null)} onIndexChange={(i) => setView((v) => (v ? { ...v, index: i } : v))}
+          renderFooter={(photo) => <DishPhotoReport photo={photo} dish={view.title} />} />
       )}
+    </div>
+  );
+}
+
+// "Report this photo" under a traveler's dish photo in the viewer: the same
+// five reasons as every report, filed as kind 'photo' with ref dish:<id> for
+// the Admin safety queue. The poster is never told, and stays anonymous.
+const REPORT_REASONS = [["minor_safety", "A child's safety"], ["nudity", "Nudity or sexual content"], ["harassment", "Harassment or hate"], ["spam", "Spam or a scam"], ["other", "Something else"]];
+function DishPhotoReport({ photo, dish }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  useEffect(() => { setOpen(false); setSent(false); }, [photo?.id]);
+  if (!photo?.id) return null;
+  const send = async (reason) => {
+    if (busy) return;
+    setBusy(true);
+    const { error } = await reportShared({ kind: "photo", ref: `dish:${photo.id}`, reason, note: dish ? `Traveler dish photo: ${dish}` : undefined });
+    setBusy(false);
+    if (error) { showToast(error, "error"); return; }
+    setOpen(false); setSent(true);
+    showToast("Thank you — we review every report", "success");
+  };
+  const light = "rgba(255,252,247,0.85)";
+  if (sent) return <p className="text-center" style={{ fontSize: fs(12.5), color: light, minHeight: 44, lineHeight: "44px" }}>Reported. Thank you.</p>;
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="w-full underline underline-offset-2"
+        style={{ minHeight: 44, fontSize: fs(12.5), color: light }}>
+        Report this photo
+      </button>
+    );
+  }
+  return (
+    <div role="group" aria-label="Why are you reporting this photo?" className="flex flex-col gap-1.5">
+      <p className="text-center" style={{ fontSize: fs(12.5), color: light }}>What&rsquo;s wrong with this photo?</p>
+      {REPORT_REASONS.map(([id, label]) => (
+        <button key={id} type="button" onClick={() => send(id)} disabled={busy} className="w-full rounded-[12px] px-4 text-left font-semibold disabled:opacity-60"
+          style={{ minHeight: 44, background: "rgba(255,252,247,0.12)", color: "#FFFCF7", fontSize: fs(13.5) }}>
+          {label}
+        </button>
+      ))}
+      <button type="button" onClick={() => setOpen(false)} disabled={busy} className="w-full" style={{ minHeight: 44, fontSize: fs(12.5), color: light }}>Cancel</button>
     </div>
   );
 }
