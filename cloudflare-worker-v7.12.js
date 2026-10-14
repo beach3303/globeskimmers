@@ -1452,21 +1452,33 @@ async function handleDeleteAccount(request, env) {
     const userId = who?.id;
     if (!userId) return jsonResponse({ error: 'Could not identify account' }, 401);
 
-    // A step that failed is retried by the daily cron (purge:<uid>), so the
-    // account is never left half-deleted for good.
-    const purge = await gbPurgeUserContent(env, userId);
-    if (!purge.ok && env.GLOBESKIMMERS_KV) {
-      await env.GLOBESKIMMERS_KV.put(`purge:${userId}`, JSON.stringify({ at: new Date().toISOString(), failed_steps: purge.failed.slice(0, 12) })).catch(() => {});
-    }
+    // 1b) An intent record first: if this request dies after the auth delete,
+    //     the daily cron (purgeRetrySweep) still finishes the clean-up.
+    const kv = env.GLOBESKIMMERS_KV;
+    if (kv) await kv.put(`purge:${userId}`, JSON.stringify({ at: new Date().toISOString(), failed_steps: ['pending'] })).catch(() => {});
 
-    // 2) Hard-delete the auth user (cascades profiles + login_events).
+    // 2) Hard-delete the auth user FIRST (cascades profiles + login_events). If
+    //    it fails, nothing is purged: the age record and the blocks stay, so a
+    //    frozen account stays frozen and the person can simply try again. The
+    //    intent record stays too: the cron checks the account before it purges
+    //    anything, drops the record while the account is alive, and finishes
+    //    the job if the delete did land after all (an answer lost on the way
+    //    back). A 404 means the account is already gone.
     const delRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
       method: 'DELETE',
       headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-    });
-    if (delRes.status !== 200 && delRes.status !== 204) {
-      const detail = await delRes.text().catch(() => '');
-      return jsonResponse({ error: `Deletion failed (${delRes.status})`, detail: detail.slice(0, 300) }, 502);
+    }).catch(() => null);
+    if (!delRes || ![200, 204, 404].includes(delRes.status)) {
+      const detail = delRes ? await delRes.text().catch(() => '') : 'no answer';
+      return jsonResponse({ error: `Deletion failed (${delRes ? delRes.status : 'network'})`, detail: detail.slice(0, 300) }, 502);
+    }
+
+    // 2b) Then everything else. A step that failed stays queued (purge:<uid>)
+    //     for the daily cron, so the account is never left half-deleted for good.
+    const purge = await gbPurgeUserContent(env, userId);
+    if (kv) {
+      if (purge.ok) await kv.delete(`purge:${userId}`).catch(() => {});
+      else await kv.put(`purge:${userId}`, JSON.stringify({ at: new Date().toISOString(), failed_steps: purge.failed.slice(0, 12) })).catch(() => {});
     }
 
     // 3) Their member number and new-member mark go with the account
@@ -16244,12 +16256,16 @@ async function freezeSweep(env, now = new Date()) {
   } while (cursor);
   return out;
 }
-// Daily: finish the deletion of accounts whose purge had a failed step
-// (handleDeleteAccount queues purge:<uid>). The auth user is already gone,
-// so there is no age to check — only the leftovers to remove.
+// Daily: finish the deletion of accounts whose purge had a failed step, or
+// whose request ended before its purge did (handleDeleteAccount queues
+// purge:<uid> before it deletes the sign-in). Only a DELETED account is ever
+// cleaned up here: the sign-in is checked first, and while it is still alive
+// (its delete failed) the record is dropped and nothing is touched — the age
+// record and the blocks stay. A check that can't be made waits a day.
 async function purgeRetrySweep(env, now = new Date()) {
   const out = { done: 0, failed: 0 };
   const kv = env.GLOBESKIMMERS_KV; if (!kv) return out;
+  const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_KEY;
   let cursor, attempts = 0;
   do {
     const page = await kv.list({ prefix: 'purge:', cursor });
@@ -16259,6 +16275,12 @@ async function purgeRetrySweep(env, now = new Date()) {
         const userId = name.slice('purge:'.length);
         if (!BL_UUID.test(userId)) { await kv.delete(name).catch(() => {}); continue; }
         const rec = (await kv.get(name, { type: 'json' }).catch(() => null)) || {};
+        // A deletion that is running right now finishes (or re-queues) itself.
+        if (Array.isArray(rec.failed_steps) && rec.failed_steps.includes('pending') && now.getTime() - Date.parse(rec.at || 0) < 3600000) continue;
+        if (!key) { out.failed++; continue; }
+        const au = await fetch(`${GB_URL(env)}/auth/v1/admin/users/${userId}`, { headers: { apikey: key, Authorization: `Bearer ${key}` } }).catch(() => null);
+        if (au && au.ok) { await kv.delete(name).catch(() => {}); continue; }   // still alive: its delete never happened
+        if (!au || au.status !== 404) { out.failed++; continue; }              // couldn't tell: try tomorrow
         attempts++;
         const res = await gbPurgeUserContent(env, userId);
         if (res.ok) { await kv.delete(name).catch(() => {}); out.done++; continue; }
