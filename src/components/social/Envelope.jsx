@@ -12,7 +12,9 @@
 //            chevron, a 20px paper face and 'THEO · YESTERDAY', 'stamped *Torre de Belém*'
 //            in Instrument Serif 16, then 'Verified' and the mono place line. A postcard
 //            adds its 3:2 photo above and its message in serif italic (three lines at
-//            most; Mailbox has the whole card).
+//            most; Mailbox has the whole card); a stamp adds a 3:2 cream plate there with
+//            the stamp tilted on its square, so cards in a row share one shape (founder,
+//            2026-10-14: option B over top-aligned cards).
 //            'full'  the Mailbox letter: the stamp on a cream square tilted -3 degrees with
 //            a postmark across its corner, a 20px solid face and the time, the line in
 //            Instrument Serif 18, then the place, 'Verified · GPS' when the row names the
@@ -591,15 +593,29 @@ export default function Envelope({
   );
 
   if (!full) {
+    // A stamp gets a 3:2 cream plate where a postcard has its photo, so the two cards in a
+    // row share one shape: the stamp tilted on its square, as on the Mailbox letter.
+    const plateStamp = !postcard ? feedStamp(row) : null;
+    const plate = !postcard;
+    const plateDrawable = plate && stampThumbKind(plateStamp, { feedSafe: true }) !== null;
     const content = (
       <>
         <AirmailChevron height={3} absolute style={{ zIndex: 1 }} />
         {photo ? (
           <img src={photo} alt={photoAlt} loading="lazy" decoding="async"
             style={{ display: 'block', width: '100%', aspectRatio: '3 / 2', objectFit: 'cover' }} />
+        ) : plate ? (
+          <span aria-hidden="true" style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', aspectRatio: '3 / 2', background: NEUTRAL.cream, borderBottom: `1px solid ${NEUTRAL.creamRule}` }}>
+            <span style={{ position: 'relative' }}>
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 84, height: 84, boxSizing: 'border-box', overflow: 'hidden', background: NEUTRAL.cream, border: `1px solid ${NEUTRAL.creamRule}`, borderRadius: 4, transform: 'rotate(-3deg)', boxShadow: `0 6px 14px -10px ${rgba(NEUTRAL.ink, 0.35)}` }}>
+                {plateDrawable ? <StampThumb stamp={plateStamp} size={76} feedSafe /> : <PostmarkRing city={row.city || row.name} date={row.visited_on || row.created_at} color={NEUTRAL.airmailBlue} size={64} />}
+              </span>
+              <PostmarkLines variant="envelope" style={{ position: 'absolute', left: 44, top: -6 }} />
+            </span>
+          </span>
         ) : null}
-        <span style={{ display: 'block', padding: photo ? '10px 12px 8px' : 0 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 20, paddingRight: reportable && !photo ? 28 : undefined }}>
+        <span style={{ display: 'block', padding: photo || plate ? '10px 12px 8px' : 0 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 20, paddingRight: reportable && !photo && !plate ? 28 : undefined }}>
             {face}
             <span style={headText}>{head}</span>
           </span>
@@ -616,7 +632,7 @@ export default function Envelope({
     if (reportable) {
       return (
         <Frame {...frameRest} className={className} style={{ ...frameBase, flex: 'none', width: fs(190), maxWidth: '100%', borderRadius: 12, ...style }}>
-          <Inner {...rootProps} {...innerRest} style={{ ...innerBase, borderRadius: 11, padding: photo ? 0 : '12px 12px 8px' }}>
+          <Inner {...rootProps} {...innerRest} style={{ ...innerBase, borderRadius: 11, padding: photo || plate ? 0 : '12px 12px 8px' }}>
             {content}
           </Inner>
           {door(0)}
@@ -638,7 +654,7 @@ export default function Envelope({
           borderRadius: 12,
           background: NEUTRAL.white,
           border: `1px solid ${NEUTRAL.airmailLine}`,
-          padding: photo ? 0 : '12px 12px 8px',
+          padding: photo || plate ? 0 : '12px 12px 8px',
           ...style,
         }}
       >
