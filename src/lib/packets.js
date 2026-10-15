@@ -29,8 +29,11 @@ export function derivePackets(stamps) {
   return [...groups.values()]
     .map((g) => {
       g.dates.sort();
-      const from = monthDay(g.dates[0]), to = monthDay(g.dates[g.dates.length - 1]);
-      g.range = from ? (to && to !== from ? `${from} – ${to}` : from) : null;
+      const first = g.dates[0], last = g.dates[g.dates.length - 1];
+      const from = monthDay(first), to = monthDay(last);
+      // One month reads "May 18–19": "May 18 – May 19" wrapped on the envelope's label.
+      const oneMonth = !!first && !!last && first.slice(0, 7) === last.slice(0, 7);
+      g.range = from ? (to && to !== from ? (oneMonth ? `${from}–${Number(last.slice(8, 10))}` : `${from} – ${to}`) : from) : null;
       return g;
     })
     .sort((a, b) => b.photos.length - a.photos.length);
