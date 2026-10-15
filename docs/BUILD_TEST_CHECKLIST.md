@@ -1920,3 +1920,24 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   passports stop showing photos to strangers until the owner sets albums to 'My passport'.
 - **Activate:** push to main (worker + migration deploy together, no manual SQL), probe social/profile {}
   → the three dials; then the founder's `npm run ota` for the Settings rows and the held-pen sheet.
+
+## 2026-10-15 — The stamp tiers, built (stamping-v2, not pushed)
+- Founder: "Build it" (with my defaults: new stamps at Inner circle, chrono = oldest first, bulk mover
+  yes; circle decided A default / adult switch to D / full-privacy members never named; 🔒 unshareable
+  without a permission change). 03b0771 worker + migration 20261015120000 (visibility + pos on stamps
+  with a today's-meaning backfill; default_stamp_tier / circle_public / booklet_order / shuffle_seed /
+  custom_order on social_profiles; api.share_links). f5c2c38 the founder's vintage sticker set replaces
+  the chibi faces (same six reactions). App commit: four chips on the stamp sheet, corner marks in the
+  owner's booklet, the ask-first share sheet + Links I've shared, the mixed-page picture chooser (public
+  only by default, 🔒 never), order row + Arrange drag sheet, Settings rows (default tier, bulk, circle
+  switch with the founder-worded confirm), the visit page honors the owner's order.
+- Tests: test-tiers 31/31 (slices per level on both views, follower access to private booklets, link
+  mint/revoke/expiry/list, tier writes + legacy hidden sync, blotter tier gates incl. owner-less 🔒,
+  circle A/D with member privacy, order prefs, one-write arrangement); all sibling suites green (~203
+  checks); sortStamps 5/5. Gates: worker node --check, eslint, no-undef 0, build 0.
+- Behavior notes on push: followers (approved) begin seeing followers-tier pages of private booklets;
+  the known-faces circle row retires (counts only); new stamps default to Inner circle.
+- **Activate:** push to main (worker + migration together; the backfill UPDATE runs in the migration);
+  probe a slug at each level + /passport/share-link mint/revoke; then the founder's `npm run ota` — which
+  ALSO still carries everything since 1.0.2610150236 (one-photo sensing, stickers now vintage, albums by
+  year, captions, guestbook 600, privacy dials).
