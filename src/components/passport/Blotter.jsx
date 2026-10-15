@@ -1,9 +1,8 @@
 // The Blotter (founder concept 2026-09-30, mockup v3) — reactions live AROUND
 // a shared passport page, never inside the booklet. Six reaction STICKERS, the
 // founder's own word art (2026-10-14; never platform emoji): WOW! · COOL! ·
-// TAKE ME! · BEEN THERE! · I WANNA GO! · MORE PICS PLEASE! — plus contextual YUMMY! that
-// appears only when a photo on the page has food as its MAIN subject
-// (vision-tagged at the public flip). Comments are the Guestbook: signatures
+// TAKE ME! · BEEN THERE! · I WANNA GO! · MORE PICS PLEASE! (YUMMY! retired the
+// same night, founder: "Remove yummy"). Comments are the Guestbook: signatures
 // and finger DOODLES (small in the margin, tap to enlarge); comment-likes are
 // CO-SIGNS — you put your name under someone's words, tap again to lift your
 // pen, and who-signed is always visible. The owner can sweep anything.
@@ -28,17 +27,6 @@ const INK = "#16110D", INK3 = "#736657", RULE = "rgba(22,17,13,.12)";
 const PAPER = "#FBF6EC", CARD = "#FFFDF6";
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 
-// ── YUMMY still wears the drawn ink (no sticker for it yet) ─────────────────
-function YummyIcon({ c }) {
-  return (
-    <svg viewBox="0 0 40 34" width="22" height="19" aria-hidden="true">
-      <path d="M13,12 q2,-5 0,-8 M20,12 q2,-5 0,-8 M27,12 q2,-5 0,-8" stroke={c} strokeWidth="2" fill="none" strokeLinecap="round" />
-      <path d="M7,17 a13,8 0 0 0 26,0 z" fill="none" stroke={c} strokeWidth="2.2" />
-      <path d="M12,28 h16" stroke={c} strokeWidth="2.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 const KINDS = [
   { k: "wow", label: "WOW!", color: "#9A6F1E", art: wowArt },
   { k: "cool", label: "COOL!", color: "#2C6E9B", art: coolArt },
@@ -47,31 +35,22 @@ const KINDS = [
   { k: "wannago", label: "I WANNA GO!", color: "#B04A6E", art: wannagoArt },
   { k: "morepics", label: "MORE PICS PLEASE!", color: "#6D3A6E", art: morepicsArt },
 ];
-const YUMMY = { k: "yummy", label: "YUMMY!", color: "#B0472F", Icon: YummyIcon };
 
 const fmtDay = (iso) => {
   try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
   catch { return ""; }
 };
 
-// The stamp on the page's tray: which stamp gets a food-star YUMMY?
-function yummyTarget(stamps) {
-  const st = (stamps || []).find((s) => (s.photos || []).some((p) => p.food_subject === 1 && p.mod_status !== "blocked"));
-  return st ? `st:${st.id}` : null;
-}
-
 // ── The strip under a page: press stamps + open the Guestbook ───────────────
 // `photoId` points the strip at one photo (its reactions and comments)
-// instead of a page's stamps; `food` says that photo's food is the star.
 // `postcardId` points it at a postcard on a city board (City Boards, 2026-10-14):
-// no slug, as the worker finds the card's sender itself; `food` = it names a dish.
-export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, photoId = null, postcardId = null, food = false }) {
+// no slug, as the worker finds the card's sender itself.
+export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, photoId = null, postcardId = null }) {
   const [busy, setBusy] = useState(null);       // kind being pressed/peeled
   const [sheet, setSheet] = useState(false);
   const one = postcardId ? `pc:${postcardId}` : photoId ? `ph:${photoId}` : null;
   const targets = useMemo(() => (one ? [one] : (stamps || []).map((s) => `st:${s.id}`)), [stamps, one]);
   const lead = targets[0] || null;
-  const yumTarget = useMemo(() => (one ? (food ? one : null) : yummyTarget(stamps)), [stamps, one, food]);
   const item = postcardId ? "postcard" : photoId ? "photo" : null;
 
   const agg = useMemo(() => {
@@ -97,7 +76,7 @@ export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, phot
 
   const press = async (kind) => {
     if (busy) return;
-    const target = kind === "yummy" ? yumTarget : lead;
+    const target = lead;
     if (!target) return;
     const op = agg.mine.has(kind) ? "peel" : "press";
     setBusy(kind);
@@ -110,12 +89,12 @@ export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, phot
     }
   };
 
-  const tray = yumTarget ? [...KINDS, YUMMY] : KINDS;
+  const tray = KINDS;
   return (
     <>
       <div className="flex items-center gap-1.5 flex-wrap justify-center rounded-2xl px-2.5 py-2"
         style={{ background: PAPER, border: `1px solid ${RULE}` }}>
-        {tray.map(({ k, label, color, art, Icon }) => {
+        {tray.map(({ k, label, color, art }) => {
           const on = agg.mine.has(k);
           const n = agg.counts[k] || 0;
           return (
@@ -123,11 +102,9 @@ export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, phot
               aria-pressed={on} aria-label={`${label} — ${n}`}
               className="flex flex-col items-center rounded-xl px-1 py-1 active:scale-95 transition-transform"
               style={{ background: on ? "#EBF3EE" : "transparent", border: on ? `1.5px solid ${color}` : "1.5px solid transparent", minWidth: 44, opacity: busy && busy !== k ? 0.6 : 1 }}>
-              {art
-                ? <img src={art} alt="" draggable={false} style={{ width: 46, height: 46, objectFit: "contain" }} />
-                : <Icon c={color} />}
+              <img src={art} alt="" draggable={false} style={{ width: 46, height: 46, objectFit: "contain" }} />
               <span style={{ fontFamily: MONO, fontSize: fs(8), fontWeight: 700, letterSpacing: ".04em", color: on ? color : INK3, minHeight: 11 }}>
-                {art ? (n > 0 ? n : "") : `${label}${n > 0 ? ` ${n}` : ""}`}
+                {n > 0 ? n : ""}
               </span>
             </button>
           );

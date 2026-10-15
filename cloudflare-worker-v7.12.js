@@ -18104,15 +18104,16 @@ async function handleLuggageSet(request, env, ctx) {
 
 // ── The Blotter (2026-09-30, mockup v3): reactions AROUND a page ────────────
 // Marks are stamp presses on the blotter under a shared passport page — five
-// core (wow/cool/takeme/been/wannago/morepics) + contextual yummy (only where a
+// core (wow/cool/takeme/been/wannago/morepics); contextual yummy retired (was: only where a
 // photo's food_subject says food is the star). The Guestbook holds signatures
 // and finger DOODLES (fail-closed image moderation, R2 bl/). Co-signs are the
 // comment-like done our way: public authorship — tap ✍ to put your name under
 // someone's words, tap again to lift your pen; who-signed is always visible.
 // Rails: non-owners need the booklet PUBLIC; block pairs vanish silently;
 // teen authors sign only on owners they follow (accepted); owner sweeps all.
-// 'cool' joined with the founder's sticker set (2026-10-14).
-const BL_KINDS = new Set(['wow', 'cool', 'takeme', 'been', 'wannago', 'morepics', 'yummy']);
+// 'cool' joined with the founder's sticker set, and 'yummy' retired, both 2026-10-14
+// (founder: "Remove yummy") — new presses are refused; old marks just sit unseen.
+const BL_KINDS = new Set(['wow', 'cool', 'takeme', 'been', 'wannago', 'morepics']);
 const BL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function blShare(env, slug) {
@@ -18237,17 +18238,6 @@ async function handleBlotterMark(request, env, ctx) {
     const tgt = await blTarget(env, share, b.target, user.id);
     if (!tgt) return jsonResponse({ error: 'Not found' }, 404);
     const { st, target } = tgt;
-    if (op === 'press' && kind === 'yummy') {
-      // YUMMY only where food is the star (vision-tagged at the public flip; a board card names its dish).
-      if (tgt.pc) {
-        if (!tgt.pc.meta?.dish) return jsonResponse({ error: 'YUMMY belongs on food photos' }, 400);
-      } else if (tgt.photo) {
-        if (!(Number(tgt.photo.food_subject) === 1 && tgt.photo.mod_status === 'ok')) return jsonResponse({ error: 'YUMMY belongs on food photos' }, 400);
-      } else {
-        const fq = await gbRest(env, `passport_stamp_photos?stamp_id=eq.${st.id}&food_subject=eq.1&mod_status=eq.ok&select=id&limit=1`, {});
-        if (!(fq.ok && (await fq.json()).length)) return jsonResponse({ error: 'YUMMY belongs on food photos' }, 400);
-      }
-    }
     if (op === 'press') {
       const w = await gbRest(env, 'blotter_marks?on_conflict=target,user_id,kind', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ owner_user_id: share.user_id, target, user_id: user.id, kind }) });
       if (!w.ok) return jsonResponse({ error: 'Could not press' }, 502);
@@ -19913,6 +19903,7 @@ async function handleAdminHeldHandles(request, env) {
 // total plus 30 days of activity, newest first, each flagged unread. mark:true
 // moves mailbox_seen_at to now AFTER reading. Teen activity under 24h stays
 // hidden, the same rail as the who-signed lists.
+// yummy stays only as a label, so Mailbox rows from before its retirement still read right.
 const BL_KIND_LABEL = { wow: 'WOW!', cool: 'COOL!', takeme: 'TAKE ME!', been: 'BEEN THERE!', wannago: 'I WANNA GO!', morepics: 'MORE PICS PLEASE!', yummy: 'YUMMY!' };
 async function handleSocialUnread(request, env) {
   try {

@@ -32,7 +32,6 @@ import { BookOpen } from 'lucide-react';
 import { NEUTRAL, ZONE, fs, rgba } from '@/components/redesign/constants';
 import { Folder } from '@/components/redesign/Zone';
 import StampThumb, { stampThumbKind } from '@/components/passport/StampThumb';
-import { BlotterStrip } from '@/components/passport/Blotter';
 import { PASSPORT_COVER_URL } from '@/components/passport/PassportBook';
 import { VerifiedMark } from '@/components/social/SocialMarks';
 import { envelopeTitle } from '@/components/social/Envelope';
@@ -300,11 +299,6 @@ export default function PassportFolder({
       {newest ? (
         <>
           <NewestPage stamp={newest} c={c} />
-          {slug ? (
-            <div style={{ ...PANEL, padding: 8 }}>
-              <BlotterStrip slug={slug} stamps={[newest]} blotter={blotter} ownerView={false} onChanged={onBlotterChanged} />
-            </div>
-          ) : null}
           {more.length ? (
             <div style={PANEL}>
               <div style={{ marginBottom: 8, fontFamily: MONO, fontSize: fs(9.5), lineHeight: 12 / 9.5, fontWeight: 500, letterSpacing: '.14em', color: NEUTRAL.ink3 }}>MORE PAGES</div>
