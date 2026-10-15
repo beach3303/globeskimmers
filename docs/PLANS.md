@@ -894,8 +894,14 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   for everyone by default ("cold, but airtight; full privacy as default"), minors locked to counts-only and
   never listed in anyone's circle; adults may flip their own circle to public lists in Settings behind the
   founder's wording ("Your followers and inner circle will be public. Continue?" / "Keep private"); B and C
-  not built. Open: whether a full-privacy member appears by name in someone else's public list
-  (recommendation: count only), plus new-stamp default tier, oldest-first chrono, bulk set-all.
+  not built. Decided 2026-10-15: a full-privacy member appears in others' public
+  lists as part of the count only ("I take your recommendation — the answer is no"), and the founder said
+  "Build it" with my defaults (new stamps at Inner circle, chrono oldest-first, bulk set-all). **BUILT the
+  same day** (03b0771 worker + migration 20261015120000, 5db0d4c app, f5c2c38 the vintage sticker set
+  replacing the chibi faces): four chips per stamp, corner marks, ask-first expiring links with Turn off,
+  cleaned picture shares (🔒 never; a private stamp shares only after its permission changes), order row +
+  drag-to-arrange (one-write custom order), circle counts-only with the warning-gated public switch.
+  Tests 31/31 + ~203 green. Awaiting the founder's push, then `npm run ota`.
   **Art:** "Mixed / rescue" for dogs and cats (founder). Review page:
   https://claude.ai/artifact/JeXKJshqiT2BJ9BSPARA2G; status: `docs/design/new-look/BUILD_STATUS.md` on new-look.
   **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
