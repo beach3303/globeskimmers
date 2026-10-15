@@ -44,7 +44,9 @@ export default function PhotoFooter({ photo, slug, blotter, ownerView, onChanged
           ✎ {photo.caption ? "Edit caption" : "Add a caption"}
         </button>
       ))}
-      <BlotterStrip slug={slug} blotter={blotter} ownerView={ownerView} onChanged={onChanged} photoId={photo.id} food={!!photo.food} />
+      {/* Reactions and comments need the shared booklet (its slug); the caption is the
+          owner's own and works anywhere, the Profile's albums included. */}
+      {slug ? <BlotterStrip slug={slug} blotter={blotter} ownerView={ownerView} onChanged={onChanged} photoId={photo.id} /> : null}
     </div>
   );
 }

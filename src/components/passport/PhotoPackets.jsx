@@ -7,7 +7,7 @@
 // moderation-safe and the owner view is instant.
 import React, { useMemo, useRef, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
-import { derivePackets } from "@/lib/packets";
+import { derivePackets, packetsByYear } from "@/lib/packets";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import { uploadStampPhoto } from "@/lib/passport";
 import { readPhotoExif } from "@/lib/photoExif";
@@ -27,11 +27,16 @@ function Envelope({ packet, onOpen }) {
       className="flex-none active:scale-95 transition-transform" style={{ width: 176 }}>
       <div style={{ position: "relative", height: 128 }}>
         {/* prints peeking out -->*/}
+        {/* lazy <img> peeks, not CSS backgrounds: a lifetime of envelopes loads as it scrolls */}
         {peek && (
-          <div aria-hidden style={{ position: "absolute", left: 14, right: 14, top: 0, height: 78, borderRadius: 6, background: `#8FB2C8 url("${String(peek).replace(/"/g, "%22")}") center/cover no-repeat`, transform: "rotate(-3deg)", border: "3px solid #fff", boxShadow: "0 2px 6px rgba(0,0,0,.18)" }} />
+          <div aria-hidden style={{ position: "absolute", left: 14, right: 14, top: 0, height: 78, borderRadius: 6, overflow: "hidden", background: "#8FB2C8", transform: "rotate(-3deg)", border: "3px solid #fff", boxShadow: "0 2px 6px rgba(0,0,0,.18)" }}>
+            <img src={peek} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          </div>
         )}
         {packet.photos[1] && (
-          <div aria-hidden style={{ position: "absolute", left: 26, right: 6, top: 6, height: 70, borderRadius: 6, background: `#D9C9A8 url("${String(packet.photos[1].src).replace(/"/g, "%22")}") center/cover no-repeat`, transform: "rotate(4deg)", border: "3px solid #fff", boxShadow: "0 2px 6px rgba(0,0,0,.15)", zIndex: 0 }} />
+          <div aria-hidden style={{ position: "absolute", left: 26, right: 6, top: 6, height: 70, borderRadius: 6, overflow: "hidden", background: "#D9C9A8", transform: "rotate(4deg)", border: "3px solid #fff", boxShadow: "0 2px 6px rgba(0,0,0,.15)", zIndex: 0 }}>
+            <img src={packet.photos[1].src} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          </div>
         )}
         {/* the envelope */}
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 82, borderRadius: 10, background: "linear-gradient(180deg,#EBDDB6,#E2D1A4)", border: "1.5px solid #C9B583", boxShadow: "0 4px 10px -6px rgba(0,0,0,.3)", zIndex: 2 }}>
@@ -79,29 +84,43 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
     if (added) { showToast(`${added} print${added === 1 ? "" : "s"} added to ${packet.city} 📸`, "success"); onChanged?.(); }
   };
   if (!packets.length) return null;
+  // The shelf used to scroll sideways; a lifetime of prints reads top to bottom, a year at
+  // a time (founder, 2026-10-14 night). Newest year first, two envelopes across on a phone.
+  const years = packetsByYear(packets);
   return (
     <div className={className}>
       <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: "#8A5410" }}>{title}</div>
       <div style={{ fontFamily: SERIF, fontSize: fs(22), color: "#16110D", lineHeight: 1.1 }}>Prints from every place</div>
       <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPick} />
-      <div className="flex gap-3 overflow-x-auto pt-3 pb-2" style={{ scrollbarWidth: "none" }}>
-        {packets.map((p) => (
-          <div key={p.key} style={{ position: "relative" }}>
-            <Envelope packet={p} onOpen={() => setOpen({ photos: p.photos, index: 0, city: p.city, range: p.range, packet: p })} />
-            {owner && p.stampId && (
-              // A 44px target around the 28px badge on the envelope's corner.
-              <button type="button" onClick={() => pickFor(p)} disabled={!!busyKey} aria-label={`Add prints to ${p.city}`}
-                style={{ position: "absolute", top: -12, right: -12, zIndex: 3, width: 44, height: 44, display: "grid", placeItems: "center", background: "transparent", border: 0, padding: 0 }}>
-                <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 999, background: "#fff", border: "1.5px solid #C9B583", display: "grid", placeItems: "center", boxShadow: "0 2px 6px rgba(0,0,0,.18)" }}>
-                  {busyKey === p.key ? <Loader2 size={14} className="animate-spin" color="#8A6E33" /> : <Plus size={15} color="#8A6E33" strokeWidth={2.6} />}
-                </span>
-              </button>
-            )}
+      {years.map(({ year, prints, packets: list }) => (
+        <section key={year} aria-label={`${year} — ${prints} prints`}>
+          <div className="flex items-baseline gap-2.5" style={{ marginTop: 16 }}>
+            <span style={{ fontFamily: SERIF, fontSize: fs(18), color: "#16110D" }}>{year}</span>
+            <span className="uppercase" style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".14em", color: INK3 }}>
+              {list.length} PLACE{list.length === 1 ? "" : "S"} · {prints} PRINT{prints === 1 ? "" : "S"}
+            </span>
+            <span aria-hidden="true" className="flex-1" style={{ borderTop: "1px dashed rgba(22,17,13,.18)", transform: "translateY(-3px)" }} />
           </div>
-        ))}
-      </div>
-      <p style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, letterSpacing: ".03em" }}>
-        {owner ? "Every destination gathers your memory photos on its own. Tap + to add more prints." : "Every destination gathers their memory photos on its own."}
+          <div className="grid justify-items-center" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(176px, 1fr))", gap: "16px 10px", paddingTop: 12 }}>
+            {list.map((p) => (
+              <div key={p.key} style={{ position: "relative" }}>
+                <Envelope packet={p} onOpen={() => setOpen({ photos: p.photos, index: 0, city: p.city, range: p.range, packet: p })} />
+                {owner && p.stampId && (
+                  // A 44px target around the 28px badge on the envelope's corner.
+                  <button type="button" onClick={() => pickFor(p)} disabled={!!busyKey} aria-label={`Add prints to ${p.city}`}
+                    style={{ position: "absolute", top: -12, right: -12, zIndex: 3, width: 44, height: 44, display: "grid", placeItems: "center", background: "transparent", border: 0, padding: 0 }}>
+                    <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 999, background: "#fff", border: "1.5px solid #C9B583", display: "grid", placeItems: "center", boxShadow: "0 2px 6px rgba(0,0,0,.18)" }}>
+                      {busyKey === p.key ? <Loader2 size={14} className="animate-spin" color="#8A6E33" /> : <Plus size={15} color="#8A6E33" strokeWidth={2.6} />}
+                    </span>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+      <p style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, letterSpacing: ".03em", marginTop: 10 }}>
+        {owner ? "Every destination gathers your memory photos, a year at a time. Tap + to add prints — captions can wait for later." : "Every destination gathers their memory photos, a year at a time."}
       </p>
       {open && (
         <PhotoLightbox
@@ -121,8 +140,8 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
                   {busyKey ? "Adding…" : `＋ Add prints to ${open.city}`}
                 </button>
               )}
-              {social?.slug && ph?.id && (
-                <PhotoFooter photo={ph} slug={social.slug} blotter={social.blotter} ownerView={owner} onChanged={social.onBlotterChanged}
+              {(social?.slug || owner) && ph?.id && (
+                <PhotoFooter photo={ph} slug={social?.slug || null} blotter={social?.blotter || null} ownerView={owner} onChanged={social?.onBlotterChanged}
                   onCaption={(id, caption) => setOpen((o) => (o ? { ...o, photos: o.photos.map((x) => (x.id === id ? { ...x, caption } : x)) } : o))} />
               )}
             </div>
