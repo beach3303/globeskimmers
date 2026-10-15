@@ -15306,20 +15306,30 @@ async function handlePlaceSearch(request, env) {
     const q = (url.searchParams.get('q') || '').trim();
     if (q.length < 2) return jsonResponse({ results: [] });
     const near = url.searchParams.get('near'); // "lat,lng" (optional bias)
-    const cacheKey = `place:${q.toLowerCase().slice(0, 80)}${near ? '@' + near : ''}`;
+    // place2: English names (place: kept local ones, "東京都, 日本", for 30 days).
+    const cacheKey = `place2:${q.toLowerCase().slice(0, 80)}${near ? '@' + near : ''}`;
     if (env.GLOBESKIMMERS_KV) { const c = await env.GLOBESKIMMERS_KV.get(cacheKey); if (c) return jsonResponse({ results: JSON.parse(c), cached: true }); }
     let viewbox = '';
     if (near) { const [la, ln] = near.split(',').map(Number); if (Number.isFinite(la) && Number.isFinite(ln)) viewbox = `&viewbox=${ln - 1.5},${la + 1.5},${ln + 1.5},${la - 1.5}`; }
-    const nom = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(q)}${viewbox}`;
+    // English names, as the stamp prints them: "Tokyo, Japan" and "Eiffel Tower", not
+    // "東京都, 日本" and "Tour Eiffel".
+    const nom = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&accept-language=en&q=${encodeURIComponent(q)}${viewbox}`;
     const r = await fetch(nom, { headers: { 'User-Agent': 'Globeskimmers/1.0 (travel app place stamps; support@globeskimmers.io)', 'Accept': 'application/json' } });
     if (!r.ok) return jsonResponse({ results: [] });
     const raw = await r.json();
+    const seen = new Set();
     const results = (Array.isArray(raw) ? raw : []).map((p) => {
       const a = p.address || {};
       const city = a.city || a.town || a.village || a.hamlet || a.municipality || a.county || '';
       const name = p.name || String(p.display_name || '').split(',')[0] || '';
       return { name, display: p.display_name, city, country: a.country || '', cc: String(a.country_code || '').toUpperCase(), lat: +p.lat, lng: +p.lon, type: p.type };
-    }).filter((x) => Number.isFinite(x.lat));
+    }).filter((x) => {
+      // One row per place: Paris came back three times (the city and two of its boundaries).
+      const k = `${x.name}|${x.city}|${x.cc}`.toLowerCase();
+      if (!Number.isFinite(x.lat) || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
     if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(results), { expirationTtl: 2592000 });
     return jsonResponse({ results });
   } catch (e) { return jsonResponse({ error: e.message, results: [] }, 500); }
