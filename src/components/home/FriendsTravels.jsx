@@ -95,7 +95,7 @@ export default function FriendsTravels({ wide = false }) {
             Travel is better with your <em style={{ color: BLUE }}>circle</em>
           </h3>
           <p style={{ margin: "6px 0 0", fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}>
-            Follow the ones you travel with, and their real stamps and postcards land here: where they went, and whether they were really there.
+            Follow the ones you travel with, and their real stamps and postcards land here: where they went, and whether they were really there. Your feed is yours alone — nobody else can see it.
           </p>
           <button
             type="button"
@@ -127,7 +127,7 @@ export default function FriendsTravels({ wide = false }) {
           <ArrowRight size={14} strokeWidth={2} aria-hidden="true" />
         </button>
       </div>
-      <p style={{ margin: "2px 0 0", fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}>Everything here really happened</p>
+      <p style={{ margin: "2px 0 0", fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}>Everything here really happened — and only you see it</p>
       {/* The envelopes bleed to the box's right edge and scroll sideways. */}
       <div className="flex overflow-x-auto" style={{ gap: 12, marginTop: 12, marginRight: -16, paddingRight: 16, paddingBottom: 2, scrollbarWidth: "none" }}>
         {rows.map((r, i) => (

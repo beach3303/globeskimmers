@@ -15,7 +15,7 @@
 // still to complete) gets the note that lets it finish.
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronRight, Globe, Mail, Mailbox as MailboxIcon } from "lucide-react";
+import { ChevronRight, Globe, Lock, Mail, Mailbox as MailboxIcon } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { cityBoardsUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
@@ -70,6 +70,12 @@ function Masthead({ onPostcard = undefined, addressable = false }) {
             </button>
           ) : null}
         </div>
+        {/* The seal (founder, 2026-10-15): say out loud that a mailbox is private — people
+            worry that friends can see who writes to them. Nobody can; this line tells them. */}
+        <p style={{ display: "flex", alignItems: "flex-start", gap: 6, margin: "8px 0 0", fontSize: fs(12.5), fontWeight: 500, lineHeight: 1.45, color: BLUE }}>
+          <Lock size={13} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flex: "none", marginTop: 2 }} />
+          <span>Sealed — <b style={{ fontWeight: 750 }}>only you</b> can open and see your mailbox. Nobody else knows what lands here or who it&rsquo;s from, not even your inner circle.</span>
+        </p>
       </header>
       <AirmailChevron height={5} />
     </>
