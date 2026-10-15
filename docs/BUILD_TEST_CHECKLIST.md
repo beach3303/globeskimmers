@@ -1823,6 +1823,9 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - 1f40dc1 (founder: "let the app know … it's taking two or three seconds"): past 4 s the card reads "Still
   looking — a slow connection can take a few extra seconds…"; past 10 s the form stops waiting and offers
   the search ("Your photo still proves the visit"). Verified with a 7 s and a 20 s simulated lookup.
+- Stamping… narrates (founder: "how much time do you need max to send the photo?"): "Checking your GPS…",
+  "Placing your stamp…", "Sending photo 2 of 3…" under the buttons; verified mid-upload with a 7 s delay.
+  (A broken first run was the rig's own demo session expiring, 267k looping auth retries — rig-only.)
   Gates: eslint, no-undef 0, build 0; sensing/choices/old-photo/slow screens recaptured.
 - **Activate:** push to main (deploys the worker; no migration, no SQL), probe `/place-search?q=Tokyo` →
   local 東京都 and `/photo-place` signed out → 401; then `npm run ota` AGAIN so phones get the one-photo
