@@ -524,6 +524,12 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
   // keeps the city centre when the city was picked first.
   const [venueSpot, setVenueSpot] = useState(Number.isFinite(+preset?.lat) && Number.isFinite(+preset?.lng) ? { lat: +preset.lat, lng: +preset.lng, category: null } : null);
   const [dateVal, setDateVal] = useState(preset?.visited_on || localISODate());
+  // The date fills in from the photos (founder, 2026-10-14): the earliest day a picked photo
+  // was taken, until the date is set by hand. A photo with no date (a screenshot, one saved
+  // from a chat) or a future one (a camera clock off) leaves it as it was.
+  const [dateFromPhoto, setDateFromPhoto] = useState(false);
+  const dateByHand = useRef(!!preset?.visited_on);
+  const fromPhoto = useRef(false);
   const [results, setResults] = useState(null);
   const [searchFor, setSearchFor] = useState(null);
   const [searching, setSearching] = useState(false);
@@ -543,7 +549,20 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     else { setVenue(r.name); if (Number.isFinite(+r.lat) && Number.isFinite(+r.lng)) setVenueSpot({ lat: +r.lat, lng: +r.lng, category: r.category || r.type || null }); if (!city) { setCity(r.city || ""); setCityQ(r.city || ""); } if (!country) setCountry(r.country || ""); if (!cc) setCc(r.cc || ""); if (!coords) setCoords({ lat: r.lat, lng: r.lng }); }
     setResults(null); setSearchFor(null);
   };
-  const onPickPhotos = (e) => { const f = [...(e.target.files || [])]; e.target.value = ""; setPhotos((p) => [...p, ...f].slice(0, 4)); };
+  const onPickPhotos = (e) => {
+    const f = [...(e.target.files || [])];
+    e.target.value = "";
+    setPhotos((p) => [...p, ...f].slice(0, 4));
+    if (!f.length || dateByHand.current) return;
+    Promise.all(f.map((x) => readPhotoExif(x).catch(() => null))).then((all) => {
+      const today = localISODate();
+      const days = all.map((x) => String(x?.taken_at || "").slice(0, 10)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today).sort();
+      if (!days.length || dateByHand.current) return;
+      setDateVal((cur) => (fromPhoto.current && cur < days[0] ? cur : days[0]));
+      fromPhoto.current = true;
+      setDateFromPhoto(true);
+    });
+  };
   const submit = async () => {
     const cityName = (city || cityQ).trim();
     // The sensed spot and country belong to where you are: they anchor the
@@ -645,7 +664,9 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
         )}
 
         <label style={labelStyle}>Date</label>
-        <input type="date" value={dateVal} max={localISODate()} onChange={(e) => setDateVal(e.target.value)} style={{ ...inputStyle, marginTop: 4 }} />
+        <input type="date" value={dateVal} max={localISODate()} style={{ ...inputStyle, marginTop: 4 }}
+          onChange={(e) => { dateByHand.current = true; fromPhoto.current = false; setDateFromPhoto(false); setDateVal(e.target.value); }} />
+        {dateFromPhoto ? <p style={{ color: INK3, fontSize: fs(12), lineHeight: 1.4, margin: "4px 0 0" }}>From your photo. Change it if that’s not the day you went.</p> : null}
 
         <label style={labelStyle}>Proof photo — taken there (up to 4)</label>
         <p style={{ color: INK3, fontSize: fs(11.5), lineHeight: 1.45, marginTop: 4 }}>
