@@ -14896,20 +14896,7 @@ async function handlePassportShare(request, env) {
         // serializer only ever shows status 'ok'.
         const pq = await gbRest(env, `passport_stamp_photos?user_id=eq.${user.id}&mod_status=is.null&select=id,photo_key&limit=80`, {});
         const pending = pq.ok ? await pq.json() : [];
-        if (pending.length && env.MEDIA) {
-          const job = (async () => {
-            for (const p of pending) {
-              try {
-                const obj = await env.MEDIA.get(p.photo_key);
-                if (!obj) continue;
-                const buf = new Uint8Array(await obj.arrayBuffer());
-                const v = await gbModeratePhoto(env, ppBytesToB64(buf), obj.httpMetadata?.contentType || 'image/jpeg');
-                await gbRest(env, `passport_stamp_photos?id=eq.${p.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mod_status: v && v.allow ? 'ok' : 'blocked', food_subject: v && v.allow && v.food ? 1 : 0 }) });
-              } catch { /* stays unchecked → stays hidden publicly */ }
-            }
-          })();
-          await Promise.race([job, new Promise((r) => setTimeout(r, 6000))]);
-        }
+        if (pending.length && env.MEDIA) await Promise.race([ppReviewPhotos(env, pending), new Promise((r) => setTimeout(r, 6000))]);
       }
       // Private = you + your friends (mutual accepted follows) — founder,
       // 2026-10-05. There is no deeper tier: not-public IS the friends tier.
@@ -14943,10 +14930,45 @@ function ppShareStamps(stamps, origin) {
     }));
 }
 
+// Reviews stored passport photos ({ id, photo_key }), four at a time: 'ok' or 'blocked' by
+// the reviewer's answer. A review that fails (the API down) leaves the photo unchecked, so a
+// later sweep tries it again; it used to block the photo for good.
+async function ppReviewPhotos(env, rows) {
+  const one = async (p) => {
+    try {
+      const obj = await env.MEDIA.get(p.photo_key);
+      if (!obj) return;
+      const v = await gbModeratePhoto(env, ppBytesToB64(new Uint8Array(await obj.arrayBuffer())), obj.httpMetadata?.contentType || 'image/jpeg');
+      if (!v || v.reason) return;
+      await gbRest(env, `passport_stamp_photos?id=eq.${p.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mod_status: v.allow ? 'ok' : 'blocked', food_subject: v.allow && v.food ? 1 : 0 }) });
+    } catch { /* stays unchecked → stays hidden from others */ }
+  };
+  for (let i = 0; i < rows.length; i += 4) await Promise.all(rows.slice(i, i + 4).map(one));
+}
+
+// A visit reviews the owner's unchecked photos (founder, 2026-10-14: friends saw no albums on
+// a private passport, whose photos were never reviewed). Up to 40, newest first, at most one
+// sweep per owner every 2 minutes. The visit waits up to 4 s, so it already shows most of
+// them; the rest finish after the reply. Callers check first that the viewer may see them.
+async function ppSweepPhotos(env, ctx, ownerId) {
+  if (!env.MEDIA || !env.GLOBESKIMMERS_KV || !ownerId) return;
+  try {
+    const lock = `ppsweep:${ownerId}`;
+    if (await env.GLOBESKIMMERS_KV.get(lock)) return;
+    const pq = await gbRest(env, `passport_stamp_photos?user_id=eq.${ownerId}&mod_status=is.null&order=created_at.desc&select=id,photo_key&limit=40`, {});
+    const pending = pq.ok ? await pq.json() : [];
+    if (!pending.length) return;
+    await env.GLOBESKIMMERS_KV.put(lock, '1', { expirationTtl: 120 });
+    const job = ppReviewPhotos(env, pending);
+    if (ctx) ctx.waitUntil(job);
+    await Promise.race([job, new Promise((r) => setTimeout(r, 4000))]);
+  } catch { /* the visit goes on; unchecked photos stay hidden */ }
+}
+
 // Read-only passport by slug. Public → anyone. Private → the owner and their
 // FRIENDS (mutual accepted follows) still see it in-app (founder, 2026-10-05:
 // "private is with self and friends"); everyone else gets { private: true }.
-async function handlePassportPublic(request, env) {
+async function handlePassportPublic(request, env, ctx) {
   try {
     const b = await request.json().catch(() => ({}));
     const slug = String(b.slug || '').replace(/[^a-z0-9]/gi, '');
@@ -14970,6 +14992,7 @@ async function handlePassportPublic(request, env) {
         : !!viewer; // the owner always sees their own
       if (!friend) return jsonResponse({ private: true });
     }
+    if (viewer?.id !== share.user_id) await ppSweepPhotos(env, ctx, share.user_id);
     const holder = await ppHolder(env, share.user_id);
     const { stamps } = await ppLoad(env, share.user_id);
     const origin = new URL(request.url).origin;
@@ -15155,16 +15178,16 @@ async function handlePassportPhotoUpload(request, env, ctx) {
     let upCaption = b.caption ? String(b.caption).replace(/\s+/g, ' ').trim().slice(0, 200) || null : null;
     if (upCaption && !(await gbModerate(env, upCaption)).allow) upCaption = null;
     await gbRest(env, 'passport_stamp_photos', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ stamp_id: stampId, user_id: user.id, photo_key: key, photo_url: photoUrl, caption: upCaption }) });
-    // If the booklet is ALREADY public, review this photo now (async) — the
-    // public-flip sweep only runs at flip time, so without this a photo added
-    // later would never earn mod_status 'ok' and never show to friends.
-    if (ctx) ctx.waitUntil((async () => {
+    // Review this photo now (async): only a reviewed photo shows to anyone else. A private
+    // passport is seen by its inner circle (mutual follows, 2026-10-05), so an adult's photo
+    // is reviewed public or not; it used to wait for a public booklet, and friends saw no
+    // albums (founder, 2026-10-14). A minor's passport is seen by no one else: no review.
+    if (ctx && !gbOffSocial(upSp)) ctx.waitUntil((async () => {
       try {
-        const shq = await gbRest(env, `passport_shares?user_id=eq.${user.id}&is_public=eq.true&select=user_id&limit=1`, {});
-        if (!(shq.ok && (await shq.json()).length)) return; // private journal — no review
         const v = await gbModeratePhoto(env, data, mediaType);
-        await gbRest(env, `passport_stamp_photos?photo_key=eq.${encodeURIComponent(key)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mod_status: v && v.allow ? 'ok' : 'blocked', food_subject: v && v.allow && v.food ? 1 : 0 }) });
-      } catch { /* stays unchecked → stays owner-only */ }
+        if (!v || v.reason) return; // the review itself failed: unchecked, so a visit retries it
+        await gbRest(env, `passport_stamp_photos?photo_key=eq.${encodeURIComponent(key)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mod_status: v.allow ? 'ok' : 'blocked', food_subject: v.allow && v.food ? 1 : 0 }) });
+      } catch { /* stays unchecked → stays owner-only until a visit retries it */ }
     })());
 
     // Proof from this photo — location tag first (free), then recognition.
@@ -19020,7 +19043,7 @@ async function handlePostcardKeep(request, env) {
 // Bio, favorites, dreams and coffee orders stay out: they were written before
 // B5's checks. Reads only.
 const WORLD_KNOWN_MAX = 12;
-async function handleSocialWorld(request, env) {
+async function handleSocialWorld(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
@@ -19101,6 +19124,7 @@ async function handleSocialWorld(request, env) {
     const relation = { self: false, i_follow: iFollow, follows_me: followsMe, inner };
     const visible = !!share && (share.is_public === true || inner);
     if (!visible) return jsonResponse({ person, relation, private: true });
+    await ppSweepPhotos(env, ctx, sid);
 
     // The open page: booklet, trunk, kit and circle, read together.
     const count = (r) => { const m = String(r?.headers?.get('content-range') || '').match(/\/(\d+)$/); return m ? Number(m[1]) : null; };
@@ -25679,7 +25703,7 @@ export default {
       if (pathname === '/postcards/send' && request.method === 'POST') return await handlePostcardSend(request, env, ctx);
       if (pathname === '/postcards/box' && request.method === 'POST') return await handlePostcardBox(request, env);
       if (pathname === '/postcards/keep' && request.method === 'POST') return await handlePostcardKeep(request, env);
-      if (pathname === '/social/world' && request.method === 'POST') return await handleSocialWorld(request, env);
+      if (pathname === '/social/world' && request.method === 'POST') return await handleSocialWorld(request, env, ctx);
       if (pathname === '/city/board' && request.method === 'POST') return await handleCityBoard(request, env);
       if (pathname === '/city/boards' && request.method === 'POST') return await handleCityBoards(request, env);
       if (pathname === '/social/avatar' && request.method === 'POST') return await handleSocialAvatar(request, env, ctx);
@@ -25707,7 +25731,7 @@ export default {
       if (pathname.startsWith('/t/') && request.method === 'GET') return await handlePassportTagLanding(request, env);
       if (pathname.startsWith('/h/') && request.method === 'GET') return await handleHeldClaimLanding(request, env);
       if (pathname === '/passport/share' && request.method === 'POST') return await handlePassportShare(request, env);
-      if (pathname === '/passport/public' && request.method === 'POST') return await handlePassportPublic(request, env);
+      if (pathname === '/passport/public' && request.method === 'POST') return await handlePassportPublic(request, env, ctx);
       if (pathname.startsWith('/p/') && request.method === 'GET') return await handlePassportShareLanding(request, env, ctx);
       if (pathname.startsWith('/go/') && request.method === 'GET') return handleStoreGo(request, env, ctx);
       if (pathname === '/cache/stats') return await handleCacheStats(request, env);
