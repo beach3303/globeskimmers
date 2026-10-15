@@ -1810,3 +1810,17 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   Move to a paid geocoder if photo stamping grows.
 - **Activate:** with the push above (deploys the worker; no migration, no SQL): probe `/place-search?q=Tokyo`
   → local 東京都, and `/photo-place` signed out → 401; then `npm run ota`.
+
+## 2026-10-14 — OTA went out ahead of the worker; one-photo sensing beat (stamping-v2, worker still not pushed)
+- ~19:36 PT the founder ran `npm run ota`: Capgo production = 1.0.2610150236, carrying everything through
+  a102beb — the photo-first form, albums on visits, the date limits — while the WORKER IS NOT DEPLOYED.
+  Every new screen falls back safely (the founder's Grand Canyon photo: date filled in, /photo-place 404 →
+  "We couldn't name where this photo was taken" → search). Photo sensing, second names from search, the
+  album review sweep and the server date checks stay dark until the push.
+- 3ec29af, from the founder's phone test: the first pick takes ONE photo (the sensing photo; the + for up
+  to 4 opens after, never re-looking-up; removing the last photo resets sensing), and sensing is a visible
+  beat — "Reading your photo — finding where and when it was taken…", ≥1.3 s, fields and Stamp it held.
+  Gates: eslint, no-undef 0, build 0; sensing/choices/old-photo screens recaptured.
+- **Activate:** push to main (deploys the worker; no migration, no SQL), probe `/place-search?q=Tokyo` →
+  local 東京都 and `/photo-place` signed out → 401; then `npm run ota` AGAIN so phones get the one-photo
+  sensing flow.
