@@ -1957,3 +1957,13 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   slow-lookup messages + Stamping… narration, the vintage sticker reactions + COOL! (YUMMY gone), albums
   by year + captions + the 600-character guestbook, the three privacy-dial Settings rows + held-pen sheet,
   and the full tier UI (chips, corner marks, ask-first links, picture chooser, order row, Arrange).
+
+## 2026-10-15 — OTA SHIPPED: 1.0.2610151816 (iOS + Android)
+- The founder was remote and asked Claude to run it; `npm run ota` ran clean (build → cap sync both →
+  Capgo upload, CI=true, pinned CLI 8.68.1). Channel list confirms production = 1.0.2610151816, iOS and
+  Android. Phones take it on next launch.
+- This bundle carries everything since 1.0.2610150236: one-photo sensing + the reading beat + slow-lookup
+  messages + Stamping… narration; the vintage sticker reactions + COOL! (YUMMY retired, folder strip
+  gone); albums by year + captions everywhere + the 600-character guestbook; the privacy-dial Settings
+  rows + the held-pen sheet; and the full tier UI (four chips, corner marks, ask-first links with Turn
+  off, the picture chooser, order row, Arrange). Nothing left to activate.
