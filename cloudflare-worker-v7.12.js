@@ -18104,14 +18104,15 @@ async function handleLuggageSet(request, env, ctx) {
 
 // ── The Blotter (2026-09-30, mockup v3): reactions AROUND a page ────────────
 // Marks are stamp presses on the blotter under a shared passport page — five
-// core (wow/takeme/been/wannago/morepics) + contextual yummy (only where a
+// core (wow/cool/takeme/been/wannago/morepics) + contextual yummy (only where a
 // photo's food_subject says food is the star). The Guestbook holds signatures
 // and finger DOODLES (fail-closed image moderation, R2 bl/). Co-signs are the
 // comment-like done our way: public authorship — tap ✍ to put your name under
 // someone's words, tap again to lift your pen; who-signed is always visible.
 // Rails: non-owners need the booklet PUBLIC; block pairs vanish silently;
 // teen authors sign only on owners they follow (accepted); owner sweeps all.
-const BL_KINDS = new Set(['wow', 'takeme', 'been', 'wannago', 'morepics', 'yummy']);
+// 'cool' joined with the founder's sticker set (2026-10-14).
+const BL_KINDS = new Set(['wow', 'cool', 'takeme', 'been', 'wannago', 'morepics', 'yummy']);
 const BL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function blShare(env, slug) {
@@ -19912,7 +19913,7 @@ async function handleAdminHeldHandles(request, env) {
 // total plus 30 days of activity, newest first, each flagged unread. mark:true
 // moves mailbox_seen_at to now AFTER reading. Teen activity under 24h stays
 // hidden, the same rail as the who-signed lists.
-const BL_KIND_LABEL = { wow: 'WOW', takeme: 'TAKE ME', been: 'BEEN HERE \u2665', wannago: 'I WANNA GO', morepics: 'MORE PICS', yummy: 'YUMMY' };
+const BL_KIND_LABEL = { wow: 'WOW!', cool: 'COOL!', takeme: 'TAKE ME!', been: 'BEEN THERE!', wannago: 'I WANNA GO!', morepics: 'MORE PICS PLEASE!', yummy: 'YUMMY!' };
 async function handleSocialUnread(request, env) {
   try {
     const user = await gbUser(request, env);
