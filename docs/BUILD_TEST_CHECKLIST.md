@@ -1830,3 +1830,14 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - **Activate:** push to main (deploys the worker; no migration, no SQL), probe `/place-search?q=Tokyo` →
   local 東京都 and `/photo-place` signed out → 401; then `npm run ota` AGAIN so phones get the one-photo
   sensing flow.
+
+## 2026-10-14 night — LIVE: the past-trip bundle (main bd391cd)
+- Founder said "push": 16 commits 6ae159f → bd391cd, pre-push gates in the main checkout (node --check,
+  build, boot-check ✅). Deploy Cloudflare Workers run 38676052642 succeeded (api + tts). No migration.
+- Live probes: /place-search?q=Tokyo → "Tokyo 東京都, Japan" (place2 cache); ?q=Paris → France first;
+  /photo-place signed out → 401; at Sensō-ji → Asakusa Jinja / Sensō-ji Temple / Hanayashiki + Taito 台東区
+  (in Tokyo) + Tokyo 東京都; at the Grand Canyon South Rim → Bright Angel Trail (67 m), Grand Canyon South
+  Rim, Coconino County AZ; /passport/list unchanged.
+- Phones on 1.0.2610150236 sense photos as of this deploy (that bundle already calls /photo-place).
+- **Activate:** the founder's `npm run ota` — ships the one-photo sensing beat, the slow-lookup messages
+  and the Stamping… narration (3ec29af, 1f40dc1, 9dd4a71).

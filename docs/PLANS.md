@@ -866,14 +866,19 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   minors excluded (founder: "with the exception of minors, can we allow circles of friends [who] follow
   each other access to view their albums"; 6596bf4 server, 9dcbb18 visit page). Found while mocking up
   past-trip stamping: the city search leaned toward where you are and a far spot kept today's city
-  (ad4bd95), and place names came back in local languages (f1741ef). On stamping-v2, not pushed: the push
-  deploys the worker, then `npm run ota`. **Decided the same evening:** Stamp a place starts from a photo
+  (ad4bd95), and place names came back in local languages (f1741ef). **Decided the same evening:** Stamp a place starts from a photo
   (founder: "user just clicks stamp a place and then uploads a photo and then the app senses which city
   and state the photo was taken from … give three option"): up to 3 choices from where the photo was
   taken, famous places then the city and the wider city; place names carry their original alphabet
   (founder: "can we put both names in original character and tokyo?"; "Tokyo 東京都"); and **stamps go
   back to January 1, 2026, never later than today** (founder: "we allow users to go back and stamp all the
-  way back from Jan 1, 2026"). Built: d8c5404 server, 85f60c2 app; same push and OTA.
+  way back from Jan 1, 2026"). Built: d8c5404 server, 85f60c2 app. Refined after the founder's phone test:
+  one photo does the sensing with a visible ≥1.3 s beat (3ec29af), a slow lookup says so at 4 s and yields
+  at 10 s (1f40dc1), and Stamping… narrates photo by photo (9dd4a71). **PUSHED 2026-10-14 night (founder:
+  "push"): main 6ae159f → bd391cd, deploy run 38676052642 ✓; live probes: Tokyo 東京都, photo-place 401
+  signed out, Sensō-ji and Grand Canyon points both answer. Remaining: the founder's `npm run ota`** —
+  phones on 1.0.2610150236 already sense (the server is live); the OTA adds the one-photo flow and the
+  patient messages.
   **Art:** "Mixed / rescue" for dogs and cats (founder). Review page:
   https://claude.ai/artifact/JeXKJshqiT2BJ9BSPARA2G; status: `docs/design/new-look/BUILD_STATUS.md` on new-look.
   **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
