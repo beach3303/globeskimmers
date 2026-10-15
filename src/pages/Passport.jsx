@@ -576,6 +576,8 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
   const [searching, setSearching] = useState(false);
   const [photos, setPhotos] = useState([]);
   const [busy, setBusy] = useState(false);
+  // What Stamping… is doing right now ("Sending photo 2 of 3…"), under the buttons.
+  const [busyMsg, setBusyMsg] = useState(null);
   const fileRef = useRef(null);
 
   const runSearch = async (which) => {
@@ -685,7 +687,7 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     if (!cityName) { showToast("Add a city first", "error"); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVal) || dateVal < STAMP_EARLIEST) { showToast("Stamps go back to January 1, 2026", "error"); return; }
     if (dateVal > localISODate()) { showToast("That date hasn’t happened yet", "error"); return; }
-    setBusy(true);
+    setBusy(true); setBusyMsg(null);
     // No stamp without proof (founder, 2026-10-03): being there now (GPS at the
     // picked venue, today), or a photo taken there. Nothing is created unproven.
     const sl = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -701,6 +703,7 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
       // The native GPS, best of 2–3 readings (founder, 2026-10-10). Visits have
       // no map on the worker, so the phone measures, with the same accuracy
       // allowance the worker gives (capped at 100 m).
+      setBusyMsg("Checking your GPS…");
       const fix = await getStampFix().catch(() => null);
       if (fix && metersBetween(fix.lat, fix.lng, spot.lat, spot.lng) <= stampRadiusFor({ name: venue, category: spot.category }) + Math.min(fix.acc ?? 0, 100)) verified = "gps";
     }
@@ -718,6 +721,7 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
       showToast("Those photos are from before 2026. Stamps go back to January 1, 2026.", "error");
       return;
     }
+    setBusyMsg("Placing your stamp…");
     const { data, error } = await addStamp({
       kind: "city", entity_type: "visit", entity_id,
       name: venue.trim() || cityName, city: cityName, region: region || null,
@@ -733,6 +737,9 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     if (data.private) showToast("This may be a sensitive place ❤️ — the stamp starts private. Share it from the stamp anytime.", "success");
     let proof = null;
     for (let i = 0; i < photos.length; i++) {
+      // Say which photo is traveling (founder, 2026-10-14: "how much time do you need to
+      // send the photo?" — this is where the photo really goes, 1–3 s each, so narrate it).
+      setBusyMsg(photos.length > 1 ? `Sending photo ${i + 1} of ${photos.length}…` : "Sending your photo — checking it proves the visit…");
       try {
         const image = await resizePhoto(photos[i]);
         const up = await uploadStampPhoto({ stamp_id: data.id, image, visited_on: dateVal, exif: exifs[i] });
@@ -877,6 +884,7 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
           <button onClick={onClose} disabled={busy} className="flex-1 rounded-xl py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(14) }}>Cancel</button>
           <button onClick={submit} disabled={busy || !!located?.loading} className="flex-1 rounded-xl py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(14), opacity: located?.loading ? 0.6 : 1 }}>{busy ? "Stamping…" : "Stamp it"}</button>
         </div>
+        {busy && busyMsg ? <p role="status" style={{ color: INK2, fontSize: fs(12), textAlign: "center", marginTop: 8 }}>{busyMsg}</p> : null}
         <p style={{ color: INK3, fontSize: fs(10), textAlign: "center", marginTop: 10 }}>Place names © OpenStreetMap contributors</p>
       </div>
     </div>
