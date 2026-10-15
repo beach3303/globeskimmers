@@ -1863,3 +1863,12 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - **Activate:** push to main (worker must deploy BEFORE phones get the app, or a COOL! press 400s), probe
   /blotter/mark kind:cool on a test target → 200; then the founder's `npm run ota` (carries the stickers
   AND the earlier one-photo sensing round, which is still waiting on an OTA).
+
+## 2026-10-14 night — YUMMY retired; the folder card's floating strip removed (stamping-v2, not pushed)
+- Founder, from their phone: "Remove yummy … can we remove the ones inside red circle" (the reaction strip
+  on the visit page's "Where they've been" folder card, anchored to nothing). 04b15dc: PassportFolder drops
+  the strip; Blotter drops YUMMY (tray, target logic, drawn icon); worker BL_KINDS drops 'yummy' (new press
+  → 400) with its label kept for old Mailbox rows; the dish gate in blotter/mark is gone. Stickers remain
+  on photos, open-booklet pages and board postcards. Tests: test-stickers 15/15 (YUMMY refused), boardbook
+  19/19 (flipped), albums 16/16. Gates: eslint, no-undef 0, build 0, worker node --check.
+- **Activate:** rides the same push + `npm run ota` as the sticker entry above.
