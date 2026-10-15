@@ -878,7 +878,14 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   "push"): main 6ae159f → bd391cd, deploy run 38676052642 ✓; live probes: Tokyo 東京都, photo-place 401
   signed out, Sensō-ji and Grand Canyon points both answer. Remaining: the founder's `npm run ota`** —
   phones on 1.0.2610150236 already sense (the server is live); the OTA adds the one-photo flow and the
-  patient messages.
+  patient messages. **Decided 2026-10-15 (founder: "Let's do your recommendations", after the
+  follow/privacy consultation): the privacy dials.** Followers are approved by default (every new follow
+  waits as a request; accept/decline in the circle, cancel for the asker; the switch is Settings →
+  Privacy). Photo albums have their own audience apart from the passport — Inner circle by default (a
+  public passport shows pages, not photos), My passport, or Only me. Writing on a passport (comments,
+  guestbook, co-signs) is Inner circle by default, openable to everyone-who-sees-it or off; reactions
+  stay open to whoever sees the page. Minors unchanged: all social stays off. Built the same day
+  (8eebf67 worker + migration, 7e80847 app), tests 28/28; awaiting the founder's push + OTA.
   **Art:** "Mixed / rescue" for dogs and cats (founder). Review page:
   https://claude.ai/artifact/JeXKJshqiT2BJ9BSPARA2G; status: `docs/design/new-look/BUILD_STATUS.md` on new-look.
   **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
