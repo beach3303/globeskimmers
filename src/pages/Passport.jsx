@@ -612,37 +612,58 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     setCity(o.city); setCityQ(o.city); setCityLocal(o.kind === "city" ? o.local : null);
     setCountry(o.country); setCc(o.cc); setRegion(o.region);
   };
-  const locate = async (x) => {
-    const at = { lat: Math.round(x.lat * 1000) / 1000, lng: Math.round(x.lng * 1000) / 1000 };
-    setLocated({ loading: true, at });
-    const options = photoOptions(await photoPlace(at.lat, at.lng));
-    if (!options.length) { setLocated(null); setPhotoNote("We couldn’t name where this photo was taken. Search for the place below."); return; }
-    setLocated({ at, options });
-    choose(options[0], at);
-  };
+  // One photo does the sensing (founder, 2026-10-14 evening: "it should only be one photo"):
+  // the FIRST, and only while no place is set. Later photos are memories and extra proof,
+  // never a new lookup. And the sensing takes a visible beat (founder: "I think you need time
+  // after I upload it to sense it"): "Reading your photo…" holds at least SENSE_MS before the
+  // answer appears, plus however long the lookup really takes.
+  const SENSE_MS = 1300;
+  const senseSeq = useRef(0);
   const onPickPhotos = (e) => {
     const f = [...(e.target.files || [])];
     e.target.value = "";
     if (!f.length) return;
+    const senseThis = photos.length === 0 && !preset && !located &&
+      !venue.trim() && !((city || cityQ).trim() && (city || cityQ).trim() !== (sensed?.city || ""));
     setPhotos((p) => [...p, ...f].slice(0, 4));
-    const typed = !!venue.trim() || (!!(city || cityQ).trim() && (city || cityQ).trim() !== (sensed?.city || ""));
-    const placeKnown = !!preset || !!located || typed;
-    Promise.all(f.map((x) => readPhotoExif(x).catch(() => null))).then((all) => {
-      setPhotoNote(null);
+    const seq = ++senseSeq.current;
+    const live = () => senseSeq.current === seq; // the photo wasn't removed meanwhile
+    if (senseThis) { setPhotoNote(null); setLocated({ loading: true, at: null }); }
+    const t0 = Date.now();
+    const settle = () => new Promise((r) => setTimeout(r, Math.max(0, (senseThis ? SENSE_MS : 0) - (Date.now() - t0))));
+    Promise.all(f.map((x) => readPhotoExif(x).catch(() => null))).then(async (all) => {
+      if (!senseThis) setPhotoNote(null);
       const today = localISODate();
       const days = all.map((x) => String(x?.taken_at || "").slice(0, 10)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today).sort();
       const inRange = days.filter((d) => d >= STAMP_EARLIEST);
       // Photos from before stamps reach back can't date or prove a visit.
-      if (days.length && !inRange.length) { setPhotoNote(`This photo is from ${longDay(days[0])}. Stamps go back to January 1, 2026.`); return; }
+      if (days.length && !inRange.length) {
+        await settle();
+        if (!live()) return;
+        if (senseThis) setLocated(null);
+        setPhotoNote(`This photo is from ${longDay(days[0])}. Stamps go back to January 1, 2026.`);
+        return;
+      }
       if (inRange.length && !dateByHand.current) {
         setDateVal((cur) => (fromPhoto.current && cur < inRange[0] ? cur : inRange[0]));
         fromPhoto.current = true;
         setDateFromPhoto(true);
       }
-      if (placeKnown) return;
+      if (!senseThis) return;
       const tagged = all.find((x) => Number.isFinite(x?.lat) && Number.isFinite(x?.lng) && !(x.lat === 0 && x.lng === 0));
-      if (tagged) locate(tagged);
-      else setPhotoNote("This photo has no location. Search for the place below, and we’ll look for it in the picture.");
+      if (!tagged) {
+        await settle();
+        if (live()) { setLocated(null); setPhotoNote("This photo has no location. Search for the place below, and we’ll look for it in the picture."); }
+        return;
+      }
+      const at = { lat: Math.round(tagged.lat * 1000) / 1000, lng: Math.round(tagged.lng * 1000) / 1000 };
+      if (live()) setLocated({ loading: true, at });
+      const options = photoOptions(await photoPlace(at.lat, at.lng));
+      await settle();
+      if (!live()) return;
+      if (!options.length) { setLocated(null); setPhotoNote("We couldn’t name where this photo was taken. Search for the place below."); return; }
+      setLocated({ at, options });
+      choose(options[0], at);
     });
   };
   const submit = async () => {
@@ -724,7 +745,8 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
 
   const inputStyle = { width: "100%", border: `1px solid ${RULE}`, borderRadius: 12, padding: "10px 12px", fontSize: fs(14), color: INK, fontFamily: SANS, background: "#fff" };
   const labelStyle = { fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", textTransform: "uppercase", color: INK3, display: "block", marginTop: 14 };
-  const showFields = searchOpen || !located?.options;
+  // While the photo is being read, the form holds its breath: no search fields, no "+".
+  const showFields = searchOpen || (!located?.options && !located?.loading);
   return (
     <div onClick={onClose} className="fixed inset-0 z-[9998] flex items-start justify-center p-4 overflow-y-auto" style={{ background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)" }}>
       <div onClick={(e) => e.stopPropagation()} className="w-full bg-white" style={{ maxWidth: 400, marginTop: 28, marginBottom: 40, borderRadius: 22, padding: 20, boxShadow: SHADOW_CARD_SOFT }}>
@@ -738,28 +760,39 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
             <span aria-hidden="true" style={{ width: 44, height: 44, borderRadius: 12, background: "#fff", display: "grid", placeItems: "center", flexShrink: 0 }}><Camera size={20} color={STAMP} /></span>
             <span>
               <span style={{ display: "block", fontSize: fs(15), fontWeight: 700, color: INK }}>Add a photo from the trip</span>
-              <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>We’ll find where and when it was taken, and it proves your visit.</span>
+              <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>One photo is enough — we’ll find where and when it was taken, and it proves your visit.</span>
             </span>
           </button>
         ) : (
           <>
-            <label style={labelStyle}>Your photos (up to 4)</label>
+            <label style={labelStyle}>{photos.length === 1 ? "Your photo" : "Your photos (up to 4)"}</label>
             <div className="flex gap-2 mt-1 flex-wrap items-center">
               {photos.map((f, i) => (
                 <div key={i} className="relative">
                   <img src={URL.createObjectURL(f)} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 10, border: `1px solid ${RULE}` }} />
-                  <button onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))} aria-label="Remove photo" className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,.7)" }}><X size={11} color="#fff" strokeWidth={2.5} /></button>
+                  <button onClick={() => {
+                    const next = photos.filter((_, j) => j !== i);
+                    setPhotos(next);
+                    // The last photo gone → the sensing starts over with the next one.
+                    if (!next.length) { senseSeq.current += 1; setLocated(null); setChoice(null); setPhotoNote(null); }
+                  }} aria-label="Remove photo" className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,.7)" }}><X size={11} color="#fff" strokeWidth={2.5} /></button>
                 </div>
               ))}
-              {photos.length < 4 && (
+              {photos.length < 4 && !located?.loading && (
                 <button onClick={() => fileRef.current?.click()} aria-label="Add another photo" className="rounded-xl flex items-center justify-center" style={{ width: 56, height: 56, border: `1px dashed ${RULE}`, background: IVORY_2 }}><Plus size={18} color={INK3} /></button>
               )}
             </div>
           </>
         )}
-        <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPickPhotos} />
+        {/* The first pick takes ONE photo (the sensing photo); more can join after. */}
+        <input ref={fileRef} type="file" accept="image/*" multiple={photos.length > 0} className="hidden" onChange={onPickPhotos} />
         {photoNote ? <p style={{ color: INK2, fontSize: fs(12.5), lineHeight: 1.4, marginTop: 8 }}>{photoNote}</p> : null}
-        {located?.loading ? <p role="status" style={{ color: INK3, fontSize: fs(12.5), marginTop: 10 }}>Finding where this photo was taken…</p> : null}
+        {located?.loading ? (
+          <div role="status" className="flex items-center gap-2.5 rounded-xl" style={{ marginTop: 10, padding: "10px 12px", background: IVORY_2, border: `1px solid ${RULE}` }}>
+            <Loader2 size={16} color={STAMP} strokeWidth={2.2} className="animate-spin" aria-hidden="true" />
+            <span style={{ fontSize: fs(13), color: INK2, lineHeight: 1.35 }}>Reading your photo — finding where and when it was taken…</span>
+          </div>
+        ) : null}
 
         {located?.options && !searchOpen ? (
           <>
