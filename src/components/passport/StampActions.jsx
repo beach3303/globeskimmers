@@ -302,7 +302,9 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
         <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: RULE }} aria-hidden="true" />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate" style={{ fontFamily: SERIF, fontSize: fs(21), color: INK, lineHeight: 1.15 }}>{stamp.name}</p>
+            <p className="truncate" style={{ fontFamily: SERIF, fontSize: fs(21), color: INK, lineHeight: 1.15 }}>
+              {stamp.name}{stamp.meta?.local_name ? <span style={{ color: INK2, marginLeft: 8 }}>{stamp.meta.local_name}</span> : null}
+            </p>
             {place && <p className="truncate" style={{ fontFamily: MONO, fontSize: fs(11.5), color: INK3, marginTop: 2 }}>{place}</p>}
             {isLocalFav && <p style={{ fontSize: fs(12.5), fontWeight: 600, color: "#0A5F58", marginTop: 4, lineHeight: 1.3 }}>{localFavoriteLine(stamp)}</p>}
           </div>

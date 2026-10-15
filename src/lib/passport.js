@@ -60,6 +60,13 @@ export async function listPassport() {
   return { stamps: data?.stamps || [], stats: data?.stats || {}, error };
 }
 
+// Where a trip photo was taken, from its location tag: { places, cities } — the famous
+// places within reach and the city it's in (worker /photo-place) — or null.
+export async function photoPlace(lat, lng) {
+  const { data, error } = await callWorker('photo-place', { lat, lng });
+  return error || !data || data.error ? null : data;
+}
+
 // Attach a photo to a stamp (base64 data URL or bare base64). A photo on a
 // self-declared stamp upgrades it to ✓ (photo-proof); visited_on optional.
 // exif: { lat, lng, taken_at } read from the ORIGINAL file (src/lib/photoExif.js)

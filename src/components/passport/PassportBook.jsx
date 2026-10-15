@@ -10,7 +10,7 @@ import { getShareLink } from "@/lib/passport";
 import { countryCode } from "@/lib/countries";
 import { stampArtUrl } from "@/lib/stampArt";
 import { isPlainArt } from "@/lib/respectPlaces";
-import { STAMP_INK_STRENGTH } from "@/lib/stampDesign";
+import { STAMP_INK_STRENGTH, typographicStampConfig } from "@/lib/stampDesign";
 import { isPhotoFirst } from "@/lib/passport";
 import { calmEdge } from "@/lib/photoEdge";
 import AirportStamp from "@/components/passport/AirportStamp";
@@ -209,6 +209,15 @@ function StampToken({ stamp, idx, onOpen, pageW, frameW = pageW, compact = false
   const bigDate = stamp.visited_on
     ? new Date(stamp.visited_on + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "";
+  // The place's own name in its own alphabet, under the English one (founder, 2026-10-14:
+  // "both names in original character and tokyo"), in the ink of what it sits under: the
+  // caption's under the art, the stamp's own under a typographic stamp.
+  const localName = isCity && stamp.meta?.local_name ? (
+    <div style={{ fontFamily: SERIF, fontSize: fs(17 * t), marginTop: 4 * t, lineHeight: 1.15,
+      color: showArt ? cityInk : typographicStampConfig({ entityId: stamp.entity_id || stamp.id, name: stamp.name, country: stamp.country }).ink }}>
+      {stamp.meta.local_name}
+    </div>
+  ) : null;
   const photos = (stamp.photos || []).slice(0, 4);
   const artW = Math.round((compact ? BOOK.art : ART_FRAC) * pageW);
   const badgeW = Math.round((compact ? 0.36 : 0.5) * pageW);
@@ -286,17 +295,21 @@ function StampToken({ stamp, idx, onOpen, pageW, frameW = pageW, compact = false
                 Visited {stamp.city || stamp.name}{stamp.country ? `, ${stamp.country}` : ""}
               </div>
               {venue && <div style={{ fontFamily: SERIF, fontStyle: "italic", color: cityInk, fontSize: fs(17 * t), marginTop: 4 * t, lineHeight: 1.1 }}>I was here @ {venue}</div>}
+              {localName}
               {bigDate && <div style={{ fontFamily: MONO, color: cityInk, opacity: 0.7, fontSize: fs(11.5 * t), letterSpacing: ".03em", marginTop: 6 * t }}>{bigDate}</div>}
             </>
           ) : (
             // The typographic stamp already says the name + date + "I was
             // here!" — only add the city context when the stamp is a specific
             // spot within a city (e.g. LAKE LOUISE → "Visited Banff, Canada").
-            venue && stamp.city && (
-              <div style={{ fontFamily: MONO, color: cityInk, opacity: 0.95, fontSize: fs(13 * t), letterSpacing: ".04em", textTransform: "uppercase", marginTop: 8 * t }}>
-                Visited {stamp.city}{stamp.country ? `, ${stamp.country}` : ""}
-              </div>
-            )
+            <>
+              {venue && stamp.city && (
+                <div style={{ fontFamily: MONO, color: cityInk, opacity: 0.95, fontSize: fs(13 * t), letterSpacing: ".04em", textTransform: "uppercase", marginTop: 8 * t }}>
+                  Visited {stamp.city}{stamp.country ? `, ${stamp.country}` : ""}
+                </div>
+              )}
+              {localName}
+            </>
           )}
           <FilmCaption film={stamp.meta?.film} t={t} />
           {(stamp.tagged_by_name || stamp.tagged_by_handle) && (

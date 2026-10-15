@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { ChevronLeft, Loader2, Plus, Trash2, Calendar, RefreshCw, X, UserPlus, Mail } from "lucide-react";
+import { ChevronLeft, Loader2, Plus, Trash2, Calendar, RefreshCw, X, UserPlus, Mail, Camera } from "lucide-react";
 import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT, NEUTRAL } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { cityBoardUrl, hasBoard } from "@/lib/boardLinks";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead, socialFollow } from "@/lib/passport";
+import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead, socialFollow, photoPlace } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
 import { TAGGING_ENABLED } from "@/lib/flags";
@@ -20,6 +20,7 @@ import AirportStamp from "@/components/passport/AirportStamp";
 import LandStamp from "@/components/passport/LandStamp";
 import LocalFavoriteStamp, { isLocalFavorite, localFavoriteLine } from "@/components/passport/LocalFavoriteStamp";
 import { useLocation, isLiveFix } from "@/components/location/LocationContext";
+import { useDistanceUnit } from "@/components/location/distanceUnit";
 import PassportBook, { packBookPages, readFontScale, fitsTogether } from "@/components/passport/PassportBook";
 import BlotterStrip from "@/components/passport/Blotter";
 import { isAdminEmail } from "@/lib/admins";
@@ -194,6 +195,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
   };
   const saveDate = async () => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) { setShowDate(false); return; }
+    if (dateVal < STAMP_EARLIEST) { showToast("Stamps go back to January 1, 2026", "error"); return; }
     setBusy(true);
     const { error } = await setStampDate(stamp.id, dateVal);
     setBusy(false); setShowDate(false);
@@ -359,7 +361,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
 
       {!readOnly && showDate && (
         <div className="flex items-center gap-2 mt-2">
-          <input type="date" value={dateVal} onChange={(e) => setDateVal(e.target.value)} max={localISODate()}
+          <input type="date" value={dateVal} onChange={(e) => setDateVal(e.target.value)} min={STAMP_EARLIEST} max={localISODate()}
             className="rounded-lg px-2 py-1" style={{ border: `1px solid ${RULE}`, fontSize: fs(13), color: INK }} />
           <button onClick={saveDate} disabled={busy} className="rounded-lg px-3 py-1 font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: fs(12.5) }}>Save</button>
         </div>
@@ -494,6 +496,31 @@ const SAMPLE_STATS = { countries: 3, verified: 6 };
 // "Stamp a place" — a user-initiated (never prompted) stamp for a city or spot
 // you visited. Free OSM place search + free-text; date + memory photos. Creates
 // a kind:'city' stamp rendered as a borderless fat-ink line.
+// How far back a visit can be stamped (founder, 2026-10-14: "all the way back from Jan 1,
+// 2026"). The worker holds the same line.
+const STAMP_EARLIEST = "2026-01-01";
+const longDay = (d) => new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+// Up to three answers to "where was this photo taken?" (founder, 2026-10-14: "the app senses
+// which city and state the photo was taken from … give three options"): the famous places
+// within reach first, then the city, and the wider city around a ward ("Taito", in "Tokyo"):
+// cities keep up to two of the three places, so Tokyo isn't crowded out by temples.
+function photoOptions(data) {
+  const cities = (data?.cities || []).filter((c) => c?.city).map((c) => ({
+    key: `c:${c.city}`, kind: "city", name: c.city, local: c.local || null,
+    city: c.city, country: c.country || "", cc: c.cc || "", region: c.region || null,
+    sub: [c.within, c.region, c.country].filter(Boolean).join(", "),
+  }));
+  const here = cities[0] || {};
+  const places = (data?.places || []).filter((p) => p?.name).map((p) => ({
+    key: `p:${p.id}`, kind: "place", name: p.name, local: null,
+    city: p.city || here.city || "", country: p.country || here.country || "", cc: here.cc || "", region: here.region || null,
+    sub: [p.city, p.country].filter(Boolean).join(", "), meters: p.meters,
+  }));
+  const nCities = Math.min(cities.length, places.length ? 2 : 3);
+  return [...places.slice(0, 3 - nCities), ...cities.slice(0, nCities)];
+}
+
 function StampPlaceModal({ onClose, onDone, preset = null }) {
   // No preset → start from where GPS says you are (founder, 2026-10-05:
   // "provide them the city where they currently are"). The city field is
@@ -504,7 +531,8 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
   // enough for the 400 m photo-location proof and Verify I'm here.
   // "Where you are" is a live GPS reading from this app run — never the place
   // you are browsing or an old restored fix (founder, 2026-10-11).
-  const { currentGpsLocation } = useLocation();
+  const { currentGpsLocation, activeLocation } = useLocation();
+  const units = useDistanceUnit(activeLocation);
   const rough = (v) => (Number.isFinite(+v) ? Math.round(+v * 1000) / 1000 : null);
   const live = isLiveFix(currentGpsLocation, 60 * 60 * 1000) ? currentGpsLocation : null;
   const sensed = !preset && live?.address?.city ? {
@@ -516,6 +544,7 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
   const [city, setCity] = useState(preset?.city || sensed?.city || "");
   const [country, setCountry] = useState(preset?.country || sensed?.country || "");
   const [cc, setCc] = useState("");
+  const [region, setRegion] = useState(null);
   const [coords, setCoords] = useState(
     Number.isFinite(+preset?.lat) && Number.isFinite(+preset?.lng) ? { lat: +preset.lat, lng: +preset.lng }
     : Number.isFinite(+sensed?.lat) && Number.isFinite(+sensed?.lng) ? { lat: +sensed.lat, lng: +sensed.lng } : null);
@@ -523,6 +552,10 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
   // The venue's OWN point and type, for the on-the-spot GPS check — `coords`
   // keeps the city centre when the city was picked first.
   const [venueSpot, setVenueSpot] = useState(Number.isFinite(+preset?.lat) && Number.isFinite(+preset?.lng) ? { lat: +preset.lat, lng: +preset.lng, category: null } : null);
+  // The place's own name in its own alphabet ("東京都" beside "Tokyo"), when a search or the
+  // photo's location gave one (founder, 2026-10-14).
+  const [cityLocal, setCityLocal] = useState(null);
+  const [venueLocal, setVenueLocal] = useState(null);
   const [dateVal, setDateVal] = useState(preset?.visited_on || localISODate());
   // The date fills in from the photos (founder, 2026-10-14): the earliest day a picked photo
   // was taken, until the date is set by hand. A photo with no date (a screenshot, one saved
@@ -530,6 +563,14 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
   const [dateFromPhoto, setDateFromPhoto] = useState(false);
   const dateByHand = useRef(!!preset?.visited_on);
   const fromPhoto = useRef(false);
+  // Where the photo was taken: { loading, at } while the worker answers, then { at, options }.
+  // The stamp then sits where the photo was taken, to about a city block (3 decimals): close
+  // enough for its location to prove the visit, never the exact spot. A preset place (a tag
+  // to prove) or one typed in is already known, so a photo only dates and proves it.
+  const [located, setLocated] = useState(null);
+  const [choice, setChoice] = useState(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [photoNote, setPhotoNote] = useState(null);
   const [results, setResults] = useState(null);
   const [searchFor, setSearchFor] = useState(null);
   const [searching, setSearching] = useState(false);
@@ -547,33 +588,61 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     setResults(res); setSearching(false);
   };
   const pick = (r) => {
-    if (searchFor === "city") { setCity(r.city || r.name); setCityQ(r.city || r.name); setCountry(r.country || ""); setCc(r.cc || ""); setCoords({ lat: r.lat, lng: r.lng }); }
+    setChoice(null); setRegion(null);
+    if (searchFor === "city") { setCity(r.city || r.name); setCityQ(r.city || r.name); setCityLocal(r.local || null); setCountry(r.country || ""); setCc(r.cc || ""); setCoords({ lat: r.lat, lng: r.lng }); }
     else {
-      setVenue(r.name);
+      setVenue(r.name); setVenueLocal(r.local || null);
       const at = Number.isFinite(+r.lat) && Number.isFinite(+r.lng) ? { lat: +r.lat, lng: +r.lng } : null;
       if (at) setVenueSpot({ ...at, category: r.category || r.type || null });
       // A spot over 50 km from the city in the box brings its own city and country: a past
       // trip picked with today's city still filled in stamped the Eiffel Tower in Lisboa.
       const far = !!at && !!coords && metersBetween(coords.lat, coords.lng, at.lat, at.lng) > 50000;
-      if (!city || far) { setCity(r.city || ""); setCityQ(r.city || ""); }
+      if (!city || far) { setCity(r.city || ""); setCityQ(r.city || ""); setCityLocal(null); }
       if (!country || far) setCountry(r.country || "");
       if (!cc || far) setCc(r.cc || "");
       if (at && (!coords || far)) setCoords(at);
     }
     setResults(null); setSearchFor(null);
   };
+  const choose = (o, at) => {
+    setChoice(o.key); setSearchOpen(false); setResults(null); setSearchFor(null);
+    setCoords(at);
+    setVenue(o.kind === "place" ? o.name : ""); setVenueLocal(o.kind === "place" ? o.local : null);
+    setVenueSpot(o.kind === "place" ? { ...at, category: null } : null);
+    setCity(o.city); setCityQ(o.city); setCityLocal(o.kind === "city" ? o.local : null);
+    setCountry(o.country); setCc(o.cc); setRegion(o.region);
+  };
+  const locate = async (x) => {
+    const at = { lat: Math.round(x.lat * 1000) / 1000, lng: Math.round(x.lng * 1000) / 1000 };
+    setLocated({ loading: true, at });
+    const options = photoOptions(await photoPlace(at.lat, at.lng));
+    if (!options.length) { setLocated(null); setPhotoNote("We couldn’t name where this photo was taken. Search for the place below."); return; }
+    setLocated({ at, options });
+    choose(options[0], at);
+  };
   const onPickPhotos = (e) => {
     const f = [...(e.target.files || [])];
     e.target.value = "";
+    if (!f.length) return;
     setPhotos((p) => [...p, ...f].slice(0, 4));
-    if (!f.length || dateByHand.current) return;
+    const typed = !!venue.trim() || (!!(city || cityQ).trim() && (city || cityQ).trim() !== (sensed?.city || ""));
+    const placeKnown = !!preset || !!located || typed;
     Promise.all(f.map((x) => readPhotoExif(x).catch(() => null))).then((all) => {
+      setPhotoNote(null);
       const today = localISODate();
       const days = all.map((x) => String(x?.taken_at || "").slice(0, 10)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today).sort();
-      if (!days.length || dateByHand.current) return;
-      setDateVal((cur) => (fromPhoto.current && cur < days[0] ? cur : days[0]));
-      fromPhoto.current = true;
-      setDateFromPhoto(true);
+      const inRange = days.filter((d) => d >= STAMP_EARLIEST);
+      // Photos from before stamps reach back can't date or prove a visit.
+      if (days.length && !inRange.length) { setPhotoNote(`This photo is from ${longDay(days[0])}. Stamps go back to January 1, 2026.`); return; }
+      if (inRange.length && !dateByHand.current) {
+        setDateVal((cur) => (fromPhoto.current && cur < inRange[0] ? cur : inRange[0]));
+        fromPhoto.current = true;
+        setDateFromPhoto(true);
+      }
+      if (placeKnown) return;
+      const tagged = all.find((x) => Number.isFinite(x?.lat) && Number.isFinite(x?.lng) && !(x.lat === 0 && x.lng === 0));
+      if (tagged) locate(tagged);
+      else setPhotoNote("This photo has no location. Search for the place below, and we’ll look for it in the picture.");
     });
   };
   const submit = async () => {
@@ -582,10 +651,12 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     // stamp only while the city still names that place (accents, case and a
     // ", Country" tail don't count as a change). A city typed in elsewhere
     // keeps no anchor, so a photo taken here can't prove it.
-    const sameCity = (x, y) => { const n = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(",")[0].trim().toLowerCase(); return !!n(x) && n(x) === n(y); };
+    const sameCity = (x, y) => { const n = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").split(",")[0].trim().toLowerCase(); return !!n(x) && n(x) === n(y); };
     const sensedOnly = !!sensed && !!coords && coords.lat === sensed.lat && coords.lng === sensed.lng;
     const dropSensed = sensedOnly && !sameCity(cityName, sensed.city);
     if (!cityName) { showToast("Add a city first", "error"); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVal) || dateVal < STAMP_EARLIEST) { showToast("Stamps go back to January 1, 2026", "error"); return; }
+    if (dateVal > localISODate()) { showToast("That date hasn’t happened yet", "error"); return; }
     setBusy(true);
     // No stamp without proof (founder, 2026-10-03): being there now (GPS at the
     // picked venue, today), or a photo taken there. Nothing is created unproven.
@@ -610,12 +681,22 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
       showToast("Stamps need proof — add a photo you took there (with its location on), or stamp it while you're there", "error");
       return;
     }
+    // Each photo's own location tag and time, read before resizing strips them. Photos all
+    // dated before stamps reach back prove nothing, so nothing is created.
+    const exifs = await Promise.all(photos.map((f) => readPhotoExif(f).catch(() => null)));
+    const photoDays = exifs.map((x) => String(x?.taken_at || "").slice(0, 10)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+    if (verified !== "gps" && photoDays.length === photos.length && photoDays.every((d) => d < STAMP_EARLIEST)) {
+      setBusy(false);
+      showToast("Those photos are from before 2026. Stamps go back to January 1, 2026.", "error");
+      return;
+    }
     const { data, error } = await addStamp({
       kind: "city", entity_type: "visit", entity_id,
-      name: venue.trim() || cityName, city: cityName, region: null,
+      name: venue.trim() || cityName, city: cityName, region: region || null,
       country: (dropSensed && country === sensed.country ? null : country) || null, cc: cc || undefined,
       lat: spot?.lat ?? (dropSensed ? null : coords?.lat) ?? null, lng: spot?.lng ?? (dropSensed ? null : coords?.lng) ?? null,
       visited_on: dateVal, local_hour: new Date().getHours(), verified,
+      local_name: (venue.trim() ? venueLocal : cityLocal) || undefined,
       // Photos attached → the photo path too, so a GPS claim the worker
       // distrusts (a VPN, a travel eSIM) still gets its photos tried as proof.
       ...(verified !== "gps" || photos.length ? { await_proof: true } : {}),
@@ -623,11 +704,10 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     if (error || !data?.id) { setBusy(false); showToast(error || "Could not add stamp", "error"); return; }
     if (data.private) showToast("This may be a sensitive place ❤️ — the stamp starts private. Share it from the stamp anytime.", "success");
     let proof = null;
-    for (const f of photos) {
+    for (let i = 0; i < photos.length; i++) {
       try {
-        const exif = await readPhotoExif(f);   // before resizing strips it
-        const image = await resizePhoto(f);
-        const up = await uploadStampPhoto({ stamp_id: data.id, image, visited_on: dateVal, exif });
+        const image = await resizePhoto(photos[i]);
+        const up = await uploadStampPhoto({ stamp_id: data.id, image, visited_on: dateVal, exif: exifs[i] });
         if (up?.data?.proof && !proof) proof = up.data.proof;
       } catch { /* skip a bad photo */ }
     }
@@ -644,64 +724,118 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
 
   const inputStyle = { width: "100%", border: `1px solid ${RULE}`, borderRadius: 12, padding: "10px 12px", fontSize: fs(14), color: INK, fontFamily: SANS, background: "#fff" };
   const labelStyle = { fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", textTransform: "uppercase", color: INK3, display: "block", marginTop: 14 };
+  const showFields = searchOpen || !located?.options;
   return (
     <div onClick={onClose} className="fixed inset-0 z-[9998] flex items-start justify-center p-4 overflow-y-auto" style={{ background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)" }}>
       <div onClick={(e) => e.stopPropagation()} className="w-full bg-white" style={{ maxWidth: 400, marginTop: 28, marginBottom: 40, borderRadius: 22, padding: 20, boxShadow: SHADOW_CARD_SOFT }}>
         <p style={{ fontFamily: SERIF, fontSize: fs(24), color: INK }}>Stamp a place</p>
         <p style={{ color: INK3, fontSize: fs(12.5), lineHeight: 1.4, marginTop: 2 }}>A quick ink stamp for a city or spot you visited — with your own photos.</p>
 
-        <label style={labelStyle}>City</label>
-        <div className="flex gap-2 mt-1">
-          <input value={cityQ} onChange={(e) => { setCityQ(e.target.value); setCity(e.target.value); }} placeholder="e.g. Medellín, Colombia" style={inputStyle} />
-          <button onClick={() => runSearch("city")} disabled={searching} className="shrink-0 rounded-xl px-3 font-semibold" style={{ background: IVORY_2, color: INK2, fontSize: fs(12.5) }}>Search</button>
-        </div>
-
-        <label style={labelStyle}>Spot / place (optional)</label>
-        <div className="flex gap-2 mt-1">
-          <input value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="e.g. Cracker Barrel" style={inputStyle} />
-          <button onClick={() => runSearch("venue")} disabled={searching} className="shrink-0 rounded-xl px-3 font-semibold" style={{ background: IVORY_2, color: INK2, fontSize: fs(12.5) }}>Search</button>
-        </div>
-
-        {searching && <p style={{ color: INK3, fontSize: fs(12), marginTop: 8 }}>Searching…</p>}
-        {results && (
-          <div className="mt-2 rounded-xl overflow-hidden" style={{ border: `1px solid ${RULE}` }}>
-            {results.length === 0 ? (
-              <p style={{ color: INK3, fontSize: fs(12.5), padding: 10 }}>No matches — just type it above and tap Stamp it.</p>
-            ) : results.map((r, i) => (
-              <button key={i} onClick={() => pick(r)} className="w-full text-left" style={{ padding: "9px 12px", borderTop: i ? `1px solid ${RULE}` : "none", background: "#fff" }}>
-                <div style={{ fontSize: fs(13.5), color: INK, fontFamily: SANS, fontWeight: 600 }}>{r.name}</div>
-                <div className="truncate" style={{ fontSize: fs(11), color: INK3 }}>{r.display}</div>
-              </button>
-            ))}
-          </div>
+        {/* Photo first (founder, 2026-10-14): a photo from the trip says where and when. */}
+        {photos.length === 0 ? (
+          <button type="button" onClick={() => fileRef.current?.click()} className="w-full text-left flex items-center gap-3 rounded-2xl mt-4"
+            style={{ padding: 14, border: `1.5px dashed ${RULE}`, background: IVORY_2 }}>
+            <span aria-hidden="true" style={{ width: 44, height: 44, borderRadius: 12, background: "#fff", display: "grid", placeItems: "center", flexShrink: 0 }}><Camera size={20} color={STAMP} /></span>
+            <span>
+              <span style={{ display: "block", fontSize: fs(15), fontWeight: 700, color: INK }}>Add a photo from the trip</span>
+              <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>We’ll find where and when it was taken, and it proves your visit.</span>
+            </span>
+          </button>
+        ) : (
+          <>
+            <label style={labelStyle}>Your photos (up to 4)</label>
+            <div className="flex gap-2 mt-1 flex-wrap items-center">
+              {photos.map((f, i) => (
+                <div key={i} className="relative">
+                  <img src={URL.createObjectURL(f)} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 10, border: `1px solid ${RULE}` }} />
+                  <button onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))} aria-label="Remove photo" className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,.7)" }}><X size={11} color="#fff" strokeWidth={2.5} /></button>
+                </div>
+              ))}
+              {photos.length < 4 && (
+                <button onClick={() => fileRef.current?.click()} aria-label="Add another photo" className="rounded-xl flex items-center justify-center" style={{ width: 56, height: 56, border: `1px dashed ${RULE}`, background: IVORY_2 }}><Plus size={18} color={INK3} /></button>
+              )}
+            </div>
+          </>
         )}
+        <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPickPhotos} />
+        {photoNote ? <p style={{ color: INK2, fontSize: fs(12.5), lineHeight: 1.4, marginTop: 8 }}>{photoNote}</p> : null}
+        {located?.loading ? <p role="status" style={{ color: INK3, fontSize: fs(12.5), marginTop: 10 }}>Finding where this photo was taken…</p> : null}
+
+        {located?.options && !searchOpen ? (
+          <>
+            <label style={labelStyle}>Where was this?</label>
+            <div role="radiogroup" aria-label="Where was this photo taken?" className="mt-1 rounded-xl overflow-hidden" style={{ border: `1px solid ${RULE}` }}>
+              {located.options.map((o, i) => {
+                const on = choice === o.key;
+                const away = o.kind === "place" && Number.isFinite(o.meters) ? ` · ${units.formatDistance(o.meters / 1609.34)} from your photo` : "";
+                return (
+                  <button key={o.key} type="button" role="radio" aria-checked={on} onClick={() => choose(o, located.at)}
+                    className="w-full text-left flex items-center gap-3" style={{ padding: "10px 12px", borderTop: i ? `1px solid ${RULE}` : "none", background: on ? IVORY_2 : "#fff" }}>
+                    <span aria-hidden="true" style={{ width: 18, height: 18, borderRadius: 999, border: `2px solid ${on ? STAMP : RULE}`, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                      {on ? <span style={{ width: 8, height: 8, borderRadius: 999, background: STAMP }} /> : null}
+                    </span>
+                    <span className="min-w-0">
+                      <span style={{ display: "block", fontSize: fs(14), color: INK, fontWeight: 600 }}>
+                        {o.name}{o.local ? <span style={{ fontWeight: 400, color: INK2, marginLeft: 6 }}>{o.local}</span> : null}
+                      </span>
+                      <span className="truncate" style={{ display: "block", fontSize: fs(11.5), color: INK3 }}>{o.sub}{away}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <button type="button" onClick={() => setSearchOpen(true)} style={{ marginTop: 6, padding: "6px 0", fontSize: fs(12.5), fontWeight: 600, color: TEAL_DEEP, background: "none", border: 0 }}>Somewhere else? Search instead</button>
+          </>
+        ) : null}
+
+        {showFields ? (
+          <>
+            {photos.length === 0 ? <p style={{ ...labelStyle, marginTop: 18 }}>Or search for the place</p> : null}
+            <label style={labelStyle}>City</label>
+            <div className="flex gap-2 mt-1">
+              <input value={cityQ} onChange={(e) => { setCityQ(e.target.value); setCity(e.target.value); setCityLocal(null); setRegion(null); setChoice(null); }} placeholder="e.g. Medellín, Colombia" style={inputStyle} />
+              <button onClick={() => runSearch("city")} disabled={searching} className="shrink-0 rounded-xl px-3 font-semibold" style={{ background: IVORY_2, color: INK2, fontSize: fs(12.5) }}>Search</button>
+            </div>
+
+            <label style={labelStyle}>Spot / place (optional)</label>
+            <div className="flex gap-2 mt-1">
+              <input value={venue} onChange={(e) => { setVenue(e.target.value); setVenueLocal(null); setChoice(null); }} placeholder="e.g. Cracker Barrel" style={inputStyle} />
+              <button onClick={() => runSearch("venue")} disabled={searching} className="shrink-0 rounded-xl px-3 font-semibold" style={{ background: IVORY_2, color: INK2, fontSize: fs(12.5) }}>Search</button>
+            </div>
+
+            {searching && <p style={{ color: INK3, fontSize: fs(12), marginTop: 8 }}>Searching…</p>}
+            {results && (
+              <div className="mt-2 rounded-xl overflow-hidden" style={{ border: `1px solid ${RULE}` }}>
+                {results.length === 0 ? (
+                  <p style={{ color: INK3, fontSize: fs(12.5), padding: 10 }}>No matches — just type it above and tap Stamp it.</p>
+                ) : results.map((r, i) => (
+                  <button key={i} onClick={() => pick(r)} className="w-full text-left" style={{ padding: "9px 12px", borderTop: i ? `1px solid ${RULE}` : "none", background: "#fff" }}>
+                    <div style={{ fontSize: fs(13.5), color: INK, fontFamily: SANS, fontWeight: 600 }}>
+                      {r.name}{r.local ? <span style={{ fontWeight: 400, color: INK2, marginLeft: 6 }}>{r.local}</span> : null}
+                    </div>
+                    <div className="truncate" style={{ fontSize: fs(11), color: INK3 }}>{r.display}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        ) : null}
 
         <label style={labelStyle}>Date</label>
-        <input type="date" value={dateVal} max={localISODate()} style={{ ...inputStyle, marginTop: 4 }}
+        <input type="date" value={dateVal} min={STAMP_EARLIEST} max={localISODate()} style={{ ...inputStyle, marginTop: 4 }}
           onChange={(e) => { dateByHand.current = true; fromPhoto.current = false; setDateFromPhoto(false); setDateVal(e.target.value); }} />
         {dateFromPhoto ? <p style={{ color: INK3, fontSize: fs(12), lineHeight: 1.4, margin: "4px 0 0" }}>From your photo. Change it if that’s not the day you went.</p> : null}
-
-        <label style={labelStyle}>Proof photo — taken there (up to 4)</label>
-        <p style={{ color: INK3, fontSize: fs(11.5), lineHeight: 1.45, marginTop: 4 }}>
-          Stamped today at the place? Your GPS is the proof. A past trip needs a photo you took there — its location tag, or the place itself in the picture.
-        </p>
-        <div className="flex gap-2 mt-1 flex-wrap items-center">
-          {photos.map((f, i) => (
-            <div key={i} className="relative">
-              <img src={URL.createObjectURL(f)} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 10, border: `1px solid ${RULE}` }} />
-              <button onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,.7)" }}><X size={11} color="#fff" strokeWidth={2.5} /></button>
-            </div>
-          ))}
-          {photos.length < 4 && (
-            <button onClick={() => fileRef.current?.click()} className="rounded-xl flex items-center justify-center" style={{ width: 56, height: 56, border: `1px dashed ${RULE}`, background: IVORY_2 }}><Plus size={18} color={INK3} /></button>
-          )}
-          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPickPhotos} />
-        </div>
+        {photos.length === 0 ? (
+          <p style={{ color: INK3, fontSize: fs(11.5), lineHeight: 1.45, marginTop: 8 }}>
+            Stamping today, at the place? Search for it above: your GPS is the proof. Stamps go back to January 1, 2026.
+          </p>
+        ) : null}
 
         <div className="flex gap-2 mt-5">
           <button onClick={onClose} disabled={busy} className="flex-1 rounded-xl py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(14) }}>Cancel</button>
-          <button onClick={submit} disabled={busy} className="flex-1 rounded-xl py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(14) }}>{busy ? "Stamping…" : "Stamp it"}</button>
+          <button onClick={submit} disabled={busy || !!located?.loading} className="flex-1 rounded-xl py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(14), opacity: located?.loading ? 0.6 : 1 }}>{busy ? "Stamping…" : "Stamp it"}</button>
         </div>
+        <p style={{ color: INK3, fontSize: fs(10), textAlign: "center", marginTop: 10 }}>Place names © OpenStreetMap contributors</p>
       </div>
     </div>
   );
