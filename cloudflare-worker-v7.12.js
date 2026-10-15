@@ -18281,7 +18281,7 @@ async function handleBlotterSign(request, env, ctx) {
       if (sp === undefined) return gbAgeUnknownResp();
       if (gbUnderAge(sp)) return gbUnderAgeResp();
       if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
-      const text = String(b.text || '').trim().slice(0, 280);
+      const text = String(b.text || '').trim().slice(0, 600);
       if (!text) return jsonResponse({ error: 'Write something first' }, 400);
       const mod = await gbModerate(env, text);
       if (!mod.allow) return jsonResponse({ error: "Let's keep the guestbook kind" }, 400);
@@ -18295,7 +18295,7 @@ async function handleBlotterSign(request, env, ctx) {
     const tgt = await blTarget(env, share, b.target, user.id);
     if (!tgt) return jsonResponse({ error: 'Not found' }, 404);
 
-    const text = String(b.text || '').trim().slice(0, 280);
+    const text = String(b.text || '').trim().slice(0, 600);
     let doodleKey = null;
     if (b.doodle) {
       if (!env.MEDIA) return jsonResponse({ error: 'Doodles unavailable right now' }, 500);

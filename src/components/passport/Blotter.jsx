@@ -206,7 +206,7 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
                 </div>
               ) : editing?.id === e.id ? (
                 <div>
-                  <textarea value={editing.text} onChange={(ev) => setEditing({ ...editing, text: ev.target.value })} maxLength={280} rows={2}
+                  <textarea value={editing.text} onChange={(ev) => setEditing({ ...editing, text: ev.target.value })} maxLength={600} rows={4}
                     className="w-full rounded-xl px-3 py-2" style={{ background: CARD, border: `1px solid ${RULE}`, fontFamily: SERIF, fontSize: fs(15), color: INK }} />
                   <div className="flex gap-3 mt-1">
                     <button onClick={saveEdit} disabled={busy} style={{ fontFamily: MONO, fontSize: fs(10), fontWeight: 700, color: "#2E6B4E" }}>save</button>
@@ -249,11 +249,18 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
           ))}
         </div>
 
-        {/* Compose: a line, or a doodle in the margin */}
-        <div className="flex items-center gap-2 mt-3">
-          <input value={text} onChange={(e) => setText(e.target.value)} maxLength={280} placeholder={forPhoto ? "Write a comment…" : "Sign the guestbook…"}
-            className="flex-1 min-w-0 rounded-xl px-3 py-2.5"
-            style={{ background: CARD, border: `1px solid ${RULE}`, fontFamily: SERIF, fontStyle: "italic", fontSize: fs(15), color: INK }} />
+        {/* Compose: a line or a whole story (founder, 2026-10-14 night: "more than just a
+            signature space"), or a doodle in the margin */}
+        <div className="mt-3">
+          <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={600} rows={3}
+            placeholder={forPhoto ? "Write a comment — a line or a whole story…" : "Sign the guestbook — a line or a whole story…"}
+            aria-label={forPhoto ? "Write a comment" : "Sign the guestbook"}
+            className="w-full rounded-xl px-3 py-2.5 resize-none"
+            style={{ background: CARD, border: `1px solid ${RULE}`, fontFamily: SERIF, fontStyle: "italic", fontSize: fs(15), color: INK, lineHeight: 1.5 }} />
+        </div>
+        <div className="flex items-center gap-2 mt-2">
+          <span aria-hidden="true" style={{ fontFamily: MONO, fontSize: fs(9), color: INK3 }}>{text.length ? `${text.length}/600` : ""}</span>
+          <span className="flex-1" />
           <button type="button" onClick={() => setPad(true)} aria-label="Draw a doodle instead"
             className="flex-none rounded-xl px-2.5 py-2 active:scale-95 transition-transform inline-flex items-center gap-1" style={{ background: CARD, border: `1px solid ${RULE}`, color: "#0E7C86", fontSize: fs(12), fontWeight: 600 }}>
             <PencilLine size={16} color="#0E7C86" /> Draw
