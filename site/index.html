@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Globeskimmers</title>
-<meta name="description" content="Globeskimmers is your Virtual Passport. Go to the places you've been dreaming about, collect a stamp when you're there, and keep your photos on every page. Free on iPhone.">
+<meta name="description" content="Globeskimmers is your Virtual Passport. Go to the places you've been dreaming about, collect a stamp when you're there, and keep your photos on every page. Free on iPhone and Android.">
 <link rel="canonical" href="https://globeskimmers.io/">
 <link rel="icon" href="/img/icon-64.png" sizes="64x64">
 <link rel="apple-touch-icon" href="/img/icon-192.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Globeskimmers">
 <meta property="og:title" content="Globeskimmers — Collect the world, one stamp at a time.">
-<meta property="og:description" content="Your Virtual Passport. Go see it, stamp it, keep the memory. Free on iPhone.">
+<meta property="og:description" content="Your Virtual Passport. Go see it, stamp it, keep the memory. Free on iPhone and Android.">
 <meta property="og:url" content="https://globeskimmers.io/">
 <meta property="og:image" content="https://globeskimmers.io/img/og.jpg">
 <meta name="twitter:card" content="summary_large_image">
@@ -137,7 +137,8 @@ a { color: var(--link); }
 .ctas { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 30px; }
 .badge { display: block; height: 52px; border-radius: 9px; }
 .badge img { height: 52px; width: auto; }
-.android { display: inline-flex; flex-direction: column; justify-content: center; gap: 5px; width: 156px; height: 52px; padding: 0 16px; border-radius: 9px; border: 1px dashed rgba(214, 166, 74, .8); }
+.android { display: inline-flex; flex-direction: column; justify-content: center; gap: 5px; width: 156px; height: 52px; padding: 0 16px; border-radius: 9px; border: 1px solid rgba(214, 166, 74, .8); text-decoration: none; }
+.android:hover { border-color: var(--gold); }
 .android .soon { font: 500 9.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
 .android b { font: 600 20px/1 var(--sans); letter-spacing: -.01em; color: var(--cream); }
 .band { position: relative; padding: 104px 0; }
@@ -159,7 +160,8 @@ a { color: var(--link); }
 .hero .badge { width: 156px; }
 .hero .badge img { width: 156px; }
 /* not a button: a dashed "not yet" outline, like the app's unearned-stamp ring */
-.droid { display: inline-flex; flex-direction: column; justify-content: center; gap: 5px; width: 156px; height: 52px; padding: 0 16px; border-radius: 9px; border: 1px dashed rgba(214, 166, 74, .8); }
+.droid { display: inline-flex; flex-direction: column; justify-content: center; gap: 5px; width: 156px; height: 52px; padding: 0 16px; border-radius: 9px; border: 1px solid rgba(214, 166, 74, .8); text-decoration: none; }
+.droid:hover { border-color: var(--gold); }
 .droid small { font: 500 9.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--gold-pale); }
 .droid b { font: 600 19px/1 var(--sans); letter-spacing: -.01em; color: var(--cream); }
 .stage { position: relative; width: 100%; max-width: 500px; aspect-ratio: 1 / 1; margin: 0 auto; }
@@ -499,12 +501,12 @@ footer { margin-top: 64px; border-top: 1px solid var(--rule); padding: 34px 0 44
   <section class="band navy hero" aria-labelledby="hero-title">
     <div class="wrap hero-grid">
       <div>
-        <p class="kick">Your Virtual Passport · <span style="white-space:nowrap">Free on iPhone</span></p>
+        <p class="kick">Your Virtual Passport · <span style="white-space:nowrap">Free on iPhone &amp; Android</span></p>
         <h1 id="hero-title">Collect the world, <em>one stamp</em> at a time.</h1>
         <p class="lead">You deserve the trip. Go see the places you&rsquo;ve been dreaming about, and when you get there, your stamp is waiting. Add your photos, and every adventure stays with you.</p>
         <div class="ctas">
           <a class="badge" href="https://apps.apple.com/us/app/globeskimmers/id6753154199" aria-label="Download on the App Store"><img src="img/app-store-badge.svg" alt="Download on the App Store" width="156" height="52"></a>
-          <div class="droid"><small>Coming soon on</small><b>Android</b></div>
+          <a class="droid" href="https://play.google.com/store/apps/details?id=com.globeskimmers.app&amp;referrer=utm_source%3Dsite%26utm_medium%3Dlanding" aria-label="Get it on Google Play"><small>Get it on</small><b>Google Play</b></a>
         </div>
       </div>
       <div class="stage" aria-hidden="true">
@@ -693,7 +695,7 @@ footer { margin-top: 64px; border-top: 1px solid var(--rule); padding: 34px 0 44
             </li>
             <li class="promise">
               <span class="p-ic"><svg class="ic" aria-hidden="true"><use href="#i-gift"/></svg></span>
-              <div><h3>It&rsquo;s <em>free</em>.</h3><p>Start your passport on iPhone today. Android is on the way.</p></div>
+              <div><h3>It&rsquo;s <em>free</em>.</h3><p>Start your passport today — free on iPhone and Android.</p></div>
             </li>
           </ul>
         </div>
@@ -720,7 +722,7 @@ footer { margin-top: 64px; border-top: 1px solid var(--rule); padding: 34px 0 44
             <p class="deck">Pack the bag. Go see it. Keep it forever.</p>
             <div class="ctas">
               <a class="badge" href="https://apps.apple.com/us/app/globeskimmers/id6753154199" aria-label="Download on the App Store"><img src="img/app-store-badge.svg" alt="Download on the App Store" width="156" height="52"></a>
-              <span class="android"><span class="soon">Coming soon on</span><b>Android</b></span>
+              <a class="android" href="https://play.google.com/store/apps/details?id=com.globeskimmers.app&amp;referrer=utm_source%3Dsite%26utm_medium%3Dlanding" aria-label="Get it on Google Play"><span class="soon">Get it on</span><b>Google Play</b></a>
             </div>
           </div>
           <div class="slot" aria-hidden="true"><svg class="ic"><use href="#i-globe"/></svg><span>Your next<br>stamp</span></div>
