@@ -1,7 +1,7 @@
 // The Blotter (founder concept 2026-09-30, mockup v3) — reactions live AROUND
-// a shared passport page, never inside the booklet. Five reaction STAMPS in
-// our own engraved ink (never platform emoji artwork): WOW · TAKE ME ·
-// BEEN HERE ♥ · I WANNA GO · MORE PICS, PLEASE — plus contextual YUMMY! that
+// a shared passport page, never inside the booklet. Six reaction STICKERS, the
+// founder's own word art (2026-10-14; never platform emoji): WOW! · COOL! ·
+// TAKE ME! · BEEN THERE! · I WANNA GO! · MORE PICS PLEASE! — plus contextual YUMMY! that
 // appears only when a photo on the page has food as its MAIN subject
 // (vision-tagged at the public flip). Comments are the Guestbook: signatures
 // and finger DOODLES (small in the margin, tap to enlarge); comment-likes are
@@ -15,6 +15,12 @@ import { blotterMark, blotterSign, blotterCosign, blotterSweep } from "@/lib/pas
 import { useDismissable } from "@/lib/dismissStack";
 import { useAuth } from "@/lib/AuthContext";
 import TravelerSheet from "@/components/social/TravelerSheet";
+import wowArt from "@/assets/blotter/wow.png";
+import coolArt from "@/assets/blotter/cool.png";
+import takemeArt from "@/assets/blotter/takeme.png";
+import beenArt from "@/assets/blotter/been.png";
+import wannagoArt from "@/assets/blotter/wannago.png";
+import morepicsArt from "@/assets/blotter/morepics.png";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -22,49 +28,7 @@ const INK = "#16110D", INK3 = "#736657", RULE = "rgba(22,17,13,.12)";
 const PAPER = "#FBF6EC", CARD = "#FFFDF6";
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 
-// ── The five faces, drawn in our own worn ink ───────────────────────────────
-function WowIcon({ c }) {
-  const star = "l1.1,2.4 2.6,.3 -1.9,1.8 .5,2.6 -2.3,-1.4 -2.3,1.4 .5,-2.6 -1.9,-1.8 2.6,-.3 Z";
-  return (
-    <svg viewBox="0 0 40 40" width="22" height="22" aria-hidden="true">
-      <circle cx="20" cy="20" r="16.5" fill="none" stroke={c} strokeWidth="2.4" />
-      <path d={`M13,13 ${star}`} fill={c} /><path d={`M27,13 ${star}`} fill={c} />
-      <ellipse cx="20" cy="27.5" rx="4.2" ry="5.2" fill="none" stroke={c} strokeWidth="2" />
-    </svg>
-  );
-}
-function TakeMeIcon({ c }) {
-  return (
-    <svg viewBox="0 0 40 30" width="22" height="17" aria-hidden="true">
-      <path d="M8,20 l9,-4 6,-7 q2,-2 3,0 q1,1 -1,3 l-5,6 -2,9 -3,0 -1,-6 -4,2 -1,3 -2,0 0,-4 -2,-2 1,-2 z" fill={c} />
-    </svg>
-  );
-}
-function BeenIcon({ c }) {
-  return (
-    <svg viewBox="0 0 44 32" width="24" height="18" aria-hidden="true">
-      <g fill={c}><ellipse cx="14" cy="13" rx="4" ry="6" transform="rotate(-15 14 13)" /><ellipse cx="24" cy="21" rx="4" ry="6" transform="rotate(-15 24 21)" /></g>
-      <path d="M34,10 c-1.8,-2.6 -6,-1.4 -6,1.8 c0,2.4 3.4,4.6 6,6.6 c2.6,-2 6,-4.2 6,-6.6 c0,-3.2 -4.2,-4.4 -6,-1.8 z" fill="#B0472F" />
-    </svg>
-  );
-}
-function WannaGoIcon({ c }) {
-  return (
-    <svg viewBox="0 0 44 28" width="24" height="16" aria-hidden="true">
-      <path d="M4,22 h36 M8,22 a16,10 0 0 1 28,0" fill="none" stroke={c} strokeWidth="2.2" />
-      <circle cx="22" cy="14" r="3.5" fill="none" stroke={c} strokeWidth="2" />
-    </svg>
-  );
-}
-function MorePicsIcon({ c }) {
-  return (
-    <svg viewBox="0 0 44 32" width="24" height="18" aria-hidden="true">
-      <rect x="5" y="9" width="34" height="19" rx="4" fill="none" stroke={c} strokeWidth="2.2" />
-      <rect x="16" y="4" width="12" height="6" rx="2" fill="none" stroke={c} strokeWidth="2.2" />
-      <circle cx="22" cy="18.5" r="6" fill="none" stroke={c} strokeWidth="2.2" />
-    </svg>
-  );
-}
+// ── YUMMY still wears the drawn ink (no sticker for it yet) ─────────────────
 function YummyIcon({ c }) {
   return (
     <svg viewBox="0 0 40 34" width="22" height="19" aria-hidden="true">
@@ -76,11 +40,12 @@ function YummyIcon({ c }) {
 }
 
 const KINDS = [
-  { k: "wow", label: "WOW", color: "#9A6F1E", Icon: WowIcon },
-  { k: "takeme", label: "TAKE ME", color: "#2B4A7E", Icon: TakeMeIcon },
-  { k: "been", label: "BEEN ♥", color: "#2E6B4E", Icon: BeenIcon },
-  { k: "wannago", label: "I WANNA GO", color: "#6D3A6E", Icon: WannaGoIcon },
-  { k: "morepics", label: "MORE PICS", color: "#0E7C86", Icon: MorePicsIcon },
+  { k: "wow", label: "WOW!", color: "#9A6F1E", art: wowArt },
+  { k: "cool", label: "COOL!", color: "#2C6E9B", art: coolArt },
+  { k: "takeme", label: "TAKE ME!", color: "#2B4A7E", art: takemeArt },
+  { k: "been", label: "BEEN THERE!", color: "#2E6B4E", art: beenArt },
+  { k: "wannago", label: "I WANNA GO!", color: "#B04A6E", art: wannagoArt },
+  { k: "morepics", label: "MORE PICS PLEASE!", color: "#6D3A6E", art: morepicsArt },
 ];
 const YUMMY = { k: "yummy", label: "YUMMY!", color: "#B0472F", Icon: YummyIcon };
 
@@ -150,17 +115,19 @@ export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, phot
     <>
       <div className="flex items-center gap-1.5 flex-wrap justify-center rounded-2xl px-2.5 py-2"
         style={{ background: PAPER, border: `1px solid ${RULE}` }}>
-        {tray.map(({ k, label, color, Icon }) => {
+        {tray.map(({ k, label, color, art, Icon }) => {
           const on = agg.mine.has(k);
           const n = agg.counts[k] || 0;
           return (
             <button key={k} type="button" onClick={() => press(k)} disabled={busy === k}
               aria-pressed={on} aria-label={`${label} — ${n}`}
-              className="flex flex-col items-center rounded-xl px-1.5 py-1 active:scale-95 transition-transform"
+              className="flex flex-col items-center rounded-xl px-1 py-1 active:scale-95 transition-transform"
               style={{ background: on ? "#EBF3EE" : "transparent", border: on ? `1.5px solid ${color}` : "1.5px solid transparent", minWidth: 44, opacity: busy && busy !== k ? 0.6 : 1 }}>
-              <Icon c={color} />
-              <span style={{ fontFamily: MONO, fontSize: fs(7.5), fontWeight: 700, letterSpacing: ".04em", color: INK3 }}>
-                {label}{n > 0 ? ` ${n}` : ""}
+              {art
+                ? <img src={art} alt="" draggable={false} style={{ width: 46, height: 46, objectFit: "contain" }} />
+                : <Icon c={color} />}
+              <span style={{ fontFamily: MONO, fontSize: fs(8), fontWeight: 700, letterSpacing: ".04em", color: on ? color : INK3, minHeight: 11 }}>
+                {art ? (n > 0 ? n : "") : `${label}${n > 0 ? ` ${n}` : ""}`}
               </span>
             </button>
           );
