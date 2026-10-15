@@ -27,13 +27,15 @@ const INK = "#16110D", INK3 = "#736657", RULE = "rgba(22,17,13,.12)";
 const PAPER = "#FBF6EC", CARD = "#FFFDF6";
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 
+// The founder's vintage travel set (2026-10-15, replacing the chibi faces): rings in the
+// stickers' own muted inks.
 const KINDS = [
   { k: "wow", label: "WOW!", color: "#9A6F1E", art: wowArt },
   { k: "cool", label: "COOL!", color: "#2C6E9B", art: coolArt },
-  { k: "takeme", label: "TAKE ME!", color: "#2B4A7E", art: takemeArt },
+  { k: "takeme", label: "TAKE ME!", color: "#8A5410", art: takemeArt },
   { k: "been", label: "BEEN THERE!", color: "#2E6B4E", art: beenArt },
-  { k: "wannago", label: "I WANNA GO!", color: "#B04A6E", art: wannagoArt },
-  { k: "morepics", label: "MORE PICS PLEASE!", color: "#6D3A6E", art: morepicsArt },
+  { k: "wannago", label: "I WANNA GO!", color: "#A85A2E", art: wannagoArt },
+  { k: "morepics", label: "MORE PICS PLEASE!", color: "#8B5A1A", art: morepicsArt },
 ];
 
 const fmtDay = (iso) => {
