@@ -1872,3 +1872,20 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   on photos, open-booklet pages and board postcards. Tests: test-stickers 15/15 (YUMMY refused), boardbook
   19/19 (flipped), albums 16/16. Gates: eslint, no-undef 0, build 0, worker node --check.
 - **Activate:** rides the same push + `npm run ota` as the sticker entry above.
+
+## 2026-10-14 night — Albums by year + captions everywhere + a bigger guestbook (stamping-v2, not pushed)
+- Founder: captions per photo (upload first, caption later), guestbook "more than just a signature space",
+  albums vertical and year-separated for 300–1000+ lifetime prints.
+- Captions already existed (upload takes one, /passport/photo/caption edits, viewer shows it in italics);
+  what was missing: the Profile's albums had no shared slug, so the footer (and the caption pen) never
+  rendered. PhotoFooter now works slugless (caption always for the owner; reactions only with a slug) and
+  PhotoPackets shows it for owner || slug.
+- derivePackets keys by city|country|YEAR with packetsByYear() sections (newest first, per-year place and
+  print counts); the grid is repeat(auto-fill, minmax(176px, 1fr)) scrolling with the page; envelope peeks
+  are lazy <img>, not CSS backgrounds. Guestbook composer: textarea rows 3, 600 chars + counter (edit box
+  too); worker sign/edit slice 280 → 600.
+- Tests: derivePackets/packetsByYear 4/4 (per-year split, newest-first, ranges, counts); test-stickers now
+  17/17 (700-char story accepted, kept to 600). Gates: eslint, no-undef 0, build 0, worker node --check.
+  Screens: Profile albums 2026/2025 sections, EDIT CAPTION pill on the Profile's own album, the big
+  comment box with 214/600.
+- **Activate:** rides the same push + `npm run ota` as the sticker entries above.
