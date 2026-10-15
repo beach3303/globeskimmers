@@ -1841,3 +1841,11 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Phones on 1.0.2610150236 sense photos as of this deploy (that bundle already calls /photo-place).
 - **Activate:** the founder's `npm run ota` — ships the one-photo sensing beat, the slow-lookup messages
   and the Stamping… narration (3ec29af, 1f40dc1, 9dd4a71).
+
+## 2026-10-14 night — Website: the landing page sells Android (main d678219, LIVE)
+- The founder asked; Play has been public since 10-13 and the landing page still said "Coming soon on
+  Android" (the 10-13 Activate row). d678219: hero + closing boxes are "Get it on Google Play" links
+  (site-style box, referrer utm_source=site&utm_medium=landing), kicker/meta/og read "Free on iPhone and
+  Android", the free promise drops "Android is on the way". /get needed nothing (already both stores).
+- Deploy website run 38689510697 ✓. Live probes: zero "Coming soon", 2 play.google.com links, both meta
+  descriptions updated, app-ads.txt 200 and untouched, www 200. Nothing left to activate.
