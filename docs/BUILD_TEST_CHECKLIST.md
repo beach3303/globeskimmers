@@ -1900,3 +1900,23 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   messages, Stamping… narration, albums by year, captions from the Profile, the 600-character guestbook.
   Until the OTA, current phones still show the drawn icons (all still work; a YUMMY press now gets
   "Unknown stamp").
+
+## 2026-10-15 — The privacy dials: follower approval + albums audience + comments dial (stamping-v2, not pushed)
+- Founder approved the recommendations from the follow/privacy consultation. 8eebf67 worker + migration
+  20261015090000_privacy_dials.sql (api.social_profiles approve_followers / albums_audience /
+  comments_audience, NULL = defaults, checks; auto-applies ~20 s after push; gbSocialProfile reads
+  select=* so there is NO deploy/column race): follows to adults wait as requests by default (the teen
+  rails' accept/decline/cancel turned on for everyone; muted follows answer and list 'pending' so a block
+  or a minor tells nothing); albums 'inner' by default (a public passport shows pages, not photos;
+  enforced in /passport/public, /social/world and on ph: targets — no reacting to an unseen photo by id;
+  the visit sweep skips viewers who can't see albums); comments 'inner' by default (sign + co-sign gated,
+  lift free, boards keep board rules, blotter/read answers can_comment). 7e80847 app: three Settings →
+  Privacy rows (EdChoices chips), the guestbook sheet holds its pen with the honest line.
+- Tests: test-privacy 28/28 (request/cancel/decline/accept round trip, Mailbox request row, approval off,
+  minor answers 'pending', albums dial on both views + the ph: leak, comments dial incl. co-sign and
+  can_comment, junk words not stored); all 7 earlier suites still green (123 ok total). Gates: eslint,
+  no-undef 0, build 0, worker node --check. Screens: the Settings rows, the held-pen sheet.
+- NOTE a product change on push: new follows everywhere become requests until approved, and public
+  passports stop showing photos to strangers until the owner sets albums to 'My passport'.
+- **Activate:** push to main (worker + migration deploy together, no manual SQL), probe social/profile {}
+  → the three dials; then the founder's `npm run ota` for the Settings rows and the held-pen sheet.
