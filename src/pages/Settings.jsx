@@ -5,7 +5,8 @@ import { searchHomeCities, resolveHomePlace } from "@/lib/homePlace";
 import { searchCountries, countryCode } from "@/lib/countries";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2, UserX, LayoutGrid } from "lucide-react";
+import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2, UserX, LayoutGrid, UserCheck, Images, PenLine } from "lucide-react";
+import { callWorker } from "@/lib/callWorker";
 import { useHomeZoneStyle, setHomeZoneStyle } from "@/components/redesign/Zone";
 import ContactUsModal from "../components/ContactUsModal";
 import RefreshAccessModal from "../components/RefreshAccessModal";
@@ -124,6 +125,22 @@ function EdRow({ icon: Icon, iconBg, title, desc, control, last, isTablet, step 
             : control.node}
         </div>
       )}
+    </div>
+  );
+}
+
+// Three chips, one chosen — the audience dials (founder, 2026-10-15).
+function EdChoices({ value, options, onPick, label }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex gap-2">
+      {options.map(([v, text]) => (
+        <button key={v} type="button" role="radio" aria-checked={value === v} onClick={() => onPick(v)}
+          className="flex-1 h-11 rounded-xl font-semibold"
+          style={{ fontSize: "calc(12.5px*var(--fs,1))", border: `1.5px solid ${value === v ? TEAL_DEEP : "rgba(22,17,13,.16)"}`,
+            background: value === v ? "rgba(14,124,115,.08)" : "#fff", color: value === v ? TEAL_DEEP : "#3A3128" }}>
+          {text}
+        </button>
+      ))}
     </div>
   );
 }
@@ -565,6 +582,22 @@ export default function SettingsPage() {
     setLoading(false);
   }, [profile, authUser]);
 
+  // The privacy dials live on the worker's social profile (founder, 2026-10-15):
+  // read once, save on change, keep the switch honest if a save fails.
+  const [dials, setDials] = useState(null); // { approve_followers, albums_audience, comments_audience }
+  useEffect(() => {
+    let gone = false;
+    callWorker("social/profile", {}).then(({ data }) => {
+      if (!gone && data?.profile) setDials({ approve_followers: data.profile.approve_followers !== false, albums_audience: data.profile.albums_audience || "inner", comments_audience: data.profile.comments_audience || "inner" });
+    });
+    return () => { gone = true; };
+  }, []);
+  const saveDial = async (field, value, prev) => {
+    setDials((d) => ({ ...d, [field]: value }));
+    const { data, error } = await callWorker("social/profile", { [field]: value });
+    if (error || !data) { setDials((d) => ({ ...d, [field]: prev })); showToast(error || "Couldn't save — try again", "error"); }
+  };
+
   // Close the home-country dropdown when tapping outside it.
   useEffect(() => {
     if (!countryOpen) return;
@@ -971,6 +1004,32 @@ export default function SettingsPage() {
                   ? `Visitors see ${[homeCity, homeCountry].filter(Boolean).join(" · ")}`
                   : homeCity ? `Visitors see ${homeCountry || "your country"} only` : "Set your home city above first. Visitors see your country only"}
                 control={{ node: <EdToggle on={showHomeCity} onClick={() => { const next = !showHomeCity; setShowHomeCity(next); persist({ show_home_city: next }); }} label="Show my home city on my page" /> }}
+              />
+            )}
+            {dials && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={UserCheck} iconBg={CAT.coffee.ink} title="Approve my followers"
+                desc={dials.approve_followers ? "New followers wait for your yes — approve them in your circle" : "Anyone can follow you without asking"}
+                control={{ node: <EdToggle on={dials.approve_followers} onClick={() => saveDial("approve_followers", !dials.approve_followers, dials.approve_followers)} label="Approve my followers" /> }}
+              />
+            )}
+            {dials && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={Images} iconBg={CAT.shopping.ink} title="Who sees my photo albums"
+                desc="Your passport pages and your photo albums each have their own audience. Inner circle: people you follow who follow you back."
+                control={{ below: true, node: (
+                  <EdChoices label="Who sees my photo albums" value={dials.albums_audience}
+                    options={[["inner", "Inner circle"], ["passport", "My passport"], ["me", "Only me"]]}
+                    onPick={(v) => saveDial("albums_audience", v, dials.albums_audience)} />
+                ) }}
+              />
+            )}
+            {dials && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={PenLine} iconBg={CAT.transit.ink} title="Who can write on my passport"
+                desc="Comments and guestbook signatures on your pages and photos. Reactions stay open to whoever can see them."
+                control={{ below: true, node: (
+                  <EdChoices label="Who can write on my passport" value={dials.comments_audience}
+                    options={[["inner", "Inner circle"], ["audience", "Anyone who sees it"], ["off", "No one"]]}
+                    onPick={(v) => saveDial("comments_audience", v, dials.comments_audience)} />
+                ) }}
               />
             )}
             <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.culture.ink} title="Our promise" desc="Your stamps and photos are yours. We never sell your photos or your location history, and we never show ads to kids. Shared passports never reveal exact locations, and photos only appear to others after review."

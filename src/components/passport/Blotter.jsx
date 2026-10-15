@@ -46,6 +46,9 @@ const fmtDay = (iso) => {
 // `postcardId` points it at a postcard on a city board (City Boards, 2026-10-14):
 // no slug, as the worker finds the card's sender itself.
 export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, photoId = null, postcardId = null }) {
+  // The comments dial, answered by blotter/read for THIS viewer (a board keeps board rules).
+  const canWrite = postcardId ? true : blotter?.can_comment !== false;
+  const commentsOff = !postcardId && blotter?.comments === "off";
   const [busy, setBusy] = useState(null);       // kind being pressed/peeled
   const [sheet, setSheet] = useState(false);
   const one = postcardId ? `pc:${postcardId}` : photoId ? `ph:${photoId}` : null;
@@ -117,14 +120,15 @@ export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, phot
       </div>
       {sheet && (
         <GuestbookSheet slug={slug} targets={targets} lead={lead} entries={pageEntries}
-          ownerView={ownerView} onChanged={onChanged} onClose={() => setSheet(false)} item={item} />
+          ownerView={ownerView} onChanged={onChanged} onClose={() => setSheet(false)} item={item}
+          canWrite={canWrite} commentsOff={commentsOff} />
       )}
     </>
   );
 }
 
 // ── The Guestbook sheet: signatures, doodles, co-signs ──────────────────────
-function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, onClose, item = null }) {
+function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, onClose, item = null, canWrite = true, commentsOff = false }) {
   // item: 'photo' or 'postcard' for one thing's comments, null for a page's guestbook.
   const forPhoto = !!item;
   useDismissable(true, onClose);
@@ -249,6 +253,12 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
           ))}
         </div>
 
+        {!canWrite ? (
+          <p className="mt-3" style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(14), color: INK3 }}>
+            {commentsOff ? "Comments are switched off on this passport." : "Only their inner circle can write here — reactions are open to everyone who can see the page."}
+          </p>
+        ) : (
+        <>
         {/* Compose: a line or a whole story (founder, 2026-10-14 night: "more than just a
             signature space"), or a doodle in the margin */}
         <div className="mt-3">
@@ -274,6 +284,8 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
         <p className="mt-2" style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".06em", color: INK3 }}>
           {item === "postcard" ? "Comments carry your @handle. The postcard’s sender can sweep any comment." : "Signatures carry your @handle. The page’s owner can sweep any entry."}
         </p>
+        </>
+        )}
       </div>
 
       {pad && <DoodlePad onClose={() => setPad(false)} onPost={(dataUrl) => sign(dataUrl)} busy={busy} />}
