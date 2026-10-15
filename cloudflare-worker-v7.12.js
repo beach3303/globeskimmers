@@ -14225,6 +14225,27 @@ const PP_KINDS = ['country', 'city', 'airport', 'icon', 'wonder', 'attraction', 
 const PP_VERIFY_RANK = { self: 0, reported: 0.5, photo: 1, photo_ai: 2, photo_loc: 3, gps: 4 };
 const PP_VERIFIED = new Set(['gps', 'photo_loc', 'photo_ai']);
 const ppDate = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) ? String(s) : null);
+// How far back a visit can be stamped (founder, 2026-10-14: "all the way back from Jan 1,
+// 2026"), and never later than tomorrow in UTC (a traveler ahead of UTC is already there).
+const PP_EARLIEST = '2026-01-01';
+const ppDateAllowed = (d) => !!d && d >= PP_EARLIEST && d <= new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+const ppDateRefusal = (d) => jsonResponse({ error: d < PP_EARLIEST ? 'Stamps go back to January 1, 2026' : 'That date hasn’t happened yet', code: 'date_out_of_range' }, 400);
+// A place's own name when it's written in another alphabet ("東京都" beside "Tokyo";
+// founder, 2026-10-14: "both names in original character and tokyo"). One in Latin
+// letters ("Roma", "Tour Eiffel") adds nothing to the English name, so it isn't kept.
+function ppLocalName(english, local) {
+  const l = String(local || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  return l && l !== String(english || '').trim() && /(?!\p{Script=Latin})\p{L}/u.test(l) ? l : null;
+}
+// The country's own language, where it isn't written in Latin letters: OpenStreetMap's plain
+// name can mix several ("Храм Сенсодзи 金龍山 浅草寺" for Sensō-ji), its name:ja is "浅草寺".
+const PP_NATIVE_LANG = {
+  JP: 'ja', CN: 'zh', TW: 'zh', HK: 'zh', MO: 'zh', KR: 'ko', KP: 'ko', RU: 'ru', UA: 'uk', BY: 'be', BG: 'bg',
+  RS: 'sr', MK: 'mk', KG: 'ky', MN: 'mn', GR: 'el', CY: 'el', IL: 'he', IR: 'fa', PK: 'ur', IN: 'hi', NP: 'ne',
+  BD: 'bn', LK: 'si', TH: 'th', LA: 'lo', KH: 'km', MM: 'my', GE: 'ka', AM: 'hy', ET: 'am',
+  SA: 'ar', AE: 'ar', EG: 'ar', JO: 'ar', LB: 'ar', SY: 'ar', IQ: 'ar', KW: 'ar', QA: 'ar', BH: 'ar', OM: 'ar', YE: 'ar', MA: 'ar', DZ: 'ar', TN: 'ar', LY: 'ar', SD: 'ar',
+};
+const ppNativeName = (namedetails, cc) => namedetails?.[`name:${PP_NATIVE_LANG[String(cc || '').toUpperCase()]}`] || namedetails?.name || null;
 const ppSlug = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
 // Create or update a stamp (idempotent per user+kind+entity), keeping the
@@ -14455,6 +14476,9 @@ async function handlePassportStamp(request, env, ctx) {
     let verified = ['gps', 'photo', 'self'].includes(b.verified) ? b.verified : 'self';
     let entityId = b.entity_id != null && String(b.entity_id) ? String(b.entity_id).slice(0, 220) : null;
     const visitedOn = ppDate(b.visited_on);
+    // A Stamp-a-place visit's date is the traveler's pick, so it keeps to the range; other
+    // stamps carry today, or an existing stamp's own date.
+    if (kind === 'city' && String(b.entity_type || '') === 'visit' && visitedOn && !ppDateAllowed(visitedOn)) return ppDateRefusal(visitedOn);
     let lat = Number.isFinite(+b.lat) ? +b.lat : null;
     let lng = Number.isFinite(+b.lng) ? +b.lng : null;
 
@@ -14690,10 +14714,13 @@ async function handlePassportStamp(request, env, ctx) {
     }
     // The page-one home-city stamp (onboarding "make your passport") marks
     // itself origin:true — the app renders it as the cover page, not a brag.
+    // The place's own name in its own alphabet, beside the English one ("東京都").
+    const localName = ppLocalName(name, b.local_name);
     const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}), ...(direction ? { direction } : {}), ...(mode ? { mode } : {}), ...(presence ? { presence } : {}),
       // A park or rim keeps its parent place, so Verify I'm here measures it the same way.
       ...(variantParent ? { parent_id: variantParent } : {}),
-      ...(localFav ? { local_favorite: localFav } : {}) };
+      ...(localFav ? { local_favorite: localFav } : {}),
+      ...(localName ? { local_name: localName } : {}) };
     const row = {
       user_id: user.id, kind, tier,
       entity_type: b.entity_type ? String(b.entity_type) : null,
@@ -15192,14 +15219,19 @@ async function handlePassportPhotoUpload(request, env, ctx) {
 
     // Proof from this photo — location tag first (free), then recognition.
     const patch = {};
-    const visitedOn = ppDate(b.visited_on);
+    const asked = ppDate(b.visited_on);
+    const visitedOn = asked && ppDateAllowed(asked) ? asked : null;
     if (visitedOn) patch.visited_on = visitedOn;
     const rankOf = (v) => PP_VERIFY_RANK[v] ?? 0;
     const forCheck = { ...stamp, visited_on: visitedOn || stamp.visited_on };
     const exif = b.exif && typeof b.exif === 'object' ? b.exif : null;
+    // A photo taken before stamps reach back (2026-01-01) proves no visit, by its location
+    // or by what's in it.
+    const takenDay = String(exif?.taken_at || '').slice(0, 10);
+    const tooOld = /^\d{4}-\d{2}-\d{2}$/.test(takenDay) && takenDay < PP_EARLIEST;
     let proof = null, ai = null;
-    if (rankOf(stamp.verified) < rankOf('photo_loc') && ppPhotoLocProves(forCheck, exif)) proof = 'photo_loc';
-    if (!proof && rankOf(stamp.verified) < rankOf('photo_ai') && mediaType === 'image/jpeg' && await ppVisionAllowed(env, user.id)) {
+    if (!tooOld && rankOf(stamp.verified) < rankOf('photo_loc') && ppPhotoLocProves(forCheck, exif)) proof = 'photo_loc';
+    if (!proof && !tooOld && rankOf(stamp.verified) < rankOf('photo_ai') && mediaType === 'image/jpeg' && await ppVisionAllowed(env, user.id)) {
       ai = await ppRecognizePlace(env, bytes, mediaType, stamp);
       if (ppAiProves(ai)) proof = 'photo_ai';
     }
@@ -15335,8 +15367,9 @@ async function handlePlaceSearch(request, env) {
     let viewbox = '';
     if (near) { const [la, ln] = near.split(',').map(Number); if (Number.isFinite(la) && Number.isFinite(ln)) viewbox = `&viewbox=${ln - 1.5},${la + 1.5},${ln + 1.5},${la - 1.5}`; }
     // English names, as the stamp prints them: "Tokyo, Japan" and "Eiffel Tower", not
-    // "東京都, 日本" and "Tour Eiffel".
-    const nom = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&accept-language=en&q=${encodeURIComponent(q)}${viewbox}`;
+    // "東京都, 日本" and "Tour Eiffel"; the original rides along as `local` when it's
+    // another alphabet (namedetails: the place's own name tags).
+    const nom = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&namedetails=1&limit=6&accept-language=en&q=${encodeURIComponent(q)}${viewbox}`;
     const r = await fetch(nom, { headers: { 'User-Agent': 'Globeskimmers/1.0 (travel app place stamps; support@globeskimmers.io)', 'Accept': 'application/json' } });
     if (!r.ok) return jsonResponse({ results: [] });
     const raw = await r.json();
@@ -15345,7 +15378,7 @@ async function handlePlaceSearch(request, env) {
       const a = p.address || {};
       const city = a.city || a.town || a.village || a.hamlet || a.municipality || a.county || '';
       const name = p.name || String(p.display_name || '').split(',')[0] || '';
-      return { name, display: p.display_name, city, country: a.country || '', cc: String(a.country_code || '').toUpperCase(), lat: +p.lat, lng: +p.lon, type: p.type };
+      return { name, local: ppLocalName(name, ppNativeName(p.namedetails, a.country_code)), display: p.display_name, city, country: a.country || '', cc: String(a.country_code || '').toUpperCase(), lat: +p.lat, lng: +p.lon, type: p.type };
     }).filter((x) => {
       // One row per place: Paris came back three times (the city and two of its boundaries).
       const k = `${x.name}|${x.city}|${x.cc}`.toLowerCase();
@@ -15356,6 +15389,85 @@ async function handlePlaceSearch(request, env) {
     if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(cacheKey, JSON.stringify(results), { expirationTtl: 2592000 });
     return jsonResponse({ results });
   } catch (e) { return jsonResponse({ error: e.message, results: [] }, 500); }
+}
+
+// POST /photo-place { lat, lng } — where a trip photo was taken, for "Stamp a place" from a
+// photo (founder, 2026-10-14: "the app senses which city and state the photo was taken from
+// … give three options"): the famous places within reach of that spot, and the city it's in
+// with the wider one around it ("Shinjuku" in "Tokyo"). Cached a week per ~110 m.
+async function handlePhotoPlace(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const lat = Math.round(Number(b.lat) * 1000) / 1000;
+    const lng = Math.round(Number(b.lng) * 1000) / 1000;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) return jsonResponse({ error: 'lat and lng required' }, 400);
+    const key = `photoplace:v1:${lat}_${lng}`;
+    if (env.GLOBESKIMMERS_KV) {
+      const hit = await env.GLOBESKIMMERS_KV.get(key, { type: 'json' }).catch(() => null);
+      if (hit) return jsonResponse({ ...hit, cached: true });
+    }
+    const [places, cities] = await Promise.all([ppPlacesNear(env, lat, lng), ppCitiesAt(env, lat, lng)]);
+    if (env.GLOBESKIMMERS_KV && cities.length) await env.GLOBESKIMMERS_KV.put(key, JSON.stringify({ places, cities }), { expirationTtl: 7 * 86400 }).catch(() => {});
+    return jsonResponse({ places, cities });
+  } catch (e) { return jsonResponse({ error: e.message, places: [], cities: [] }, 500); }
+}
+
+// Up to 3 stamp-worthy places whose reach covers the point, nearest first: each place's own
+// footprint, and never less than the 400 m a photo's location proves. No secret stamps:
+// those are found by being there now.
+async function ppPlacesNear(env, lat, lng) {
+  if (!env.ATTRACTIONS_DB) return [];
+  const dLat = 2.5 / 111, dLng = 2.5 / (111 * Math.cos(lat * Math.PI / 180) || 1);
+  const rs = await env.ATTRACTIONS_DB.prepare(
+    `SELECT id, name, category, city, country, lat, lng, footprint_radius_m FROM attractions
+      WHERE lat BETWEEN ?1 AND ?2 AND lng BETWEEN ?3 AND ?4
+        AND (class_ban IS NULL OR class_ban = '' OR class_ban LIKE 'review:%')
+        AND (tier IS NULL OR tier != 'secret')
+        AND coalesce(founder_scope, scope) IN ('world','national','regional')
+      LIMIT 200`).bind(lat - dLat, lat + dLat, lng - dLng, lng + dLng).all().catch(() => ({ results: [] }));
+  return (rs.results || [])
+    .map((r) => ({ r, m: haversineMilesLoc(lat, lng, r.lat, r.lng) * 1609.34 }))
+    .filter(({ r, m }) => m <= Math.max(400, ppStampRadius(r)))
+    .sort((x, y) => x.m - y.m)
+    .slice(0, 3)
+    .map(({ r, m }) => ({ id: String(r.id), name: r.name, city: r.city || '', country: r.country || '', lat: r.lat, lng: r.lng, meters: Math.round(m) }));
+}
+
+// The city a point is in, and the wider city around it when it's a ward or district:
+// [{ city, local, within, region, country, cc }]. OpenStreetMap (free) names them in English
+// with the original alphabet beside it; a spot in no city takes its named area (Universal
+// City, in Los Angeles County). Google's reverse geocode names the city when OpenStreetMap
+// doesn't answer. region is the state, for the US and Canada.
+async function ppCitiesAt(env, lat, lng) {
+  const headers = { 'User-Agent': 'Globeskimmers/1.0 (travel app place stamps; support@globeskimmers.io)', Accept: 'application/json' };
+  const rev = (zoom, extra) => fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=${zoom}&accept-language=en${extra}`, { headers })
+    .then((r) => (r.ok ? r.json() : null)).then((d) => (d && !d.error ? d : null)).catch(() => null);
+  const spot = await rev(18, '&addressdetails=1');
+  const a = spot?.address || null;
+  if (!a?.country) {
+    try {
+      const g = await (await handleReverseGeocode(new Request('https://w.local/reverse-geocode', { method: 'POST', body: JSON.stringify({ latitude: lat, longitude: lng, precise: true }) }), env)).json();
+      return g?.city ? [{ city: g.city, local: null, within: null, region: g.region || null, country: g.country || '', cc: '' }] : [];
+    } catch { return []; }
+  }
+  const cc = String(a.country_code || '').toUpperCase();
+  const base = { region: cc === 'US' || cc === 'CA' ? a.state || null : null, country: a.country, cc };
+  const out = [];
+  const add = (city, local, within) => {
+    const c = String(city || '').trim();
+    if (!c || out.some((o) => o.city.toLowerCase() === c.toLowerCase())) return;
+    out.push({ city: c, local: ppLocalName(c, local), within: within || null, ...base });
+  };
+  // Zoom 10 is the city or ward; zoom 8, asked only for a ward or district, the city it's in.
+  const town = await rev(10, '&namedetails=1');
+  const wider = town && Number(town.place_rank) >= 14 ? await rev(8, '&namedetails=1') : null;
+  const wide = wider?.addresstype === 'city' && wider.name && wider.name !== town?.name ? wider : null;
+  if (!(a.city || a.town || a.village || a.municipality)) add(a.quarter || a.suburb || a.hamlet, null, town?.name);
+  add(town?.name || a.city || a.town || a.village || a.municipality, ppNativeName(town?.namedetails, cc), wide?.name);
+  if (wide) add(wide.name, ppNativeName(wide.namedetails, cc), null);
+  return out.slice(0, 3);
 }
 
 async function handleStampArtServe(request, env) {
@@ -16468,6 +16580,7 @@ async function handlePassportStampDate(request, env) {
     const stampId = String(b.stamp_id || '');
     const visitedOn = ppDate(b.visited_on);
     if (!stampId || !visitedOn) return jsonResponse({ error: 'stamp_id + visited_on (YYYY-MM-DD) required' }, 400);
+    if (!ppDateAllowed(visitedOn)) return ppDateRefusal(visitedOn);
     const r = await gbRest(env, `passport_stamps?id=eq.${stampId}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ visited_on: visitedOn, updated_at: new Date().toISOString() }) });
     if (!r.ok) return jsonResponse({ error: 'update failed' }, 502);
     return jsonResponse({ ok: true });
@@ -25674,6 +25787,7 @@ export default {
       if (pathname.startsWith('/bl-doodle/') && request.method === 'GET') return await handleBlotterDoodleServe(request, env);
       if (pathname === '/airport-at' && request.method === 'GET') return await handleAirportAt(request, env);
       if (pathname === '/place-search' && request.method === 'GET') return await handlePlaceSearch(request, env);
+      if (pathname === '/photo-place' && request.method === 'POST') return await handlePhotoPlace(request, env);
       if (pathname.startsWith('/stamp-art/') && request.method === 'GET') return await handleStampArtServe(request, env);
       if (pathname === '/passport/stamp' && request.method === 'POST') return await handlePassportStamp(request, env, ctx);
       if (pathname === '/passport/list' && request.method === 'POST') return await handlePassportList(request, env);
