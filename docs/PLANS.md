@@ -867,7 +867,13 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   each other access to view their albums"; 6596bf4 server, 9dcbb18 visit page). Found while mocking up
   past-trip stamping: the city search leaned toward where you are and a far spot kept today's city
   (ad4bd95), and place names came back in local languages (f1741ef). On stamping-v2, not pushed: the push
-  deploys the worker, then `npm run ota`.
+  deploys the worker, then `npm run ota`. **Decided the same evening:** Stamp a place starts from a photo
+  (founder: "user just clicks stamp a place and then uploads a photo and then the app senses which city
+  and state the photo was taken from … give three option"): up to 3 choices from where the photo was
+  taken, famous places then the city and the wider city; place names carry their original alphabet
+  (founder: "can we put both names in original character and tokyo?"; "Tokyo 東京都"); and **stamps go
+  back to January 1, 2026, never later than today** (founder: "we allow users to go back and stamp all the
+  way back from Jan 1, 2026"). Built: d8c5404 server, 85f60c2 app; same push and OTA.
   **Art:** "Mixed / rescue" for dogs and cats (founder). Review page:
   https://claude.ai/artifact/JeXKJshqiT2BJ9BSPARA2G; status: `docs/design/new-look/BUILD_STATUS.md` on new-look.
   **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**

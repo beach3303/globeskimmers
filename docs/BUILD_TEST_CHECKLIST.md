@@ -1788,3 +1788,25 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   on the first friend visit.
 - **Activate:** push to main (deploys the worker; no migration, no SQL), probe `/place-search?q=Tokyo` →
   "Tokyo, Japan"; then `npm run ota` (iOS and Android).
+
+## 2026-10-14 — Stamp a place from a photo; original names; stamps from January 1, 2026 (stamping-v2, not pushed)
+- d8c5404 worker: POST `/photo-place` {lat, lng} (signed in; KV `photoplace:v1:<lat3>_<lng3>`, 7 days): up to
+  3 stamp-worthy D1 places whose reach covers the point (max(400 m, footprint); no secrets), and the city
+  with the wider city around a ward, from Nominatim reverse (zoom 18, 10, and 8 only for a ward), Google's
+  /reverse-geocode as the fallback. `/place-search` and `/photo-place` return `local`, the name in the
+  country's own alphabet (name:ja etc.; Latin-letter names dropped), kept on a visit as meta.local_name.
+  A Stamp-a-place visit and /passport/stamp/date refuse dates before 2026-01-01 or after tomorrow (UTC);
+  a photo with an EXIF date before 2026 proves nothing.
+- 85f60c2 app: the form opens on "Add a photo from the trip"; a located photo offers up to 3 choices and
+  dates the stamp, which sits at the photo's point to ~110 m so photo_loc proves it; "Somewhere else?
+  Search instead"; both names in results, choices, the stamp and its sheet; date boxes min 2026-01-01;
+  "Place names © OpenStreetMap contributors" under the form.
+- Tests: test-photoplace 20/20 (recorded Nominatim answers for the Eiffel Tower, Shinjuku and Universal
+  Studios); test-albums 16/16; the live place search 8/8 ("Tokyo 東京都", "Sensō-ji 浅草寺"); world, osage,
+  boardbook, cards, boards, city and bell suites still pass. Gates: node --check, eslint, no-undef 0,
+  build 0. Screens captured as the demo account (writes simulated), including the manual path, whose
+  stamp request carried local_name 浅草寺.
+- Note: Nominatim asks for at most 1 request a second; each new photo spot costs 2–3 (cached a week).
+  Move to a paid geocoder if photo stamping grows.
+- **Activate:** with the push above (deploys the worker; no migration, no SQL): probe `/place-search?q=Tokyo`
+  → local 東京都, and `/photo-place` signed out → 401; then `npm run ota`.
