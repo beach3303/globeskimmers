@@ -886,6 +886,16 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   guestbook, co-signs) is Inner circle by default, openable to everyone-who-sees-it or off; reactions
   stay open to whoever sees the page. Minors unchanged: all social stays off. Built the same day
   (8eebf67 worker + migration, 7e80847 app), tests 28/28; awaiting the founder's push + OTA.
+  **In review 2026-10-15 (do not build yet): the stamp-tiers plan** — four audiences per stamp (Only me ⊂
+  Inner ⊂ Followers ⊂ Everyone), albums riding their stamp, ask-first share links (what the link may show +
+  how long it lives + Links I've shared with Turn off), picture shares cleaned by default, 🔒 unshareable
+  in any form (Share on a private stamp opens the permission chips: change it first), chronological /
+  shuffle / drag-to-arrange page order. **Decided within it, 2026-10-15: circle visibility** — counts-only
+  for everyone by default ("cold, but airtight; full privacy as default"), minors locked to counts-only and
+  never listed in anyone's circle; adults may flip their own circle to public lists in Settings behind the
+  founder's wording ("Your followers and inner circle will be public. Continue?" / "Keep private"); B and C
+  not built. Open: whether a full-privacy member appears by name in someone else's public list
+  (recommendation: count only), plus new-stamp default tier, oldest-first chrono, bulk set-all.
   **Art:** "Mixed / rescue" for dogs and cats (founder). Review page:
   https://claude.ai/artifact/JeXKJshqiT2BJ9BSPARA2G; status: `docs/design/new-look/BUILD_STATUS.md` on new-look.
   **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
