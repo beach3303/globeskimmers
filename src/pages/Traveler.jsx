@@ -30,6 +30,7 @@ import MapFolder from "@/components/profile/MapFolder";
 import VirtualItems from "@/components/profile/VirtualItems";
 import Luggage from "@/components/passport/Luggage";
 import PassportFolder from "@/components/passport/PassportFolder";
+import PhotoPackets from "@/components/passport/PhotoPackets";
 import CircleOrbit, { CircleLegend, groupsFromKnown } from "@/components/social/CircleOrbit";
 import { TwoRingMark } from "@/components/social/SocialMarks";
 import TravelerActions from "@/components/social/TravelerActions";
@@ -283,6 +284,12 @@ function TravelerWorld() {
             stamps={world.stamps} ownerFlags={world.flags || {}} ownerFirst={first} style={{ marginTop: GAP }} />
         ) : null}
         <MapFolder readOnly ownerFirst={first} favorites={world.favorites || []} dreams={world.dreams || []} cloth={cloth.key} style={{ marginTop: GAP }} />
+        {/* Their albums, last as on your own profile (founder, 2026-10-14: friends saw no
+            albums). The server sends only reviewed photos, so no packet means none yet. */}
+        {world.stamps ? (
+          <PhotoPackets stamps={world.stamps} title={first ? `${first}’s photo packets` : "Their photo packets"} className="mt-8"
+            social={worldSlug ? { slug: worldSlug, blotter, onBlotterChanged: refreshBlotter } : null} />
+        ) : null}
       </>
     );
   }

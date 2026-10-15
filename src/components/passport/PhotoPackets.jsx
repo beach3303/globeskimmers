@@ -101,7 +101,7 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
         ))}
       </div>
       <p style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, letterSpacing: ".03em" }}>
-        Every destination gathers your memory photos on its own.{owner ? " Tap + to add more prints." : ""}
+        {owner ? "Every destination gathers your memory photos on its own. Tap + to add more prints." : "Every destination gathers their memory photos on its own."}
       </p>
       {open && (
         <PhotoLightbox
