@@ -1941,3 +1941,19 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   probe a slug at each level + /passport/share-link mint/revoke; then the founder's `npm run ota` — which
   ALSO still carries everything since 1.0.2610150236 (one-photo sensing, stickers now vintage, albums by
   year, captions, guestbook 600, privacy dials).
+
+## 2026-10-15 — LIVE: the privacy dials + the stamp tiers + the vintage stickers (main 5b89ca6)
+- Founder said "push": 10 commits c7e4c6c → 5b89ca6, gates in the main checkout (node --check, build,
+  boot-check ✅). Apply Supabase Migrations run 38783483936 ✓ (20261015090000 privacy dials +
+  20261015120000 stamp tiers with the backfill UPDATE); Deploy Cloudflare Workers run 38783483926 ✓.
+- Live probes (demo account only): social/profile carries every dial at its default (approval ON, albums
+  inner, comments inner, new stamps inner, circle private, order newest); passport/list stamps backfilled
+  (visibility 'inner' on the private demo booklet) with booklet prefs; a share link minted (24 h expiry),
+  resolved signed-out, revoked, dead, and gone from Links I've shared; blotter kinds unchanged.
+- Live behavior changes from this push: new follows are requests; public passports show pages, not
+  photos, to strangers; followers see followers-tier pages of private booklets; the circle is counts-only;
+  comments are inner-circle by default; new stamps start at Inner circle.
+- **Activate:** the founder's `npm run ota` — ships EVERYTHING since 1.0.2610150236: one-photo sensing +
+  slow-lookup messages + Stamping… narration, the vintage sticker reactions + COOL! (YUMMY gone), albums
+  by year + captions + the 600-character guestbook, the three privacy-dial Settings rows + held-pen sheet,
+  and the full tier UI (chips, corner marks, ask-first links, picture chooser, order row, Arrange).
