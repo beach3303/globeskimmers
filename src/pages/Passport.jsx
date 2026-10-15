@@ -658,9 +658,16 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
       }
       const at = { lat: Math.round(tagged.lat * 1000) / 1000, lng: Math.round(tagged.lng * 1000) / 1000 };
       if (live()) setLocated({ loading: true, at });
-      const options = photoOptions(await photoPlace(at.lat, at.lng));
+      // A slow connection gets told (founder: "they should know that it's taking two or
+      // three seconds"): past 4 s the card says it's still looking; past 10 s it stops and
+      // offers the search instead of holding the form (the network call alone would wait 25 s).
+      const slowTimer = setTimeout(() => { if (live()) setLocated((l) => (l?.loading ? { ...l, slow: true } : l)); }, 4000);
+      const data = await Promise.race([photoPlace(at.lat, at.lng), new Promise((r) => setTimeout(() => r("slow"), 10000))]);
+      clearTimeout(slowTimer);
       await settle();
       if (!live()) return;
+      if (data === "slow") { setLocated(null); setPhotoNote("The lookup is slow right now — search for the place below. Your photo still proves the visit."); return; }
+      const options = photoOptions(data);
       if (!options.length) { setLocated(null); setPhotoNote("We couldn’t name where this photo was taken. Search for the place below."); return; }
       setLocated({ at, options });
       choose(options[0], at);
@@ -790,7 +797,9 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
         {located?.loading ? (
           <div role="status" className="flex items-center gap-2.5 rounded-xl" style={{ marginTop: 10, padding: "10px 12px", background: IVORY_2, border: `1px solid ${RULE}` }}>
             <Loader2 size={16} color={STAMP} strokeWidth={2.2} className="animate-spin" aria-hidden="true" />
-            <span style={{ fontSize: fs(13), color: INK2, lineHeight: 1.35 }}>Reading your photo — finding where and when it was taken…</span>
+            <span style={{ fontSize: fs(13), color: INK2, lineHeight: 1.35 }}>
+              {located.slow ? "Still looking — a slow connection can take a few extra seconds…" : "Reading your photo — finding where and when it was taken…"}
+            </span>
           </div>
         ) : null}
 
