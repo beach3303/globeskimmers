@@ -74,16 +74,22 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   // traveler shows it on their shared passport.
   const arrival = stamp.kind === "airport" || stamp.entity_type === "border";
   // Who sees the stamp itself: only me, or my shared passport (+ friends' feeds).
-  const [onlyMe, setOnlyMe] = useState(stamp.hidden === true);
+  const [tier, setTier] = useState(stamp.visibility || (stamp.hidden === true ? "me" : "inner"));
   const [visBusy, setVisBusy] = useState(false);
-  const setVisibility = async (hidden) => {
-    if (visBusy || hidden === onlyMe) return;
+  const TIER_TOAST = {
+    me: "Only you can see this stamp — and its photos",
+    inner: "Shared with your inner circle",
+    followers: "Shared with your followers and inner circle",
+    public: "On your public pages — anyone with your link can see it",
+  };
+  const setVisibility = async (next) => {
+    if (visBusy || next === tier) return;
     setVisBusy(true);
-    const r = await setStampVisibility(stamp.id, hidden);
+    const r = await setStampVisibility(stamp.id, next);
     setVisBusy(false);
     if (r.error) { showToast(r.error, "error"); return; }
-    setOnlyMe(r.hidden);
-    showToast(r.hidden ? "Only you can see this stamp" : "On your passport for your circle to see", "success");
+    setTier(r.visibility || next);
+    showToast(TIER_TOAST[r.visibility || next], "success");
     onChanged?.();
   };
   const [noteEdit, setNoteEdit] = useState(false);
@@ -316,13 +322,16 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
         {!readOnly && (
           <div className="mt-3 rounded-[14px] px-3.5 py-3" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
             <span className="block uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".14em", color: INK3 }}>Who can see this stamp</span>
-            <div className="flex gap-2 mt-2">
-              {[[true, "🔒 Only me"], [false, "🌍 My passport"]].map(([h, label]) => (
-                <button key={label} type="button" onClick={() => setVisibility(h)} disabled={visBusy} aria-pressed={onlyMe === h}
-                  className="flex-1 rounded-full py-2 font-semibold disabled:opacity-60"
-                  style={{ background: onlyMe === h ? INK : "#fff", color: onlyMe === h ? "#fff" : INK, border: `1px solid ${RULE}`, fontSize: fs(13) }}>{label}</button>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {[["me", "🔒 Only me"], ["inner", "🤝 Inner circle"], ["followers", "✓ Followers"], ["public", "🌍 Everyone"]].map(([v, label]) => (
+                <button key={v} type="button" onClick={() => setVisibility(v)} disabled={visBusy} aria-pressed={tier === v}
+                  className="rounded-full py-2 font-semibold disabled:opacity-60"
+                  style={{ background: tier === v ? INK : "#fff", color: tier === v ? "#fff" : INK, border: `1px solid ${RULE}`, fontSize: fs(12.5) }}>{label}</button>
               ))}
             </div>
+            <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.45, marginTop: 7 }}>
+              The stamp's photos follow it. 🔒 Only me can never be shared — in a link or a picture — until you change this.
+            </p>
           </div>
         )}
 

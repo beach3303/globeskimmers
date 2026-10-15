@@ -57,7 +57,7 @@ export const STAMP_REFUSALS = ['not_here', 'unlocatable', 'proof_needed'];
 // The user's whole passport: { stamps:[{...,photos:[]}], stats:{...} }.
 export async function listPassport() {
   const { data, error } = await callWorker('passport/list', {});
-  return { stamps: data?.stamps || [], stats: data?.stats || {}, error };
+  return { stamps: data?.stamps || [], stats: data?.stats || {}, booklet: data?.booklet || null, error };
 }
 
 // Where a trip photo was taken, from its location tag: { places, cities } — the famous
@@ -204,10 +204,55 @@ export async function setStampNote(stamp_id, { note, isPublic } = {}) {
   const { data, error } = await callWorker('passport/stamp/note', body);
   return { note: data?.note ?? null, notePublic: data?.note_public === true, error: error || data?.error || null };
 }
-// Who sees a stamp: hidden = only me; shown = my shared passport + friends' feeds.
-export async function setStampVisibility(stamp_id, hidden) {
-  const { data, error } = await callWorker('passport/stamp/visibility', { stamp_id, hidden: !!hidden });
-  return { hidden: data?.hidden === true, error: error || data?.error || null };
+// Who sees a stamp — the four tiers (founder, 2026-10-15): 'me' | 'inner' | 'followers'
+// | 'public'. A boolean still works as the old hidden flag.
+export async function setStampVisibility(stamp_id, visibility) {
+  const body = typeof visibility === 'boolean' ? { stamp_id, hidden: visibility } : { stamp_id, visibility };
+  const { data, error } = await callWorker('passport/stamp/visibility', body);
+  return { visibility: data?.visibility || null, hidden: data?.hidden === true, error: error || data?.error || null };
+}
+// One tap moves every stamp to one level.
+export async function setAllStampsVisibility(visibility) {
+  const { data, error } = await callWorker('passport/stamp/visibility', { all: true, visibility });
+  return { ok: data?.ok === true, error: error || data?.error || null };
+}
+// Ask-first share links (founder, 2026-10-15): mint { level, hours? } → { url, token,
+// expires_at }; list() → { links }; revoke(token).
+export async function mintShareLink(level, hours) {
+  const { data, error } = await callWorker('passport/share-link', { level, hours });
+  return { data, error: error || data?.error || null };
+}
+export async function listShareLinks() {
+  const { data, error } = await callWorker('passport/share-links', {});
+  return { links: data?.links || [], error };
+}
+export async function revokeShareLink(token) {
+  const { data, error } = await callWorker('passport/share-link', { op: 'revoke', token });
+  return { ok: data?.ok === true, error };
+}
+// Save the booklet's order: { booklet_order } | { reshuffle: true } | { custom_order: ids }.
+// Answers with the updated profile (the shuffle's new seed included).
+export async function setBookletOrder(body) {
+  const { data, error } = await callWorker('social/profile', body);
+  return { profile: data?.profile || null, error: error || data?.error || null };
+}
+// The booklet's page order, applied wherever the booklet shows (owner and visitors alike):
+// 'newest' (default) | 'chrono' (oldest trip first, like a real passport) | 'shuffle'
+// (seeded, stable until re-dealt) | 'custom' (the hand's arrangement).
+export function sortStamps(stamps, booklet) {
+  const list = [...(stamps || [])];
+  const t = (s) => Date.parse(s.visited_on || s.created_at) || 0;
+  const order = booklet?.order || 'newest';
+  if (order === 'chrono') return list.sort((a, b) => t(a) - t(b) || String(a.id).localeCompare(String(b.id)));
+  if (order === 'shuffle' && Number.isFinite(booklet?.seed)) {
+    const h = (str) => { let x = booklet.seed >>> 0; for (const c of String(str)) { x = Math.imul(x ^ c.charCodeAt(0), 2654435761); x ^= x >>> 15; } return x >>> 0; };
+    return list.sort((a, b) => h(a.id) - h(b.id) || String(a.id).localeCompare(String(b.id)));
+  }
+  if (order === 'custom' && Array.isArray(booklet?.custom) && booklet.custom.length) {
+    const at = new Map(booklet.custom.map((id, i) => [id, i]));
+    return list.sort((a, b) => (at.has(a.id) ? at.get(a.id) : 1e9 - t(a) / 1e6) - (at.has(b.id) ? at.get(b.id) : 1e9 - t(b) / 1e6));
+  }
+  return list.sort((a, b) => t(b) - t(a));
 }
 // The owner's caption under one photo (moderated; '' clears it).
 export async function setPhotoCaption(photo_id, caption) {

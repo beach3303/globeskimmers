@@ -7,7 +7,7 @@ import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { cityBoardUrl, hasBoard } from "@/lib/boardLinks";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead, socialFollow, photoPlace } from "@/lib/passport";
+import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead, socialFollow, photoPlace, sortStamps, mintShareLink, listShareLinks, revokeShareLink, setBookletOrder } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
 import { TAGGING_ENABLED } from "@/lib/flags";
@@ -521,6 +521,74 @@ function photoOptions(data) {
   return [...places.slice(0, 3 - nCities), ...cities.slice(0, nCities)];
 }
 
+// ── Arrange (founder, 2026-10-15): drag stamps into your own order ──────────
+// A vertical list of every stamp; hold the handle and drag a row where you want it.
+// Saving writes the whole arrangement as one array; the booklet then packs pages
+// from it, for you and for everyone you share with.
+function ArrangeSheet({ stamps, onClose, onSaved }) {
+  const [ids, setIds] = useState(() => stamps.map((s) => s.id));
+  const [busy, setBusy] = useState(false);
+  const [dragId, setDragId] = useState(null);
+  const rowsRef = useRef(null);
+  const byId = useMemo(() => Object.fromEntries(stamps.map((s) => [s.id, s])), [stamps]);
+  const ROW = 56;
+  const onPointerDown = (id) => (e) => {
+    e.preventDefault();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
+    setDragId(id);
+  };
+  const onPointerMove = (e) => {
+    if (!dragId || !rowsRef.current) return;
+    const rect = rowsRef.current.getBoundingClientRect();
+    const target = Math.max(0, Math.min(ids.length - 1, Math.floor((e.clientY - rect.top + rowsRef.current.scrollTop) / ROW)));
+    const from = ids.indexOf(dragId);
+    if (from === -1 || from === target) return;
+    const next = [...ids];
+    next.splice(from, 1);
+    next.splice(target, 0, dragId);
+    setIds(next);
+  };
+  const save = async () => {
+    setBusy(true);
+    const { error } = await setBookletOrder({ custom_order: ids });
+    setBusy(false);
+    if (error) { showToast(error, "error"); return; }
+    showToast("Your arrangement is saved", "success");
+    onSaved(ids);
+  };
+  const day = (s) => (s.visited_on ? new Date(s.visited_on + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" }) : "");
+  return (
+    <div className="fixed inset-0 z-[9998] flex items-end justify-center" role="dialog" aria-modal="true" aria-label="Arrange your stamps">
+      <button aria-label="Close" onClick={onClose} className="absolute inset-0" style={{ background: "rgba(22,17,13,.5)" }} />
+      <div className="relative w-full max-w-md rounded-t-3xl px-4 pt-4 pb-6 flex flex-col" style={{ background: IVORY, maxHeight: "86vh" }}>
+        <p style={{ fontFamily: SERIF, fontSize: fs(20), color: INK }}>Arrange your stamps</p>
+        <p style={{ color: INK3, fontSize: fs(12), lineHeight: 1.4, marginTop: 2 }}>Hold ≡ and drag a stamp where you want it. Top of the list = first page.</p>
+        <div ref={rowsRef} onPointerMove={onPointerMove} onPointerUp={() => setDragId(null)} onPointerCancel={() => setDragId(null)}
+          className="mt-3 overflow-y-auto rounded-xl" style={{ border: `1px solid ${RULE}`, background: "#fff", flex: 1, touchAction: dragId ? "none" : "pan-y" }}>
+          {ids.map((id) => {
+            const st = byId[id];
+            if (!st) return null;
+            return (
+              <div key={id} className="flex items-center gap-2.5 px-3" style={{ height: 56, borderTop: "1px solid rgba(22,17,13,.07)", background: dragId === id ? "#EBF3EE" : "transparent" }}>
+                <button type="button" aria-label={`Move ${st.name}`} onPointerDown={onPointerDown(id)}
+                  className="flex-none text-center" style={{ width: 34, fontSize: fs(17), color: INK3, cursor: "grab", touchAction: "none" }}>≡</button>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate" style={{ fontSize: fs(13.5), fontWeight: 600, color: INK }}>{st.name}</div>
+                  <div className="truncate" style={{ fontFamily: MONO, fontSize: fs(9.5), color: INK3 }}>{[st.city, st.country].filter(Boolean).join(", ")}{day(st) ? ` · ${day(st)}` : ""}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex gap-2 mt-3">
+          <button onClick={onClose} disabled={busy} className="flex-1 rounded-xl py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(14) }}>Cancel</button>
+          <button onClick={save} disabled={busy} className="flex-1 rounded-xl py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(14) }}>{busy ? "Saving…" : "Save arrangement"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StampPlaceModal({ onClose, onDone, preset = null }) {
   // No preset → start from where GPS says you are (founder, 2026-10-05:
   // "provide them the city where they currently are"). The city field is
@@ -936,6 +1004,7 @@ function PassportInner() {
   const [stats, setStats] = useState({});
   const [tags, setTags] = useState([]);
   const [lightbox, setLightbox] = useState(null); // { photos:[{src}], index, title, credit } — the shared PhotoLightbox (swipe, ×)
+  const [booklet, setBooklet] = useState(null); // { order, seed, custom, default_tier } — the page order (tiers, 2026-10-15)
 
   const [claim, setClaim] = useState(null); // { token, tag } from a shared invite link
 
@@ -961,13 +1030,13 @@ function PassportInner() {
     setLoading(true);
     if (viewSlug) {
       const { data } = await getPublicPassport(viewSlug);
-      if (data && !data.private) { setStamps(data.stamps || []); setStats(data.stats || {}); setViewHolder(data.holder || "A traveler"); }
+      if (data && !data.private) { setStamps(data.stamps || []); setStats(data.stats || {}); setBooklet(data.booklet || null); setViewHolder(data.holder || "A traveler"); }
       else { setStamps([]); setStats({}); setViewHolder(null); }
       setViewOwner(data?.owner_id || data?.user_id || null);
       setTags([]); setLoading(false); return;
     }
     const [pp, tg] = await Promise.all([listPassport(), listTags()]);
-    setStamps(pp.stamps); setStats(pp.stats); setTags(tg.tags || []); setLoading(false);
+    setStamps(pp.stamps); setStats(pp.stats); setBooklet(pp.booklet || null); setTags(tg.tags || []); setLoading(false);
   }, [viewSlug]);
   useEffect(() => { load(); }, [load]);
 
@@ -1005,12 +1074,45 @@ function PassportInner() {
     setBlotter(await blotterRead(blSlug));
   }, [blSlug]);
   useEffect(() => { if (!preview && blSlug) refreshBlotter(); }, [blSlug, preview, refreshBlotter]);
+  // The ask-first link (founder, 2026-10-15): minted with what it may show and how long
+  // it works; the live ones listed with Turn off.
+  const [linkLevel, setLinkLevel] = useState("public");
+  const [linkHours, setLinkHours] = useState(168);
+  const [myLinks, setMyLinks] = useState([]);
+  useEffect(() => {
+    if (!shareOpen || readOnly) return;
+    let gone = false;
+    listShareLinks().then(({ links }) => { if (!gone) setMyLinks(links); });
+    return () => { gone = true; };
+  }, [shareOpen, readOnly]);
   const shareNow = async () => {
-    if (!share?.url) return;
+    setShareBusy(true);
+    const { data, error } = await mintShareLink(linkLevel, linkHours || undefined);
+    setShareBusy(false);
+    if (error || !data?.url) { showToast(error || "Couldn't make the link — try again", "error"); return; }
+    setMyLinks((l) => [{ token: data.token, level: data.level, expires_at: data.expires_at, url: data.url }, ...l]);
     try {
-      if (navigator.share) await navigator.share({ title: "Globeskimmers", text: "Check out my Virtual Passport on Globeskimmers 🛂", url: share.url });
-      else if (navigator.clipboard) { await navigator.clipboard.writeText(share.url); showToast("Link copied", "success"); }
+      if (navigator.share) await navigator.share({ title: "Globeskimmers", text: "Check out my Virtual Passport on Globeskimmers 🛂", url: data.url });
+      else if (navigator.clipboard) { await navigator.clipboard.writeText(data.url); showToast("Link copied", "success"); }
     } catch { /* dismissed */ }
+  };
+  // The page order (founder, 2026-10-15): newest / oldest-first / shuffle / the hand.
+  const [arranging, setArranging] = useState(false);
+  const [orderBusy, setOrderBusy] = useState(false);
+  const applyOrder = async (body) => {
+    if (orderBusy) return;
+    setOrderBusy(true);
+    const { profile: upd, error } = await setBookletOrder(body);
+    setOrderBusy(false);
+    if (error) { showToast(error, "error"); return; }
+    setBooklet((b) => ({ ...(b || {}), order: upd?.booklet_order || b?.order || "newest", seed: upd?.shuffle_seed ?? b?.seed ?? null, custom: upd?.custom_order ?? b?.custom ?? null }));
+    if (body.reshuffle) showToast("Pages shuffled — they'll stay this way until you shuffle again", "success");
+  };
+  const turnOffLink = async (token) => {
+    const { ok, error } = await revokeShareLink(token);
+    if (!ok) { showToast(error || "Couldn't turn it off — try again", "error"); return; }
+    setMyLinks((l) => l.filter((x) => x.token !== token));
+    showToast("Link turned off — it stops working right now", "success");
   };
 
   // Places of respect (founder, 2026-10-04): the first time one sits in the
@@ -1217,10 +1319,9 @@ function PassportInner() {
   const statsView = preview ? SAMPLE_STATS : stats;
   // Flat, newest-first stamp list — PassportBook paginates it to fit each page
   // (no scrolling), packing by real size and mixing countries like a passport.
-  const bookStamps = useMemo(() => {
-    const t = (s) => Date.parse(s.visited_on || s.created_at) || 0;
-    return [...stampsView].sort((a, b) => t(b) - t(a));
-  }, [stampsView]);
+  // The owner's chosen order, applied for everyone who sees this booklet
+  // (newest / oldest-first chrono / seeded shuffle / the hand's arrangement).
+  const bookStamps = useMemo(() => sortStamps(stampsView, preview ? null : booklet), [stampsView, booklet, preview]);
 
   // The stamp open in the detail modal — re-derived from fresh data (auto-closes if deleted).
   const openStamp = openStampId ? stampsView.find((s) => s.id === openStampId) : null;
@@ -1319,26 +1420,67 @@ function PassportInner() {
           </div>
         )}
 
-        {/* Share my passport (privacy toggle + link) */}
+        {/* Share my passport — the ask-first sheet (founder, 2026-10-15): every link says
+            what it may show and how long it works; 🔒 Only me is in no link, ever. */}
         {!readOnly && stamps.length > 0 && (
           <div className="mb-4">
             {!shareOpen ? (
               <button onClick={openShare} className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13), fontWeight: 600 }}>🔗 Share my passport</button>
             ) : (
               <div className="bg-white rounded-[16px] p-3.5" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
-                <p style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", textTransform: "uppercase", color: INK3 }}>Who can see it</p>
-                <div className="flex gap-2 mt-2">
-                  <button onClick={() => setPublic(false)} disabled={shareBusy} className="flex-1 rounded-lg py-2 font-semibold" style={{ background: share && !share.is_public ? STAMP : "#fff", color: share && !share.is_public ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(12.5) }}>🔒 Private</button>
-                  <button onClick={() => setPublic(true)} disabled={shareBusy} className="flex-1 rounded-lg py-2 font-semibold" style={{ background: share && share.is_public ? STAMP : "#fff", color: share && share.is_public ? "#fff" : INK2, border: `1px solid ${RULE}`, fontSize: fs(12.5) }}>🔗 Anyone with link</button>
+                <p style={{ fontFamily: SERIF, fontSize: fs(17), color: INK }}>You’re about to share your passport.</p>
+
+                <p className="mt-2.5" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", textTransform: "uppercase", color: INK3 }}>What do you allow this link to show?</p>
+                <div className="flex gap-2 mt-1.5">
+                  {[["public", "🌍 My public pages"], ["inner", "🤝 My inner-circle view"]].map(([v, label]) => (
+                    <button key={v} onClick={() => setLinkLevel(v)} aria-pressed={linkLevel === v} className="flex-1 rounded-lg py-2 font-semibold"
+                      style={{ background: linkLevel === v ? "rgba(14,124,115,.08)" : "#fff", color: linkLevel === v ? TEAL_DEEP : INK2, border: `1.5px solid ${linkLevel === v ? TEAL_DEEP : RULE}`, fontSize: fs(12) }}>{label}</button>
+                  ))}
                 </div>
-                {share && share.is_public && (
-                  <>
-                    <button onClick={shareNow} className="w-full rounded-lg py-2.5 font-semibold mt-2.5" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>Share link</button>
-                    <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.4, marginTop: 6, wordBreak: "break-all" }}>{share.url}</p>
-                  </>
+                <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.45, marginTop: 5 }}>
+                  {linkLevel === "inner"
+                    ? "Anyone who gets this link sees your inner-circle pages and their albums — no account needed. Only send it to people you trust."
+                    : "Only the stamps you set to 🌍 Everyone, plus the album photos connected to them. Nothing else."}
+                </p>
+
+                <p className="mt-2.5" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", textTransform: "uppercase", color: INK3 }}>How long should it work?</p>
+                <div className="flex gap-2 mt-1.5">
+                  {[[24, "24 hours"], [168, "7 days"], [0, "Until I turn it off"]].map(([h, label]) => (
+                    <button key={h} onClick={() => setLinkHours(h)} aria-pressed={linkHours === h} className="flex-1 rounded-lg py-2 font-semibold"
+                      style={{ background: linkHours === h ? "rgba(14,124,115,.08)" : "#fff", color: linkHours === h ? TEAL_DEEP : INK2, border: `1.5px solid ${linkHours === h ? TEAL_DEEP : RULE}`, fontSize: fs(12) }}>{label}</button>
+                  ))}
+                </div>
+
+                <p className="mt-2.5 rounded-lg px-2.5 py-2" style={{ background: "#F5E9E4", border: "1px solid #E0C3B5", color: "#6E3326", fontSize: fs(10.5), lineHeight: 1.45 }}>
+                  🔒 Only-me stamps — and the albums linked to them — appear in no link, ever. Not to friends, not to followers, not to your inner circle.
+                </p>
+
+                <button onClick={shareNow} disabled={shareBusy} className="w-full rounded-lg py-2.5 font-semibold mt-2.5 disabled:opacity-60" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>
+                  {shareBusy ? "Making your link…" : "Share this link"}
+                </button>
+
+                {myLinks.length > 0 && (
+                  <div className="mt-3 pt-2.5" style={{ borderTop: `1px dashed ${RULE}` }}>
+                    <p style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", textTransform: "uppercase", color: INK3 }}>Links I’ve shared</p>
+                    {myLinks.map((l) => (
+                      <div key={l.token} className="flex items-center gap-2 mt-1.5">
+                        <span style={{ fontSize: fs(12), color: INK2 }}>{l.level === "inner" ? "🤝 Inner view" : "🌍 Public pages"}</span>
+                        <span className="flex-1" style={{ fontFamily: MONO, fontSize: fs(9.5), color: INK3 }}>
+                          {l.expires_at ? `ends ${new Date(l.expires_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : "until turned off"}
+                        </span>
+                        <button onClick={() => turnOffLink(l.token)} className="rounded-lg px-2.5 py-1" style={{ background: IVORY_2, color: "#B0472F", fontSize: fs(11), fontWeight: 600 }}>Turn off</button>
+                      </div>
+                    ))}
+                  </div>
                 )}
-                <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.45, marginTop: 6 }}>Whoever you send it to opens the link → downloads the app → views your booklet (while private, only your inner circle can). Switch back to Private anytime.</p>
-                <button onClick={() => setShareOpen(false)} style={{ color: INK3, fontSize: fs(11.5), marginTop: 6 }}>Close</button>
+
+                <div className="flex items-center gap-2 mt-3 pt-2.5" style={{ borderTop: `1px dashed ${RULE}` }}>
+                  <span className="flex-1" style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.4 }}>Can strangers open my booklet by @handle? {share?.is_public ? "Yes — my public pages." : "No — it reads private."}</span>
+                  <button onClick={() => setPublic(!share?.is_public)} disabled={shareBusy} className="rounded-lg px-3 py-1.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(11.5) }}>
+                    {share?.is_public ? "Make private" : "Make public"}
+                  </button>
+                </div>
+                <button onClick={() => setShareOpen(false)} style={{ color: INK3, fontSize: fs(11.5), marginTop: 8 }}>Close</button>
               </div>
             )}
           </div>
@@ -1417,8 +1559,24 @@ function PassportInner() {
         ) : (
           /* THE BOOK — tap the cover to open, then flip through the pages */
           <div className="mt-1 mb-2" ref={bookRef}>
+            {!readOnly && !preview && stampsView.length > 1 && (
+              <div className="flex items-center gap-1.5 flex-wrap mb-2" role="radiogroup" aria-label="Page order">
+                {[["newest", "🕐 Newest"], ["chrono", "📖 Oldest first"]].map(([v, label]) => (
+                  <button key={v} type="button" role="radio" aria-checked={(booklet?.order || "newest") === v} onClick={() => applyOrder({ booklet_order: v })} disabled={orderBusy}
+                    className="rounded-full px-2.5 py-1.5 font-semibold"
+                    style={{ background: (booklet?.order || "newest") === v ? "#EBF3EE" : "#fff", color: INK2, border: `1.5px solid ${(booklet?.order || "newest") === v ? TEAL_DEEP : RULE}`, fontSize: fs(11) }}>{label}</button>
+                ))}
+                <button type="button" role="radio" aria-checked={booklet?.order === "shuffle"} onClick={() => applyOrder({ reshuffle: true })} disabled={orderBusy}
+                  className="rounded-full px-2.5 py-1.5 font-semibold"
+                  style={{ background: booklet?.order === "shuffle" ? "#EBF3EE" : "#fff", color: INK2, border: `1.5px solid ${booklet?.order === "shuffle" ? TEAL_DEEP : RULE}`, fontSize: fs(11) }}>🎲 Shuffle</button>
+                <button type="button" role="radio" aria-checked={booklet?.order === "custom"} onClick={() => setArranging(true)}
+                  className="rounded-full px-2.5 py-1.5 font-semibold"
+                  style={{ background: booklet?.order === "custom" ? "#EBF3EE" : "#fff", color: INK2, border: `1.5px solid ${booklet?.order === "custom" ? TEAL_DEEP : RULE}`, fontSize: fs(11) }}>✋ {booklet?.order === "custom" ? "My order" : "Arrange"}</button>
+              </div>
+            )}
             <PassportBook
               stamps={bookStamps}
+              showTiers={!readOnly && !preview}
               holder={holder}
               homeCountry={readOnly ? null : (profile?.home_country || null)}
               countries={statsView.countries || 0}
@@ -1527,6 +1685,10 @@ function PassportInner() {
       )}
 
       {/* Stamp a place — manual city/spot visit stamp */}
+      {arranging && (
+        <ArrangeSheet stamps={bookStamps} onClose={() => setArranging(false)}
+          onSaved={(ids) => { setArranging(false); setBooklet((b) => ({ ...(b || {}), order: "custom", custom: ids })); }} />
+      )}
       {showStampPlace && <StampPlaceModal preset={stampPreset} onClose={() => { setShowStampPlace(false); setStampPreset(null); }} onDone={() => { setShowStampPlace(false); setStampPreset(null); load(); }} />}
 
       {/* Friend view: the quiet report door (and the sheet of reasons), and Block */}

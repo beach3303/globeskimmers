@@ -19,7 +19,7 @@ import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
 import { getWorld, reportTraveler } from "@/lib/world";
-import { getHandle, getShareLink, blotterRead } from "@/lib/passport";
+import { getHandle, getShareLink, blotterRead, sortStamps } from "@/lib/passport";
 import { clothOf } from "@/lib/cloth";
 import { usePageGround } from "@/components/redesign/PageGround";
 import { Folder } from "@/components/redesign/Zone";
@@ -196,6 +196,8 @@ function TravelerWorld() {
   }, [worldSlug, world?.stamps]);
   const refreshBlotter = () => { if (worldSlug) blotterRead(worldSlug).then(setBlotter); };
 
+  // The owner's chosen page order (newest / chrono / shuffle / their hand) holds here too.
+  const orderedStamps = world?.stamps ? sortStamps(world.stamps, world.booklet) : null;
   const cloth = clothOf(world?.person?.cloth);
   usePageGround(cloth.paper);
 
@@ -245,7 +247,7 @@ function TravelerWorld() {
     body = (
       <>
         {world.luggage ? (
-          <Luggage variant="card" readOnly cloth={cloth.key} stamps={world.stamps} luggage={world.luggage}
+          <Luggage variant="card" readOnly cloth={cloth.key} stamps={orderedStamps} luggage={world.luggage}
             ownerFlags={world.flags || {}} ownerFirst={first} style={firstCard} />
         ) : null}
         <Bookplate
@@ -274,20 +276,20 @@ function TravelerWorld() {
         ) : null}
         {world.circle ? <TheirCircle world={world} first={first} cloth={cloth.key} inner={rel === "inner"} style={{ marginTop: GAP }} /> : null}
         {world.stamps ? (
-          <PassportFolder mode="visit" cloth={cloth.key} ownerFirst={first} stamps={world.stamps} slug={worldSlug}
+          <PassportFolder mode="visit" cloth={cloth.key} ownerFirst={first} stamps={orderedStamps} slug={worldSlug}
             blotter={blotter} onBlotterChanged={refreshBlotter}
             onOpenDoor={worldSlug ? () => navigate(`${createPageUrl("Passport")}?view_slug=${encodeURIComponent(worldSlug)}`) : undefined}
             style={{ marginTop: GAP }} />
         ) : null}
         {world.gear ? (
           <VirtualItems readOnly gear={world.gear.gear} buddies={world.gear.buddies} layout={world.gear.layout}
-            stamps={world.stamps} ownerFlags={world.flags || {}} ownerFirst={first} style={{ marginTop: GAP }} />
+            stamps={orderedStamps} ownerFlags={world.flags || {}} ownerFirst={first} style={{ marginTop: GAP }} />
         ) : null}
         <MapFolder readOnly ownerFirst={first} favorites={world.favorites || []} dreams={world.dreams || []} cloth={cloth.key} style={{ marginTop: GAP }} />
         {/* Their albums, last as on your own profile (founder, 2026-10-14: friends saw no
             albums). The server sends only reviewed photos, so no packet means none yet. */}
         {world.stamps ? (
-          <PhotoPackets stamps={world.stamps} title={first ? `${first}’s photo packets` : "Their photo packets"} className="mt-8"
+          <PhotoPackets stamps={orderedStamps} title={first ? `${first}’s photo packets` : "Their photo packets"} className="mt-8"
             social={worldSlug ? { slug: worldSlug, blotter, onBlotterChanged: refreshBlotter } : null} />
         ) : null}
       </>

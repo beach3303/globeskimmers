@@ -39,6 +39,14 @@ const SANS = '"Inter Tight", ui-sans-serif, system-ui, -apple-system, sans-serif
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const INK = "#243447", INK3 = "#66717D", STAMP = "#B0472F";
 // Cool inks for city/place visit stamps — a different one per stamp (deterministic).
+// ── Stamp tiers in the booklet (founder, 2026-10-15) ────────────────────────
+// A viewer's payload carries no visibility — only the owner's does — so null
+// means "not ours to police here".
+const PP_TIER_RANK = { public: 0, followers: 1, inner: 2, me: 3 };
+const ppTierOf = (st) => st.visibility || (st.hidden ? "me" : null);
+const PP_TIER_MARK = { me: "🔒", inner: "🤝", followers: "✓", public: "🌍" };
+const PP_TIER_WORD = { me: "Only me", inner: "Inner circle", followers: "Followers", public: "Everyone" };
+
 const CITY_INKS = ["#1F6E6A", "#2B4A7E", "#3E5AA8", "#0E7C86", "#2E6B4E", "#5B4B8A", "#6D3A6E", "#2C6E9B", "#3A7D5B", "#4453A6"];
 // Inks for the iconic-place PLACEHOLDER stamp (used until bespoke art is uploaded
 // for #301–1006). Includes the warm STAMP red so variety spans warm + cool.
@@ -179,7 +187,7 @@ export function packBookPages(stamps, pageW, fsScale = 1) {
 // constant fraction across phones (lets pagination fit each page with no scroll).
 // Airport ≈ ⅓ page; iconic ≈ ½ page with "I was here!", a big ink date, and up
 // to 4 memory photos in a 2×2 grid.
-function StampToken({ stamp, idx, onOpen, pageW, frameW = pageW, compact = false }) {
+function StampToken({ stamp, idx, onOpen, pageW, frameW = pageW, compact = false, tierMark = false }) {
   const [artFail, setArtFail] = useState(false);
   // In the booklet each stamp keeps its own tilt (its half of the page places
   // it); on a shared page the tilt and nudge follow its order on the page.
@@ -230,13 +238,20 @@ function StampToken({ stamp, idx, onOpen, pageW, frameW = pageW, compact = false
   const tick = (stamp.verified === "gps" || stamp.verified === "photo_loc" || stamp.verified === "photo_ai") && (
     <span className="absolute" title={stamp.verified === "gps" ? "Verified visit" : "Verified by photo"} style={{ top: -6, left: isAirport ? 10 : 14, background: "#2E6B4E", color: "#fff", fontSize: 14, fontWeight: 700, width: 26, height: 26, borderRadius: 999, display: "grid", placeItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }}>✓</span>
   );
+  const tier = tierMark ? ppTierOf(stamp) : null;
   return (
     <button
       onClick={() => onOpen(stamp)}
-      aria-label={`Open stamp: ${stamp.name}`}
+      aria-label={`Open stamp: ${stamp.name}${tier ? ` — ${PP_TIER_WORD[tier]}` : ""}`}
       className="relative active:scale-95 transition-transform"
       style={{ transform: `translateX(${nudge}px) rotate(${rot}deg)`, maxWidth: "100%" }}
     >
+      {tier && (
+        // The owner's at-a-glance disclosure mark (never drawn into a shared image).
+        <span aria-hidden="true" className="absolute" style={{ top: -8, right: -4, zIndex: 3, fontSize: 11, lineHeight: 1, background: "rgba(255,253,246,.92)", border: "1px solid rgba(22,17,13,.14)", borderRadius: 999, padding: "2.5px 4px" }}>
+          {PP_TIER_MARK[tier]}
+        </span>
+      )}
       {isAirport ? (
         <div className="flex flex-col items-center">
           <AirportStamp iata={String(stamp.entity_id || "").split(":")[0]} city={stamp.city} country={stamp.country} countryCode={stamp.country} date={stamp.visited_on} direction={stamp.meta?.direction || null} width={airportW} />
@@ -518,7 +533,7 @@ function OwnershipPage({ holder, homeCountry, countries, totalStamps, coverH, pa
 // share size, centred, the way pages were shared before (it may grow taller than
 // a page; the share frame scales it to fit).
 const SPOT = ["flex-start", "center", "flex-end"];
-function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW, share = false }) {
+function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW, share = false, tiers = false }) {
   if (pg.stamps.length === 1 && isPhotoFirst(pg.stamps[0])) {
     return (
       <Paper coverH={coverH} pageNo={pageNo} watermark={watermark}>
@@ -552,7 +567,7 @@ function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW, share = 
       <div style={{ position: "relative", height: "100%", display: "grid", gridTemplateRows: rows, gap: HALF_PAD.gap, paddingTop: HALF_PAD.top, paddingBottom: HALF_PAD.bottom }}>
         {halves.map((s, j) => (
           <div key={s ? s.id : `empty-${j}`} style={{ display: "flex", minHeight: 0, padding: "2px 4px", ...(s ? spot(s) : {}), ...(pg.full ? { justifyContent: "center", alignItems: "center" } : {}) }}>
-            {s && <StampToken stamp={s} idx={j} onOpen={() => onOpenStamp(s.id)} pageW={pageW} compact />}
+            {s && <StampToken stamp={s} idx={j} onOpen={() => onOpenStamp(s.id)} pageW={pageW} compact tierMark={tiers} />}
           </div>
         ))}
       </div>
@@ -609,6 +624,7 @@ export default function PassportBook({
   stamps, holder, homeCountry, countries, totalStamps, onOpenStamp,
   coverUrl = PASSPORT_COVER_URL,
   renderUnderPage = null, // (pageStamps) => node — the Blotter strip under an open page
+  showTiers = false,      // the owner's view: corner marks + tier-aware picture shares
 }) {
   const reduce = useReducedMotion();
   const [open, setOpen] = useState(false);
@@ -704,7 +720,7 @@ export default function PassportBook({
     const watermark = idx % 2 === 0 ? "🌍" : "✈️"; // alternate earth / airplane
     if (idx === 0) return <OwnershipPage holder={holder} homeCountry={homeCountry} countries={countries} totalStamps={totalStamps} coverH={coverH} pageNo={pageNo} watermark={watermark} />;
     const ci = idx - 1; // 0-based index into the collection (stamp pages, then blanks)
-    if (ci < stampCount) return <StampPage pg={bookPages[ci]} onOpenStamp={onOpenStamp} coverH={coverH} pageNo={pageNo} watermark={watermark} pageW={pageW} />;
+    if (ci < stampCount) return <StampPage pg={bookPages[ci]} onOpenStamp={onOpenStamp} coverH={coverH} pageNo={pageNo} watermark={watermark} pageW={pageW} tiers={showTiers} />;
     return <EmptyCollectionPage coverH={coverH} pageNo={pageNo} watermark={watermark} first={ci === stampCount && stampCount === 0} />;
   };
 
@@ -735,6 +751,14 @@ export default function PassportBook({
   // tap "did nothing" on the phone even with the new bundle), so a slow or
   // failed render is visible on screen, not only in a toast.
   const [preview, setPreview] = useState(null);
+  // Which tiers this picture share may include ('public' | 'followers' | 'inner'); 🔒 never.
+  const [shareTier, setShareTier] = useState(null);
+  const shareOk = useCallback((st) => {
+    const t = ppTierOf(st);
+    if (t == null) return true;
+    if (t === "me") return false;
+    return PP_TIER_RANK[t] <= PP_TIER_RANK[shareTier || "public"];
+  }, [shareTier]);
   const renderCurrentPage = useCallback(async () => {
     if (sharing) return;
     // The page element: the ref first, else the DOM marker (a forwarded ref
@@ -745,7 +769,21 @@ export default function PassportBook({
     // (the share frame scales a tall page down). Open on the first stamp at full
     // size instead; the preview still offers the other stamp and the whole page.
     const pgNow = page >= 1 && page - 1 < bookPages.length ? bookPages[page - 1] : null;
-    const heroFirst = el === sharePageRef.current && pgNow && pgNow.stamps.length > 1 && el.offsetHeight > pageW * 1.6 + 4 ? pgNow.stamps[0] : null;
+    // The owner's page may hold mixed tiers (founder, 2026-10-15): a picture is forever,
+    // so it is cleaned by default — the sheet asks which tiers may ride before any pixels
+    // render, and 🔒 Only me never rides in a page picture.
+    if (showTiers && pgNow && !shareTier) {
+      const tiers = pgNow.stamps.map(ppTierOf);
+      const n = (t) => tiers.filter((x) => x === t).length;
+      const counts = { public: n("public") + tiers.filter((x) => x == null).length, followers: n("followers"), inner: n("inner"), me: n("me") };
+      if (!counts.public && !counts.followers && !counts.inner) {
+        setPreview({ status: "error", message: "Everything on this page is 🔒 Only me. To share a stamp, first change who can see it." });
+        return;
+      }
+      if (counts.followers || counts.inner || counts.me) { setPreview({ status: "choose", counts }); return; }
+    }
+    const shareStamps = pgNow ? pgNow.stamps.filter(shareOk) : [];
+    const heroFirst = el === sharePageRef.current && pgNow && shareStamps.length > 1 && el.offsetHeight > pageW * 1.6 + 4 ? shareStamps[0] : null;
     setSharing(true);
     setPreview({ status: "rendering" });
     try {
@@ -768,23 +806,36 @@ export default function PassportBook({
       const img = await composeShare(pageCanvas, "story_meta");
       // The memory photos on THIS page, in page order — the carousel's slides 2+.
       const pg = page >= 1 && page - 1 < bookPages.length ? bookPages[page - 1] : null;
-      const photos = pg ? pg.stamps.flatMap((st) => (st.photos || []).filter((ph) => ph && ph.photo_url).map((ph) => ({ src: ph.photo_url, stamp: st }))) : [];
+      const pgShare = pg ? pg.stamps.filter(shareOk) : [];
+      const photos = pgShare.flatMap((st) => (st.photos || []).filter((ph) => ph && ph.photo_url).map((ph) => ({ src: ph.photo_url, stamp: st })));
       if (!heroFirst) setHeroStamp(null);
       // The growth link: every share carries the traveler's landing URL —
       // the research's one multiplier (installs-per-share). Fetched lazily,
       // never blocks the render.
       let shareUrl = null;
       try { const { data: sl } = await getShareLink(); shareUrl = sl?.url || null; } catch { /* the image still shares */ }
-      setPreview({ status: "ready", target: "instagram", use: "story", preset: "story_meta", subject: heroFirst ? heroFirst.id : "page", shareUrl, pageStamps: pg ? pg.stamps : [], pageCanvas, photos, mix: photos.length > 0 ? "both" : "page", slides: null, slidesPreset: null, slidesBusy: false, slideFailed: 0, ...img });
+      setPreview({ status: "ready", target: "instagram", use: "story", preset: "story_meta", subject: heroFirst ? heroFirst.id : "page", shareUrl, pageStamps: pgShare, pageCanvas, photos, mix: photos.length > 0 ? "both" : "page", slides: null, slidesPreset: null, slidesBusy: false, slideFailed: 0, ...img });
       logEvent("passport_share_open", { photos_on_page: photos.length }, "Passport");
     } catch (e) {
       try { console.error("[passport share] render failed", e); } catch { /* ignore */ }
       setPreview({ status: "error", message: e?.message || String(e) });
     } finally { setSharing(false); }
-  }, [sharing, page, bookPages, pageW]);
+  }, [sharing, page, bookPages, pageW, showTiers, shareTier, shareOk]);
+  // The chooser's pick: allow that tier, let the filtered share node paint, then render.
+  const proceedShare = useCallback(async (tier) => {
+    setShareTier(tier);
+    setPreview({ status: "rendering" });
+    await new Promise((r) => setTimeout(r, 120));
+    setSharing(false);
+    renderShareNow.current?.();
+  }, []);
+  const renderShareNow = useRef(null);
+  useEffect(() => { renderShareNow.current = renderCurrentPage; });
+
   // Re-render the preview around ONE stamp (subject) or back to the page.
   const chooseSubject = useCallback(async (stampOrNull) => {
     if (!preview || preview.status !== "ready") return;
+    if (stampOrNull && ppTierOf(stampOrNull) === "me") { showToast("This stamp is Only me. To share it, first change who can see it.", "error"); return; }
     setHeroStamp(stampOrNull);
     setPreview((p) => ({ ...p, status: "rendering", subject: stampOrNull ? stampOrNull.id : "page" }));
     try {
@@ -805,6 +856,7 @@ export default function PassportBook({
   const slidesJob = useRef(0);
   const closePreview = useCallback(() => {
     slidesJob.current += 1; // cancels a slide build in flight
+    setShareTier(null);
     setPreview((p) => { if (p?.url) { try { URL.revokeObjectURL(p.url); } catch { /* ignore */ } } revokeSlides(p?.slides); return null; });
   }, []);
   // Build the photo slides ahead of the Share tap: iOS only opens the sheet
@@ -968,7 +1020,8 @@ export default function PassportBook({
 
         {open && page >= 1 && page - 1 < bookPages.length && !(bookPages[page - 1].stamps.length === 1 && isPhotoFirst(bookPages[page - 1].stamps[0])) && (
           <div ref={sharePageRef} data-pp-share-page="" aria-hidden style={{ position: "absolute", left: -10000, top: 0, width: pageW }}>
-            <StampPage pg={bookPages[page - 1]} onOpenStamp={() => {}} coverH={coverH} pageNo={page + 1} watermark={page % 2 === 0 ? "🌍" : "✈️"} pageW={pageW} share />
+            {/* the picture that leaves the phone holds only the tiers the owner allowed */}
+            <StampPage pg={{ ...bookPages[page - 1], stamps: bookPages[page - 1].stamps.filter(shareOk) }} onOpenStamp={() => {}} coverH={coverH} pageNo={page + 1} watermark={page % 2 === 0 ? "🌍" : "✈️"} pageW={pageW} share />
           </div>
         )}
 
@@ -1073,6 +1126,34 @@ export default function PassportBook({
               alt={carouselFor(preview) && preview.mix === "photos" && preview.slides?.length ? "Your first memory photo, ready to share" : "Your passport page, ready to share"}
               onClick={(e) => e.stopPropagation()}
               style={{ maxWidth: "92vw", maxHeight: "62vh", objectFit: "contain", borderRadius: 12, boxShadow: "0 24px 60px -20px rgba(0,0,0,.6)" }} />
+          ) : preview.status === "choose" ? (
+            <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[380px] rounded-[16px] px-5 py-5" style={{ background: PAPER, color: INK }}>
+              <div style={{ fontFamily: SERIF, fontSize: fs(21), lineHeight: 1.2 }}>A shared picture can travel anywhere.</div>
+              <div className="mt-1.5" style={{ fontFamily: MONO, fontSize: fs(10.5), color: INK3, lineHeight: 1.5 }}>
+                This page holds {[preview.counts.public ? `${preview.counts.public} 🌍` : null, preview.counts.followers ? `${preview.counts.followers} ✓` : null, preview.counts.inner ? `${preview.counts.inner} 🤝` : null, preview.counts.me ? `${preview.counts.me} 🔒` : null].filter(Boolean).join(" · ")} stamps. What may the picture include?
+              </div>
+              <div className="flex flex-col gap-2 mt-3">
+                <button type="button" onClick={() => proceedShare("public")} className="rounded-xl py-2.5 px-3 font-semibold text-left" style={{ background: "#fff", border: "1.5px solid #0E7C73", color: "#0E7C73", fontSize: fs(13.5) }}>
+                  🌍 Public stamps only{preview.counts.public ? ` (${preview.counts.public})` : ""} — the page re-packs without the rest
+                </button>
+                {preview.counts.followers > 0 && (
+                  <button type="button" onClick={() => proceedShare("followers")} className="rounded-xl py-2.5 px-3 font-semibold text-left" style={{ background: "#fff", border: `1px solid ${PAPER_EDGE}`, color: INK, fontSize: fs(13.5) }}>
+                    ✓ Include follower stamps too (+{preview.counts.followers})
+                  </button>
+                )}
+                {preview.counts.inner > 0 && (
+                  <button type="button" onClick={() => proceedShare("inner")} className="rounded-xl py-2.5 px-3 font-semibold text-left" style={{ background: "#fff", border: `1px solid ${PAPER_EDGE}`, color: INK, fontSize: fs(13.5) }}>
+                    🤝 Include inner-circle stamps too (+{preview.counts.inner + preview.counts.followers})
+                  </button>
+                )}
+              </div>
+              {preview.counts.me > 0 && (
+                <div className="mt-3 rounded-xl px-3 py-2.5" style={{ background: "#F5E9E4", border: "1px solid #D8B4A6", color: "#6E3326", fontSize: fs(11.5), lineHeight: 1.5 }}>
+                  🔒 {preview.counts.me} Only-me stamp{preview.counts.me === 1 ? "" : "s"} never ride{preview.counts.me === 1 ? "s" : ""} along in a page picture. To share one, first change who can see it.
+                </div>
+              )}
+              <button type="button" onClick={closePreview} className="w-full rounded-xl py-2 mt-3" style={{ color: INK3, fontSize: fs(12.5) }}>Cancel</button>
+            </div>
           ) : (
             <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[380px] rounded-[16px] px-5 py-6 text-center" style={{ background: PAPER, color: INK }}>
               <div style={{ fontFamily: SERIF, fontSize: fs(22), lineHeight: 1.15 }}>{preview.status === "rendering" ? "Preparing your page…" : "Couldn't prepare this page"}</div>

@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2, UserX, LayoutGrid, UserCheck, Images, PenLine } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
+import { setAllStampsVisibility } from "@/lib/passport";
 import { useHomeZoneStyle, setHomeZoneStyle } from "@/components/redesign/Zone";
 import ContactUsModal from "../components/ContactUsModal";
 import RefreshAccessModal from "../components/RefreshAccessModal";
@@ -588,10 +589,24 @@ export default function SettingsPage() {
   useEffect(() => {
     let gone = false;
     callWorker("social/profile", {}).then(({ data }) => {
-      if (!gone && data?.profile) setDials({ approve_followers: data.profile.approve_followers !== false, albums_audience: data.profile.albums_audience || "inner", comments_audience: data.profile.comments_audience || "inner" });
+      if (!gone && data?.profile) setDials({ approve_followers: data.profile.approve_followers !== false, albums_audience: data.profile.albums_audience || "inner", comments_audience: data.profile.comments_audience || "inner", default_stamp_tier: data.profile.default_stamp_tier || "inner", circle_public: data.profile.circle_public === true });
     });
     return () => { gone = true; };
   }, []);
+  // The bulk mover and the circle switch keep their own little confirms.
+  const [bulkPick, setBulkPick] = useState(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [circleAsk, setCircleAsk] = useState(false);
+  const TIER_OPTS = [["me", "🔒 Only me"], ["inner", "🤝 Inner circle"], ["followers", "✓ Followers"], ["public", "🌍 Everyone"]];
+  const applyBulk = async () => {
+    if (!bulkPick || bulkBusy) return;
+    setBulkBusy(true);
+    const { ok, error } = await setAllStampsVisibility(bulkPick);
+    setBulkBusy(false);
+    setBulkPick(null);
+    if (!ok) { showToast(error || "Couldn't update — try again", "error"); return; }
+    showToast(`Every stamp is now ${Object.fromEntries(TIER_OPTS)[bulkPick]}`, "success");
+  };
   const saveDial = async (field, value, prev) => {
     setDials((d) => ({ ...d, [field]: value }));
     const { data, error } = await callWorker("social/profile", { [field]: value });
@@ -1019,6 +1034,56 @@ export default function SettingsPage() {
                   <EdChoices label="Who sees my photo albums" value={dials.albums_audience}
                     options={[["inner", "Inner circle"], ["passport", "My passport"], ["me", "Only me"]]}
                     onPick={(v) => saveDial("albums_audience", v, dials.albums_audience)} />
+                ) }}
+              />
+            )}
+            {dials && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={LayoutGrid} iconBg={CAT.weather.ink} title="New stamps start at"
+                desc="Every stamp you make begins at this audience. Change any stamp's own level anytime from the stamp."
+                control={{ below: true, node: (
+                  <EdChoices label="New stamps start at" value={dials.default_stamp_tier}
+                    options={TIER_OPTS}
+                    onPick={(v) => saveDial("default_stamp_tier", v, dials.default_stamp_tier)} />
+                ) }}
+              />
+            )}
+            {dials && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={LayoutGrid} iconBg={CAT.atm.ink} title="Set all my stamps to one level"
+                desc="One tap moves every stamp — the way to go fully private, or fully public, at once."
+                control={{ below: true, node: (
+                  <div>
+                    <EdChoices label="Set all my stamps to one level" value={bulkPick} options={TIER_OPTS} onPick={setBulkPick} />
+                    {bulkPick && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="flex-1" style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#3A3128" }}>Move every stamp to {Object.fromEntries(TIER_OPTS)[bulkPick]}?</span>
+                        <button type="button" onClick={applyBulk} disabled={bulkBusy} className="h-10 px-4 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>{bulkBusy ? "Moving…" : "Move them"}</button>
+                        <button type="button" onClick={() => setBulkPick(null)} className="h-10 px-3 rounded-xl" style={{ color: "#736657", fontSize: "calc(12px*var(--fs,1))" }}>Cancel</button>
+                      </div>
+                    )}
+                  </div>
+                ) }}
+              />
+            )}
+            {dials && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={UserCheck} iconBg={CAT.todo.ink} title="My circle is public"
+                desc={dials.circle_public ? "Anyone who sees your page can browse who's in your circle (members who allow it)" : "Visitors see counts only — never names"}
+                control={{ below: true, node: (
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#3A3128" }}>{dials.circle_public ? "Public lists are on" : "Full privacy (default)"}</span>
+                      <EdToggle on={dials.circle_public} label="My circle is public"
+                        onClick={() => { if (dials.circle_public) saveDial("circle_public", false, true); else setCircleAsk(true); }} />
+                    </div>
+                    {circleAsk && !dials.circle_public && (
+                      <div className="mt-2 rounded-xl px-3 py-2.5" style={{ background: "#FBF3E2", border: "1px solid #E5CA98" }}>
+                        <p style={{ fontSize: "calc(13px*var(--fs,1))", color: "#16110D", lineHeight: 1.45 }}>Your followers and inner circle will be public. Continue?</p>
+                        <div className="flex gap-2 mt-2">
+                          <button type="button" onClick={() => { setCircleAsk(false); saveDial("circle_public", true, false); }} className="flex-1 h-10 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>Continue</button>
+                          <button type="button" onClick={() => setCircleAsk(false)} className="flex-1 h-10 rounded-xl font-semibold" style={{ border: "1.5px solid rgba(22,17,13,.16)", background: "#fff", color: "#3A3128", fontSize: "calc(12.5px*var(--fs,1))" }}>Keep private</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ) }}
               />
             )}
