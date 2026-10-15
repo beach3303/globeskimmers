@@ -1889,3 +1889,14 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   Screens: Profile albums 2026/2025 sections, EDIT CAPTION pill on the Profile's own album, the big
   comment box with 214/600.
 - **Activate:** rides the same push + `npm run ota` as the sticker entries above.
+
+## 2026-10-15 — LIVE: stickers, COOL!, YUMMY retired, albums by year, captions, the big guestbook (main df56496)
+- Founder said "push": 9 commits d678219 → df56496, gates in the main checkout (node --check, build,
+  boot-check ✅). Deploy Cloudflare Workers run 38733175591 ✓. No migration, no SQL.
+- Live probes (no writes): blotter/mark kind cool on a ghost page → 404 Not found (whitelisted), yummy →
+  400 Unknown stamp (retired), fire → 400; passport/list 200.
+- **Activate:** the founder's `npm run ota` — ships the WHOLE evening to phones: sticker reactions +
+  COOL!, YUMMY gone, the folder card's strip gone, one-photo sensing with the reading beat and slow-lookup
+  messages, Stamping… narration, albums by year, captions from the Profile, the 600-character guestbook.
+  Until the OTA, current phones still show the drawn icons (all still work; a YUMMY press now gets
+  "Unknown stamp").
