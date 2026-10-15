@@ -541,12 +541,25 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     const q = which === "city" ? cityQ : venue;
     if (!q || q.trim().length < 2) return;
     setSearching(true); setSearchFor(which); setResults(null);
-    const res = await placeSearch(q, coords);
+    // A city can be anywhere you've been, so its search doesn't lean toward where you are
+    // (from Lisbon, "Paris" listed a farm in Portugal first). A spot leans toward the city.
+    const res = await placeSearch(q, which === "city" ? null : coords);
     setResults(res); setSearching(false);
   };
   const pick = (r) => {
     if (searchFor === "city") { setCity(r.city || r.name); setCityQ(r.city || r.name); setCountry(r.country || ""); setCc(r.cc || ""); setCoords({ lat: r.lat, lng: r.lng }); }
-    else { setVenue(r.name); if (Number.isFinite(+r.lat) && Number.isFinite(+r.lng)) setVenueSpot({ lat: +r.lat, lng: +r.lng, category: r.category || r.type || null }); if (!city) { setCity(r.city || ""); setCityQ(r.city || ""); } if (!country) setCountry(r.country || ""); if (!cc) setCc(r.cc || ""); if (!coords) setCoords({ lat: r.lat, lng: r.lng }); }
+    else {
+      setVenue(r.name);
+      const at = Number.isFinite(+r.lat) && Number.isFinite(+r.lng) ? { lat: +r.lat, lng: +r.lng } : null;
+      if (at) setVenueSpot({ ...at, category: r.category || r.type || null });
+      // A spot over 50 km from the city in the box brings its own city and country: a past
+      // trip picked with today's city still filled in stamped the Eiffel Tower in Lisboa.
+      const far = !!at && !!coords && metersBetween(coords.lat, coords.lng, at.lat, at.lng) > 50000;
+      if (!city || far) { setCity(r.city || ""); setCityQ(r.city || ""); }
+      if (!country || far) setCountry(r.country || "");
+      if (!cc || far) setCc(r.cc || "");
+      if (at && (!coords || far)) setCoords(at);
+    }
     setResults(null); setSearchFor(null);
   };
   const onPickPhotos = (e) => {
