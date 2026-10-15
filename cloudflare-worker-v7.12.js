@@ -14943,7 +14943,19 @@ async function handlePassportShare(request, env) {
 // rough zone "only our team sees"): meta.presence and the old birthday flag
 // stay on the server, and so do account ids — the owner's and a tagger's (the
 // booklet shows the tagger by tagged_by_name/_handle).
-function ppShareStamps(stamps, origin) {
+// May this viewer see the owner's photo albums? The owner always; otherwise the albums
+// dial (founder, 2026-10-15): 'passport' follows the booklet's audience, 'inner' (the
+// default) mutual friends only — a public passport shows its pages but not its photos —
+// and 'me' no one.
+async function ppAlbumsAllowed(env, ownerSp, ownerId, viewerId, inner = null) {
+  if (viewerId && viewerId === ownerId) return true;
+  const aud = ownerSp?.albums_audience || 'inner';
+  if (aud === 'me') return false;
+  if (aud === 'passport') return true;
+  if (inner !== null) return inner;
+  return viewerId ? await gbMutualFriends(env, viewerId, ownerId) : false;
+}
+function ppShareStamps(stamps, origin, withPhotos = true) {
   return (stamps || [])
     .filter((st) => !st.hidden)
     .map(({ lat, lng, note, note_public, meta, tagged_by, user_id, ...rest }) => ({
@@ -14953,7 +14965,7 @@ function ppShareStamps(stamps, origin) {
       ...(note_public && note ? { note, note_public: true } : {}),
       // Fail-closed: another viewer sees only photos that PASSED moderation,
       // each by its id, never by its key (gbRowMedia).
-      photos: (rest.photos || []).filter((p) => p.mod_status === 'ok').map((p) => ({ ...p, photo_url: `${origin}/pp-photo/p/${p.id}` })),
+      photos: withPhotos ? (rest.photos || []).filter((p) => p.mod_status === 'ok').map((p) => ({ ...p, photo_url: `${origin}/pp-photo/p/${p.id}` })) : [],
     }));
 }
 
@@ -15019,11 +15031,14 @@ async function handlePassportPublic(request, env, ctx) {
         : !!viewer; // the owner always sees their own
       if (!friend) return jsonResponse({ private: true });
     }
-    if (viewer?.id !== share.user_id) await ppSweepPhotos(env, ctx, share.user_id);
+    // The albums dial (founder, 2026-10-15): a private page's visitor is a mutual friend
+    // already; a public page's stranger gets the pages without the photos by default.
+    const withPhotos = await ppAlbumsAllowed(env, ownerSp, share.user_id, viewer?.id || null, share.is_public ? null : true);
+    if (withPhotos && viewer?.id !== share.user_id) await ppSweepPhotos(env, ctx, share.user_id);
     const holder = await ppHolder(env, share.user_id);
     const { stamps } = await ppLoad(env, share.user_id);
     const origin = new URL(request.url).origin;
-    const shared = ppShareStamps(stamps, origin);
+    const shared = ppShareStamps(stamps, origin, withPhotos);
     // The cloth the owner's world is bound in (B2), for the visit page's cover.
     const holderCloth = (await gbFaces(env, [share.user_id], origin))[share.user_id]?.cloth || null;
     return jsonResponse({ holder, holder_cloth: holderCloth, stamps: shared, stats: ppStats(shared) });
@@ -17615,9 +17630,10 @@ async function handleSocialProfile(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const mine = await gbSocialProfile(env, user.id);
     const origin = new URL(request.url).origin;
-    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, website: p.website || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null };
+    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, website: p.website || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null, approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || 'inner', comments_audience: p.comments_audience || 'inner' };
     // A patch with only a website saves it (B5: it used to read as a read).
-    if (b.display_name === undefined && b.bio === undefined && b.favorites === undefined && b.dreams === undefined && b.website === undefined) {
+    if (b.display_name === undefined && b.bio === undefined && b.favorites === undefined && b.dreams === undefined && b.website === undefined
+      && b.approve_followers === undefined && b.albums_audience === undefined && b.comments_audience === undefined) {
       return jsonResponse({ profile: pick(mine) || null });
     }
     if (gbUnderAge(mine)) return gbUnderAgeResp();
@@ -17629,6 +17645,10 @@ async function handleSocialProfile(request, env, ctx) {
       ? v.slice(0, 50).map((x) => ({ name: clean(typeof x === 'string' ? x : x?.name, 60) })).filter((x) => x.name)
       : null;
     const patch = { updated_at: new Date().toISOString() };
+    // The privacy dials (founder, 2026-10-15). Only the known words are stored.
+    if (b.approve_followers !== undefined) patch.approve_followers = b.approve_followers === true;
+    if (b.albums_audience !== undefined && ['passport', 'inner', 'me'].includes(b.albums_audience)) patch.albums_audience = b.albums_audience;
+    if (b.comments_audience !== undefined && ['inner', 'audience', 'off'].includes(b.comments_audience)) patch.comments_audience = b.comments_audience;
     if (b.display_name !== undefined) patch.display_name = clean(b.display_name, 40);
     if (b.bio !== undefined) patch.bio = clean(b.bio, 200);
     if (b.website !== undefined) {
@@ -18206,6 +18226,12 @@ async function blTarget(env, share, target, viewerId) {
   const pq = await gbRest(env, `passport_stamp_photos?id=eq.${m[1]}&user_id=eq.${share.user_id}&select=id,stamp_id,mod_status,food_subject`, {});
   const photo = (pq.ok ? await pq.json() : [])[0];
   if (!photo || (viewerId !== share.user_id && photo.mod_status !== 'ok')) return null;
+  // The albums dial guards the photo itself (founder, 2026-10-15): someone who can't see
+  // the albums can't press or write on a photo by its id either.
+  if (viewerId !== share.user_id) {
+    const oq = await gbRest(env, `social_profiles?user_id=eq.${share.user_id}&select=*`, {});
+    if (!(await ppAlbumsAllowed(env, (oq.ok ? await oq.json() : [])[0] || null, share.user_id, viewerId))) return null;
+  }
   const st = await blStamp(env, share, `st:${photo.stamp_id}`);
   return st ? { st, photo, target: `ph:${photo.id}` } : null;
 }
@@ -18248,6 +18274,19 @@ async function handleBlotterMark(request, env, ctx) {
     if (ctx) ctx.waitUntil(gbLogEvent(env, op === 'press' ? 'blotter_press' : 'blotter_peel', { kind }));
     return jsonResponse({ ok: true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// May this viewer WRITE on the owner's passport surfaces (founder, 2026-10-15)? The
+// comments dial: 'inner' (the default) mutual friends only, 'audience' everyone who can
+// see the page, 'off' no one. Reactions are never gated here, and a city board's
+// postcards keep the board's own rules — this dial is for the passport.
+async function blCanComment(env, ownerSp, ownerId, viewerId, mutual = null) {
+  if (viewerId && viewerId === ownerId) return true;
+  const dial = ownerSp?.comments_audience || 'inner';
+  if (dial === 'off') return false;
+  if (dial === 'audience') return !!viewerId;
+  if (mutual !== null) return mutual;
+  return viewerId ? await gbMutualFriends(env, viewerId, ownerId) : false;
 }
 
 // POST /blotter/sign — op 'sign' { slug, target, text?, doodle? } | 'edit'
@@ -18294,6 +18333,13 @@ async function handleBlotterSign(request, env, ctx) {
     if (gate) return blGateResp(gate);
     const tgt = await blTarget(env, share, b.target, user.id);
     if (!tgt) return jsonResponse({ error: 'Not found' }, 404);
+    if (!tgt.pc) {
+      const oq = await gbRest(env, `social_profiles?user_id=eq.${share.user_id}&select=*`, {});
+      const osp = (oq.ok ? await oq.json() : [])[0] || null;
+      if (!(await blCanComment(env, osp, share.user_id, user.id))) {
+        return jsonResponse({ error: (osp?.comments_audience || 'inner') === 'off' ? 'Comments are switched off on this passport' : 'Only their inner circle can write here' }, 403);
+      }
+    }
 
     const text = String(b.text || '').trim().slice(0, 600);
     let doodleKey = null;
@@ -18345,6 +18391,10 @@ async function handleBlotterCosign(request, env, ctx) {
     const gate = await blGate(env, user, share, b.op === 'lift' ? {} : { identity: true });
     if (gate) return blGateResp(gate);
     if (user.id !== e0.author_user_id && await gbBlockedEither(env, user.id, e0.author_user_id)) return jsonResponse({ error: 'Not found' }, 404);
+    if (b.op !== 'lift' && !String(e0.target || '').startsWith('pc:')) {
+      const oq = await gbRest(env, `social_profiles?user_id=eq.${e0.owner_user_id}&select=*`, {});
+      if (!(await blCanComment(env, (oq.ok ? await oq.json() : [])[0] || null, e0.owner_user_id, user.id))) return jsonResponse({ error: 'Only their inner circle can write here' }, 403);
+    }
     if (b.op === 'lift') {
       await gbRest(env, `blotter_cosigns?entry_id=eq.${id}&user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
     } else {
@@ -18396,9 +18446,17 @@ async function handleBlotterRead(request, env) {
     const isOwner = !!(user && user.id === share.user_id);
     // A private page's marks and notes are open to its owner's FRIENDS (mutual
     // accepted follows), as blGate lets them press and sign there (B4, 2026-10-14).
-    if (!share.is_public && !isOwner && !(user && await gbMutualFriends(env, user.id, share.user_id))) return jsonResponse({ targets: {}, entries: [] });
+    let viewerMutual = isOwner ? true : null;
+    if (!share.is_public && !isOwner) {
+      viewerMutual = !!(user && await gbMutualFriends(env, user.id, share.user_id));
+      if (!viewerMutual) return jsonResponse({ targets: {}, entries: [] });
+    }
     // A minor's page (held, frozen, unconfirmed — or unknown) reads empty.
-    if (!isOwner && gbOffSocial(await gbSocialProfile(env, share.user_id).catch(() => undefined))) return jsonResponse({ targets: {}, entries: [] });
+    let ownerSp = null;
+    if (!isOwner) {
+      ownerSp = await gbSocialProfile(env, share.user_id).catch(() => undefined);
+      if (gbOffSocial(ownerSp)) return jsonResponse({ targets: {}, entries: [] });
+    }
     // Blocks hide the pair both ways (block_v2); a visitor whose blocks can't
     // be read sees nothing rather than everything.
     const blockSet = user && !isOwner ? await gbBlockSet(env, user.id) : new Set();
@@ -18444,7 +18502,10 @@ async function handleBlotterRead(request, env) {
       entries = entries.filter((e) => visible(String(e.target || '')));
     }
     const hiddenIds = isOwner ? ownerBlocked : new Set([...blockSet, ...ownerBlocked]);
-    return jsonResponse({ ...(await blDigest(env, request, user, marks, entries, (_t, who) => hiddenIds.has(who))), owner: isOwner });
+    // The comments dial, answered for THIS viewer, so the sheet can hold its pen.
+    const commentsDial = isOwner ? null : ownerSp?.comments_audience || 'inner';
+    const canComment = isOwner ? true : await blCanComment(env, ownerSp, share.user_id, user?.id || null, viewerMutual);
+    return jsonResponse({ ...(await blDigest(env, request, user, marks, entries, (_t, who) => hiddenIds.has(who))), owner: isOwner, can_comment: canComment, comments: commentsDial });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -18670,7 +18731,9 @@ async function handleSocialFollow(request, env, ctx) {
         // people who said yes. A muted follow (see op 'follow') is listed as
         // followed.
         following: following.map((r) => {
-          const row = shape(r.status === 'muted' ? { ...r, status: 'accepted' } : r, 'followee_id');
+          // A muted edge reads as a request still waiting — the ordinary state now that
+          // adults approve followers — never as a tell.
+          const row = shape(r.status === 'muted' ? { ...r, status: 'pending' } : r, 'followee_id');
           return r.status === 'accepted' && followsMe.has(r.followee_id) ? row : { ...row, name: null, verified: false, seal: null, cloth: null, avatar: null };
         }),
         // My blocked list names no one and gives out no account id (go-live
@@ -18734,6 +18797,9 @@ async function handleSocialFollow(request, env, ctx) {
         if (sp === undefined) return gbAgeUnknownResp();
         if (gbUnderAge(sp) || gbAgeHeld(sp)) muted = true;
         else if (sp?.social_tier === 'teen') status = 'pending';
+        // Adults approve their followers too (founder, 2026-10-15: "most people want
+        // privacy"), unless they switched approval off. NULL = the default, approval ON.
+        else if (sp?.approve_followers !== false) status = 'pending';
       }
       const w = await gbRest(env, 'user_follows', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ follower_id: user.id, followee_id: target.user_id, status: muted ? 'muted' : status }) });
       if (!w.ok) return jsonResponse({ error: 'Couldn’t follow right now — try again' }, 502);
@@ -18741,7 +18807,9 @@ async function handleSocialFollow(request, env, ctx) {
       // becomes a real follow when it is asked for again.
       if (!muted) await gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${target.user_id}&status=eq.muted`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status }) });
       if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_follow', { status: muted ? 'muted' : status }));
-      return jsonResponse({ ok: true, status, handle: target.handle });
+      // With approval the default, 'pending' is the ordinary answer — so a muted follow
+      // (a block, a minor) answers 'pending' too, indistinguishable from any other.
+      return jsonResponse({ ok: true, status: muted ? 'pending' : status, handle: target.handle });
     }
 
     if (op === 'unfollow') {
@@ -19228,7 +19296,8 @@ async function handleSocialWorld(request, env, ctx) {
     const relation = { self: false, i_follow: iFollow, follows_me: followsMe, inner };
     const visible = !!share && (share.is_public === true || inner);
     if (!visible) return jsonResponse({ person, relation, private: true });
-    await ppSweepPhotos(env, ctx, sid);
+    const withPhotos = await ppAlbumsAllowed(env, ownerSp, sid, me, inner);
+    if (withPhotos) await ppSweepPhotos(env, ctx, sid);
 
     // The open page: booklet, trunk, kit and circle, read together.
     const count = (r) => { const m = String(r?.headers?.get('content-range') || '').match(/\/(\d+)$/); return m ? Number(m[1]) : null; };
@@ -19240,7 +19309,7 @@ async function handleSocialWorld(request, env, ctx) {
       gbRest(env, `user_follows?followee_id=eq.${sid}&status=eq.accepted&select=follower_id&limit=2000`, { headers: { Prefer: 'count=exact' } }),
       gbRest(env, `user_follows?or=(follower_id.eq.${me},followee_id.eq.${me})&status=eq.accepted&select=follower_id,followee_id&limit=2000`, {}),
     ]);
-    const shared = ppShareStamps(stamps, origin);
+    const shared = ppShareStamps(stamps, origin, withPhotos);
     const lug = (lq.ok ? await lq.json() : [])[0];
     const gearRow = (gq.ok ? await gq.json() : [])[0] || {};
     const gear = gearRow.gear && typeof gearRow.gear === 'object' ? { ...gearRow.gear } : {};
