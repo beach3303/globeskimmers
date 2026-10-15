@@ -1765,3 +1765,26 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   /activities 200; /legal/terms has no drafting note; /admin, /, app-ads.txt 200. OTA run by the founder:
   Capgo production channel = 1.0.2610140610 (iOS + Android). Still open: build 14 at the next App Store
   submission (official SIWA artwork, 3a73df2) and the first-cron KV check above.
+
+## 2026-10-14 — Past trips: the photo's date and the place search; albums for the inner circle (stamping-v2, not pushed)
+- 2904736 Stamp a place: the date fills in from the photos (the earliest day one was taken; never a future
+  one; a date set by hand wins), with "From your photo. Change it if that's not the day you went."
+- ad4bd95 Stamp a place: the city search no longer leans toward where you are (from Lisbon, "Paris" listed
+  a farm in Portugal first, and picking it set the city to São Teotónio); a spot over 50 km from the city in
+  the box brings its own city and country (a past Eiffel Tower trip stamped "Visited Lisboa, Portugal").
+- f1741ef Worker /place-search: English names (accept-language=en; new cache key `place2:`, so cached local
+  names like "東京都, 日本" aren't served), one row per place (Paris came back three times).
+- 6596bf4 Worker: a private passport's photos reach its inner circle. An adult's upload is reviewed public or
+  not (a minor's never); a visit by an allowed viewer (/social/world, /passport/public) reviews the owner's
+  unchecked photos (up to 40, KV lock `ppsweep:<owner>` for 2 minutes, a 4 s wait); a review that fails
+  leaves the photo unchecked instead of blocking it for good; going public uses the same review.
+- 9dcbb18 a friend's visit page shows their photo packets ("their memory photos"); 2a1239a a one-month range
+  reads "May 18–19".
+- Tests: scratch harness test-albums 16/16 (6 fail against the old worker: the inner circle saw no photos);
+  world 21, osage 15, boardbook 19 and cards 17 still pass; the place-search handler 6/6 against live
+  Nominatim. Gates: node --check, eslint, no-undef, build 0. Screens captured as the demo account with every
+  write simulated.
+- Cost note: every adult photo upload now gets one Claude Haiku review, and older unchecked photos get one
+  on the first friend visit.
+- **Activate:** push to main (deploys the worker; no migration, no SQL), probe `/place-search?q=Tokyo` →
+  "Tokyo, Japan"; then `npm run ota` (iOS and Android).

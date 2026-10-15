@@ -861,6 +861,13 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   age columns (816a078) ship with the City Boards push, the age worker after them, the native parts in
   iOS 1.0.5 and the next Android build. Open for the founder or counsel: what counts as a significant
   change (parent re-approval), when to show Google's consent screen, and a Texas user who declines.
+  **Decided 2026-10-14, evening:** a past trip's stamp takes its date from the photo (founder: "let's
+  improve it based on your suggestion"; 2904736), and a private passport's albums reach its inner circle,
+  minors excluded (founder: "with the exception of minors, can we allow circles of friends [who] follow
+  each other access to view their albums"; 6596bf4 server, 9dcbb18 visit page). Found while mocking up
+  past-trip stamping: the city search leaned toward where you are and a far spot kept today's city
+  (ad4bd95), and place names came back in local languages (f1741ef). On stamping-v2, not pushed: the push
+  deploys the worker, then `npm run ota`.
   **Art:** "Mixed / rescue" for dogs and cats (founder). Review page:
   https://claude.ai/artifact/JeXKJshqiT2BJ9BSPARA2G; status: `docs/design/new-look/BUILD_STATUS.md` on new-look.
   **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
