@@ -1849,3 +1849,17 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   Android", the free promise drops "Android is on the way". /get needed nothing (already both stores).
 - Deploy website run 38689510697 ✓. Live probes: zero "Coming soon", 2 play.google.com links, both meta
   descriptions updated, app-ads.txt 200 and untouched, www 200. Nothing left to activate.
+
+## 2026-10-14 night — Sticker reactions: the founder's word art + COOL! (stamping-v2, not pushed)
+- The founder uploaded six stickers; they replace the drawn reaction stamps everywhere the Blotter strip
+  shows (photos, passport pages, board postcards). c142186 worker: BL_KINDS + 'cool', BL_KIND_LABEL in the
+  sticker wording (Mailbox rows read "stamped COOL! · MORE PICS PLEASE! on your photo from …"). 0cb56c2
+  app: src/assets/blotter/*.png (168px, transparent, trimmed from the uploads by a scratch script), strip
+  shows sticker + count, pressed = cream chip ringed in its ink; YUMMY! keeps its drawn icon (no sticker
+  yet — ask the founder when they want one). Multi-press per person and Mailbox notification already
+  existed; tests prove them: scratch test-stickers 15/15 (counts per sticker, one per person, peel leaves
+  the rest, unknown sticker 400, YUMMY food-only, Mailbox rows + dot); boardbook/albums/world/city suites
+  still pass. Gates: node --check, eslint, no-undef 0, build 0. Screens: lightbox strip + Mailbox rows.
+- **Activate:** push to main (worker must deploy BEFORE phones get the app, or a COOL! press 400s), probe
+  /blotter/mark kind:cool on a test target → 200; then the founder's `npm run ota` (carries the stickers
+  AND the earlier one-photo sensing round, which is still waiting on an OTA).
