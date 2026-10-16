@@ -25,6 +25,27 @@ import { showToast } from '@/components/Toast';
 import { PhotoView } from '@/components/home/SuggestPlaceSection';
 import OfficialSeal from '@/components/passport/OfficialSeal';
 
+// A held name's Seal (founder, 2026-10-16): picked here, its invitation is written for it,
+// and claiming the name switches the Seal on. Burgundy splits into person and business.
+const HELD_SEAL_OPTS = [
+  ['', 'No Seal — username only'],
+  ['gold', 'Gold — Honored'],
+  ['burgundy:person', 'Burgundy — Official person'],
+  ['burgundy:business', 'Burgundy — Official business'],
+  ['sunshine-heart', 'Sunshine ♥ — Friends & Family'],
+  ['sunshine-star', 'Sunshine ★ — Friends & Family'],
+  ['teal', 'Teal — GlobeSkimmers team'],
+];
+const heldSealValue = (r) => (r?.seal ? (r.seal === 'burgundy' ? `burgundy:${r.seal_kind || 'person'}` : r.seal) : '');
+const heldSealPatch = (v) => { if (!v) return { seal: '', seal_kind: '' }; const [seal, kind] = String(v).split(':'); return { seal, seal_kind: kind || '' }; };
+function HeldSealPicker({ value, onPick, label }) {
+  return (
+    <select value={value} onChange={(e) => onPick(e.target.value)} aria-label={label}
+      style={{ padding: '7px 8px', borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 12.5, background: '#fff', maxWidth: '100%' }}>
+      {HELD_SEAL_OPTS.map(([v, l]) => <option key={v || 'none'} value={v}>{l}</option>)}
+    </select>
+  );
+}
 const SEAL_TIER_LABEL = { gold: 'Gold · Honored', burgundy: 'Burgundy · Official', teal: 'Teal · GlobeSkimmers team', 'sunshine-heart': 'Sunshine ♥ · Friends & Family', 'sunshine-star': 'Sunshine ★ · Friends & Family' };
 
 const COLORS = {
@@ -1037,6 +1058,7 @@ export default function AdminAnalytics() {
   const [held, setHeld] = useState({ rows: [], emailConfigured: false, error: null });
   const [heldDraft, setHeldDraft] = useState({ handle: '', name: '', email: '' });
   const [heldEdits, setHeldEdits] = useState({});      // handle -> email draft
+  const [heldNames, setHeldNames] = useState({});      // handle -> first-name draft (brand reserve)
   const [heldBusy, setHeldBusy] = useState(null);      // handle being acted on
   const [inviteCopy, setInviteCopy] = useState(null);  // { handle, text } when email isn't configured
   const [seals, setSeals] = useState({ rows: [], error: null });
@@ -1070,15 +1092,15 @@ export default function AdminAnalytics() {
     return { data, error: error || data?.error || null };
   };
   const addHeld = async () => {
-    const { error } = await heldCall({ op: 'add', handle: heldDraft.handle, display_name: heldDraft.name, email: heldDraft.email, kind: heldDraft.kind || 'family' });
-    if (error) setHeld((h) => ({ ...h, error })); else setHeldDraft({ handle: '', name: '', email: '', kind: heldDraft.kind || 'family' });
+    const { error } = await heldCall({ op: 'add', handle: heldDraft.handle, display_name: heldDraft.name, email: heldDraft.email, kind: heldDraft.kind || 'family', ...heldSealPatch(heldDraft.seal) });
+    if (error) setHeld((h) => ({ ...h, error })); else setHeldDraft({ handle: '', name: '', email: '', kind: heldDraft.kind || 'family', seal: '' });
   };
   const saveHeldEmail = async (handle) => {
     setHeldBusy(handle);
-    const { error } = await heldCall({ op: 'update', handle, email: heldEdits[handle] ?? '' });
+    const { error } = await heldCall({ op: 'update', handle, ...(heldEdits[handle] !== undefined ? { email: heldEdits[handle] } : {}), ...(heldNames[handle] !== undefined ? { display_name: heldNames[handle] } : {}) });
     setHeldBusy(null);
     if (error) setHeld((h) => ({ ...h, error }));
-    else setHeldEdits((e) => { const n = { ...e }; delete n[handle]; return n; });
+    else { setHeldEdits((e) => { const n = { ...e }; delete n[handle]; return n; }); setHeldNames((e) => { const n = { ...e }; delete n[handle]; return n; }); }
   };
   const inviteHeld = async (handle) => {
     setHeldBusy(handle); setInviteCopy(null);
@@ -1483,7 +1505,7 @@ export default function AdminAnalytics() {
               {famRows.map((r) => (
                 <div key={r.handle} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border}` }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', fontSize: 13 }}>
-                    <span style={{ fontWeight: 700, color: COLORS.dark }}>@{r.handle}</span>
+                    <span style={{ fontWeight: 700, color: COLORS.dark, display: 'inline-flex', alignItems: 'center' }}>@{r.handle}{r.seal ? <OfficialSeal size={14} tier={r.seal} /> : null}</span>
                     {r.display_name && <span style={{ color: COLORS.gray }}>{r.display_name}</span>}
                     {r.claimed_at
                       ? <span style={{ color: COLORS.green, fontWeight: 700 }}>🎉 Claimed {String(r.claimed_at).slice(0, 10)}</span>
@@ -1498,6 +1520,8 @@ export default function AdminAnalytics() {
                         style={{ flex: '1 1 220px', minWidth: 180, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
                       <button type="button" onClick={() => saveHeldEmail(r.handle)} disabled={heldBusy === r.handle || heldEdits[r.handle] === undefined}
                         style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: heldEdits[r.handle] === undefined ? 0.5 : 1 }}>Save email</button>
+                      <HeldSealPicker value={heldSealValue(r)} label={`Seal for @${r.handle}`}
+                        onPick={(v) => heldCall({ op: 'update', handle: r.handle, ...heldSealPatch(v) })} />
                       <button type="button" onClick={() => inviteHeld(r.handle)} disabled={heldBusy === r.handle || !(heldEdits[r.handle] ?? r.email)}
                         style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: COLORS.green, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: (heldEdits[r.handle] ?? r.email) ? 1 : 0.5 }}>
                         {heldBusy === r.handle ? 'Working…' : held.emailConfigured ? 'Send invitation' : 'Compose invite'}
@@ -1526,6 +1550,7 @@ export default function AdminAnalytics() {
                       style={{ padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: (heldDraft.kind || 'family') === k ? COLORS.dark : '#fff', color: (heldDraft.kind || 'family') === k ? '#fff' : COLORS.gray, fontSize: 12, fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize' }}>{k}</button>
                   ))}
                 </div>
+                <HeldSealPicker value={heldDraft.seal || ''} label="Seal for the new held name" onPick={(v) => setHeldDraft((d) => ({ ...d, seal: v }))} />
                 <button type="button" onClick={addHeld} disabled={heldDraft.handle.length < 3}
                   style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: COLORS.dark, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: heldDraft.handle.length < 3 ? 0.5 : 1 }}>Hold it</button>
               </div>
@@ -1546,13 +1571,29 @@ export default function AdminAnalytics() {
               </div>
               {brandOpen && (() => { const r = brandRows.find((x) => x.handle === brandOpen); return r && !r.claimed_at ? (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${COLORS.border}` }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.dark, alignSelf: 'center' }}>@{r.handle}</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.dark, alignSelf: 'center', display: 'inline-flex', alignItems: 'center' }}>@{r.handle}{r.seal ? <OfficialSeal size={14} tier={r.seal} /> : null}</span>
+                  <input value={heldNames[r.handle] ?? r.display_name ?? ''} onChange={(e) => setHeldNames((v) => ({ ...v, [r.handle]: e.target.value.slice(0, 60) }))}
+                    placeholder="Their first name (for the hello)" aria-label={`Name for @${r.handle}`}
+                    style={{ flex: '1 1 160px', minWidth: 140, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
                   <input value={heldEdits[r.handle] ?? r.email ?? ''} onChange={(e) => setHeldEdits((v) => ({ ...v, [r.handle]: e.target.value }))}
                     placeholder="partner-email@brand.com" aria-label={`Email for @${r.handle}`}
                     style={{ flex: '1 1 200px', minWidth: 170, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
-                  <button type="button" onClick={() => saveHeldEmail(r.handle)} disabled={heldBusy === r.handle || heldEdits[r.handle] === undefined}
-                    style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: heldEdits[r.handle] === undefined ? 0.5 : 1 }}>Save email</button>
+                  <button type="button" onClick={() => saveHeldEmail(r.handle)} disabled={heldBusy === r.handle || (heldEdits[r.handle] === undefined && heldNames[r.handle] === undefined)}
+                    style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: heldEdits[r.handle] === undefined && heldNames[r.handle] === undefined ? 0.5 : 1 }}>Save</button>
+                  <HeldSealPicker value={heldSealValue(r)} label={`Seal for @${r.handle}`}
+                    onPick={(v) => heldCall({ op: 'update', handle: r.handle, ...heldSealPatch(v) })} />
+                  <button type="button" onClick={() => inviteHeld(r.handle)} disabled={heldBusy === r.handle || !(heldEdits[r.handle] ?? r.email)}
+                    style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: COLORS.green, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: (heldEdits[r.handle] ?? r.email) ? 1 : 0.5 }}>
+                    {heldBusy === r.handle ? 'Working…' : held.emailConfigured ? 'Send invitation' : 'Compose invite'}
+                  </button>
                   <button type="button" onClick={() => removeHeld(r.handle)} style={{ padding: '7px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.red, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Release</button>
+                
+                  {inviteCopy?.handle === r.handle && (
+                    <div style={{ flex: '1 1 100%', marginTop: 4 }}>
+                      <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>Copied to your clipboard — paste it into a text or email:</div>
+                      <textarea readOnly value={inviteCopy.text} rows={7} style={{ width: '100%', fontSize: 12, padding: 8, borderRadius: 8, border: `1px solid ${COLORS.border}`, color: COLORS.dark }} />
+                    </div>
+                  )}
                 </div>
               ) : null; })()}
             </Section>

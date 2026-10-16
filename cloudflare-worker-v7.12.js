@@ -20469,7 +20469,60 @@ async function gbHeld(env, handle) {
 // The invitation email. Composed always; sent only when RESEND_API_KEY is
 // set — otherwise the admin panel offers the text for the founder to send
 // by hand. Never includes anything but the name, handle, and sign-in email.
+// A held name with a Seal (founder, 2026-10-16) gets the short letter written for that Seal:
+// the name, one line about its Seal, the link. Wording built from the approved Seal letters.
+function gbHeldSealLetter(row, link) {
+  const name = row.display_name || 'there';
+  const h = row.handle;
+  const business = row.seal === 'burgundy' && row.seal_kind === 'business';
+  const SEAL = {
+    gold: ['\u272A @' + h + ' is reserved for you \u2014 with the Gold Seal',
+      'It carries the Gold Seal \u2014 Honored: the highest Seal of Honor and Respect. It can\'t be bought, applied for, or earned \u2014 it is gifted, and there are very few.'],
+    burgundy: business
+      ? ['\u272A @' + h + ' is reserved on GlobeSkimmers as your official account',
+        'It carries the GlobeSkimmers Seal, so Users, Locals, & Travelers see it beside your name everywhere you post, sign or send, and know it\'s really you \u2014 a verified business entity.']
+      : ['\u272A @' + h + ' is reserved for you on GlobeSkimmers',
+        'It carries the GlobeSkimmers Seal \u2014 our mark of official accounts \u2014 so everyone who meets you here knows it\'s really you.'],
+    'sunshine-heart': ['\u2600 @' + h + ' is reserved for you \u2014 with the Sunshine Seal',
+      'It carries the Sunshine Seal \u2014 a seal of warmth that isn\'t for everyone, reserved only for the family and friends who make GlobeSkimmers home, with a little heart Maiza picked just for you.'],
+    'sunshine-star': ['\u2600 @' + h + ' is reserved for you \u2014 with the Sunshine Seal',
+      'It carries the Sunshine Seal \u2014 a seal of warmth that isn\'t for everyone, reserved only for the family and friends who make GlobeSkimmers home, with a little star Maiza picked just for you.'],
+    teal: ['\u272A @' + h + ' \u2014 your GlobeSkimmers team account',
+      'It carries the Teal Seal \u2014 the mark of the GlobeSkimmers team.'],
+  }[row.seal];
+  if (!SEAL) return null;
+  const opening = business
+    ? `@${h} is saved on GlobeSkimmers as your official account \u2014 no one else can claim it.`
+    : `@${h} is saved for you on GlobeSkimmers \u2014 in your name, so no one else can take it.`;
+  const text = `Hello ${name},
+
+${opening}
+
+${SEAL[1]}
+
+Open this link on your phone to claim it:
+${link}
+
+New to GlobeSkimmers? The link will help you download it first.${business ? ' Questions? Just reply.' : ''}
+
+Maiza
+Founder, GlobeSkimmers \u2708\uFE0F`;
+  return { subject: SEAL[0], text };
+}
 async function gbSendHeldInvite(env, row, link) {
+  const sealed = gbHeldSealLetter(row, link);
+  if (sealed) {
+    if (!env.RESEND_API_KEY) return { sent: false, subject: sealed.subject, text: sealed.text, reason: 'no-key' };
+    try {
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: env.RESEND_FROM || 'GlobeSkimmers <hello@globeskimmers.io>', reply_to: env.RESEND_REPLY_TO || 'founder@globeskimmers.io', to: [row.email], subject: sealed.subject, text: sealed.text }),
+      });
+      if (!r.ok) return { sent: false, subject: sealed.subject, text: sealed.text, reason: `resend-${r.status}` };
+      return { sent: true, subject: sealed.subject, text: sealed.text };
+    } catch (e) { return { sent: false, subject: sealed.subject, text: sealed.text, reason: e.message }; }
+  }
   const name = row.display_name || 'traveler';
   const subject = '\u{1F389} Maiza saved a GlobeSkimmers username for you';
   const text = `Hello ${name},
@@ -20574,6 +20627,10 @@ async function handleSocialHandle(request, env, ctx) {
       if (w.status === 409) return await gbTakenResponse(env, want);
       return jsonResponse({ error: 'Could not save the username' }, 502);
     }
+    if (held && !held.claimed_at && SEAL_TIERS.has(held.seal)) {
+      // Its Seal comes with it (founder, 2026-10-16) — no second letter; the invitation said so.
+      await gbRest(env, `passport_shares?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ verified: true, seal: held.seal, updated_at: new Date().toISOString() }) });
+    }
     if (held && !held.claimed_at) {
       // The ceremony is honored: mark the claim for the founder's panel.
       await gbRest(env, `held_handles?handle=eq.${encodeURIComponent(want)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ claimed_at: new Date().toISOString(), claimed_by: user.id }) });
@@ -20651,13 +20708,22 @@ async function handleAdminHeldHandles(request, env) {
       if (handleBlocked(handle)) return jsonResponse({ error: 'That name is on the blocked list (policy) — it cannot be held or claimed' }, 400);
       const own = await gbRest(env, `passport_shares?handle=eq.${encodeURIComponent(handle)}&select=user_id&limit=1`, {});
       if ((own.ok ? await own.json() : []).length) return jsonResponse({ error: 'A user already owns that handle' }, 409);
-      const row = { handle, display_name: String(b.display_name || '').trim().slice(0, 60) || null, email: clean(b.email) || null, kind: b.kind === 'brand' ? 'brand' : 'family' };
-      const w = await gbRest(env, 'held_handles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+      const seal = SEAL_TIERS.has(b.seal) ? b.seal : null;
+      const row = { handle, display_name: String(b.display_name || '').trim().slice(0, 60) || null, email: clean(b.email) || null, kind: b.kind === 'brand' ? 'brand' : 'family',
+        ...(seal ? { seal, seal_kind: seal === 'burgundy' ? (b.seal_kind === 'business' ? 'business' : 'person') : null } : {}) };
+      let w = await gbRest(env, 'held_handles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+      // The seconds before the seal columns exist (2026-10-16): hold the name without its Seal.
+      if (!w.ok && w.status === 400 && seal) { const { seal: _s, seal_kind: _k, ...plain } = row; w = await gbRest(env, 'held_handles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(plain) }); }
       if (!w.ok) return jsonResponse({ error: w.status === 409 ? 'Already on the list' : 'Could not save' }, w.status === 409 ? 409 : 502);
     } else if (op === 'update') {
       const patch = {};
       if (b.email !== undefined) patch.email = clean(b.email) || null;
       if (b.display_name !== undefined) patch.display_name = String(b.display_name || '').trim().slice(0, 60) || null;
+      if (b.seal !== undefined) {
+        const seal = SEAL_TIERS.has(b.seal) ? b.seal : null;
+        patch.seal = seal;
+        patch.seal_kind = seal === 'burgundy' ? (b.seal_kind === 'business' ? 'business' : 'person') : null;
+      }
       const w = await gbRest(env, `held_handles?handle=eq.${encodeURIComponent(clean(b.handle))}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
       if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
     } else if (op === 'remove') {
