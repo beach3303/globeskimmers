@@ -20901,7 +20901,7 @@ async function gbSendSealLetter(env, { email, name, handle, tier, kind = 'person
     const text = sunshine
       ? `Hello ${who},
 
-Your account @${handle} now carries the Sunshine Seal \u2014 the GlobeSkimmers mark for friends and family. It's a seal, not a checkmark, with a little ${tier === 'sunshine-heart' ? 'heart' : 'star'} Maiza picked just for you.
+Your account @${handle} now carries the Sunshine Seal \u2014 a seal of warmth that isn't for everyone, reserved only for the family and friends who make GlobeSkimmers home. It's a seal, not a checkmark, with a little ${tier === 'sunshine-heart' ? 'heart' : 'star'} Maiza picked just for you.
 
 Everywhere you post, sign or send, it sits beside your name.
 
