@@ -931,6 +931,15 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   Austin, Texas and USA at once. Kit template spec for ChatGPT: docs/design/city-board-kits.md.
   Wording round (4fce642: "city board", @username, @local/@traveler, names off boards) committed,
   awaiting push.
+  **Same day, later (founder's review of the built face):** the wall is **billboard + pins** (prints and
+  cards pushpinned on cork under the painted header, 5d94a07); the sticker trays and comments leave the
+  wall and live in the **enlarged viewer** (tap a photo → large, swipe/arrow to the next photo or the next
+  postcard enlarged, X back to the board; stickers with a count each, comments on every board photo that
+  the owner hears of and the public reads — board rules, 'bph:' targets, 04442b1); every board without a
+  kit wears a **typographic header** (deco rays, plate by name); the full board list (1,044 in two waves)
+  is docs/design/city-board-list.md. Founder asked whether Claude can make the kit art without ChatGPT:
+  yes, as flat vector (a motif library + per-board pride lists → generated headers and icons); a sample
+  batch first. All six commits since 15a3cc9 are local — the founder has not said push.
   **Art:** "Mixed / rescue" for dogs and cats (founder). Review page:
   https://claude.ai/artifact/JeXKJshqiT2BJ9BSPARA2G; status: `docs/design/new-look/BUILD_STATUS.md` on new-look.
   **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
