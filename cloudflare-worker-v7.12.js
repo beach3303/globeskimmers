@@ -19281,11 +19281,13 @@ async function handleCityBoard(request, env) {
       photo: `${origin}/pc-photo/${p.photo_key}`,
       message: p.message, place: p.place_name, city: p.city, country: p.country,
       dish: p.meta?.dish || null, to_me: false, board: true,
-      // A card signed "a local" / "a traveler" (founder, 2026-10-15) names
+      // A card signed "@local" / "@traveler" (founder, 2026-10-15) names
       // nobody: no handle, no name, no face — the label is all a reader gets.
+      // And a SIGNED city-board card shows the @username alone (founder,
+      // 2026-10-16: "signed — handle, no name"): real names stay off boards.
       ...(p.meta?.anon
         ? { anon: p.meta.anon === 'local' ? 'local' : 'traveler', by: { handle: null, name: null } }
-        : { by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) } }),
+        : { by: { handle: share[p.sender_id]?.handle || null, name: null, ...(faces[p.sender_id] || {}) } }),
     }));
     return jsonResponse({ rows, next, can_post: there && mySp?.social_tier !== 'teen', city, country });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }

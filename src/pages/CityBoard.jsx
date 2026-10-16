@@ -4,7 +4,7 @@
 // postcards on airmail stock: newest first, 24 at a time, 'Show older' for the rest.
 // /CityBoard?city=Lisbon&country=Portugal, opened from Home's 'Postcards from Lisbon'.
 //
-// 'Post to this board' shows only when the worker says you can (can_post: an adult with a
+// 'Post to this city board' shows only when the worker says you can (can_post: an adult with a
 // verified stamp there); otherwise one line says how to earn it. It shows nothing untrue:
 // nothing social until the age tier is known; the hold or birthday note for a held
 // account; a skeleton while the first page loads; 'Try again' when a read fails; an empty
@@ -50,7 +50,7 @@ function useBack() {
   };
 }
 
-// The Mailbox masthead's sibling, with 'Post to this board' where Mailbox has 'Postcard'.
+// The Mailbox masthead's sibling, with 'Post to this city board' where Mailbox has 'Postcard'.
 function Masthead({ city, onBack, onPost = undefined }) {
   return (
     <>
@@ -74,7 +74,7 @@ function Masthead({ city, onBack, onPost = undefined }) {
             <button type="button" onClick={onPost}
               style={{ flex: "none", display: "flex", alignItems: "center", gap: 8, minHeight: 44, padding: "0 16px", borderRadius: 999, border: 0, background: NEUTRAL.stamp, font: "inherit", fontSize: fs(13), fontWeight: 600, color: NEUTRAL.white, cursor: "pointer" }}>
               <Mail size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
-              Post to this board
+              Post to this city board
             </button>
           ) : null}
         </div>
