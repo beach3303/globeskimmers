@@ -15,9 +15,10 @@
 // board opens with the next update. Each card's '•••' opens TravelerSheet (Report,
 // Unfollow, Block); cards from people you blocked never show.
 import React, { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Mail, Stamp, X } from "lucide-react";
 import { createPageUrl } from "@/utils";
+import { cityBoardUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
 import { blotterReadBoard, cityBoard, getHandle, getSocialProfile } from "@/lib/passport";
@@ -76,7 +77,7 @@ const PLATES = [
 const plateOf = (name) => { let h = 0; for (const c of String(name || "")) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PLATES[h % PLATES.length]; };
 const RAYS = Array.from({ length: 16 }, (_, k) => { const a = (k - 16) * 0.19635, b = (k - 15) * 0.19635; return `<polygon points="201,160 ${201 + 260 * Math.cos(a)},${160 + 260 * Math.sin(a)} ${201 + 260 * Math.cos(b)},${160 + 260 * Math.sin(b)}" fill="${k % 2 ? "#FFFFFF" : "#000000"}" opacity="${k % 2 ? 0.08 : 0.06}"/>`; }).join("");
 
-function Billboard({ name, kind = "city", country = "", kit = null, counts = null, onBack, onPost = undefined }) {
+function Billboard({ name, kind = "city", country = "", region = "", kit = null, counts = null, onBack, onPost = undefined }) {
   const fallback = plateOf(name);
   const plate = kit?.palette?.plate || fallback.plate;
   const accent = kit?.palette?.accent || fallback.accent;
@@ -105,7 +106,7 @@ function Billboard({ name, kind = "city", country = "", kit = null, counts = nul
             )}
             <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "26px 12px 10px", background: "linear-gradient(180deg, rgba(8,16,32,0), rgba(8,16,32,.78))" }}>
               <h1 style={{ margin: 0, fontFamily: SERIF, fontSize: fs(30), fontWeight: 400, lineHeight: 1.05, letterSpacing: ".03em", color: ink, overflowWrap: "anywhere" }}>{name}</h1>
-              {kind !== "country" && country ? <div style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".18em", textTransform: "uppercase", color: accent, marginTop: 2 }}>{country}</div> : null}
+              {kind !== "country" && country ? <div style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".18em", textTransform: "uppercase", color: accent, marginTop: 2 }}>{kind === "city" && region ? `${region} · ${country}` : country}</div> : null}
             </div>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 8, color: accent }}>
@@ -249,7 +250,8 @@ function Board({ kind, city, region, country, onBack }) {
   const [book, setBook] = useState(null);
   const readBook = (list) => blotterReadBoard((list || []).filter((x) => x?.type !== "photo").map((x) => x?.id), (list || []).filter((x) => x?.type === "photo").map((x) => x?.id)).then(setBook);
   const live = useRef(0);
-  const ask = { city, country, kind, region };
+  // A US city asked without its state opens the busiest one; later reads keep that state.
+  const askOf = (b) => ({ city, country, kind, region: region || b?.board?.region || null });
 
   useEffect(() => {
     let gone = false;
@@ -260,7 +262,7 @@ function Board({ kind, city, region, country, onBack }) {
 
   const load = async () => {
     const n = ++live.current;
-    const r = await cityBoard(ask);
+    const r = await cityBoard(askOf(null));
     if (n !== live.current) return;
     setBoard(r);
     setOlder("idle");
@@ -273,7 +275,7 @@ function Board({ kind, city, region, country, onBack }) {
     if (older === "busy" || !board?.next) return;
     const n = live.current;
     setOlder("busy");
-    const r = await cityBoard({ ...ask, before: board.next });
+    const r = await cityBoard({ ...askOf(board), before: board.next });
     if (n !== live.current) return;
     if (r.error || r.held || r.unavailable) { setOlder("failed"); return; }
     setOlder("idle");
@@ -368,8 +370,19 @@ function Board({ kind, city, region, country, onBack }) {
 
   return (
     <div>
-      <Billboard name={name} kind={kind} country={country} kit={board?.kit || null} counts={board?.counts || null} onBack={onBack} onPost={canPost ? () => setCompose(true) : undefined} />
+      <Billboard name={name} kind={kind} country={country} region={kind === "city" ? board?.board?.region || region : ""} kit={board?.kit || null} counts={board?.counts || null} onBack={onBack} onPost={canPost ? () => setCompose(true) : undefined} />
       <div className={COLUMN}>
+        {/* Same name, another state (founder, 2026-10-16): Portland, Oregon offers Portland, Maine. */}
+        {kind === "city" && (board?.alternates || []).length ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "12px 0 0" }}>
+            {board.alternates.map((a) => (
+              <Link key={a.region} to={cityBoardUrl(city, country, a.region)}
+                style={{ display: "inline-flex", alignItems: "center", minHeight: 32, padding: "0 12px", borderRadius: 999, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, fontSize: fs(12), fontWeight: 600, color: BLUE, textDecoration: "none" }}>
+                Also {city}, {a.region} →
+              </Link>
+            ))}
+          </div>
+        ) : null}
         {kind === "city" && board && !board.held && !board.unavailable && !board.error && !canPost ? (
           <p style={{ display: "flex", alignItems: "flex-start", gap: 8, margin: "14px 0 0", fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
             <Stamp size={15} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 1 }} />
@@ -393,7 +406,7 @@ function Board({ kind, city, region, country, onBack }) {
       ) : null}
       {kind === "city" ? (
         <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={() => { setCompose(false); retry(); }}
-          toCity={{ city, country, region: region || null }} blocked={circle.blocked} />
+          toCity={{ city, country, region: region || board?.board?.region || null }} blocked={circle.blocked} />
       ) : null}
     </div>
   );

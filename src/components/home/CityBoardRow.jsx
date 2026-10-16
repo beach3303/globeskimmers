@@ -22,7 +22,8 @@ const BLUE = NEUTRAL.airmailBlue;
 /** @type {import('react').CSSProperties} */
 const ROW = { display: "flex", alignItems: "center", gap: 12, minHeight: 64, boxSizing: "border-box", padding: "8px 12px 8px 14px", background: NEUTRAL.airmail, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16, textDecoration: "none" };
 
-export default function CityBoardRow({ city = "", country = "" }) {
+export default function CityBoardRow({ city = "", country = "", region = "" }) {
+  const r = String(region || "").trim();
   const { socialTier, socialTierReady } = useAuth();
   const c = String(city || "").trim();
   const k = String(country || "").trim();
@@ -34,9 +35,9 @@ export default function CityBoardRow({ city = "", country = "" }) {
   useEffect(() => {
     if (!open) { setBoard(null); return undefined; }
     let gone = false;
-    cityBoard({ city: c, country: k }).then((r) => { if (!gone) setBoard(r); });
+    cityBoard({ city: c, country: k, region: r || null }).then((res) => { if (!gone) setBoard(res); });
     return () => { gone = true; };
-  }, [open, c, k]);
+  }, [open, c, k, r]);
 
   // The list of every board is the same for everyone (the worker keeps it five minutes).
   useEffect(() => {
@@ -61,7 +62,7 @@ export default function CityBoardRow({ city = "", country = "" }) {
       <div className="mx-auto max-w-md md:max-w-[720px]">
         {showHere ? (
           <>
-            <Link to={cityBoardUrl(c, k)} style={ROW}>
+            <Link to={cityBoardUrl(c, k, r)} style={ROW}>
               <PostmarkRing city={c} date={new Date().toISOString()} color={BLUE} size={44} style={{ flexShrink: 0 }} />
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: "block", fontFamily: SERIF, fontSize: fs(19), lineHeight: 1.15, color: NEUTRAL.ink, overflowWrap: "anywhere" }}>

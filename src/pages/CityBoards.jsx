@@ -85,7 +85,7 @@ function BoardTile({ board }) {
       <div style={{ padding: "8px 10px 10px" }}>
         <div style={{ fontFamily: SERIF, fontSize: fs(19), lineHeight: 1.1, color: NEUTRAL.ink, overflowWrap: "anywhere" }}>{board.name || board.city}</div>
         <div style={{ marginTop: 3, display: "flex", flexWrap: "wrap", gap: "2px 8px", fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", lineHeight: 1.35, textTransform: "uppercase", color: NEUTRAL.ink2 }}>
-          <span style={{ overflowWrap: "anywhere" }}>{board.kind === "country" ? "Country board" : board.kind === "state" ? `${board.country} · State board` : board.country}</span>
+          <span style={{ overflowWrap: "anywhere" }}>{board.kind === "country" ? "Country board" : board.kind === "state" ? `${board.country} · State board` : board.region ? `${board.region} · ${board.country}` : board.country}</span>
           <span style={{ color: BLUE }}>{countLabel(board)}</span>
         </div>
       </div>
@@ -157,7 +157,7 @@ function Boards({ onBack }) {
     body = (
       <>
         <div className="grid grid-cols-2 md:grid-cols-3" style={{ gap: 12, opacity: searching ? 0.55 : 1, transition: "opacity .15s" }}>
-          {list.boards.map((b) => <BoardTile key={`${b.city}|${b.country}`} board={b} />)}
+          {list.boards.map((b) => <BoardTile key={b.key || `${b.city}|${b.region || ""}|${b.country}`} board={b} />)}
         </div>
         {(list.rollups || []).length ? (
           <>

@@ -643,7 +643,7 @@ export default function HomePage() {
       />
       <FriendsTravels wide={isTablet} />
       {/* City Board: 'Postcards from Lisbon', only when that board has something to show. */}
-      <CityBoardRow city={activeLocation?.address?.city} country={activeLocation?.address?.country} />
+      <CityBoardRow city={activeLocation?.address?.city} country={activeLocation?.address?.country} region={activeLocation?.address?.state} />
       <NearbyServices wide={isTablet} onAction={handleQuickAction} onAllServices={openAllServices} />
       {isTablet && rowsFirst && <HomeRows unit={unit} onAction={handleQuickAction} />}
       <StampsNearYou unit={unit} onAction={handleQuickAction} onNearest={setNearestStamp} />

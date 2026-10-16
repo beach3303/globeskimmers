@@ -94,7 +94,7 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
               </div>
               <span aria-hidden="true" style={{ position: "absolute", left: 56, top: 17, pointerEvents: "none" }}><PostmarkLines variant="postcard" style={{ display: "block" }} /></span>
               {toBoard ? (
-                <Link to={cityBoardUrl(boardCity, boardCountry)} aria-label={`Postcards from ${boardCity}`}
+                <Link to={cityBoardUrl(boardCity, boardCountry, row.region)} aria-label={`Postcards from ${boardCity}${row.region ? `, ${row.region}` : ""}`}
                   style={{ position: "absolute", left: 16, top: 2, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 999 }}>
                   <PostmarkRing city={row.city || place} date={row.created_at} size={40} />
                 </Link>

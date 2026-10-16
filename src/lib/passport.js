@@ -34,8 +34,9 @@ export async function addStamp(opts) {
   const city = String(opts?.city || '').trim();
   const country = String(opts?.country || '').trim();
   if (!error && data?.id && city && country) {
-    if (VERIFIED.has(data.verified)) announceStamp({ city, country });
-    else awaitingProof.set(data.id, { city, country });
+    const region = String(opts?.region || '').trim() || null;
+    if (VERIFIED.has(data.verified)) announceStamp({ city, country, region });
+    else awaitingProof.set(data.id, { city, country, region });
   }
   return { data, error };
 }
@@ -391,6 +392,7 @@ export async function cityBoard({ city, country, kind = 'city', region = null, b
     rows: Array.isArray(data?.rows) ? data.rows : [],
     next: data?.next || null,
     board: data?.board || null,
+    alternates: Array.isArray(data?.alternates) ? data.alternates : [],
     kit: data?.kit || null,
     counts: data?.counts || null,
     can_post: data?.can_post === true,

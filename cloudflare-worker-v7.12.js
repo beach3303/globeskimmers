@@ -17985,21 +17985,81 @@ const pcCountryName = (v) => {
   if (!/^[A-Za-z]{2}$/.test(s)) return s;
   try { const n = new Intl.DisplayNames(['en'], { type: 'region' }).of(s.toUpperCase()); return n && n.toUpperCase() !== s.toUpperCase() && n !== 'Unknown Region' ? n : s; } catch { return s; }
 };
-const pcCityKey = (city, country) => {
-  const n = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-  const c = n(city);
-  const k = n(pcCountryName(country));
-  return c && k ? `${c}|${k}`.slice(0, 140) : null;
+// US states (and DC and the territories) by postal code, for the board key's state.
+const PC_US_STATES = { AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland', MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri', MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont', VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming', DC: 'District of Columbia', PR: 'Puerto Rico', VI: 'U.S. Virgin Islands', GU: 'Guam', AS: 'American Samoa', MP: 'Northern Mariana Islands' };
+const pcFold = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const PC_US_BY_NAME = Object.fromEntries(Object.values(PC_US_STATES).map((n) => [pcFold(n), n]));
+// A state's display name from a code ('OR'), a name ('oregon') or DC's spellings; else null.
+const pcUSState = (v) => {
+  const s = String(v || '').trim();
+  if (!s) return null;
+  const code = s.replace(/\./g, '').toUpperCase();
+  if (PC_US_STATES[code]) return PC_US_STATES[code];
+  const f = pcFold(s).replace(/\./g, '');
+  if (f === 'washington dc' || f === 'dc') return 'District of Columbia';
+  return PC_US_BY_NAME[f] || null;
+};
+const pcIsUSName = (country) => pcFold(pcCountryName(country)) === 'united states' || ['usa', 'united states of america', 'u.s.a.', 'u.s.'].includes(pcFold(country));
+// A board's key: 'lisbon|portugal'. A US city carries its state (founder, 2026-10-16:
+// "there should be a way we differentiate cities if they are from different states"):
+// 'portland, oregon|united states' and 'portland, maine|united states' are two boards.
+// A US city whose state isn't known yet keys as 'portland|united states' — the reads
+// below learn the state from the stamp's own coordinates before it reaches a board.
+const pcCityKey = (city, country, region = null) => {
+  const c = pcFold(city);
+  const us = pcIsUSName(country);
+  const k = us ? 'united states' : pcFold(pcCountryName(country));
+  if (!c || !k) return null;
+  const st = us ? pcUSState(region) : null;
+  return `${c}${st ? `, ${pcFold(st)}` : ''}|${k}`.slice(0, 140);
 };
 const PC_CITY_DAILY = 5;
 // Was this traveler really in that city? A verified stamp of theirs there; false
 // when the stamps can't be read, so a board fails closed.
 async function pcWasThere(env, userId, key) {
   try {
-    const q = await gbRest(env, `passport_stamps?user_id=eq.${userId}&hidden=eq.false&verified=in.(gps,photo_loc,photo_ai)&select=city,country&limit=2000`, {});
+    const q = await gbRest(env, `passport_stamps?user_id=eq.${userId}&hidden=eq.false&verified=in.(gps,photo_loc,photo_ai)&select=id,city,region,country,lat,lng&limit=2000`, {});
     if (!q.ok) return false;
-    return (await q.json()).some((st) => pcCityKey(st.city, st.country) === key);
+    const stamps = await q.json();
+    if (stamps.some((st) => pcCityKey(st.city, st.country, st.region) === key)) return true;
+    // A stateless US stamp of the same city name learns its state, then is asked again.
+    const city = key.split('|')[0].split(', ')[0];
+    const maybe = stamps.filter((st) => pcIsUSName(st.country) && !pcUSState(st.region) && pcFold(st.city) === city);
+    if (!maybe.length) return false;
+    await pcHealStates(env, maybe, 3);
+    return maybe.some((st) => pcCityKey(st.city, st.country, st.region) === key);
   } catch { return false; }
+}
+// A US stamp without its state (older stamps, some searches) learns it from its own
+// coordinates — the cached reverse geocode — and keeps it. A few per read, never more.
+async function pcHealStates(env, stamps, max = 6) {
+  let n = 0;
+  for (const st of stamps) {
+    if (n >= max) break;
+    if (!pcIsUSName(st.country) || pcUSState(st.region) || st.lat == null || st.lng == null || !st.id) continue;
+    n += 1;
+    try {
+      const g = await psGeoAt(env, +st.lat, +st.lng);
+      const state = pcUSState(g?.region);
+      if (!state) continue;
+      st.region = state;
+      await gbRest(env, `passport_stamps?id=eq.${st.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ region: state }) });
+    } catch { /* stays stateless; it simply isn't on a US city board yet */ }
+  }
+}
+// The state of this traveler's own verified stamp in a US city (newest first), healing a
+// stateless one — so an old app's post or a card sent from a stamp lands on the right board.
+async function pcStampState(env, userId, city, country) {
+  try {
+    if (!pcIsUSName(country) || !city) return null;
+    const q = await gbRest(env, `passport_stamps?user_id=eq.${userId}&hidden=eq.false&verified=in.(gps,photo_loc,photo_ai)&city=ilike.${pcLike(city)}&order=created_at.desc&select=id,city,region,country,lat,lng&limit=20`, {});
+    const stamps = (q.ok ? await q.json() : []).filter((st) => pcIsUSName(st.country) && pcFold(st.city) === pcFold(city));
+    const known = stamps.find((st) => pcUSState(st.region));
+    if (known) return pcUSState(known.region);
+    await pcHealStates(env, stamps, 2);
+    const healed = stamps.find((st) => pcUSState(st.region));
+    return healed ? pcUSState(healed.region) : null;
+  } catch { return null; }
 }
 
 // A board card signed without a name (founder, 2026-10-15): "a local" when the
@@ -18024,7 +18084,27 @@ async function pcAnonLabel(env, userId, boardCity) {
 const PC_WALL_PAGE = 30;
 const pcNorm = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const pcClean = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
-const pcLike = (v) => encodeURIComponent(String(v).replace(/[,.()*%\\]/g, ' '));
+// An ilike value: PostgREST's reserved characters become '_' (any one character), so
+// 'St. Louis' still matches; exactness is settled by the board key afterwards.
+const pcLike = (v) => encodeURIComponent(String(v).replace(/[,.()*%\\:"]/g, '_'));
+// A country filter that also catches ISO codes ('PT') and, for the US, its aliases.
+let PC_ISO_BY_NAME = null;
+const pcIsoOf = (name) => {
+  if (!PC_ISO_BY_NAME) {
+    PC_ISO_BY_NAME = {};
+    try {
+      const dn = new Intl.DisplayNames(['en'], { type: 'region' });
+      const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      for (const a of A) for (const b2 of A) { const code = a + b2; const n = dn.of(code); if (n && n !== code && n !== 'Unknown Region') PC_ISO_BY_NAME[pcFold(n)] = code; }
+    } catch { /* names only */ }
+  }
+  return PC_ISO_BY_NAME[pcFold(name)] || null;
+};
+const pcCountryIn = (country) => {
+  const name = pcCountryName(country);
+  const vals = pcIsUSName(country) ? ['United States', 'US', 'USA', 'United States of America'] : [name, pcIsoOf(name)].filter(Boolean);
+  return `country=in.(${[...new Set(vals)].map((v) => encodeURIComponent(`"${v}"`)).join(',')})`;
+};
 const pcIsUS = (country) => pcNorm(pcCountryName(country)) === 'united states';
 // The board a request names: { kind, key, name, city, region, country } or null.
 function pcBoardOf(b) {
@@ -18034,14 +18114,24 @@ function pcBoardOf(b) {
   if (!country) return null;
   // The kind is named, never guessed: an old build's empty city stays a refusal, not a country board.
   const kind = b.kind === 'state' ? 'state' : b.kind === 'country' ? 'country' : 'city';
-  if (kind === 'city') { const key = pcCityKey(city, country); return key ? { kind, key, name: city, city, region: region || null, country } : null; }
+  if (kind === 'city') {
+    const state = pcIsUSName(country) ? pcUSState(region) : null;
+    const key = pcCityKey(city, country, state);
+    return key ? { kind, key, name: city, city, region: state || region || null, country: pcIsUSName(country) ? 'United States' : country } : null;
+  }
+  if (kind === 'state' && pcIsUSName(country)) {
+    const st = pcUSState(region) || region;
+    return st ? { kind, key: `state:${pcNorm(st)}|united states`.slice(0, 140), name: st, city: null, region: st, country: 'United States' } : null;
+  }
   if (kind === 'state') return region ? { kind, key: `state:${pcNorm(region)}|${pcNorm(country)}`.slice(0, 140), name: region, city: null, region, country } : null;
   return { kind, key: `country:${pcNorm(country)}`.slice(0, 140), name: country, city: null, region: null, country };
 }
 // Kit folders on R2: kits/city/lisbon--portugal, kits/state/texas--united-states,
 // kits/country/ghana (docs/design/city-board-kits.md). Looked up once an hour.
 const pcSlugWord = (v) => pcNorm(v).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-const pcKitSlug = (board) => board.kind === 'country' ? `country/${pcSlugWord(board.country)}` : `${board.kind}/${pcSlugWord(board.name)}--${pcSlugWord(board.country)}`;
+const pcKitSlug = (board) => board.kind === 'country' ? `country/${pcSlugWord(board.country)}`
+  : board.kind === 'city' && pcIsUSName(board.country) && board.region ? `city/${pcSlugWord(board.name)}--${pcSlugWord(board.region)}--united-states`
+  : `${board.kind}/${pcSlugWord(board.name)}--${pcSlugWord(board.country)}`;
 async function pcKit(env, board, origin) {
   if (!env.MEDIA) return null;
   const slug = pcKitSlug(board);
@@ -18077,12 +18167,16 @@ async function handleKitServe(request, env) {
 async function pcBoardPhotos(env, board, before, blocked, origin) {
   const none = { photos: [], more: false, total: 0 };
   try {
-    let where = `visibility=eq.public&hidden=eq.false&country=ilike.${pcLike(board.country)}`;
+    let where = `visibility=eq.public&hidden=eq.false&${pcCountryIn(board.country)}`;
     if (board.kind === 'city') where += `&city=ilike.${pcLike(board.city)}`;
-    if (board.kind === 'state') where += `&region=ilike.${pcLike(board.region)}`;
-    const sq = await gbRest(env, `passport_stamps?${where}&order=created_at.desc&select=id,user_id,name,kind,city,region,country&limit=400`, {});
+    const sq = await gbRest(env, `passport_stamps?${where}&order=created_at.desc&select=id,user_id,name,kind,city,region,country,lat,lng&limit=${board.kind === 'city' ? 400 : 2000}`, {});
     if (!sq.ok) return none;
-    let stamps = (await sq.json()).filter((st) => board.kind !== 'city' || pcCityKey(st.city, st.country) === board.key);
+    let stamps = await sq.json();
+    // A US city's board holds its own state's stamps; a stateless one learns its state first.
+    if (board.kind === 'city' && pcIsUSName(board.country)) await pcHealStates(env, stamps.filter((st) => pcFold(st.city) === pcFold(board.city)), 6);
+    if (board.kind === 'state') await pcHealStates(env, stamps, 6);
+    stamps = stamps.filter((st) => board.kind === 'city' ? pcCityKey(st.city, st.country, st.region) === board.key
+      : board.kind === 'state' ? pcFold(pcUSState(st.region) || st.region) === pcFold(board.region) : true);
     if (!stamps.length) return none;
     // Owners first: an adult whose albums are open to passport viewers (the dial that
     // defaults to "same as the stamp" since 2026-10-16). Minors and 'inner'/'me' owners
@@ -18127,7 +18221,7 @@ async function pcNoticeForStamps(env, userId, stampIds) {
       const n = counts[st.id] || 0;
       if (!n) continue;
       const list = [
-        pcBoardOf({ city: st.city, country: st.country, region: st.region }),
+        pcIsUSName(st.country) && !pcUSState(st.region) ? null : pcBoardOf({ city: st.city, country: st.country, region: st.region }),
         st.region && pcIsUS(st.country) ? pcBoardOf({ kind: 'state', region: st.region, country: st.country }) : null,
         pcBoardOf({ kind: 'country', country: st.country }),
       ];
@@ -18147,6 +18241,21 @@ async function pcNoticeSweep(env, userId) {
     if (kv) await kv.put(k, '1', { expirationTtl: 90 * 86400 }).catch(() => {});
   } catch { /* next read tries again */ }
 }
+// The states a US city name has boards in: [{ region, count }], busiest first — from the
+// public stamps there and the cards addressed to it.
+async function pcStatesOfCity(env, city) {
+  const by = {};
+  try {
+    const [sq, pq] = await Promise.all([
+      gbRest(env, `passport_stamps?visibility=eq.public&hidden=eq.false&${pcCountryIn('United States')}&city=ilike.${pcLike(city)}&select=city,region&limit=1000`, {}),
+      gbRest(env, `postcards?to_city=like.${encodeURIComponent(`${pcFold(city)}, `)}*&select=to_city&limit=1000`, {}),
+    ]);
+    for (const st of (sq.ok ? await sq.json() : [])) { const r = pcUSState(st.region); if (r && pcFold(st.city) === pcFold(city)) by[r] = (by[r] || 0) + 1; }
+    for (const pc of (pq.ok ? await pq.json() : [])) { const r = pcUSState(String(pc.to_city || '').split('|')[0].split(', ').pop()); if (r) by[r] = (by[r] || 0) + 1; }
+  } catch { /* none known */ }
+  return Object.entries(by).map(([region, count]) => ({ region, count })).sort((x, y) => y.count - x.count);
+}
+
 // Take a photo down from every board (or put it back) without touching its album.
 async function handlePassportPhotoBoard(request, env) {
   try {
@@ -18189,6 +18298,7 @@ async function handlePostcardSend(request, env, ctx) {
     let toCity = null;
     let boardCity = null;
     let boardCountry = null;
+    let boardRegion = null;
     let toTeen = false;
     let anonLabel = null;
     if (b.to_handle) {
@@ -18211,7 +18321,11 @@ async function handlePostcardSend(request, env, ctx) {
       if (sp.social_tier === 'teen') return jsonResponse({ error: 'City boards open at age 18' }, 403);
       boardCity = clean(b.to_city.city, 60);
       boardCountry = clean(pcCountryName(b.to_city.country), 60);
-      toCity = pcCityKey(boardCity, boardCountry);
+      if (pcIsUSName(boardCountry)) {
+        boardCountry = 'United States';
+        boardRegion = pcUSState(b.to_city.region) || await pcStampState(env, user.id, boardCity, boardCountry);
+      }
+      toCity = pcCityKey(boardCity, boardCountry, boardRegion);
       if (!toCity) return jsonResponse({ error: 'Which city?' }, 400);
       if (!(await pcWasThere(env, user.id, toCity))) return jsonResponse({ error: 'Only travelers who were really there can post here. Stamp it first, verified.', code: 'not_there' }, 403);
       if (msg && !(await gbModerate(env, msg)).allow) return jsonResponse({ error: 'Let’s keep the board kind. Try different words.' }, 422);
@@ -18261,19 +18375,20 @@ async function handlePostcardSend(request, env, ctx) {
       toTeen = rsp?.social_tier === 'teen';
       toUser = to.user_id;
     }
+    const cardRegion = !toCity && pcIsUSName(b.country) && b.city ? (pcUSState(b.region) || await pcStampState(env, user.id, b.city, b.country)) : null;
     const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
     const key = `pc/${crypto.randomUUID()}.${ext}`;
     await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: mediaType, cacheControl: 'public, max-age=31536000, immutable' } });
 
     const row = {
       sender_id: user.id, to_user_id: toUser, photo_key: key, message: msg,
-      place_name: clean(b.place_name, 80), city: clean(b.city, 60), country: clean(b.country, 60), region: clean(b.region, 60),
+      place_name: clean(b.place_name, 80), city: clean(b.city, 60), country: clean(b.country, 60), region: cardRegion || clean(b.region, 60),
       ...((b.meta && typeof b.meta === 'object') || anonLabel ? { meta: {
         ...(b.meta && typeof b.meta === 'object' ? { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60) } : {}),
         ...(anonLabel ? { anon: anonLabel } : {}),
       } } : {}),
       // A board card carries the board's city and country.
-      ...(toCity ? { to_city: toCity, city: boardCity, country: boardCountry } : {}),
+      ...(toCity ? { to_city: toCity, city: boardCity, country: boardCountry, region: boardRegion } : {}),
     };
     const w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
     if (!w.ok) { if (ctx) ctx.waitUntil(env.MEDIA.delete(key).catch(() => {})); return jsonResponse({ error: 'Could not send' }, 502); }
@@ -18288,7 +18403,7 @@ async function handlePostcardSend(request, env, ctx) {
     let pin = null;
     if (toUser && !toTeen && sp.social_tier !== 'teen' && row.city && row.country) {
       try {
-        const k = pcCityKey(row.city, row.country);
+        const k = pcCityKey(row.city, row.country, row.region);
         if (k && await pcWasThere(env, user.id, k)) pin = { city: row.city, country: row.country, region: row.region || null, label: await pcAnonLabel(env, user.id, row.city) };
       } catch { /* no offer; the card is already on its way */ }
     }
@@ -19338,7 +19453,7 @@ async function handleSocialFeed(request, env) {
     const cardRows = pcs.map((p) => ({
       type: 'postcard', id: p.id, created_at: p.created_at,
       photo: `${origin}/pc-photo/${p.photo_key}`,
-      message: p.message, place: p.place_name, city: p.city, country: p.country,
+      message: p.message, place: p.place_name, city: p.city, region: p.region || null, country: p.country,
       dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
       to_me: p.to_user_id === user.id,
       ...(p.to_user_id === null && keptSet ? { kept: keptSet.has(p.id) } : {}),
@@ -19428,7 +19543,7 @@ async function handlePostcardBox(request, env) {
     const rows = kept.map((p) => ({
       type: 'postcard', id: p.id, created_at: p.created_at,
       photo: `${origin}/pc-photo/${p.photo_key}`,
-      message: p.message, place: p.place_name, city: p.city, country: p.country,
+      message: p.message, place: p.place_name, city: p.city, region: p.region || null, country: p.country,
       dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
       to_me: p.to_user_id === user.id,
       ...(p.to_user_id === null ? { kept: true } : {}),
@@ -19452,7 +19567,19 @@ async function handleCityBoard(request, env) {
     const mySp = await gbSocialProfile(env, user.id).catch(() => undefined);
     if (mySp === undefined) return jsonResponse({ rows: [], error: 'Couldn’t check your account — try again', code: 'age_unknown' }, 503);
     if (gbOffSocial(mySp)) return jsonResponse({ rows: [], code: 'teen_hold', held: gbNeedsConfirm(mySp) ? 'confirm' : 'teen' }, 403);
-    const b = await request.json().catch(() => ({}));
+    const b0 = await request.json().catch(() => ({}));
+    // Same name, different states (founder, 2026-10-16): a US city board is one state's.
+    // Asked without a state (an old link, a card with no state), the busiest one opens and
+    // the others are named so the page can offer them.
+    let b = b0;
+    let alternates = [];
+    if ((b0.kind || 'city') === 'city' && pcIsUSName(b0.country) && b0.city) {
+      const states = await pcStatesOfCity(env, b0.city);
+      const asked = pcUSState(b0.region);
+      const chosen = asked || states[0]?.region || null;
+      b = { ...b0, region: chosen };
+      alternates = states.filter((x) => x.region !== chosen).slice(0, 4);
+    }
     const board = pcBoardOf(b);
     if (!board) return jsonResponse({ rows: [], error: 'Which city?' }, 400);
     const { key, city, country } = board;
@@ -19464,7 +19591,7 @@ async function handleCityBoard(request, env) {
     // city inside it (a card's region rides with it since 2026-10-16).
     const cardsQ = board.kind === 'city'
       ? `postcards?to_city=eq.${encodeURIComponent(key)}`
-      : `postcards?to_city=not.is.null&country=ilike.${pcLike(country)}${board.kind === 'state' ? `&region=ilike.${pcLike(board.region)}` : ''}`;
+      : `postcards?to_city=not.is.null&${pcCountryIn(country)}${board.kind === 'state' ? `&region=ilike.${pcLike(board.region)}` : ''}`;
     const [q, there, wall, kit, cc] = await Promise.all([
       gbRest(env, `${cardsQ}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {}),
       board.kind === 'city' ? pcWasThere(env, user.id, key) : Promise.resolve(false),
@@ -19529,6 +19656,7 @@ async function handleCityBoard(request, env) {
     return jsonResponse({
       rows, next, can_post: board.kind === 'city' && there && mySp?.social_tier !== 'teen', city, country,
       board: { kind: board.kind, key, name: board.name, city: board.city, region: board.region, country },
+      ...(alternates.length ? { alternates } : {}),
       kit, counts: { photos: wall.total, cards: cardTotal },
     });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
@@ -19551,9 +19679,10 @@ async function pcPhotoBoards(env, origin) {
   if (kv) { try { const c = JSON.parse((await kv.get('photoboards:v1')) || 'null'); if (c) return c; } catch { /* rebuild */ } }
   const out = { city: {}, state: {}, country: {} };
   try {
-    const sq = await gbRest(env, `passport_stamps?visibility=eq.public&hidden=eq.false&select=id,user_id,city,region,country&limit=3000`, {});
+    const sq = await gbRest(env, `passport_stamps?visibility=eq.public&hidden=eq.false&select=id,user_id,city,region,country,lat,lng&limit=3000`, {});
     const stamps = sq.ok ? (await sq.json()).filter((st) => st.city && st.country) : [];
     if (!stamps.length) return out;
+    await pcHealStates(env, stamps, 8);
     const byId = Object.fromEntries(stamps.map((st) => [st.id, st]));
     const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${stamps.map((st) => st.id).join(',')})&mod_status=eq.ok&board_hidden=eq.false&order=created_at.desc&select=id,stamp_id,user_id,created_at&limit=6000`, {});
     const photos = pq.ok ? (await pq.json()).filter((ph) => byId[ph.stamp_id]) : [];
@@ -19573,7 +19702,7 @@ async function pcPhotoBoards(env, origin) {
     for (const ph of photos) {
       if (!okOwner.has(ph.user_id)) continue;
       const st = byId[ph.stamp_id];
-      add(out.city, pcBoardOf({ city: st.city, country: st.country, region: st.region }), ph);
+      if (!pcIsUSName(st.country) || pcUSState(st.region)) add(out.city, pcBoardOf({ city: st.city, country: st.country, region: st.region }), ph);
       if (st.region && pcIsUS(st.country)) add(out.state, pcBoardOf({ kind: 'state', region: st.region, country: st.country }), ph);
       add(out.country, pcBoardOf({ kind: 'country', country: st.country }), ph);
     }
@@ -19607,17 +19736,20 @@ async function handleCityBoards(request, env) {
     const origin = new URL(request.url).origin;
     const boards = list.filter((x) => x && x.city && x.country && Number(x.total) > 0).map((x) => {
       const cover = (Array.isArray(x.covers) ? x.covers : []).find((c) => c && c.photo_key && !blocked.has(c.sender_id));
-      return { kind: 'city', city: x.city, country: x.country, count: Number(x.total), cards: Number(x.total), photos: 0, recent: Number(x.recent) || 0, last_at: x.last_at || null, cover: cover ? `${origin}/pc-photo/${cover.photo_key}` : null };
+      // A US key carries its state: 'portland, oregon|united states'.
+      const cityPart = String(x.to_city || '').split('|')[0];
+      const region = pcIsUSName(x.country) && cityPart.includes(', ') ? pcUSState(cityPart.split(', ').pop()) : null;
+      return { kind: 'city', key: x.to_city || pcCityKey(x.city, x.country), city: x.city, region, country: x.country, count: Number(x.total), cards: Number(x.total), photos: 0, recent: Number(x.recent) || 0, last_at: x.last_at || null, cover: cover ? `${origin}/pc-photo/${cover.photo_key}` : null };
     });
     // Photo boards (City Billboards, 2026-10-16) join the list: a city with only photos is a
     // board too, and every US state and every country with anything inside it. Counts add up.
     const pb = await pcPhotoBoards(env, origin);
-    const byKey = Object.fromEntries(boards.map((x) => [pcCityKey(x.city, x.country), x]));
+    const byKey = Object.fromEntries(boards.map((x) => [x.key, x]));
     for (const e of Object.values(pb.city)) {
       if (q && !(`${pcNorm(e.city)} ${pcNorm(e.country)}`.includes(q))) continue;
       const x = byKey[e.key];
       if (x) { x.photos = e.photos; x.count += e.photos; x.recent += e.recent; if (!x.last_at || (e.last_at && e.last_at > x.last_at)) { x.last_at = e.last_at; x.cover = x.cover || e.cover; } }
-      else boards.push({ kind: 'city', city: e.city, country: e.country, count: e.photos, cards: 0, photos: e.photos, recent: e.recent, last_at: e.last_at, cover: e.cover });
+      else boards.push({ kind: 'city', key: e.key, city: e.city, region: e.region || null, country: e.country, count: e.photos, cards: 0, photos: e.photos, recent: e.recent, last_at: e.last_at, cover: e.cover });
     }
     const rollups = [...Object.values(pb.state), ...Object.values(pb.country)]
       .filter((e) => !q || `${pcNorm(e.name)} ${pcNorm(e.country)}`.includes(q))

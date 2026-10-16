@@ -13,8 +13,12 @@ export function countryName(v) {
   } catch { return s; }
 }
 
-export const cityBoardUrl = (city, country) =>
-  `${createPageUrl("CityBoard")}?city=${encodeURIComponent(String(city || "").trim())}&country=${encodeURIComponent(countryName(country))}`;
+// A US city's board is one state's (founder, 2026-10-16): Portland, Oregon and Portland,
+// Maine are two boards, so a link carries the state when it knows it.
+export const cityBoardUrl = (city, country, region = null) => {
+  const r = String(region || "").trim();
+  return `${createPageUrl("CityBoard")}?city=${encodeURIComponent(String(city || "").trim())}&country=${encodeURIComponent(countryName(country))}${r ? `&region=${encodeURIComponent(r)}` : ""}`;
+};
 
 export const cityBoardsUrl = () => createPageUrl("CityBoards");
 
@@ -26,7 +30,7 @@ export const countryBoardUrl = (country) =>
   `${createPageUrl("CityBoard")}?kind=country&country=${encodeURIComponent(countryName(country))}`;
 // Any board row the index lists: { kind, city | region | country }.
 export const boardUrl = (b) =>
-  b?.kind === "state" ? stateBoardUrl(b.region || b.name, b.country) : b?.kind === "country" ? countryBoardUrl(b.country || b.name) : cityBoardUrl(b?.city, b?.country);
+  b?.kind === "state" ? stateBoardUrl(b.region || b.name, b.country) : b?.kind === "country" ? countryBoardUrl(b.country || b.name) : cityBoardUrl(b?.city, b?.country, b?.region);
 
 // Whether a place names a board: both a city and a country.
 export const hasBoard = (city, country) => !!String(city || "").trim() && !!String(country || "").trim();

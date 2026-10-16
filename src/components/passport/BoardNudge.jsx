@@ -45,14 +45,15 @@ export default function BoardNudge() {
     const onStamped = async (e) => {
       const city = String(e?.detail?.city || "").trim();
       const country = countryName(e?.detail?.country);
+      const region = String(e?.detail?.region || "").trim() || null;
       if (!live.current.ok || !city || !country || /onboarding/i.test(live.current.path)) return;
-      const key = `${city}|${country}`.toLowerCase();
+      const key = `${city}|${region || ""}|${country}`.toLowerCase();
       if (offered().includes(key)) return;
       await new Promise((r) => setTimeout(r, 1500)); // after the stamp's own toast
-      const board = await cityBoard({ city, country });
+      const board = await cityBoard({ city, country, region });
       if (gone || !live.current.ok || !board.can_post || board.held || board.unavailable || board.error) return;
       markOffered(key);
-      setNudge({ city, country, first: board.rows.length === 0 });
+      setNudge({ city, country, region, first: board.rows.length === 0 });
     };
     window.addEventListener("gs:stamped", onStamped);
     return () => { gone = true; window.removeEventListener("gs:stamped", onStamped); };
@@ -66,7 +67,7 @@ export default function BoardNudge() {
   }, [nudge, compose]);
 
   if (!nudge) return null;
-  const { city, country, first } = nudge;
+  const { city, country, region, first } = nudge;
   return (
     <>
       {!compose ? (
@@ -89,7 +90,7 @@ export default function BoardNudge() {
       ) : null}
       <PostcardCompose open={compose} toCity={{ city, country }}
         onClose={() => { setCompose(false); setNudge(null); }}
-        onSent={() => { setCompose(false); setNudge(null); navigate(cityBoardUrl(city, country)); }} />
+        onSent={() => { setCompose(false); setNudge(null); navigate(cityBoardUrl(city, country, region)); }} />
     </>
   );
 }

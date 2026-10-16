@@ -1672,7 +1672,7 @@ function PassportInner() {
               const city = String(openStamp.city || (openStamp.kind === "city" ? openStamp.name : "") || "").trim();
               if (preview || !boardsOk || !hasBoard(city, openStamp.country)) return null;
               return (
-                <button type="button" onClick={() => { setOpenStampId(null); navigate(cityBoardUrl(city, openStamp.country)); }}
+                <button type="button" onClick={() => { setOpenStampId(null); navigate(cityBoardUrl(city, openStamp.country, openStamp.region)); }}
                   className="mt-2 w-full rounded-xl font-semibold flex items-center justify-center gap-2"
                   style={{ minHeight: 44, background: NEUTRAL.airmail, color: NEUTRAL.airmailBlue, border: `1px solid ${NEUTRAL.airmailLine}`, fontSize: fs(13) }}>
                   <Mail size={16} strokeWidth={2} aria-hidden="true" focusable="false" />

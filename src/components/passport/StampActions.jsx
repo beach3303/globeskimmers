@@ -514,7 +514,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
           )}
           {showBoard && (
             <Row icon={Mail} label={`Postcards from ${boardCity}`} sub="Its city board, from travelers who were really there"
-              onClick={() => { onClose?.(); navigate(cityBoardUrl(boardCity, stamp.country)); }} />
+              onClick={() => { onClose?.(); navigate(cityBoardUrl(boardCity, stamp.country, stamp.region)); }} />
           )}
           {!readOnly && (
             TAGGING_ENABLED

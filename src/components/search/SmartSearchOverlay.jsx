@@ -287,8 +287,8 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
               <div className="font-mono uppercase tracking-[0.14em] text-[calc(10px*var(--fs))] font-semibold mb-2" style={{ color: SUB }}>City boards</div>
               <div className="rounded-xl overflow-hidden" style={{ background: "#fff", border: `1px solid ${EDGE}` }}>
                 {boards.map((b, i) => (
-                  <button key={`${b.city}|${b.country}`} type="button"
-                    onClick={() => { navigate(cityBoardUrl(b.city, b.country)); onClose(); }}
+                  <button key={`${b.city}|${b.region || ""}|${b.country}`} type="button"
+                    onClick={() => { navigate(cityBoardUrl(b.city, b.country, b.region)); onClose(); }}
                     className="w-full text-left px-3.5 py-2 flex items-center gap-2.5 hover:bg-black/[0.02]"
                     style={{ minHeight: 52, borderTop: i ? `1px solid ${EDGE}` : "none" }}>
                     <Mail className="w-4 h-4 flex-none" style={{ color: NEUTRAL.airmailBlue }} strokeWidth={2} />
