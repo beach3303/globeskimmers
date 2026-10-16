@@ -915,6 +915,22 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   apply to pins. Place addressing ("To: Café A Brasileira") and the after-stamp board nudge remain the
   next supply levers from the plan sheet — not yet built. App side reaches phones at the founder's next
   `npm run ota`.
+  **City Billboards (founder decisions, 2026-10-16 — IN BUILD):** the board's face becomes a city
+  billboard: a painted per-city header (direction C, deco frame) over a dense wall — photos without
+  words as tiles three across, postcards woven in as wide cards; tap opens the card/photo. **Photos
+  follow their stamp:** a 🌍 public stamp's reviewed photos hang on its city board with NO ask — a
+  heads-up instead (the stamp sheet line, one Mailbox note per city, an "on the board" mark and
+  Remove on each photo); the albums dial's default moves from inner-circle to "same as the stamp" for
+  EVERYONE, with the Mailbox note (founder: "instagram doesn't ask permission… give them a heads up").
+  🔒/inner/followers stamps, teens and unreviewed photos never reach a board. Albums page gets quiet
+  tier marks on envelopes and photos + an owner-only legend line (founder, same day). **Five years
+  back:** stamps from 2021-01-01 (931409d). **Coverage:** art kits for ~950 boards in two waves
+  (wave 1: 50 states + DC, top 100 US cities, top 100 world, all 195 countries; wave 2: next 200 US +
+  300 world); the US gets city + state + country boards (Texas: hat/BBQ; California: the bear); every
+  country a rollup board; any other city a plain airmail-frame board. A photo from Austin hangs on
+  Austin, Texas and USA at once. Kit template spec for ChatGPT: docs/design/city-board-kits.md.
+  Wording round (4fce642: "city board", @username, @local/@traveler, names off boards) committed,
+  awaiting push.
   **Art:** "Mixed / rescue" for dogs and cats (founder). Review page:
   https://claude.ai/artifact/JeXKJshqiT2BJ9BSPARA2G; status: `docs/design/new-look/BUILD_STATUS.md` on new-look.
   **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
