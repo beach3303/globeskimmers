@@ -20481,8 +20481,8 @@ function gbHeldSealLetter(row, link) {
     burgundy: business
       ? ['\u272A @' + h + ' is reserved on GlobeSkimmers as your official account',
         'It carries the GlobeSkimmers Seal, so Users, Locals, & Travelers see it beside your name everywhere you post, sign or send, and know it\'s really you \u2014 a verified business entity.']
-      : ['\u272A @' + h + ' is reserved for you on GlobeSkimmers',
-        'It carries the GlobeSkimmers Seal \u2014 our mark of official accounts \u2014 so everyone who meets you here knows it\'s really you.'],
+      : ['\u272A Your verified account is reserved \u2014 @' + h,
+        'It comes verified with the GlobeSkimmers Seal, given to a select few, so everyone who finds you here knows it\'s truly you.'],
     'sunshine-heart': ['\u2600 @' + h + ' is reserved for you \u2014 with the Sunshine Seal',
       'It carries the Sunshine Seal \u2014 a seal of warmth that isn\'t for everyone, reserved only for the family and friends who make GlobeSkimmers home, with a little heart Maiza picked just for you.'],
     'sunshine-star': ['\u2600 @' + h + ' is reserved for you \u2014 with the Sunshine Seal',
@@ -20493,7 +20493,9 @@ function gbHeldSealLetter(row, link) {
   if (!SEAL) return null;
   const opening = business
     ? `@${h} is saved on GlobeSkimmers as your official account \u2014 no one else can claim it.`
-    : `@${h} is saved for you on GlobeSkimmers \u2014 in your name, so no one else can take it.`;
+    : row.seal === 'burgundy'
+      ? `@${h} has been reserved for you on GlobeSkimmers \u2014 in your name, so no one else can claim it.`
+      : `@${h} is saved for you on GlobeSkimmers \u2014 in your name, so no one else can take it.`;
   const text = `Hello ${name},
 
 ${opening}
@@ -21009,9 +21011,15 @@ The Seal means everyone who meets you on GlobeSkimmers knows it's really you \u2
   const gold = `Yours is the Gold Seal \u2014 Honored: the highest Seal of Honor. It can't be bought, applied for, or earned \u2014 it is gifted, and there are very few.
 
 The founder honors you.`;
-  const std = `It's an honor to have you here. Welcome.`;
+  const person = `Hello ${who},
+
+Your account @${handle} is now verified with the GlobeSkimmers Seal, given to a select few, so everyone who finds you here knows it's truly you.
+
+It's a seal, not a checkmark, and it sits beside your name everywhere you post, sign or send.
+
+We're glad you're here.`;
   const subject = tier === 'gold' ? '\u272A The Gold Seal \u2014 Honored' : '\u272A Your GlobeSkimmers Seal is official';
-  const text = base + (tier === 'gold' ? gold : std) + `
+  const text = (tier === 'gold' ? base + gold : person) + `
 
 Maiza & GlobeSkimmers \u2708\uFE0F
 "Collect your world."`;
