@@ -1091,7 +1091,11 @@ export default function AdminAnalytics() {
       try { await navigator.clipboard.writeText(`Subject: ${data.subject}\n\n${data.text}`); } catch { /* shown below anyway */ }
     }
   };
-  const removeHeld = async (handle) => { await heldCall({ op: 'remove', handle }); };
+  // Release frees a held name for anyone (no email is sent), so it asks first (2026-10-16).
+  const removeHeld = async (handle) => {
+    if (!window.confirm(`Release @${handle}?\n\nIt stops being held: anyone will be able to take it. No email is sent — to give it to someone, use Send invitation instead.`)) return;
+    await heldCall({ op: 'remove', handle });
+  };
   const [sealLetter, setSealLetter] = useState(null); // { sent, subject, text } from the last grant
   const grantSeal = async () => {
     setSealLetter(null);
