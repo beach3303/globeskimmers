@@ -902,6 +902,19 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   cleaned picture shares (🔒 never; a private stamp shares only after its permission changes), order row +
   drag-to-arrange (one-write custom order), circle counts-only with the warning-gated public switch.
   Tests 31/31 + ~203 green. Awaiting the founder's push, then `npm run ota`.
+  **Postcard privacy + the pin ask (founder decisions, 2026-10-15, PUSHED same day, 3380f43; worker
+  deploy 38841625288 green, probes clean):** sealed mail stays sealed — nobody can see what a user
+  receives, who wrote, or that it arrived; the app now says so out loud (Mailbox "Sealed — **only you**
+  can open and see your mailbox…", Home circle zone "and only you see it"; seal lines 15a3cc9, pushed).
+  The bridge: after a direct send from a city the sender verifiably stamped, one ask — "Pin a copy on
+  <city>'s board?" (default No; the mail is untouched; the receiver is never named, no reveal switch —
+  founder: "Sender should give permission to post to city board"). Nameless board cards sign "a local"
+  (sender's home city = the board's city) or "a traveler" — the worker decides (founder: "by a @local,
+  or by @traveler can we determine"), offered on every public card (Signed / No name chips). Mail to a
+  teen is never offered for pinning; all board gates (verified stamp, 18+, 5/day, photo+word checks)
+  apply to pins. Place addressing ("To: Café A Brasileira") and the after-stamp board nudge remain the
+  next supply levers from the plan sheet — not yet built. App side reaches phones at the founder's next
+  `npm run ota`.
   **Art:** "Mixed / rescue" for dogs and cats (founder). Review page:
   https://claude.ai/artifact/JeXKJshqiT2BJ9BSPARA2G; status: `docs/design/new-look/BUILD_STATUS.md` on new-look.
   **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**

@@ -1967,3 +1967,14 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   gone); albums by year + captions everywhere + the 600-character guestbook; the privacy-dial Settings
   rows + the held-pen sheet; and the full tier UI (four chips, corner marks, ask-first links with Turn
   off, the picture chooser, order row, Arrange). Nothing left to activate.
+
+## 2026-10-15 — Postcard privacy: the seal lines, the pin ask, a local / a traveler (PUSHED + LIVE)
+- main 15a3cc9 (seal lines: Mailbox "Sealed — only you…", Home circle "and only you see it") and
+  3380f43 (worker + app: the pin ask after direct sends, meta.anon board cards signed "a local" /
+  "a traveler" decided by pcAnonLabel, identity stripped on board reads, anon kept out of feeds,
+  Signed / No name chips on board compose). Deploy 38841625288 green (api + tts).
+- Probes (demo JWT, browser UA): /city/board 200 well-formed (boards empty in prod — the supply
+  problem itself), /social/feed 200 no leaks, /postcards/send runs the edited path (409 no_followers
+  on the earliest gate). Harness: test-pins 16/16; cards/boards/boardbook/city unchanged.
+- Gates: eslint ✓ no-undef ✓ build ✓ boot-check ✓. **Activate: nothing** — no migration, no SQL.
+  The app side (ask sheet, chips, FROM A LOCAL bylines) reaches phones at the founder's `npm run ota`.
