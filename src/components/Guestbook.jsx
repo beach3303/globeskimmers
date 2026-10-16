@@ -340,7 +340,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
               Notes &amp; doodles post publicly. By posting you grant Globeskimmers a license to display them.
             </p>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", columnGap: 12 }}>
-              <span style={{ fontSize: fs(11), lineHeight: 1.35, color: NEUTRAL.ink3 }}>{body.length}/1000 · posts publicly as {board ? "your @username" : displayName}</span>
+              <span style={{ fontSize: fs(11), lineHeight: 1.35, color: NEUTRAL.ink3 }}>{body.length}/1000 · posts publicly as {board ? "your @username (or @local / @traveler if you have none)" : displayName}</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
                 <button type="button" onClick={resetCompose} style={{ ...textButton, justifyContent: "center", padding: "0 8px", fontSize: fs(13), color: NEUTRAL.ink2 }}>Cancel</button>
                 <button type="button" onClick={submit} disabled={busy} style={{ ...outline(w), padding: "0 20px", opacity: busy ? 0.5 : 1 }}>

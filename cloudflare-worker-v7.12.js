@@ -18300,6 +18300,28 @@ async function pcWasInBoard(env, userId, board) {
   } catch { return false; }
 }
 
+// '@local' or '@traveler' for someone with no @username (founder, 2026-10-16: "if no username?
+// @local? @traveler?"): local when the board is their home — the home city for a city board,
+// the home country for a country board, the home pin's state for a US state board.
+async function pcBoardAnonLabel(env, userId, board) {
+  try {
+    if (!board) return 'traveler';
+    if (board.kind === 'city') return await pcAnonLabel(env, userId, board.city);
+    const pr = await gbRest(env, `profiles?id=eq.${userId}&select=home_country,home_city_country,home_lat,home_lng`, { headers: { 'Accept-Profile': 'public' } });
+    const home = pr.ok ? (await pr.json())[0] || {} : {};
+    if (board.kind === 'country') {
+      const want = pcIsUSName(board.country) ? 'united states' : pcFold(pcCountryName(board.country));
+      const mine = [home.home_country, home.home_city_country].filter(Boolean).map((c) => (pcIsUSName(c) ? 'united states' : pcFold(pcCountryName(c))));
+      return mine.includes(want) ? 'local' : 'traveler';
+    }
+    if (home.home_lat != null && home.home_lng != null) {
+      const g = await psGeoAt(env, +home.home_lat, +home.home_lng);
+      if (pcFold(pcUSState(g?.region) || '') === pcFold(board.region)) return 'local';
+    }
+    return 'traveler';
+  } catch { return 'traveler'; }
+}
+
 // Take a photo down from every board (or put it back) without touching its album.
 async function handlePassportPhotoBoard(request, env) {
   try {
@@ -19703,17 +19725,14 @@ async function handleCityBoard(request, env) {
     const cardTotal = cc.ok ? parseInt((cc.headers.get('content-range') || '').split('/')[1] || '', 10) || cardRows.length : cardRows.length;
     // Its guestbook (founder, 2026-10-16): one per city, state and country board.
     const gbId = pcGuestbookId(board);
-    const [gq, mayIn] = await Promise.all([
-      gbRest(env, `guestbook_entries?entity_id=eq.${encodeURIComponent(gbId)}&review_status=eq.ok&deleted_at=is.null&hidden=eq.false&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } }).catch(() => null),
-      board.kind === 'city' ? Promise.resolve(there) : pcWasInBoard(env, user.id, board),
-    ]);
+    const gq = await gbRest(env, `guestbook_entries?entity_id=eq.${encodeURIComponent(gbId)}&review_status=eq.ok&deleted_at=is.null&hidden=eq.false&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } }).catch(() => null);
     const gbCount = gq && gq.ok ? parseInt((gq.headers.get('content-range') || '').split('/')[1] || '0', 10) || 0 : 0;
     return jsonResponse({
       rows, next, can_post: board.kind === 'city' && there && mySp?.social_tier !== 'teen', city, country,
       board: { kind: board.kind, key, name: board.name, city: board.city, region: board.region, country },
       ...(alternates.length ? { alternates } : {}),
       kit, counts: { photos: wall.total, cards: cardTotal },
-      guestbook: { id: gbId, count: gbCount, can_sign: !!mayIn && mySp?.social_tier !== 'teen' },
+      guestbook: { id: gbId, count: gbCount, can_sign: mySp?.social_tier !== 'teen' },
     });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -25329,13 +25348,20 @@ async function handleGuestbookSign(request, env, ctx) {
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required', message: 'Add your birth year in Settings to sign guestbooks.' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Guestbooks aren\u2019t available on this account' }, 403);
     if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
+    let visitedBoard = false;
     if (isBoard) {
-      // A board's guestbook is public like the board: 18+, and only from someone who was there.
-      if (sp.social_tier === 'teen') return jsonResponse({ error: 'City boards open at age 18' }, 403);
-      if (!(await pcWasInBoard(env, user.id, pcBoardOf(b.board)))) return jsonResponse({ error: 'Only travelers who were really there can write here. Stamp it first, verified.', code: 'not_there' }, 403);
-      const hq = await gbRest(env, `passport_shares?user_id=eq.${user.id}&select=handle`, {});
+      // A board's guestbook (founder, 2026-10-16): anyone 18 or over may write, comment and
+      // doodle — no stamp needed; everyone reads. Signed with the @username, else @local or
+      // @traveler; marked 'visited' only for a verified stamp there.
+      if (sp.social_tier === 'teen') return jsonResponse({ error: 'Guestbooks on boards open at age 18' }, 403);
+      const board = pcBoardOf(b.board);
+      const [hq, wasIn] = await Promise.all([
+        gbRest(env, `passport_shares?user_id=eq.${user.id}&select=handle`, {}),
+        pcWasInBoard(env, user.id, board),
+      ]);
       const h = ((hq.ok ? await hq.json() : [])[0] || {}).handle;
-      boardHandle = h ? `@${h}` : null;
+      boardHandle = h ? `@${h}` : `@${await pcBoardAnonLabel(env, user.id, board)}`;
+      visitedBoard = !!wasIn;
     }
     if (env.GLOBESKIMMERS_KV) {
       const ck = `gb:sign:${user.id}:${new Date().toISOString().slice(0, 10)}`;
@@ -25366,7 +25392,7 @@ async function handleGuestbookSign(request, env, ctx) {
       const vq = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&entity_id=${gbInList(ids.all)}&verified=in.(gps,photo_loc,photo_ai)&select=id&limit=1`);
       verified = vq.ok ? (await vq.json()).length > 0 : false;
     } catch { verified = false; }
-    if (isBoard) verified = true;   // a board's guestbook already asked for the proof
+    if (isBoard) verified = visitedBoard;   // a stamp in that city, state or country
 
     // Record/mark the visit (eligibility token + "sign later" reminder queue).
     await gbRest(env, 'guestbook_visits', {

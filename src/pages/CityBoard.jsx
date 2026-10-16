@@ -253,7 +253,7 @@ function BoardGuestbookSheet({ name, gb, signBoard, onClose, onCount }) {
         <Guestbook entityType="board" entityId={gb.id} entityName={name} prompts={BOARD_PROMPTS}
           intro="Help the next traveler: a tip, the best spot, the best food or nature, your favorite part."
           signExtra={{ board: signBoard }} canSign={gb.can_sign !== false}
-          cantSignNote={`Stamp ${name}, verified, to leave a tip here — this guestbook is for travelers who were really there.`}
+          cantSignNote="Guestbooks on boards open at age 18."
           onCount={onCount} />
       </div>
     </div>
