@@ -1,7 +1,7 @@
 // PrivacyCard: who can open your passport (Profile.dc.html L213-226; bible.profile.sections
 // 7, word.lines). A plain white card, because it is a setting: 'Your passport is
-// *private*' (or *public*) with the inner-circle sentence, and a switch whose state is
-// also printed in words. The flow is today's: going public asks the age gate first (the
+// *private*' (or *public*), and a switch whose state is also printed in words. Like every
+// privacy switch (founder, 2026-10-16), ON means private; OFF says 'Not private'. The flow is today's: going public asks the age gate first (the
 // OS age range when the platform has one, else the birthday field), a teen or an under-13
 // answer stops there, and a public passport offers its link to copy.
 //
@@ -57,7 +57,7 @@ export default function PrivacyCard({ cloth = undefined, share = null, onShare =
     }
     if (error) { showToast(error, "error"); return; }
     apply({ is_public: !!data.is_public, url: data.url || null });
-    showToast(data.is_public ? "Your passport is public — anyone with the link can view it" : "Private — just you and your inner circle now", "success");
+    showToast(data.is_public ? "Not private — anyone with your link can see your 🌍 stamps" : "Private — only the people you approve", "success");
   };
 
   const copyLink = async () => {
@@ -77,21 +77,21 @@ export default function PrivacyCard({ cloth = undefined, share = null, onShare =
           </h3>
           <p style={{ margin: "4px 0 0", fontSize: fs(12.5), lineHeight: 18 / 12.5, color: NEUTRAL.ink3 }}>
             {isPublic
-              ? "Anyone with the link can view the booklet: photos only after review, never your locations."
-              : "Just you and your inner circle: people you follow who follow you back. Flip to public to share with anyone by link."}
+              ? "Not private: anyone with your link sees your 🌍 Everyone stamps — photos only after review, never your locations."
+              : "Only people you approve see it, each just the stamps you set for them. Switch off to share your 🌍 stamps by link."}
           </p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
-          <button type="button" role="switch" aria-checked={isPublic} aria-label="Public passport" onClick={toggleShare}
+          <button type="button" role="switch" aria-checked={!isPublic} aria-label="Private passport" onClick={toggleShare}
             aria-disabled={busy || !loaded || undefined} aria-busy={busy || undefined}
             style={{ position: "relative", display: "block", width: 52, height: 44, padding: 0, background: "transparent", border: 0, cursor: busy || !loaded ? "default" : "pointer", opacity: loaded ? 1 : 0.5 }}>
-            <span aria-hidden="true" style={{ position: "absolute", left: 3, top: 9, width: 46, height: 26, borderRadius: 999, background: isPublic ? NEUTRAL.brandTeal : TRACK_OFF, transition: "background .15s" }} />
-            <span aria-hidden="true" style={{ position: "absolute", left: isPublic ? 26 : 6, top: 12, width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 999, background: NEUTRAL.white, boxShadow: "0 1px 2px rgba(0,0,0,.25)", transition: "left .15s" }}>
-              <Knob size={11} strokeWidth={2.4} color={isPublic ? NEUTRAL.brandTeal : NEUTRAL.ink2} aria-hidden="true" focusable="false" />
+            <span aria-hidden="true" style={{ position: "absolute", left: 3, top: 9, width: 46, height: 26, borderRadius: 999, background: !isPublic ? NEUTRAL.brandTeal : TRACK_OFF, transition: "background .15s" }} />
+            <span aria-hidden="true" style={{ position: "absolute", left: !isPublic ? 26 : 6, top: 12, width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 999, background: NEUTRAL.white, boxShadow: "0 1px 2px rgba(0,0,0,.25)", transition: "left .15s" }}>
+              <Knob size={11} strokeWidth={2.4} color={!isPublic ? NEUTRAL.brandTeal : NEUTRAL.ink2} aria-hidden="true" focusable="false" />
             </span>
           </button>
           <span aria-hidden="true" style={{ fontFamily: MONO, fontSize: fs(9), lineHeight: 12 / 9, fontWeight: 500, letterSpacing: ".14em", color: NEUTRAL.ink3 }}>
-            {loaded ? (isPublic ? "PUBLIC" : "PRIVATE") : ""}
+            {loaded ? (isPublic ? "NOT PRIVATE" : "PRIVATE") : ""}
           </span>
         </div>
       </div>

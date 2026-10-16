@@ -1014,11 +1014,13 @@ export default function SettingsPage() {
             {/* Where you live, for visitors (founder, 2026-10-14: "A plus a switch to turn on city"):
                 your country always, your city only when this is on. Shown once the column exists. */}
             {profile && "show_home_city" in profile && (
-              <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Show my home city on my page"
-                desc={showHomeCity && homeCity
-                  ? `Visitors see ${[homeCity, homeCountry].filter(Boolean).join(" · ")}`
-                  : homeCity ? `Visitors see ${homeCountry || "your country"} only` : "Set your home city above first. Visitors see your country only"}
-                control={{ node: <EdToggle on={showHomeCity} onClick={() => { const next = !showHomeCity; setShowHomeCity(next); persist({ show_home_city: next }); }} label="Show my home city on my page" /> }}
+              // Every privacy switch reads the same way (founder, 2026-10-16): ON = private,
+              // and an OFF switch says "Not private" in words.
+              <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Keep my home city private"
+                desc={!showHomeCity
+                  ? `Private — visitors see ${homeCountry || "your country"} only`
+                  : homeCity ? `Not private — visitors see ${[homeCity, homeCountry].filter(Boolean).join(" · ")}` : "Not private — set your home city above to show it"}
+                control={{ node: <EdToggle on={!showHomeCity} onClick={() => { const next = !showHomeCity; setShowHomeCity(next); persist({ show_home_city: next }); }} label="Keep my home city private" /> }}
               />
             )}
             {dials && (
@@ -1029,17 +1031,17 @@ export default function SettingsPage() {
             )}
             {dials && (
               <EdRow isTablet={isTablet} step={fontStep} icon={Images} iconBg={CAT.shopping.ink} title="Who sees my photo albums"
-                desc="An album is exactly as private as its stamp — and a public stamp's photos also hang on its city board, signed with your @username. Inner circle keeps every album to people you follow who follow you back; Only me keeps them to you."
+                desc="A stamp's photos are seen by the same people who can see the stamp."
                 control={{ below: true, node: (
                   <EdChoices label="Who sees my photo albums" value={dials.albums_audience}
-                    options={[["passport", "Same as the stamp"], ["inner", "Inner circle"], ["me", "Only me"]]}
+                    options={[["passport", "Same as each stamp"], ["inner", "Inner circle only"], ["me", "Only me"]]}
                     onPick={(v) => saveDial("albums_audience", v, dials.albums_audience)} />
                 ) }}
               />
             )}
             {dials && (
               <EdRow isTablet={isTablet} step={fontStep} icon={LayoutGrid} iconBg={CAT.weather.ink} title="New stamps start at"
-                desc="Every stamp you make begins at this audience. Change any stamp's own level anytime from the stamp."
+                desc="Where each new stamp begins. You can change any stamp later."
                 control={{ below: true, node: (
                   <EdChoices label="New stamps start at" value={dials.default_stamp_tier}
                     options={TIER_OPTS}
@@ -1065,13 +1067,13 @@ export default function SettingsPage() {
               />
             )}
             {dials && (
-              <EdRow isTablet={isTablet} step={fontStep} icon={UserCheck} iconBg={CAT.todo.ink} title="My circle is public"
-                desc={dials.circle_public ? "Anyone who sees your page can browse who's in your circle (members who allow it)" : "Visitors see counts only — never names"}
+              <EdRow isTablet={isTablet} step={fontStep} icon={UserCheck} iconBg={CAT.todo.ink} title="Keep my circle private"
+                desc={dials.circle_public ? "Not private — visitors can see who's in your circle" : "Private — visitors see counts only, never names"}
                 control={{ below: true, node: (
                   <div>
                     <div className="flex items-center justify-between">
-                      <span style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#3A3128" }}>{dials.circle_public ? "Public lists are on" : "Full privacy (default)"}</span>
-                      <EdToggle on={dials.circle_public} label="My circle is public"
+                      <span style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#3A3128" }}>{dials.circle_public ? "Not private" : "Private (default)"}</span>
+                      <EdToggle on={!dials.circle_public} label="Keep my circle private"
                         onClick={() => { if (dials.circle_public) saveDial("circle_public", false, true); else setCircleAsk(true); }} />
                     </div>
                     {circleAsk && !dials.circle_public && (
@@ -1089,7 +1091,7 @@ export default function SettingsPage() {
             )}
             {dials && (
               <EdRow isTablet={isTablet} step={fontStep} icon={PenLine} iconBg={CAT.transit.ink} title="Who can write on my passport"
-                desc="Comments and guestbook signatures on your pages and photos. Reactions stay open to whoever can see them."
+                desc="Comments and guestbook signatures on your pages and photos."
                 control={{ below: true, node: (
                   <EdChoices label="Who can write on my passport" value={dials.comments_audience}
                     options={[["inner", "Inner circle"], ["audience", "Anyone who sees it"], ["off", "No one"]]}
