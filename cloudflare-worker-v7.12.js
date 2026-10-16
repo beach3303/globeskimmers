@@ -18001,6 +18001,14 @@ const pcUSState = (v) => {
   if (f === 'washington dc' || f === 'dc') return 'District of Columbia';
   return PC_US_BY_NAME[f] || null;
 };
+// Some US stamps carry their state inside the city ('Los Angeles, CA', 'Washington, D.C.'):
+// split it off, so they share one board with 'Los Angeles' + California.
+const pcUSCity = (city, region = null) => {
+  const c = String(city || '').trim();
+  const m = c.match(/^(.*?),\s*([^,]+)$/);
+  const tail = m ? pcUSState(m[2]) : null;
+  return tail ? { city: m[1].trim(), state: pcUSState(region) || tail } : { city: c, state: pcUSState(region) };
+};
 const pcIsUSName = (country) => pcFold(pcCountryName(country)) === 'united states' || ['usa', 'united states of america', 'u.s.a.', 'u.s.'].includes(pcFold(country));
 // A board's key: 'lisbon|portugal'. A US city carries its state (founder, 2026-10-16:
 // "there should be a way we differentiate cities if they are from different states"):
@@ -18008,11 +18016,12 @@ const pcIsUSName = (country) => pcFold(pcCountryName(country)) === 'united state
 // A US city whose state isn't known yet keys as 'portland|united states' — the reads
 // below learn the state from the stamp's own coordinates before it reaches a board.
 const pcCityKey = (city, country, region = null) => {
-  const c = pcFold(city);
   const us = pcIsUSName(country);
+  const uc = us ? pcUSCity(city, region) : null;
+  const c = pcFold(us ? uc.city : city);
   const k = us ? 'united states' : pcFold(pcCountryName(country));
   if (!c || !k) return null;
-  const st = us ? pcUSState(region) : null;
+  const st = us ? uc.state : null;
   return `${c}${st ? `, ${pcFold(st)}` : ''}|${k}`.slice(0, 140);
 };
 const PC_CITY_DAILY = 5;
@@ -18026,7 +18035,7 @@ async function pcWasThere(env, userId, key) {
     if (stamps.some((st) => pcCityKey(st.city, st.country, st.region) === key)) return true;
     // A stateless US stamp of the same city name learns its state, then is asked again.
     const city = key.split('|')[0].split(', ')[0];
-    const maybe = stamps.filter((st) => pcIsUSName(st.country) && !pcUSState(st.region) && pcFold(st.city) === city);
+    const maybe = stamps.filter((st) => pcIsUSName(st.country) && !pcUSCity(st.city, st.region).state && pcFold(pcUSCity(st.city).city) === city);
     if (!maybe.length) return false;
     await pcHealStates(env, maybe, 3);
     return maybe.some((st) => pcCityKey(st.city, st.country, st.region) === key);
@@ -18038,11 +18047,12 @@ async function pcHealStates(env, stamps, max = 6) {
   let n = 0;
   for (const st of stamps) {
     if (n >= max) break;
-    if (!pcIsUSName(st.country) || pcUSState(st.region) || st.lat == null || st.lng == null || !st.id) continue;
+    if (!pcIsUSName(st.country) || pcUSState(st.region) || !st.id) continue;
+    const named = pcUSCity(st.city).state;
+    if (!named && (st.lat == null || st.lng == null)) continue;
     n += 1;
     try {
-      const g = await psGeoAt(env, +st.lat, +st.lng);
-      const state = pcUSState(g?.region);
+      const state = named || pcUSState((await psGeoAt(env, +st.lat, +st.lng))?.region);
       if (!state) continue;
       st.region = state;
       await gbRest(env, `passport_stamps?id=eq.${st.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ region: state }) });
@@ -18054,10 +18064,11 @@ async function pcHealStates(env, stamps, max = 6) {
 async function pcStampState(env, userId, city, country) {
   try {
     if (!pcIsUSName(country) || !city) return null;
-    const q = await gbRest(env, `passport_stamps?user_id=eq.${userId}&hidden=eq.false&verified=in.(gps,photo_loc,photo_ai)&city=ilike.${pcLike(city)}&order=created_at.desc&select=id,city,region,country,lat,lng&limit=20`, {});
-    const stamps = (q.ok ? await q.json() : []).filter((st) => pcIsUSName(st.country) && pcFold(st.city) === pcFold(city));
-    const known = stamps.find((st) => pcUSState(st.region));
-    if (known) return pcUSState(known.region);
+    const base = pcUSCity(city).city;
+    const q = await gbRest(env, `passport_stamps?user_id=eq.${userId}&hidden=eq.false&verified=in.(gps,photo_loc,photo_ai)&city=ilike.${pcLike(base)}*&order=created_at.desc&select=id,city,region,country,lat,lng&limit=20`, {});
+    const stamps = (q.ok ? await q.json() : []).filter((st) => pcIsUSName(st.country) && pcFold(pcUSCity(st.city).city) === pcFold(base));
+    const known = stamps.find((st) => pcUSCity(st.city, st.region).state);
+    if (known) return pcUSCity(known.city, known.region).state;
     await pcHealStates(env, stamps, 2);
     const healed = stamps.find((st) => pcUSState(st.region));
     return healed ? pcUSState(healed.region) : null;
@@ -18117,9 +18128,10 @@ function pcBoardOf(b) {
   // The kind is named, never guessed: an old build's empty city stays a refusal, not a country board.
   const kind = b.kind === 'state' ? 'state' : b.kind === 'country' ? 'country' : 'city';
   if (kind === 'city') {
-    const state = pcIsUSName(country) ? pcUSState(region) : null;
-    const key = pcCityKey(city, country, state);
-    return key ? { kind, key, name: city, city, region: state || region || null, country: pcIsUSName(country) ? 'United States' : country } : null;
+    const us = pcIsUSName(country);
+    const uc = us ? pcUSCity(city, region) : { city, state: null };
+    const key = pcCityKey(uc.city, country, uc.state);
+    return key ? { kind, key, name: uc.city, city: uc.city, region: uc.state || region || null, country: us ? 'United States' : country } : null;
   }
   if (kind === 'state' && pcIsUSName(country)) {
     const st = pcUSState(region) || region;
@@ -18170,12 +18182,12 @@ async function pcBoardPhotos(env, board, before, blocked, origin) {
   const none = { photos: [], more: false, total: 0 };
   try {
     let where = `visibility=eq.public&hidden=eq.false&${pcCountryIn(board.country)}`;
-    if (board.kind === 'city') where += `&city=ilike.${pcLike(board.city)}`;
+    if (board.kind === 'city') where += `&city=ilike.${pcLike(board.city)}${pcIsUSName(board.country) ? '*' : ''}`;
     const sq = await gbRest(env, `passport_stamps?${where}&order=created_at.desc&select=id,user_id,name,kind,city,region,country,lat,lng&limit=${board.kind === 'city' ? 400 : 2000}`, {});
     if (!sq.ok) return none;
     let stamps = await sq.json();
     // A US city's board holds its own state's stamps; a stateless one learns its state first.
-    if (board.kind === 'city' && pcIsUSName(board.country)) await pcHealStates(env, stamps.filter((st) => pcFold(st.city) === pcFold(board.city)), 6);
+    if (board.kind === 'city' && pcIsUSName(board.country)) await pcHealStates(env, stamps.filter((st) => pcFold(pcUSCity(st.city).city) === pcFold(board.city)), 6);
     if (board.kind === 'state') await pcHealStates(env, stamps, 6);
     stamps = stamps.filter((st) => board.kind === 'city' ? pcCityKey(st.city, st.country, st.region) === board.key
       : board.kind === 'state' ? pcFold(pcUSState(st.region) || st.region) === pcFold(board.region) : true);
@@ -18223,7 +18235,7 @@ async function pcNoticeForStamps(env, userId, stampIds) {
       const n = counts[st.id] || 0;
       if (!n) continue;
       const list = [
-        pcIsUSName(st.country) && !pcUSState(st.region) ? null : pcBoardOf({ city: st.city, country: st.country, region: st.region }),
+        pcIsUSName(st.country) && !pcUSCity(st.city, st.region).state ? null : pcBoardOf({ city: st.city, country: st.country, region: st.region }),
         st.region && pcIsUS(st.country) ? pcBoardOf({ kind: 'state', region: st.region, country: st.country }) : null,
         pcBoardOf({ kind: 'country', country: st.country }),
       ];
@@ -18249,10 +18261,10 @@ async function pcStatesOfCity(env, city) {
   const by = {};
   try {
     const [sq, pq] = await Promise.all([
-      gbRest(env, `passport_stamps?visibility=eq.public&hidden=eq.false&${pcCountryIn('United States')}&city=ilike.${pcLike(city)}&select=city,region&limit=1000`, {}),
-      gbRest(env, `postcards?to_city=like.${encodeURIComponent(`${pcFold(city)}, `)}*&select=to_city&limit=1000`, {}),
+      gbRest(env, `passport_stamps?visibility=eq.public&hidden=eq.false&${pcCountryIn('United States')}&city=ilike.${pcLike(pcUSCity(city).city)}*&select=city,region&limit=1000`, {}),
+      gbRest(env, `postcards?to_city=like.${encodeURIComponent(`${pcFold(pcUSCity(city).city)}, `)}*&select=to_city&limit=1000`, {}),
     ]);
-    for (const st of (sq.ok ? await sq.json() : [])) { const r = pcUSState(st.region); if (r && pcFold(st.city) === pcFold(city)) by[r] = (by[r] || 0) + 1; }
+    for (const st of (sq.ok ? await sq.json() : [])) { const u = pcUSCity(st.city, st.region); if (u.state && pcFold(u.city) === pcFold(pcUSCity(city).city)) by[u.state] = (by[u.state] || 0) + 1; }
     for (const pc of (pq.ok ? await pq.json() : [])) { const r = pcUSState(String(pc.to_city || '').split('|')[0].split(', ').pop()); if (r) by[r] = (by[r] || 0) + 1; }
   } catch { /* none known */ }
   return Object.entries(by).map(([region, count]) => ({ region, count })).sort((x, y) => y.count - x.count);
@@ -18325,7 +18337,9 @@ async function handlePostcardSend(request, env, ctx) {
       boardCountry = clean(pcCountryName(b.to_city.country), 60);
       if (pcIsUSName(boardCountry)) {
         boardCountry = 'United States';
-        boardRegion = pcUSState(b.to_city.region) || await pcStampState(env, user.id, boardCity, boardCountry);
+        const uc = pcUSCity(boardCity, b.to_city.region);
+        boardCity = uc.city;
+        boardRegion = uc.state || await pcStampState(env, user.id, boardCity, boardCountry);
       }
       toCity = pcCityKey(boardCity, boardCountry, boardRegion);
       if (!toCity) return jsonResponse({ error: 'Which city?' }, 400);
@@ -18377,7 +18391,7 @@ async function handlePostcardSend(request, env, ctx) {
       toTeen = rsp?.social_tier === 'teen';
       toUser = to.user_id;
     }
-    const cardRegion = !toCity && pcIsUSName(b.country) && b.city ? (pcUSState(b.region) || await pcStampState(env, user.id, b.city, b.country)) : null;
+    const cardRegion = !toCity && pcIsUSName(b.country) && b.city ? (pcUSCity(b.city, b.region).state || await pcStampState(env, user.id, b.city, b.country)) : null;
     const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
     const key = `pc/${crypto.randomUUID()}.${ext}`;
     await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: mediaType, cacheControl: 'public, max-age=31536000, immutable' } });
@@ -19706,7 +19720,7 @@ async function pcPhotoBoards(env, origin) {
     for (const ph of photos) {
       if (!okOwner.has(ph.user_id)) continue;
       const st = byId[ph.stamp_id];
-      if (!pcIsUSName(st.country) || pcUSState(st.region)) add(out.city, pcBoardOf({ city: st.city, country: st.country, region: st.region }), ph);
+      if (!pcIsUSName(st.country) || pcUSCity(st.city, st.region).state) add(out.city, pcBoardOf({ city: st.city, country: st.country, region: st.region }), ph);
       if (st.region && pcIsUS(st.country)) add(out.state, pcBoardOf({ kind: 'state', region: st.region, country: st.country }), ph);
       add(out.country, pcBoardOf({ kind: 'country', country: st.country }), ph);
     }
