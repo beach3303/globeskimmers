@@ -1,9 +1,14 @@
 # The boards we put up — the list
 
 Decided with the founder 2026-10-16. Every board below gets an art kit (docs/design/city-board-kits.md);
-any other city still gets a board with the typographic header, and every country board rolls up
-everything posted inside it. Counts: **51 states**, **114 + 209 US cities and
-destinations**, **106 + 369 world cities and destinations**, **195 countries**.
+every country board rolls up everything posted inside it, and any place not on this list still gets a
+plain board, with the typographic header, the moment someone posts from it. City-states (Singapore,
+Monaco, Fiji…) are counted once, as countries — one kit serves both their boards. The same list as a
+spreadsheet: docs/design/city-board-list.csv.
+
+Counts: **51 states**, **114 + 209 US cities and destinations**,
+**104 + 362 world cities and destinations**, **195 countries** —
+**1,035 boards**.
 
 ## Wave 1 — launch
 
@@ -177,7 +182,7 @@ At least one per state. A national park or an island is a board too.
 - Wilmington, NC
 - Shenandoah, VA
 
-### World cities and destinations — wave 1 (106)
+### World cities and destinations — wave 1 (104)
 - Paris, France
 - London, United Kingdom
 - Rome, Italy
@@ -187,7 +192,6 @@ At least one per state. A national park or an island is a board too.
 - Osaka, Japan
 - Seoul, South Korea
 - Bangkok, Thailand
-- Singapore
 - Hong Kong
 - Dubai, United Arab Emirates
 - Istanbul, Türkiye
@@ -283,7 +287,6 @@ At least one per state. A national park or an island is a board too.
 - Melbourne, Australia
 - Auckland, New Zealand
 - Queenstown, New Zealand
-- Fiji
 
 ### Countries (195)
 Every country gets a board; the kit paints its pride — food, textiles, art, a scene, a national animal — never its politics.
@@ -523,7 +526,7 @@ Every country gets a board; the kit paints its pride — food, textiles, art, a 
 - Providence, RI
 - New Haven, CT
 - Hartford, CT
-- Pittsburgh’s Fallingwater, PA
+- Fallingwater, PA
 - Erie, PA
 - Toledo, OH
 - Dayton, OH
@@ -603,7 +606,7 @@ Every country gets a board; the kit paints its pride — food, textiles, art, a 
 - Harpers Ferry, WV
 - New River Gorge, WV
 - Morgantown, WV
-- Louisville, CO
+- Crested Butte, CO
 - Fort Collins, CO
 - Telluride, CO
 - Durango, CO
@@ -696,7 +699,7 @@ Every country gets a board; the kit paints its pride — food, textiles, art, a 
 - Pago Pago, American Samoa
 - Saipan, Northern Mariana Islands
 
-### World cities and destinations — wave 2 (369)
+### World cities and destinations — wave 2 (362)
 - Manchester, United Kingdom
 - Liverpool, United Kingdom
 - Bath, United Kingdom
@@ -723,8 +726,6 @@ Every country gets a board; the kit paints its pride — food, textiles, art, a 
 - Normandy, France
 - Loire Valley, France
 - Chamonix, France
-- Monaco
-- Luxembourg
 - Antwerp, Belgium
 - Ghent, Belgium
 - Rotterdam, Netherlands
@@ -863,8 +864,6 @@ Every country gets a board; the kit paints its pride — food, textiles, art, a 
 - Durban, South Africa
 - Stellenbosch, South Africa
 - Antananarivo, Madagascar
-- Mauritius
-- Seychelles
 - Dakar, Senegal
 - Abidjan, Côte d’Ivoire
 - Kumasi, Ghana
@@ -895,7 +894,7 @@ Every country gets a board; the kit paints its pride — food, textiles, art, a 
 - Amritsar, India
 - Ladakh, India
 - Darjeeling, India
-- Lhasa, Tibet
+- Lhasa, China
 - Xi’an, China
 - Chengdu, China
 - Guilin, China
@@ -1011,9 +1010,6 @@ Every country gets a board; the kit paints its pride — food, textiles, art, a 
 - Trinidad, Cuba
 - Bridgetown, Barbados
 - Castries, St. Lucia
-- Antigua and Barbuda
-- St. Kitts and Nevis
-- Grenada
 - Aruba
 - Curaçao
 - Bermuda
