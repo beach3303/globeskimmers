@@ -171,7 +171,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     .filter((f) => f && f.handle && f.status === "accepted" && !isBlocked(f))
     .slice(0, 12);
   const board = toCity && String(toCity.city || "").trim() && String(toCity.country || "").trim()
-    ? { city: String(toCity.city).trim(), country: String(toCity.country).trim() } : null;
+    ? { city: String(toCity.city).trim(), country: String(toCity.country).trim(), region: toCity.region ? String(toCity.region).trim() : null } : null;
   const fixedBlocked = !board && !!fixedTo && block.handles.has(fixedTo);
   const nowhere = !board && !fixedTo && to === "" && followerCount === 0;
   const canSend = !busy && !!image && !nowhere && !fixedBlocked;
@@ -192,6 +192,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     const { data, error } = await sendPostcard({
       image, message,
       place_name: place || preset?.place_name, city: board?.city || preset?.city, country: board?.country || preset?.country,
+      region: board?.region || preset?.region || undefined,
       meta: dish ? { dish } : undefined,
       to_handle: address || undefined,
       to_city: board || undefined,
@@ -208,7 +209,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     // verifiably stamped may hang on that city's board too — their choice,
     // asked now, while the card is in hand. The mail itself is already away.
     const offer = !board && address && data?.pin && data.pin.city
-      ? { city: String(data.pin.city), country: String(data.pin.country || ""), label: data.pin.label === "local" ? "local" : "traveler", image, message, place: place || preset?.place_name || "", dish, addr: address }
+      ? { city: String(data.pin.city), country: String(data.pin.country || ""), region: data.pin.region ? String(data.pin.region) : null, label: data.pin.label === "local" ? "local" : "traveler", image, message, place: place || preset?.place_name || "", dish, addr: address }
       : null;
     if (offer) setPinOffer(offer);
     // The next postcard starts blank.
@@ -226,7 +227,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     setPinBusy(true);
     const { error } = await sendPostcard({
       image: pinOffer.image, message: pinOffer.message,
-      place_name: pinOffer.place || undefined, city: pinOffer.city, country: pinOffer.country,
+      place_name: pinOffer.place || undefined, city: pinOffer.city, country: pinOffer.country, region: pinOffer.region || undefined,
       meta: pinOffer.dish ? { dish: pinOffer.dish } : undefined,
       to_city: { city: pinOffer.city, country: pinOffer.country },
       anon: anon || undefined,

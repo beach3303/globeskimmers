@@ -20,9 +20,13 @@ export function derivePackets(stamps) {
     // 300–1000+ prints read as years, not one endless shelf).
     const year = String(s.visited_on || s.created_at || "").slice(0, 4) || "Undated";
     const key = `${city}|${(s.country || "").trim()}|${year}`;
-    if (!groups.has(key)) groups.set(key, { key, year, city, country: (s.country || "").trim(), photos: [], dates: [], stampId: null, stampWhen: "" });
+    if (!groups.has(key)) groups.set(key, { key, year, city, country: (s.country || "").trim(), photos: [], dates: [], tiers: [], stampId: null, stampWhen: "" });
     const g = groups.get(key);
-    for (const p of photos) g.photos.push({ src: p.photo_url, photo_url: p.photo_url, id: p.id, caption: p.caption || null, place: s.name, food: Number(p.food_subject) === 1 });
+    // The stamp's audience rides on each print (the tiers, 2026-10-15): the album is exactly as
+    // private as its stamp, and a 🌍 print also hangs on the city board unless taken down.
+    const tier = s.visibility || (s.hidden ? "me" : "inner");
+    if (!g.tiers.includes(tier)) g.tiers.push(tier);
+    for (const p of photos) g.photos.push({ src: p.photo_url, photo_url: p.photo_url, id: p.id, caption: p.caption || null, place: s.name, food: Number(p.food_subject) === 1, tier, board_hidden: p.board_hidden === true });
     if (s.visited_on) g.dates.push(String(s.visited_on).slice(0, 10));
     // The packet's newest stamp receives prints added from the packet itself
     // (founder, 2026-10-05: upload from the profile, not only from the stamp).

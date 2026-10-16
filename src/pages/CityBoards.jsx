@@ -13,7 +13,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, Search, Stamp } from "lucide-react";
 import { createPageUrl } from "@/utils";
-import { cityBoardUrl } from "@/lib/boardLinks";
+import { boardUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
 import { cityBoards } from "@/lib/passport";
 import { AirmailChevron } from "@/components/redesign/ornaments";
@@ -32,7 +32,8 @@ const OUTLINE = { minHeight: 44, padding: "0 16px", borderRadius: 14, background
 /** @type {import('react').CSSProperties} */
 const NOTE = { padding: 16, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16 };
 
-const countLabel = (n) => `${n} postcard${n === 1 ? "" : "s"}`;
+// "312 photos · 41 cards" (City Billboards, 2026-10-16); an older worker sends count alone.
+const countLabel = (b) => { const ph = Number(b?.photos) || 0; const cd = Number(b?.cards ?? b?.count) || 0; const parts = []; if (ph) parts.push(`${ph} photo${ph === 1 ? "" : "s"}`); if (cd) parts.push(`${cd} card${cd === 1 ? "" : "s"}`); return parts.join(" · ") || "new"; };
 
 function useBack() {
   const navigate = useNavigate();
@@ -55,9 +56,9 @@ function Masthead({ onBack }) {
           <div style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".2em", lineHeight: 1.2, textTransform: "uppercase", color: NEUTRAL.stamp }}>Globeskimmers · City boards</div>
         </div>
         <h1 style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(30), fontWeight: 400, lineHeight: 1.04, color: NEUTRAL.ink }}>
-          Postcards from <em style={{ fontStyle: "italic", color: BLUE }}>every city</em>
+          A board for <em style={{ fontStyle: "italic", color: BLUE }}>every city</em>
         </h1>
-        <p style={{ margin: "6px 0 0", fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>From travelers who were really there. Busiest first.</p>
+        <p style={{ margin: "6px 0 0", fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>Photos and postcards from travelers who were really there. Busiest first.</p>
       </header>
       <AirmailChevron height={5} />
     </>
@@ -69,7 +70,7 @@ function BoardTile({ board }) {
   const [broken, setBroken] = useState(false);
   const cover = board.cover && !broken;
   return (
-    <Link to={cityBoardUrl(board.city, board.country)} aria-label={`${board.city}, ${board.country}: ${countLabel(board.count)}`}
+    <Link to={boardUrl(board)} aria-label={`${board.name || board.city}, ${board.country}: ${countLabel(board)}`}
       style={{ display: "block", overflow: "hidden", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 14, textDecoration: "none", color: "inherit" }}>
       <div style={{ position: "relative", aspectRatio: "4 / 3", background: NEUTRAL.airmail }}>
         {cover ? (
@@ -77,15 +78,15 @@ function BoardTile({ board }) {
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
         ) : (
           <div aria-hidden="true" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <PostmarkRing city={board.city} date={board.last_at || new Date().toISOString()} color={BLUE} size={64} />
+            <PostmarkRing city={board.name || board.city} date={board.last_at || new Date().toISOString()} color={BLUE} size={64} />
           </div>
         )}
       </div>
       <div style={{ padding: "8px 10px 10px" }}>
-        <div style={{ fontFamily: SERIF, fontSize: fs(19), lineHeight: 1.1, color: NEUTRAL.ink, overflowWrap: "anywhere" }}>{board.city}</div>
+        <div style={{ fontFamily: SERIF, fontSize: fs(19), lineHeight: 1.1, color: NEUTRAL.ink, overflowWrap: "anywhere" }}>{board.name || board.city}</div>
         <div style={{ marginTop: 3, display: "flex", flexWrap: "wrap", gap: "2px 8px", fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", lineHeight: 1.35, textTransform: "uppercase", color: NEUTRAL.ink2 }}>
-          <span style={{ overflowWrap: "anywhere" }}>{board.country}</span>
-          <span style={{ color: BLUE }}>{countLabel(board.count)}</span>
+          <span style={{ overflowWrap: "anywhere" }}>{board.kind === "country" ? "Country board" : board.kind === "state" ? `${board.country} · State board` : board.country}</span>
+          <span style={{ color: BLUE }}>{countLabel(board)}</span>
         </div>
       </div>
     </Link>
@@ -138,7 +139,7 @@ function Boards({ onBack }) {
         <button type="button" onClick={retry} style={{ ...OUTLINE, marginTop: 10 }}>Try again</button>
       </div>
     );
-  } else if (!list.boards.length) {
+  } else if (!list.boards.length && !(list.rollups || []).length) {
     body = asked ? (
       <p role="status" style={{ margin: 0, fontSize: fs(14), lineHeight: 1.45, color: NEUTRAL.ink2 }}>No city board matches “{asked}” yet.</p>
     ) : (
@@ -154,9 +155,19 @@ function Boards({ onBack }) {
     );
   } else {
     body = (
-      <div className="grid grid-cols-2 md:grid-cols-3" style={{ gap: 12, opacity: searching ? 0.55 : 1, transition: "opacity .15s" }}>
-        {list.boards.map((b) => <BoardTile key={`${b.city}|${b.country}`} board={b} />)}
-      </div>
+      <>
+        <div className="grid grid-cols-2 md:grid-cols-3" style={{ gap: 12, opacity: searching ? 0.55 : 1, transition: "opacity .15s" }}>
+          {list.boards.map((b) => <BoardTile key={`${b.city}|${b.country}`} board={b} />)}
+        </div>
+        {(list.rollups || []).length ? (
+          <>
+            <h2 style={{ margin: "18px 0 8px", fontFamily: MONO, fontSize: fs(10), fontWeight: 500, letterSpacing: ".16em", lineHeight: 1.2, textTransform: "uppercase", color: BLUE }}>States &amp; countries</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3" style={{ gap: 12, opacity: searching ? 0.55 : 1, transition: "opacity .15s" }}>
+              {list.rollups.map((b) => <BoardTile key={`${b.kind}|${b.name}|${b.country}`} board={b} />)}
+            </div>
+          </>
+        ) : null}
+      </>
     );
   }
 

@@ -15,12 +15,15 @@ kits/<key>/
   header.png      1206 × 690 px  (the app shows it at 402 × 230 points, 3×)
   icon-1.png … icon-6.png   360 × 360 px, transparent background
   palette.json    { "plate": "#0C2B50", "accent": "#D6A64A", "ink": "#FFFCF7" }   (optional)
-  meta.json       { "key": "us-ca-los-angeles", "name": "Los Angeles", "kind": "city",
+  meta.json       { "name": "Los Angeles", "kind": "city", "icons": 6,
                     "country": "United States", "state": "California" }
 ```
 
-Keys are lowercase, hyphenated, prefixed by the ISO country code: `us-ca-los-angeles`,
-`us-tx` (a state), `fr` (a country), `fr-paris`, `ph-siargao` (a destination), `eg-cairo`.
+Folders are named by kind, then the place and its country, lowercase and hyphenated — exactly how
+the app looks them up: `city/los-angeles--united-states`, `state/texas--united-states`,
+`country/ghana`, `city/paris--france`, `city/siargao--philippines` (a destination is a city board),
+`city/cairo--egypt`. Accents dropped (`city/sao-paulo--brazil`). `meta.json` may add
+`"icons": 8` when a kit ships more than six.
 
 ## The header (1206 × 690)
 

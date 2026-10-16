@@ -330,7 +330,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
               ))}
             </div>
             <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.45, marginTop: 7 }}>
-              The stamp's photos follow it. 🔒 Only me can never be shared — in a link or a picture — until you change this.
+              The stamp's photos follow it. 🌍 Everyone also hangs them on the city board, signed @username — any photo can be taken off the board from your album. 🔒 Only me can never be shared — in a link or a picture — until you change this.
             </p>
           </div>
         )}

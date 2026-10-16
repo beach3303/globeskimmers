@@ -20,8 +20,14 @@ const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const INK3 = "#736657";
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 
+// The stamp's mark, as the passport wears it (founder, 2026-10-16: label albums "not so subtle
+// that it destroys the creativity"): one small glyph per audience the envelope holds.
+const MARK = { me: "🔒", inner: "🤝", followers: "✓", public: "🌍" };
+const marksOf = (tiers) => (tiers || []).map((t) => MARK[t]).filter(Boolean).join(" ");
+
 function Envelope({ packet, onOpen }) {
   const peek = packet.photos[0]?.src;
+  const marks = marksOf(packet.tiers);
   return (
     <button type="button" onClick={onOpen} aria-label={`Open the ${packet.city} photo packet — ${packet.photos.length} prints`}
       className="flex-none active:scale-95 transition-transform" style={{ width: 176 }}>
@@ -41,6 +47,7 @@ function Envelope({ packet, onOpen }) {
         {/* the envelope */}
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 82, borderRadius: 10, background: "linear-gradient(180deg,#EBDDB6,#E2D1A4)", border: "1.5px solid #C9B583", boxShadow: "0 4px 10px -6px rgba(0,0,0,.3)", zIndex: 2 }}>
           <div aria-hidden style={{ position: "absolute", top: 0, left: 0, right: 0, height: 0, borderLeft: "88px solid transparent", borderRight: "88px solid transparent", borderTop: "26px solid rgba(201,181,131,.55)" }} />
+          {marks ? <span aria-hidden="true" style={{ position: "absolute", right: 8, top: 30, fontSize: fs(10.5), lineHeight: 1, opacity: 0.8 }}>{marks}</span> : null}
           <div className="absolute inset-x-0 bottom-2 text-center px-2">
             <div className="truncate" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: fs(15), color: "#6B4F1E", letterSpacing: ".04em" }}>{packet.city.toUpperCase()}</div>
             <div style={{ fontFamily: MONO, fontSize: fs(8.5), color: "#8A6E33", letterSpacing: ".14em" }}>
@@ -53,7 +60,9 @@ function Envelope({ packet, onOpen }) {
   );
 }
 
-export default function PhotoPackets({ stamps, title = "Photo packets", owner = false, onChanged = null, social = null, className = "max-w-md mx-auto px-4 mt-8" }) {
+// albums: the owner's "Who sees my photo albums" dial ('passport' | 'inner' | 'me'); a 🌍 print
+// hangs on the city board only while the dial is open to passport viewers.
+export default function PhotoPackets({ stamps, title = "Photo packets", owner = false, albums = "passport", onChanged = null, social = null, className = "max-w-md mx-auto px-4 mt-8" }) {
   // social: { slug, blotter, onBlotterChanged } — the per-photo guestbook inside an open album.
   // className: the column (the profile passes its own, which widens on iPad).
   const packets = useMemo(() => derivePackets(stamps), [stamps]);
@@ -91,6 +100,11 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
     <div className={className}>
       <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: "#8A5410" }}>{title}</div>
       <div style={{ fontFamily: SERIF, fontSize: fs(22), color: "#16110D", lineHeight: 1.1 }}>Prints from every place</div>
+      {owner ? (
+        <p style={{ margin: "4px 0 0", fontFamily: MONO, fontSize: fs(9), letterSpacing: ".06em", lineHeight: 1.5, color: INK3 }}>
+          Each album is exactly as private as its stamp — 🔒 only me · 🤝 inner circle · ✓ followers · 🌍 everyone, and 🌍 prints also hang on the city board.
+        </p>
+      ) : null}
       <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPick} />
       {years.map(({ year, prints, packets: list }) => (
         <section key={year} aria-label={`${year} — ${prints} prints`}>
@@ -142,6 +156,8 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
               )}
               {(social?.slug || owner) && ph?.id && (
                 <PhotoFooter photo={ph} slug={social?.slug || null} blotter={social?.blotter || null} ownerView={owner} onChanged={social?.onBlotterChanged}
+                  albumsOpen={albums !== "inner" && albums !== "me"}
+                  onBoard={(id, hidden) => setOpen((o) => (o ? { ...o, photos: o.photos.map((x) => (x.id === id ? { ...x, board_hidden: hidden } : x)) } : o))}
                   onCaption={(id, caption) => setOpen((o) => (o ? { ...o, photos: o.photos.map((x) => (x.id === id ? { ...x, caption } : x)) } : o))} />
               )}
             </div>

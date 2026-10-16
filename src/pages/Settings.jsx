@@ -589,7 +589,7 @@ export default function SettingsPage() {
   useEffect(() => {
     let gone = false;
     callWorker("social/profile", {}).then(({ data }) => {
-      if (!gone && data?.profile) setDials({ approve_followers: data.profile.approve_followers !== false, albums_audience: data.profile.albums_audience || "inner", comments_audience: data.profile.comments_audience || "inner", default_stamp_tier: data.profile.default_stamp_tier || "inner", circle_public: data.profile.circle_public === true });
+      if (!gone && data?.profile) setDials({ approve_followers: data.profile.approve_followers !== false, albums_audience: data.profile.albums_audience || "passport", comments_audience: data.profile.comments_audience || "inner", default_stamp_tier: data.profile.default_stamp_tier || "inner", circle_public: data.profile.circle_public === true });
     });
     return () => { gone = true; };
   }, []);
@@ -1029,10 +1029,10 @@ export default function SettingsPage() {
             )}
             {dials && (
               <EdRow isTablet={isTablet} step={fontStep} icon={Images} iconBg={CAT.shopping.ink} title="Who sees my photo albums"
-                desc="Your passport pages and your photo albums each have their own audience. Inner circle: people you follow who follow you back."
+                desc="An album is exactly as private as its stamp — and a public stamp's photos also hang on its city board, signed with your @username. Inner circle keeps every album to people you follow who follow you back; Only me keeps them to you."
                 control={{ below: true, node: (
                   <EdChoices label="Who sees my photo albums" value={dials.albums_audience}
-                    options={[["inner", "Inner circle"], ["passport", "My passport"], ["me", "Only me"]]}
+                    options={[["passport", "Same as the stamp"], ["inner", "Inner circle"], ["me", "Only me"]]}
                     onPick={(v) => saveDial("albums_audience", v, dials.albums_audience)} />
                 ) }}
               />

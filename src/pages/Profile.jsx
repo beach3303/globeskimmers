@@ -80,6 +80,7 @@ export default function ProfilePage() {
   const teen = socialTier === "teen";
 
   const [stamps, setStamps] = useState(null);     // null until listPassport lands
+  const [albums, setAlbums] = useState("passport"); // the albums dial, for the prints' board marks
   const [stats, setStats] = useState(null);
   const [luggage, setLuggage] = useState(null);
   const [handle, setHandle] = useState({ loaded: false, handle: null, verified: false, seal: null });
@@ -114,6 +115,7 @@ export default function ProfilePage() {
   useEffect(() => {
     let gone = false;
     listPassport().then((pp) => {
+      if (!pp.error) setAlbums(pp.booklet?.albums || "passport");
       if (gone) return;
       setStamps(pp.stamps || []);
       setStats(pp.error ? null : pp.stats || null);
@@ -131,7 +133,7 @@ export default function ProfilePage() {
 
   const reloadLuggage = () => { luggageGet().then((d) => setLuggage(d)); };
   // New prints from a photo packet show at once.
-  const reloadStamps = () => { listPassport().then((pp) => { if (pp.error) return; setStamps(pp.stamps || []); setStats(pp.stats || null); }); };
+  const reloadStamps = () => { listPassport().then((pp) => { if (pp.error) return; setStamps(pp.stamps || []); setStats(pp.stats || null); setAlbums(pp.booklet?.albums || "passport"); }); };
 
   const startEdit = () => {
     const s = social || { name: "", bio: "", website: "", favorites: [], dreams: [] };
@@ -292,7 +294,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Your own packets take more prints, as on the Passport (founder, 2026-10-14). */}
-      {!edit && stamps ? <PhotoPackets stamps={stamps} title="Photo packets" owner onChanged={reloadStamps} className={`${COLUMN} mt-8`} /> : null}
+      {!edit && stamps ? <PhotoPackets stamps={stamps} title="Photo packets" owner albums={albums} onChanged={reloadStamps} className={`${COLUMN} mt-8`} /> : null}
     </div>
   );
 }

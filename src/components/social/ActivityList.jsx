@@ -49,6 +49,8 @@ export function activityLine(a) {
       return { who, text: `${a.doodle && !a.body ? "left a doodle on" : "signed"}${a.stamp ? ` your ${a.stamp} page` : " your passport"}${words}` };
     }
     case "tag": return { who, text: `tagged you${a.place ? ` at ${a.place}` : ""}. Were you there together?` };
+    // The heads-up that photos hang on a board (City Billboards, 2026-10-16): no `who`, the board speaks.
+    case "board": return { who: a.board || "A city", text: `${a.board_kind === "state" ? "state" : a.board_kind === "country" ? "country" : "city"} board now shows ${a.photos === 1 ? "one of your photos" : `${a.photos || "some"} of your photos`} — take any down from your album` };
     default: return { who, text: "" };
   }
 }

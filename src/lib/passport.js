@@ -375,21 +375,24 @@ export async function getAgeInfo() {
 // Send a postcard: image (data URL from resizePhoto), message, the place
 // line, optional dish meta, and either to_handle, to_city ({ city, country }:
 // that city's board, City Board) or nothing (= followers).
-export async function sendPostcard({ image, message, place_name, city, country, meta, to_handle, to_city, anon }) {
-  const { data, error } = await callWorker('postcards/send', { image, message, place_name, city, country, meta, to_handle, to_city, ...(anon ? { anon: true } : {}) });
+export async function sendPostcard({ image, message, place_name, city, country, region, meta, to_handle, to_city, anon }) {
+  const { data, error } = await callWorker('postcards/send', { image, message, place_name, city, country, ...(region ? { region } : {}), meta, to_handle, to_city, ...(anon ? { anon: true } : {}) });
   return { data, error: error || data?.error || null };
 }
 // A city's board (City Board, 2026-10-14): postcards from travelers who were really
 // there, newest first, a page at a time (before = the previous page's `next`).
 // { rows, next, can_post, held, unavailable, error }: held for a held viewer, and
 // unavailable before the worker or its column is there, so the app shows no board.
-export async function cityBoard({ city, country, before = null }) {
-  const { data, error } = await callWorker('city/board', { city, country, ...(before ? { before } : {}) });
+export async function cityBoard({ city, country, kind = 'city', region = null, before = null }) {
+  const { data, error } = await callWorker('city/board', { city, country, kind, ...(region ? { region } : {}), ...(before ? { before } : {}) });
   if (data && data.path === '/city/board') return { rows: [], next: null, can_post: false, held: null, unavailable: true, error: null };
   const held = data?.code === 'teen_hold' ? data.held || 'teen' : null;
   return {
     rows: Array.isArray(data?.rows) ? data.rows : [],
     next: data?.next || null,
+    board: data?.board || null,
+    kit: data?.kit || null,
+    counts: data?.counts || null,
     can_post: data?.can_post === true,
     held,
     unavailable: data?.unavailable === true,
@@ -406,6 +409,7 @@ export async function cityBoards(q = "") {
   const held = data?.code === 'teen_hold' ? data.held || 'teen' : null;
   return {
     boards: Array.isArray(data?.boards) ? data.boards : [],
+    rollups: Array.isArray(data?.rollups) ? data.rollups : [],
     held,
     unavailable: data?.unavailable === true,
     error: held ? null : error || data?.error || null,
@@ -494,4 +498,11 @@ export async function luggageGet() {
 export async function luggageSet(patch) {
   const { data, error } = await callWorker('luggage/set', patch);
   return { data, error };
+}
+
+// Take one of your photos down from every city board (or put it back) without touching
+// its album (City Billboards, 2026-10-16). { photo_id, hidden } → { ok, board_hidden }.
+export async function setPhotoOnBoard(photo_id, hidden) {
+  const { data, error } = await callWorker('passport/photo/board', { photo_id, hidden });
+  return { data, error: error || data?.error || null };
 }

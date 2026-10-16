@@ -1,8 +1,11 @@
 // CityBoard: a city's board (founder, 2026-10-03: "i love the city board"; built
-// 2026-10-14). Postcards addressed to a city by travelers who were really there (the
-// worker requires a verified stamp of theirs in that city), drawn like the Mailbox
-// postcards on airmail stock: newest first, 24 at a time, 'Show older' for the rest.
-// /CityBoard?city=Lisbon&country=Portugal, opened from Home's 'Postcards from Lisbon'.
+// 2026-10-14; the billboard, 2026-10-16). A painted header in a deco frame — the city's
+// art kit when it has one, the plain plate until then — over a dense wall: the reviewed
+// photos of every public stamp taken there, three across, with the postcards addressed
+// to the city woven in as full-width cards. Tap a photo to see it large, signed with its
+// @username. /CityBoard?city=Lisbon&country=Portugal; a US state is
+// ?kind=state&region=Texas&country=United%20States and a country ?kind=country&country=Ghana —
+// those roll up everything inside them and take no posts of their own.
 //
 // 'Post to this city board' shows only when the worker says you can (can_post: an adult with a
 // verified stamp there); otherwise one line says how to earn it. It shows nothing untrue:
@@ -13,12 +16,11 @@
 // Unfollow, Block); cards from people you blocked never show.
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ChevronLeft, Mail, Stamp } from "lucide-react";
+import { ChevronLeft, Mail, Stamp, X } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
 import { blotterReadBoard, cityBoard, getHandle, getSocialProfile } from "@/lib/passport";
-import { AirmailChevron } from "@/components/redesign/ornaments";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { whenLabel } from "@/components/social/Envelope";
 import PostcardCard from "@/components/social/PostcardCard";
@@ -50,52 +52,131 @@ function useBack() {
   };
 }
 
-// The Mailbox masthead's sibling, with 'Post to this city board' where Mailbox has 'Postcard'.
-function Masthead({ city, onBack, onPost = undefined }) {
+// The billboard (founder, 2026-10-16: "a billboard design almost, with photo collections of
+// photos taken in that city"): the kit's painting in a deco frame, the board's name over its
+// calm lower third, the counts, and Post when the viewer may. Without a kit, the plate alone.
+function Billboard({ name, kind = "city", country = "", kit = null, counts = null, onBack, onPost = undefined }) {
+  const plate = kit?.palette?.plate || NEUTRAL.navy;
+  const accent = kit?.palette?.accent || NEUTRAL.gold;
+  const ink = kit?.palette?.ink || NEUTRAL.ivory;
+  const kindWord = kind === "state" ? "State board" : kind === "country" ? "Country board" : "City board";
+  const icons = Array.isArray(kit?.icons) ? kit.icons.slice(0, 5) : [];
   return (
-    <>
-      <div aria-hidden="true" style={{ height: 12 }} />
-      <header className={COLUMN} style={{ paddingTop: 4, paddingBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+    <header style={{ background: plate, padding: "8px 12px 12px" }}>
+      <div className="max-w-md md:max-w-2xl mx-auto">
+        <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
           <button type="button" onClick={onBack} aria-label="Back"
-            style={{ flex: "none", display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, margin: "0 0 0 -12px", padding: 0, borderRadius: 999, background: "transparent", border: 0, color: BLUE, cursor: "pointer" }}>
+            style={{ flex: "none", display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, margin: "0 0 0 -12px", padding: 0, borderRadius: 999, background: "transparent", border: 0, color: ink, cursor: "pointer" }}>
             <ChevronLeft size={22} strokeWidth={2} aria-hidden="true" focusable="false" />
           </button>
-          <div style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".2em", lineHeight: 1.2, textTransform: "uppercase", color: NEUTRAL.stamp }}>Globeskimmers · City board</div>
+          <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".24em", lineHeight: 1.2, textTransform: "uppercase", color: accent }}>Globeskimmers · {kindWord}</div>
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 12, marginTop: 2 }}>
-          <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-            <h1 style={{ margin: 0, fontFamily: SERIF, fontSize: fs(30), fontWeight: 400, lineHeight: 1.04, color: NEUTRAL.ink, overflowWrap: "anywhere" }}>
-              Postcards from <em style={{ fontStyle: "italic", color: BLUE }}>{city || "this city"}</em>
-            </h1>
-            <p style={{ margin: "6px 0 0", fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>From travelers who were really there.</p>
+        <div style={{ border: `3px solid ${accent}`, borderRadius: 10, padding: 8 }}>
+          <div style={{ position: "relative", height: 170, borderRadius: 6, overflow: "hidden", border: `1px solid ${accent}`, background: `linear-gradient(160deg, ${plate}, ${NEUTRAL.coverNight})` }}>
+            {kit?.header ? (
+              <img src={kit.header} alt="" aria-hidden="true" decoding="async" onError={(e) => { e.currentTarget.style.display = "none"; }}
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            ) : null}
+            <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "26px 12px 10px", background: "linear-gradient(180deg, rgba(8,16,32,0), rgba(8,16,32,.78))" }}>
+              <h1 style={{ margin: 0, fontFamily: SERIF, fontSize: fs(30), fontWeight: 400, lineHeight: 1.05, letterSpacing: ".03em", color: ink, overflowWrap: "anywhere" }}>{name}</h1>
+              {kind !== "country" && country ? <div style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".18em", textTransform: "uppercase", color: accent, marginTop: 2 }}>{country}</div> : null}
+            </div>
           </div>
-          {onPost ? (
-            <button type="button" onClick={onPost}
-              style={{ flex: "none", display: "flex", alignItems: "center", gap: 8, minHeight: 44, padding: "0 16px", borderRadius: 999, border: 0, background: NEUTRAL.stamp, font: "inherit", fontSize: fs(13), fontWeight: 600, color: NEUTRAL.white, cursor: "pointer" }}>
-              <Mail size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
-              Post to this city board
-            </button>
-          ) : null}
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 8, color: accent }}>
+            <span style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".14em", textTransform: "uppercase" }}>
+              {counts ? `${counts.photos ?? 0} photo${counts.photos === 1 ? "" : "s"} · ${counts.cards ?? 0} card${counts.cards === 1 ? "" : "s"}` : "From travelers who were really there"}
+            </span>
+            {onPost ? (
+              <button type="button" onClick={onPost}
+                style={{ flex: "none", display: "flex", alignItems: "center", gap: 7, minHeight: 40, padding: "0 14px", borderRadius: 999, border: 0, background: NEUTRAL.stamp, font: "inherit", fontSize: fs(12.5), fontWeight: 600, color: NEUTRAL.white, cursor: "pointer" }}>
+                <Mail size={15} strokeWidth={2} aria-hidden="true" focusable="false" />
+                Post to this city board
+              </button>
+            ) : null}
+          </div>
         </div>
-      </header>
-      <AirmailChevron height={5} />
-    </>
+        {icons.length ? (
+          <div aria-hidden="true" style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 10 }}>
+            {icons.map((src) => (
+              <span key={src} style={{ width: 40, height: 40, borderRadius: 999, background: NEUTRAL.coverNight, border: `2px solid ${accent}`, overflow: "hidden", display: "block" }}>
+                <img src={src} alt="" loading="lazy" onError={(e) => { e.currentTarget.parentElement.style.display = "none"; }} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", padding: 5, boxSizing: "border-box" }} />
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </header>
   );
 }
 
-function Board({ city, country, onBack }) {
+// One photo of the wall, large: the picture, its caption, its signature, and Report.
+function PhotoPeek({ row, onClose, onReport }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const handle = lc(row?.by?.handle);
+  return (
+    <div role="dialog" aria-modal="true" aria-label={`Photo from ${row.place || "the board"}`} className="fixed inset-0 z-[9998] flex flex-col"
+      style={{ background: "rgba(8,16,32,.94)" }} onClick={onClose}>
+      <div style={{ display: "flex", justifyContent: "flex-end", padding: "calc(8px + env(safe-area-inset-top)) 8px 0" }}>
+        <button type="button" onClick={onClose} aria-label="Close"
+          style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: 0, color: NEUTRAL.ivory, cursor: "pointer" }}>
+          <X size={22} strokeWidth={2} aria-hidden="true" focusable="false" />
+        </button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 8px" }} onClick={(e) => e.stopPropagation()}>
+        <img src={row.photo} alt={row.caption || `Photo from ${row.place || ""}`} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 6, display: "block" }} />
+      </div>
+      <div style={{ padding: "12px 20px calc(20px + env(safe-area-inset-bottom))", color: NEUTRAL.ivory }} onClick={(e) => e.stopPropagation()}>
+        {row.caption ? <p style={{ margin: 0, fontFamily: SERIF, fontStyle: "italic", fontSize: fs(16), lineHeight: 1.35 }}>&ldquo;{row.caption}&rdquo;</p> : null}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 10px", marginTop: row.caption ? 8 : 0, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".1em", textTransform: "uppercase", color: NEUTRAL.goldPale }}>
+          <span>{handle ? `From @${handle}` : "From a traveler"}</span>
+          {row.place ? <span>· {row.place}</span> : null}
+          {whenLabel(row.created_at) ? <span style={{ marginLeft: "auto" }}>{whenLabel(row.created_at)}</span> : null}
+        </div>
+        {onReport ? (
+          <button type="button" onClick={() => onReport(row)}
+            style={{ marginTop: 10, minHeight: 36, padding: "0 12px", borderRadius: 999, background: "transparent", border: `1px solid ${NEUTRAL.goldPale}`, font: "inherit", fontSize: fs(12), fontWeight: 600, color: NEUTRAL.goldPale, cursor: "pointer" }}>
+            Report this photo
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// A tile on the wall: the photo, and the @username when the owner signed it.
+function PhotoTile({ row, onOpen }) {
+  const handle = lc(row?.by?.handle);
+  return (
+    <button type="button" onClick={() => onOpen(row)} aria-label={`Open the photo${row.place ? ` from ${row.place}` : ""}${handle ? ` by @${handle}` : ""}`}
+      style={{ position: "relative", display: "block", width: "100%", aspectRatio: "1 / 1", padding: 0, borderRadius: 8, overflow: "hidden", border: 0, background: NEUTRAL.airmailHair, cursor: "pointer" }}>
+      <img src={row.photo} alt="" loading="lazy" decoding="async" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+      {handle ? (
+        <span style={{ position: "absolute", left: 5, bottom: 5, padding: "2px 6px", borderRadius: 999, background: "rgba(22,17,13,.72)", color: NEUTRAL.white, fontFamily: MONO, fontSize: fs(7.5), letterSpacing: ".1em", textTransform: "uppercase" }}>@{handle}</span>
+      ) : null}
+    </button>
+  );
+}
+
+function Board({ kind, city, region, country, onBack }) {
   const { profile } = useAuth();
   const circle = useCircle();
-  const [board, setBoard] = useState(null);       // { rows, next, can_post, held, unavailable, error } once read
+  const name = kind === "state" ? region : kind === "country" ? country : city;
+  const [board, setBoard] = useState(null);       // { rows, next, can_post, board, kit, counts, held, unavailable, error } once read
   const [older, setOlder] = useState("idle");     // 'idle' | 'busy' | 'failed'
   const [me, setMe] = useState({ handle: null, name: null });
   const [traveler, setTraveler] = useState(null);
   const [compose, setCompose] = useState(false);
+  const [peek, setPeek] = useState(null);
   // The cards' likes and comments (the guestbook, 2026-10-14), read for every card shown.
   const [book, setBook] = useState(null);
-  const readBook = (list) => blotterReadBoard((list || []).map((x) => x?.id)).then(setBook);
+  const readBook = (list) => blotterReadBoard((list || []).filter((x) => x?.type !== "photo").map((x) => x?.id)).then(setBook);
   const live = useRef(0);
+  const ask = { city, country, kind, region };
 
   useEffect(() => {
     let gone = false;
@@ -106,20 +187,20 @@ function Board({ city, country, onBack }) {
 
   const load = async () => {
     const n = ++live.current;
-    const r = await cityBoard({ city, country });
+    const r = await cityBoard(ask);
     if (n !== live.current) return;
     setBoard(r);
     setOlder("idle");
     readBook(r.rows);
   };
-  useEffect(() => { load(); }, [city, country]);
+  useEffect(() => { load(); }, [kind, city, region, country]);
   const retry = () => { setBoard(null); load(); };
 
   const readOlder = async () => {
     if (older === "busy" || !board?.next) return;
     const n = live.current;
     setOlder("busy");
-    const r = await cityBoard({ city, country, before: board.next });
+    const r = await cityBoard({ ...ask, before: board.next });
     if (n !== live.current) return;
     if (r.error || r.held || r.unavailable) { setOlder("failed"); return; }
     setOlder("idle");
@@ -133,21 +214,24 @@ function Board({ city, country, onBack }) {
 
   const blocked = circle.blockedHandles || new Set();
   const rows = board && !board.error && !board.held && !board.unavailable ? (board.rows || []).filter((r) => !blocked.has(lc(r?.by?.handle))) : [];
-  const canPost = !!board && board.can_post === true && !board.held && !board.unavailable;
+  const canPost = kind === "city" && !!board && board.can_post === true && !board.held && !board.unavailable;
   const report = (row) => setTraveler({
-    person: { ...(row.by || {}), postcard_id: row.id || null },
-    report: { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(`City board ${city}${row.place ? `, ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.message ? `: "${row.message}"` : ""}`, 480) },
+    person: { ...(row.by || {}), postcard_id: row.type === "photo" ? null : row.id || null },
+    report: row.type === "photo"
+      ? { kind: "photo", ...(row.id ? { ref: `ph:${row.id}` } : {}), note: clip(`Photo on ${name}’s board${row.place ? `, ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.caption ? `: "${row.caption}"` : ""}`, 480) }
+      : { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(`City board ${name}${row.place ? `, ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.message ? `: "${row.message}"` : ""}`, 480) },
   });
 
   let body;
   if (!board) {
     body = (
       <>
-        <span className="sr-only" role="status">{`Opening ${city}’s board`}</span>
-        {[0, 1].map((i) => (
-          <div key={i} aria-hidden="true" className="animate-pulse motion-reduce:animate-none"
-            style={{ height: 300, marginTop: i ? 16 : 0, borderRadius: 14, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}` }} />
-        ))}
+        <span className="sr-only" role="status">{`Opening ${name}’s board`}</span>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} aria-hidden="true" className="animate-pulse motion-reduce:animate-none" style={{ aspectRatio: "1 / 1", borderRadius: 8, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}` }} />
+          ))}
+        </div>
       </>
     );
   } else if (board.held) {
@@ -155,13 +239,13 @@ function Board({ city, country, onBack }) {
   } else if (board.unavailable) {
     body = (
       <div style={{ padding: 16, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16 }}>
-        <p style={{ margin: 0, fontSize: fs(14), lineHeight: 1.45, color: NEUTRAL.ink2 }}>{city}’s board opens with the next app update.</p>
+        <p style={{ margin: 0, fontSize: fs(14), lineHeight: 1.45, color: NEUTRAL.ink2 }}>{name}’s board opens with the next app update.</p>
       </div>
     );
   } else if (board.error) {
     body = (
       <div style={{ padding: 16, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16 }}>
-        <p style={{ margin: 0, fontSize: fs(14), lineHeight: 1.4, color: NEUTRAL.ink2 }}>Couldn’t open {city}’s board.</p>
+        <p style={{ margin: 0, fontSize: fs(14), lineHeight: 1.4, color: NEUTRAL.ink2 }}>Couldn’t open {name}’s board.</p>
         <button type="button" onClick={retry} style={{ ...OUTLINE, marginTop: 10 }}>Try again</button>
       </div>
     );
@@ -170,20 +254,22 @@ function Board({ city, country, onBack }) {
       <div style={{ padding: "24px 20px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 18, textAlign: "center" }}>
         <Mail size={36} strokeWidth={1.6} color={BLUE} aria-hidden="true" focusable="false" style={{ display: "block", margin: "0 auto" }} />
         <p style={{ margin: "10px 0 0", fontFamily: SERIF, fontSize: fs(20), lineHeight: 1.2, color: NEUTRAL.ink }}>
-          No postcards from {city} <em style={{ fontStyle: "italic", color: BLUE }}>yet</em>
+          Nothing from {name} <em style={{ fontStyle: "italic", color: BLUE }}>yet</em>
         </p>
-        <p style={{ margin: "6px auto 0", maxWidth: "34ch", fontSize: fs(13), lineHeight: 1.5, color: NEUTRAL.ink2 }}>
-          {canPost ? "You were here, so the first one can be yours." : `Travelers who stamp ${city}, verified, can post here.`}
+        <p style={{ margin: "6px auto 0", maxWidth: "36ch", fontSize: fs(13), lineHeight: 1.5, color: NEUTRAL.ink2 }}>
+          {canPost ? "You were here, so the first card can be yours — and the photos on your public stamps hang here on their own." : `Photos on public stamps from ${name} hang here on their own; travelers who stamp it, verified, can post cards too.`}
         </p>
       </div>
     );
   } else {
     body = (
       <>
-        <h2 style={KICKER}>Newest first</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: 16, marginTop: 8, alignItems: "start" }}>
-          {rows.map((r, i) => (
-            <div key={r.id || `bc-${r.created_at}-${i}`}>
+        <h2 style={KICKER}>Newest first · tap any photo</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginTop: 8, alignItems: "start" }}>
+          {rows.map((r, i) => (r.type === "photo" ? (
+            <PhotoTile key={r.id || `ph-${i}`} row={r} onOpen={setPeek} />
+          ) : (
+            <div key={r.id || `bc-${r.created_at}-${i}`} style={{ gridColumn: "1 / -1" }}>
               <PostcardCard row={r} me={me.handle} meName={me.name || profile?.first_name || null} onReport={report} />
               {r.id ? (
                 <div style={{ marginTop: 8 }}>
@@ -192,16 +278,16 @@ function Board({ city, country, onBack }) {
                 </div>
               ) : null}
             </div>
-          ))}
+          )))}
         </div>
         {board.next ? (
           <div style={{ marginTop: 16, textAlign: "center" }}>
             <button type="button" onClick={readOlder} aria-busy={older === "busy" || undefined} aria-disabled={older === "busy" || undefined}
               style={{ ...OUTLINE, background: NEUTRAL.white, cursor: older === "busy" ? "progress" : "pointer" }}>
-              {older === "busy" ? "One moment…" : "Show older postcards"}
+              {older === "busy" ? "One moment…" : "Show more"}
             </button>
             {older === "failed" ? (
-              <p role="status" style={{ margin: "8px 0 0", fontSize: fs(12.5), color: NEUTRAL.ink2 }}>Couldn’t load older postcards. Try again.</p>
+              <p role="status" style={{ margin: "8px 0 0", fontSize: fs(12.5), color: NEUTRAL.ink2 }}>Couldn’t load more. Try again.</p>
             ) : null}
           </div>
         ) : null}
@@ -211,22 +297,25 @@ function Board({ city, country, onBack }) {
 
   return (
     <div>
-      <Masthead city={city} onBack={onBack} onPost={canPost ? () => setCompose(true) : undefined} />
+      <Billboard name={name} kind={kind} country={country} kit={board?.kit || null} counts={board?.counts || null} onBack={onBack} onPost={canPost ? () => setCompose(true) : undefined} />
       <div className={COLUMN}>
-        {board && !board.held && !board.unavailable && !board.error && !canPost ? (
-          <p style={{ display: "flex", alignItems: "flex-start", gap: 8, margin: "16px 0 0", fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
+        {kind === "city" && board && !board.held && !board.unavailable && !board.error && !canPost ? (
+          <p style={{ display: "flex", alignItems: "flex-start", gap: 8, margin: "14px 0 0", fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
             <Stamp size={15} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 1 }} />
-            <span>Stamp {city} with GPS or a photo taken there, and you can post here too.</span>
+            <span>Stamp {city} with GPS or a photo taken there, and you can post a card here too.</span>
           </p>
         ) : null}
-        <section aria-label={`Postcards from ${city}`} style={{ marginTop: 16 }}>{body}</section>
+        <section aria-label={`${name}’s board`} style={{ marginTop: 14 }}>{body}</section>
       </div>
+      {peek ? <PhotoPeek row={peek} onClose={() => setPeek(null)} onReport={(row) => { setPeek(null); report(row); }} /> : null}
       {traveler ? (
         <TravelerSheet person={traveler.person} report={traveler.report}
           onClose={() => setTraveler(null)} onChanged={() => { setTraveler(null); circle.retry(); retry(); }} />
       ) : null}
-      <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={() => { setCompose(false); retry(); }}
-        toCity={{ city, country }} blocked={circle.blocked} />
+      {kind === "city" ? (
+        <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={() => { setCompose(false); retry(); }}
+          toCity={{ city, country, region: region || null }} blocked={circle.blocked} />
+      ) : null}
     </div>
   );
 }
@@ -236,28 +325,33 @@ export default function CityBoardPage() {
   const location = useLocation();
   const onBack = useBack();
   const params = new URLSearchParams(location.search);
+  const kindParam = clean(params.get("kind")).toLowerCase();
+  const kind = kindParam === "state" || kindParam === "country" ? kindParam : "city";
   const city = clean(params.get("city"));
+  const region = clean(params.get("region") || params.get("state"));
   const country = clean(params.get("country"));
-  // Nothing social until the age tier is known; a held account keeps the masthead with its
+  const name = kind === "state" ? region : kind === "country" ? country : city;
+  const named = kind === "state" ? !!region && !!country : kind === "country" ? !!country : !!city && !!country;
+  // Nothing social until the age tier is known; a held account keeps the billboard with its
   // note, and the board isn't read for it.
-  if (!socialTierReady || socialTier === "blocked") return <Masthead city={city} onBack={onBack} />;
+  if (!socialTierReady || socialTier === "blocked") return <Billboard name={name || "This board"} kind={kind} country={country} onBack={onBack} />;
   if (socialTier === "confirm" || socialTier === "teen") {
     return (
       <div>
-        <Masthead city={city} onBack={onBack} />
+        <Billboard name={name || "This board"} kind={kind} country={country} onBack={onBack} />
         <div className={COLUMN}><div style={{ marginTop: 16 }}>{socialTier === "confirm" ? <ConfirmBirthdayNote /> : <TeenHoldNote />}</div></div>
       </div>
     );
   }
-  if (!city || !country) {
+  if (!named) {
     return (
       <div>
-        <Masthead city={city} onBack={onBack} />
+        <Billboard name="This board" kind={kind} country={country} onBack={onBack} />
         <div className={COLUMN}>
-          <p style={{ margin: "16px 0 0", fontSize: fs(14), color: NEUTRAL.ink2 }}>This board needs a city. Open it from Home.</p>
+          <p style={{ margin: "16px 0 0", fontSize: fs(14), color: NEUTRAL.ink2 }}>This board needs a place. Open it from Home.</p>
         </div>
       </div>
     );
   }
-  return <Board city={city} country={country} onBack={onBack} />;
+  return <Board kind={kind} city={city} region={region} country={country} onBack={onBack} />;
 }

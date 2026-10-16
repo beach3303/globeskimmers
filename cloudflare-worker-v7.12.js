@@ -14808,6 +14808,7 @@ async function handlePassportStampVisibility(request, env) {
         // "Set all my stamps to one level" — the one-tap way to go dark, or go public.
         const w = await gbRest(env, `passport_stamps?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: patch });
         if (!w.ok) return jsonResponse({ error: 'Could not update' }, 502);
+        if (b.visibility === 'public') await pcNoticeForStamps(env, user.id, null);
         return jsonResponse({ ok: true, visibility: b.visibility, all: true });
       }
       const id2 = String(b.stamp_id || '');
@@ -14815,6 +14816,7 @@ async function handlePassportStampVisibility(request, env) {
       const w = await gbRest(env, `passport_stamps?id=eq.${id2}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: patch });
       const rows = w.ok ? await w.json() : [];
       if (!rows.length) return jsonResponse({ error: 'Not found' }, 404);
+      if (b.visibility === 'public') await pcNoticeForStamps(env, user.id, [id2]);
       return jsonResponse({ ok: true, visibility: rows[0].visibility, hidden: rows[0].hidden === true });
     }
     const id = String(b.stamp_id || '');
@@ -14837,7 +14839,7 @@ async function ppLoad(env, userId) {
     // mod_status must ride along or the public serializer's ok-filter sees
     // undefined and hides every photo (found 2026-09-30 — reviewed photos were
     // invisible on public passports).
-    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption,mod_status,food_subject`, {});
+    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption,mod_status,food_subject,board_hidden`, {});
     photos = pq.ok ? await pq.json() : [];
   }
   const byStamp = {};
@@ -14893,7 +14895,7 @@ async function handlePassportList(request, env) {
       gbRest(env, `social_profiles?user_id=eq.${user.id}&select=*`, {}),
     ]);
     const sp = (spq.ok ? await spq.json() : [])[0] || {};
-    return jsonResponse({ ...loaded, booklet: { order: sp.booklet_order || 'newest', seed: sp.shuffle_seed ?? null, custom: Array.isArray(sp.custom_order) ? sp.custom_order : null, default_tier: PP_TIERS.includes(sp.default_stamp_tier) ? sp.default_stamp_tier : 'inner' } });
+    return jsonResponse({ ...loaded, booklet: { order: sp.booklet_order || 'newest', seed: sp.shuffle_seed ?? null, custom: Array.isArray(sp.custom_order) ? sp.custom_order : null, default_tier: PP_TIERS.includes(sp.default_stamp_tier) ? sp.default_stamp_tier : 'inner', albums: sp.albums_audience || 'passport' } });
   } catch (e) { return jsonResponse({ error: e.message, stamps: [], stats: {} }, 500); }
 }
 
@@ -14956,7 +14958,7 @@ async function handlePassportShare(request, env) {
         // Fail-closed photo moderation the moment the journal becomes public:
         // unchecked photos get reviewed in the background; the public
         // serializer only ever shows status 'ok'.
-        const pq = await gbRest(env, `passport_stamp_photos?user_id=eq.${user.id}&mod_status=is.null&select=id,photo_key&limit=80`, {});
+        const pq = await gbRest(env, `passport_stamp_photos?user_id=eq.${user.id}&mod_status=is.null&select=id,photo_key,stamp_id,user_id&limit=80`, {});
         const pending = pq.ok ? await pq.json() : [];
         if (pending.length && env.MEDIA) await Promise.race([ppReviewPhotos(env, pending), new Promise((r) => setTimeout(r, 6000))]);
       }
@@ -15005,7 +15007,9 @@ async function ppViewerLevel(env, ownerId, viewerId, inner = null) {
 // and 'me' no one.
 function ppAlbumsAllowedAt(ownerSp, lvl) {
   if (lvl >= 3) return true;
-  const aud = ownerSp?.albums_audience || 'inner';
+  // The default moved from 'inner' to 'passport' on 2026-10-16 (founder: photos follow
+  // their stamp onto city boards, heads-up instead of an ask). Explicit choices stand.
+  const aud = ownerSp?.albums_audience || 'passport';
   if (aud === 'me') return false;
   if (aud === 'passport') return true;
   return lvl >= 2;
@@ -15035,6 +15039,8 @@ async function ppReviewPhotos(env, rows) {
       const v = await gbModeratePhoto(env, ppBytesToB64(new Uint8Array(await obj.arrayBuffer())), obj.httpMetadata?.contentType || 'image/jpeg');
       if (!v || v.reason) return;
       await gbRest(env, `passport_stamp_photos?id=eq.${p.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mod_status: v.allow ? 'ok' : 'blocked', food_subject: v.allow && v.food ? 1 : 0 }) });
+      // Now that it may hang on a board (a public stamp's photo), the owner hears about it.
+      if (v.allow && p.stamp_id && p.user_id) await pcNoticeForStamps(env, p.user_id, [p.stamp_id]);
     } catch { /* stays unchecked → stays hidden from others */ }
   };
   for (let i = 0; i < rows.length; i += 4) await Promise.all(rows.slice(i, i + 4).map(one));
@@ -15044,12 +15050,24 @@ async function ppReviewPhotos(env, rows) {
 // a private passport, whose photos were never reviewed). Up to 40, newest first, at most one
 // sweep per owner every 2 minutes. The visit waits up to 4 s, so it already shows most of
 // them; the rest finish after the reply. Callers check first that the viewer may see them.
-async function ppSweepPhotos(env, ctx, ownerId) {
+async function ppSweepPhotos(env, ctx, ownerId, lvl = 3) {
   if (!env.MEDIA || !env.GLOBESKIMMERS_KV || !ownerId) return;
   try {
     const lock = `ppsweep:${ownerId}`;
     if (await env.GLOBESKIMMERS_KV.get(lock)) return;
-    const pq = await gbRest(env, `passport_stamp_photos?user_id=eq.${ownerId}&mod_status=is.null&order=created_at.desc&select=id,photo_key&limit=40`, {});
+    // Only the stamps this viewer may open (the tiers, 2026-10-15): a stranger's visit
+    // never sends an inner-circle album for review. A stamp with no tier yet reads as
+    // inner, the legacy meaning.
+    let onStamps = '';
+    if (lvl < 3) {
+      const tiers = PP_TIERS.filter((t) => PP_TIER_NEED[t] <= lvl);
+      const vis = lvl >= 2 ? `or=(visibility.in.(${tiers.join(',')}),visibility.is.null)` : `visibility=in.(${tiers.join(',')})`;
+      const sq = await gbRest(env, `passport_stamps?user_id=eq.${ownerId}&hidden=eq.false&${vis}&select=id&limit=500`, {});
+      const ids = sq.ok ? (await sq.json()).map((st) => st.id) : [];
+      if (!ids.length) return;
+      onStamps = `&stamp_id=in.(${ids.join(',')})`;
+    }
+    const pq = await gbRest(env, `passport_stamp_photos?user_id=eq.${ownerId}&mod_status=is.null${onStamps}&order=created_at.desc&select=id,photo_key,stamp_id,user_id&limit=40`, {});
     const pending = pq.ok ? await pq.json() : [];
     if (!pending.length) return;
     await env.GLOBESKIMMERS_KV.put(lock, '1', { expirationTtl: 120 });
@@ -15098,7 +15116,7 @@ async function handlePassportPublic(request, env, ctx) {
     if (linkLevel !== null && linkLevel > lvl) lvl = linkLevel;
     if (lvl === 0 && !share.is_public && linkLevel === null) return jsonResponse({ private: true });
     const withPhotos = ppAlbumsAllowedAt(ownerSp, linkLevel === 2 ? 2 : lvl);
-    if (withPhotos && lvl < 3) await ppSweepPhotos(env, ctx, share.user_id);
+    if (withPhotos && lvl < 3) await ppSweepPhotos(env, ctx, share.user_id, linkLevel === 2 ? 2 : lvl);
     const holder = await ppHolder(env, share.user_id);
     const { stamps } = await ppLoad(env, share.user_id);
     const origin = new URL(request.url).origin;
@@ -17996,6 +18014,155 @@ async function pcAnonLabel(env, userId, boardCity) {
   } catch { return 'traveler'; }
 }
 
+// ── City Billboards (founder decisions, 2026-10-16) ─────────────────────────
+// A board is a city ('lisbon|portugal'), a US state ('state:texas|united states')
+// or a country ('country:ghana'). Its wall holds the postcards addressed to it AND
+// the reviewed photos of every 🌍 public stamp taken there — no ask; a heads-up
+// (board_notices) and Remove on each photo instead. A state or country board
+// rolls up everything inside it, so a photo from Austin hangs on Austin, Texas
+// and the United States at once.
+const PC_WALL_PAGE = 30;
+const pcNorm = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const pcClean = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
+const pcLike = (v) => encodeURIComponent(String(v).replace(/[,.()*%\\]/g, ' '));
+const pcIsUS = (country) => pcNorm(pcCountryName(country)) === 'united states';
+// The board a request names: { kind, key, name, city, region, country } or null.
+function pcBoardOf(b) {
+  const country = pcClean(pcCountryName(b.country), 60);
+  const city = pcClean(b.city, 60);
+  const region = pcClean(b.region || b.state, 60);
+  if (!country) return null;
+  // The kind is named, never guessed: an old build's empty city stays a refusal, not a country board.
+  const kind = b.kind === 'state' ? 'state' : b.kind === 'country' ? 'country' : 'city';
+  if (kind === 'city') { const key = pcCityKey(city, country); return key ? { kind, key, name: city, city, region: region || null, country } : null; }
+  if (kind === 'state') return region ? { kind, key: `state:${pcNorm(region)}|${pcNorm(country)}`.slice(0, 140), name: region, city: null, region, country } : null;
+  return { kind, key: `country:${pcNorm(country)}`.slice(0, 140), name: country, city: null, region: null, country };
+}
+// Kit folders on R2: kits/city/lisbon--portugal, kits/state/texas--united-states,
+// kits/country/ghana (docs/design/city-board-kits.md). Looked up once an hour.
+const pcSlugWord = (v) => pcNorm(v).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const pcKitSlug = (board) => board.kind === 'country' ? `country/${pcSlugWord(board.country)}` : `${board.kind}/${pcSlugWord(board.name)}--${pcSlugWord(board.country)}`;
+async function pcKit(env, board, origin) {
+  if (!env.MEDIA) return null;
+  const slug = pcKitSlug(board);
+  const kv = env.GLOBESKIMMERS_KV;
+  const ck = `kit:v1:${slug}`;
+  if (kv) { try { const c = await kv.get(ck); if (c) return c === 'none' ? null : JSON.parse(c); } catch { /* read it fresh */ } }
+  let kit = null;
+  try {
+    const meta = await env.MEDIA.get(`kits/${slug}/meta.json`);
+    if (meta) {
+      const m = await meta.json().catch(() => ({}));
+      let palette = null;
+      try { const pal = await env.MEDIA.get(`kits/${slug}/palette.json`); if (pal) palette = await pal.json(); } catch { palette = null; }
+      const n = Number.isInteger(m.icons) ? Math.max(0, Math.min(12, m.icons)) : 6;
+      kit = { slug, name: m.name || board.name, header: `${origin}/kit/${slug}/header.png`, icons: Array.from({ length: n }, (_, i) => `${origin}/kit/${slug}/icon-${i + 1}.png`), palette };
+    }
+  } catch { kit = null; }
+  if (kv) await kv.put(ck, kit ? JSON.stringify(kit) : 'none', { expirationTtl: 3600 }).catch(() => {});
+  return kit;
+}
+async function handleKitServe(request, env) {
+  if (!env.MEDIA) return new Response('Not found', { status: 404 });
+  const path = decodeURIComponent(new URL(request.url).pathname.replace(/^\/kit\//, ''));
+  if (!/^(city|state|country)\/[a-z0-9-]+\/(header\.png|icon-(?:[1-9]|1[0-2])\.png)$/.test(path)) return new Response('Not found', { status: 404 });
+  const obj = await env.MEDIA.get(`kits/${path}`);
+  if (!obj) return new Response('Not found', { status: 404 });
+  return new Response(obj.body, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400, immutable' } });
+}
+// The photos a board hangs: every reviewed photo of a 🌍 public stamp taken there,
+// not yet taken down (board_hidden), never from anyone the viewer blocked. `before`
+// pages by the photo's created_at. Fails to none: a missing column (deploy race)
+// or an unreadable table never breaks the board — the cards still show.
+async function pcBoardPhotos(env, board, before, blocked, origin) {
+  const none = { photos: [], more: false, total: 0 };
+  try {
+    let where = `visibility=eq.public&hidden=eq.false&country=ilike.${pcLike(board.country)}`;
+    if (board.kind === 'city') where += `&city=ilike.${pcLike(board.city)}`;
+    if (board.kind === 'state') where += `&region=ilike.${pcLike(board.region)}`;
+    const sq = await gbRest(env, `passport_stamps?${where}&order=created_at.desc&select=id,user_id,name,kind,city,region,country&limit=400`, {});
+    if (!sq.ok) return none;
+    let stamps = (await sq.json()).filter((st) => board.kind !== 'city' || pcCityKey(st.city, st.country) === board.key);
+    if (!stamps.length) return none;
+    // Owners first: an adult whose albums are open to passport viewers (the dial that
+    // defaults to "same as the stamp" since 2026-10-16). Minors and 'inner'/'me' owners
+    // drop out here, so the count below is the wall's true size.
+    const owners = [...new Set(stamps.map((st) => st.user_id))];
+    const okOwner = new Set();
+    for (let i = 0; i < owners.length; i += 100) {
+      const r = await gbRest(env, `social_profiles?user_id=in.(${owners.slice(i, i + 100).join(',')})&select=user_id,albums_audience,${GB_TIER_COLS}`, {});
+      if (!r.ok) return none;
+      for (const row of await r.json()) { const t = gbTierRow(row); if (!gbUnderAge(t) && !gbAgeHeld(t) && !['inner', 'me'].includes(row.albums_audience)) okOwner.add(row.user_id); }
+    }
+    stamps = stamps.filter((st) => okOwner.has(st.user_id) && !blocked.has(st.user_id));
+    if (!stamps.length) return none;
+    const byId = Object.fromEntries(stamps.map((st) => [st.id, st]));
+    const ids = stamps.map((st) => st.id).join(',');
+    const base = `passport_stamp_photos?stamp_id=in.(${ids})&mod_status=eq.ok&board_hidden=eq.false`;
+    const [pq, cq] = await Promise.all([
+      gbRest(env, `${base}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&select=id,stamp_id,user_id,caption,created_at&limit=${PC_WALL_PAGE + 1}`, {}),
+      gbRest(env, `${base}&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } }),
+    ]);
+    if (!pq.ok) return none;
+    const got = (await pq.json()).filter((ph) => byId[ph.stamp_id] && !blocked.has(ph.user_id));
+    const total = cq.ok ? parseInt((cq.headers.get('content-range') || '').split('/')[1] || '0', 10) || got.length : got.length;
+    return { photos: got.slice(0, PC_WALL_PAGE).map((ph) => ({ ...ph, stamp: byId[ph.stamp_id], photo: `${origin}/pp-photo/p/${ph.id}` })), more: got.length > PC_WALL_PAGE, total };
+  } catch { return none; }
+}
+// The heads-up (founder, 2026-10-16: no ask — "give them a heads up"): one Mailbox
+// note per board the first time a traveler's photos hang there. stampIds null =
+// every public stamp of theirs. Never worth failing the action that called it.
+async function pcNoticeForStamps(env, userId, stampIds) {
+  try {
+    if (Array.isArray(stampIds) && !stampIds.length) return;
+    const where = Array.isArray(stampIds) ? `id=in.(${stampIds.filter((x) => BL_UUID.test(x)).join(',')})&` : '';
+    const sq = await gbRest(env, `passport_stamps?${where}user_id=eq.${userId}&visibility=eq.public&hidden=eq.false&select=id,name,city,region,country&limit=500`, {});
+    const stamps = sq.ok ? await sq.json() : [];
+    if (!stamps.length) return;
+    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${stamps.map((st) => st.id).join(',')})&mod_status=eq.ok&board_hidden=eq.false&select=stamp_id&limit=2000`, {});
+    const counts = {};
+    for (const ph of (pq.ok ? await pq.json() : [])) counts[ph.stamp_id] = (counts[ph.stamp_id] || 0) + 1;
+    const boards = {};
+    for (const st of stamps) {
+      const n = counts[st.id] || 0;
+      if (!n) continue;
+      const list = [
+        pcBoardOf({ city: st.city, country: st.country, region: st.region }),
+        st.region && pcIsUS(st.country) ? pcBoardOf({ kind: 'state', region: st.region, country: st.country }) : null,
+        pcBoardOf({ kind: 'country', country: st.country }),
+      ];
+      for (const bd of list) if (bd) { boards[bd.key] = boards[bd.key] || { ...bd, photos: 0 }; boards[bd.key].photos += n; }
+    }
+    const rows = Object.values(boards).map((bd) => ({ user_id: userId, board_key: bd.key, board_name: bd.name, kind: bd.kind, photos: bd.photos }));
+    if (rows.length) await gbRest(env, 'board_notices?on_conflict=user_id,board_key', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify(rows) });
+  } catch { /* a missing heads-up never fails the action */ }
+}
+// Travelers from before the flip get their heads-up once, on their next Mailbox read.
+async function pcNoticeSweep(env, userId) {
+  try {
+    const kv = env.GLOBESKIMMERS_KV;
+    const k = `bnsweep:v1:${userId}`;
+    if (kv && await kv.get(k)) return;
+    await pcNoticeForStamps(env, userId, null);
+    if (kv) await kv.put(k, '1', { expirationTtl: 90 * 86400 }).catch(() => {});
+  } catch { /* next read tries again */ }
+}
+// Take a photo down from every board (or put it back) without touching its album.
+async function handlePassportPhotoBoard(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.photo_id || '');
+    if (!BL_UUID.test(id) || typeof b.hidden !== 'boolean') return jsonResponse({ error: 'photo_id + hidden required' }, 400);
+    const w = await gbRest(env, `passport_stamp_photos?id=eq.${id}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ board_hidden: b.hidden }) });
+    if (!w.ok) return jsonResponse({ error: 'Could not update' }, 502);
+    const rows = await w.json();
+    if (!rows.length) return jsonResponse({ error: 'Not found' }, 404);
+    return jsonResponse({ ok: true, board_hidden: rows[0].board_hidden === true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 // ── Postcards (2026-09-30): sent, not posted ────────────────────────────────
 // The photo is moderated SYNCHRONOUSLY at send (a postcard is shared by
 // definition — fail-closed, no unreviewed image ever leaves the sender).
@@ -18100,7 +18267,7 @@ async function handlePostcardSend(request, env, ctx) {
 
     const row = {
       sender_id: user.id, to_user_id: toUser, photo_key: key, message: msg,
-      place_name: clean(b.place_name, 80), city: clean(b.city, 60), country: clean(b.country, 60),
+      place_name: clean(b.place_name, 80), city: clean(b.city, 60), country: clean(b.country, 60), region: clean(b.region, 60),
       ...((b.meta && typeof b.meta === 'object') || anonLabel ? { meta: {
         ...(b.meta && typeof b.meta === 'object' ? { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60) } : {}),
         ...(anonLabel ? { anon: anonLabel } : {}),
@@ -18122,7 +18289,7 @@ async function handlePostcardSend(request, env, ctx) {
     if (toUser && !toTeen && sp.social_tier !== 'teen' && row.city && row.country) {
       try {
         const k = pcCityKey(row.city, row.country);
-        if (k && await pcWasThere(env, user.id, k)) pin = { city: row.city, country: row.country, label: await pcAnonLabel(env, user.id, row.city) };
+        if (k && await pcWasThere(env, user.id, k)) pin = { city: row.city, country: row.country, region: row.region || null, label: await pcAnonLabel(env, user.id, row.city) };
       } catch { /* no offer; the card is already on its way */ }
     }
     return jsonResponse({ ok: true, ...(toCity ? { board: toCity } : {}), ...(pin ? { pin } : {}) });
@@ -19242,56 +19409,84 @@ async function handleCityBoard(request, env) {
     if (mySp === undefined) return jsonResponse({ rows: [], error: 'Couldn’t check your account — try again', code: 'age_unknown' }, 503);
     if (gbOffSocial(mySp)) return jsonResponse({ rows: [], code: 'teen_hold', held: gbNeedsConfirm(mySp) ? 'confirm' : 'teen' }, 403);
     const b = await request.json().catch(() => ({}));
-    const city = String(b.city || '').replace(/\s+/g, ' ').trim().slice(0, 60);
-    const country = String(b.country || '').replace(/\s+/g, ' ').trim().slice(0, 60);
-    const key = pcCityKey(city, country);
-    if (!key) return jsonResponse({ rows: [], error: 'Which city?' }, 400);
+    const board = pcBoardOf(b);
+    if (!board) return jsonResponse({ rows: [], error: 'Which city?' }, 400);
+    const { key, city, country } = board;
     const before = typeof b.before === 'string' && /^\d{4}-\d{2}-\d{2}T[0-9:.]+(Z|[+-]\d{2}:?\d{2})$/.test(b.before) ? b.before : null;
     const blocked = await gbBlockSet(env, user.id);
     if (!blocked) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
-    const [q, there] = await Promise.all([
-      gbRest(env, `postcards?to_city=eq.${encodeURIComponent(key)}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {}),
-      pcWasThere(env, user.id, key),
+    const origin = new URL(request.url).origin;
+    // Cards addressed to this city; a state or country board rolls up the cards of every
+    // city inside it (a card's region rides with it since 2026-10-16).
+    const cardsQ = board.kind === 'city'
+      ? `postcards?to_city=eq.${encodeURIComponent(key)}`
+      : `postcards?to_city=not.is.null&country=ilike.${pcLike(country)}${board.kind === 'state' ? `&region=ilike.${pcLike(board.region)}` : ''}`;
+    const [q, there, wall, kit, cc] = await Promise.all([
+      gbRest(env, `${cardsQ}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {}),
+      board.kind === 'city' ? pcWasThere(env, user.id, key) : Promise.resolve(false),
+      pcBoardPhotos(env, board, before, blocked, origin),
+      pcKit(env, board, origin),
+      gbRest(env, `${cardsQ}&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } }),
     ]);
     if (q.status === 400) return jsonResponse({ rows: [], unavailable: true });
     if (!q.ok) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
     const got = await q.json();
-    const page = got.slice(0, PC_BOX_PAGE);
-    const next = got.length > PC_BOX_PAGE ? page[page.length - 1].created_at : null;
-    const senders = [...new Set(page.map((p) => p.sender_id))].filter((id) => !blocked.has(id));
+    const cards = got.slice(0, PC_BOX_PAGE);
+    const people = [...new Set([...cards.map((p) => p.sender_id), ...wall.photos.map((p) => p.user_id)])].filter((id) => !blocked.has(id));
     let share = {};
     let prof = {};
-    if (senders.length) {
-      const inList = senders.join(',');
+    const aud = {};
+    if (people.length) {
+      const inList = people.join(',');
       const [h2, p2] = await Promise.all([
         gbRest(env, `passport_shares?user_id=in.(${inList})&select=user_id,handle`, {}),
-        gbRest(env, `social_profiles?user_id=in.(${inList})&select=user_id,display_name,${GB_TIER_COLS}`, {}),
+        gbRest(env, `social_profiles?user_id=in.(${inList})&select=user_id,display_name,albums_audience,${GB_TIER_COLS}`, {}),
       ]);
       if (!p2.ok) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
       share = Object.fromEntries((h2.ok ? await h2.json() : []).map((r) => [r.user_id, r]));
-      prof = Object.fromEntries((await p2.json()).map((r) => [r.user_id, gbTierRow(r)]));
+      for (const r of await p2.json()) { prof[r.user_id] = gbTierRow(r); aud[r.user_id] = r.albums_audience || null; }
     }
-    // An adult's card only: never a minor's, never one whose sender's age can't be read.
+    // An adult's card or photo only: never a minor's, never one whose owner's age can't be
+    // read. A photo also needs its owner's albums open to passport viewers — the dial that
+    // defaults to "same as the stamp" since 2026-10-16; 'inner' and 'me' keep photos home.
     const adult = (id) => { const r = prof[id]; return !!r && !gbUnderAge(r) && !gbAgeHeld(r); };
-    const shown = page.filter((p) => !blocked.has(p.sender_id) && adult(p.sender_id));
+    const albumsOpen = (id) => !['inner', 'me'].includes(aud[id]);
+    const shownCards = cards.filter((p) => !blocked.has(p.sender_id) && adult(p.sender_id));
+    const shownPhotos = wall.photos.filter((p) => adult(p.user_id) && albumsOpen(p.user_id));
+    const senders = [...new Set(shownCards.map((p) => p.sender_id))];
     const gone = await gbPurgeQueued(env, senders.filter((id) => !share[id]?.handle && prof[id]?.display_name));
-    const nameOf = (id) => (gone.has(id) ? null : prof[id]?.display_name || null);
-    const origin = new URL(request.url).origin;
-    const faces = await gbFaces(env, senders.filter((id) => !gone.has(id) && adult(id)), origin);
-    const rows = shown.map((p) => ({
+    const faces = await gbFaces(env, senders.filter((id) => !gone.has(id)), origin);
+    const cardRows = shownCards.map((p) => ({
       type: 'postcard', id: p.id, created_at: p.created_at,
       photo: `${origin}/pc-photo/${p.photo_key}`,
-      message: p.message, place: p.place_name, city: p.city, country: p.country,
+      message: p.message, place: p.place_name, city: p.city, region: p.region || null, country: p.country,
       dish: p.meta?.dish || null, to_me: false, board: true,
-      // A card signed "@local" / "@traveler" (founder, 2026-10-15) names
-      // nobody: no handle, no name, no face — the label is all a reader gets.
-      // And a SIGNED city-board card shows the @username alone (founder,
-      // 2026-10-16: "signed — handle, no name"): real names stay off boards.
+      // A card signed "@local" / "@traveler" (founder, 2026-10-15) names nobody: no
+      // handle, no name, no face. A SIGNED city-board card shows the @username alone
+      // (founder, 2026-10-16: "signed — handle, no name"): real names stay off boards.
       ...(p.meta?.anon
         ? { anon: p.meta.anon === 'local' ? 'local' : 'traveler', by: { handle: null, name: null } }
         : { by: { handle: share[p.sender_id]?.handle || null, name: null, ...(faces[p.sender_id] || {}) } }),
     }));
-    return jsonResponse({ rows, next, can_post: there && mySp?.social_tier !== 'teen', city, country });
+    const photoRows = shownPhotos.map((p) => ({
+      type: 'photo', id: p.id, created_at: p.created_at, photo: p.photo, caption: p.caption || null,
+      place: p.stamp.name, stamp_kind: p.stamp.kind || null, city: p.stamp.city || null, region: p.stamp.region || null, country: p.stamp.country || null,
+      by: { handle: share[p.user_id]?.handle || null, name: null },
+    }));
+    // One page from two sources: it ends at the newer of the two sources' last items, and
+    // anything older waits for the next page — nothing is skipped, nothing repeats.
+    const lastCard = got.length > PC_BOX_PAGE ? cards[cards.length - 1].created_at : null;
+    const lastPhoto = wall.more && wall.photos.length ? wall.photos[wall.photos.length - 1].created_at : null;
+    const next = [lastCard, lastPhoto].filter(Boolean).sort().pop() || null;
+    const rows = [...cardRows, ...photoRows]
+      .filter((r) => !next || String(r.created_at) >= next)
+      .sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)));
+    const cardTotal = cc.ok ? parseInt((cc.headers.get('content-range') || '').split('/')[1] || '', 10) || cardRows.length : cardRows.length;
+    return jsonResponse({
+      rows, next, can_post: board.kind === 'city' && there && mySp?.social_tier !== 'teen', city, country,
+      board: { kind: board.kind, key, name: board.name, city: board.city, region: board.region, country },
+      kit, counts: { photos: wall.total, cards: cardTotal },
+    });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -19304,6 +19499,45 @@ async function handleCityBoard(request, env) {
 // five minutes. Same doors as a board: teens and held accounts get the hold. Before the
 // migration the answer is { boards: [], unavailable: true }.
 const PC_BOARDS_TTL = 300;
+// Boards whose photos come from public stamps (City Billboards, 2026-10-16): counts and a
+// cover per city, US state and country, from adult owners whose albums are open. Cached
+// five minutes; a read that fails lists no photo boards rather than wrong ones.
+async function pcPhotoBoards(env, origin) {
+  const kv = env.GLOBESKIMMERS_KV;
+  if (kv) { try { const c = JSON.parse((await kv.get('photoboards:v1')) || 'null'); if (c) return c; } catch { /* rebuild */ } }
+  const out = { city: {}, state: {}, country: {} };
+  try {
+    const sq = await gbRest(env, `passport_stamps?visibility=eq.public&hidden=eq.false&select=id,user_id,city,region,country&limit=3000`, {});
+    const stamps = sq.ok ? (await sq.json()).filter((st) => st.city && st.country) : [];
+    if (!stamps.length) return out;
+    const byId = Object.fromEntries(stamps.map((st) => [st.id, st]));
+    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${stamps.map((st) => st.id).join(',')})&mod_status=eq.ok&board_hidden=eq.false&order=created_at.desc&select=id,stamp_id,user_id,created_at&limit=6000`, {});
+    const photos = pq.ok ? (await pq.json()).filter((ph) => byId[ph.stamp_id]) : [];
+    const owners = [...new Set(photos.map((ph) => ph.user_id))];
+    const okOwner = new Set();
+    for (let i = 0; i < owners.length; i += 100) {
+      const r = await gbRest(env, `social_profiles?user_id=in.(${owners.slice(i, i + 100).join(',')})&select=user_id,albums_audience,${GB_TIER_COLS}`, {});
+      for (const row of (r.ok ? await r.json() : [])) { const t = gbTierRow(row); if (!gbUnderAge(t) && !gbAgeHeld(t) && !['inner', 'me'].includes(row.albums_audience)) okOwner.add(row.user_id); }
+    }
+    const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
+    const add = (bucket, bd, ph) => {
+      if (!bd) return;
+      const e = bucket[bd.key] || (bucket[bd.key] = { kind: bd.kind, key: bd.key, name: bd.name, city: bd.city, region: bd.region, country: bd.country, photos: 0, recent: 0, last_at: null, cover: null });
+      e.photos += 1; if (ph.created_at > weekAgo) e.recent += 1;
+      if (!e.last_at || ph.created_at > e.last_at) { e.last_at = ph.created_at; e.cover = `${origin}/pp-photo/p/${ph.id}`; }
+    };
+    for (const ph of photos) {
+      if (!okOwner.has(ph.user_id)) continue;
+      const st = byId[ph.stamp_id];
+      add(out.city, pcBoardOf({ city: st.city, country: st.country, region: st.region }), ph);
+      if (st.region && pcIsUS(st.country)) add(out.state, pcBoardOf({ kind: 'state', region: st.region, country: st.country }), ph);
+      add(out.country, pcBoardOf({ kind: 'country', country: st.country }), ph);
+    }
+  } catch { return out; }
+  if (kv) await kv.put('photoboards:v1', JSON.stringify(out), { expirationTtl: 300 }).catch(() => {});
+  return out;
+}
+
 async function handleCityBoards(request, env) {
   try {
     const user = await gbUser(request, env);
@@ -19329,9 +19563,23 @@ async function handleCityBoards(request, env) {
     const origin = new URL(request.url).origin;
     const boards = list.filter((x) => x && x.city && x.country && Number(x.total) > 0).map((x) => {
       const cover = (Array.isArray(x.covers) ? x.covers : []).find((c) => c && c.photo_key && !blocked.has(c.sender_id));
-      return { city: x.city, country: x.country, count: Number(x.total), recent: Number(x.recent) || 0, last_at: x.last_at || null, cover: cover ? `${origin}/pc-photo/${cover.photo_key}` : null };
+      return { kind: 'city', city: x.city, country: x.country, count: Number(x.total), cards: Number(x.total), photos: 0, recent: Number(x.recent) || 0, last_at: x.last_at || null, cover: cover ? `${origin}/pc-photo/${cover.photo_key}` : null };
     });
-    return jsonResponse({ boards });
+    // Photo boards (City Billboards, 2026-10-16) join the list: a city with only photos is a
+    // board too, and every US state and every country with anything inside it. Counts add up.
+    const pb = await pcPhotoBoards(env, origin);
+    const byKey = Object.fromEntries(boards.map((x) => [pcCityKey(x.city, x.country), x]));
+    for (const e of Object.values(pb.city)) {
+      if (q && !(`${pcNorm(e.city)} ${pcNorm(e.country)}`.includes(q))) continue;
+      const x = byKey[e.key];
+      if (x) { x.photos = e.photos; x.count += e.photos; x.recent += e.recent; if (!x.last_at || (e.last_at && e.last_at > x.last_at)) { x.last_at = e.last_at; x.cover = x.cover || e.cover; } }
+      else boards.push({ kind: 'city', city: e.city, country: e.country, count: e.photos, cards: 0, photos: e.photos, recent: e.recent, last_at: e.last_at, cover: e.cover });
+    }
+    const rollups = [...Object.values(pb.state), ...Object.values(pb.country)]
+      .filter((e) => !q || `${pcNorm(e.name)} ${pcNorm(e.country)}`.includes(q))
+      .map((e) => ({ kind: e.kind, name: e.name, region: e.region, country: e.country, count: e.photos, cards: 0, photos: e.photos, recent: e.recent, last_at: e.last_at, cover: e.cover }));
+    boards.sort((x, y) => (y.recent - x.recent) || (y.count - x.count));
+    return jsonResponse({ boards, rollups });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -19495,7 +19743,7 @@ async function handleSocialWorld(request, env, ctx) {
     const visible = !!share && (share.is_public === true || lvl >= 1);
     if (!visible) return jsonResponse({ person, relation, private: true });
     const withPhotos = ppAlbumsAllowedAt(ownerSp, lvl);
-    if (withPhotos) await ppSweepPhotos(env, ctx, sid);
+    if (withPhotos) await ppSweepPhotos(env, ctx, sid, lvl);
 
     // The open page: booklet, trunk, kit and circle, read together.
     const count = (r) => { const m = String(r?.headers?.get('content-range') || '').match(/\/(\d+)$/); return m ? Number(m[1]) : null; };
@@ -20186,13 +20434,16 @@ async function handleSocialUnread(request, env) {
     const seenAt = Date.parse(sp?.mailbox_seen_at || '') || (Date.now() - 14 * 864e5);
     const floor = encodeURIComponent(new Date(Date.now() - 30 * 864e5).toISOString());
     const j = async (r) => (r.ok ? await r.json() : []);
-    const [follows, following, direct, marks, entries, tags] = await Promise.all([
+    await pcNoticeSweep(env, me);
+    const [follows, following, direct, marks, entries, tags, notices] = await Promise.all([
       gbRest(env, `user_follows?followee_id=eq.${me}&created_at=gte.${floor}&select=follower_id,status,created_at&order=created_at.desc&limit=50`, {}).then(j),
       gbRest(env, `user_follows?follower_id=eq.${me}&status=eq.accepted&select=followee_id&limit=200`, {}).then(j),
       gbRest(env, `postcards?to_user_id=eq.${me}&created_at=gte.${floor}&select=sender_id,place_name,created_at&order=created_at.desc&limit=50`, {}).then(j),
       gbRest(env, `blotter_marks?owner_user_id=eq.${me}&user_id=neq.${me}&created_at=gte.${floor}&select=target,user_id,kind,created_at&order=created_at.desc&limit=150`, {}).then(j),
       gbRest(env, `blotter_entries?owner_user_id=eq.${me}&author_user_id=neq.${me}&created_at=gte.${floor}&select=id,target,author_user_id,body,doodle_key,created_at&order=created_at.desc&limit=50`, {}).then(j),
       gbRest(env, `passport_tags?to_user_id=eq.${me}&status=eq.pending&created_at=gte.${floor}&select=from_user_id,name,created_at&order=created_at.desc&limit=50`, {}).then(j),
+      // The heads-up that photos hang on a board (City Billboards, 2026-10-16); no table yet = none.
+      gbRest(env, `board_notices?user_id=eq.${me}&created_at=gte.${floor}&select=board_name,kind,photos,created_at&order=created_at.desc&limit=20`, {}).then(j).catch(() => []),
     ]);
     // Blocks hide the pair both ways (block_v2, 2026-10-13), activity from
     // before the block included; unreadable blocks count nothing. Signatures
@@ -20223,6 +20474,7 @@ async function handleSocialUnread(request, env) {
     items.push(...grouped.values());
     for (const r of entries) items.push({ type: 'signature', uid: r.author_user_id, entry_id: r.id, target: r.target, body: r.body ? String(r.body).slice(0, 90) : null, doodle: !!r.doodle_key, at: r.created_at });
     for (const r of tags) items.push({ type: 'tag', uid: r.from_user_id, place: r.name || null, at: r.created_at });
+    for (const r of (Array.isArray(notices) ? notices : [])) items.push({ type: 'board', uid: null, board_name: r.board_name, board_kind: r.kind, photos: r.photos, at: r.created_at });
 
     for (let i = items.length - 1; i >= 0; i--) {
       const onMyPages = items[i].type === 'signature' || items[i].type === 'reaction';
@@ -20263,7 +20515,7 @@ async function handleSocialUnread(request, env) {
     const dayAgo = Date.now() - 864e5;
 
     const activity = items
-      .filter((i) => checked.has(i.uid) && !young.has(i.uid))
+      .filter((i) => i.type === 'board' || (checked.has(i.uid) && !young.has(i.uid)))
       .filter((i) => !(who[i.uid]?.teen && Date.parse(i.at) > dayAgo))
       .sort((a, c) => String(c.at).localeCompare(String(a.at)))
       .slice(0, 40)
@@ -20281,6 +20533,7 @@ async function handleSocialUnread(request, env) {
         ...(i.body !== undefined ? { body: i.body, doodle: i.doodle } : {}),
         ...(i.place !== undefined ? { place: i.place } : {}),
         ...(i.to_me ? { to_me: true } : {}),
+        ...(i.type === 'board' ? { board: i.board_name, board_kind: i.board_kind, photos: i.photos } : {}),
       }));
     const total = activity.filter((a) => a.unread).length;
     // A traveler already deleted, whose clean-up hasn't reached them yet, is
@@ -26040,6 +26293,7 @@ export default {
       if (pathname === '/places/like' && request.method === 'POST') return await handlePlaceLike(request, env);
       if (pathname === '/places/report' && request.method === 'POST') return await handlePlaceReport(request, env, ctx);
       if (pathname.startsWith('/pc-photo/') && request.method === 'GET') return await handlePostcardPhotoServe(request, env);
+      if (pathname.startsWith('/kit/') && request.method === 'GET') return await handleKitServe(request, env);
       if (pathname.startsWith('/av-photo/') && request.method === 'GET') return await handleAvatarServe(request, env);
       if (pathname.startsWith('/bl-doodle/') && request.method === 'GET') return await handleBlotterDoodleServe(request, env);
       if (pathname === '/airport-at' && request.method === 'GET') return await handleAirportAt(request, env);
@@ -26076,6 +26330,7 @@ export default {
       if (pathname === '/postcards/keep' && request.method === 'POST') return await handlePostcardKeep(request, env);
       if (pathname === '/social/world' && request.method === 'POST') return await handleSocialWorld(request, env, ctx);
       if (pathname === '/city/board' && request.method === 'POST') return await handleCityBoard(request, env);
+      if (pathname === '/passport/photo/board' && request.method === 'POST') return await handlePassportPhotoBoard(request, env);
       if (pathname === '/city/boards' && request.method === 'POST') return await handleCityBoards(request, env);
       if (pathname === '/social/avatar' && request.method === 'POST') return await handleSocialAvatar(request, env, ctx);
       if (pathname === '/blotter/read' && request.method === 'POST') return await handleBlotterRead(request, env);
