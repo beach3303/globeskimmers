@@ -195,7 +195,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
   };
   const saveDate = async () => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) { setShowDate(false); return; }
-    if (dateVal < STAMP_EARLIEST) { showToast("Stamps go back to January 1, 2026", "error"); return; }
+    if (dateVal < STAMP_EARLIEST) { showToast("Stamps go back to January 1, 2021", "error"); return; }
     setBusy(true);
     const { error } = await setStampDate(stamp.id, dateVal);
     setBusy(false); setShowDate(false);
@@ -498,7 +498,8 @@ const SAMPLE_STATS = { countries: 3, verified: 6 };
 // a kind:'city' stamp rendered as a borderless fat-ink line.
 // How far back a visit can be stamped (founder, 2026-10-14: "all the way back from Jan 1,
 // 2026"). The worker holds the same line.
-const STAMP_EARLIEST = "2026-01-01";
+// Five years back (founder, 2026-10-16); the worker holds the same floor (PP_EARLIEST).
+const STAMP_EARLIEST = "2021-01-01";
 const longDay = (d) => new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
 // Up to three answers to "where was this photo taken?" (founder, 2026-10-14: "the app senses
@@ -753,7 +754,7 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     const sensedOnly = !!sensed && !!coords && coords.lat === sensed.lat && coords.lng === sensed.lng;
     const dropSensed = sensedOnly && !sameCity(cityName, sensed.city);
     if (!cityName) { showToast("Add a city first", "error"); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVal) || dateVal < STAMP_EARLIEST) { showToast("Stamps go back to January 1, 2026", "error"); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVal) || dateVal < STAMP_EARLIEST) { showToast("Stamps go back to January 1, 2021", "error"); return; }
     if (dateVal > localISODate()) { showToast("That date hasn’t happened yet", "error"); return; }
     setBusy(true); setBusyMsg(null);
     // No stamp without proof (founder, 2026-10-03): being there now (GPS at the
@@ -786,7 +787,7 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     const photoDays = exifs.map((x) => String(x?.taken_at || "").slice(0, 10)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
     if (verified !== "gps" && photoDays.length === photos.length && photoDays.every((d) => d < STAMP_EARLIEST)) {
       setBusy(false);
-      showToast("Those photos are from before 2026. Stamps go back to January 1, 2026.", "error");
+      showToast("Those photos are from before 2021. Stamps go back to January 1, 2021.", "error");
       return;
     }
     setBusyMsg("Placing your stamp…");

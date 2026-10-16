@@ -14227,9 +14227,11 @@ const PP_VERIFIED = new Set(['gps', 'photo_loc', 'photo_ai']);
 const ppDate = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) ? String(s) : null);
 // How far back a visit can be stamped (founder, 2026-10-14: "all the way back from Jan 1,
 // 2026"), and never later than tomorrow in UTC (a traveler ahead of UTC is already there).
-const PP_EARLIEST = '2026-01-01';
+// Five years back (founder, 2026-10-16: a friend wants to fill his passport; EXIF GPS+date
+// verifies a 2021 photo exactly like last week's). Was 2026-01-01 from 2026-10-14 to 10-16.
+const PP_EARLIEST = '2021-01-01';
 const ppDateAllowed = (d) => !!d && d >= PP_EARLIEST && d <= new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-const ppDateRefusal = (d) => jsonResponse({ error: d < PP_EARLIEST ? 'Stamps go back to January 1, 2026' : 'That date hasn’t happened yet', code: 'date_out_of_range' }, 400);
+const ppDateRefusal = (d) => jsonResponse({ error: d < PP_EARLIEST ? 'Stamps go back to January 1, 2021' : 'That date hasn’t happened yet', code: 'date_out_of_range' }, 400);
 // A place's own name when it's written in another alphabet ("東京都" beside "Tokyo";
 // founder, 2026-10-14: "both names in original character and tokyo"). One in Latin
 // letters ("Roma", "Tour Eiffel") adds nothing to the English name, so it isn't kept.
@@ -15348,7 +15350,7 @@ async function handlePassportPhotoUpload(request, env, ctx) {
     const rankOf = (v) => PP_VERIFY_RANK[v] ?? 0;
     const forCheck = { ...stamp, visited_on: visitedOn || stamp.visited_on };
     const exif = b.exif && typeof b.exif === 'object' ? b.exif : null;
-    // A photo taken before stamps reach back (2026-01-01) proves no visit, by its location
+    // A photo taken before stamps reach back (PP_EARLIEST) proves no visit, by its location
     // or by what's in it.
     const takenDay = String(exif?.taken_at || '').slice(0, 10);
     const tooOld = /^\d{4}-\d{2}-\d{2}$/.test(takenDay) && takenDay < PP_EARLIEST;
