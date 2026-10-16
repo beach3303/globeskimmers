@@ -940,6 +940,13 @@ Suggested by Claude, not yet agreed: a "See all hotels" link from a package into
   is docs/design/city-board-list.md. Founder asked whether Claude can make the kit art without ChatGPT:
   yes, as flat vector (a motif library + per-board pride lists → generated headers and icons); a sample
   batch first. All six commits since 15a3cc9 are local — the founder has not said push.
+  **Pushed 10-16 (86e3e95, deploys ✓, migration ✓).** Then, same day: **"Los Angeles, CA" fix** (c8235dd —
+  a state inside the city name joins its board) and **a guestbook on every board** (edb878d, founder:
+  "one guestbook per city board, per state board, per country board … tips, recommendations, your fave
+  part … best spots, best nature, best food … doodles … expand and collapse throughout the app … in the
+  header"): the place guestbook under 'board:<kind>.<slug>', 18+ and a verified stamp there to sign,
+  @username only, prompts Tip / Best spot / Best food / Best nature / Favorite part, the door in the
+  billboard header; every doodle in the app opens in place with 'Enlarge all'. Both await push + OTA.
   **Art:** "Mixed / rescue" for dogs and cats (founder). Review page:
   https://claude.ai/artifact/JeXKJshqiT2BJ9BSPARA2G; status: `docs/design/new-look/BUILD_STATUS.md` on new-look.
   **Home: Option B, boxed zones with folder tabs (founder, 2026-10-13: "i choose Home Option B")**
