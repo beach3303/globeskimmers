@@ -20477,7 +20477,7 @@ function gbHeldSealLetter(row, link) {
   const business = row.seal === 'burgundy' && row.seal_kind === 'business';
   const SEAL = {
     gold: ['\u272A @' + h + ' is reserved for you \u2014 with the Gold Seal',
-      'It carries the Gold Seal \u2014 Honored: the highest Seal of Honor and Respect. It can\'t be bought, applied for, or earned \u2014 it is gifted, and there are very few.'],
+      'It carries the Gold Seal \u2014 Honored: the highest Seal of Honor. It can\'t be bought, applied for, or earned \u2014 it is gifted, and there are very few.'],
     burgundy: business
       ? ['\u272A @' + h + ' is reserved on GlobeSkimmers as your official account',
         'It carries the GlobeSkimmers Seal, so Users, Locals, & Travelers see it beside your name everywhere you post, sign or send, and know it\'s really you \u2014 a verified business entity.']
@@ -21006,7 +21006,7 @@ Your account @${handle} now carries the GlobeSkimmers Seal \u2014 our mark of of
 The Seal means everyone who meets you on GlobeSkimmers knows it's really you \u2014 beside your name everywhere you post, sign, and send.
 
 `;
-  const gold = `Yours is the Gold Seal \u2014 Honored: the highest Seal of Honor and Respect. It can't be bought, applied for, or earned \u2014 it is gifted, and there are very few.
+  const gold = `Yours is the Gold Seal \u2014 Honored: the highest Seal of Honor. It can't be bought, applied for, or earned \u2014 it is gifted, and there are very few.
 
 The founder honors you.`;
   const std = `It's an honor to have you here. Welcome.`;
