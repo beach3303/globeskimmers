@@ -25,7 +25,6 @@ import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { whenLabel } from "@/components/social/Envelope";
 import PostcardCard from "@/components/social/PostcardCard";
 import PostcardCompose from "@/components/passport/PostcardCompose";
-import { BlotterStrip } from "@/components/passport/Blotter";
 import TravelerSheet from "@/components/social/TravelerSheet";
 import ConfirmBirthdayNote from "@/components/social/ConfirmBirthdayNote";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
@@ -35,6 +34,14 @@ const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
 const COLUMN = "max-w-md md:max-w-2xl mx-auto px-4";
 const BLUE = NEUTRAL.airmailBlue;
 
+// The wall's look (founder, 2026-10-16: "billboard and pins"): prints and cards pinned on cork
+// under the painted billboard, each with a small tilt and a pushpin; 'flat' is the plain grid.
+const WALL = "pins";
+const CORK = { background: "#B5926B", backgroundImage: "radial-gradient(rgba(60,42,28,.18) 1.2px, transparent 1.3px)", backgroundSize: "14px 14px" };
+const tiltOf = (i) => [-2.5, 1.5, -1, 2.5, -1.5, 2, -2, 1][i % 8];
+const Pin = ({ color = NEUTRAL.stamp }) => (
+  <span aria-hidden="true" style={{ position: "absolute", left: "50%", top: -6, transform: "translateX(-50%)", width: 13, height: 13, borderRadius: "50%", background: color, boxShadow: "inset -2px -3px 4px rgba(0,0,0,.35), 0 2px 3px rgba(0,0,0,.3)", zIndex: 2 }} />
+);
 const lc = (v) => String(v ?? "").trim().replace(/^@+/, "").toLowerCase();
 const clip = (t, n) => { const v = String(t || "").replace(/\s+/g, " ").trim(); return v.length > n ? `${v.slice(0, n - 1)}…` : v; };
 const clean = (v) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
@@ -55,9 +62,23 @@ function useBack() {
 // The billboard (founder, 2026-10-16: "a billboard design almost, with photo collections of
 // photos taken in that city"): the kit's painting in a deco frame, the board's name over its
 // calm lower third, the counts, and Post when the viewer may. Without a kit, the plate alone.
+// Palettes for boards without a kit yet: deco plates in the house family, picked by the
+// board's name so a board keeps its colours and neighbours differ.
+const PLATES = [
+  { plate: "#0C2B50", accent: "#D6A64A", sky: "#123A66" }, // navy · gold
+  { plate: "#5C3F30", accent: "#E8D3A3", sky: "#7C5A42" }, // umber · cream
+  { plate: "#0A4A42", accent: "#D6A64A", sky: "#0E7C73" }, // pine · gold
+  { plate: "#7A2E2A", accent: "#F2C230", sky: "#A2423B" }, // oxblood · sun
+  { plate: "#2B4C8C", accent: "#F6E7C8", sky: "#4E6FB0" }, // airmail · ivory
+  { plate: "#4A3A5E", accent: "#E8B64C", sky: "#6A5784" }, // plum · amber
+];
+const plateOf = (name) => { let h = 0; for (const c of String(name || "")) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PLATES[h % PLATES.length]; };
+const RAYS = Array.from({ length: 16 }, (_, k) => { const a = (k - 16) * 0.19635, b = (k - 15) * 0.19635; return `<polygon points="201,160 ${201 + 260 * Math.cos(a)},${160 + 260 * Math.sin(a)} ${201 + 260 * Math.cos(b)},${160 + 260 * Math.sin(b)}" fill="${k % 2 ? "#FFFFFF" : "#000000"}" opacity="${k % 2 ? 0.08 : 0.06}"/>`; }).join("");
+
 function Billboard({ name, kind = "city", country = "", kit = null, counts = null, onBack, onPost = undefined }) {
-  const plate = kit?.palette?.plate || NEUTRAL.navy;
-  const accent = kit?.palette?.accent || NEUTRAL.gold;
+  const fallback = plateOf(name);
+  const plate = kit?.palette?.plate || fallback.plate;
+  const accent = kit?.palette?.accent || fallback.accent;
   const ink = kit?.palette?.ink || NEUTRAL.ivory;
   const kindWord = kind === "state" ? "State board" : kind === "country" ? "Country board" : "City board";
   const icons = Array.isArray(kit?.icons) ? kit.icons.slice(0, 5) : [];
@@ -72,11 +93,15 @@ function Billboard({ name, kind = "city", country = "", kit = null, counts = nul
           <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".24em", lineHeight: 1.2, textTransform: "uppercase", color: accent }}>Globeskimmers · {kindWord}</div>
         </div>
         <div style={{ border: `3px solid ${accent}`, borderRadius: 10, padding: 8 }}>
-          <div style={{ position: "relative", height: 170, borderRadius: 6, overflow: "hidden", border: `1px solid ${accent}`, background: `linear-gradient(160deg, ${plate}, ${NEUTRAL.coverNight})` }}>
+          <div style={{ position: "relative", height: 170, borderRadius: 6, overflow: "hidden", border: `1px solid ${accent}`, background: `linear-gradient(180deg, ${fallback.sky}, ${plate})` }}>
             {kit?.header ? (
               <img src={kit.header} alt="" aria-hidden="true" decoding="async" onError={(e) => { e.currentTarget.style.display = "none"; }}
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-            ) : null}
+            ) : (
+              // The typographic header: deco rays, a sun, a horizon — the name does the talking.
+              <svg aria-hidden="true" viewBox="0 0 402 230" preserveAspectRatio="xMidYMid slice" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+                dangerouslySetInnerHTML={{ __html: `${RAYS}<circle cx="62" cy="58" r="22" fill="${accent}" opacity=".9"/><path d="M0 182 L402 182 L402 230 L0 230 Z" fill="#000000" opacity=".22"/><path d="M0 182 L402 182" stroke="${accent}" stroke-width="1.5" opacity=".6"/>` }} />
+            )}
             <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "26px 12px 10px", background: "linear-gradient(180deg, rgba(8,16,32,0), rgba(8,16,32,.78))" }}>
               <h1 style={{ margin: 0, fontFamily: SERIF, fontSize: fs(30), fontWeight: 400, lineHeight: 1.05, letterSpacing: ".03em", color: ink, overflowWrap: "anywhere" }}>{name}</h1>
               {kind !== "country" && country ? <div style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".18em", textTransform: "uppercase", color: accent, marginTop: 2 }}>{country}</div> : null}
@@ -148,16 +173,22 @@ function PhotoPeek({ row, onClose, onReport }) {
 }
 
 // A tile on the wall: the photo, and the @username when the owner signed it.
-function PhotoTile({ row, onOpen }) {
+function PhotoTile({ row, onOpen, index = 0 }) {
   const handle = lc(row?.by?.handle);
+  const pinned = WALL === "pins";
   return (
     <button type="button" onClick={() => onOpen(row)} aria-label={`Open the photo${row.place ? ` from ${row.place}` : ""}${handle ? ` by @${handle}` : ""}`}
-      style={{ position: "relative", display: "block", width: "100%", aspectRatio: "1 / 1", padding: 0, borderRadius: 8, overflow: "hidden", border: 0, background: NEUTRAL.airmailHair, cursor: "pointer" }}>
-      <img src={row.photo} alt="" loading="lazy" decoding="async" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-      {handle ? (
-        <span style={{ position: "absolute", left: 5, bottom: 5, padding: "2px 6px", borderRadius: 999, background: "rgba(22,17,13,.72)", color: NEUTRAL.white, fontFamily: MONO, fontSize: fs(7.5), letterSpacing: ".1em", textTransform: "uppercase" }}>@{handle}</span>
-      ) : null}
+      style={pinned
+        ? { position: "relative", display: "block", width: "100%", padding: "4px 4px 6px", border: 0, borderRadius: 3, background: NEUTRAL.ivory, boxShadow: "0 6px 12px rgba(22,17,13,.28)", transform: `rotate(${tiltOf(index)}deg)`, cursor: "pointer", marginTop: 6 }
+        : { position: "relative", display: "block", width: "100%", aspectRatio: "1 / 1", padding: 0, borderRadius: 8, overflow: "hidden", border: 0, background: NEUTRAL.airmailHair, cursor: "pointer" }}>
+      {pinned ? <Pin /> : null}
+      <span style={{ position: "relative", display: "block", width: "100%", aspectRatio: "1 / 1", overflow: "hidden", borderRadius: pinned ? 2 : 8, background: NEUTRAL.airmailHair }}>
+        <img src={row.photo} alt="" loading="lazy" decoding="async" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        {handle ? (
+          <span style={{ position: "absolute", left: 5, bottom: 5, padding: "2px 6px", borderRadius: 999, background: "rgba(22,17,13,.72)", color: NEUTRAL.white, fontFamily: MONO, fontSize: fs(7.5), letterSpacing: ".1em", textTransform: "uppercase" }}>@{handle}</span>
+        ) : null}
+      </span>
     </button>
   );
 }
@@ -264,19 +295,14 @@ function Board({ kind, city, region, country, onBack }) {
   } else {
     body = (
       <>
-        <h2 style={KICKER}>Newest first · tap any photo</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginTop: 8, alignItems: "start" }}>
+        <h2 style={{ ...KICKER, ...(WALL === "pins" ? { color: "#4A3426" } : {}) }}>Newest first · tap any photo</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: WALL === "pins" ? "10px 8px" : 6, marginTop: 8, alignItems: "start" }}>
           {rows.map((r, i) => (r.type === "photo" ? (
-            <PhotoTile key={r.id || `ph-${i}`} row={r} onOpen={setPeek} />
+            <PhotoTile key={r.id || `ph-${i}`} row={r} onOpen={setPeek} index={i} />
           ) : (
-            <div key={r.id || `bc-${r.created_at}-${i}`} style={{ gridColumn: "1 / -1" }}>
+            <div key={r.id || `bc-${r.created_at}-${i}`} style={{ gridColumn: "1 / -1", ...(WALL === "pins" ? { position: "relative", transform: `rotate(${tiltOf(i) / 2}deg)`, margin: "8px 2px 4px", filter: "drop-shadow(0 8px 10px rgba(22,17,13,.28))" } : {}) }}>
+              {WALL === "pins" ? <Pin color={NEUTRAL.airmailBlue} /> : null}
               <PostcardCard row={r} me={me.handle} meName={me.name || profile?.first_name || null} onReport={report} />
-              {r.id ? (
-                <div style={{ marginTop: 8 }}>
-                  <BlotterStrip postcardId={r.id} blotter={book} food={!!r.dish}
-                    ownerView={!!me.handle && lc(r.by?.handle) === lc(me.handle)} onChanged={() => readBook(board?.rows)} />
-                </div>
-              ) : null}
             </div>
           )))}
         </div>
@@ -305,8 +331,13 @@ function Board({ kind, city, region, country, onBack }) {
             <span>Stamp {city} with GPS or a photo taken there, and you can post a card here too.</span>
           </p>
         ) : null}
-        <section aria-label={`${name}’s board`} style={{ marginTop: 14 }}>{body}</section>
+        <section aria-label={`${name}’s board`} style={{ marginTop: 14 }}>{WALL === "pins" && rows.length ? null : body}</section>
       </div>
+      {WALL === "pins" && rows.length ? (
+        <div style={{ ...CORK, padding: "14px 0 24px", marginTop: 14 }}>
+          <div className={COLUMN}>{body}</div>
+        </div>
+      ) : null}
       {peek ? <PhotoPeek row={peek} onClose={() => setPeek(null)} onReport={(row) => { setPeek(null); report(row); }} /> : null}
       {traveler ? (
         <TravelerSheet person={traveler.person} report={traveler.report}

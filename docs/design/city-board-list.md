@@ -1,0 +1,1068 @@
+# The boards we put up — the list
+
+Decided with the founder 2026-10-16. Every board below gets an art kit (docs/design/city-board-kits.md);
+any other city still gets a board with the typographic header, and every country board rolls up
+everything posted inside it. Counts: **51 states**, **114 + 209 US cities and
+destinations**, **106 + 369 world cities and destinations**, **195 countries**.
+
+## Wave 1 — launch
+
+### US states (51)
+- Alabama
+- Alaska
+- Arizona
+- Arkansas
+- California
+- Colorado
+- Connecticut
+- Delaware
+- Florida
+- Georgia
+- Hawaii
+- Idaho
+- Illinois
+- Indiana
+- Iowa
+- Kansas
+- Kentucky
+- Louisiana
+- Maine
+- Maryland
+- Massachusetts
+- Michigan
+- Minnesota
+- Mississippi
+- Missouri
+- Montana
+- Nebraska
+- Nevada
+- New Hampshire
+- New Jersey
+- New Mexico
+- New York
+- North Carolina
+- North Dakota
+- Ohio
+- Oklahoma
+- Oregon
+- Pennsylvania
+- Rhode Island
+- South Carolina
+- South Dakota
+- Tennessee
+- Texas
+- Utah
+- Vermont
+- Virginia
+- Washington
+- West Virginia
+- Wisconsin
+- Wyoming
+- District of Columbia
+
+### US cities and destinations — wave 1 (114)
+At least one per state. A national park or an island is a board too.
+- New York City, NY
+- Los Angeles, CA
+- Chicago, IL
+- Miami, FL
+- Las Vegas, NV
+- San Francisco, CA
+- Orlando, FL
+- Washington, DC
+- New Orleans, LA
+- Boston, MA
+- Seattle, WA
+- San Diego, CA
+- Honolulu, HI
+- Nashville, TN
+- Austin, TX
+- Denver, CO
+- Atlanta, GA
+- Philadelphia, PA
+- Houston, TX
+- Dallas, TX
+- Phoenix, AZ
+- Portland, OR
+- San Antonio, TX
+- Savannah, GA
+- Charleston, SC
+- Santa Fe, NM
+- Sedona, AZ
+- Palm Springs, CA
+- Napa Valley, CA
+- Monterey & Carmel, CA
+- Santa Barbara, CA
+- Lake Tahoe, CA/NV
+- Yosemite, CA
+- Grand Canyon, AZ
+- Yellowstone, WY
+- Zion, UT
+- Key West, FL
+- Fort Lauderdale, FL
+- Tampa & St. Pete, FL
+- St. Augustine, FL
+- Memphis, TN
+- Louisville, KY
+- Asheville, NC
+- Charlotte, NC
+- Outer Banks, NC
+- Richmond, VA
+- Virginia Beach, VA
+- Baltimore, MD
+- Annapolis, MD
+- Pittsburgh, PA
+- Cleveland, OH
+- Detroit, MI
+- Minneapolis, MN
+- Milwaukee, WI
+- St. Louis, MO
+- Kansas City, MO
+- Oklahoma City, OK
+- Omaha, NE
+- Boise, ID
+- Salt Lake City, UT
+- Park City, UT
+- Moab, UT
+- Jackson Hole, WY
+- Aspen, CO
+- Vail, CO
+- Boulder, CO
+- Colorado Springs, CO
+- Albuquerque, NM
+- Tucson, AZ
+- Scottsdale, AZ
+- Anchorage, AK
+- Juneau, AK
+- Maui, HI
+- Kauai, HI
+- Big Island, HI
+- Sacramento, CA
+- San Jose, CA
+- Reno, NV
+- Bozeman, MT
+- Glacier National Park, MT
+- Rapid City & Mount Rushmore, SD
+- Fargo, ND
+- Des Moines, IA
+- Madison, WI
+- Indianapolis, IN
+- Columbus, OH
+- Cincinnati, OH
+- Niagara Falls, NY
+- Burlington, VT
+- Portland, ME
+- Bar Harbor & Acadia, ME
+- Newport, RI
+- Mystic, CT
+- Portsmouth, NH
+- Atlantic City, NJ
+- Cape May, NJ
+- Wilmington, DE
+- Rehoboth Beach, DE
+- Little Rock, AR
+- Hot Springs, AR
+- Birmingham, AL
+- Gulf Shores, AL
+- Jackson, MS
+- Biloxi, MS
+- Wichita, KS
+- Charleston, WV
+- Lexington, KY
+- Chattanooga, TN
+- Knoxville & the Smokies, TN
+- Myrtle Beach, SC
+- Hilton Head, SC
+- Raleigh & Durham, NC
+- Wilmington, NC
+- Shenandoah, VA
+
+### World cities and destinations — wave 1 (106)
+- Paris, France
+- London, United Kingdom
+- Rome, Italy
+- Barcelona, Spain
+- Tokyo, Japan
+- Kyoto, Japan
+- Osaka, Japan
+- Seoul, South Korea
+- Bangkok, Thailand
+- Singapore
+- Hong Kong
+- Dubai, United Arab Emirates
+- Istanbul, Türkiye
+- Amsterdam, Netherlands
+- Berlin, Germany
+- Prague, Czechia
+- Vienna, Austria
+- Budapest, Hungary
+- Lisbon, Portugal
+- Porto, Portugal
+- Madrid, Spain
+- Seville, Spain
+- Florence, Italy
+- Venice, Italy
+- Milan, Italy
+- Amalfi Coast, Italy
+- Athens, Greece
+- Santorini, Greece
+- Mykonos, Greece
+- Dubrovnik, Croatia
+- Kraków, Poland
+- Copenhagen, Denmark
+- Stockholm, Sweden
+- Oslo, Norway
+- Reykjavík, Iceland
+- Dublin, Ireland
+- Edinburgh, United Kingdom
+- Brussels, Belgium
+- Bruges, Belgium
+- Zürich, Switzerland
+- Interlaken, Switzerland
+- Munich, Germany
+- Salzburg, Austria
+- Nice, France
+- Mexico City, Mexico
+- Cancún, Mexico
+- Tulum, Mexico
+- Oaxaca, Mexico
+- Los Cabos, Mexico
+- Havana, Cuba
+- Punta Cana, Dominican Republic
+- Nassau, Bahamas
+- Montego Bay, Jamaica
+- Cartagena, Colombia
+- Medellín, Colombia
+- Lima, Peru
+- Cusco & Machu Picchu, Peru
+- Rio de Janeiro, Brazil
+- São Paulo, Brazil
+- Buenos Aires, Argentina
+- Santiago, Chile
+- Toronto, Canada
+- Vancouver, Canada
+- Montréal, Canada
+- Québec City, Canada
+- Banff, Canada
+- Cairo, Egypt
+- Luxor, Egypt
+- Marrakech, Morocco
+- Cape Town, South Africa
+- Nairobi, Kenya
+- Zanzibar, Tanzania
+- Accra, Ghana
+- Lagos, Nigeria
+- Tel Aviv, Israel
+- Jerusalem
+- Petra, Jordan
+- Doha, Qatar
+- Abu Dhabi, United Arab Emirates
+- Mumbai, India
+- Delhi, India
+- Jaipur, India
+- Agra, India
+- Goa, India
+- Kathmandu, Nepal
+- Bali, Indonesia
+- Kuala Lumpur, Malaysia
+- Hanoi, Vietnam
+- Ho Chi Minh City, Vietnam
+- Hoi An, Vietnam
+- Phuket, Thailand
+- Chiang Mai, Thailand
+- Siem Reap, Cambodia
+- Manila, Philippines
+- Cebu, Philippines
+- Boracay, Philippines
+- Palawan, Philippines
+- Siargao, Philippines
+- Taipei, Taiwan
+- Shanghai, China
+- Beijing, China
+- Sydney, Australia
+- Melbourne, Australia
+- Auckland, New Zealand
+- Queenstown, New Zealand
+- Fiji
+
+### Countries (195)
+Every country gets a board; the kit paints its pride — food, textiles, art, a scene, a national animal — never its politics.
+- Afghanistan
+- Albania
+- Algeria
+- Andorra
+- Angola
+- Antigua and Barbuda
+- Argentina
+- Armenia
+- Australia
+- Austria
+- Azerbaijan
+- Bahamas
+- Bahrain
+- Bangladesh
+- Barbados
+- Belarus
+- Belgium
+- Belize
+- Benin
+- Bhutan
+- Bolivia
+- Bosnia and Herzegovina
+- Botswana
+- Brazil
+- Brunei
+- Bulgaria
+- Burkina Faso
+- Burundi
+- Cabo Verde
+- Cambodia
+- Cameroon
+- Canada
+- Central African Republic
+- Chad
+- Chile
+- China
+- Colombia
+- Comoros
+- Congo
+- Costa Rica
+- Côte d’Ivoire
+- Croatia
+- Cuba
+- Cyprus
+- Czechia
+- DR Congo
+- Denmark
+- Djibouti
+- Dominica
+- Dominican Republic
+- Ecuador
+- Egypt
+- El Salvador
+- Equatorial Guinea
+- Eritrea
+- Estonia
+- Eswatini
+- Ethiopia
+- Fiji
+- Finland
+- France
+- Gabon
+- Gambia
+- Georgia
+- Germany
+- Ghana
+- Greece
+- Grenada
+- Guatemala
+- Guinea
+- Guinea-Bissau
+- Guyana
+- Haiti
+- Honduras
+- Hungary
+- Iceland
+- India
+- Indonesia
+- Iran
+- Iraq
+- Ireland
+- Israel
+- Italy
+- Jamaica
+- Japan
+- Jordan
+- Kazakhstan
+- Kenya
+- Kiribati
+- Kuwait
+- Kyrgyzstan
+- Laos
+- Latvia
+- Lebanon
+- Lesotho
+- Liberia
+- Libya
+- Liechtenstein
+- Lithuania
+- Luxembourg
+- Madagascar
+- Malawi
+- Malaysia
+- Maldives
+- Mali
+- Malta
+- Marshall Islands
+- Mauritania
+- Mauritius
+- Mexico
+- Micronesia
+- Moldova
+- Monaco
+- Mongolia
+- Montenegro
+- Morocco
+- Mozambique
+- Myanmar
+- Namibia
+- Nauru
+- Nepal
+- Netherlands
+- New Zealand
+- Nicaragua
+- Niger
+- Nigeria
+- North Korea
+- North Macedonia
+- Norway
+- Oman
+- Pakistan
+- Palau
+- Palestine
+- Panama
+- Papua New Guinea
+- Paraguay
+- Peru
+- Philippines
+- Poland
+- Portugal
+- Qatar
+- Romania
+- Russia
+- Rwanda
+- Saint Kitts and Nevis
+- Saint Lucia
+- Saint Vincent and the Grenadines
+- Samoa
+- San Marino
+- São Tomé and Príncipe
+- Saudi Arabia
+- Senegal
+- Serbia
+- Seychelles
+- Sierra Leone
+- Singapore
+- Slovakia
+- Slovenia
+- Solomon Islands
+- Somalia
+- South Africa
+- South Korea
+- South Sudan
+- Spain
+- Sri Lanka
+- Sudan
+- Suriname
+- Sweden
+- Switzerland
+- Syria
+- Tajikistan
+- Tanzania
+- Thailand
+- Timor-Leste
+- Togo
+- Tonga
+- Trinidad and Tobago
+- Tunisia
+- Türkiye
+- Turkmenistan
+- Tuvalu
+- Uganda
+- Ukraine
+- United Arab Emirates
+- United Kingdom
+- United States
+- Uruguay
+- Uzbekistan
+- Vanuatu
+- Vatican City
+- Venezuela
+- Vietnam
+- Yemen
+- Zambia
+- Zimbabwe
+
+## Wave 2 — after launch
+
+### US cities and destinations — wave 2 (209)
+- Brooklyn, NY
+- Long Island & the Hamptons, NY
+- Hudson Valley, NY
+- Lake Placid, NY
+- Buffalo, NY
+- Rochester, NY
+- Albany, NY
+- Jersey City, NJ
+- Princeton, NJ
+- Hoboken, NJ
+- Lancaster, PA
+- Gettysburg, PA
+- Hershey, PA
+- Poconos, PA
+- Harrisburg, PA
+- Ocean City, MD
+- Alexandria, VA
+- Williamsburg, VA
+- Charlottesville, VA
+- Roanoke, VA
+- Asbury Park, NJ
+- Salem, MA
+- Cape Cod, MA
+- Martha’s Vineyard, MA
+- Nantucket, MA
+- Provincetown, MA
+- Worcester, MA
+- Springfield, MA
+- Stowe, VT
+- Woodstock, VT
+- Kennebunkport, ME
+- White Mountains, NH
+- Lake Winnipesaukee, NH
+- Block Island, RI
+- Providence, RI
+- New Haven, CT
+- Hartford, CT
+- Pittsburgh’s Fallingwater, PA
+- Erie, PA
+- Toledo, OH
+- Dayton, OH
+- Hocking Hills, OH
+- Ann Arbor, MI
+- Grand Rapids, MI
+- Traverse City, MI
+- Mackinac Island, MI
+- Door County, WI
+- Green Bay, WI
+- Duluth, MN
+- Boundary Waters, MN
+- Rochester, MN
+- Sioux Falls, SD
+- Badlands, SD
+- Bismarck, ND
+- Theodore Roosevelt NP, ND
+- Lincoln, NE
+- Topeka, KS
+- Lawrence, KS
+- Branson, MO
+- Ozarks, MO
+- Springfield, MO
+- Tulsa, OK
+- Fort Worth, TX
+- El Paso, TX
+- Galveston, TX
+- South Padre Island, TX
+- Big Bend, TX
+- Fredericksburg, TX
+- Marfa, TX
+- Corpus Christi, TX
+- Waco, TX
+- Lubbock, TX
+- Baton Rouge, LA
+- Lafayette, LA
+- Natchez, MS
+- Oxford, MS
+- Tupelo, MS
+- Montgomery, AL
+- Mobile, AL
+- Huntsville, AL
+- Pensacola, FL
+- Destin, FL
+- Panama City Beach, FL
+- Tallahassee, FL
+- Jacksonville, FL
+- Daytona Beach, FL
+- Cocoa Beach, FL
+- Sarasota, FL
+- Naples, FL
+- Fort Myers, FL
+- Everglades, FL
+- Palm Beach, FL
+- Clearwater, FL
+- Gainesville, FL
+- Macon, GA
+- Augusta, GA
+- Athens, GA
+- Jekyll Island, GA
+- Tybee Island, GA
+- Greenville, SC
+- Columbia, SC
+- Chapel Hill, NC
+- Boone, NC
+- Winston-Salem, NC
+- Frankfort, KY
+- Bowling Green, KY
+- Mammoth Cave, KY
+- Pigeon Forge & Gatlinburg, TN
+- Franklin, TN
+- Bentonville, AR
+- Eureka Springs, AR
+- Shreveport, LA
+- Fayetteville, AR
+- Lexington, VA
+- Harpers Ferry, WV
+- New River Gorge, WV
+- Morgantown, WV
+- Louisville, CO
+- Fort Collins, CO
+- Telluride, CO
+- Durango, CO
+- Steamboat Springs, CO
+- Breckenridge, CO
+- Estes Park & Rocky Mountain NP, CO
+- Taos, NM
+- Roswell, NM
+- White Sands, NM
+- Carlsbad Caverns, NM
+- Flagstaff, AZ
+- Page & Antelope Canyon, AZ
+- Lake Havasu, AZ
+- Tempe, AZ
+- Yuma, AZ
+- Bisbee, AZ
+- Provo, UT
+- St. George, UT
+- Bryce Canyon, UT
+- Arches, UT
+- Capitol Reef, UT
+- Cheyenne, WY
+- Grand Teton, WY
+- Cody, WY
+- Laramie, WY
+- Missoula, MT
+- Whitefish, MT
+- Helena, MT
+- Billings, MT
+- Sun Valley, ID
+- Coeur d’Alene, ID
+- Idaho Falls, ID
+- Spokane, WA
+- Tacoma, WA
+- Olympia, WA
+- Olympic National Park, WA
+- San Juan Islands, WA
+- Leavenworth, WA
+- Bellingham, WA
+- Walla Walla, WA
+- Eugene, OR
+- Bend, OR
+- Cannon Beach, OR
+- Crater Lake, OR
+- Hood River, OR
+- Astoria, OR
+- Ashland, OR
+- Redwoods, CA
+- Mendocino, CA
+- Sonoma, CA
+- Berkeley, CA
+- Oakland, CA
+- Big Sur, CA
+- San Luis Obispo, CA
+- Pismo Beach, CA
+- Malibu, CA
+- Santa Monica, CA
+- Pasadena, CA
+- Long Beach, CA
+- Laguna Beach, CA
+- Anaheim, CA
+- Huntington Beach, CA
+- Catalina Island, CA
+- Joshua Tree, CA
+- Death Valley, CA
+- Temecula, CA
+- La Jolla, CA
+- Fresno, CA
+- Bakersfield, CA
+- Laughlin, NV
+- Carson City, NV
+- Virginia City, NV
+- Fairbanks, AK
+- Denali, AK
+- Seward & Kenai, AK
+- Sitka, AK
+- Ketchikan, AK
+- Hilo, HI
+- Kona, HI
+- Lanai, HI
+- Molokai, HI
+- Waikiki, HI
+- Guam
+- San Juan, PR
+- Vieques, PR
+- Rincón, PR
+- St. Thomas, USVI
+- St. John, USVI
+- St. Croix, USVI
+- Pago Pago, American Samoa
+- Saipan, Northern Mariana Islands
+
+### World cities and destinations — wave 2 (369)
+- Manchester, United Kingdom
+- Liverpool, United Kingdom
+- Bath, United Kingdom
+- Oxford, United Kingdom
+- Cambridge, United Kingdom
+- Cotswolds, United Kingdom
+- Lake District, United Kingdom
+- Cornwall, United Kingdom
+- Belfast, United Kingdom
+- Glasgow, United Kingdom
+- Scottish Highlands, United Kingdom
+- Cardiff, United Kingdom
+- Galway, Ireland
+- Cork, Ireland
+- Ring of Kerry, Ireland
+- Cliffs of Moher, Ireland
+- Lyon, France
+- Marseille, France
+- Bordeaux, France
+- Strasbourg, France
+- Provence, France
+- French Riviera, France
+- Mont-Saint-Michel, France
+- Normandy, France
+- Loire Valley, France
+- Chamonix, France
+- Monaco
+- Luxembourg
+- Antwerp, Belgium
+- Ghent, Belgium
+- Rotterdam, Netherlands
+- Utrecht, Netherlands
+- Hamburg, Germany
+- Frankfurt, Germany
+- Cologne, Germany
+- Dresden, Germany
+- Heidelberg, Germany
+- Black Forest, Germany
+- Bavarian Alps, Germany
+- Innsbruck, Austria
+- Hallstatt, Austria
+- Geneva, Switzerland
+- Lucerne, Switzerland
+- Zermatt, Switzerland
+- Bern, Switzerland
+- Lugano, Switzerland
+- Naples, Italy
+- Capri, Italy
+- Cinque Terre, Italy
+- Sicily, Italy
+- Sardinia, Italy
+- Lake Como, Italy
+- Bologna, Italy
+- Verona, Italy
+- Pisa, Italy
+- Siena, Italy
+- Tuscany, Italy
+- Turin, Italy
+- Dolomites, Italy
+- Puglia, Italy
+- Matera, Italy
+- Valencia, Spain
+- Granada, Spain
+- Málaga, Spain
+- Ibiza, Spain
+- Mallorca, Spain
+- Bilbao, Spain
+- San Sebastián, Spain
+- Tenerife, Spain
+- Córdoba, Spain
+- Toledo, Spain
+- Algarve, Portugal
+- Madeira, Portugal
+- Azores, Portugal
+- Sintra, Portugal
+- Coimbra, Portugal
+- Crete, Greece
+- Rhodes, Greece
+- Corfu, Greece
+- Thessaloniki, Greece
+- Meteora, Greece
+- Split, Croatia
+- Hvar, Croatia
+- Zagreb, Croatia
+- Plitvice Lakes, Croatia
+- Ljubljana, Slovenia
+- Lake Bled, Slovenia
+- Kotor, Montenegro
+- Sarajevo, Bosnia and Herzegovina
+- Mostar, Bosnia and Herzegovina
+- Belgrade, Serbia
+- Tirana, Albania
+- Albanian Riviera, Albania
+- Sofia, Bulgaria
+- Bucharest, Romania
+- Transylvania, Romania
+- Warsaw, Poland
+- Gdańsk, Poland
+- Wrocław, Poland
+- Bratislava, Slovakia
+- Tallinn, Estonia
+- Riga, Latvia
+- Vilnius, Lithuania
+- Helsinki, Finland
+- Lapland, Finland
+- Bergen, Norway
+- Lofoten, Norway
+- Tromsø, Norway
+- Gothenburg, Sweden
+- Malmö, Sweden
+- Aarhus, Denmark
+- Faroe Islands
+- Golden Circle, Iceland
+- Cappadocia, Türkiye
+- Antalya, Türkiye
+- Ephesus, Türkiye
+- Bodrum, Türkiye
+- Tbilisi, Georgia
+- Yerevan, Armenia
+- Baku, Azerbaijan
+- Moscow, Russia
+- St. Petersburg, Russia
+- Kyiv, Ukraine
+- Lviv, Ukraine
+- Nicosia, Cyprus
+- Valletta, Malta
+- Beirut, Lebanon
+- Amman, Jordan
+- Wadi Rum, Jordan
+- Dead Sea, Jordan
+- Muscat, Oman
+- Riyadh, Saudi Arabia
+- Jeddah, Saudi Arabia
+- AlUla, Saudi Arabia
+- Manama, Bahrain
+- Kuwait City, Kuwait
+- Tehran, Iran
+- Isfahan, Iran
+- Sharm El Sheikh, Egypt
+- Alexandria, Egypt
+- Aswan, Egypt
+- Fes, Morocco
+- Chefchaouen, Morocco
+- Casablanca, Morocco
+- Sahara, Morocco
+- Tunis, Tunisia
+- Algiers, Algeria
+- Addis Ababa, Ethiopia
+- Lalibela, Ethiopia
+- Kigali, Rwanda
+- Kampala, Uganda
+- Dar es Salaam, Tanzania
+- Serengeti, Tanzania
+- Kilimanjaro, Tanzania
+- Maasai Mara, Kenya
+- Mombasa, Kenya
+- Victoria Falls, Zambia/Zimbabwe
+- Windhoek, Namibia
+- Namib Desert, Namibia
+- Okavango Delta, Botswana
+- Johannesburg, South Africa
+- Kruger, South Africa
+- Garden Route, South Africa
+- Durban, South Africa
+- Stellenbosch, South Africa
+- Antananarivo, Madagascar
+- Mauritius
+- Seychelles
+- Dakar, Senegal
+- Abidjan, Côte d’Ivoire
+- Kumasi, Ghana
+- Cape Coast, Ghana
+- Abuja, Nigeria
+- Kinshasa, DR Congo
+- Luanda, Angola
+- Maputo, Mozambique
+- Karachi, Pakistan
+- Lahore, Pakistan
+- Islamabad, Pakistan
+- Dhaka, Bangladesh
+- Colombo, Sri Lanka
+- Kandy, Sri Lanka
+- Galle, Sri Lanka
+- Malé, Maldives
+- Thimphu, Bhutan
+- Pokhara, Nepal
+- Everest Base Camp, Nepal
+- Kolkata, India
+- Chennai, India
+- Bengaluru, India
+- Hyderabad, India
+- Kerala, India
+- Udaipur, India
+- Varanasi, India
+- Rishikesh, India
+- Amritsar, India
+- Ladakh, India
+- Darjeeling, India
+- Lhasa, Tibet
+- Xi’an, China
+- Chengdu, China
+- Guilin, China
+- Hangzhou, China
+- Shenzhen, China
+- Guangzhou, China
+- Harbin, China
+- Zhangjiajie, China
+- Macau
+- Kaohsiung, Taiwan
+- Taichung, Taiwan
+- Busan, South Korea
+- Jeju, South Korea
+- Gyeongju, South Korea
+- Nara, Japan
+- Hiroshima, Japan
+- Hakone, Japan
+- Sapporo, Japan
+- Okinawa, Japan
+- Fukuoka, Japan
+- Nagoya, Japan
+- Kanazawa, Japan
+- Nikko, Japan
+- Mount Fuji, Japan
+- Ulaanbaatar, Mongolia
+- Almaty, Kazakhstan
+- Tashkent, Uzbekistan
+- Samarkand, Uzbekistan
+- Bishkek, Kyrgyzstan
+- Krabi, Thailand
+- Koh Samui, Thailand
+- Pattaya, Thailand
+- Ayutthaya, Thailand
+- Luang Prabang, Laos
+- Vientiane, Laos
+- Phnom Penh, Cambodia
+- Yangon, Myanmar
+- Bagan, Myanmar
+- Ha Long Bay, Vietnam
+- Da Nang, Vietnam
+- Hue, Vietnam
+- Sapa, Vietnam
+- Penang, Malaysia
+- Langkawi, Malaysia
+- Malacca, Malaysia
+- Borneo, Malaysia
+- Jakarta, Indonesia
+- Yogyakarta, Indonesia
+- Lombok, Indonesia
+- Komodo, Indonesia
+- Raja Ampat, Indonesia
+- Davao, Philippines
+- Bohol, Philippines
+- Baguio, Philippines
+- Vigan, Philippines
+- Batanes, Philippines
+- Iloilo, Philippines
+- Dumaguete, Philippines
+- Bacolod, Philippines
+- La Union, Philippines
+- Camiguin, Philippines
+- Dili, Timor-Leste
+- Port Moresby, Papua New Guinea
+- Brisbane, Australia
+- Gold Coast, Australia
+- Perth, Australia
+- Adelaide, Australia
+- Cairns & the Great Barrier Reef, Australia
+- Uluru, Australia
+- Hobart, Australia
+- Darwin, Australia
+- Byron Bay, Australia
+- Great Ocean Road, Australia
+- Wellington, New Zealand
+- Christchurch, New Zealand
+- Rotorua, New Zealand
+- Milford Sound, New Zealand
+- Bora Bora, French Polynesia
+- Tahiti, French Polynesia
+- Apia, Samoa
+- Nuku’alofa, Tonga
+- Port Vila, Vanuatu
+- Honiara, Solomon Islands
+- Nouméa, New Caledonia
+- Guadalajara, Mexico
+- Puerto Vallarta, Mexico
+- San Miguel de Allende, Mexico
+- Guanajuato, Mexico
+- Mérida, Mexico
+- Playa del Carmen, Mexico
+- Cozumel, Mexico
+- Puebla, Mexico
+- Monterrey, Mexico
+- Tijuana, Mexico
+- Mazatlán, Mexico
+- Sayulita, Mexico
+- Belize City & the Cayes, Belize
+- Antigua, Guatemala
+- Lake Atitlán, Guatemala
+- San Salvador, El Salvador
+- Roatán, Honduras
+- Granada, Nicaragua
+- San José, Costa Rica
+- Arenal, Costa Rica
+- Manuel Antonio, Costa Rica
+- Panama City, Panama
+- Bocas del Toro, Panama
+- Kingston, Jamaica
+- Negril, Jamaica
+- Santo Domingo, Dominican Republic
+- Port-au-Prince, Haiti
+- Varadero, Cuba
+- Trinidad, Cuba
+- Bridgetown, Barbados
+- Castries, St. Lucia
+- Antigua and Barbuda
+- St. Kitts and Nevis
+- Grenada
+- Aruba
+- Curaçao
+- Bermuda
+- Cayman Islands
+- Turks and Caicos
+- Bogotá, Colombia
+- Cali, Colombia
+- Santa Marta, Colombia
+- Quito, Ecuador
+- Galápagos, Ecuador
+- Guayaquil, Ecuador
+- Cuenca, Ecuador
+- La Paz, Bolivia
+- Salar de Uyuni, Bolivia
+- Arequipa, Peru
+- Sacred Valley, Peru
+- Lake Titicaca, Peru/Bolivia
+- Valparaíso, Chile
+- Atacama, Chile
+- Patagonia, Chile/Argentina
+- Easter Island, Chile
+- Mendoza, Argentina
+- Bariloche, Argentina
+- Iguazú Falls, Argentina/Brazil
+- Salta, Argentina
+- Ushuaia, Argentina
+- Montevideo, Uruguay
+- Punta del Este, Uruguay
+- Asunción, Paraguay
+- Salvador, Brazil
+- Florianópolis, Brazil
+- Brasília, Brazil
+- Fernando de Noronha, Brazil
+- Manaus & the Amazon, Brazil
+- Recife, Brazil
+- Fortaleza, Brazil
+- Georgetown, Guyana
+- Paramaribo, Suriname
+- Caracas, Venezuela
+- Ottawa, Canada
+- Calgary, Canada
+- Jasper, Canada
+- Whistler, Canada
+- Victoria, Canada
+- Halifax, Canada
+- Niagara Falls, Canada
+- Winnipeg, Canada
+- Edmonton, Canada
+- Prince Edward Island, Canada
+- Newfoundland, Canada
+- Yukon, Canada
+- Nuuk, Greenland
