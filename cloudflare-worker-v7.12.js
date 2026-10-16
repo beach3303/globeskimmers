@@ -14839,7 +14839,9 @@ async function ppLoad(env, userId) {
     // mod_status must ride along or the public serializer's ok-filter sees
     // undefined and hides every photo (found 2026-09-30 — reviewed photos were
     // invisible on public passports).
-    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption,mod_status,food_subject,board_hidden`, {});
+    let pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption,mod_status,food_subject,board_hidden`, {});
+    // The seconds between a worker deploy and its migration (2026-10-16): read without the new column.
+    if (pq.status === 400) pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption,mod_status,food_subject`, {});
     photos = pq.ok ? await pq.json() : [];
   }
   const byStamp = {};
@@ -18390,7 +18392,9 @@ async function handlePostcardSend(request, env, ctx) {
       // A board card carries the board's city and country.
       ...(toCity ? { to_city: toCity, city: boardCity, country: boardCountry, region: boardRegion } : {}),
     };
-    const w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+    let w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+    // The seconds before postcards.region exists (2026-10-16): send without it.
+    if (!w.ok && w.status === 400) { const { region: _r, ...rest } = row; w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(rest) }); }
     if (!w.ok) { if (ctx) ctx.waitUntil(env.MEDIA.delete(key).catch(() => {})); return jsonResponse({ error: 'Could not send' }, 502); }
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: !!toUser, city: !!toCity, has_dish: !!(b.meta && b.meta.dish), anon: anonLabel || undefined }));
     // A new board card shows in the City Boards list at once, not after its five minutes.

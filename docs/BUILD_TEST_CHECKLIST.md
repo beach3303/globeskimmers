@@ -1978,3 +1978,23 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   on the earliest gate). Harness: test-pins 16/16; cards/boards/boardbook/city unchanged.
 - Gates: eslint ✓ no-undef ✓ build ✓ boot-check ✓. **Activate: nothing** — no migration, no SQL.
   The app side (ask sheet, chips, FROM A LOCAL bylines) reaches phones at the founder's `npm run ota`.
+
+## 2026-10-16 — City Billboards, same-name cities, privacy switches (PUSHED)
+- Commits 4fce642 → this entry (founder: "push"). What ships:
+  - **City-board wording:** "city board" everywhere; signed cards show @username only; @local / @traveler.
+  - **Five years back:** stamps from 2021-01-01 (photo proof unchanged).
+  - **City Billboards:** painted header (kit) or typographic plate; wall = billboard + pins; photos of
+    🌍 public stamps hang on their city / state / country boards with a heads-up (no ask); albums
+    default flips to "same as each stamp"; Take it down / Put it back per photo; the enlarged viewer
+    (swipe photo ↔ postcard, stickers with counts, public comments, `bph:` targets).
+  - **Same-name US cities:** board key = city + state ("portland, oregon|united states"); stateless
+    US stamps learn their state from coordinates; links without a state open the busiest board and
+    offer the others.
+  - **Privacy switches:** ON = private everywhere (home city, circle, Profile passport card);
+    OFF says "Not private"; album choices "Same as each stamp / Inner circle only / Only me".
+- Migration **20261016150000_city_billboards** auto-applies (board_hidden, postcards.region,
+  board_notices). Deploy-race guards: album reads and card sends retry without the new columns.
+- Tests: 14 harness suites green (test-billboard 33, test-states 12 new). Gates: worker syntax,
+  source lint clean (one error is in the gitignored android/app/build artifact), build, boot-check.
+- **Activate:** nothing manual. Phones get the app side with the founder's `npm run ota`.
+  Art kits: upload to R2 under `kits/<kind>/<slug>/` (docs/design/city-board-kits.md) when painted.
