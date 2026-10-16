@@ -1998,3 +1998,19 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   source lint clean (one error is in the gitignored android/app/build artifact), build, boot-check.
 - **Activate:** nothing manual. Phones get the app side with the founder's `npm run ota`.
   Art kits: upload to R2 under `kits/<kind>/<slug>/` (docs/design/city-board-kits.md) when painted.
+
+## 2026-10-16 (later) — board guestbooks, minors on boards, Seal letters, the LA fix (PUSHED)
+- Commits c8235dd → 60ca190 (founder: "push"). No migration. What ships:
+  - **"Los Angeles, CA" joins Los Angeles, California** — a state inside a US city name becomes its state.
+  - **A guestbook on every board** (city, state, country) — the place guestbook under
+    `board:<kind>.<slug>`; **anyone 18+ writes, comments and doodles, no stamp needed**; @username,
+    else @local / @traveler; prompts Tip / Best spot / Best food / Best nature / Favorite part; the door
+    is in the billboard header. Every doodle in the app opens in place, with "Enlarge all".
+  - **Minors**: read every board, guestbook and comment, add sticker likes; never comment, write, post,
+    send or receive postcards; their photos never hang on boards; albums private; stamps capped at
+    Only me / Inner circle. Explicit rules — they hold even if TEEN_SOCIAL_ENABLED ever flips.
+  - **Seal letters**: Sunshine (Friends & Family) letter and a business welcome (burgundy → Business),
+    founder-approved wording; gold, burgundy-person and teal unchanged.
+- Tests: 17 harness suites, 320 checks green (new: test-boardgb 17, test-minors 17, test-seal-letters 9).
+  Gates: worker syntax, source lint clean, build, boot-check.
+- **Activate:** nothing manual. Phones get the app side with the founder's `npm run ota`.
