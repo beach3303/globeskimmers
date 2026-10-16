@@ -47,16 +47,19 @@ const fmtDay = (iso) => {
 // `photoId` points the strip at one photo (its reactions and comments)
 // `postcardId` points it at a postcard on a city board (City Boards, 2026-10-14):
 // no slug, as the worker finds the card's sender itself.
-export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, photoId = null, postcardId = null }) {
+// `boardPhotoId` points it at a photo hanging on a city board (City Billboards, 2026-10-16):
+// board rules, like a postcard — anyone adult may react and comment, the owner hears of it.
+export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, photoId = null, postcardId = null, boardPhotoId = null }) {
+  const onBoard = !!postcardId || !!boardPhotoId;
   // The comments dial, answered by blotter/read for THIS viewer (a board keeps board rules).
-  const canWrite = postcardId ? true : blotter?.can_comment !== false;
-  const commentsOff = !postcardId && blotter?.comments === "off";
+  const canWrite = onBoard ? true : blotter?.can_comment !== false;
+  const commentsOff = !onBoard && blotter?.comments === "off";
   const [busy, setBusy] = useState(null);       // kind being pressed/peeled
   const [sheet, setSheet] = useState(false);
-  const one = postcardId ? `pc:${postcardId}` : photoId ? `ph:${photoId}` : null;
+  const one = postcardId ? `pc:${postcardId}` : boardPhotoId ? `bph:${boardPhotoId}` : photoId ? `ph:${photoId}` : null;
   const targets = useMemo(() => (one ? [one] : (stamps || []).map((s) => `st:${s.id}`)), [stamps, one]);
   const lead = targets[0] || null;
-  const item = postcardId ? "postcard" : photoId ? "photo" : null;
+  const item = postcardId ? "postcard" : (photoId || boardPhotoId) ? "photo" : null;
 
   const agg = useMemo(() => {
     const counts = {}, mine = new Set();
@@ -74,7 +77,7 @@ export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, phot
     [blotter, targets],
   );
 
-  if ((!slug && !postcardId) || !lead) return null;
+  if ((!slug && !onBoard) || !lead) return null;
   const hasAny = Object.keys(agg.counts).length > 0 || pageEntries.length > 0;
   // The owner's own booklet stays quiet until someone reacts.
   if (ownerView && !hasAny) return null;

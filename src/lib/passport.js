@@ -462,10 +462,11 @@ export async function blotterRead(slug) {
 }
 // The likes and comments on one board page's postcards (City Boards, 2026-10-14): the same
 // { targets, entries } shape, keyed 'pc:<id>'.
-export async function blotterReadBoard(postcardIds) {
+export async function blotterReadBoard(postcardIds, photoIds = []) {
   const ids = (postcardIds || []).filter(Boolean).slice(0, 60);
-  if (!ids.length) return { targets: {}, entries: [] };
-  const { data } = await callWorker('blotter/read', { postcards: ids });
+  const photos = (photoIds || []).filter(Boolean).slice(0, 60);
+  if (!ids.length && !photos.length) return { targets: {}, entries: [] };
+  const { data } = await callWorker('blotter/read', { postcards: ids, ...(photos.length ? { photos } : {}) });
   return data && !data.error ? data : { targets: {}, entries: [] };
 }
 // Press or peel one of the five reaction stamps (+ contextual 'yummy').

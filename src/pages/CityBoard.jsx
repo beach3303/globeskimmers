@@ -16,7 +16,7 @@
 // Unfollow, Block); cards from people you blocked never show.
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ChevronLeft, Mail, Stamp, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Mail, Stamp, X } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
@@ -25,6 +25,7 @@ import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { whenLabel } from "@/components/social/Envelope";
 import PostcardCard from "@/components/social/PostcardCard";
 import PostcardCompose from "@/components/passport/PostcardCompose";
+import { BlotterStrip } from "@/components/passport/Blotter";
 import TravelerSheet from "@/components/social/TravelerSheet";
 import ConfirmBirthdayNote from "@/components/social/ConfirmBirthdayNote";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
@@ -134,36 +135,77 @@ function Billboard({ name, kind = "city", country = "", kit = null, counts = nul
   );
 }
 
-// One photo of the wall, large: the picture, its caption, its signature, and Report.
-function PhotoPeek({ row, onClose, onReport }) {
+// The viewer (founder, 2026-10-16: "enlarge them… comment on each photo… the stickers appear
+// when user enlarges… scroll to next photo enlarged, scroll to postcard enlarged if postcard is
+// next, collapse so everything goes back to board"). One item at a time over the wall's rows,
+// swiped or arrowed through, each with its sticker tray and comments (board rules: anyone
+// adult may react, the owner hears of it in the Mailbox).
+function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, onReport }) {
+  const row = rows[index];
+  const touch = useRef(null);
+  const go = (d) => { const n = index + d; if (n >= 0 && n < rows.length) onIndex(n); };
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e) => { if (e.key === "Escape") onClose(); else if (e.key === "ArrowRight") go(1); else if (e.key === "ArrowLeft") go(-1); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  });
+  if (!row) return null;
   const handle = lc(row?.by?.handle);
+  const ownerView = !!me && !!handle && lc(me) === handle;
+  const onTouchStart = (e) => { touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; };
+  const onTouchEnd = (e) => {
+    const t = touch.current; touch.current = null;
+    if (!t) return;
+    const dx = e.changedTouches[0].clientX - t.x, dy = e.changedTouches[0].clientY - t.y;
+    if (Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.4) go(dx < 0 ? 1 : -1);
+  };
+  const arrow = (d) => (
+    <button type="button" onClick={() => go(d)} aria-label={d > 0 ? "Next" : "Previous"} disabled={d > 0 ? index >= rows.length - 1 : index <= 0}
+      className="disabled:opacity-25"
+      style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 999, background: "rgba(255,255,255,.08)", border: 0, color: NEUTRAL.ivory, cursor: "pointer" }}>
+      {d > 0 ? <ChevronRight size={22} strokeWidth={2} aria-hidden="true" focusable="false" /> : <ChevronLeft size={22} strokeWidth={2} aria-hidden="true" focusable="false" />}
+    </button>
+  );
   return (
-    <div role="dialog" aria-modal="true" aria-label={`Photo from ${row.place || "the board"}`} className="fixed inset-0 z-[9998] flex flex-col"
-      style={{ background: "rgba(8,16,32,.94)" }} onClick={onClose}>
-      <div style={{ display: "flex", justifyContent: "flex-end", padding: "calc(8px + env(safe-area-inset-top)) 8px 0" }}>
-        <button type="button" onClick={onClose} aria-label="Close"
-          style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: 0, color: NEUTRAL.ivory, cursor: "pointer" }}>
-          <X size={22} strokeWidth={2} aria-hidden="true" focusable="false" />
-        </button>
-      </div>
-      <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 8px" }} onClick={(e) => e.stopPropagation()}>
-        <img src={row.photo} alt={row.caption || `Photo from ${row.place || ""}`} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 6, display: "block" }} />
-      </div>
-      <div style={{ padding: "12px 20px calc(20px + env(safe-area-inset-bottom))", color: NEUTRAL.ivory }} onClick={(e) => e.stopPropagation()}>
-        {row.caption ? <p style={{ margin: 0, fontFamily: SERIF, fontStyle: "italic", fontSize: fs(16), lineHeight: 1.35 }}>&ldquo;{row.caption}&rdquo;</p> : null}
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 10px", marginTop: row.caption ? 8 : 0, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".1em", textTransform: "uppercase", color: NEUTRAL.goldPale }}>
-          <span>{handle ? `From @${handle}` : "From a traveler"}</span>
-          {row.place ? <span>· {row.place}</span> : null}
-          {whenLabel(row.created_at) ? <span style={{ marginLeft: "auto" }}>{whenLabel(row.created_at)}</span> : null}
+    <div role="dialog" aria-modal="true" aria-label={row.type === "photo" ? `Photo ${index + 1} of ${rows.length}` : `Postcard ${index + 1} of ${rows.length}`}
+      className="fixed inset-0 z-[9998] flex flex-col" style={{ background: "rgba(8,16,32,.96)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(8px + env(safe-area-inset-top)) 8px 0" }}>
+        {arrow(-1)}
+        <span style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".16em", color: NEUTRAL.goldPale }}>{index + 1} / {rows.length}</span>
+        <div style={{ display: "flex", gap: 2 }}>
+          {arrow(1)}
+          <button type="button" onClick={onClose} aria-label="Back to the board"
+            style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: 0, color: NEUTRAL.ivory, cursor: "pointer" }}>
+            <X size={22} strokeWidth={2} aria-hidden="true" focusable="false" />
+          </button>
         </div>
-        {onReport ? (
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: "6px 12px calc(24px + env(safe-area-inset-bottom))" }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+        {row.type === "photo" ? (
+          <>
+            <img key={row.id} src={row.photo} alt={row.caption || `Photo from ${row.place || ""}`} style={{ display: "block", width: "100%", maxHeight: "54vh", objectFit: "contain", borderRadius: 6 }} />
+            <div style={{ color: NEUTRAL.ivory, padding: "10px 4px 0" }}>
+              {row.caption ? <p style={{ margin: 0, fontFamily: SERIF, fontStyle: "italic", fontSize: fs(16), lineHeight: 1.35 }}>&ldquo;{row.caption}&rdquo;</p> : null}
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 10px", marginTop: row.caption ? 8 : 0, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".1em", textTransform: "uppercase", color: NEUTRAL.goldPale }}>
+                <span>{handle ? `From @${handle}` : "From a traveler"}</span>
+                {row.place ? <span>· {row.place}</span> : null}
+                {whenLabel(row.created_at) ? <span style={{ marginLeft: "auto" }}>{whenLabel(row.created_at)}</span> : null}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={{ maxWidth: 420, margin: "0 auto" }}>
+            <PostcardCard row={row} me={me} meName={meName} onReport={onReport} />
+          </div>
+        )}
+        {row.id ? (
+          <div style={{ marginTop: 12 }}>
+            <BlotterStrip {...(row.type === "photo" ? { boardPhotoId: row.id } : { postcardId: row.id })} blotter={book} food={!!row.dish} ownerView={ownerView} onChanged={onBook} />
+          </div>
+        ) : null}
+        {row.type === "photo" && onReport ? (
           <button type="button" onClick={() => onReport(row)}
-            style={{ marginTop: 10, minHeight: 36, padding: "0 12px", borderRadius: 999, background: "transparent", border: `1px solid ${NEUTRAL.goldPale}`, font: "inherit", fontSize: fs(12), fontWeight: 600, color: NEUTRAL.goldPale, cursor: "pointer" }}>
+            style={{ marginTop: 12, minHeight: 36, padding: "0 12px", borderRadius: 999, background: "transparent", border: `1px solid ${NEUTRAL.goldPale}`, font: "inherit", fontSize: fs(12), fontWeight: 600, color: NEUTRAL.goldPale, cursor: "pointer" }}>
             Report this photo
           </button>
         ) : null}
@@ -202,10 +244,10 @@ function Board({ kind, city, region, country, onBack }) {
   const [me, setMe] = useState({ handle: null, name: null });
   const [traveler, setTraveler] = useState(null);
   const [compose, setCompose] = useState(false);
-  const [peek, setPeek] = useState(null);
+  const [view, setView] = useState(null);     // the viewer's index into rows, or null
   // The cards' likes and comments (the guestbook, 2026-10-14), read for every card shown.
   const [book, setBook] = useState(null);
-  const readBook = (list) => blotterReadBoard((list || []).filter((x) => x?.type !== "photo").map((x) => x?.id)).then(setBook);
+  const readBook = (list) => blotterReadBoard((list || []).filter((x) => x?.type !== "photo").map((x) => x?.id), (list || []).filter((x) => x?.type === "photo").map((x) => x?.id)).then(setBook);
   const live = useRef(0);
   const ask = { city, country, kind, region };
 
@@ -298,9 +340,12 @@ function Board({ kind, city, region, country, onBack }) {
         <h2 style={{ ...KICKER, ...(WALL === "pins" ? { color: "#4A3426" } : {}) }}>Newest first · tap any photo</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: WALL === "pins" ? "10px 8px" : 6, marginTop: 8, alignItems: "start" }}>
           {rows.map((r, i) => (r.type === "photo" ? (
-            <PhotoTile key={r.id || `ph-${i}`} row={r} onOpen={setPeek} index={i} />
+            <PhotoTile key={r.id || `ph-${i}`} row={r} onOpen={() => setView(i)} index={i} />
           ) : (
-            <div key={r.id || `bc-${r.created_at}-${i}`} style={{ gridColumn: "1 / -1", ...(WALL === "pins" ? { position: "relative", transform: `rotate(${tiltOf(i) / 2}deg)`, margin: "8px 2px 4px", filter: "drop-shadow(0 8px 10px rgba(22,17,13,.28))" } : {}) }}>
+            <div key={r.id || `bc-${r.created_at}-${i}`} role="button" tabIndex={0} aria-label="Open this postcard"
+              onClick={(e) => { if (!e.target.closest("button, a")) setView(i); }}
+              onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !e.target.closest("button, a")) { e.preventDefault(); setView(i); } }}
+              style={{ gridColumn: "1 / -1", cursor: "pointer", ...(WALL === "pins" ? { position: "relative", transform: `rotate(${tiltOf(i) / 2}deg)`, margin: "8px 2px 4px", filter: "drop-shadow(0 8px 10px rgba(22,17,13,.28))" } : {}) }}>
               {WALL === "pins" ? <Pin color={NEUTRAL.airmailBlue} /> : null}
               <PostcardCard row={r} me={me.handle} meName={me.name || profile?.first_name || null} onReport={report} />
             </div>
@@ -338,7 +383,10 @@ function Board({ kind, city, region, country, onBack }) {
           <div className={COLUMN}>{body}</div>
         </div>
       ) : null}
-      {peek ? <PhotoPeek row={peek} onClose={() => setPeek(null)} onReport={(row) => { setPeek(null); report(row); }} /> : null}
+      {view !== null && rows[view] ? (
+        <BoardViewer rows={rows} index={view} onIndex={setView} onClose={() => setView(null)} book={book} onBook={() => readBook(board?.rows)}
+          me={me.handle} meName={me.name || profile?.first_name || null} onReport={(row) => { setView(null); report(row); }} />
+      ) : null}
       {traveler ? (
         <TravelerSheet person={traveler.person} report={traveler.report}
           onClose={() => setTraveler(null)} onChanged={() => { setTraveler(null); circle.retry(); retry(); }} />
