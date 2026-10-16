@@ -16,7 +16,8 @@
 // age read when AuthContext reports it (socialTierReady false), so a teen never
 // glimpses the sign button.
 import { useEffect, useState, useCallback, useId } from "react";
-import { Binoculars, Brush, EyeOff, HandHeart, Heart, Hourglass, Lightbulb, Lock, PenLine, X } from "lucide-react";
+import { Binoculars, Brush, EyeOff, HandHeart, Heart, Hourglass, Lightbulb, Lock, MapPin, PenLine, Trees, UtensilsCrossed, X } from "lucide-react";
+import DoodleThumb, { DoodlesAllToggle } from "@/components/DoodleThumb";
 import { callWorker } from "@/lib/callWorker";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
@@ -40,7 +41,16 @@ const PROMPTS = [
   { key: "shoutout", label: "Shout-out", icon: HandHeart, hint: "Thank someone who made your visit special…" },
   { key: "story", label: "My memory", icon: PenLine, hint: "A moment from your visit you'll remember…" },
 ];
-const PROMPT_LABEL = { ...Object.fromEntries(PROMPTS.map((p) => [p.key, p.label])), doodle: "Doodle" };
+// A board's guestbook asks for what helps the next visitor most (founder, 2026-10-16: "leave
+// tips, recommendations, your fave part … best spots, best nature, best food").
+export const BOARD_PROMPTS = [
+  { key: "tip", label: "Tip", icon: Lightbulb, hint: "One thing you wish you'd known before you came…" },
+  { key: "spot", label: "Best spot", icon: MapPin, hint: "The place you'd send a friend first…" },
+  { key: "food", label: "Best food", icon: UtensilsCrossed, hint: "The dish you'd come back for — and where to find it…" },
+  { key: "nature", label: "Best nature", icon: Trees, hint: "A park, a trail, a view worth the walk…" },
+  { key: "favorite", label: "Favorite part", icon: Heart, hint: "What did you love most here?" },
+];
+const PROMPT_LABEL = { ...Object.fromEntries([...PROMPTS, ...BOARD_PROMPTS].map((p) => [p.key, p.label])), favorite: "Favorite part", doodle: "Doodle" };
 
 const HELD_TOAST = "Thank you! Our team takes a quick look before it posts";
 // The worker's age gate answers 428 { error: "age_required", message }.
@@ -117,10 +127,17 @@ function Labelled({ icon: Icon, color, children }) {
 /**
  * @param {{
  *   entityType?: string, entityId: any, entityName?: string, onCount?: (n: number) => void,
- *   startComposing?: boolean, world?: any,
+ *   startComposing?: boolean, world?: any, prompts?: any[], intro?: string, signExtra?: any,
+ *   canSign?: boolean, cantSignNote?: string,
  * }} props
+ *
+ * A board's guestbook (2026-10-16) passes its own prompts and intro, the board itself in
+ * signExtra (the worker checks the board and that the signer was really there), canSign
+ * from the board read (else cantSignNote shows instead of the pen), and drops the
+ * owner's private note — a board has no owner.
  */
-export default function Guestbook({ entityType = "place", entityId, entityName = undefined, onCount = undefined, startComposing = false, world = undefined }) {
+export default function Guestbook({ entityType = "place", entityId, entityName = undefined, onCount = undefined, startComposing = false, world = undefined, prompts = PROMPTS, intro = undefined, signExtra = undefined, canSign = true, cantSignNote = undefined }) {
+  const board = entityType === "board";
   const { user, profile, isAuthenticated, socialTier, socialTierReady } = useAuth();
   // Without a world: NEUTRAL_WORLD, the shared inks on white.
   const w = worldRow(world);
@@ -143,7 +160,9 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
   const [pad, setPad] = useState(false);                   // the finger-doodle sheet
   const [ownerNote, setOwnerNote] = useState(false);       // the private message to the owner
   const [doodleBusy, setDoodleBusy] = useState(false);
-  const [openDoodle, setOpenDoodle] = useState(null);      // entry id expanded full-width
+  // Doodles open and close in place; "Enlarge all" opens every one (founder, 2026-10-16).
+  const [openDoodles, setOpenDoodles] = useState(() => new Set());
+  const toggleDoodle = (id) => setOpenDoodles((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const [lightbox, setLightbox] = useState(null);          // full-size photo url
   // Block: the follow list says whether the worker has block_v2; read once,
   // only when someone else's note is on screen.
@@ -188,6 +207,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
       prompt_type: "doodle", is_doodle: true,
       photo_key: up.data.key, photo_url: up.data.url,
       body: body.trim() || undefined,
+      ...(signExtra || {}),
     });
     setDoodleBusy(false);
     if (error) { showToast(errText(data, error), "error"); return; }
@@ -206,6 +226,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
       entity_type: entityType, entity_id: String(entityId), entity_name: entityName,
       display_name: displayName, home_city: showCity ? homeCity : null, show_city: showCity,
       prompt_type: prompt, body: text,
+      ...(signExtra || {}),
     });
     setBusy(false);
     if (error) { showToast(errText(data, error), "error"); return; }
@@ -253,6 +274,10 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
       {/* Sign CTA — a 13–17 account reads, never posts (founder, 2026-10-11) */}
       {isAuthenticated && !tierReady ? null : isAuthenticated && socialTier === "teen" ? (
         <TeenHoldNote />
+      ) : isAuthenticated && !canSign ? (
+        <div style={{ ...box(w), padding: "14px 16px", fontSize: fs(13), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
+          {cantSignNote || "Only travelers who were really there can write here."}
+        </div>
       ) : isAuthenticated ? (
         !composing ? (
           <div style={{ display: "flex", gap: 8 }}>
@@ -277,10 +302,10 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
               </button>
             </div>
             <p style={{ marginTop: -6, fontSize: fs(13), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
-              Help future visitors — share a tip, or tell us your favorite part{entityName ? ` of ${entityName}` : ""}
+              {intro || <>Help future visitors — share a tip, or tell us your favorite part{entityName ? ` of ${entityName}` : ""}</>}
             </p>
             <ChipRow wrap label="Kind of note">
-              {PROMPTS.map((p) => (
+              {prompts.map((p) => (
                 <WorldChip key={p.key} world={w} icon={p.icon} label={p.label} active={prompt === p.key} clearable={false} onClick={() => setPrompt(p.key)} />
               ))}
             </ChipRow>
@@ -290,7 +315,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
               maxLength={1000}
               rows={3}
               aria-label="Your note"
-              placeholder={PROMPTS.find((p) => p.key === prompt)?.hint || "Leave a tip…"}
+              placeholder={prompts.find((p) => p.key === prompt)?.hint || "Leave a tip…"}
               className="placeholder:text-[color:var(--gs-ph)]"
               style={field}
             />
@@ -303,7 +328,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
               <Labelled icon={Brush} color={w.iconInk}>{doodleBusy ? "Posting your doodle…" : "Doodle with your finger instead"}</Labelled>
             </button>
 
-            {homeCity && (
+            {homeCity && !board && (
               <label style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 44, fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink2, cursor: "pointer" }}>
                 <input type="checkbox" checked={showCity} onChange={(e) => setShowCity(e.target.checked)}
                   style={{ width: 18, height: 18, margin: 0, flexShrink: 0, accentColor: w.ink }} />
@@ -315,7 +340,7 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
               Notes &amp; doodles post publicly. By posting you grant Globeskimmers a license to display them.
             </p>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", columnGap: 12 }}>
-              <span style={{ fontSize: fs(11), lineHeight: 1.35, color: NEUTRAL.ink3 }}>{body.length}/1000 · posts publicly as {displayName}</span>
+              <span style={{ fontSize: fs(11), lineHeight: 1.35, color: NEUTRAL.ink3 }}>{body.length}/1000 · posts publicly as {board ? "your @username" : displayName}</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
                 <button type="button" onClick={resetCompose} style={{ ...textButton, justifyContent: "center", padding: "0 8px", fontSize: fs(13), color: NEUTRAL.ink2 }}>Cancel</button>
                 <button type="button" onClick={submit} disabled={busy} style={{ ...outline(w), padding: "0 20px", opacity: busy ? 0.5 : 1 }}>
@@ -341,19 +366,30 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
         </div>
       ) : entries.length === 0 ? (
         <div style={{ ...box(w), padding: "24px 20px", textAlign: "center" }}>
-          <p style={{ fontSize: fs(14.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>No notes yet — be the first to share a tip or your favorite part{entityName ? ` of ${entityName}` : ""}</p>
+          <p style={{ fontSize: fs(14.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>{board ? `No tips yet — be the first to help the next traveler in ${entityName || "this place"}` : <>No notes yet — be the first to share a tip or your favorite part{entityName ? ` of ${entityName}` : ""}</>}</p>
         </div>
       ) : (
+        <>
+        {(() => {
+          const ids = entries.filter((x) => x.photo_url && x.is_doodle).map((x) => x.id);
+          const allOpen = ids.length > 1 && ids.every((id) => openDoodles.has(id));
+          return ids.length > 1 ? (
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <DoodlesAllToggle count={ids.length} allOpen={allOpen} color={w.ink}
+                onToggle={() => setOpenDoodles(allOpen ? new Set() : new Set(ids))} />
+            </div>
+          ) : null;
+        })()}
         <ul style={{ ...box(w), padding: "0 16px" }}>
           {entries.map((e, i) => {
             const mine = !!e.mine || (!!user && e.user_id === user.id);
-            const doodleOpen = openDoodle === e.id;
+            const doodleOpen = openDoodles.has(e.id);
             return (
               <li key={e.id} style={{ padding: "14px 0", borderTop: i ? `1px solid ${w.line}` : 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   {/* The disc grows with the text size, so the initial never outgrows it. */}
                   <span aria-hidden="true" style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", width: fs(32), height: fs(32), borderRadius: 999, background: w.wash, color: w.washInk, fontFamily: SERIF, fontSize: fs(16), lineHeight: 1 }}>
-                    {(e.display_name || "?").charAt(0).toUpperCase()}
+                    {(String(e.display_name || "?").replace(/^@+/, "") || "?").charAt(0).toUpperCase()}
                   </span>
                   <div style={{ minWidth: 0 }}>
                     <p style={{ fontSize: fs(14), lineHeight: 1.3, fontWeight: 700, color: NEUTRAL.ink, overflowWrap: "anywhere" }}>
@@ -389,15 +425,9 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
                   <>
                     <p style={{ marginTop: 8, fontSize: fs(14), lineHeight: 1.55, color: NEUTRAL.ink2, overflowWrap: "anywhere" }}>{e.body}</p>
                     {e.photo_url && e.is_doodle && (
-                      <button type="button" onClick={() => setOpenDoodle(doodleOpen ? null : e.id)}
-                        aria-label={doodleOpen ? "Shrink the doodle" : "Enlarge the doodle"}
-                        style={{ display: "block", minHeight: 44, marginTop: 8, padding: 0, width: doodleOpen ? "100%" : 112, borderRadius: 12, border: `1px solid ${w.line}`, background: NEUTRAL.cream, overflow: "hidden", cursor: "pointer", transition: "width .2s" }}>
-                        <img src={e.photo_url} alt={`A doodle by ${e.display_name}`} loading="lazy"
-                          style={{ display: "block", width: "100%", objectFit: "contain", maxHeight: doodleOpen ? 360 : 84 }} />
-                        <span style={{ display: "block", padding: "2px 0 3px", fontSize: fs(10.5), lineHeight: 1.3, color: NEUTRAL.ink3 }}>
-                          {doodleOpen ? "tap to shrink" : "tap to enlarge"}
-                        </span>
-                      </button>
+                      <div style={{ marginTop: 8 }}>
+                        <DoodleThumb src={e.photo_url} alt={`A doodle by ${e.display_name}`} open={doodleOpen} onToggle={() => toggleDoodle(e.id)} line={w.line} />
+                      </div>
                     )}
                     {e.photo_url && !e.is_doodle && (
                       <button type="button" onClick={() => setLightbox(e.photo_url)} aria-label="Open the photo"
@@ -428,11 +458,12 @@ export default function Guestbook({ entityType = "place", entityId, entityName =
             );
           })}
         </ul>
+        </>
       )}
 
       {/* The quiet door for anything not kind (founder, 2026-10-05): a private
           message to the owner — never posted; screened before delivery. */}
-      {isAuthenticated && tierReady && !composing && socialTier !== "teen" && (
+      {isAuthenticated && tierReady && !composing && socialTier !== "teen" && !board && (
         <button type="button" onClick={() => setOwnerNote(true)}
           style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 44, padding: "4px 0", background: "transparent", border: 0, fontFamily: "inherit", fontSize: fs(12), lineHeight: 1.4, color: NEUTRAL.ink3, textAlign: "center", cursor: "pointer" }}>
           <span>

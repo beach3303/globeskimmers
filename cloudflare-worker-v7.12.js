@@ -18270,6 +18270,36 @@ async function pcStatesOfCity(env, city) {
   return Object.entries(by).map(([region, count]) => ({ region, count })).sort((x, y) => y.count - x.count);
 }
 
+// A board's guestbook (founder, 2026-10-16: "one guestbook per city board, per state board,
+// per country board"): the place guestbook's machinery under the id 'board:<kind>.<slug>' —
+// 'board:city.portland.oregon.united-states', 'board:state.texas.united-states',
+// 'board:country.ghana' — inside GB_ENTITY_ID_RE's alphabet.
+const pcGuestbookId = (board) => {
+  if (!board) return null;
+  const w = (v) => pcSlugWord(v) || 'x';
+  if (board.kind === 'country') return `board:country.${w(board.country)}`;
+  if (board.kind === 'state') return `board:state.${w(board.region)}.${w(board.country)}`;
+  return `board:city.${w(board.city)}${pcIsUSName(board.country) && board.region ? `.${w(board.region)}` : ''}.${w(board.country)}`;
+};
+// Was this traveler really there: a verified stamp in the board's city, US state or country.
+async function pcWasInBoard(env, userId, board) {
+  if (!board) return false;
+  if (board.kind === 'city') return pcWasThere(env, userId, board.key);
+  try {
+    const q = await gbRest(env, `passport_stamps?user_id=eq.${userId}&hidden=eq.false&verified=in.(gps,photo_loc,photo_ai)&select=id,city,region,country,lat,lng&limit=2000`, {});
+    if (!q.ok) return false;
+    const stamps = await q.json();
+    if (board.kind === 'country') {
+      const want = pcIsUSName(board.country) ? 'united states' : pcFold(pcCountryName(board.country));
+      return stamps.some((st) => (pcIsUSName(st.country) ? 'united states' : pcFold(pcCountryName(st.country))) === want);
+    }
+    const inState = (st) => pcIsUSName(st.country) && pcFold(pcUSCity(st.city, st.region).state || '') === pcFold(board.region);
+    if (stamps.some(inState)) return true;
+    await pcHealStates(env, stamps.filter((st) => pcIsUSName(st.country) && !pcUSCity(st.city, st.region).state), 3);
+    return stamps.some(inState);
+  } catch { return false; }
+}
+
 // Take a photo down from every board (or put it back) without touching its album.
 async function handlePassportPhotoBoard(request, env) {
   try {
@@ -19671,11 +19701,19 @@ async function handleCityBoard(request, env) {
       .filter((r) => !next || String(r.created_at) >= next)
       .sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)));
     const cardTotal = cc.ok ? parseInt((cc.headers.get('content-range') || '').split('/')[1] || '', 10) || cardRows.length : cardRows.length;
+    // Its guestbook (founder, 2026-10-16): one per city, state and country board.
+    const gbId = pcGuestbookId(board);
+    const [gq, mayIn] = await Promise.all([
+      gbRest(env, `guestbook_entries?entity_id=eq.${encodeURIComponent(gbId)}&review_status=eq.ok&deleted_at=is.null&hidden=eq.false&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } }).catch(() => null),
+      board.kind === 'city' ? Promise.resolve(there) : pcWasInBoard(env, user.id, board),
+    ]);
+    const gbCount = gq && gq.ok ? parseInt((gq.headers.get('content-range') || '').split('/')[1] || '0', 10) || 0 : 0;
     return jsonResponse({
       rows, next, can_post: board.kind === 'city' && there && mySp?.social_tier !== 'teen', city, country,
       board: { kind: board.kind, key, name: board.name, city: board.city, region: board.region, country },
       ...(alternates.length ? { alternates } : {}),
       kit, counts: { photos: wall.total, cards: cardTotal },
+      guestbook: { id: gbId, count: gbCount, can_sign: !!mayIn && mySp?.social_tier !== 'teen' },
     });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -25192,6 +25230,7 @@ const GB_ENTITY_ID_RE = /^[A-Za-z0-9:_.-]{1,200}$/;
 async function gbEntityIds(env, raw) {
   const id = String(raw || '').trim();
   if (!GB_ENTITY_ID_RE.test(id)) return null;
+  if (id.startsWith('board:')) return { canon: id, all: [id] };
   let gid = null;
   if (/^[a-z]+:/.test(id) || /^[a-z]{2}-[a-z0-9-]+$/.test(id)) gid = await resolveStampGid(env, id).catch(() => null);
   else if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id) && env.GLOBESKIMMERS_KV) {
@@ -25276,6 +25315,13 @@ async function handleGuestbookSign(request, env, ctx) {
     if (!isDoodle && (!text || text.length < 2)) return jsonResponse({ error: 'Write a short note first' }, 400);
     if (text.length > 1000) return jsonResponse({ error: 'Note too long (max 1000 characters)' }, 400);
     const entityName = gbClean(b.entity_name).slice(0, 160);
+    const isBoard = entityId.startsWith('board:');
+    let boardHandle = null;
+    if (isBoard) {
+      const board = b.board && typeof b.board === 'object' ? pcBoardOf(b.board) : null;
+      if (!board || pcGuestbookId(board) !== entityId) return jsonResponse({ error: 'Which board?' }, 400);
+      if (entityType !== 'board') return jsonResponse({ error: 'Which board?' }, 400);
+    }
 
     // Public posting passes the age gate like every other social surface.
     const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
@@ -25283,6 +25329,14 @@ async function handleGuestbookSign(request, env, ctx) {
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required', message: 'Add your birth year in Settings to sign guestbooks.' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Guestbooks aren\u2019t available on this account' }, 403);
     if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
+    if (isBoard) {
+      // A board's guestbook is public like the board: 18+, and only from someone who was there.
+      if (sp.social_tier === 'teen') return jsonResponse({ error: 'City boards open at age 18' }, 403);
+      if (!(await pcWasInBoard(env, user.id, pcBoardOf(b.board)))) return jsonResponse({ error: 'Only travelers who were really there can write here. Stamp it first, verified.', code: 'not_there' }, 403);
+      const hq = await gbRest(env, `passport_shares?user_id=eq.${user.id}&select=handle`, {});
+      const h = ((hq.ok ? await hq.json() : [])[0] || {}).handle;
+      boardHandle = h ? `@${h}` : null;
+    }
     if (env.GLOBESKIMMERS_KV) {
       const ck = `gb:sign:${user.id}:${new Date().toISOString().slice(0, 10)}`;
       const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
@@ -25305,13 +25359,14 @@ async function handleGuestbookSign(request, env, ctx) {
       profileCity = gbClean(p0?.home_city).slice(0, 80) || null;
     } catch { /* fall back to "A traveler" */ }
     const wantsCity = b.show_city === true || (b.show_city === undefined && !!gbClean(b.home_city));
-    const homeCity = wantsCity && sp.social_tier === 'adult' ? profileCity : null;
+    const homeCity = wantsCity && sp.social_tier === 'adult' && !isBoard ? profileCity : null;
     // "✓ visited": the traveler holds a proven stamp for this place.
     let verified = false;
     try {
       const vq = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&entity_id=${gbInList(ids.all)}&verified=in.(gps,photo_loc,photo_ai)&select=id&limit=1`);
       verified = vq.ok ? (await vq.json()).length > 0 : false;
     } catch { verified = false; }
+    if (isBoard) verified = true;   // a board's guestbook already asked for the proof
 
     // Record/mark the visit (eligibility token + "sign later" reminder queue).
     await gbRest(env, 'guestbook_visits', {
@@ -25326,10 +25381,11 @@ async function handleGuestbookSign(request, env, ctx) {
     if (!gbUploadFile(photoKey, user.id)) photoKey = '';
     const photoUrl = photoKey ? `${new URL(request.url).origin}/gb-photo/${photoKey}` : '';
 
-    const promptType = ['tip', 'favorite', 'musttry', 'shoutout', 'story', 'doodle'].includes(gbClean(b.prompt_type)) ? gbClean(b.prompt_type) : 'tip';
+    // A board's prompts add the best spot, food and nature (founder, 2026-10-16).
+    const promptType = ['tip', 'favorite', 'musttry', 'shoutout', 'story', 'doodle', 'spot', 'food', 'nature'].includes(gbClean(b.prompt_type)) ? gbClean(b.prompt_type) : 'tip';
     const row = {
       entity_type: entityType, entity_id: entityId, entity_name: entityName,
-      user_id: user.id, display_name: profileName || 'A traveler',
+      user_id: user.id, display_name: isBoard ? (boardHandle || 'A traveler') : (profileName || 'A traveler'),
       home_city: homeCity, prompt_type: promptType,
       body: text || null, verified_visit: verified,
       review_status: held ? 'held' : 'ok', review_reason: held ? (review.reason || 'reads as negative').slice(0, 140) : null,

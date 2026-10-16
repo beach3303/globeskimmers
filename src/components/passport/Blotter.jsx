@@ -6,6 +6,7 @@
 // and finger DOODLES (small in the margin, tap to enlarge); comment-likes are
 // CO-SIGNS — you put your name under someone's words, tap again to lift your
 // pen, and who-signed is always visible. The owner can sweep anything.
+import DoodleThumb, { DoodlesAllToggle } from "@/components/DoodleThumb";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Undo2, Eraser, PencilLine } from "lucide-react";
@@ -145,7 +146,11 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [pad, setPad] = useState(false);
-  const [bigDoodle, setBigDoodle] = useState(null); // enlarged doodle URL
+  // Doodles open and close in place, like every doodle in the app (founder, 2026-10-16).
+  const [openDoodles, setOpenDoodles] = useState(() => new Set());
+  const toggleDoodle = (id) => setOpenDoodles((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const doodleIds = entries.filter((x) => x.doodle).map((x) => x.id);
+  const allDoodlesOpen = doodleIds.length > 1 && doodleIds.every((id) => openDoodles.has(id));
   const [editing, setEditing] = useState(null);     // { id, text }
   const [whoOpen, setWhoOpen] = useState(null);     // entry id with signers shown
   // Report (and Block, where the worker allows it) for someone else's entry —
@@ -197,6 +202,12 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
         </div>
 
         <div className="mt-3">
+          {doodleIds.length > 1 ? (
+            <div className="flex justify-end mb-2">
+              <DoodlesAllToggle count={doodleIds.length} allOpen={allDoodlesOpen} color="#8A5410"
+                onToggle={() => setOpenDoodles(allDoodlesOpen ? new Set() : new Set(doodleIds))} />
+            </div>
+          ) : null}
           {entries.length === 0 && (
             <p style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(14.5), color: INK3 }}>
               {forPhoto ? "No comments yet. Be the first to leave a line or a little drawing." : "No signatures yet. Be the first to leave a line or a little drawing."}
@@ -205,12 +216,9 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
           {entries.map((e) => (
             <div key={e.id} className="py-2.5" style={{ borderTop: `1px dashed ${RULE}` }}>
               {e.doodle ? (
-                <div className="flex items-start gap-2.5">
-                  <button type="button" onClick={() => setBigDoodle(e.doodle)} aria-label="Enlarge this doodle"
-                    className="flex-none active:scale-95 transition-transform"
-                    style={{ width: 96, height: 72, borderRadius: 8, overflow: "hidden", border: "1.5px solid #D9CCA9", background: CARD, boxShadow: "0 2px 6px rgba(0,0,0,.12)" }}>
-                    <img src={e.doodle} alt={`A doodle by ${e.handle ? "@" + e.handle : e.name || "a traveler"}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                  </button>
+                <div className="flex items-start gap-2.5 flex-wrap">
+                  <DoodleThumb src={e.doodle} alt={`A doodle by ${e.handle ? "@" + e.handle : e.name || "a traveler"}`} small={96}
+                    open={openDoodles.has(e.id)} onToggle={() => toggleDoodle(e.id)} line="#D9CCA9" paper={CARD} />
                   {e.body && <p className="min-w-0 flex-1" style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(15), color: INK, margin: 0 }}>{e.body}</p>}
                 </div>
               ) : editing?.id === e.id ? (
@@ -300,14 +308,6 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
           onClose={() => setAboutEntry(null)} onChanged={() => { setAboutEntry(null); onChanged?.(); }} />
       )}
 
-      {/* Tap a doodle → it grows to full width; tap again → back to the margin. */}
-      {bigDoodle && (
-        <button type="button" onClick={() => setBigDoodle(null)} aria-label="Shrink the doodle back"
-          className="fixed inset-0 z-[80] flex items-center justify-center p-6" style={{ background: "rgba(22,17,13,.6)" }}>
-          <img src={bigDoodle} alt="An enlarged doodle" className="w-full max-w-sm rounded-2xl"
-            style={{ background: CARD, border: "1.5px solid #D9CCA9", boxShadow: "0 18px 36px -18px rgba(0,0,0,.6)" }} />
-        </button>
-      )}
     </div>
   );
 }

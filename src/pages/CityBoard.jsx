@@ -16,7 +16,8 @@
 // Unfollow, Block); cards from people you blocked never show.
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Mail, Stamp, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, Mail, Stamp, X } from "lucide-react";
+import Guestbook, { BOARD_PROMPTS } from "@/components/Guestbook";
 import { createPageUrl } from "@/utils";
 import { cityBoardUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
@@ -77,7 +78,7 @@ const PLATES = [
 const plateOf = (name) => { let h = 0; for (const c of String(name || "")) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PLATES[h % PLATES.length]; };
 const RAYS = Array.from({ length: 16 }, (_, k) => { const a = (k - 16) * 0.19635, b = (k - 15) * 0.19635; return `<polygon points="201,160 ${201 + 260 * Math.cos(a)},${160 + 260 * Math.sin(a)} ${201 + 260 * Math.cos(b)},${160 + 260 * Math.sin(b)}" fill="${k % 2 ? "#FFFFFF" : "#000000"}" opacity="${k % 2 ? 0.08 : 0.06}"/>`; }).join("");
 
-function Billboard({ name, kind = "city", country = "", region = "", kit = null, counts = null, onBack, onPost = undefined }) {
+function Billboard({ name, kind = "city", country = "", region = "", kit = null, counts = null, onBack, onPost = undefined, guestbookCount = null, onGuestbook = undefined }) {
   const fallback = plateOf(name);
   const plate = kit?.palette?.plate || fallback.plate;
   const accent = kit?.palette?.accent || fallback.accent;
@@ -122,6 +123,14 @@ function Billboard({ name, kind = "city", country = "", region = "", kit = null,
             ) : null}
           </div>
         </div>
+        {/* The board's guestbook, in the header (founder, 2026-10-16): tips, favorite spots and doodles. */}
+        {onGuestbook ? (
+          <button type="button" onClick={onGuestbook}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", minHeight: 44, marginTop: 10, padding: "0 14px", borderRadius: 12, background: "transparent", border: `1.5px solid ${accent}`, fontFamily: "inherit", fontSize: fs(13.5), fontWeight: 600, color: accent, cursor: "pointer" }}>
+            <BookOpen size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
+            {name}&rsquo;s guestbook{guestbookCount ? ` · ${guestbookCount} tip${guestbookCount === 1 ? "" : "s"} & doodle${guestbookCount === 1 ? "" : "s"}` : " · tips & doodles"}
+          </button>
+        ) : null}
         {icons.length ? (
           <div aria-hidden="true" style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 10 }}>
             {icons.map((src) => (
@@ -215,6 +224,42 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
   );
 }
 
+// The board's guestbook in a sheet: the short, positive ask, then the place guestbook's
+// notes and doodles under the board's id (City Billboards, 2026-10-16).
+function BoardGuestbookSheet({ name, gb, signBoard, onClose, onCount }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div role="dialog" aria-modal="true" aria-label={`${name}’s guestbook`} className="fixed inset-0 z-[9998] flex items-end justify-center" style={{ background: "rgba(22,17,13,.5)" }} onClick={onClose}>
+      <div className="w-full max-w-md md:max-w-2xl max-h-[90vh] overflow-y-auto" style={{ background: NEUTRAL.ivory, borderRadius: "22px 22px 0 0", padding: "16px 16px calc(28px + env(safe-area-inset-bottom))" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+          <div>
+            <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", textTransform: "uppercase", color: NEUTRAL.stamp }}>The guestbook</div>
+            <h2 style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(24), fontWeight: 400, lineHeight: 1.1, color: NEUTRAL.ink }}>
+              <em style={{ fontStyle: "italic", color: BLUE }}>{name}</em>, by travelers who were here
+            </h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close the guestbook"
+            style={{ flex: "none", width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 999, background: "transparent", border: 0, color: NEUTRAL.ink2, cursor: "pointer" }}>
+            <X size={20} strokeWidth={2} aria-hidden="true" focusable="false" />
+          </button>
+        </div>
+        <p style={{ margin: "6px 0 12px", fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
+          Leave a tip, your favorite spot, the best food or the best nature — anything that helps the next visitor. Doodles welcome.
+        </p>
+        <Guestbook entityType="board" entityId={gb.id} entityName={name} prompts={BOARD_PROMPTS}
+          intro="Help the next traveler: a tip, the best spot, the best food or nature, your favorite part."
+          signExtra={{ board: signBoard }} canSign={gb.can_sign !== false}
+          cantSignNote={`Stamp ${name}, verified, to leave a tip here — this guestbook is for travelers who were really there.`}
+          onCount={onCount} />
+      </div>
+    </div>
+  );
+}
+
 // A tile on the wall: the photo, and the @username when the owner signed it.
 function PhotoTile({ row, onOpen, index = 0 }) {
   const handle = lc(row?.by?.handle);
@@ -246,6 +291,8 @@ function Board({ kind, city, region, country, onBack }) {
   const [traveler, setTraveler] = useState(null);
   const [compose, setCompose] = useState(false);
   const [view, setView] = useState(null);     // the viewer's index into rows, or null
+  const [gbOpen, setGbOpen] = useState(false);
+  const [gbCount, setGbCount] = useState(null);
   // The cards' likes and comments (the guestbook, 2026-10-14), read for every card shown.
   const [book, setBook] = useState(null);
   const readBook = (list) => blotterReadBoard((list || []).filter((x) => x?.type !== "photo").map((x) => x?.id), (list || []).filter((x) => x?.type === "photo").map((x) => x?.id)).then(setBook);
@@ -370,7 +417,9 @@ function Board({ kind, city, region, country, onBack }) {
 
   return (
     <div>
-      <Billboard name={name} kind={kind} country={country} region={kind === "city" ? board?.board?.region || region : ""} kit={board?.kit || null} counts={board?.counts || null} onBack={onBack} onPost={canPost ? () => setCompose(true) : undefined} />
+      <Billboard name={name} kind={kind} country={country} region={kind === "city" ? board?.board?.region || region : ""} kit={board?.kit || null} counts={board?.counts || null} onBack={onBack} onPost={canPost ? () => setCompose(true) : undefined}
+        guestbookCount={gbCount ?? board?.guestbook?.count ?? null}
+        onGuestbook={board?.guestbook?.id && !board.held && !board.unavailable && !board.error ? () => setGbOpen(true) : undefined} />
       <div className={COLUMN}>
         {/* Same name, another state (founder, 2026-10-16): Portland, Oregon offers Portland, Maine. */}
         {kind === "city" && (board?.alternates || []).length ? (
@@ -395,6 +444,10 @@ function Board({ kind, city, region, country, onBack }) {
         <div style={{ ...CORK, padding: "14px 0 24px", marginTop: 14 }}>
           <div className={COLUMN}>{body}</div>
         </div>
+      ) : null}
+      {gbOpen && board?.guestbook?.id ? (
+        <BoardGuestbookSheet name={name} gb={board.guestbook} onClose={() => setGbOpen(false)} onCount={setGbCount}
+          signBoard={{ kind, city: board?.board?.city || city, region: board?.board?.region || region || null, country: board?.board?.country || country }} />
       ) : null}
       {view !== null && rows[view] ? (
         <BoardViewer rows={rows} index={view} onIndex={setView} onClose={() => setView(null)} book={book} onBook={() => readBook(board?.rows)}

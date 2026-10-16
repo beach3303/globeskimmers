@@ -395,6 +395,7 @@ export async function cityBoard({ city, country, kind = 'city', region = null, b
     alternates: Array.isArray(data?.alternates) ? data.alternates : [],
     kit: data?.kit || null,
     counts: data?.counts || null,
+    guestbook: data?.guestbook || null,
     can_post: data?.can_post === true,
     held,
     unavailable: data?.unavailable === true,
