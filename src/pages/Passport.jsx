@@ -998,7 +998,7 @@ function PassportInner() {
   const colWrap = isTablet ? "max-w-[820px]" : "max-w-md";
   const { isAuthenticated, profile, user, socialTier, socialTierReady } = useAuth();
   // City boards are for adults whose age is known, as everywhere else.
-  const boardsOk = socialTierReady && !["blocked", "teen", "confirm"].includes(String(socialTier || ""));
+  const boardsOk = socialTierReady && String(socialTier || "") !== "blocked";   // minors read boards (2026-10-16)
   const isDev = isAdminEmail(user?.email); // sample-passport preview is admin-only
   const [loading, setLoading] = useState(true);
   const [stamps, setStamps] = useState([]);

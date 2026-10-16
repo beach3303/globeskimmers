@@ -27,7 +27,7 @@ export default function CityBoardRow({ city = "", country = "", region = "" }) {
   const { socialTier, socialTierReady } = useAuth();
   const c = String(city || "").trim();
   const k = String(country || "").trim();
-  const social = socialTierReady && !["blocked", "teen", "confirm"].includes(String(socialTier || ""));
+  const social = socialTierReady && String(socialTier || "") !== "blocked";   // minors read boards (2026-10-16)
   const open = social && !!c && !!k;
   const [board, setBoard] = useState(null);
   const [all, setAll] = useState(null);

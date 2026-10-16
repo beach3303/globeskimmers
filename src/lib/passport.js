@@ -396,6 +396,8 @@ export async function cityBoard({ city, country, kind = 'city', region = null, b
     kit: data?.kit || null,
     counts: data?.counts || null,
     guestbook: data?.guestbook || null,
+    // A minor reads boards and adds sticker likes; posting, notes and comments stay 18+ (2026-10-16).
+    read_only: data?.read_only === true,
     can_post: data?.can_post === true,
     held,
     unavailable: data?.unavailable === true,

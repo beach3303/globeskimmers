@@ -150,7 +150,7 @@ function Billboard({ name, kind = "city", country = "", region = "", kit = null,
 // next, collapse so everything goes back to board"). One item at a time over the wall's rows,
 // swiped or arrowed through, each with its sticker tray and comments (board rules: anyone
 // adult may react, the owner hears of it in the Mailbox).
-function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, onReport }) {
+function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, onReport, readOnly = false }) {
   const row = rows[index];
   const touch = useRef(null);
   const go = (d) => { const n = index + d; if (n >= 0 && n < rows.length) onIndex(n); };
@@ -210,7 +210,7 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
         )}
         {row.id ? (
           <div style={{ marginTop: 12 }}>
-            <BlotterStrip {...(row.type === "photo" ? { boardPhotoId: row.id } : { postcardId: row.id })} blotter={book} food={!!row.dish} ownerView={ownerView} onChanged={onBook} />
+            <BlotterStrip {...(row.type === "photo" ? { boardPhotoId: row.id } : { postcardId: row.id })} blotter={book} food={!!row.dish} ownerView={ownerView} onChanged={onBook} readOnly={readOnly} />
           </div>
         ) : null}
         {row.type === "photo" && onReport ? (
@@ -248,12 +248,14 @@ function BoardGuestbookSheet({ name, gb, signBoard, onClose, onCount }) {
           </button>
         </div>
         <p style={{ margin: "6px 0 12px", fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
-          Leave a tip, your favorite spot, the best food or the best nature — anything that helps the next visitor. Doodles welcome.
+          {gb.can_sign === false
+            ? "Tips from travelers: the best spots, the best food, the best nature, and their favorite parts."
+            : "Leave a tip, your favorite spot, the best food or the best nature — anything that helps the next visitor. Doodles welcome."}
         </p>
         <Guestbook entityType="board" entityId={gb.id} entityName={name} prompts={BOARD_PROMPTS}
           intro="Help the next traveler: a tip, the best spot, the best food or nature, your favorite part."
           signExtra={{ board: signBoard }} canSign={gb.can_sign !== false}
-          cantSignNote="Guestbooks on boards open at age 18."
+          cantSignNote="Notes and comments open at age 18 — you can read them all, and add sticker likes to photos."
           onCount={onCount} />
       </div>
     </div>
@@ -432,7 +434,12 @@ function Board({ kind, city, region, country, onBack }) {
             ))}
           </div>
         ) : null}
-        {kind === "city" && board && !board.held && !board.unavailable && !board.error && !canPost ? (
+        {board && board.read_only ? (
+          <p style={{ display: "flex", alignItems: "flex-start", gap: 8, margin: "14px 0 0", fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
+            <Stamp size={15} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>Browse every photo, card and tip, and add sticker likes. Posting and notes open at age 18.</span>
+          </p>
+        ) : kind === "city" && board && !board.held && !board.unavailable && !board.error && !canPost ? (
           <p style={{ display: "flex", alignItems: "flex-start", gap: 8, margin: "14px 0 0", fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
             <Stamp size={15} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 1 }} />
             <span>Stamp {city} with GPS or a photo taken there, and you can post a card here too.</span>
@@ -450,7 +457,7 @@ function Board({ kind, city, region, country, onBack }) {
           signBoard={{ kind, city: board?.board?.city || city, region: board?.board?.region || region || null, country: board?.board?.country || country }} />
       ) : null}
       {view !== null && rows[view] ? (
-        <BoardViewer rows={rows} index={view} onIndex={setView} onClose={() => setView(null)} book={book} onBook={() => readBook(board?.rows)}
+        <BoardViewer rows={rows} index={view} onIndex={setView} onClose={() => setView(null)} book={book} onBook={() => readBook(board?.rows)} readOnly={board?.read_only === true}
           me={me.handle} meName={me.name || profile?.first_name || null} onReport={(row) => { setView(null); report(row); }} />
       ) : null}
       {traveler ? (
@@ -477,17 +484,10 @@ export default function CityBoardPage() {
   const country = clean(params.get("country"));
   const name = kind === "state" ? region : kind === "country" ? country : city;
   const named = kind === "state" ? !!region && !!country : kind === "country" ? !!country : !!city && !!country;
-  // Nothing social until the age tier is known; a held account keeps the billboard with its
-  // note, and the board isn't read for it.
+  // Nothing until the age tier is known; a frozen account sees the billboard alone. A minor
+  // reads every board and adds sticker likes (founder, 2026-10-16) — the worker answers
+  // read_only, and posting, guestbook notes and comments stay 18+.
   if (!socialTierReady || socialTier === "blocked") return <Billboard name={name || "This board"} kind={kind} country={country} onBack={onBack} />;
-  if (socialTier === "confirm" || socialTier === "teen") {
-    return (
-      <div>
-        <Billboard name={name || "This board"} kind={kind} country={country} onBack={onBack} />
-        <div className={COLUMN}><div style={{ marginTop: 16 }}>{socialTier === "confirm" ? <ConfirmBirthdayNote /> : <TeenHoldNote />}</div></div>
-      </div>
-    );
-  }
   if (!named) {
     return (
       <div>

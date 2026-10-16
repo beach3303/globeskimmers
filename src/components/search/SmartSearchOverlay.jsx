@@ -70,7 +70,7 @@ export default function SmartSearchOverlay({ isOpen, onClose }) {
   // City boards that match what's typed (2026-10-14): 'Postcards from Paris · 24' opens the
   // board without moving your location. "coffee in Paris" asks about the part after "in".
   const { socialTier, socialTierReady } = useAuth();
-  const boardsOk = socialTierReady && !["blocked", "teen", "confirm"].includes(String(socialTier || ""));
+  const boardsOk = socialTierReady && String(socialTier || "") !== "blocked";   // minors read boards (2026-10-16)
   const [boards, setBoards] = useState([]);
   const typed = (scope === "named_place" ? (chosenPlace?.placeName || placeQuery) : q).trim();
   const boardTerm = (typed.match(/\bin\s+(.+)$/i)?.[1] || typed).trim();

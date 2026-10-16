@@ -50,10 +50,11 @@ const fmtDay = (iso) => {
 // no slug, as the worker finds the card's sender itself.
 // `boardPhotoId` points it at a photo hanging on a city board (City Billboards, 2026-10-16):
 // board rules, like a postcard — anyone adult may react and comment, the owner hears of it.
-export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, photoId = null, postcardId = null, boardPhotoId = null }) {
+// `readOnly`: a minor on a board (founder, 2026-10-16) — sticker likes yes, comments read-only.
+export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, photoId = null, postcardId = null, boardPhotoId = null, readOnly = false }) {
   const onBoard = !!postcardId || !!boardPhotoId;
   // The comments dial, answered by blotter/read for THIS viewer (a board keeps board rules).
-  const canWrite = onBoard ? true : blotter?.can_comment !== false;
+  const canWrite = readOnly ? false : onBoard ? true : blotter?.can_comment !== false;
   const commentsOff = !onBoard && blotter?.comments === "off";
   const [busy, setBusy] = useState(null);       // kind being pressed/peeled
   const [sheet, setSheet] = useState(false);
@@ -127,14 +128,14 @@ export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, phot
       {sheet && (
         <GuestbookSheet slug={slug} targets={targets} lead={lead} entries={pageEntries}
           ownerView={ownerView} onChanged={onChanged} onClose={() => setSheet(false)} item={item}
-          canWrite={canWrite} commentsOff={commentsOff} />
+          canWrite={canWrite} commentsOff={commentsOff} heldNote={readOnly ? "Comments open at age 18 — you can read them all, and add sticker likes." : null} />
       )}
     </>
   );
 }
 
 // ── The Guestbook sheet: signatures, doodles, co-signs ──────────────────────
-function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, onClose, item = null, canWrite = true, commentsOff = false }) {
+function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, onClose, item = null, canWrite = true, commentsOff = false, heldNote = null }) {
   // item: 'photo' or 'postcard' for one thing's comments, null for a page's guestbook.
   const forPhoto = !!item;
   useDismissable(true, onClose);
@@ -236,12 +237,14 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
               <div className="flex items-center gap-2.5 flex-wrap mt-1.5" style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".05em", color: INK3 }}>
                 <span style={{ color: "#0E7C86", fontWeight: 700 }}>{e.handle ? `@${e.handle}` : e.name || "a traveler"}</span>
                 <span>{fmtDay(e.created_at)}{e.edited ? " · edited" : ""}</span>
+                {canWrite ? (
                 <button type="button" onClick={() => cosign(e)} aria-pressed={e.cosigned}
                   aria-label={e.cosigned ? "Lift your pen" : "Co-sign — put your name under this"}
                   className="rounded-full px-2 py-0.5 active:scale-95 transition-transform"
                   style={{ background: e.cosigned ? "#EBF3EE" : CARD, border: `1px solid ${e.cosigned ? "#2E6B4E" : RULE}`, color: "#2E6B4E", fontWeight: 700 }}>
                   ✍ {e.cosigns || ""}
                 </button>
+                ) : e.cosigns ? <span style={{ color: "#2E6B4E", fontWeight: 700 }}>✍ {e.cosigns}</span> : null}
                 {e.cosigns > 0 && (
                   <button type="button" onClick={() => setWhoOpen(whoOpen === e.id ? null : e.id)} style={{ textDecoration: "underline", textUnderlineOffset: 2 }}>
                     who?
@@ -268,7 +271,7 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
 
         {!canWrite ? (
           <p className="mt-3" style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(14), color: INK3 }}>
-            {commentsOff ? "Comments are switched off on this passport." : "Only their inner circle can write here — reactions are open to everyone who can see the page."}
+            {heldNote || (commentsOff ? "Comments are switched off on this passport." : "Only their inner circle can write here — reactions are open to everyone who can see the page.")}
           </p>
         ) : (
         <>

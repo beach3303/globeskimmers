@@ -191,15 +191,8 @@ function Boards({ onBack }) {
 export default function CityBoardsPage() {
   const { socialTier, socialTierReady } = useAuth();
   const onBack = useBack();
-  // Nothing social until the age tier is known; a held account keeps the masthead with its note.
+  // Nothing until the age tier is known; a frozen account sees the masthead alone. Minors
+  // browse every board (founder, 2026-10-16).
   if (!socialTierReady || socialTier === "blocked") return <Masthead onBack={onBack} />;
-  if (socialTier === "confirm" || socialTier === "teen") {
-    return (
-      <div>
-        <Masthead onBack={onBack} />
-        <div className={COLUMN}><div style={{ marginTop: 16 }}>{socialTier === "confirm" ? <ConfirmBirthdayNote /> : <TeenHoldNote />}</div></div>
-      </div>
-    );
-  }
   return <Boards onBack={onBack} />;
 }

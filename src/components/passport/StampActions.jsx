@@ -59,7 +59,9 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   // A stamp in a city opens that city's board (City Boards, 2026-10-14), for adults as everywhere.
   const { socialTier, socialTierReady } = useAuth();
   const boardCity = String(stamp?.city || (stamp?.kind === "city" ? stamp?.name : "") || "").trim();
-  const showBoard = socialTierReady && !["blocked", "teen", "confirm"].includes(String(socialTier || "")) && hasBoard(boardCity, stamp?.country);
+  const showBoard = socialTierReady && String(socialTier || "") !== "blocked" && hasBoard(boardCity, stamp?.country);   // minors read boards (2026-10-16)
+  // A minor: no postcards, and stamps stay Only me or Inner circle (founder, 2026-10-16).
+  const minor = ["teen", "confirm"].includes(String(socialTier || ""));
   const navigate = useNavigate();
   // An attraction stamp opens its place's Things to Do card (prices, guestbook…).
   const canSeePlace = stamp.kind === "attraction" && !!stamp.entity_id;
@@ -323,14 +325,16 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
           <div className="mt-3 rounded-[14px] px-3.5 py-3" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
             <span className="block uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".14em", color: INK3 }}>Who can see this stamp</span>
             <div className="grid grid-cols-2 gap-2 mt-2">
-              {[["me", "🔒 Only me"], ["inner", "🤝 Inner circle"], ["followers", "✓ Followers"], ["public", "🌍 Everyone"]].map(([v, label]) => (
+              {[["me", "🔒 Only me"], ["inner", "🤝 Inner circle"], ...(minor ? [] : [["followers", "✓ Followers"], ["public", "🌍 Everyone"]])].map(([v, label]) => (
                 <button key={v} type="button" onClick={() => setVisibility(v)} disabled={visBusy} aria-pressed={tier === v}
                   className="rounded-full py-2 font-semibold disabled:opacity-60"
                   style={{ background: tier === v ? INK : "#fff", color: tier === v ? "#fff" : INK, border: `1px solid ${RULE}`, fontSize: fs(12.5) }}>{label}</button>
               ))}
             </div>
             <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.45, marginTop: 7 }}>
-              The stamp's photos follow it. 🌍 Everyone also hangs them on the city board, signed @username — any photo can be taken off the board from your album. 🔒 Only me can never be shared — in a link or a picture — until you change this.
+              {minor
+                ? "The stamp's photos follow it, and stay private. Followers and Everyone open at age 18."
+                : "The stamp's photos follow it. 🌍 Everyone also hangs them on the city board, signed @username — any photo can be taken off the board from your album. 🔒 Only me can never be shared — in a link or a picture — until you change this."}
             </p>
           </div>
         )}
@@ -509,7 +513,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
             <Row icon={MapPin} label="See this place" sub={isLocalFav ? "Who recommends it, and why" : "Prices, parking, tips and its guestbook"}
               onClick={() => { onClose?.(); openAttraction(navigate, { id: stamp.entity_id, name: stamp.name, lat: stamp.lat, lng: stamp.lng }, "From your passport"); }} />
           )}
-          {!readOnly && (
+          {!readOnly && !minor && (
             <Row icon={PencilLine} label="Send as a postcard" sub="This place's photo on the front, your words on the back" onClick={openCompose} />
           )}
           {showBoard && (

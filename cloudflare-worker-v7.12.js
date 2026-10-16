@@ -14741,7 +14741,9 @@ async function handlePassportStamp(request, env, ctx) {
       visited_on: visitedOn, verified,
       // Every new stamp starts at the owner's default tier — Inner circle unless they chose
       // otherwise in Settings (founder, 2026-10-15) — and a sensitive place starts Only me.
-      visibility: startPrivate ? 'me' : (PP_TIERS.includes(stamperSp?.default_stamp_tier) ? stamperSp.default_stamp_tier : 'inner'),
+      // A minor's stamp never starts above Inner circle (founder, 2026-10-16: their albums stay private).
+      visibility: startPrivate ? 'me' : (stamperSp?.social_tier === 'teen' || gbNeedsConfirm(stamperSp)) ? (stamperSp?.default_stamp_tier === 'me' ? 'me' : 'inner')
+        : (PP_TIERS.includes(stamperSp?.default_stamp_tier) ? stamperSp.default_stamp_tier : 'inner'),
       ...(startPrivate ? { hidden: true } : {}),
     };
     if (row.visibility === 'me') row.hidden = true;
@@ -14803,6 +14805,11 @@ async function handlePassportStampVisibility(request, env) {
     // The four tiers (founder, 2026-10-15). Old builds still send { hidden }, which means
     // Only me or the owner's default.
     if (PP_TIERS.includes(b.visibility)) {
+      if (b.visibility === 'public' || b.visibility === 'followers') {
+        const vsp = await gbSocialProfile(env, user.id).catch(() => undefined);
+        if (vsp === undefined) return jsonResponse({ error: 'Couldn’t check your account — try again' }, 503);
+        if (vsp?.social_tier === 'teen' || gbNeedsConfirm(vsp)) return jsonResponse({ error: 'Public stamps open at age 18 — your stamps stay private', code: 'teen_hold' }, 403);
+      }
       const patch = JSON.stringify({ visibility: b.visibility, hidden: b.visibility === 'me', updated_at: new Date().toISOString() });
       if (b.all === true) {
         // "Set all my stamps to one level" — the one-tap way to go dark, or go public.
@@ -15009,6 +15016,8 @@ async function ppViewerLevel(env, ownerId, viewerId, inner = null) {
 // and 'me' no one.
 function ppAlbumsAllowedAt(ownerSp, lvl) {
   if (lvl >= 3) return true;
+  // A minor's albums are private, full stop (founder, 2026-10-16).
+  if (ownerSp?.social_tier === 'teen') return false;
   // The default moved from 'inner' to 'passport' on 2026-10-16 (founder: photos follow
   // their stamp onto city boards, heads-up instead of an ask). Explicit choices stand.
   const aud = ownerSp?.albums_audience || 'passport';
@@ -16958,6 +16967,11 @@ const gbAgeUnknownResp = () => jsonResponse({ error: 'Couldn’t check your acco
 // gbTierRow) use gbUnderAge || gbAgeHeld instead: a missing row there means
 // "no profile", not a failed read.
 const gbOffSocial = (sp) => sp === undefined || gbUnderAge(sp) || gbAgeHeld(sp);
+// Minors may READ city, state and country boards and their guestbooks, and add sticker likes —
+// never comment, post, send or receive postcards (founder, 2026-10-16).
+const pcBoardReader = (sp) => sp !== undefined && !gbUnderAge(sp) && !gbConsentRevoked(sp);
+// An adult in good standing — the only one whose photos and cards may hang on a board.
+const pcAdultRow = (t) => !!t && !gbUnderAge(t) && !gbAgeHeld(t) && t.social_tier !== 'teen';
 // The phone's own age answer (Apple's Declared Age Range, Google's Play Age Signals; teens plan
 // Phase 0) caps the birthday's tier: the younger wins. An under-13 answer is 'blocked' even
 // with no birthday yet; any other answer waits for the birthday, which is still required.
@@ -18200,7 +18214,7 @@ async function pcBoardPhotos(env, board, before, blocked, origin) {
     for (let i = 0; i < owners.length; i += 100) {
       const r = await gbRest(env, `social_profiles?user_id=in.(${owners.slice(i, i + 100).join(',')})&select=user_id,albums_audience,${GB_TIER_COLS}`, {});
       if (!r.ok) return none;
-      for (const row of await r.json()) { const t = gbTierRow(row); if (!gbUnderAge(t) && !gbAgeHeld(t) && !['inner', 'me'].includes(row.albums_audience)) okOwner.add(row.user_id); }
+      for (const row of await r.json()) { const t = gbTierRow(row); if (pcAdultRow(t) && !['inner', 'me'].includes(row.albums_audience)) okOwner.add(row.user_id); }
     }
     stamps = stamps.filter((st) => okOwner.has(st.user_id) && !blocked.has(st.user_id));
     if (!stamps.length) return none;
@@ -18356,6 +18370,7 @@ async function handlePostcardSend(request, env, ctx) {
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Postcards aren\'t available on this account' }, 403);
     if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
+    if (sp.social_tier === 'teen') return jsonResponse({ error: 'Postcards open at age 18', code: 'teen_hold' }, 403);
 
     // Address it. An @handle's owner passes the recipient's rails only
     // after the photo is checked (below).
@@ -18436,7 +18451,8 @@ async function handlePostcardSend(request, env, ctx) {
       if (await gbBlockedEither(env, user.id, to.user_id)) return jsonResponse({ ok: true });
       const rsp = await gbSocialProfile(env, to.user_id).catch(() => undefined);
       if (rsp === undefined) return jsonResponse({ error: 'Couldn’t send right now — try again' }, 503);
-      if (rsp?.social_tier === 'blocked' || gbAgeHeld(rsp)) return jsonResponse({ ok: true });
+      // A minor receives no postcards (founder, 2026-10-16): stored nowhere, answered like any send.
+      if (rsp?.social_tier === 'blocked' || rsp?.social_tier === 'teen' || gbAgeHeld(rsp)) return jsonResponse({ ok: true });
       if (rsp?.social_tier === 'teen' && !(await gbMutualFriends(env, user.id, to.user_id))) {
         return jsonResponse({ error: 'You two need to follow each other to exchange postcards' }, 403);
       }
@@ -18731,8 +18747,13 @@ async function blGate(env, user, share, opts) {
     const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
     if (sp === undefined) return BL_AGE_UNKNOWN;
     if (sp?.social_tier === 'blocked') return BL_FROZEN;
-    if (gbNeedsConfirm(sp)) return GB_CONFIRM_MSG;
-    if (gbTeenHold(sp)) return BL_TEEN_HOLD;
+    // A sticker like on a board's photo or card is open to minors (founder, 2026-10-16);
+    // a comment never is.
+    const boardSticker = !!share.board && !!opts.actor && !opts.identity;
+    if (boardSticker && gbConsentRevoked(sp)) return BL_TEEN_HOLD;
+    if (!boardSticker && gbNeedsConfirm(sp)) return GB_CONFIRM_MSG;
+    if (!boardSticker && gbTeenHold(sp)) return BL_TEEN_HOLD;
+    if (opts.identity && share.board && (sp?.social_tier === 'teen' || gbNeedsConfirm(sp))) return 'Comments open at age 18';
     if (opts.identity && sp?.social_tier === 'teen') {
       const f = await gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${share.user_id}&status=eq.accepted&select=follower_id&limit=1`, {});
       if (!(f.ok && (await f.json()).length)) return 'Follow this traveler first — you can sign once they accept';
@@ -19180,7 +19201,7 @@ async function blReadBoard(env, request, user, ids, photoIds = []) {
   ]);
   if (!blocks || !tq.ok || !oq.ok) return none;
   const profs = await tq.json();
-  const adults = new Set(profs.map(gbTierRow).filter((r) => !gbUnderAge(r) && !gbAgeHeld(r)).map((r) => r.user_id));
+  const adults = new Set(profs.map(gbTierRow).filter(pcAdultRow).map((r) => r.user_id));
   const albumsOpen = new Set(profs.filter((r) => !['inner', 'me'].includes(r.albums_audience)).map((r) => r.user_id));
   const ownerBlocks = {};
   for (const r of await oq.json()) (ownerBlocks[r.user_id] = ownerBlocks[r.user_id] || new Set()).add(r.blocked_user_id);
@@ -19488,7 +19509,8 @@ async function handleSocialFeed(request, env) {
     let pcs = [...(pcTo.ok ? await pcTo.json() : []), ...(pcBroadcast.ok ? await pcBroadcast.json() : [])];
     // A card to a city's board belongs to the board, not to followers' feeds.
     pcs = pcs.filter((p) => !p.to_city);
-    if (teenMe) pcs = pcs.filter((pcrow) => pcrow.to_user_id !== user.id || mutual.has(pcrow.sender_id));
+    // A minor reads no postcards at all (founder, 2026-10-16).
+    if (teenMe) pcs = [];
     // Senders I don't follow: their handle, name and age (a card from an
     // account that has since turned out to be a minor is dropped too).
     const pcSenders = [...new Set(pcs.map((p) => p.sender_id))].filter((id) => !ids.includes(id));
@@ -19604,7 +19626,7 @@ async function handlePostcardBox(request, env) {
       }
     }
     const minor = (id) => { const r = prof[id]; return !!r && (gbUnderAge(r) || gbAgeHeld(r)); };
-    const kept = page.filter((p) => !blocked.has(p.sender_id) && !minor(p.sender_id) && (!teenMe || mutual.has(p.sender_id)));
+    const kept = page.filter((p) => !blocked.has(p.sender_id) && !minor(p.sender_id) && !teenMe);
     const gone = await gbPurgeQueued(env, senders.filter((id) => !share[id]?.handle && prof[id]?.display_name));
     const nameOf = (id) => (gone.has(id) ? null : prof[id]?.display_name || null);
     const origin = new URL(request.url).origin;
@@ -19636,7 +19658,9 @@ async function handleCityBoard(request, env) {
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const mySp = await gbSocialProfile(env, user.id).catch(() => undefined);
     if (mySp === undefined) return jsonResponse({ rows: [], error: 'Couldn’t check your account — try again', code: 'age_unknown' }, 503);
-    if (gbOffSocial(mySp)) return jsonResponse({ rows: [], code: 'teen_hold', held: gbNeedsConfirm(mySp) ? 'confirm' : 'teen' }, 403);
+    if (!pcBoardReader(mySp)) return jsonResponse({ rows: [], code: 'teen_hold', held: gbNeedsConfirm(mySp) ? 'confirm' : 'teen' }, 403);
+    // A minor reads the board and adds sticker likes; posting and writing stay 18+.
+    const writer = !gbOffSocial(mySp) && mySp?.social_tier !== 'teen';
     const b0 = await request.json().catch(() => ({}));
     // Same name, different states (founder, 2026-10-16): a US city board is one state's.
     // Asked without a state (an old link, a card with no state), the busiest one opens and
@@ -19690,7 +19714,7 @@ async function handleCityBoard(request, env) {
     // An adult's card or photo only: never a minor's, never one whose owner's age can't be
     // read. A photo also needs its owner's albums open to passport viewers — the dial that
     // defaults to "same as the stamp" since 2026-10-16; 'inner' and 'me' keep photos home.
-    const adult = (id) => { const r = prof[id]; return !!r && !gbUnderAge(r) && !gbAgeHeld(r); };
+    const adult = (id) => pcAdultRow(prof[id]);
     const albumsOpen = (id) => !['inner', 'me'].includes(aud[id]);
     const shownCards = cards.filter((p) => !blocked.has(p.sender_id) && adult(p.sender_id));
     const shownPhotos = wall.photos.filter((p) => adult(p.user_id) && albumsOpen(p.user_id));
@@ -19728,11 +19752,11 @@ async function handleCityBoard(request, env) {
     const gq = await gbRest(env, `guestbook_entries?entity_id=eq.${encodeURIComponent(gbId)}&review_status=eq.ok&deleted_at=is.null&hidden=eq.false&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } }).catch(() => null);
     const gbCount = gq && gq.ok ? parseInt((gq.headers.get('content-range') || '').split('/')[1] || '0', 10) || 0 : 0;
     return jsonResponse({
-      rows, next, can_post: board.kind === 'city' && there && mySp?.social_tier !== 'teen', city, country,
+      rows, next, can_post: board.kind === 'city' && there && writer, read_only: !writer, city, country,
       board: { kind: board.kind, key, name: board.name, city: board.city, region: board.region, country },
       ...(alternates.length ? { alternates } : {}),
       kit, counts: { photos: wall.total, cards: cardTotal },
-      guestbook: { id: gbId, count: gbCount, can_sign: mySp?.social_tier !== 'teen' },
+      guestbook: { id: gbId, count: gbCount, can_sign: writer },
     });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -19765,7 +19789,7 @@ async function pcPhotoBoards(env, origin) {
     const okOwner = new Set();
     for (let i = 0; i < owners.length; i += 100) {
       const r = await gbRest(env, `social_profiles?user_id=in.(${owners.slice(i, i + 100).join(',')})&select=user_id,albums_audience,${GB_TIER_COLS}`, {});
-      for (const row of (r.ok ? await r.json() : [])) { const t = gbTierRow(row); if (!gbUnderAge(t) && !gbAgeHeld(t) && !['inner', 'me'].includes(row.albums_audience)) okOwner.add(row.user_id); }
+      for (const row of (r.ok ? await r.json() : [])) { const t = gbTierRow(row); if (pcAdultRow(t) && !['inner', 'me'].includes(row.albums_audience)) okOwner.add(row.user_id); }
     }
     const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
     const add = (bucket, bd, ph) => {
@@ -19792,7 +19816,7 @@ async function handleCityBoards(request, env) {
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const mySp = await gbSocialProfile(env, user.id).catch(() => undefined);
     if (mySp === undefined) return jsonResponse({ boards: [], error: 'Couldn’t check your account — try again', code: 'age_unknown' }, 503);
-    if (gbOffSocial(mySp)) return jsonResponse({ boards: [], code: 'teen_hold', held: gbNeedsConfirm(mySp) ? 'confirm' : 'teen' }, 403);
+    if (!pcBoardReader(mySp)) return jsonResponse({ boards: [], code: 'teen_hold', held: gbNeedsConfirm(mySp) ? 'confirm' : 'teen' }, 403);
     const b = await request.json().catch(() => ({}));
     // The board key's own spelling (pcCityKey): unaccented, lowercase, single spaces.
     const q = String(b.q || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 40);
