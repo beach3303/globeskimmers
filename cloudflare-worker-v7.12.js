@@ -20888,11 +20888,51 @@ async function handleAdminHandleRequests(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
-// The Seal letters — founder-approved word for word, 2026-10-03. Gold bows,
-// burgundy confirms; teal (House) sends nothing. Sent on grant when Resend
-// is configured, otherwise returned composed for the desk to copy.
-async function gbSendSealLetter(env, { email, name, handle, tier }) {
+// The Seal letters — founder-approved word for word: gold and burgundy 2026-10-03; the
+// Sunshine (Friends & Family) letter and the business welcome 2026-10-16. Gold bows,
+// burgundy confirms (a business gets its welcome), Sunshine thanks; teal (House) sends
+// nothing. Sent on grant when Resend is configured, otherwise returned composed for the
+// desk to copy.
+async function gbSendSealLetter(env, { email, name, handle, tier, kind = 'person' }) {
   const who = name || 'there';
+  if (tier === 'sunshine-heart' || tier === 'sunshine-star' || (tier === 'burgundy' && kind === 'business')) {
+    const sunshine = tier !== 'burgundy';
+    const subject = sunshine ? '\u2600 Your Sunshine Seal \u2014 Friends & Family' : '\u272A Welcome to GlobeSkimmers \u2014 your business Seal is official';
+    const text = sunshine
+      ? `Hello ${who},
+
+Your account @${handle} now carries the Sunshine Seal \u2014 the GlobeSkimmers mark for friends and family. It's a seal, not a checkmark, with a little ${tier === 'sunshine-heart' ? 'heart' : 'star'} Maiza picked just for you.
+
+Everywhere you post, sign or send, it sits beside your name.
+
+Thank you for being a part of GlobeSkimmers.
+
+Maiza & GlobeSkimmers \u2708\uFE0F
+"Collect your world."`
+      : `Hello ${who},
+
+Welcome! Your account @${handle} now carries the GlobeSkimmers Seal \u2014 the official mark for businesses we've confirmed are really you.
+
+Users, Locals, & Travelers see it beside your name everywhere you post, sign or send, so they know it's really you \u2014 a verified business entity.
+
+Travelers leave kind notes, tips and doodles in your place's guestbook. Kind notes post right away, and anything unkind waits for our review.
+
+We're so glad you're here. If there's anything we can do to help travelers find you, just reply to this email.
+
+Maiza & GlobeSkimmers \u2708\uFE0F
+"Collect your world."`;
+    if (!email) return { sent: false, subject, text, reason: 'no-email' };
+    if (!env.RESEND_API_KEY) return { sent: false, subject, text, reason: 'no-key' };
+    try {
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: env.RESEND_FROM || 'GlobeSkimmers <hello@globeskimmers.io>', reply_to: env.RESEND_REPLY_TO || 'founder@globeskimmers.io', to: [email], subject, text }),
+      });
+      if (!r.ok) return { sent: false, subject, text, reason: `resend-${r.status}` };
+      return { sent: true, subject, text };
+    } catch (e) { return { sent: false, subject, text, reason: e.message }; }
+  }
   const base = `Hello ${who},
 
 Your account @${handle} now carries the GlobeSkimmers Seal \u2014 our mark of official accounts. It isn't a checkmark; it's a stamp, drawn in the same worn ink as the stamps people collect for the places they've been and the moments they were there.
@@ -20953,8 +20993,8 @@ async function handleAdminVerified(request, env) {
       const w = await gbRest(env, `passport_shares?handle=eq.${encodeURIComponent(handle)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ verified: op === 'grant', seal, updated_at: new Date().toISOString() }) });
       const rows = w.ok ? await w.json() : [];
       if (!rows.length) return jsonResponse({ error: 'No user with that handle' }, 404);
-      if (op === 'grant' && !wasSealed && (seal === 'gold' || seal === 'burgundy')) {
-        // Letters go to gold and burgundy only; House and Sunshine grants are personal.
+      if (op === 'grant' && !wasSealed && (seal === 'gold' || seal === 'burgundy' || seal === 'sunshine-heart' || seal === 'sunshine-star')) {
+        // Letters go to gold, burgundy (a business gets its welcome) and Sunshine; House sends none.
         // The letter rides the grant. Email from the auth admin API, name
         // from the social profile; failures just fall back to desk copy.
         let email = null, name = null;
@@ -20966,7 +21006,7 @@ async function handleAdminVerified(request, env) {
           const pq = await gbRest(env, `social_profiles?user_id=eq.${rows[0].user_id}&select=display_name`, {});
           name = (pq.ok ? await pq.json() : [])[0]?.display_name || null;
         } catch { /* fine */ }
-        var letter = await gbSendSealLetter(env, { email, name, handle: rows[0].handle, tier: seal });
+        var letter = await gbSendSealLetter(env, { email, name, handle: rows[0].handle, tier: seal, kind: b.kind === 'business' ? 'business' : 'person' });
       }
     }
     const list = await gbRest(env, 'passport_shares?verified=eq.true&select=handle,user_id,seal&order=handle.asc', {});

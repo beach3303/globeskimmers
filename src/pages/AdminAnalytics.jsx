@@ -1042,6 +1042,8 @@ export default function AdminAnalytics() {
   const [seals, setSeals] = useState({ rows: [], error: null });
   const [sealDraft, setSealDraft] = useState('');
   const [sealTierDraft, setSealTierDraft] = useState('burgundy');
+  // Burgundy is for businesses AND people: a business gets the welcome letter (2026-10-16).
+  const [sealKindDraft, setSealKindDraft] = useState('person');
   const [brandOpen, setBrandOpen] = useState(null);   // brand handle with controls expanded
   const [requests, setRequests] = useState({ rows: [], error: null });
   // Guestbook review: notes held as negative, and notes hidden by 3 reports.
@@ -1093,7 +1095,7 @@ export default function AdminAnalytics() {
   const [sealLetter, setSealLetter] = useState(null); // { sent, subject, text } from the last grant
   const grantSeal = async () => {
     setSealLetter(null);
-    const { data, error } = await sealCall({ op: 'grant', handle: sealDraft, seal: sealTierDraft });
+    const { data, error } = await sealCall({ op: 'grant', handle: sealDraft, seal: sealTierDraft, ...(sealTierDraft === 'burgundy' ? { kind: sealKindDraft } : {}) });
     if (error) { setSeals((v) => ({ ...v, error })); return; }
     setSealDraft('');
     if (data?.letter) {
@@ -1629,6 +1631,13 @@ export default function AdminAnalytics() {
                   <option value="sunshine-heart">Sunshine ♥ — Friends & Family</option>
                   <option value="sunshine-star">Sunshine ★ — Friends & Family</option>
                 </select>
+                {sealTierDraft === 'burgundy' && (
+                  <select value={sealKindDraft} onChange={(e) => setSealKindDraft(e.target.value)} aria-label="Business or person"
+                    style={{ padding: '7px 8px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff' }}>
+                    <option value="person">Person</option>
+                    <option value="business">Business (welcome letter)</option>
+                  </select>
+                )}
                 <button type="button" onClick={grantSeal} disabled={!sealDraft.trim()}
                   style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: sealDraft.trim() ? 1 : 0.5 }}>Grant</button>
               </div>
