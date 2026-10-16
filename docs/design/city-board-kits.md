@@ -20,7 +20,9 @@ kits/<key>/
 ```
 
 Folders are named by kind, then the place and its country, lowercase and hyphenated — exactly how
-the app looks them up: `city/los-angeles--united-states`, `state/texas--united-states`,
+the app looks them up. A US city also names its state, because the same city name can exist in
+several states (Portland, Oregon and Portland, Maine are two boards):
+`city/los-angeles--california--united-states`, `city/portland--maine--united-states`, `state/texas--united-states`,
 `country/ghana`, `city/paris--france`, `city/siargao--philippines` (a destination is a city board),
 `city/cairo--egypt`. Accents dropped (`city/sao-paulo--brazil`). `meta.json` may add
 `"icons": 8` when a kit ships more than six.

@@ -1,1036 +1,1036 @@
-﻿Wave,Board type,Name,State / region,Country
-1,State,Alabama,,United States
-1,State,Alaska,,United States
-1,State,Arizona,,United States
-1,State,Arkansas,,United States
-1,State,California,,United States
-1,State,Colorado,,United States
-1,State,Connecticut,,United States
-1,State,Delaware,,United States
-1,State,Florida,,United States
-1,State,Georgia,,United States
-1,State,Hawaii,,United States
-1,State,Idaho,,United States
-1,State,Illinois,,United States
-1,State,Indiana,,United States
-1,State,Iowa,,United States
-1,State,Kansas,,United States
-1,State,Kentucky,,United States
-1,State,Louisiana,,United States
-1,State,Maine,,United States
-1,State,Maryland,,United States
-1,State,Massachusetts,,United States
-1,State,Michigan,,United States
-1,State,Minnesota,,United States
-1,State,Mississippi,,United States
-1,State,Missouri,,United States
-1,State,Montana,,United States
-1,State,Nebraska,,United States
-1,State,Nevada,,United States
-1,State,New Hampshire,,United States
-1,State,New Jersey,,United States
-1,State,New Mexico,,United States
-1,State,New York,,United States
-1,State,North Carolina,,United States
-1,State,North Dakota,,United States
-1,State,Ohio,,United States
-1,State,Oklahoma,,United States
-1,State,Oregon,,United States
-1,State,Pennsylvania,,United States
-1,State,Rhode Island,,United States
-1,State,South Carolina,,United States
-1,State,South Dakota,,United States
-1,State,Tennessee,,United States
-1,State,Texas,,United States
-1,State,Utah,,United States
-1,State,Vermont,,United States
-1,State,Virginia,,United States
-1,State,Washington,,United States
-1,State,West Virginia,,United States
-1,State,Wisconsin,,United States
-1,State,Wyoming,,United States
-1,State,District of Columbia,,United States
-1,City / destination,New York City,New York,United States
-1,City / destination,Los Angeles,California,United States
-1,City / destination,Chicago,Illinois,United States
-1,City / destination,Miami,Florida,United States
-1,City / destination,Las Vegas,Nevada,United States
-1,City / destination,San Francisco,California,United States
-1,City / destination,Orlando,Florida,United States
-1,City / destination,Washington,District of Columbia,United States
-1,City / destination,New Orleans,Louisiana,United States
-1,City / destination,Boston,Massachusetts,United States
-1,City / destination,Seattle,Washington,United States
-1,City / destination,San Diego,California,United States
-1,City / destination,Honolulu,Hawaii,United States
-1,City / destination,Nashville,Tennessee,United States
-1,City / destination,Austin,Texas,United States
-1,City / destination,Denver,Colorado,United States
-1,City / destination,Atlanta,Georgia,United States
-1,City / destination,Philadelphia,Pennsylvania,United States
-1,City / destination,Houston,Texas,United States
-1,City / destination,Dallas,Texas,United States
-1,City / destination,Phoenix,Arizona,United States
-1,City / destination,Portland,Oregon,United States
-1,City / destination,San Antonio,Texas,United States
-1,City / destination,Savannah,Georgia,United States
-1,City / destination,Charleston,South Carolina,United States
-1,City / destination,Santa Fe,New Mexico,United States
-1,City / destination,Sedona,Arizona,United States
-1,City / destination,Palm Springs,California,United States
-1,City / destination,Napa Valley,California,United States
-1,City / destination,Monterey & Carmel,California,United States
-1,City / destination,Santa Barbara,California,United States
-1,City / destination,Lake Tahoe,California / Nevada,United States
-1,City / destination,Yosemite,California,United States
-1,City / destination,Grand Canyon,Arizona,United States
-1,City / destination,Yellowstone,Wyoming,United States
-1,City / destination,Zion,Utah,United States
-1,City / destination,Key West,Florida,United States
-1,City / destination,Fort Lauderdale,Florida,United States
-1,City / destination,Tampa & St. Pete,Florida,United States
-1,City / destination,St. Augustine,Florida,United States
-1,City / destination,Memphis,Tennessee,United States
-1,City / destination,Louisville,Kentucky,United States
-1,City / destination,Asheville,North Carolina,United States
-1,City / destination,Charlotte,North Carolina,United States
-1,City / destination,Outer Banks,North Carolina,United States
-1,City / destination,Richmond,Virginia,United States
-1,City / destination,Virginia Beach,Virginia,United States
-1,City / destination,Baltimore,Maryland,United States
-1,City / destination,Annapolis,Maryland,United States
-1,City / destination,Pittsburgh,Pennsylvania,United States
-1,City / destination,Cleveland,Ohio,United States
-1,City / destination,Detroit,Michigan,United States
-1,City / destination,Minneapolis,Minnesota,United States
-1,City / destination,Milwaukee,Wisconsin,United States
-1,City / destination,St. Louis,Missouri,United States
-1,City / destination,Kansas City,Missouri,United States
-1,City / destination,Oklahoma City,Oklahoma,United States
-1,City / destination,Omaha,Nebraska,United States
-1,City / destination,Boise,Idaho,United States
-1,City / destination,Salt Lake City,Utah,United States
-1,City / destination,Park City,Utah,United States
-1,City / destination,Moab,Utah,United States
-1,City / destination,Jackson Hole,Wyoming,United States
-1,City / destination,Aspen,Colorado,United States
-1,City / destination,Vail,Colorado,United States
-1,City / destination,Boulder,Colorado,United States
-1,City / destination,Colorado Springs,Colorado,United States
-1,City / destination,Albuquerque,New Mexico,United States
-1,City / destination,Tucson,Arizona,United States
-1,City / destination,Scottsdale,Arizona,United States
-1,City / destination,Anchorage,Alaska,United States
-1,City / destination,Juneau,Alaska,United States
-1,City / destination,Maui,Hawaii,United States
-1,City / destination,Kauai,Hawaii,United States
-1,City / destination,Big Island,Hawaii,United States
-1,City / destination,Sacramento,California,United States
-1,City / destination,San Jose,California,United States
-1,City / destination,Reno,Nevada,United States
-1,City / destination,Bozeman,Montana,United States
-1,City / destination,Glacier National Park,Montana,United States
-1,City / destination,Rapid City & Mount Rushmore,South Dakota,United States
-1,City / destination,Fargo,North Dakota,United States
-1,City / destination,Des Moines,Iowa,United States
-1,City / destination,Madison,Wisconsin,United States
-1,City / destination,Indianapolis,Indiana,United States
-1,City / destination,Columbus,Ohio,United States
-1,City / destination,Cincinnati,Ohio,United States
-1,City / destination,Niagara Falls,New York,United States
-1,City / destination,Burlington,Vermont,United States
-1,City / destination,Portland,Maine,United States
-1,City / destination,Bar Harbor & Acadia,Maine,United States
-1,City / destination,Newport,Rhode Island,United States
-1,City / destination,Mystic,Connecticut,United States
-1,City / destination,Portsmouth,New Hampshire,United States
-1,City / destination,Atlantic City,New Jersey,United States
-1,City / destination,Cape May,New Jersey,United States
-1,City / destination,Wilmington,Delaware,United States
-1,City / destination,Rehoboth Beach,Delaware,United States
-1,City / destination,Little Rock,Arkansas,United States
-1,City / destination,Hot Springs,Arkansas,United States
-1,City / destination,Birmingham,Alabama,United States
-1,City / destination,Gulf Shores,Alabama,United States
-1,City / destination,Jackson,Mississippi,United States
-1,City / destination,Biloxi,Mississippi,United States
-1,City / destination,Wichita,Kansas,United States
-1,City / destination,Charleston,West Virginia,United States
-1,City / destination,Lexington,Kentucky,United States
-1,City / destination,Chattanooga,Tennessee,United States
-1,City / destination,Knoxville & the Smokies,Tennessee,United States
-1,City / destination,Myrtle Beach,South Carolina,United States
-1,City / destination,Hilton Head,South Carolina,United States
-1,City / destination,Raleigh & Durham,North Carolina,United States
-1,City / destination,Wilmington,North Carolina,United States
-1,City / destination,Shenandoah,Virginia,United States
-2,City / destination,Brooklyn,New York,United States
-2,City / destination,Long Island & the Hamptons,New York,United States
-2,City / destination,Hudson Valley,New York,United States
-2,City / destination,Lake Placid,New York,United States
-2,City / destination,Buffalo,New York,United States
-2,City / destination,Rochester,New York,United States
-2,City / destination,Albany,New York,United States
-2,City / destination,Jersey City,New Jersey,United States
-2,City / destination,Princeton,New Jersey,United States
-2,City / destination,Hoboken,New Jersey,United States
-2,City / destination,Lancaster,Pennsylvania,United States
-2,City / destination,Gettysburg,Pennsylvania,United States
-2,City / destination,Hershey,Pennsylvania,United States
-2,City / destination,Poconos,Pennsylvania,United States
-2,City / destination,Harrisburg,Pennsylvania,United States
-2,City / destination,Ocean City,Maryland,United States
-2,City / destination,Alexandria,Virginia,United States
-2,City / destination,Williamsburg,Virginia,United States
-2,City / destination,Charlottesville,Virginia,United States
-2,City / destination,Roanoke,Virginia,United States
-2,City / destination,Asbury Park,New Jersey,United States
-2,City / destination,Salem,Massachusetts,United States
-2,City / destination,Cape Cod,Massachusetts,United States
-2,City / destination,Martha’s Vineyard,Massachusetts,United States
-2,City / destination,Nantucket,Massachusetts,United States
-2,City / destination,Provincetown,Massachusetts,United States
-2,City / destination,Worcester,Massachusetts,United States
-2,City / destination,Springfield,Massachusetts,United States
-2,City / destination,Stowe,Vermont,United States
-2,City / destination,Woodstock,Vermont,United States
-2,City / destination,Kennebunkport,Maine,United States
-2,City / destination,White Mountains,New Hampshire,United States
-2,City / destination,Lake Winnipesaukee,New Hampshire,United States
-2,City / destination,Block Island,Rhode Island,United States
-2,City / destination,Providence,Rhode Island,United States
-2,City / destination,New Haven,Connecticut,United States
-2,City / destination,Hartford,Connecticut,United States
-2,City / destination,Fallingwater,Pennsylvania,United States
-2,City / destination,Erie,Pennsylvania,United States
-2,City / destination,Toledo,Ohio,United States
-2,City / destination,Dayton,Ohio,United States
-2,City / destination,Hocking Hills,Ohio,United States
-2,City / destination,Ann Arbor,Michigan,United States
-2,City / destination,Grand Rapids,Michigan,United States
-2,City / destination,Traverse City,Michigan,United States
-2,City / destination,Mackinac Island,Michigan,United States
-2,City / destination,Door County,Wisconsin,United States
-2,City / destination,Green Bay,Wisconsin,United States
-2,City / destination,Duluth,Minnesota,United States
-2,City / destination,Boundary Waters,Minnesota,United States
-2,City / destination,Rochester,Minnesota,United States
-2,City / destination,Sioux Falls,South Dakota,United States
-2,City / destination,Badlands,South Dakota,United States
-2,City / destination,Bismarck,North Dakota,United States
-2,City / destination,Theodore Roosevelt NP,North Dakota,United States
-2,City / destination,Lincoln,Nebraska,United States
-2,City / destination,Topeka,Kansas,United States
-2,City / destination,Lawrence,Kansas,United States
-2,City / destination,Branson,Missouri,United States
-2,City / destination,Ozarks,Missouri,United States
-2,City / destination,Springfield,Missouri,United States
-2,City / destination,Tulsa,Oklahoma,United States
-2,City / destination,Fort Worth,Texas,United States
-2,City / destination,El Paso,Texas,United States
-2,City / destination,Galveston,Texas,United States
-2,City / destination,South Padre Island,Texas,United States
-2,City / destination,Big Bend,Texas,United States
-2,City / destination,Fredericksburg,Texas,United States
-2,City / destination,Marfa,Texas,United States
-2,City / destination,Corpus Christi,Texas,United States
-2,City / destination,Waco,Texas,United States
-2,City / destination,Lubbock,Texas,United States
-2,City / destination,Baton Rouge,Louisiana,United States
-2,City / destination,Lafayette,Louisiana,United States
-2,City / destination,Natchez,Mississippi,United States
-2,City / destination,Oxford,Mississippi,United States
-2,City / destination,Tupelo,Mississippi,United States
-2,City / destination,Montgomery,Alabama,United States
-2,City / destination,Mobile,Alabama,United States
-2,City / destination,Huntsville,Alabama,United States
-2,City / destination,Pensacola,Florida,United States
-2,City / destination,Destin,Florida,United States
-2,City / destination,Panama City Beach,Florida,United States
-2,City / destination,Tallahassee,Florida,United States
-2,City / destination,Jacksonville,Florida,United States
-2,City / destination,Daytona Beach,Florida,United States
-2,City / destination,Cocoa Beach,Florida,United States
-2,City / destination,Sarasota,Florida,United States
-2,City / destination,Naples,Florida,United States
-2,City / destination,Fort Myers,Florida,United States
-2,City / destination,Everglades,Florida,United States
-2,City / destination,Palm Beach,Florida,United States
-2,City / destination,Clearwater,Florida,United States
-2,City / destination,Gainesville,Florida,United States
-2,City / destination,Macon,Georgia,United States
-2,City / destination,Augusta,Georgia,United States
-2,City / destination,Athens,Georgia,United States
-2,City / destination,Jekyll Island,Georgia,United States
-2,City / destination,Tybee Island,Georgia,United States
-2,City / destination,Greenville,South Carolina,United States
-2,City / destination,Columbia,South Carolina,United States
-2,City / destination,Chapel Hill,North Carolina,United States
-2,City / destination,Boone,North Carolina,United States
-2,City / destination,Winston-Salem,North Carolina,United States
-2,City / destination,Frankfort,Kentucky,United States
-2,City / destination,Bowling Green,Kentucky,United States
-2,City / destination,Mammoth Cave,Kentucky,United States
-2,City / destination,Pigeon Forge & Gatlinburg,Tennessee,United States
-2,City / destination,Franklin,Tennessee,United States
-2,City / destination,Bentonville,Arkansas,United States
-2,City / destination,Eureka Springs,Arkansas,United States
-2,City / destination,Shreveport,Louisiana,United States
-2,City / destination,Fayetteville,Arkansas,United States
-2,City / destination,Lexington,Virginia,United States
-2,City / destination,Harpers Ferry,West Virginia,United States
-2,City / destination,New River Gorge,West Virginia,United States
-2,City / destination,Morgantown,West Virginia,United States
-2,City / destination,Crested Butte,Colorado,United States
-2,City / destination,Fort Collins,Colorado,United States
-2,City / destination,Telluride,Colorado,United States
-2,City / destination,Durango,Colorado,United States
-2,City / destination,Steamboat Springs,Colorado,United States
-2,City / destination,Breckenridge,Colorado,United States
-2,City / destination,Estes Park & Rocky Mountain NP,Colorado,United States
-2,City / destination,Taos,New Mexico,United States
-2,City / destination,Roswell,New Mexico,United States
-2,City / destination,White Sands,New Mexico,United States
-2,City / destination,Carlsbad Caverns,New Mexico,United States
-2,City / destination,Flagstaff,Arizona,United States
-2,City / destination,Page & Antelope Canyon,Arizona,United States
-2,City / destination,Lake Havasu,Arizona,United States
-2,City / destination,Tempe,Arizona,United States
-2,City / destination,Yuma,Arizona,United States
-2,City / destination,Bisbee,Arizona,United States
-2,City / destination,Provo,Utah,United States
-2,City / destination,St. George,Utah,United States
-2,City / destination,Bryce Canyon,Utah,United States
-2,City / destination,Arches,Utah,United States
-2,City / destination,Capitol Reef,Utah,United States
-2,City / destination,Cheyenne,Wyoming,United States
-2,City / destination,Grand Teton,Wyoming,United States
-2,City / destination,Cody,Wyoming,United States
-2,City / destination,Laramie,Wyoming,United States
-2,City / destination,Missoula,Montana,United States
-2,City / destination,Whitefish,Montana,United States
-2,City / destination,Helena,Montana,United States
-2,City / destination,Billings,Montana,United States
-2,City / destination,Sun Valley,Idaho,United States
-2,City / destination,Coeur d’Alene,Idaho,United States
-2,City / destination,Idaho Falls,Idaho,United States
-2,City / destination,Spokane,Washington,United States
-2,City / destination,Tacoma,Washington,United States
-2,City / destination,Olympia,Washington,United States
-2,City / destination,Olympic National Park,Washington,United States
-2,City / destination,San Juan Islands,Washington,United States
-2,City / destination,Leavenworth,Washington,United States
-2,City / destination,Bellingham,Washington,United States
-2,City / destination,Walla Walla,Washington,United States
-2,City / destination,Eugene,Oregon,United States
-2,City / destination,Bend,Oregon,United States
-2,City / destination,Cannon Beach,Oregon,United States
-2,City / destination,Crater Lake,Oregon,United States
-2,City / destination,Hood River,Oregon,United States
-2,City / destination,Astoria,Oregon,United States
-2,City / destination,Ashland,Oregon,United States
-2,City / destination,Redwoods,California,United States
-2,City / destination,Mendocino,California,United States
-2,City / destination,Sonoma,California,United States
-2,City / destination,Berkeley,California,United States
-2,City / destination,Oakland,California,United States
-2,City / destination,Big Sur,California,United States
-2,City / destination,San Luis Obispo,California,United States
-2,City / destination,Pismo Beach,California,United States
-2,City / destination,Malibu,California,United States
-2,City / destination,Santa Monica,California,United States
-2,City / destination,Pasadena,California,United States
-2,City / destination,Long Beach,California,United States
-2,City / destination,Laguna Beach,California,United States
-2,City / destination,Anaheim,California,United States
-2,City / destination,Huntington Beach,California,United States
-2,City / destination,Catalina Island,California,United States
-2,City / destination,Joshua Tree,California,United States
-2,City / destination,Death Valley,California,United States
-2,City / destination,Temecula,California,United States
-2,City / destination,La Jolla,California,United States
-2,City / destination,Fresno,California,United States
-2,City / destination,Bakersfield,California,United States
-2,City / destination,Laughlin,Nevada,United States
-2,City / destination,Carson City,Nevada,United States
-2,City / destination,Virginia City,Nevada,United States
-2,City / destination,Fairbanks,Alaska,United States
-2,City / destination,Denali,Alaska,United States
-2,City / destination,Seward & Kenai,Alaska,United States
-2,City / destination,Sitka,Alaska,United States
-2,City / destination,Ketchikan,Alaska,United States
-2,City / destination,Hilo,Hawaii,United States
-2,City / destination,Kona,Hawaii,United States
-2,City / destination,Lanai,Hawaii,United States
-2,City / destination,Molokai,Hawaii,United States
-2,City / destination,Waikiki,Hawaii,United States
-2,City / destination,Guam,Guam,United States
-2,City / destination,San Juan,Puerto Rico,United States
-2,City / destination,Vieques,Puerto Rico,United States
-2,City / destination,Rincón,Puerto Rico,United States
-2,City / destination,St. Thomas,U.S. Virgin Islands,United States
-2,City / destination,St. John,U.S. Virgin Islands,United States
-2,City / destination,St. Croix,U.S. Virgin Islands,United States
-2,City / destination,Pago Pago,American Samoa,United States
-2,City / destination,Saipan,Northern Mariana Islands,United States
-1,City / destination,Paris,,France
-1,City / destination,London,,United Kingdom
-1,City / destination,Rome,,Italy
-1,City / destination,Barcelona,,Spain
-1,City / destination,Tokyo,,Japan
-1,City / destination,Kyoto,,Japan
-1,City / destination,Osaka,,Japan
-1,City / destination,Seoul,,South Korea
-1,City / destination,Bangkok,,Thailand
-1,City / destination,Hong Kong,Hong Kong SAR,China
-1,City / destination,Dubai,,United Arab Emirates
-1,City / destination,Istanbul,,Türkiye
-1,City / destination,Amsterdam,,Netherlands
-1,City / destination,Berlin,,Germany
-1,City / destination,Prague,,Czechia
-1,City / destination,Vienna,,Austria
-1,City / destination,Budapest,,Hungary
-1,City / destination,Lisbon,,Portugal
-1,City / destination,Porto,,Portugal
-1,City / destination,Madrid,,Spain
-1,City / destination,Seville,,Spain
-1,City / destination,Florence,,Italy
-1,City / destination,Venice,,Italy
-1,City / destination,Milan,,Italy
-1,City / destination,Amalfi Coast,,Italy
-1,City / destination,Athens,,Greece
-1,City / destination,Santorini,,Greece
-1,City / destination,Mykonos,,Greece
-1,City / destination,Dubrovnik,,Croatia
-1,City / destination,Kraków,,Poland
-1,City / destination,Copenhagen,,Denmark
-1,City / destination,Stockholm,,Sweden
-1,City / destination,Oslo,,Norway
-1,City / destination,Reykjavík,,Iceland
-1,City / destination,Dublin,,Ireland
-1,City / destination,Edinburgh,,United Kingdom
-1,City / destination,Brussels,,Belgium
-1,City / destination,Bruges,,Belgium
-1,City / destination,Zürich,,Switzerland
-1,City / destination,Interlaken,,Switzerland
-1,City / destination,Munich,,Germany
-1,City / destination,Salzburg,,Austria
-1,City / destination,Nice,,France
-1,City / destination,Mexico City,,Mexico
-1,City / destination,Cancún,,Mexico
-1,City / destination,Tulum,,Mexico
-1,City / destination,Oaxaca,,Mexico
-1,City / destination,Los Cabos,,Mexico
-1,City / destination,Havana,,Cuba
-1,City / destination,Punta Cana,,Dominican Republic
-1,City / destination,Nassau,,Bahamas
-1,City / destination,Montego Bay,,Jamaica
-1,City / destination,Cartagena,,Colombia
-1,City / destination,Medellín,,Colombia
-1,City / destination,Lima,,Peru
-1,City / destination,Cusco & Machu Picchu,,Peru
-1,City / destination,Rio de Janeiro,,Brazil
-1,City / destination,São Paulo,,Brazil
-1,City / destination,Buenos Aires,,Argentina
-1,City / destination,Santiago,,Chile
-1,City / destination,Toronto,,Canada
-1,City / destination,Vancouver,,Canada
-1,City / destination,Montréal,,Canada
-1,City / destination,Québec City,,Canada
-1,City / destination,Banff,,Canada
-1,City / destination,Cairo,,Egypt
-1,City / destination,Luxor,,Egypt
-1,City / destination,Marrakech,,Morocco
-1,City / destination,Cape Town,,South Africa
-1,City / destination,Nairobi,,Kenya
-1,City / destination,Zanzibar,,Tanzania
-1,City / destination,Accra,,Ghana
-1,City / destination,Lagos,,Nigeria
-1,City / destination,Tel Aviv,,Israel
-1,City / destination,Jerusalem,,
-1,City / destination,Petra,,Jordan
-1,City / destination,Doha,,Qatar
-1,City / destination,Abu Dhabi,,United Arab Emirates
-1,City / destination,Mumbai,,India
-1,City / destination,Delhi,,India
-1,City / destination,Jaipur,,India
-1,City / destination,Agra,,India
-1,City / destination,Goa,,India
-1,City / destination,Kathmandu,,Nepal
-1,City / destination,Bali,,Indonesia
-1,City / destination,Kuala Lumpur,,Malaysia
-1,City / destination,Hanoi,,Vietnam
-1,City / destination,Ho Chi Minh City,,Vietnam
-1,City / destination,Hoi An,,Vietnam
-1,City / destination,Phuket,,Thailand
-1,City / destination,Chiang Mai,,Thailand
-1,City / destination,Siem Reap,,Cambodia
-1,City / destination,Manila,,Philippines
-1,City / destination,Cebu,,Philippines
-1,City / destination,Boracay,,Philippines
-1,City / destination,Palawan,,Philippines
-1,City / destination,Siargao,,Philippines
-1,City / destination,Taipei,,Taiwan
-1,City / destination,Shanghai,,China
-1,City / destination,Beijing,,China
-1,City / destination,Sydney,,Australia
-1,City / destination,Melbourne,,Australia
-1,City / destination,Auckland,,New Zealand
-1,City / destination,Queenstown,,New Zealand
-2,City / destination,Manchester,,United Kingdom
-2,City / destination,Liverpool,,United Kingdom
-2,City / destination,Bath,,United Kingdom
-2,City / destination,Oxford,,United Kingdom
-2,City / destination,Cambridge,,United Kingdom
-2,City / destination,Cotswolds,,United Kingdom
-2,City / destination,Lake District,,United Kingdom
-2,City / destination,Cornwall,,United Kingdom
-2,City / destination,Belfast,,United Kingdom
-2,City / destination,Glasgow,,United Kingdom
-2,City / destination,Scottish Highlands,,United Kingdom
-2,City / destination,Cardiff,,United Kingdom
-2,City / destination,Galway,,Ireland
-2,City / destination,Cork,,Ireland
-2,City / destination,Ring of Kerry,,Ireland
-2,City / destination,Cliffs of Moher,,Ireland
-2,City / destination,Lyon,,France
-2,City / destination,Marseille,,France
-2,City / destination,Bordeaux,,France
-2,City / destination,Strasbourg,,France
-2,City / destination,Provence,,France
-2,City / destination,French Riviera,,France
-2,City / destination,Mont-Saint-Michel,,France
-2,City / destination,Normandy,,France
-2,City / destination,Loire Valley,,France
-2,City / destination,Chamonix,,France
-2,City / destination,Antwerp,,Belgium
-2,City / destination,Ghent,,Belgium
-2,City / destination,Rotterdam,,Netherlands
-2,City / destination,Utrecht,,Netherlands
-2,City / destination,Hamburg,,Germany
-2,City / destination,Frankfurt,,Germany
-2,City / destination,Cologne,,Germany
-2,City / destination,Dresden,,Germany
-2,City / destination,Heidelberg,,Germany
-2,City / destination,Black Forest,,Germany
-2,City / destination,Bavarian Alps,,Germany
-2,City / destination,Innsbruck,,Austria
-2,City / destination,Hallstatt,,Austria
-2,City / destination,Geneva,,Switzerland
-2,City / destination,Lucerne,,Switzerland
-2,City / destination,Zermatt,,Switzerland
-2,City / destination,Bern,,Switzerland
-2,City / destination,Lugano,,Switzerland
-2,City / destination,Naples,,Italy
-2,City / destination,Capri,,Italy
-2,City / destination,Cinque Terre,,Italy
-2,City / destination,Sicily,,Italy
-2,City / destination,Sardinia,,Italy
-2,City / destination,Lake Como,,Italy
-2,City / destination,Bologna,,Italy
-2,City / destination,Verona,,Italy
-2,City / destination,Pisa,,Italy
-2,City / destination,Siena,,Italy
-2,City / destination,Tuscany,,Italy
-2,City / destination,Turin,,Italy
-2,City / destination,Dolomites,,Italy
-2,City / destination,Puglia,,Italy
-2,City / destination,Matera,,Italy
-2,City / destination,Valencia,,Spain
-2,City / destination,Granada,,Spain
-2,City / destination,Málaga,,Spain
-2,City / destination,Ibiza,,Spain
-2,City / destination,Mallorca,,Spain
-2,City / destination,Bilbao,,Spain
-2,City / destination,San Sebastián,,Spain
-2,City / destination,Tenerife,,Spain
-2,City / destination,Córdoba,,Spain
-2,City / destination,Toledo,,Spain
-2,City / destination,Algarve,,Portugal
-2,City / destination,Madeira,,Portugal
-2,City / destination,Azores,,Portugal
-2,City / destination,Sintra,,Portugal
-2,City / destination,Coimbra,,Portugal
-2,City / destination,Crete,,Greece
-2,City / destination,Rhodes,,Greece
-2,City / destination,Corfu,,Greece
-2,City / destination,Thessaloniki,,Greece
-2,City / destination,Meteora,,Greece
-2,City / destination,Split,,Croatia
-2,City / destination,Hvar,,Croatia
-2,City / destination,Zagreb,,Croatia
-2,City / destination,Plitvice Lakes,,Croatia
-2,City / destination,Ljubljana,,Slovenia
-2,City / destination,Lake Bled,,Slovenia
-2,City / destination,Kotor,,Montenegro
-2,City / destination,Sarajevo,,Bosnia and Herzegovina
-2,City / destination,Mostar,,Bosnia and Herzegovina
-2,City / destination,Belgrade,,Serbia
-2,City / destination,Tirana,,Albania
-2,City / destination,Albanian Riviera,,Albania
-2,City / destination,Sofia,,Bulgaria
-2,City / destination,Bucharest,,Romania
-2,City / destination,Transylvania,,Romania
-2,City / destination,Warsaw,,Poland
-2,City / destination,Gdańsk,,Poland
-2,City / destination,Wrocław,,Poland
-2,City / destination,Bratislava,,Slovakia
-2,City / destination,Tallinn,,Estonia
-2,City / destination,Riga,,Latvia
-2,City / destination,Vilnius,,Lithuania
-2,City / destination,Helsinki,,Finland
-2,City / destination,Lapland,,Finland
-2,City / destination,Bergen,,Norway
-2,City / destination,Lofoten,,Norway
-2,City / destination,Tromsø,,Norway
-2,City / destination,Gothenburg,,Sweden
-2,City / destination,Malmö,,Sweden
-2,City / destination,Aarhus,,Denmark
-2,City / destination,Faroe Islands,Faroe Islands,Denmark
-2,City / destination,Golden Circle,,Iceland
-2,City / destination,Cappadocia,,Türkiye
-2,City / destination,Antalya,,Türkiye
-2,City / destination,Ephesus,,Türkiye
-2,City / destination,Bodrum,,Türkiye
-2,City / destination,Tbilisi,,Georgia
-2,City / destination,Yerevan,,Armenia
-2,City / destination,Baku,,Azerbaijan
-2,City / destination,Moscow,,Russia
-2,City / destination,St. Petersburg,,Russia
-2,City / destination,Kyiv,,Ukraine
-2,City / destination,Lviv,,Ukraine
-2,City / destination,Nicosia,,Cyprus
-2,City / destination,Valletta,,Malta
-2,City / destination,Beirut,,Lebanon
-2,City / destination,Amman,,Jordan
-2,City / destination,Wadi Rum,,Jordan
-2,City / destination,Dead Sea,,Jordan
-2,City / destination,Muscat,,Oman
-2,City / destination,Riyadh,,Saudi Arabia
-2,City / destination,Jeddah,,Saudi Arabia
-2,City / destination,AlUla,,Saudi Arabia
-2,City / destination,Manama,,Bahrain
-2,City / destination,Kuwait City,,Kuwait
-2,City / destination,Tehran,,Iran
-2,City / destination,Isfahan,,Iran
-2,City / destination,Sharm El Sheikh,,Egypt
-2,City / destination,Alexandria,,Egypt
-2,City / destination,Aswan,,Egypt
-2,City / destination,Fes,,Morocco
-2,City / destination,Chefchaouen,,Morocco
-2,City / destination,Casablanca,,Morocco
-2,City / destination,Sahara,,Morocco
-2,City / destination,Tunis,,Tunisia
-2,City / destination,Algiers,,Algeria
-2,City / destination,Addis Ababa,,Ethiopia
-2,City / destination,Lalibela,,Ethiopia
-2,City / destination,Kigali,,Rwanda
-2,City / destination,Kampala,,Uganda
-2,City / destination,Dar es Salaam,,Tanzania
-2,City / destination,Serengeti,,Tanzania
-2,City / destination,Kilimanjaro,,Tanzania
-2,City / destination,Maasai Mara,,Kenya
-2,City / destination,Mombasa,,Kenya
-2,City / destination,Victoria Falls,,Zambia / Zimbabwe
-2,City / destination,Windhoek,,Namibia
-2,City / destination,Namib Desert,,Namibia
-2,City / destination,Okavango Delta,,Botswana
-2,City / destination,Johannesburg,,South Africa
-2,City / destination,Kruger,,South Africa
-2,City / destination,Garden Route,,South Africa
-2,City / destination,Durban,,South Africa
-2,City / destination,Stellenbosch,,South Africa
-2,City / destination,Antananarivo,,Madagascar
-2,City / destination,Dakar,,Senegal
-2,City / destination,Abidjan,,Côte d’Ivoire
-2,City / destination,Kumasi,,Ghana
-2,City / destination,Cape Coast,,Ghana
-2,City / destination,Abuja,,Nigeria
-2,City / destination,Kinshasa,,DR Congo
-2,City / destination,Luanda,,Angola
-2,City / destination,Maputo,,Mozambique
-2,City / destination,Karachi,,Pakistan
-2,City / destination,Lahore,,Pakistan
-2,City / destination,Islamabad,,Pakistan
-2,City / destination,Dhaka,,Bangladesh
-2,City / destination,Colombo,,Sri Lanka
-2,City / destination,Kandy,,Sri Lanka
-2,City / destination,Galle,,Sri Lanka
-2,City / destination,Malé,,Maldives
-2,City / destination,Thimphu,,Bhutan
-2,City / destination,Pokhara,,Nepal
-2,City / destination,Everest Base Camp,,Nepal
-2,City / destination,Kolkata,,India
-2,City / destination,Chennai,,India
-2,City / destination,Bengaluru,,India
-2,City / destination,Hyderabad,,India
-2,City / destination,Kerala,,India
-2,City / destination,Udaipur,,India
-2,City / destination,Varanasi,,India
-2,City / destination,Rishikesh,,India
-2,City / destination,Amritsar,,India
-2,City / destination,Ladakh,,India
-2,City / destination,Darjeeling,,India
-2,City / destination,Lhasa,Tibet,China
-2,City / destination,Xi’an,,China
-2,City / destination,Chengdu,,China
-2,City / destination,Guilin,,China
-2,City / destination,Hangzhou,,China
-2,City / destination,Shenzhen,,China
-2,City / destination,Guangzhou,,China
-2,City / destination,Harbin,,China
-2,City / destination,Zhangjiajie,,China
-2,City / destination,Macau,Macau SAR,China
-2,City / destination,Kaohsiung,,Taiwan
-2,City / destination,Taichung,,Taiwan
-2,City / destination,Busan,,South Korea
-2,City / destination,Jeju,,South Korea
-2,City / destination,Gyeongju,,South Korea
-2,City / destination,Nara,,Japan
-2,City / destination,Hiroshima,,Japan
-2,City / destination,Hakone,,Japan
-2,City / destination,Sapporo,,Japan
-2,City / destination,Okinawa,,Japan
-2,City / destination,Fukuoka,,Japan
-2,City / destination,Nagoya,,Japan
-2,City / destination,Kanazawa,,Japan
-2,City / destination,Nikko,,Japan
-2,City / destination,Mount Fuji,,Japan
-2,City / destination,Ulaanbaatar,,Mongolia
-2,City / destination,Almaty,,Kazakhstan
-2,City / destination,Tashkent,,Uzbekistan
-2,City / destination,Samarkand,,Uzbekistan
-2,City / destination,Bishkek,,Kyrgyzstan
-2,City / destination,Krabi,,Thailand
-2,City / destination,Koh Samui,,Thailand
-2,City / destination,Pattaya,,Thailand
-2,City / destination,Ayutthaya,,Thailand
-2,City / destination,Luang Prabang,,Laos
-2,City / destination,Vientiane,,Laos
-2,City / destination,Phnom Penh,,Cambodia
-2,City / destination,Yangon,,Myanmar
-2,City / destination,Bagan,,Myanmar
-2,City / destination,Ha Long Bay,,Vietnam
-2,City / destination,Da Nang,,Vietnam
-2,City / destination,Hue,,Vietnam
-2,City / destination,Sapa,,Vietnam
-2,City / destination,Penang,,Malaysia
-2,City / destination,Langkawi,,Malaysia
-2,City / destination,Malacca,,Malaysia
-2,City / destination,Borneo,,Malaysia
-2,City / destination,Jakarta,,Indonesia
-2,City / destination,Yogyakarta,,Indonesia
-2,City / destination,Lombok,,Indonesia
-2,City / destination,Komodo,,Indonesia
-2,City / destination,Raja Ampat,,Indonesia
-2,City / destination,Davao,,Philippines
-2,City / destination,Bohol,,Philippines
-2,City / destination,Baguio,,Philippines
-2,City / destination,Vigan,,Philippines
-2,City / destination,Batanes,,Philippines
-2,City / destination,Iloilo,,Philippines
-2,City / destination,Dumaguete,,Philippines
-2,City / destination,Bacolod,,Philippines
-2,City / destination,La Union,,Philippines
-2,City / destination,Camiguin,,Philippines
-2,City / destination,Dili,,Timor-Leste
-2,City / destination,Port Moresby,,Papua New Guinea
-2,City / destination,Brisbane,,Australia
-2,City / destination,Gold Coast,,Australia
-2,City / destination,Perth,,Australia
-2,City / destination,Adelaide,,Australia
-2,City / destination,Cairns & the Great Barrier Reef,,Australia
-2,City / destination,Uluru,,Australia
-2,City / destination,Hobart,,Australia
-2,City / destination,Darwin,,Australia
-2,City / destination,Byron Bay,,Australia
-2,City / destination,Great Ocean Road,,Australia
-2,City / destination,Wellington,,New Zealand
-2,City / destination,Christchurch,,New Zealand
-2,City / destination,Rotorua,,New Zealand
-2,City / destination,Milford Sound,,New Zealand
-2,City / destination,Bora Bora,French Polynesia,France
-2,City / destination,Tahiti,French Polynesia,France
-2,City / destination,Apia,,Samoa
-2,City / destination,Nuku’alofa,,Tonga
-2,City / destination,Port Vila,,Vanuatu
-2,City / destination,Honiara,,Solomon Islands
-2,City / destination,Nouméa,New Caledonia,France
-2,City / destination,Guadalajara,,Mexico
-2,City / destination,Puerto Vallarta,,Mexico
-2,City / destination,San Miguel de Allende,,Mexico
-2,City / destination,Guanajuato,,Mexico
-2,City / destination,Mérida,,Mexico
-2,City / destination,Playa del Carmen,,Mexico
-2,City / destination,Cozumel,,Mexico
-2,City / destination,Puebla,,Mexico
-2,City / destination,Monterrey,,Mexico
-2,City / destination,Tijuana,,Mexico
-2,City / destination,Mazatlán,,Mexico
-2,City / destination,Sayulita,,Mexico
-2,City / destination,Belize City & the Cayes,,Belize
-2,City / destination,Antigua,,Guatemala
-2,City / destination,Lake Atitlán,,Guatemala
-2,City / destination,San Salvador,,El Salvador
-2,City / destination,Roatán,,Honduras
-2,City / destination,Granada,,Nicaragua
-2,City / destination,San José,,Costa Rica
-2,City / destination,Arenal,,Costa Rica
-2,City / destination,Manuel Antonio,,Costa Rica
-2,City / destination,Panama City,,Panama
-2,City / destination,Bocas del Toro,,Panama
-2,City / destination,Kingston,,Jamaica
-2,City / destination,Negril,,Jamaica
-2,City / destination,Santo Domingo,,Dominican Republic
-2,City / destination,Port-au-Prince,,Haiti
-2,City / destination,Varadero,,Cuba
-2,City / destination,Trinidad,,Cuba
-2,City / destination,Bridgetown,,Barbados
-2,City / destination,Castries,,St. Lucia
-2,City / destination,Aruba,Aruba,Netherlands
-2,City / destination,Curaçao,Curaçao,Netherlands
-2,City / destination,Bermuda,Bermuda,United Kingdom
-2,City / destination,Cayman Islands,Cayman Islands,United Kingdom
-2,City / destination,Turks and Caicos,Turks and Caicos,United Kingdom
-2,City / destination,Bogotá,,Colombia
-2,City / destination,Cali,,Colombia
-2,City / destination,Santa Marta,,Colombia
-2,City / destination,Quito,,Ecuador
-2,City / destination,Galápagos,,Ecuador
-2,City / destination,Guayaquil,,Ecuador
-2,City / destination,Cuenca,,Ecuador
-2,City / destination,La Paz,,Bolivia
-2,City / destination,Salar de Uyuni,,Bolivia
-2,City / destination,Arequipa,,Peru
-2,City / destination,Sacred Valley,,Peru
-2,City / destination,Lake Titicaca,,Peru / Bolivia
-2,City / destination,Valparaíso,,Chile
-2,City / destination,Atacama,,Chile
-2,City / destination,Patagonia,,Chile / Argentina
-2,City / destination,Easter Island,,Chile
-2,City / destination,Mendoza,,Argentina
-2,City / destination,Bariloche,,Argentina
-2,City / destination,Iguazú Falls,,Argentina / Brazil
-2,City / destination,Salta,,Argentina
-2,City / destination,Ushuaia,,Argentina
-2,City / destination,Montevideo,,Uruguay
-2,City / destination,Punta del Este,,Uruguay
-2,City / destination,Asunción,,Paraguay
-2,City / destination,Salvador,,Brazil
-2,City / destination,Florianópolis,,Brazil
-2,City / destination,Brasília,,Brazil
-2,City / destination,Fernando de Noronha,,Brazil
-2,City / destination,Manaus & the Amazon,,Brazil
-2,City / destination,Recife,,Brazil
-2,City / destination,Fortaleza,,Brazil
-2,City / destination,Georgetown,,Guyana
-2,City / destination,Paramaribo,,Suriname
-2,City / destination,Caracas,,Venezuela
-2,City / destination,Ottawa,,Canada
-2,City / destination,Calgary,,Canada
-2,City / destination,Jasper,,Canada
-2,City / destination,Whistler,,Canada
-2,City / destination,Victoria,,Canada
-2,City / destination,Halifax,,Canada
-2,City / destination,Niagara Falls,,Canada
-2,City / destination,Winnipeg,,Canada
-2,City / destination,Edmonton,,Canada
-2,City / destination,Prince Edward Island,,Canada
-2,City / destination,Newfoundland,,Canada
-2,City / destination,Yukon,,Canada
-2,City / destination,Nuuk,Greenland,Denmark
-1,Country,Afghanistan,,Afghanistan
-1,Country,Albania,,Albania
-1,Country,Algeria,,Algeria
-1,Country,Andorra,,Andorra
-1,Country,Angola,,Angola
-1,Country,Antigua and Barbuda,,Antigua and Barbuda
-1,Country,Argentina,,Argentina
-1,Country,Armenia,,Armenia
-1,Country,Australia,,Australia
-1,Country,Austria,,Austria
-1,Country,Azerbaijan,,Azerbaijan
-1,Country,Bahamas,,Bahamas
-1,Country,Bahrain,,Bahrain
-1,Country,Bangladesh,,Bangladesh
-1,Country,Barbados,,Barbados
-1,Country,Belarus,,Belarus
-1,Country,Belgium,,Belgium
-1,Country,Belize,,Belize
-1,Country,Benin,,Benin
-1,Country,Bhutan,,Bhutan
-1,Country,Bolivia,,Bolivia
-1,Country,Bosnia and Herzegovina,,Bosnia and Herzegovina
-1,Country,Botswana,,Botswana
-1,Country,Brazil,,Brazil
-1,Country,Brunei,,Brunei
-1,Country,Bulgaria,,Bulgaria
-1,Country,Burkina Faso,,Burkina Faso
-1,Country,Burundi,,Burundi
-1,Country,Cabo Verde,,Cabo Verde
-1,Country,Cambodia,,Cambodia
-1,Country,Cameroon,,Cameroon
-1,Country,Canada,,Canada
-1,Country,Central African Republic,,Central African Republic
-1,Country,Chad,,Chad
-1,Country,Chile,,Chile
-1,Country,China,,China
-1,Country,Colombia,,Colombia
-1,Country,Comoros,,Comoros
-1,Country,Congo,,Congo
-1,Country,Costa Rica,,Costa Rica
-1,Country,Côte d’Ivoire,,Côte d’Ivoire
-1,Country,Croatia,,Croatia
-1,Country,Cuba,,Cuba
-1,Country,Cyprus,,Cyprus
-1,Country,Czechia,,Czechia
-1,Country,DR Congo,,DR Congo
-1,Country,Denmark,,Denmark
-1,Country,Djibouti,,Djibouti
-1,Country,Dominica,,Dominica
-1,Country,Dominican Republic,,Dominican Republic
-1,Country,Ecuador,,Ecuador
-1,Country,Egypt,,Egypt
-1,Country,El Salvador,,El Salvador
-1,Country,Equatorial Guinea,,Equatorial Guinea
-1,Country,Eritrea,,Eritrea
-1,Country,Estonia,,Estonia
-1,Country,Eswatini,,Eswatini
-1,Country,Ethiopia,,Ethiopia
-1,Country,Fiji,,Fiji
-1,Country,Finland,,Finland
-1,Country,France,,France
-1,Country,Gabon,,Gabon
-1,Country,Gambia,,Gambia
-1,Country,Georgia,,Georgia
-1,Country,Germany,,Germany
-1,Country,Ghana,,Ghana
-1,Country,Greece,,Greece
-1,Country,Grenada,,Grenada
-1,Country,Guatemala,,Guatemala
-1,Country,Guinea,,Guinea
-1,Country,Guinea-Bissau,,Guinea-Bissau
-1,Country,Guyana,,Guyana
-1,Country,Haiti,,Haiti
-1,Country,Honduras,,Honduras
-1,Country,Hungary,,Hungary
-1,Country,Iceland,,Iceland
-1,Country,India,,India
-1,Country,Indonesia,,Indonesia
-1,Country,Iran,,Iran
-1,Country,Iraq,,Iraq
-1,Country,Ireland,,Ireland
-1,Country,Israel,,Israel
-1,Country,Italy,,Italy
-1,Country,Jamaica,,Jamaica
-1,Country,Japan,,Japan
-1,Country,Jordan,,Jordan
-1,Country,Kazakhstan,,Kazakhstan
-1,Country,Kenya,,Kenya
-1,Country,Kiribati,,Kiribati
-1,Country,Kuwait,,Kuwait
-1,Country,Kyrgyzstan,,Kyrgyzstan
-1,Country,Laos,,Laos
-1,Country,Latvia,,Latvia
-1,Country,Lebanon,,Lebanon
-1,Country,Lesotho,,Lesotho
-1,Country,Liberia,,Liberia
-1,Country,Libya,,Libya
-1,Country,Liechtenstein,,Liechtenstein
-1,Country,Lithuania,,Lithuania
-1,Country,Luxembourg,,Luxembourg
-1,Country,Madagascar,,Madagascar
-1,Country,Malawi,,Malawi
-1,Country,Malaysia,,Malaysia
-1,Country,Maldives,,Maldives
-1,Country,Mali,,Mali
-1,Country,Malta,,Malta
-1,Country,Marshall Islands,,Marshall Islands
-1,Country,Mauritania,,Mauritania
-1,Country,Mauritius,,Mauritius
-1,Country,Mexico,,Mexico
-1,Country,Micronesia,,Micronesia
-1,Country,Moldova,,Moldova
-1,Country,Monaco,,Monaco
-1,Country,Mongolia,,Mongolia
-1,Country,Montenegro,,Montenegro
-1,Country,Morocco,,Morocco
-1,Country,Mozambique,,Mozambique
-1,Country,Myanmar,,Myanmar
-1,Country,Namibia,,Namibia
-1,Country,Nauru,,Nauru
-1,Country,Nepal,,Nepal
-1,Country,Netherlands,,Netherlands
-1,Country,New Zealand,,New Zealand
-1,Country,Nicaragua,,Nicaragua
-1,Country,Niger,,Niger
-1,Country,Nigeria,,Nigeria
-1,Country,North Korea,,North Korea
-1,Country,North Macedonia,,North Macedonia
-1,Country,Norway,,Norway
-1,Country,Oman,,Oman
-1,Country,Pakistan,,Pakistan
-1,Country,Palau,,Palau
-1,Country,Palestine,,Palestine
-1,Country,Panama,,Panama
-1,Country,Papua New Guinea,,Papua New Guinea
-1,Country,Paraguay,,Paraguay
-1,Country,Peru,,Peru
-1,Country,Philippines,,Philippines
-1,Country,Poland,,Poland
-1,Country,Portugal,,Portugal
-1,Country,Qatar,,Qatar
-1,Country,Romania,,Romania
-1,Country,Russia,,Russia
-1,Country,Rwanda,,Rwanda
-1,Country,Saint Kitts and Nevis,,Saint Kitts and Nevis
-1,Country,Saint Lucia,,Saint Lucia
-1,Country,Saint Vincent and the Grenadines,,Saint Vincent and the Grenadines
-1,Country,Samoa,,Samoa
-1,Country,San Marino,,San Marino
-1,Country,São Tomé and Príncipe,,São Tomé and Príncipe
-1,Country,Saudi Arabia,,Saudi Arabia
-1,Country,Senegal,,Senegal
-1,Country,Serbia,,Serbia
-1,Country,Seychelles,,Seychelles
-1,Country,Sierra Leone,,Sierra Leone
-1,Country,Singapore,,Singapore
-1,Country,Slovakia,,Slovakia
-1,Country,Slovenia,,Slovenia
-1,Country,Solomon Islands,,Solomon Islands
-1,Country,Somalia,,Somalia
-1,Country,South Africa,,South Africa
-1,Country,South Korea,,South Korea
-1,Country,South Sudan,,South Sudan
-1,Country,Spain,,Spain
-1,Country,Sri Lanka,,Sri Lanka
-1,Country,Sudan,,Sudan
-1,Country,Suriname,,Suriname
-1,Country,Sweden,,Sweden
-1,Country,Switzerland,,Switzerland
-1,Country,Syria,,Syria
-1,Country,Tajikistan,,Tajikistan
-1,Country,Tanzania,,Tanzania
-1,Country,Thailand,,Thailand
-1,Country,Timor-Leste,,Timor-Leste
-1,Country,Togo,,Togo
-1,Country,Tonga,,Tonga
-1,Country,Trinidad and Tobago,,Trinidad and Tobago
-1,Country,Tunisia,,Tunisia
-1,Country,Türkiye,,Türkiye
-1,Country,Turkmenistan,,Turkmenistan
-1,Country,Tuvalu,,Tuvalu
-1,Country,Uganda,,Uganda
-1,Country,Ukraine,,Ukraine
-1,Country,United Arab Emirates,,United Arab Emirates
-1,Country,United Kingdom,,United Kingdom
-1,Country,United States,,United States
-1,Country,Uruguay,,Uruguay
-1,Country,Uzbekistan,,Uzbekistan
-1,Country,Vanuatu,,Vanuatu
-1,Country,Vatican City,,Vatican City
-1,Country,Venezuela,,Venezuela
-1,Country,Vietnam,,Vietnam
-1,Country,Yemen,,Yemen
-1,Country,Zambia,,Zambia
-1,Country,Zimbabwe,,Zimbabwe
+﻿Wave,Board type,Board (as shown in the app),City / place,State / region,Country,Note
+1,State,Alabama — state board,Alabama,,United States,
+1,State,Alaska — state board,Alaska,,United States,
+1,State,Arizona — state board,Arizona,,United States,
+1,State,Arkansas — state board,Arkansas,,United States,
+1,State,California — state board,California,,United States,
+1,State,Colorado — state board,Colorado,,United States,
+1,State,Connecticut — state board,Connecticut,,United States,
+1,State,Delaware — state board,Delaware,,United States,
+1,State,Florida — state board,Florida,,United States,
+1,State,Georgia — state board,Georgia,,United States,
+1,State,Hawaii — state board,Hawaii,,United States,
+1,State,Idaho — state board,Idaho,,United States,
+1,State,Illinois — state board,Illinois,,United States,
+1,State,Indiana — state board,Indiana,,United States,
+1,State,Iowa — state board,Iowa,,United States,
+1,State,Kansas — state board,Kansas,,United States,
+1,State,Kentucky — state board,Kentucky,,United States,
+1,State,Louisiana — state board,Louisiana,,United States,
+1,State,Maine — state board,Maine,,United States,
+1,State,Maryland — state board,Maryland,,United States,
+1,State,Massachusetts — state board,Massachusetts,,United States,
+1,State,Michigan — state board,Michigan,,United States,
+1,State,Minnesota — state board,Minnesota,,United States,
+1,State,Mississippi — state board,Mississippi,,United States,
+1,State,Missouri — state board,Missouri,,United States,
+1,State,Montana — state board,Montana,,United States,
+1,State,Nebraska — state board,Nebraska,,United States,
+1,State,Nevada — state board,Nevada,,United States,
+1,State,New Hampshire — state board,New Hampshire,,United States,
+1,State,New Jersey — state board,New Jersey,,United States,
+1,State,New Mexico — state board,New Mexico,,United States,
+1,State,New York — state board,New York,,United States,
+1,State,North Carolina — state board,North Carolina,,United States,
+1,State,North Dakota — state board,North Dakota,,United States,
+1,State,Ohio — state board,Ohio,,United States,
+1,State,Oklahoma — state board,Oklahoma,,United States,
+1,State,Oregon — state board,Oregon,,United States,
+1,State,Pennsylvania — state board,Pennsylvania,,United States,
+1,State,Rhode Island — state board,Rhode Island,,United States,
+1,State,South Carolina — state board,South Carolina,,United States,
+1,State,South Dakota — state board,South Dakota,,United States,
+1,State,Tennessee — state board,Tennessee,,United States,
+1,State,Texas — state board,Texas,,United States,
+1,State,Utah — state board,Utah,,United States,
+1,State,Vermont — state board,Vermont,,United States,
+1,State,Virginia — state board,Virginia,,United States,
+1,State,Washington — state board,Washington,,United States,
+1,State,West Virginia — state board,West Virginia,,United States,
+1,State,Wisconsin — state board,Wisconsin,,United States,
+1,State,Wyoming — state board,Wyoming,,United States,
+1,State,District of Columbia — state board,District of Columbia,,United States,
+1,City / destination,"New York City, New York",New York City,New York,United States,
+1,City / destination,"Los Angeles, California",Los Angeles,California,United States,
+1,City / destination,"Chicago, Illinois",Chicago,Illinois,United States,
+1,City / destination,"Miami, Florida",Miami,Florida,United States,
+1,City / destination,"Las Vegas, Nevada",Las Vegas,Nevada,United States,
+1,City / destination,"San Francisco, California",San Francisco,California,United States,
+1,City / destination,"Orlando, Florida",Orlando,Florida,United States,
+1,City / destination,"Washington, District of Columbia",Washington,District of Columbia,United States,
+1,City / destination,"New Orleans, Louisiana",New Orleans,Louisiana,United States,
+1,City / destination,"Boston, Massachusetts",Boston,Massachusetts,United States,
+1,City / destination,"Seattle, Washington",Seattle,Washington,United States,
+1,City / destination,"San Diego, California",San Diego,California,United States,
+1,City / destination,"Honolulu, Hawaii",Honolulu,Hawaii,United States,
+1,City / destination,"Nashville, Tennessee",Nashville,Tennessee,United States,
+1,City / destination,"Austin, Texas",Austin,Texas,United States,
+1,City / destination,"Denver, Colorado",Denver,Colorado,United States,
+1,City / destination,"Atlanta, Georgia",Atlanta,Georgia,United States,
+1,City / destination,"Philadelphia, Pennsylvania",Philadelphia,Pennsylvania,United States,
+1,City / destination,"Houston, Texas",Houston,Texas,United States,
+1,City / destination,"Dallas, Texas",Dallas,Texas,United States,
+1,City / destination,"Phoenix, Arizona",Phoenix,Arizona,United States,
+1,City / destination,"Portland, Oregon",Portland,Oregon,United States,Same city name in another state — a separate board
+1,City / destination,"San Antonio, Texas",San Antonio,Texas,United States,
+1,City / destination,"Savannah, Georgia",Savannah,Georgia,United States,
+1,City / destination,"Charleston, South Carolina",Charleston,South Carolina,United States,Same city name in another state — a separate board
+1,City / destination,"Santa Fe, New Mexico",Santa Fe,New Mexico,United States,
+1,City / destination,"Sedona, Arizona",Sedona,Arizona,United States,
+1,City / destination,"Palm Springs, California",Palm Springs,California,United States,
+1,City / destination,"Napa Valley, California",Napa Valley,California,United States,
+1,City / destination,"Monterey & Carmel, California",Monterey & Carmel,California,United States,
+1,City / destination,"Santa Barbara, California",Santa Barbara,California,United States,
+1,City / destination,"Lake Tahoe, California / Nevada",Lake Tahoe,California / Nevada,United States,
+1,City / destination,"Yosemite, California",Yosemite,California,United States,
+1,City / destination,"Grand Canyon, Arizona",Grand Canyon,Arizona,United States,
+1,City / destination,"Yellowstone, Wyoming",Yellowstone,Wyoming,United States,
+1,City / destination,"Zion, Utah",Zion,Utah,United States,
+1,City / destination,"Key West, Florida",Key West,Florida,United States,
+1,City / destination,"Fort Lauderdale, Florida",Fort Lauderdale,Florida,United States,
+1,City / destination,"Tampa & St. Pete, Florida",Tampa & St. Pete,Florida,United States,
+1,City / destination,"St. Augustine, Florida",St. Augustine,Florida,United States,
+1,City / destination,"Memphis, Tennessee",Memphis,Tennessee,United States,
+1,City / destination,"Louisville, Kentucky",Louisville,Kentucky,United States,
+1,City / destination,"Asheville, North Carolina",Asheville,North Carolina,United States,
+1,City / destination,"Charlotte, North Carolina",Charlotte,North Carolina,United States,
+1,City / destination,"Outer Banks, North Carolina",Outer Banks,North Carolina,United States,
+1,City / destination,"Richmond, Virginia",Richmond,Virginia,United States,
+1,City / destination,"Virginia Beach, Virginia",Virginia Beach,Virginia,United States,
+1,City / destination,"Baltimore, Maryland",Baltimore,Maryland,United States,
+1,City / destination,"Annapolis, Maryland",Annapolis,Maryland,United States,
+1,City / destination,"Pittsburgh, Pennsylvania",Pittsburgh,Pennsylvania,United States,
+1,City / destination,"Cleveland, Ohio",Cleveland,Ohio,United States,
+1,City / destination,"Detroit, Michigan",Detroit,Michigan,United States,
+1,City / destination,"Minneapolis, Minnesota",Minneapolis,Minnesota,United States,
+1,City / destination,"Milwaukee, Wisconsin",Milwaukee,Wisconsin,United States,
+1,City / destination,"St. Louis, Missouri",St. Louis,Missouri,United States,
+1,City / destination,"Kansas City, Missouri",Kansas City,Missouri,United States,
+1,City / destination,"Oklahoma City, Oklahoma",Oklahoma City,Oklahoma,United States,
+1,City / destination,"Omaha, Nebraska",Omaha,Nebraska,United States,
+1,City / destination,"Boise, Idaho",Boise,Idaho,United States,
+1,City / destination,"Salt Lake City, Utah",Salt Lake City,Utah,United States,
+1,City / destination,"Park City, Utah",Park City,Utah,United States,
+1,City / destination,"Moab, Utah",Moab,Utah,United States,
+1,City / destination,"Jackson Hole, Wyoming",Jackson Hole,Wyoming,United States,
+1,City / destination,"Aspen, Colorado",Aspen,Colorado,United States,
+1,City / destination,"Vail, Colorado",Vail,Colorado,United States,
+1,City / destination,"Boulder, Colorado",Boulder,Colorado,United States,
+1,City / destination,"Colorado Springs, Colorado",Colorado Springs,Colorado,United States,
+1,City / destination,"Albuquerque, New Mexico",Albuquerque,New Mexico,United States,
+1,City / destination,"Tucson, Arizona",Tucson,Arizona,United States,
+1,City / destination,"Scottsdale, Arizona",Scottsdale,Arizona,United States,
+1,City / destination,"Anchorage, Alaska",Anchorage,Alaska,United States,
+1,City / destination,"Juneau, Alaska",Juneau,Alaska,United States,
+1,City / destination,"Maui, Hawaii",Maui,Hawaii,United States,
+1,City / destination,"Kauai, Hawaii",Kauai,Hawaii,United States,
+1,City / destination,"Big Island, Hawaii",Big Island,Hawaii,United States,
+1,City / destination,"Sacramento, California",Sacramento,California,United States,
+1,City / destination,"San Jose, California",San Jose,California,United States,
+1,City / destination,"Reno, Nevada",Reno,Nevada,United States,
+1,City / destination,"Bozeman, Montana",Bozeman,Montana,United States,
+1,City / destination,"Glacier National Park, Montana",Glacier National Park,Montana,United States,
+1,City / destination,"Rapid City & Mount Rushmore, South Dakota",Rapid City & Mount Rushmore,South Dakota,United States,
+1,City / destination,"Fargo, North Dakota",Fargo,North Dakota,United States,
+1,City / destination,"Des Moines, Iowa",Des Moines,Iowa,United States,
+1,City / destination,"Madison, Wisconsin",Madison,Wisconsin,United States,
+1,City / destination,"Indianapolis, Indiana",Indianapolis,Indiana,United States,
+1,City / destination,"Columbus, Ohio",Columbus,Ohio,United States,
+1,City / destination,"Cincinnati, Ohio",Cincinnati,Ohio,United States,
+1,City / destination,"Niagara Falls, New York",Niagara Falls,New York,United States,
+1,City / destination,"Burlington, Vermont",Burlington,Vermont,United States,
+1,City / destination,"Portland, Maine",Portland,Maine,United States,Same city name in another state — a separate board
+1,City / destination,"Bar Harbor & Acadia, Maine",Bar Harbor & Acadia,Maine,United States,
+1,City / destination,"Newport, Rhode Island",Newport,Rhode Island,United States,
+1,City / destination,"Mystic, Connecticut",Mystic,Connecticut,United States,
+1,City / destination,"Portsmouth, New Hampshire",Portsmouth,New Hampshire,United States,
+1,City / destination,"Atlantic City, New Jersey",Atlantic City,New Jersey,United States,
+1,City / destination,"Cape May, New Jersey",Cape May,New Jersey,United States,
+1,City / destination,"Wilmington, Delaware",Wilmington,Delaware,United States,Same city name in another state — a separate board
+1,City / destination,"Rehoboth Beach, Delaware",Rehoboth Beach,Delaware,United States,
+1,City / destination,"Little Rock, Arkansas",Little Rock,Arkansas,United States,
+1,City / destination,"Hot Springs, Arkansas",Hot Springs,Arkansas,United States,
+1,City / destination,"Birmingham, Alabama",Birmingham,Alabama,United States,
+1,City / destination,"Gulf Shores, Alabama",Gulf Shores,Alabama,United States,
+1,City / destination,"Jackson, Mississippi",Jackson,Mississippi,United States,
+1,City / destination,"Biloxi, Mississippi",Biloxi,Mississippi,United States,
+1,City / destination,"Wichita, Kansas",Wichita,Kansas,United States,
+1,City / destination,"Charleston, West Virginia",Charleston,West Virginia,United States,Same city name in another state — a separate board
+1,City / destination,"Lexington, Kentucky",Lexington,Kentucky,United States,Same city name in another state — a separate board
+1,City / destination,"Chattanooga, Tennessee",Chattanooga,Tennessee,United States,
+1,City / destination,"Knoxville & the Smokies, Tennessee",Knoxville & the Smokies,Tennessee,United States,
+1,City / destination,"Myrtle Beach, South Carolina",Myrtle Beach,South Carolina,United States,
+1,City / destination,"Hilton Head, South Carolina",Hilton Head,South Carolina,United States,
+1,City / destination,"Raleigh & Durham, North Carolina",Raleigh & Durham,North Carolina,United States,
+1,City / destination,"Wilmington, North Carolina",Wilmington,North Carolina,United States,Same city name in another state — a separate board
+1,City / destination,"Shenandoah, Virginia",Shenandoah,Virginia,United States,
+2,City / destination,"Brooklyn, New York",Brooklyn,New York,United States,
+2,City / destination,"Long Island & the Hamptons, New York",Long Island & the Hamptons,New York,United States,
+2,City / destination,"Hudson Valley, New York",Hudson Valley,New York,United States,
+2,City / destination,"Lake Placid, New York",Lake Placid,New York,United States,
+2,City / destination,"Buffalo, New York",Buffalo,New York,United States,
+2,City / destination,"Rochester, New York",Rochester,New York,United States,Same city name in another state — a separate board
+2,City / destination,"Albany, New York",Albany,New York,United States,
+2,City / destination,"Jersey City, New Jersey",Jersey City,New Jersey,United States,
+2,City / destination,"Princeton, New Jersey",Princeton,New Jersey,United States,
+2,City / destination,"Hoboken, New Jersey",Hoboken,New Jersey,United States,
+2,City / destination,"Lancaster, Pennsylvania",Lancaster,Pennsylvania,United States,
+2,City / destination,"Gettysburg, Pennsylvania",Gettysburg,Pennsylvania,United States,
+2,City / destination,"Hershey, Pennsylvania",Hershey,Pennsylvania,United States,
+2,City / destination,"Poconos, Pennsylvania",Poconos,Pennsylvania,United States,
+2,City / destination,"Harrisburg, Pennsylvania",Harrisburg,Pennsylvania,United States,
+2,City / destination,"Ocean City, Maryland",Ocean City,Maryland,United States,
+2,City / destination,"Alexandria, Virginia",Alexandria,Virginia,United States,
+2,City / destination,"Williamsburg, Virginia",Williamsburg,Virginia,United States,
+2,City / destination,"Charlottesville, Virginia",Charlottesville,Virginia,United States,
+2,City / destination,"Roanoke, Virginia",Roanoke,Virginia,United States,
+2,City / destination,"Asbury Park, New Jersey",Asbury Park,New Jersey,United States,
+2,City / destination,"Salem, Massachusetts",Salem,Massachusetts,United States,
+2,City / destination,"Cape Cod, Massachusetts",Cape Cod,Massachusetts,United States,
+2,City / destination,"Martha’s Vineyard, Massachusetts",Martha’s Vineyard,Massachusetts,United States,
+2,City / destination,"Nantucket, Massachusetts",Nantucket,Massachusetts,United States,
+2,City / destination,"Provincetown, Massachusetts",Provincetown,Massachusetts,United States,
+2,City / destination,"Worcester, Massachusetts",Worcester,Massachusetts,United States,
+2,City / destination,"Springfield, Massachusetts",Springfield,Massachusetts,United States,Same city name in another state — a separate board
+2,City / destination,"Stowe, Vermont",Stowe,Vermont,United States,
+2,City / destination,"Woodstock, Vermont",Woodstock,Vermont,United States,
+2,City / destination,"Kennebunkport, Maine",Kennebunkport,Maine,United States,
+2,City / destination,"White Mountains, New Hampshire",White Mountains,New Hampshire,United States,
+2,City / destination,"Lake Winnipesaukee, New Hampshire",Lake Winnipesaukee,New Hampshire,United States,
+2,City / destination,"Block Island, Rhode Island",Block Island,Rhode Island,United States,
+2,City / destination,"Providence, Rhode Island",Providence,Rhode Island,United States,
+2,City / destination,"New Haven, Connecticut",New Haven,Connecticut,United States,
+2,City / destination,"Hartford, Connecticut",Hartford,Connecticut,United States,
+2,City / destination,"Fallingwater, Pennsylvania",Fallingwater,Pennsylvania,United States,
+2,City / destination,"Erie, Pennsylvania",Erie,Pennsylvania,United States,
+2,City / destination,"Toledo, Ohio",Toledo,Ohio,United States,
+2,City / destination,"Dayton, Ohio",Dayton,Ohio,United States,
+2,City / destination,"Hocking Hills, Ohio",Hocking Hills,Ohio,United States,
+2,City / destination,"Ann Arbor, Michigan",Ann Arbor,Michigan,United States,
+2,City / destination,"Grand Rapids, Michigan",Grand Rapids,Michigan,United States,
+2,City / destination,"Traverse City, Michigan",Traverse City,Michigan,United States,
+2,City / destination,"Mackinac Island, Michigan",Mackinac Island,Michigan,United States,
+2,City / destination,"Door County, Wisconsin",Door County,Wisconsin,United States,
+2,City / destination,"Green Bay, Wisconsin",Green Bay,Wisconsin,United States,
+2,City / destination,"Duluth, Minnesota",Duluth,Minnesota,United States,
+2,City / destination,"Boundary Waters, Minnesota",Boundary Waters,Minnesota,United States,
+2,City / destination,"Rochester, Minnesota",Rochester,Minnesota,United States,Same city name in another state — a separate board
+2,City / destination,"Sioux Falls, South Dakota",Sioux Falls,South Dakota,United States,
+2,City / destination,"Badlands, South Dakota",Badlands,South Dakota,United States,
+2,City / destination,"Bismarck, North Dakota",Bismarck,North Dakota,United States,
+2,City / destination,"Theodore Roosevelt NP, North Dakota",Theodore Roosevelt NP,North Dakota,United States,
+2,City / destination,"Lincoln, Nebraska",Lincoln,Nebraska,United States,
+2,City / destination,"Topeka, Kansas",Topeka,Kansas,United States,
+2,City / destination,"Lawrence, Kansas",Lawrence,Kansas,United States,
+2,City / destination,"Branson, Missouri",Branson,Missouri,United States,
+2,City / destination,"Ozarks, Missouri",Ozarks,Missouri,United States,
+2,City / destination,"Springfield, Missouri",Springfield,Missouri,United States,Same city name in another state — a separate board
+2,City / destination,"Tulsa, Oklahoma",Tulsa,Oklahoma,United States,
+2,City / destination,"Fort Worth, Texas",Fort Worth,Texas,United States,
+2,City / destination,"El Paso, Texas",El Paso,Texas,United States,
+2,City / destination,"Galveston, Texas",Galveston,Texas,United States,
+2,City / destination,"South Padre Island, Texas",South Padre Island,Texas,United States,
+2,City / destination,"Big Bend, Texas",Big Bend,Texas,United States,
+2,City / destination,"Fredericksburg, Texas",Fredericksburg,Texas,United States,
+2,City / destination,"Marfa, Texas",Marfa,Texas,United States,
+2,City / destination,"Corpus Christi, Texas",Corpus Christi,Texas,United States,
+2,City / destination,"Waco, Texas",Waco,Texas,United States,
+2,City / destination,"Lubbock, Texas",Lubbock,Texas,United States,
+2,City / destination,"Baton Rouge, Louisiana",Baton Rouge,Louisiana,United States,
+2,City / destination,"Lafayette, Louisiana",Lafayette,Louisiana,United States,
+2,City / destination,"Natchez, Mississippi",Natchez,Mississippi,United States,
+2,City / destination,"Oxford, Mississippi",Oxford,Mississippi,United States,
+2,City / destination,"Tupelo, Mississippi",Tupelo,Mississippi,United States,
+2,City / destination,"Montgomery, Alabama",Montgomery,Alabama,United States,
+2,City / destination,"Mobile, Alabama",Mobile,Alabama,United States,
+2,City / destination,"Huntsville, Alabama",Huntsville,Alabama,United States,
+2,City / destination,"Pensacola, Florida",Pensacola,Florida,United States,
+2,City / destination,"Destin, Florida",Destin,Florida,United States,
+2,City / destination,"Panama City Beach, Florida",Panama City Beach,Florida,United States,
+2,City / destination,"Tallahassee, Florida",Tallahassee,Florida,United States,
+2,City / destination,"Jacksonville, Florida",Jacksonville,Florida,United States,
+2,City / destination,"Daytona Beach, Florida",Daytona Beach,Florida,United States,
+2,City / destination,"Cocoa Beach, Florida",Cocoa Beach,Florida,United States,
+2,City / destination,"Sarasota, Florida",Sarasota,Florida,United States,
+2,City / destination,"Naples, Florida",Naples,Florida,United States,
+2,City / destination,"Fort Myers, Florida",Fort Myers,Florida,United States,
+2,City / destination,"Everglades, Florida",Everglades,Florida,United States,
+2,City / destination,"Palm Beach, Florida",Palm Beach,Florida,United States,
+2,City / destination,"Clearwater, Florida",Clearwater,Florida,United States,
+2,City / destination,"Gainesville, Florida",Gainesville,Florida,United States,
+2,City / destination,"Macon, Georgia",Macon,Georgia,United States,
+2,City / destination,"Augusta, Georgia",Augusta,Georgia,United States,
+2,City / destination,"Athens, Georgia",Athens,Georgia,United States,
+2,City / destination,"Jekyll Island, Georgia",Jekyll Island,Georgia,United States,
+2,City / destination,"Tybee Island, Georgia",Tybee Island,Georgia,United States,
+2,City / destination,"Greenville, South Carolina",Greenville,South Carolina,United States,
+2,City / destination,"Columbia, South Carolina",Columbia,South Carolina,United States,
+2,City / destination,"Chapel Hill, North Carolina",Chapel Hill,North Carolina,United States,
+2,City / destination,"Boone, North Carolina",Boone,North Carolina,United States,
+2,City / destination,"Winston-Salem, North Carolina",Winston-Salem,North Carolina,United States,
+2,City / destination,"Frankfort, Kentucky",Frankfort,Kentucky,United States,
+2,City / destination,"Bowling Green, Kentucky",Bowling Green,Kentucky,United States,
+2,City / destination,"Mammoth Cave, Kentucky",Mammoth Cave,Kentucky,United States,
+2,City / destination,"Pigeon Forge & Gatlinburg, Tennessee",Pigeon Forge & Gatlinburg,Tennessee,United States,
+2,City / destination,"Franklin, Tennessee",Franklin,Tennessee,United States,
+2,City / destination,"Bentonville, Arkansas",Bentonville,Arkansas,United States,
+2,City / destination,"Eureka Springs, Arkansas",Eureka Springs,Arkansas,United States,
+2,City / destination,"Shreveport, Louisiana",Shreveport,Louisiana,United States,
+2,City / destination,"Fayetteville, Arkansas",Fayetteville,Arkansas,United States,
+2,City / destination,"Lexington, Virginia",Lexington,Virginia,United States,Same city name in another state — a separate board
+2,City / destination,"Harpers Ferry, West Virginia",Harpers Ferry,West Virginia,United States,
+2,City / destination,"New River Gorge, West Virginia",New River Gorge,West Virginia,United States,
+2,City / destination,"Morgantown, West Virginia",Morgantown,West Virginia,United States,
+2,City / destination,"Crested Butte, Colorado",Crested Butte,Colorado,United States,
+2,City / destination,"Fort Collins, Colorado",Fort Collins,Colorado,United States,
+2,City / destination,"Telluride, Colorado",Telluride,Colorado,United States,
+2,City / destination,"Durango, Colorado",Durango,Colorado,United States,
+2,City / destination,"Steamboat Springs, Colorado",Steamboat Springs,Colorado,United States,
+2,City / destination,"Breckenridge, Colorado",Breckenridge,Colorado,United States,
+2,City / destination,"Estes Park & Rocky Mountain NP, Colorado",Estes Park & Rocky Mountain NP,Colorado,United States,
+2,City / destination,"Taos, New Mexico",Taos,New Mexico,United States,
+2,City / destination,"Roswell, New Mexico",Roswell,New Mexico,United States,
+2,City / destination,"White Sands, New Mexico",White Sands,New Mexico,United States,
+2,City / destination,"Carlsbad Caverns, New Mexico",Carlsbad Caverns,New Mexico,United States,
+2,City / destination,"Flagstaff, Arizona",Flagstaff,Arizona,United States,
+2,City / destination,"Page & Antelope Canyon, Arizona",Page & Antelope Canyon,Arizona,United States,
+2,City / destination,"Lake Havasu, Arizona",Lake Havasu,Arizona,United States,
+2,City / destination,"Tempe, Arizona",Tempe,Arizona,United States,
+2,City / destination,"Yuma, Arizona",Yuma,Arizona,United States,
+2,City / destination,"Bisbee, Arizona",Bisbee,Arizona,United States,
+2,City / destination,"Provo, Utah",Provo,Utah,United States,
+2,City / destination,"St. George, Utah",St. George,Utah,United States,
+2,City / destination,"Bryce Canyon, Utah",Bryce Canyon,Utah,United States,
+2,City / destination,"Arches, Utah",Arches,Utah,United States,
+2,City / destination,"Capitol Reef, Utah",Capitol Reef,Utah,United States,
+2,City / destination,"Cheyenne, Wyoming",Cheyenne,Wyoming,United States,
+2,City / destination,"Grand Teton, Wyoming",Grand Teton,Wyoming,United States,
+2,City / destination,"Cody, Wyoming",Cody,Wyoming,United States,
+2,City / destination,"Laramie, Wyoming",Laramie,Wyoming,United States,
+2,City / destination,"Missoula, Montana",Missoula,Montana,United States,
+2,City / destination,"Whitefish, Montana",Whitefish,Montana,United States,
+2,City / destination,"Helena, Montana",Helena,Montana,United States,
+2,City / destination,"Billings, Montana",Billings,Montana,United States,
+2,City / destination,"Sun Valley, Idaho",Sun Valley,Idaho,United States,
+2,City / destination,"Coeur d’Alene, Idaho",Coeur d’Alene,Idaho,United States,
+2,City / destination,"Idaho Falls, Idaho",Idaho Falls,Idaho,United States,
+2,City / destination,"Spokane, Washington",Spokane,Washington,United States,
+2,City / destination,"Tacoma, Washington",Tacoma,Washington,United States,
+2,City / destination,"Olympia, Washington",Olympia,Washington,United States,
+2,City / destination,"Olympic National Park, Washington",Olympic National Park,Washington,United States,
+2,City / destination,"San Juan Islands, Washington",San Juan Islands,Washington,United States,
+2,City / destination,"Leavenworth, Washington",Leavenworth,Washington,United States,
+2,City / destination,"Bellingham, Washington",Bellingham,Washington,United States,
+2,City / destination,"Walla Walla, Washington",Walla Walla,Washington,United States,
+2,City / destination,"Eugene, Oregon",Eugene,Oregon,United States,
+2,City / destination,"Bend, Oregon",Bend,Oregon,United States,
+2,City / destination,"Cannon Beach, Oregon",Cannon Beach,Oregon,United States,
+2,City / destination,"Crater Lake, Oregon",Crater Lake,Oregon,United States,
+2,City / destination,"Hood River, Oregon",Hood River,Oregon,United States,
+2,City / destination,"Astoria, Oregon",Astoria,Oregon,United States,
+2,City / destination,"Ashland, Oregon",Ashland,Oregon,United States,
+2,City / destination,"Redwoods, California",Redwoods,California,United States,
+2,City / destination,"Mendocino, California",Mendocino,California,United States,
+2,City / destination,"Sonoma, California",Sonoma,California,United States,
+2,City / destination,"Berkeley, California",Berkeley,California,United States,
+2,City / destination,"Oakland, California",Oakland,California,United States,
+2,City / destination,"Big Sur, California",Big Sur,California,United States,
+2,City / destination,"San Luis Obispo, California",San Luis Obispo,California,United States,
+2,City / destination,"Pismo Beach, California",Pismo Beach,California,United States,
+2,City / destination,"Malibu, California",Malibu,California,United States,
+2,City / destination,"Santa Monica, California",Santa Monica,California,United States,
+2,City / destination,"Pasadena, California",Pasadena,California,United States,
+2,City / destination,"Long Beach, California",Long Beach,California,United States,
+2,City / destination,"Laguna Beach, California",Laguna Beach,California,United States,
+2,City / destination,"Anaheim, California",Anaheim,California,United States,
+2,City / destination,"Huntington Beach, California",Huntington Beach,California,United States,
+2,City / destination,"Catalina Island, California",Catalina Island,California,United States,
+2,City / destination,"Joshua Tree, California",Joshua Tree,California,United States,
+2,City / destination,"Death Valley, California",Death Valley,California,United States,
+2,City / destination,"Temecula, California",Temecula,California,United States,
+2,City / destination,"La Jolla, California",La Jolla,California,United States,
+2,City / destination,"Fresno, California",Fresno,California,United States,
+2,City / destination,"Bakersfield, California",Bakersfield,California,United States,
+2,City / destination,"Laughlin, Nevada",Laughlin,Nevada,United States,
+2,City / destination,"Carson City, Nevada",Carson City,Nevada,United States,
+2,City / destination,"Virginia City, Nevada",Virginia City,Nevada,United States,
+2,City / destination,"Fairbanks, Alaska",Fairbanks,Alaska,United States,
+2,City / destination,"Denali, Alaska",Denali,Alaska,United States,
+2,City / destination,"Seward & Kenai, Alaska",Seward & Kenai,Alaska,United States,
+2,City / destination,"Sitka, Alaska",Sitka,Alaska,United States,
+2,City / destination,"Ketchikan, Alaska",Ketchikan,Alaska,United States,
+2,City / destination,"Hilo, Hawaii",Hilo,Hawaii,United States,
+2,City / destination,"Kona, Hawaii",Kona,Hawaii,United States,
+2,City / destination,"Lanai, Hawaii",Lanai,Hawaii,United States,
+2,City / destination,"Molokai, Hawaii",Molokai,Hawaii,United States,
+2,City / destination,"Waikiki, Hawaii",Waikiki,Hawaii,United States,
+2,City / destination,Guam,Guam,Guam,United States,U.S. territory
+2,City / destination,"San Juan, Puerto Rico",San Juan,Puerto Rico,United States,U.S. territory
+2,City / destination,"Vieques, Puerto Rico",Vieques,Puerto Rico,United States,U.S. territory
+2,City / destination,"Rincón, Puerto Rico",Rincón,Puerto Rico,United States,U.S. territory
+2,City / destination,"St. Thomas, U.S. Virgin Islands",St. Thomas,U.S. Virgin Islands,United States,U.S. territory
+2,City / destination,"St. John, U.S. Virgin Islands",St. John,U.S. Virgin Islands,United States,U.S. territory
+2,City / destination,"St. Croix, U.S. Virgin Islands",St. Croix,U.S. Virgin Islands,United States,U.S. territory
+2,City / destination,"Pago Pago, American Samoa",Pago Pago,American Samoa,United States,U.S. territory
+2,City / destination,"Saipan, Northern Mariana Islands",Saipan,Northern Mariana Islands,United States,U.S. territory
+1,City / destination,"Paris, France",Paris,,France,
+1,City / destination,"London, United Kingdom",London,,United Kingdom,
+1,City / destination,"Rome, Italy",Rome,,Italy,
+1,City / destination,"Barcelona, Spain",Barcelona,,Spain,
+1,City / destination,"Tokyo, Japan",Tokyo,,Japan,
+1,City / destination,"Kyoto, Japan",Kyoto,,Japan,
+1,City / destination,"Osaka, Japan",Osaka,,Japan,
+1,City / destination,"Seoul, South Korea",Seoul,,South Korea,
+1,City / destination,"Bangkok, Thailand",Bangkok,,Thailand,
+1,City / destination,"Hong Kong, Hong Kong SAR",Hong Kong,Hong Kong SAR,China,Special administrative region of China
+1,City / destination,"Dubai, United Arab Emirates",Dubai,,United Arab Emirates,
+1,City / destination,"Istanbul, Türkiye",Istanbul,,Türkiye,
+1,City / destination,"Amsterdam, Netherlands",Amsterdam,,Netherlands,
+1,City / destination,"Berlin, Germany",Berlin,,Germany,
+1,City / destination,"Prague, Czechia",Prague,,Czechia,
+1,City / destination,"Vienna, Austria",Vienna,,Austria,
+1,City / destination,"Budapest, Hungary",Budapest,,Hungary,
+1,City / destination,"Lisbon, Portugal",Lisbon,,Portugal,
+1,City / destination,"Porto, Portugal",Porto,,Portugal,
+1,City / destination,"Madrid, Spain",Madrid,,Spain,
+1,City / destination,"Seville, Spain",Seville,,Spain,
+1,City / destination,"Florence, Italy",Florence,,Italy,
+1,City / destination,"Venice, Italy",Venice,,Italy,
+1,City / destination,"Milan, Italy",Milan,,Italy,
+1,City / destination,"Amalfi Coast, Italy",Amalfi Coast,,Italy,
+1,City / destination,"Athens, Greece",Athens,,Greece,
+1,City / destination,"Santorini, Greece",Santorini,,Greece,
+1,City / destination,"Mykonos, Greece",Mykonos,,Greece,
+1,City / destination,"Dubrovnik, Croatia",Dubrovnik,,Croatia,
+1,City / destination,"Kraków, Poland",Kraków,,Poland,
+1,City / destination,"Copenhagen, Denmark",Copenhagen,,Denmark,
+1,City / destination,"Stockholm, Sweden",Stockholm,,Sweden,
+1,City / destination,"Oslo, Norway",Oslo,,Norway,
+1,City / destination,"Reykjavík, Iceland",Reykjavík,,Iceland,
+1,City / destination,"Dublin, Ireland",Dublin,,Ireland,
+1,City / destination,"Edinburgh, United Kingdom",Edinburgh,,United Kingdom,
+1,City / destination,"Brussels, Belgium",Brussels,,Belgium,
+1,City / destination,"Bruges, Belgium",Bruges,,Belgium,
+1,City / destination,"Zürich, Switzerland",Zürich,,Switzerland,
+1,City / destination,"Interlaken, Switzerland",Interlaken,,Switzerland,
+1,City / destination,"Munich, Germany",Munich,,Germany,
+1,City / destination,"Salzburg, Austria",Salzburg,,Austria,
+1,City / destination,"Nice, France",Nice,,France,
+1,City / destination,"Mexico City, Mexico",Mexico City,,Mexico,
+1,City / destination,"Cancún, Mexico",Cancún,,Mexico,
+1,City / destination,"Tulum, Mexico",Tulum,,Mexico,
+1,City / destination,"Oaxaca, Mexico",Oaxaca,,Mexico,
+1,City / destination,"Los Cabos, Mexico",Los Cabos,,Mexico,
+1,City / destination,"Havana, Cuba",Havana,,Cuba,
+1,City / destination,"Punta Cana, Dominican Republic",Punta Cana,,Dominican Republic,
+1,City / destination,"Nassau, Bahamas",Nassau,,Bahamas,
+1,City / destination,"Montego Bay, Jamaica",Montego Bay,,Jamaica,
+1,City / destination,"Cartagena, Colombia",Cartagena,,Colombia,
+1,City / destination,"Medellín, Colombia",Medellín,,Colombia,
+1,City / destination,"Lima, Peru",Lima,,Peru,
+1,City / destination,"Cusco & Machu Picchu, Peru",Cusco & Machu Picchu,,Peru,
+1,City / destination,"Rio de Janeiro, Brazil",Rio de Janeiro,,Brazil,
+1,City / destination,"São Paulo, Brazil",São Paulo,,Brazil,
+1,City / destination,"Buenos Aires, Argentina",Buenos Aires,,Argentina,
+1,City / destination,"Santiago, Chile",Santiago,,Chile,
+1,City / destination,"Toronto, Canada",Toronto,,Canada,
+1,City / destination,"Vancouver, Canada",Vancouver,,Canada,
+1,City / destination,"Montréal, Canada",Montréal,,Canada,
+1,City / destination,"Québec City, Canada",Québec City,,Canada,
+1,City / destination,"Banff, Canada",Banff,,Canada,
+1,City / destination,"Cairo, Egypt",Cairo,,Egypt,
+1,City / destination,"Luxor, Egypt",Luxor,,Egypt,
+1,City / destination,"Marrakech, Morocco",Marrakech,,Morocco,
+1,City / destination,"Cape Town, South Africa",Cape Town,,South Africa,
+1,City / destination,"Nairobi, Kenya",Nairobi,,Kenya,
+1,City / destination,"Zanzibar, Tanzania",Zanzibar,,Tanzania,
+1,City / destination,"Accra, Ghana",Accra,,Ghana,
+1,City / destination,"Lagos, Nigeria",Lagos,,Nigeria,
+1,City / destination,"Tel Aviv, Israel",Tel Aviv,,Israel,
+1,City / destination,Jerusalem,Jerusalem,,,Listed without a country
+1,City / destination,"Petra, Jordan",Petra,,Jordan,
+1,City / destination,"Doha, Qatar",Doha,,Qatar,
+1,City / destination,"Abu Dhabi, United Arab Emirates",Abu Dhabi,,United Arab Emirates,
+1,City / destination,"Mumbai, India",Mumbai,,India,
+1,City / destination,"Delhi, India",Delhi,,India,
+1,City / destination,"Jaipur, India",Jaipur,,India,
+1,City / destination,"Agra, India",Agra,,India,
+1,City / destination,"Goa, India",Goa,,India,
+1,City / destination,"Kathmandu, Nepal",Kathmandu,,Nepal,
+1,City / destination,"Bali, Indonesia",Bali,,Indonesia,
+1,City / destination,"Kuala Lumpur, Malaysia",Kuala Lumpur,,Malaysia,
+1,City / destination,"Hanoi, Vietnam",Hanoi,,Vietnam,
+1,City / destination,"Ho Chi Minh City, Vietnam",Ho Chi Minh City,,Vietnam,
+1,City / destination,"Hoi An, Vietnam",Hoi An,,Vietnam,
+1,City / destination,"Phuket, Thailand",Phuket,,Thailand,
+1,City / destination,"Chiang Mai, Thailand",Chiang Mai,,Thailand,
+1,City / destination,"Siem Reap, Cambodia",Siem Reap,,Cambodia,
+1,City / destination,"Manila, Philippines",Manila,,Philippines,
+1,City / destination,"Cebu, Philippines",Cebu,,Philippines,
+1,City / destination,"Boracay, Philippines",Boracay,,Philippines,
+1,City / destination,"Palawan, Philippines",Palawan,,Philippines,
+1,City / destination,"Siargao, Philippines",Siargao,,Philippines,
+1,City / destination,"Taipei, Taiwan",Taipei,,Taiwan,
+1,City / destination,"Shanghai, China",Shanghai,,China,
+1,City / destination,"Beijing, China",Beijing,,China,
+1,City / destination,"Sydney, Australia",Sydney,,Australia,
+1,City / destination,"Melbourne, Australia",Melbourne,,Australia,
+1,City / destination,"Auckland, New Zealand",Auckland,,New Zealand,
+1,City / destination,"Queenstown, New Zealand",Queenstown,,New Zealand,
+2,City / destination,"Manchester, United Kingdom",Manchester,,United Kingdom,
+2,City / destination,"Liverpool, United Kingdom",Liverpool,,United Kingdom,
+2,City / destination,"Bath, United Kingdom",Bath,,United Kingdom,
+2,City / destination,"Oxford, United Kingdom",Oxford,,United Kingdom,
+2,City / destination,"Cambridge, United Kingdom",Cambridge,,United Kingdom,
+2,City / destination,"Cotswolds, United Kingdom",Cotswolds,,United Kingdom,
+2,City / destination,"Lake District, United Kingdom",Lake District,,United Kingdom,
+2,City / destination,"Cornwall, United Kingdom",Cornwall,,United Kingdom,
+2,City / destination,"Belfast, United Kingdom",Belfast,,United Kingdom,
+2,City / destination,"Glasgow, United Kingdom",Glasgow,,United Kingdom,
+2,City / destination,"Scottish Highlands, United Kingdom",Scottish Highlands,,United Kingdom,
+2,City / destination,"Cardiff, United Kingdom",Cardiff,,United Kingdom,
+2,City / destination,"Galway, Ireland",Galway,,Ireland,
+2,City / destination,"Cork, Ireland",Cork,,Ireland,
+2,City / destination,"Ring of Kerry, Ireland",Ring of Kerry,,Ireland,
+2,City / destination,"Cliffs of Moher, Ireland",Cliffs of Moher,,Ireland,
+2,City / destination,"Lyon, France",Lyon,,France,
+2,City / destination,"Marseille, France",Marseille,,France,
+2,City / destination,"Bordeaux, France",Bordeaux,,France,
+2,City / destination,"Strasbourg, France",Strasbourg,,France,
+2,City / destination,"Provence, France",Provence,,France,
+2,City / destination,"French Riviera, France",French Riviera,,France,
+2,City / destination,"Mont-Saint-Michel, France",Mont-Saint-Michel,,France,
+2,City / destination,"Normandy, France",Normandy,,France,
+2,City / destination,"Loire Valley, France",Loire Valley,,France,
+2,City / destination,"Chamonix, France",Chamonix,,France,
+2,City / destination,"Antwerp, Belgium",Antwerp,,Belgium,
+2,City / destination,"Ghent, Belgium",Ghent,,Belgium,
+2,City / destination,"Rotterdam, Netherlands",Rotterdam,,Netherlands,
+2,City / destination,"Utrecht, Netherlands",Utrecht,,Netherlands,
+2,City / destination,"Hamburg, Germany",Hamburg,,Germany,
+2,City / destination,"Frankfurt, Germany",Frankfurt,,Germany,
+2,City / destination,"Cologne, Germany",Cologne,,Germany,
+2,City / destination,"Dresden, Germany",Dresden,,Germany,
+2,City / destination,"Heidelberg, Germany",Heidelberg,,Germany,
+2,City / destination,"Black Forest, Germany",Black Forest,,Germany,
+2,City / destination,"Bavarian Alps, Germany",Bavarian Alps,,Germany,
+2,City / destination,"Innsbruck, Austria",Innsbruck,,Austria,
+2,City / destination,"Hallstatt, Austria",Hallstatt,,Austria,
+2,City / destination,"Geneva, Switzerland",Geneva,,Switzerland,
+2,City / destination,"Lucerne, Switzerland",Lucerne,,Switzerland,
+2,City / destination,"Zermatt, Switzerland",Zermatt,,Switzerland,
+2,City / destination,"Bern, Switzerland",Bern,,Switzerland,
+2,City / destination,"Lugano, Switzerland",Lugano,,Switzerland,
+2,City / destination,"Naples, Italy",Naples,,Italy,
+2,City / destination,"Capri, Italy",Capri,,Italy,
+2,City / destination,"Cinque Terre, Italy",Cinque Terre,,Italy,
+2,City / destination,"Sicily, Italy",Sicily,,Italy,
+2,City / destination,"Sardinia, Italy",Sardinia,,Italy,
+2,City / destination,"Lake Como, Italy",Lake Como,,Italy,
+2,City / destination,"Bologna, Italy",Bologna,,Italy,
+2,City / destination,"Verona, Italy",Verona,,Italy,
+2,City / destination,"Pisa, Italy",Pisa,,Italy,
+2,City / destination,"Siena, Italy",Siena,,Italy,
+2,City / destination,"Tuscany, Italy",Tuscany,,Italy,
+2,City / destination,"Turin, Italy",Turin,,Italy,
+2,City / destination,"Dolomites, Italy",Dolomites,,Italy,
+2,City / destination,"Puglia, Italy",Puglia,,Italy,
+2,City / destination,"Matera, Italy",Matera,,Italy,
+2,City / destination,"Valencia, Spain",Valencia,,Spain,
+2,City / destination,"Granada, Spain",Granada,,Spain,
+2,City / destination,"Málaga, Spain",Málaga,,Spain,
+2,City / destination,"Ibiza, Spain",Ibiza,,Spain,
+2,City / destination,"Mallorca, Spain",Mallorca,,Spain,
+2,City / destination,"Bilbao, Spain",Bilbao,,Spain,
+2,City / destination,"San Sebastián, Spain",San Sebastián,,Spain,
+2,City / destination,"Tenerife, Spain",Tenerife,,Spain,
+2,City / destination,"Córdoba, Spain",Córdoba,,Spain,
+2,City / destination,"Toledo, Spain",Toledo,,Spain,
+2,City / destination,"Algarve, Portugal",Algarve,,Portugal,
+2,City / destination,"Madeira, Portugal",Madeira,,Portugal,
+2,City / destination,"Azores, Portugal",Azores,,Portugal,
+2,City / destination,"Sintra, Portugal",Sintra,,Portugal,
+2,City / destination,"Coimbra, Portugal",Coimbra,,Portugal,
+2,City / destination,"Crete, Greece",Crete,,Greece,
+2,City / destination,"Rhodes, Greece",Rhodes,,Greece,
+2,City / destination,"Corfu, Greece",Corfu,,Greece,
+2,City / destination,"Thessaloniki, Greece",Thessaloniki,,Greece,
+2,City / destination,"Meteora, Greece",Meteora,,Greece,
+2,City / destination,"Split, Croatia",Split,,Croatia,
+2,City / destination,"Hvar, Croatia",Hvar,,Croatia,
+2,City / destination,"Zagreb, Croatia",Zagreb,,Croatia,
+2,City / destination,"Plitvice Lakes, Croatia",Plitvice Lakes,,Croatia,
+2,City / destination,"Ljubljana, Slovenia",Ljubljana,,Slovenia,
+2,City / destination,"Lake Bled, Slovenia",Lake Bled,,Slovenia,
+2,City / destination,"Kotor, Montenegro",Kotor,,Montenegro,
+2,City / destination,"Sarajevo, Bosnia and Herzegovina",Sarajevo,,Bosnia and Herzegovina,
+2,City / destination,"Mostar, Bosnia and Herzegovina",Mostar,,Bosnia and Herzegovina,
+2,City / destination,"Belgrade, Serbia",Belgrade,,Serbia,
+2,City / destination,"Tirana, Albania",Tirana,,Albania,
+2,City / destination,"Albanian Riviera, Albania",Albanian Riviera,,Albania,
+2,City / destination,"Sofia, Bulgaria",Sofia,,Bulgaria,
+2,City / destination,"Bucharest, Romania",Bucharest,,Romania,
+2,City / destination,"Transylvania, Romania",Transylvania,,Romania,
+2,City / destination,"Warsaw, Poland",Warsaw,,Poland,
+2,City / destination,"Gdańsk, Poland",Gdańsk,,Poland,
+2,City / destination,"Wrocław, Poland",Wrocław,,Poland,
+2,City / destination,"Bratislava, Slovakia",Bratislava,,Slovakia,
+2,City / destination,"Tallinn, Estonia",Tallinn,,Estonia,
+2,City / destination,"Riga, Latvia",Riga,,Latvia,
+2,City / destination,"Vilnius, Lithuania",Vilnius,,Lithuania,
+2,City / destination,"Helsinki, Finland",Helsinki,,Finland,
+2,City / destination,"Lapland, Finland",Lapland,,Finland,
+2,City / destination,"Bergen, Norway",Bergen,,Norway,
+2,City / destination,"Lofoten, Norway",Lofoten,,Norway,
+2,City / destination,"Tromsø, Norway",Tromsø,,Norway,
+2,City / destination,"Gothenburg, Sweden",Gothenburg,,Sweden,
+2,City / destination,"Malmö, Sweden",Malmö,,Sweden,
+2,City / destination,"Aarhus, Denmark",Aarhus,,Denmark,
+2,City / destination,Faroe Islands,Faroe Islands,Faroe Islands,Denmark,Territory of Denmark
+2,City / destination,"Golden Circle, Iceland",Golden Circle,,Iceland,
+2,City / destination,"Cappadocia, Türkiye",Cappadocia,,Türkiye,
+2,City / destination,"Antalya, Türkiye",Antalya,,Türkiye,
+2,City / destination,"Ephesus, Türkiye",Ephesus,,Türkiye,
+2,City / destination,"Bodrum, Türkiye",Bodrum,,Türkiye,
+2,City / destination,"Tbilisi, Georgia",Tbilisi,,Georgia,
+2,City / destination,"Yerevan, Armenia",Yerevan,,Armenia,
+2,City / destination,"Baku, Azerbaijan",Baku,,Azerbaijan,
+2,City / destination,"Moscow, Russia",Moscow,,Russia,
+2,City / destination,"St. Petersburg, Russia",St. Petersburg,,Russia,
+2,City / destination,"Kyiv, Ukraine",Kyiv,,Ukraine,
+2,City / destination,"Lviv, Ukraine",Lviv,,Ukraine,
+2,City / destination,"Nicosia, Cyprus",Nicosia,,Cyprus,
+2,City / destination,"Valletta, Malta",Valletta,,Malta,
+2,City / destination,"Beirut, Lebanon",Beirut,,Lebanon,
+2,City / destination,"Amman, Jordan",Amman,,Jordan,
+2,City / destination,"Wadi Rum, Jordan",Wadi Rum,,Jordan,
+2,City / destination,"Dead Sea, Jordan",Dead Sea,,Jordan,
+2,City / destination,"Muscat, Oman",Muscat,,Oman,
+2,City / destination,"Riyadh, Saudi Arabia",Riyadh,,Saudi Arabia,
+2,City / destination,"Jeddah, Saudi Arabia",Jeddah,,Saudi Arabia,
+2,City / destination,"AlUla, Saudi Arabia",AlUla,,Saudi Arabia,
+2,City / destination,"Manama, Bahrain",Manama,,Bahrain,
+2,City / destination,"Kuwait City, Kuwait",Kuwait City,,Kuwait,
+2,City / destination,"Tehran, Iran",Tehran,,Iran,
+2,City / destination,"Isfahan, Iran",Isfahan,,Iran,
+2,City / destination,"Sharm El Sheikh, Egypt",Sharm El Sheikh,,Egypt,
+2,City / destination,"Alexandria, Egypt",Alexandria,,Egypt,
+2,City / destination,"Aswan, Egypt",Aswan,,Egypt,
+2,City / destination,"Fes, Morocco",Fes,,Morocco,
+2,City / destination,"Chefchaouen, Morocco",Chefchaouen,,Morocco,
+2,City / destination,"Casablanca, Morocco",Casablanca,,Morocco,
+2,City / destination,"Sahara, Morocco",Sahara,,Morocco,
+2,City / destination,"Tunis, Tunisia",Tunis,,Tunisia,
+2,City / destination,"Algiers, Algeria",Algiers,,Algeria,
+2,City / destination,"Addis Ababa, Ethiopia",Addis Ababa,,Ethiopia,
+2,City / destination,"Lalibela, Ethiopia",Lalibela,,Ethiopia,
+2,City / destination,"Kigali, Rwanda",Kigali,,Rwanda,
+2,City / destination,"Kampala, Uganda",Kampala,,Uganda,
+2,City / destination,"Dar es Salaam, Tanzania",Dar es Salaam,,Tanzania,
+2,City / destination,"Serengeti, Tanzania",Serengeti,,Tanzania,
+2,City / destination,"Kilimanjaro, Tanzania",Kilimanjaro,,Tanzania,
+2,City / destination,"Maasai Mara, Kenya",Maasai Mara,,Kenya,
+2,City / destination,"Mombasa, Kenya",Mombasa,,Kenya,
+2,City / destination,"Victoria Falls, Zambia / Zimbabwe",Victoria Falls,,Zambia / Zimbabwe,
+2,City / destination,"Windhoek, Namibia",Windhoek,,Namibia,
+2,City / destination,"Namib Desert, Namibia",Namib Desert,,Namibia,
+2,City / destination,"Okavango Delta, Botswana",Okavango Delta,,Botswana,
+2,City / destination,"Johannesburg, South Africa",Johannesburg,,South Africa,
+2,City / destination,"Kruger, South Africa",Kruger,,South Africa,
+2,City / destination,"Garden Route, South Africa",Garden Route,,South Africa,
+2,City / destination,"Durban, South Africa",Durban,,South Africa,
+2,City / destination,"Stellenbosch, South Africa",Stellenbosch,,South Africa,
+2,City / destination,"Antananarivo, Madagascar",Antananarivo,,Madagascar,
+2,City / destination,"Dakar, Senegal",Dakar,,Senegal,
+2,City / destination,"Abidjan, Côte d’Ivoire",Abidjan,,Côte d’Ivoire,
+2,City / destination,"Kumasi, Ghana",Kumasi,,Ghana,
+2,City / destination,"Cape Coast, Ghana",Cape Coast,,Ghana,
+2,City / destination,"Abuja, Nigeria",Abuja,,Nigeria,
+2,City / destination,"Kinshasa, DR Congo",Kinshasa,,DR Congo,
+2,City / destination,"Luanda, Angola",Luanda,,Angola,
+2,City / destination,"Maputo, Mozambique",Maputo,,Mozambique,
+2,City / destination,"Karachi, Pakistan",Karachi,,Pakistan,
+2,City / destination,"Lahore, Pakistan",Lahore,,Pakistan,
+2,City / destination,"Islamabad, Pakistan",Islamabad,,Pakistan,
+2,City / destination,"Dhaka, Bangladesh",Dhaka,,Bangladesh,
+2,City / destination,"Colombo, Sri Lanka",Colombo,,Sri Lanka,
+2,City / destination,"Kandy, Sri Lanka",Kandy,,Sri Lanka,
+2,City / destination,"Galle, Sri Lanka",Galle,,Sri Lanka,
+2,City / destination,"Malé, Maldives",Malé,,Maldives,
+2,City / destination,"Thimphu, Bhutan",Thimphu,,Bhutan,
+2,City / destination,"Pokhara, Nepal",Pokhara,,Nepal,
+2,City / destination,"Everest Base Camp, Nepal",Everest Base Camp,,Nepal,
+2,City / destination,"Kolkata, India",Kolkata,,India,
+2,City / destination,"Chennai, India",Chennai,,India,
+2,City / destination,"Bengaluru, India",Bengaluru,,India,
+2,City / destination,"Hyderabad, India",Hyderabad,,India,
+2,City / destination,"Kerala, India",Kerala,,India,
+2,City / destination,"Udaipur, India",Udaipur,,India,
+2,City / destination,"Varanasi, India",Varanasi,,India,
+2,City / destination,"Rishikesh, India",Rishikesh,,India,
+2,City / destination,"Amritsar, India",Amritsar,,India,
+2,City / destination,"Ladakh, India",Ladakh,,India,
+2,City / destination,"Darjeeling, India",Darjeeling,,India,
+2,City / destination,"Lhasa, China",Lhasa,Tibet,China,Tibet Autonomous Region
+2,City / destination,"Xi’an, China",Xi’an,,China,
+2,City / destination,"Chengdu, China",Chengdu,,China,
+2,City / destination,"Guilin, China",Guilin,,China,
+2,City / destination,"Hangzhou, China",Hangzhou,,China,
+2,City / destination,"Shenzhen, China",Shenzhen,,China,
+2,City / destination,"Guangzhou, China",Guangzhou,,China,
+2,City / destination,"Harbin, China",Harbin,,China,
+2,City / destination,"Zhangjiajie, China",Zhangjiajie,,China,
+2,City / destination,"Macau, Macau SAR",Macau,Macau SAR,China,Special administrative region of China
+2,City / destination,"Kaohsiung, Taiwan",Kaohsiung,,Taiwan,
+2,City / destination,"Taichung, Taiwan",Taichung,,Taiwan,
+2,City / destination,"Busan, South Korea",Busan,,South Korea,
+2,City / destination,"Jeju, South Korea",Jeju,,South Korea,
+2,City / destination,"Gyeongju, South Korea",Gyeongju,,South Korea,
+2,City / destination,"Nara, Japan",Nara,,Japan,
+2,City / destination,"Hiroshima, Japan",Hiroshima,,Japan,
+2,City / destination,"Hakone, Japan",Hakone,,Japan,
+2,City / destination,"Sapporo, Japan",Sapporo,,Japan,
+2,City / destination,"Okinawa, Japan",Okinawa,,Japan,
+2,City / destination,"Fukuoka, Japan",Fukuoka,,Japan,
+2,City / destination,"Nagoya, Japan",Nagoya,,Japan,
+2,City / destination,"Kanazawa, Japan",Kanazawa,,Japan,
+2,City / destination,"Nikko, Japan",Nikko,,Japan,
+2,City / destination,"Mount Fuji, Japan",Mount Fuji,,Japan,
+2,City / destination,"Ulaanbaatar, Mongolia",Ulaanbaatar,,Mongolia,
+2,City / destination,"Almaty, Kazakhstan",Almaty,,Kazakhstan,
+2,City / destination,"Tashkent, Uzbekistan",Tashkent,,Uzbekistan,
+2,City / destination,"Samarkand, Uzbekistan",Samarkand,,Uzbekistan,
+2,City / destination,"Bishkek, Kyrgyzstan",Bishkek,,Kyrgyzstan,
+2,City / destination,"Krabi, Thailand",Krabi,,Thailand,
+2,City / destination,"Koh Samui, Thailand",Koh Samui,,Thailand,
+2,City / destination,"Pattaya, Thailand",Pattaya,,Thailand,
+2,City / destination,"Ayutthaya, Thailand",Ayutthaya,,Thailand,
+2,City / destination,"Luang Prabang, Laos",Luang Prabang,,Laos,
+2,City / destination,"Vientiane, Laos",Vientiane,,Laos,
+2,City / destination,"Phnom Penh, Cambodia",Phnom Penh,,Cambodia,
+2,City / destination,"Yangon, Myanmar",Yangon,,Myanmar,
+2,City / destination,"Bagan, Myanmar",Bagan,,Myanmar,
+2,City / destination,"Ha Long Bay, Vietnam",Ha Long Bay,,Vietnam,
+2,City / destination,"Da Nang, Vietnam",Da Nang,,Vietnam,
+2,City / destination,"Hue, Vietnam",Hue,,Vietnam,
+2,City / destination,"Sapa, Vietnam",Sapa,,Vietnam,
+2,City / destination,"Penang, Malaysia",Penang,,Malaysia,
+2,City / destination,"Langkawi, Malaysia",Langkawi,,Malaysia,
+2,City / destination,"Malacca, Malaysia",Malacca,,Malaysia,
+2,City / destination,"Borneo, Malaysia",Borneo,,Malaysia,
+2,City / destination,"Jakarta, Indonesia",Jakarta,,Indonesia,
+2,City / destination,"Yogyakarta, Indonesia",Yogyakarta,,Indonesia,
+2,City / destination,"Lombok, Indonesia",Lombok,,Indonesia,
+2,City / destination,"Komodo, Indonesia",Komodo,,Indonesia,
+2,City / destination,"Raja Ampat, Indonesia",Raja Ampat,,Indonesia,
+2,City / destination,"Davao, Philippines",Davao,,Philippines,
+2,City / destination,"Bohol, Philippines",Bohol,,Philippines,
+2,City / destination,"Baguio, Philippines",Baguio,,Philippines,
+2,City / destination,"Vigan, Philippines",Vigan,,Philippines,
+2,City / destination,"Batanes, Philippines",Batanes,,Philippines,
+2,City / destination,"Iloilo, Philippines",Iloilo,,Philippines,
+2,City / destination,"Dumaguete, Philippines",Dumaguete,,Philippines,
+2,City / destination,"Bacolod, Philippines",Bacolod,,Philippines,
+2,City / destination,"La Union, Philippines",La Union,,Philippines,
+2,City / destination,"Camiguin, Philippines",Camiguin,,Philippines,
+2,City / destination,"Dili, Timor-Leste",Dili,,Timor-Leste,
+2,City / destination,"Port Moresby, Papua New Guinea",Port Moresby,,Papua New Guinea,
+2,City / destination,"Brisbane, Australia",Brisbane,,Australia,
+2,City / destination,"Gold Coast, Australia",Gold Coast,,Australia,
+2,City / destination,"Perth, Australia",Perth,,Australia,
+2,City / destination,"Adelaide, Australia",Adelaide,,Australia,
+2,City / destination,"Cairns & the Great Barrier Reef, Australia",Cairns & the Great Barrier Reef,,Australia,
+2,City / destination,"Uluru, Australia",Uluru,,Australia,
+2,City / destination,"Hobart, Australia",Hobart,,Australia,
+2,City / destination,"Darwin, Australia",Darwin,,Australia,
+2,City / destination,"Byron Bay, Australia",Byron Bay,,Australia,
+2,City / destination,"Great Ocean Road, Australia",Great Ocean Road,,Australia,
+2,City / destination,"Wellington, New Zealand",Wellington,,New Zealand,
+2,City / destination,"Christchurch, New Zealand",Christchurch,,New Zealand,
+2,City / destination,"Rotorua, New Zealand",Rotorua,,New Zealand,
+2,City / destination,"Milford Sound, New Zealand",Milford Sound,,New Zealand,
+2,City / destination,"Bora Bora, French Polynesia",Bora Bora,French Polynesia,France,Territory of France
+2,City / destination,"Tahiti, French Polynesia",Tahiti,French Polynesia,France,Territory of France
+2,City / destination,"Apia, Samoa",Apia,,Samoa,
+2,City / destination,"Nuku’alofa, Tonga",Nuku’alofa,,Tonga,
+2,City / destination,"Port Vila, Vanuatu",Port Vila,,Vanuatu,
+2,City / destination,"Honiara, Solomon Islands",Honiara,,Solomon Islands,
+2,City / destination,"Nouméa, New Caledonia",Nouméa,New Caledonia,France,Territory of France
+2,City / destination,"Guadalajara, Mexico",Guadalajara,,Mexico,
+2,City / destination,"Puerto Vallarta, Mexico",Puerto Vallarta,,Mexico,
+2,City / destination,"San Miguel de Allende, Mexico",San Miguel de Allende,,Mexico,
+2,City / destination,"Guanajuato, Mexico",Guanajuato,,Mexico,
+2,City / destination,"Mérida, Mexico",Mérida,,Mexico,
+2,City / destination,"Playa del Carmen, Mexico",Playa del Carmen,,Mexico,
+2,City / destination,"Cozumel, Mexico",Cozumel,,Mexico,
+2,City / destination,"Puebla, Mexico",Puebla,,Mexico,
+2,City / destination,"Monterrey, Mexico",Monterrey,,Mexico,
+2,City / destination,"Tijuana, Mexico",Tijuana,,Mexico,
+2,City / destination,"Mazatlán, Mexico",Mazatlán,,Mexico,
+2,City / destination,"Sayulita, Mexico",Sayulita,,Mexico,
+2,City / destination,"Belize City & the Cayes, Belize",Belize City & the Cayes,,Belize,
+2,City / destination,"Antigua, Guatemala",Antigua,,Guatemala,
+2,City / destination,"Lake Atitlán, Guatemala",Lake Atitlán,,Guatemala,
+2,City / destination,"San Salvador, El Salvador",San Salvador,,El Salvador,
+2,City / destination,"Roatán, Honduras",Roatán,,Honduras,
+2,City / destination,"Granada, Nicaragua",Granada,,Nicaragua,
+2,City / destination,"San José, Costa Rica",San José,,Costa Rica,
+2,City / destination,"Arenal, Costa Rica",Arenal,,Costa Rica,
+2,City / destination,"Manuel Antonio, Costa Rica",Manuel Antonio,,Costa Rica,
+2,City / destination,"Panama City, Panama",Panama City,,Panama,
+2,City / destination,"Bocas del Toro, Panama",Bocas del Toro,,Panama,
+2,City / destination,"Kingston, Jamaica",Kingston,,Jamaica,
+2,City / destination,"Negril, Jamaica",Negril,,Jamaica,
+2,City / destination,"Santo Domingo, Dominican Republic",Santo Domingo,,Dominican Republic,
+2,City / destination,"Port-au-Prince, Haiti",Port-au-Prince,,Haiti,
+2,City / destination,"Varadero, Cuba",Varadero,,Cuba,
+2,City / destination,"Trinidad, Cuba",Trinidad,,Cuba,
+2,City / destination,"Bridgetown, Barbados",Bridgetown,,Barbados,
+2,City / destination,"Castries, St. Lucia",Castries,,St. Lucia,
+2,City / destination,Aruba,Aruba,Aruba,Netherlands,Country within the Kingdom of the Netherlands
+2,City / destination,Curaçao,Curaçao,Curaçao,Netherlands,Country within the Kingdom of the Netherlands
+2,City / destination,Bermuda,Bermuda,Bermuda,United Kingdom,British overseas territory
+2,City / destination,Cayman Islands,Cayman Islands,Cayman Islands,United Kingdom,British overseas territory
+2,City / destination,Turks and Caicos,Turks and Caicos,Turks and Caicos,United Kingdom,British overseas territory
+2,City / destination,"Bogotá, Colombia",Bogotá,,Colombia,
+2,City / destination,"Cali, Colombia",Cali,,Colombia,
+2,City / destination,"Santa Marta, Colombia",Santa Marta,,Colombia,
+2,City / destination,"Quito, Ecuador",Quito,,Ecuador,
+2,City / destination,"Galápagos, Ecuador",Galápagos,,Ecuador,
+2,City / destination,"Guayaquil, Ecuador",Guayaquil,,Ecuador,
+2,City / destination,"Cuenca, Ecuador",Cuenca,,Ecuador,
+2,City / destination,"La Paz, Bolivia",La Paz,,Bolivia,
+2,City / destination,"Salar de Uyuni, Bolivia",Salar de Uyuni,,Bolivia,
+2,City / destination,"Arequipa, Peru",Arequipa,,Peru,
+2,City / destination,"Sacred Valley, Peru",Sacred Valley,,Peru,
+2,City / destination,"Lake Titicaca, Peru / Bolivia",Lake Titicaca,,Peru / Bolivia,
+2,City / destination,"Valparaíso, Chile",Valparaíso,,Chile,
+2,City / destination,"Atacama, Chile",Atacama,,Chile,
+2,City / destination,"Patagonia, Chile / Argentina",Patagonia,,Chile / Argentina,
+2,City / destination,"Easter Island, Chile",Easter Island,,Chile,
+2,City / destination,"Mendoza, Argentina",Mendoza,,Argentina,
+2,City / destination,"Bariloche, Argentina",Bariloche,,Argentina,
+2,City / destination,"Iguazú Falls, Argentina / Brazil",Iguazú Falls,,Argentina / Brazil,
+2,City / destination,"Salta, Argentina",Salta,,Argentina,
+2,City / destination,"Ushuaia, Argentina",Ushuaia,,Argentina,
+2,City / destination,"Montevideo, Uruguay",Montevideo,,Uruguay,
+2,City / destination,"Punta del Este, Uruguay",Punta del Este,,Uruguay,
+2,City / destination,"Asunción, Paraguay",Asunción,,Paraguay,
+2,City / destination,"Salvador, Brazil",Salvador,,Brazil,
+2,City / destination,"Florianópolis, Brazil",Florianópolis,,Brazil,
+2,City / destination,"Brasília, Brazil",Brasília,,Brazil,
+2,City / destination,"Fernando de Noronha, Brazil",Fernando de Noronha,,Brazil,
+2,City / destination,"Manaus & the Amazon, Brazil",Manaus & the Amazon,,Brazil,
+2,City / destination,"Recife, Brazil",Recife,,Brazil,
+2,City / destination,"Fortaleza, Brazil",Fortaleza,,Brazil,
+2,City / destination,"Georgetown, Guyana",Georgetown,,Guyana,
+2,City / destination,"Paramaribo, Suriname",Paramaribo,,Suriname,
+2,City / destination,"Caracas, Venezuela",Caracas,,Venezuela,
+2,City / destination,"Ottawa, Canada",Ottawa,,Canada,
+2,City / destination,"Calgary, Canada",Calgary,,Canada,
+2,City / destination,"Jasper, Canada",Jasper,,Canada,
+2,City / destination,"Whistler, Canada",Whistler,,Canada,
+2,City / destination,"Victoria, Canada",Victoria,,Canada,
+2,City / destination,"Halifax, Canada",Halifax,,Canada,
+2,City / destination,"Niagara Falls, Canada",Niagara Falls,,Canada,
+2,City / destination,"Winnipeg, Canada",Winnipeg,,Canada,
+2,City / destination,"Edmonton, Canada",Edmonton,,Canada,
+2,City / destination,"Prince Edward Island, Canada",Prince Edward Island,,Canada,
+2,City / destination,"Newfoundland, Canada",Newfoundland,,Canada,
+2,City / destination,"Yukon, Canada",Yukon,,Canada,
+2,City / destination,"Nuuk, Greenland",Nuuk,Greenland,Denmark,Territory of Denmark
+1,Country,Afghanistan — country board,Afghanistan,,Afghanistan,
+1,Country,Albania — country board,Albania,,Albania,
+1,Country,Algeria — country board,Algeria,,Algeria,
+1,Country,Andorra — country board,Andorra,,Andorra,
+1,Country,Angola — country board,Angola,,Angola,
+1,Country,Antigua and Barbuda — country board,Antigua and Barbuda,,Antigua and Barbuda,
+1,Country,Argentina — country board,Argentina,,Argentina,
+1,Country,Armenia — country board,Armenia,,Armenia,
+1,Country,Australia — country board,Australia,,Australia,
+1,Country,Austria — country board,Austria,,Austria,
+1,Country,Azerbaijan — country board,Azerbaijan,,Azerbaijan,
+1,Country,Bahamas — country board,Bahamas,,Bahamas,
+1,Country,Bahrain — country board,Bahrain,,Bahrain,
+1,Country,Bangladesh — country board,Bangladesh,,Bangladesh,
+1,Country,Barbados — country board,Barbados,,Barbados,
+1,Country,Belarus — country board,Belarus,,Belarus,
+1,Country,Belgium — country board,Belgium,,Belgium,
+1,Country,Belize — country board,Belize,,Belize,
+1,Country,Benin — country board,Benin,,Benin,
+1,Country,Bhutan — country board,Bhutan,,Bhutan,
+1,Country,Bolivia — country board,Bolivia,,Bolivia,
+1,Country,Bosnia and Herzegovina — country board,Bosnia and Herzegovina,,Bosnia and Herzegovina,
+1,Country,Botswana — country board,Botswana,,Botswana,
+1,Country,Brazil — country board,Brazil,,Brazil,
+1,Country,Brunei — country board,Brunei,,Brunei,
+1,Country,Bulgaria — country board,Bulgaria,,Bulgaria,
+1,Country,Burkina Faso — country board,Burkina Faso,,Burkina Faso,
+1,Country,Burundi — country board,Burundi,,Burundi,
+1,Country,Cabo Verde — country board,Cabo Verde,,Cabo Verde,
+1,Country,Cambodia — country board,Cambodia,,Cambodia,
+1,Country,Cameroon — country board,Cameroon,,Cameroon,
+1,Country,Canada — country board,Canada,,Canada,
+1,Country,Central African Republic — country board,Central African Republic,,Central African Republic,
+1,Country,Chad — country board,Chad,,Chad,
+1,Country,Chile — country board,Chile,,Chile,
+1,Country,China — country board,China,,China,
+1,Country,Colombia — country board,Colombia,,Colombia,
+1,Country,Comoros — country board,Comoros,,Comoros,
+1,Country,Congo — country board,Congo,,Congo,
+1,Country,Costa Rica — country board,Costa Rica,,Costa Rica,
+1,Country,Côte d’Ivoire — country board,Côte d’Ivoire,,Côte d’Ivoire,
+1,Country,Croatia — country board,Croatia,,Croatia,
+1,Country,Cuba — country board,Cuba,,Cuba,
+1,Country,Cyprus — country board,Cyprus,,Cyprus,
+1,Country,Czechia — country board,Czechia,,Czechia,
+1,Country,DR Congo — country board,DR Congo,,DR Congo,
+1,Country,Denmark — country board,Denmark,,Denmark,
+1,Country,Djibouti — country board,Djibouti,,Djibouti,
+1,Country,Dominica — country board,Dominica,,Dominica,
+1,Country,Dominican Republic — country board,Dominican Republic,,Dominican Republic,
+1,Country,Ecuador — country board,Ecuador,,Ecuador,
+1,Country,Egypt — country board,Egypt,,Egypt,
+1,Country,El Salvador — country board,El Salvador,,El Salvador,
+1,Country,Equatorial Guinea — country board,Equatorial Guinea,,Equatorial Guinea,
+1,Country,Eritrea — country board,Eritrea,,Eritrea,
+1,Country,Estonia — country board,Estonia,,Estonia,
+1,Country,Eswatini — country board,Eswatini,,Eswatini,
+1,Country,Ethiopia — country board,Ethiopia,,Ethiopia,
+1,Country,Fiji — country board,Fiji,,Fiji,
+1,Country,Finland — country board,Finland,,Finland,
+1,Country,France — country board,France,,France,
+1,Country,Gabon — country board,Gabon,,Gabon,
+1,Country,Gambia — country board,Gambia,,Gambia,
+1,Country,Georgia — country board,Georgia,,Georgia,
+1,Country,Germany — country board,Germany,,Germany,
+1,Country,Ghana — country board,Ghana,,Ghana,
+1,Country,Greece — country board,Greece,,Greece,
+1,Country,Grenada — country board,Grenada,,Grenada,
+1,Country,Guatemala — country board,Guatemala,,Guatemala,
+1,Country,Guinea — country board,Guinea,,Guinea,
+1,Country,Guinea-Bissau — country board,Guinea-Bissau,,Guinea-Bissau,
+1,Country,Guyana — country board,Guyana,,Guyana,
+1,Country,Haiti — country board,Haiti,,Haiti,
+1,Country,Honduras — country board,Honduras,,Honduras,
+1,Country,Hungary — country board,Hungary,,Hungary,
+1,Country,Iceland — country board,Iceland,,Iceland,
+1,Country,India — country board,India,,India,
+1,Country,Indonesia — country board,Indonesia,,Indonesia,
+1,Country,Iran — country board,Iran,,Iran,
+1,Country,Iraq — country board,Iraq,,Iraq,
+1,Country,Ireland — country board,Ireland,,Ireland,
+1,Country,Israel — country board,Israel,,Israel,
+1,Country,Italy — country board,Italy,,Italy,
+1,Country,Jamaica — country board,Jamaica,,Jamaica,
+1,Country,Japan — country board,Japan,,Japan,
+1,Country,Jordan — country board,Jordan,,Jordan,
+1,Country,Kazakhstan — country board,Kazakhstan,,Kazakhstan,
+1,Country,Kenya — country board,Kenya,,Kenya,
+1,Country,Kiribati — country board,Kiribati,,Kiribati,
+1,Country,Kuwait — country board,Kuwait,,Kuwait,
+1,Country,Kyrgyzstan — country board,Kyrgyzstan,,Kyrgyzstan,
+1,Country,Laos — country board,Laos,,Laos,
+1,Country,Latvia — country board,Latvia,,Latvia,
+1,Country,Lebanon — country board,Lebanon,,Lebanon,
+1,Country,Lesotho — country board,Lesotho,,Lesotho,
+1,Country,Liberia — country board,Liberia,,Liberia,
+1,Country,Libya — country board,Libya,,Libya,
+1,Country,Liechtenstein — country board,Liechtenstein,,Liechtenstein,
+1,Country,Lithuania — country board,Lithuania,,Lithuania,
+1,Country,Luxembourg — country board,Luxembourg,,Luxembourg,
+1,Country,Madagascar — country board,Madagascar,,Madagascar,
+1,Country,Malawi — country board,Malawi,,Malawi,
+1,Country,Malaysia — country board,Malaysia,,Malaysia,
+1,Country,Maldives — country board,Maldives,,Maldives,
+1,Country,Mali — country board,Mali,,Mali,
+1,Country,Malta — country board,Malta,,Malta,
+1,Country,Marshall Islands — country board,Marshall Islands,,Marshall Islands,
+1,Country,Mauritania — country board,Mauritania,,Mauritania,
+1,Country,Mauritius — country board,Mauritius,,Mauritius,
+1,Country,Mexico — country board,Mexico,,Mexico,
+1,Country,Micronesia — country board,Micronesia,,Micronesia,
+1,Country,Moldova — country board,Moldova,,Moldova,
+1,Country,Monaco — country board,Monaco,,Monaco,
+1,Country,Mongolia — country board,Mongolia,,Mongolia,
+1,Country,Montenegro — country board,Montenegro,,Montenegro,
+1,Country,Morocco — country board,Morocco,,Morocco,
+1,Country,Mozambique — country board,Mozambique,,Mozambique,
+1,Country,Myanmar — country board,Myanmar,,Myanmar,
+1,Country,Namibia — country board,Namibia,,Namibia,
+1,Country,Nauru — country board,Nauru,,Nauru,
+1,Country,Nepal — country board,Nepal,,Nepal,
+1,Country,Netherlands — country board,Netherlands,,Netherlands,
+1,Country,New Zealand — country board,New Zealand,,New Zealand,
+1,Country,Nicaragua — country board,Nicaragua,,Nicaragua,
+1,Country,Niger — country board,Niger,,Niger,
+1,Country,Nigeria — country board,Nigeria,,Nigeria,
+1,Country,North Korea — country board,North Korea,,North Korea,
+1,Country,North Macedonia — country board,North Macedonia,,North Macedonia,
+1,Country,Norway — country board,Norway,,Norway,
+1,Country,Oman — country board,Oman,,Oman,
+1,Country,Pakistan — country board,Pakistan,,Pakistan,
+1,Country,Palau — country board,Palau,,Palau,
+1,Country,Palestine — country board,Palestine,,Palestine,
+1,Country,Panama — country board,Panama,,Panama,
+1,Country,Papua New Guinea — country board,Papua New Guinea,,Papua New Guinea,
+1,Country,Paraguay — country board,Paraguay,,Paraguay,
+1,Country,Peru — country board,Peru,,Peru,
+1,Country,Philippines — country board,Philippines,,Philippines,
+1,Country,Poland — country board,Poland,,Poland,
+1,Country,Portugal — country board,Portugal,,Portugal,
+1,Country,Qatar — country board,Qatar,,Qatar,
+1,Country,Romania — country board,Romania,,Romania,
+1,Country,Russia — country board,Russia,,Russia,
+1,Country,Rwanda — country board,Rwanda,,Rwanda,
+1,Country,Saint Kitts and Nevis — country board,Saint Kitts and Nevis,,Saint Kitts and Nevis,
+1,Country,Saint Lucia — country board,Saint Lucia,,Saint Lucia,
+1,Country,Saint Vincent and the Grenadines — country board,Saint Vincent and the Grenadines,,Saint Vincent and the Grenadines,
+1,Country,Samoa — country board,Samoa,,Samoa,
+1,Country,San Marino — country board,San Marino,,San Marino,
+1,Country,São Tomé and Príncipe — country board,São Tomé and Príncipe,,São Tomé and Príncipe,
+1,Country,Saudi Arabia — country board,Saudi Arabia,,Saudi Arabia,
+1,Country,Senegal — country board,Senegal,,Senegal,
+1,Country,Serbia — country board,Serbia,,Serbia,
+1,Country,Seychelles — country board,Seychelles,,Seychelles,
+1,Country,Sierra Leone — country board,Sierra Leone,,Sierra Leone,
+1,Country,Singapore — country board,Singapore,,Singapore,
+1,Country,Slovakia — country board,Slovakia,,Slovakia,
+1,Country,Slovenia — country board,Slovenia,,Slovenia,
+1,Country,Solomon Islands — country board,Solomon Islands,,Solomon Islands,
+1,Country,Somalia — country board,Somalia,,Somalia,
+1,Country,South Africa — country board,South Africa,,South Africa,
+1,Country,South Korea — country board,South Korea,,South Korea,
+1,Country,South Sudan — country board,South Sudan,,South Sudan,
+1,Country,Spain — country board,Spain,,Spain,
+1,Country,Sri Lanka — country board,Sri Lanka,,Sri Lanka,
+1,Country,Sudan — country board,Sudan,,Sudan,
+1,Country,Suriname — country board,Suriname,,Suriname,
+1,Country,Sweden — country board,Sweden,,Sweden,
+1,Country,Switzerland — country board,Switzerland,,Switzerland,
+1,Country,Syria — country board,Syria,,Syria,
+1,Country,Tajikistan — country board,Tajikistan,,Tajikistan,
+1,Country,Tanzania — country board,Tanzania,,Tanzania,
+1,Country,Thailand — country board,Thailand,,Thailand,
+1,Country,Timor-Leste — country board,Timor-Leste,,Timor-Leste,
+1,Country,Togo — country board,Togo,,Togo,
+1,Country,Tonga — country board,Tonga,,Tonga,
+1,Country,Trinidad and Tobago — country board,Trinidad and Tobago,,Trinidad and Tobago,
+1,Country,Tunisia — country board,Tunisia,,Tunisia,
+1,Country,Türkiye — country board,Türkiye,,Türkiye,
+1,Country,Turkmenistan — country board,Turkmenistan,,Turkmenistan,
+1,Country,Tuvalu — country board,Tuvalu,,Tuvalu,
+1,Country,Uganda — country board,Uganda,,Uganda,
+1,Country,Ukraine — country board,Ukraine,,Ukraine,
+1,Country,United Arab Emirates — country board,United Arab Emirates,,United Arab Emirates,
+1,Country,United Kingdom — country board,United Kingdom,,United Kingdom,
+1,Country,United States — country board,United States,,United States,
+1,Country,Uruguay — country board,Uruguay,,Uruguay,
+1,Country,Uzbekistan — country board,Uzbekistan,,Uzbekistan,
+1,Country,Vanuatu — country board,Vanuatu,,Vanuatu,
+1,Country,Vatican City — country board,Vatican City,,Vatican City,
+1,Country,Venezuela — country board,Venezuela,,Venezuela,
+1,Country,Vietnam — country board,Vietnam,,Vietnam,
+1,Country,Yemen — country board,Yemen,,Yemen,
+1,Country,Zambia — country board,Zambia,,Zambia,
+1,Country,Zimbabwe — country board,Zimbabwe,,Zimbabwe,
