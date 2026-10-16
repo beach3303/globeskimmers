@@ -46,7 +46,9 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
   const { socialTier } = useAuth();
   if (!row || typeof row !== "object") return null;
   const by = row.by || {};
-  const from = senderName(by, me);
+  // A board card signed without a name (founder, 2026-10-15): "A local" or
+  // "A traveler" is all it says — no handle, no face, Report still works.
+  const from = row.anon ? (row.anon === "local" ? "A local" : "A traveler") : senderName(by, me);
   const toMe = row.to_me === true;
   const myHandle = handleOf(me);
   const place = String(row.place ?? "").trim();

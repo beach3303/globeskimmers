@@ -17982,6 +17982,18 @@ async function pcWasThere(env, userId, key) {
   } catch { return false; }
 }
 
+// A board card signed without a name (founder, 2026-10-15): "a local" when the
+// sender's home city is the board's city (accents and case ignored, the same
+// match psEligibility uses), else "a traveler". The board key carries no
+// coordinates, so the home pin's distance can't be measured here — name only.
+async function pcAnonLabel(env, userId, boardCity) {
+  try {
+    const pr = await gbRest(env, `profiles?id=eq.${userId}&select=home_city`, { headers: { 'Accept-Profile': 'public' } });
+    const home = pr.ok ? ((await pr.json())[0] || {}).home_city : null;
+    return psNameKey(home) && psNameKey(home) === psNameKey(boardCity) ? 'local' : 'traveler';
+  } catch { return 'traveler'; }
+}
+
 // ── Postcards (2026-09-30): sent, not posted ────────────────────────────────
 // The photo is moderated SYNCHRONOUSLY at send (a postcard is shared by
 // definition — fail-closed, no unreviewed image ever leaves the sender).
@@ -18008,6 +18020,8 @@ async function handlePostcardSend(request, env, ctx) {
     let toCity = null;
     let boardCity = null;
     let boardCountry = null;
+    let toTeen = false;
+    let anonLabel = null;
     if (b.to_handle) {
       to = await gbHandleToUser(env, b.to_handle);
       if (!to) return jsonResponse({ error: 'No traveler with that username' }, 404);
@@ -18034,6 +18048,9 @@ async function handlePostcardSend(request, env, ctx) {
       if (msg && !(await gbModerate(env, msg)).allow) return jsonResponse({ error: 'Let’s keep the board kind. Try different words.' }, 422);
       const n = await gbDayCount(env, `pcb:${user.id}`);
       if (n != null && n > PC_CITY_DAILY) return jsonResponse({ error: 'That’s five postcards to city boards today. Try again tomorrow.' }, 429);
+      // No name on the board (founder, 2026-10-15): the card signs "a local"
+      // or "a traveler" instead — which one is decided here, never client-side.
+      if (b.anon === true) anonLabel = await pcAnonLabel(env, user.id, boardCity);
     } else if (sp.social_tier === 'teen') {
       return jsonResponse({ error: 'Address your postcard to a friend — broadcast opens at age 18' }, 403);
     } else {
@@ -18072,6 +18089,7 @@ async function handlePostcardSend(request, env, ctx) {
       if (rsp?.social_tier === 'teen' && !(await gbMutualFriends(env, user.id, to.user_id))) {
         return jsonResponse({ error: 'You two need to follow each other to exchange postcards' }, 403);
       }
+      toTeen = rsp?.social_tier === 'teen';
       toUser = to.user_id;
     }
     const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
@@ -18081,16 +18099,31 @@ async function handlePostcardSend(request, env, ctx) {
     const row = {
       sender_id: user.id, to_user_id: toUser, photo_key: key, message: msg,
       place_name: clean(b.place_name, 80), city: clean(b.city, 60), country: clean(b.country, 60),
-      ...(b.meta && typeof b.meta === 'object' ? { meta: { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60) } } : {}),
+      ...((b.meta && typeof b.meta === 'object') || anonLabel ? { meta: {
+        ...(b.meta && typeof b.meta === 'object' ? { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60) } : {}),
+        ...(anonLabel ? { anon: anonLabel } : {}),
+      } } : {}),
       // A board card carries the board's city and country.
       ...(toCity ? { to_city: toCity, city: boardCity, country: boardCountry } : {}),
     };
     const w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
     if (!w.ok) { if (ctx) ctx.waitUntil(env.MEDIA.delete(key).catch(() => {})); return jsonResponse({ error: 'Could not send' }, 502); }
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: !!toUser, city: !!toCity, has_dish: !!(b.meta && b.meta.dish) }));
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: !!toUser, city: !!toCity, has_dish: !!(b.meta && b.meta.dish), anon: anonLabel || undefined }));
     // A new board card shows in the City Boards list at once, not after its five minutes.
     if (toCity && env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.delete('cityboards:v1').catch(() => {});
-    return jsonResponse({ ok: true, ...(toCity ? { board: toCity } : {}) });
+    // The pin ask (founder, 2026-10-15): a direct card from a city the sender
+    // verifiably stamped may be copied onto that city's board — the sender's
+    // choice, asked after the send. No offer from a teen, for a teen's mail,
+    // or without the proof. The offer's absence never says which gate failed.
+    // The pin itself is an ordinary board post and passes every gate again.
+    let pin = null;
+    if (toUser && !toTeen && sp.social_tier !== 'teen' && row.city && row.country) {
+      try {
+        const k = pcCityKey(row.city, row.country);
+        if (k && await pcWasThere(env, user.id, k)) pin = { city: row.city, country: row.country, label: await pcAnonLabel(env, user.id, row.city) };
+      } catch { /* no offer; the card is already on its way */ }
+    }
+    return jsonResponse({ ok: true, ...(toCity ? { board: toCity } : {}), ...(pin ? { pin } : {}) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -19071,7 +19104,9 @@ async function handleSocialFeed(request, env) {
       for (const r of (h2.ok ? await h2.json() : [])) share[r.user_id] = { ...(share[r.user_id] || {}), handle: r.handle };
       for (const r of (p2.ok ? await p2.json() : [])) prof[r.user_id] = { ...(prof[r.user_id] || {}), ...gbTierRow(r) };
     }
-    pcs = pcs.filter((p) => !blocked.has(p.sender_id) && (ids.includes(p.sender_id) ? profOk : pcProfOk) && !minor(p.sender_id));
+    // A card signed "a local"/"a traveler" lives on its board only — naming its
+    // sender in followers' feeds would unmask it (founder, 2026-10-15).
+    pcs = pcs.filter((p) => !p.meta?.anon && !blocked.has(p.sender_id) && (ids.includes(p.sender_id) ? profOk : pcProfOk) && !minor(p.sender_id));
     // Which cards sent to everyone I kept in my postcard box (2026-10-14). Unreadable keeps
     // (the table not there yet) leave `kept` off, and the app shows no Keep.
     const bIds = pcs.filter((p) => p.to_user_id === null).map((p) => p.id);
@@ -19246,7 +19281,11 @@ async function handleCityBoard(request, env) {
       photo: `${origin}/pc-photo/${p.photo_key}`,
       message: p.message, place: p.place_name, city: p.city, country: p.country,
       dish: p.meta?.dish || null, to_me: false, board: true,
-      by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
+      // A card signed "a local" / "a traveler" (founder, 2026-10-15) names
+      // nobody: no handle, no name, no face — the label is all a reader gets.
+      ...(p.meta?.anon
+        ? { anon: p.meta.anon === 'local' ? 'local' : 'traveler', by: { handle: null, name: null } }
+        : { by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) } }),
     }));
     return jsonResponse({ rows, next, can_post: there && mySp?.social_tier !== 'teen', city, country });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }

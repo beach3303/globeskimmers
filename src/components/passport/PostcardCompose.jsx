@@ -135,6 +135,13 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   const [dish, setDish] = useState("");
   const [to, setTo] = useState(fixedTo);       // '' = everyone who follows me
   const [busy, setBusy] = useState(false);
+  // Board cards sign with your name, or with none at all (founder, 2026-10-15):
+  // 'anon' posts as "a local" / "a traveler" — the worker decides which.
+  const [sign, setSign] = useState("signed");
+  // After a direct send, the worker may offer to pin a copy on that city's
+  // board ({ city, country, label }); the card's parts ride along for the pin.
+  const [pinOffer, setPinOffer] = useState(/** @type {any} */ (null));
+  const [pinBusy, setPinBusy] = useState(false);
   const close = () => { if (typeof onClose === "function") onClose(); };
   useDismissable(open, close);
 
@@ -182,23 +189,52 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     if (nowhere || fixedBlocked) return;
     setBusy(true);
     const address = board ? "" : fixedTo || to;
-    const { error } = await sendPostcard({
+    const { data, error } = await sendPostcard({
       image, message,
       place_name: place || preset?.place_name, city: board?.city || preset?.city, country: board?.country || preset?.country,
       meta: dish ? { dish } : undefined,
       to_handle: address || undefined,
       to_city: board || undefined,
+      anon: board && sign === "anon" ? true : undefined,
     });
     setBusy(false);
     if (error === "age_required") { showToast("Set your birth year in Settings first (one time)", "error"); return; }
     if (error === "no_followers") { showToast("No one follows you yet. Address it to someone you follow, or invite someone to your circle first", "error"); return; }
     if (error) { showToast(workerMessage(error, "Couldn't send the postcard. Try again."), "error"); return; }
-    showToast(board ? `Posted to ${board.city}’s board` : address ? `Postcard sent to @${address}` : "Postcard sent to everyone who follows you", "success");
+    showToast(board
+      ? (sign === "anon" ? `Posted to ${board.city}’s board, no name on it` : `Posted to ${board.city}’s board`)
+      : address ? `Postcard sent to @${address}` : "Postcard sent to everyone who follows you", "success");
+    // The pin ask (founder, 2026-10-15): a direct card from a city the sender
+    // verifiably stamped may hang on that city's board too — their choice,
+    // asked now, while the card is in hand. The mail itself is already away.
+    const offer = !board && address && data?.pin && data.pin.city
+      ? { city: String(data.pin.city), country: String(data.pin.country || ""), label: data.pin.label === "local" ? "local" : "traveler", image, message, place: place || preset?.place_name || "", dish, addr: address }
+      : null;
+    if (offer) setPinOffer(offer);
     // The next postcard starts blank.
     setImage(preset?.image || null);
     setMessage("");
     setDish("");
     if (typeof onSent === "function") onSent();
+    if (!offer) close();
+  };
+
+  // Pin the just-sent card on its city's board: an ordinary board post of the
+  // same photo and words, signed or nameless. Failing never touches the mail.
+  const pinIt = async (anon) => {
+    if (pinBusy || !pinOffer) return;
+    setPinBusy(true);
+    const { error } = await sendPostcard({
+      image: pinOffer.image, message: pinOffer.message,
+      place_name: pinOffer.place || undefined, city: pinOffer.city, country: pinOffer.country,
+      meta: pinOffer.dish ? { dish: pinOffer.dish } : undefined,
+      to_city: { city: pinOffer.city, country: pinOffer.country },
+      anon: anon || undefined,
+    });
+    setPinBusy(false);
+    if (error) { showToast(workerMessage(error, "Couldn’t pin it — the postcard itself is already sent."), "error"); return; }
+    showToast(anon ? `Pinned on ${pinOffer.city}’s board as “a ${pinOffer.label}”` : `Pinned on ${pinOffer.city}’s board`, "success");
+    setPinOffer(null);
     close();
   };
 
@@ -223,6 +259,38 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
       >
         <AirmailChevron height={4} />
         <div style={{ padding: "16px 20px calc(28px + env(safe-area-inset-bottom))" }}>
+          {pinOffer ? (<>
+          {/* The ask (founder, 2026-10-15): the mail is away; pinning a copy on the
+              city's board is a separate, asked-first choice. Default is no. */}
+          <div style={{ fontFamily: MONO, fontSize: fs(9.5), lineHeight: 1.3, letterSpacing: ".2em", textTransform: "uppercase", color: NEUTRAL.stamp }}>Sent to @{pinOffer.addr} ✓</div>
+          <h3 id={titleId} style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(22), fontWeight: 400, lineHeight: 1.1, color: NEUTRAL.ink }}>
+            Pin a copy on <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>{pinOffer.city}</em>&rsquo;s board?
+          </h3>
+          <div style={{ marginTop: 12, borderRadius: 14, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, overflow: "hidden" }}>
+            <img src={pinOffer.image} alt="The card, exactly as it would hang" style={{ display: "block", width: "100%", aspectRatio: "3 / 2", objectFit: "cover" }} />
+            {pinOffer.message ? (
+              <p style={{ margin: 0, padding: "10px 14px 4px", fontFamily: SERIF, fontStyle: "italic", fontSize: fs(15), lineHeight: 1.35, color: NEUTRAL.ink2, overflowWrap: "anywhere" }}>&ldquo;{pinOffer.message}&rdquo;</p>
+            ) : null}
+            <p style={{ margin: 0, padding: `${pinOffer.message ? 0 : 10}px 14px 10px`, fontSize: fs(11.5), lineHeight: 1.4, color: NEUTRAL.ink3 }}>To: {pinOffer.place ? `${pinOffer.place} · ` : ""}{pinOffer.city}</p>
+          </div>
+          <p style={{ display: "flex", alignItems: "flex-start", gap: 6, margin: "10px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
+            <Info size={14} strokeWidth={2} color={NEUTRAL.airmailBlue} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 2 }} />
+            <span>Your friend&rsquo;s copy is untouched, and who it was mailed to never shows — the board just sees a card to the city. Signed shows your name; &ldquo;a {pinOffer.label}&rdquo; shows none.</span>
+          </p>
+          <button type="button" onClick={() => pinIt(false)} aria-busy={pinBusy || undefined}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", minHeight: 48, boxSizing: "border-box", marginTop: 14, padding: "8px 16px", borderRadius: 14, background: NEUTRAL.stamp, border: `1px solid ${NEUTRAL.stamp}`, fontFamily: "inherit", fontSize: fs(14.5), fontWeight: 600, color: NEUTRAL.white, cursor: "pointer" }}>
+            {pinBusy ? <Loader2 size={16} strokeWidth={2} className="animate-spin motion-reduce:animate-none" aria-hidden="true" focusable="false" /> : null}
+            Pin it — signed
+          </button>
+          <button type="button" onClick={() => pinIt(true)} aria-busy={pinBusy || undefined}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", minHeight: 48, boxSizing: "border-box", marginTop: 8, padding: "8px 16px", borderRadius: 14, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailBlue}`, fontFamily: "inherit", fontSize: fs(14.5), fontWeight: 600, color: NEUTRAL.airmailBlue, cursor: "pointer" }}>
+            Pin it — as &ldquo;a {pinOffer.label}&rdquo;
+          </button>
+          <button type="button" onClick={() => { setPinOffer(null); close(); }}
+            style={{ display: "block", width: "100%", minHeight: 44, marginTop: 6, padding: "8px 16px", background: "transparent", border: 0, fontFamily: "inherit", fontSize: fs(13.5), fontWeight: 600, color: NEUTRAL.ink3, cursor: "pointer" }}>
+            No thanks — keep it between us
+          </button>
+          </>) : (<>
           <div style={{ fontFamily: MONO, fontSize: fs(9.5), lineHeight: 1.3, letterSpacing: ".2em", textTransform: "uppercase", color: NEUTRAL.stamp }}>Globeskimmers mail</div>
           <h3 id={titleId} style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(22), fontWeight: 400, lineHeight: 1.1, color: NEUTRAL.ink }}>
             A postcard to {board ? <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>{board.city}</em> : <>your <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>circle</em></>}
@@ -280,9 +348,17 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
           {board ? (
             <div style={{ marginTop: 2 }}>
               <Address on fixed>{board.city}’s board</Address>
-              <p style={{ display: "flex", alignItems: "flex-start", gap: 6, margin: "4px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
+              {/* Signed, or no name at all (founder, 2026-10-15): "a local" /
+                  "a traveler" — the worker decides which of the two it signs. */}
+              <div role="group" aria-label="Signed or no name" style={{ display: "flex", flexWrap: "wrap", columnGap: 6, marginTop: 8 }}>
+                <Address on={sign === "signed"} onClick={() => setSign("signed")}>Signed — your name</Address>
+                <Address on={sign === "anon"} onClick={() => setSign("anon")}>No name</Address>
+              </div>
+              <p style={{ display: "flex", alignItems: "flex-start", gap: 6, margin: "6px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
                 <Info size={14} strokeWidth={2} color={NEUTRAL.airmailBlue} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 2 }} />
-                <span>Everyone who opens {board.city}’s board can see it, with your name.</span>
+                <span>{sign === "anon"
+                  ? <>Everyone who opens {board.city}’s board can see the card — with no name on it. It signs as &ldquo;a local&rdquo; if {board.city} is your home city, otherwise &ldquo;a traveler&rdquo;.</>
+                  : <>Everyone who opens {board.city}’s board can see it, with your name.</>}</span>
               </p>
             </div>
           ) : fixedTo ? (
@@ -344,6 +420,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
           <p style={{ margin: "8px 0 0", fontFamily: MONO, fontSize: fs(9.5), lineHeight: 1.4, letterSpacing: ".04em", textAlign: "center", color: NEUTRAL.ink3 }}>
             PHOTOS ARE REVIEWED BEFORE THEY TRAVEL · NO LOCATIONS RIDE ALONG
           </p>
+          </>)}
         </div>
       </div>
     </div>
