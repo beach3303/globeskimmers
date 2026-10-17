@@ -162,7 +162,11 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
   if (!row) return null;
   const handle = lc(row?.by?.handle);
   const ownerView = !!me && !!handle && lc(me) === handle;
-  const onTouchStart = (e) => { touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; };
+  const onTouchStart = (e) => {
+    // A finger on a drawing pad or a text field is never a swipe (founder, 2026-10-16).
+    if (e.target.closest?.("canvas, input, textarea, select")) { touch.current = null; return; }
+    touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
   const onTouchEnd = (e) => {
     const t = touch.current; touch.current = null;
     if (!t) return;

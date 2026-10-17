@@ -189,7 +189,8 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center" role="dialog" aria-modal="true" aria-label={forPhoto ? "Comments" : "Guestbook"}>
+    <div className="fixed inset-0 z-[70] flex items-end justify-center" role="dialog" aria-modal="true" aria-label={forPhoto ? "Comments" : "Guestbook"}
+      onTouchStart={stopTouch} onTouchMove={stopTouch} onTouchEnd={stopTouch}>
       <button aria-label="Close" onClick={onClose} className="absolute inset-0" style={{ background: "rgba(22,17,13,.45)" }} />
       <div className="relative w-full max-w-md rounded-t-3xl px-4 pt-4 pb-6 max-h-[82vh] overflow-y-auto" style={{ background: PAPER }}>
         <div className="flex items-center justify-between">
@@ -320,6 +321,11 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
 // fixed sheet pins to that card's top instead of the screen (founder, 2026-10-05:
 // "the doodle box goes all the way to the top of the page"). It opens over
 // wherever the traveler is, near the bottom on a phone.
+// A sheet over a swipeable page (the board viewer, the passport book) keeps its touches
+// to itself: React carries touch events up the component tree even through a portal, so
+// a doodle stroke or a scroll in the comments read as a swipe to the next photo — which
+// unmounted the sheet mid-drawing (founder, 2026-10-16: "it crashed and closed").
+const stopTouch = (e) => e.stopPropagation();
 const INKS = ["#2B4A7E", "#B0472F", "#2E6B4E", "#9A6F1E"];
 // A starter line in handwriting, small in the top-left corner (founder,
 // 2026-10-05: the guestbook pad opens with "I was here!" so it reads as a
@@ -412,6 +418,7 @@ export function DoodlePad({ onClose, onPost, busy, title = "Draw in the margin",
 
   return createPortal(
     <div className="fixed inset-0 z-[10010] flex items-end sm:items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-label={title}
+      onTouchStart={stopTouch} onTouchMove={stopTouch} onTouchEnd={stopTouch}
       style={{ paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
       <button aria-label="Cancel" onClick={onClose} className="absolute inset-0" style={{ background: "rgba(22,17,13,.55)" }} />
       <div ref={wrapRef} className="relative w-full max-w-sm rounded-2xl p-3" style={{ background: PAPER }}>
