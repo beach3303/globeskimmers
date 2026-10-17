@@ -1,36 +1,32 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/AuthContext";
-import { useDismissable } from "@/lib/dismissStack";
 import { showToast } from "@/components/Toast";
 import { IVORY, NEUTRAL, fs } from "@/components/redesign/constants";
 import useUsernameClaim from "@/components/social/useUsernameClaim";
 import UsernameFields from "@/components/social/UsernameFields";
 
-// Members who joined before sign-up asked for an @username get a gentle ask on Home (founder,
-// 2026-10-16: "subtly require current users to choose a handle"): a sheet once per app launch,
-// a beat after Home settles and never over another sheet (`hold`). "Not now" lets it go until
-// the next launch; once they have one it never shows again. Not for under-18s or a frozen account.
-const SEEN = "gs_username_nudge_v1";
+// Members who joined before sign-up asked for an @username pick one on Home (founder,
+// 2026-10-16: "don't give users a not now choice … let them pick a handle already"): a sheet a
+// beat after Home settles, never over another sheet (`hold`), that stays until they have one —
+// no close, no "Not now". Not for under-18s or a frozen account, and not when the check
+// itself failed (a network blip must never lock anyone out).
 
 export default function UsernameNudge({ hold = false }) {
   const { socialTier, socialTierReady } = useAuth();
   const eligible = socialTierReady && !["blocked", "teen"].includes(String(socialTier || ""));
-  const [seen] = useState(() => { try { return sessionStorage.getItem(SEEN) === "1"; } catch { return false; } });
   const [phase, setPhase] = useState("waiting");   // waiting → open → done
   const [settled, setSettled] = useState(false);
   const claim = useUsernameClaim((h) => {
     setPhase("done");
     showToast(`You’re @${h} — your circle can find you now`, "success");
-  }, eligible && !seen);
+  }, eligible);
   const { checking, failed, mine, minor, ready, busy, submit } = claim;
 
   useEffect(() => { const t = setTimeout(() => setSettled(true), 1500); return () => clearTimeout(t); }, []);
-  const due = eligible && !seen && settled && !hold && !checking && !failed && !mine && !minor;
+  const due = eligible && settled && !hold && !checking && !failed && !mine && !minor;
   useEffect(() => {
-    if (phase !== "waiting" || !due) return;
-    setPhase("open");
-    try { sessionStorage.setItem(SEEN, "1"); } catch { /* fine */ }
+    if (phase === "waiting" && due) setPhase("open");
   }, [phase, due]);
   useEffect(() => {
     if (phase === "open" && minor) {
@@ -40,8 +36,6 @@ export default function UsernameNudge({ hold = false }) {
   }, [phase, minor]);
 
   const isOpen = phase === "open";
-  const close = () => setPhase("done");
-  useDismissable(isOpen, close);
 
   return (
     <AnimatePresence>
@@ -49,7 +43,6 @@ export default function UsernameNudge({ hold = false }) {
         <>
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={close}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9995]"
           />
           <motion.div
@@ -76,14 +69,6 @@ export default function UsernameNudge({ hold = false }) {
               style={{ background: NEUTRAL.brandTeal, border: 0, marginTop: 4 }}
             >
               {busy ? "One moment…" : "Save my username"}
-            </button>
-            <button
-              type="button"
-              onClick={close}
-              className="block mx-auto mt-2"
-              style={{ minHeight: 44, padding: "0 16px", background: "transparent", border: 0, fontSize: fs(14), fontWeight: 600, color: NEUTRAL.ink3, cursor: "pointer" }}
-            >
-              Not now
             </button>
           </motion.div>
         </>
