@@ -2057,3 +2057,18 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Tests: 21 harness suites, 354 checks green (test-held-seals 14: held, reserved and owned names read alike).
   Gates: eslint + no-undef on every touched file, build, boot-check. Screens captured as the review account.
 - **Activate:** push (worker deploys itself). The app side reaches phones with the founder's `npm run ota`.
+
+## 2026-10-16 (late) — COOL! sticker, doodle pad vs swipe, Find a member (PUSHED)
+- **DB:** migration 20261017010000_blotter_marks_cool — the check on blotter_marks.kind gains 'cool'
+  (COOL! joined the app + worker 10-14 but never the database → every COOL! press answered
+  "Could not press"). test-stickers now reads the migrations and fails if the last check misses a kind.
+- **App:** the doodle pad and the comments sheet stop touch propagation; the board viewer ignores a touch
+  that starts on a canvas or a text field (a doodle stroke used to swipe to the next photo and unmount
+  the pad mid-drawing).
+- **Admin:** Find a member — /admin/members { q }: exact sign-in email, else part of a first name,
+  display name or @username; Find box on globeskimmers.io/admin (ships with the site deploy, no OTA)
+  and in the app's Admin Portal (needs OTA). Rows still carry no email.
+- Tests: 22 harness suites, 363 checks green (new: test-members 8). Gates: eslint + no-undef on the
+  three app files, acorn parse of admin.js, build, boot-check.
+- **Activate:** push → worker, site and the migration deploy on their own. The app side (doodle fix,
+  Admin Portal search) reaches phones with the founder's `npm run ota`.
