@@ -2072,3 +2072,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   three app files, acorn parse of admin.js, build, boot-check.
 - **Activate:** push → worker, site and the migration deploy on their own. The app side (doodle fix,
   Admin Portal search) reaches phones with the founder's `npm run ota`.
+- **Done:** main f15d017 — workers 38996254297 ✓, site 38996254292 ✓, migration 38996254283 ✓ (the live
+  COOL! press answered ok). OTA **1.0.2610170249** by the founder (`capgo channel list` ✓): phones get the
+  doodle fix, the Admin Portal's Find box, and everything from ce4c9a4 (required @username at sign-up,
+  the Home username sheet, the boards wording, Home without the circle zone).
