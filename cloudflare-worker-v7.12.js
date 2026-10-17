@@ -20576,9 +20576,11 @@ async function gbHandleSuggestions(env, want) {
 // free, and say plainly that any other name they like works too.
 async function gbTakenResponse(env, want) {
   const suggestions = await gbHandleSuggestions(env, want);
+  // One apology for every name someone can't have — taken, held for someone by the founder,
+  // or a reserved word — so nothing tells a held name apart (founder, 2026-10-16).
   const error = suggestions.length
-    ? `@${want} is taken — one of these is free, or enter any other name you like`
-    : `@${want} is taken — try another name you like`;
+    ? `Sorry, @${want} is taken — please choose another username you like, or pick one of these`
+    : `Sorry, @${want} is taken — please choose another username you like`;
   return jsonResponse({ error, suggestions }, 409);
 }
 async function handleSocialHandle(request, env, ctx) {
@@ -20608,7 +20610,7 @@ async function handleSocialHandle(request, env, ctx) {
       return await gbTakenResponse(env, want);
     }
     if (!held && (HANDLE_RESERVED.has(want) || /^gs_/.test(want))) {
-      return jsonResponse({ error: 'That name is reserved', suggestions: await gbHandleSuggestions(env, want) }, 400);
+      return await gbTakenResponse(env, want);
     }
     if (mine?.handle && mine.handle.toLowerCase() === want) return jsonResponse({ handle: mine.handle });
     // 2 changes per rolling 30 days (the first claim is free).
