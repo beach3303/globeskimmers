@@ -16,6 +16,9 @@ import { cityBoardUrl, cityBoardsUrl } from "@/lib/boardLinks";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { PostmarkRing } from "@/components/social/Envelope";
 
+const MANY_BOARDS = 50;
+const MANY_POSTS = 25;
+
 const SERIF = "'Instrument Serif', Georgia, serif";
 const BLUE = NEUTRAL.airmailBlue;
 
@@ -54,9 +57,11 @@ export default function CityBoardRow({ city = "", country = "", region = "" }) {
   const rollups = boards.length && Array.isArray(all?.rollups) ? all.rollups : [];
   const total = boards.length + rollups.length;
   if (!showHere && !boards.length) return null;
-  const line = n
+  // Counts stay quiet until they're big (founder, 2026-10-16: "we don't need to say this until
+  // there are many posts") — a small number reads as empty.
+  const line = n >= MANY_POSTS
     ? `${here.next ? `${n}+` : n} from travelers who were really there`
-    : "You were here. Post the first one.";
+    : n ? "From travelers who were really there" : "You were here. Post the first one.";
 
   return (
     // The zones' own column: px-4 outside, the same max width inside (Zone.jsx columnClass).
@@ -92,7 +97,7 @@ export default function CityBoardRow({ city = "", country = "", region = "" }) {
                 Postcards and photos from <em style={{ fontStyle: "italic", color: BLUE }}>cities &amp; countries</em>
               </span>
               <span style={{ display: "block", marginTop: 2, fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink2 }}>
-                {total === 1 ? "1 board" : `${total}${boards.length >= 60 ? "+" : ""} boards`}, from travelers who were really there
+                {total >= MANY_BOARDS ? `${total}${boards.length >= 60 ? "+" : ""} boards, from travelers who were really there` : "From travelers who were really there"}
               </span>
             </span>
             <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
