@@ -2034,3 +2034,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   with that email); the letters' From address (hello@ is not a mailbox; support@ in the Terms may bounce).
 - **Activate:** push → workers and both migrations apply on their own. The app side (Release confirm, Seal
   picker on held names, the admin list) reaches phones with `npm run ota`.
+- **Done:** main a8f8f8d — Deploy Cloudflare Workers 38991754102 ✓ (api + tts), Apply Supabase Migrations
+  38991754104 ✓ (both). Probes: held-for-me 401, Seal desk 401, /h/ landing 200, held_handles.seal and seal_kind
+  exist. OTA **1.0.2610170142** by the founder (`capgo channel list` ✓) — phones now also get the 5-year date
+  picker, billboards, board guestbooks and the privacy switches.
