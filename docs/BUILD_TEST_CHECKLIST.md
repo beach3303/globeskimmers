@@ -2038,3 +2038,22 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   38991754104 ✓ (both). Probes: held-for-me 401, Seal desk 401, /h/ landing 200, held_handles.seal and seal_kind
   exist. OTA **1.0.2610170142** by the founder (`capgo channel list` ✓) — phones now also get the 5-year date
   picker, billboards, board guestbooks and the privacy switches.
+
+## 2026-10-16 (night) — everyone has an @username; one apology for taken names; Home without the circle zone (PUSHED)
+- Commits 82f8809 → 7e945d8 (founder: "push"). No migration. What ships:
+  - **Worker:** every name someone can't have — another member's, one the founder holds, a reserved word —
+    answers "Sorry, @x is taken — please choose another username you like[, or pick one of these]" with 409,
+    so a held name is never told apart ("do not let user know that admin saved handle"; "let's not inform
+    people that it is reserved").
+  - **Sign-up:** a required "Pick your @username" step right after the first name, birthday on the same
+    screen (the worker needs the age gate first); under 18 → "Usernames open at 18" and on; a held name comes
+    filled in ("@x is ready for you"). `onboarding/UsernameStep` + shared `social/useUsernameClaim`,
+    `social/UsernameFields`.
+  - **Current members without a username:** a Home sheet that stays until they save one (no Not now, no
+    close), above the nav; never for under-18s, a frozen account, or a failed check (`social/UsernameNudge`).
+  - **Boards rows** (Home, Mailbox): "Postcards and photos from cities & countries"; counts hidden until 50
+    boards / 25 posts in your city.
+  - **Home** drops the "Your circle" zone; the circle's activity lives in the Mailbox.
+- Tests: 21 harness suites, 354 checks green (test-held-seals 14: held, reserved and owned names read alike).
+  Gates: eslint + no-undef on every touched file, build, boot-check. Screens captured as the review account.
+- **Activate:** push (worker deploys itself). The app side reaches phones with the founder's `npm run ota`.
