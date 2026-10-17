@@ -8,9 +8,7 @@
 // and the refresh-access logic all import from here.
 export const ADMIN_EMAILS = [
   'maizasimeon@gmail.com',
-  'yreolsleow@gmail.com',
   'founder@globeskimmers.io',
-  'simeonmaiza@gmail.com',
 ];
 
 // True if the given email is one of the hardcoded admin accounts.

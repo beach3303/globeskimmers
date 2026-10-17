@@ -26,7 +26,7 @@ import { useLocation, readOpenBehavior, writeOpenBehavior } from "@/components/l
 import { clearAppCache } from "@/lib/clearAppCache";
 import { showToast } from "@/components/Toast";   // the stub that swallowed this page's 9 messages is gone (2026-10-11)
 
-// ADMIN_EMAILS now imported from @/lib/admins (single source of truth, 4 admins).
+// ADMIN_EMAILS now imported from @/lib/admins (single source of truth, 2 admins).
 
 // iPad editorial design tokens (design handoff: "Settings · iPad"). Mirrors the
 // shipped PlacesToEat / CultureInformation token block so this page joins the

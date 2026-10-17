@@ -1829,8 +1829,7 @@ async function handleDeleteAccount(request, env) {
 // per-user rows, emails, or PII ever leave the Worker.
 // Keep ADMIN_EMAILS_WORKER in sync with src/lib/admins.js.
 const ADMIN_EMAILS_WORKER = [
-  'maizasimeon@gmail.com', 'yreolsleow@gmail.com',
-  'founder@globeskimmers.io', 'simeonmaiza@gmail.com',
+  'maizasimeon@gmail.com', 'founder@globeskimmers.io',
 ];
 
 async function handleAdminUserStats(request, env) {
