@@ -39,7 +39,6 @@ import SmartSearchBar from "@/components/search/SmartSearchBar";
 import SmartSearchOverlay from "@/components/search/SmartSearchOverlay";
 import DestinationStrip from "@/components/search/DestinationStrip";
 import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
-import FriendsTravels from "@/components/home/FriendsTravels";
 import CityBoardRow from "@/components/home/CityBoardRow";
 import { openAttraction } from "@/lib/openAttraction";
 
@@ -629,9 +628,10 @@ export default function HomePage() {
       )}
 
       {/* THE ZONES — one fixed order, each zone its own <section data-zone>
-          (bible.home.order): passport, your circle, nearby services, stamps
+          (bible.home.order): passport, the boards row, nearby services, stamps
           near you, the stamp shelf (dream stack only), local favorites, then
-          the closing quote. Each zone renders nothing when it has nothing
+          the closing quote. Your circle's activity lives in the Mailbox only
+          (founder, 2026-10-16: "remove your circle activity post from Home page"). Each zone renders nothing when it has nothing
           honest to show, so the stack self-compacts. Layout reserves the
           bottom space for the floating nav. */}
       <PassportHero
@@ -642,7 +642,6 @@ export default function HomePage() {
         unit={unit}
         onOpen={() => { trackEvent('feature_used', { feature_name: 'passport_hero' }); navigate(createPageUrl('Passport')); }}
       />
-      <FriendsTravels wide={isTablet} />
       {/* City Board: 'Postcards from Lisbon', only when that board has something to show. */}
       <CityBoardRow city={activeLocation?.address?.city} country={activeLocation?.address?.country} region={activeLocation?.address?.state} />
       <NearbyServices wide={isTablet} onAction={handleQuickAction} onAllServices={openAllServices} />
