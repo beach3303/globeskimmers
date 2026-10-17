@@ -1,9 +1,9 @@
 // CityBoardRow: 'Postcards from Lisbon' on Home, under your circle (City Board,
 // 2026-10-14). One airmail row with the city's postmark that opens the board. It shows
 // only when there is something honest to show: cards on the board, or a board you may
-// post to (you stamped the city, verified). Under it, 'See every city's board' opens the
+// post to (you stamped the city, verified). Under it, 'See all cities & countries' opens the
 // City Boards (founder, 2026-10-14). When this city has no board but others do, a row
-// 'Postcards from every city' stands in its place. Nothing while the age tier is unknown,
+// 'Postcards and photos from cities & countries' (founder, 2026-10-16) stands in its place. Nothing while the age tier is unknown,
 // for a held account, or before the worker has boards.
 //
 //   <CityBoardRow city country />   the active location's city and country.
@@ -51,6 +51,8 @@ export default function CityBoardRow({ city = "", country = "", region = "" }) {
   const n = here ? here.rows.length : 0;
   const showHere = !!here && (n > 0 || here.can_post);
   const boards = all && !all.held && !all.unavailable && !all.error ? all.boards : [];
+  const rollups = boards.length && Array.isArray(all?.rollups) ? all.rollups : [];
+  const total = boards.length + rollups.length;
   if (!showHere && !boards.length) return null;
   const line = n
     ? `${here.next ? `${n}+` : n} from travelers who were really there`
@@ -75,7 +77,7 @@ export default function CityBoardRow({ city = "", country = "", region = "" }) {
             {boards.length ? (
               <Link to={cityBoardsUrl()}
                 style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2, minHeight: 44, padding: "0 4px", fontSize: fs(13), fontWeight: 600, color: BLUE, textDecoration: "none" }}>
-                See every city’s board
+                See all cities &amp; countries
                 <ChevronRight size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
               </Link>
             ) : null}
@@ -87,10 +89,10 @@ export default function CityBoardRow({ city = "", country = "", region = "" }) {
             </span>
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", fontFamily: SERIF, fontSize: fs(19), lineHeight: 1.15, color: NEUTRAL.ink }}>
-                Postcards from <em style={{ fontStyle: "italic", color: BLUE }}>every city</em>
+                Postcards and photos from <em style={{ fontStyle: "italic", color: BLUE }}>cities &amp; countries</em>
               </span>
               <span style={{ display: "block", marginTop: 2, fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink2 }}>
-                {boards.length === 1 ? "1 city board" : `${boards.length}${boards.length >= 60 ? "+" : ""} city boards`}, from travelers who were really there
+                {total === 1 ? "1 board" : `${total}${boards.length >= 60 ? "+" : ""} boards`}, from travelers who were really there
               </span>
             </span>
             <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
