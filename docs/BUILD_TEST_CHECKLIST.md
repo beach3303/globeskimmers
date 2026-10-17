@@ -2014,3 +2014,23 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Tests: 17 harness suites, 320 checks green (new: test-boardgb 17, test-minors 17, test-seal-letters 9).
   Gates: worker syntax, source lint clean, build, boot-check.
 - **Activate:** nothing manual. Phones get the app side with the founder's `npm run ota`.
+
+## 2026-10-16 (evening) — sign-up codes reach the public; two admins; held-name Seals (PUSHED)
+- **Supabase sign-up emails now go through Resend (founder, in the dashboards).** Until today Auth used
+  Supabase's built-in mailer, which delivers only to the project's own team, 2 an hour, so a member of the
+  public who signed up with email never got the 6-digit code (Apple / Google / Facebook were unaffected).
+  Custom SMTP: smtp.resend.com:465, user `resend`, a sending-only key "Supabase sign-up codes" from the Resend
+  team **globeskimmers** (sign in to Resend as founder@globeskimmers.io; the maizasimeon@gmail.com login is
+  an empty team), sender GlobeSkimmers <founder@globeskimmers.io>. Email rate limit 30 → 100 an hour.
+  Live check: POST /auth/v1/signup for maizasimeon+gs-test-1016@gmail.com → 200, confirmation_sent_at
+  01:36:11Z, no session (code required). That unconfirmed test user can be deleted in Supabase → Users.
+- Commits (founder: "push"; 21 harness suites, 350 checks green): 327c511 (Release asks first) · 935dab0 (hold a @handle with its Seal; migration
+  20261016200000_held_handle_seals) · e7d2dc8 (Gold: no "and Respect") · 08f9228 (Burgundy person:
+  "verified, given to a select few") · c38c042 (handle and Seal letters sign off "Maiza & GlobeSkimmers ✈️ /
+  Collect your world.") · 37574c1 (admins = maizasimeon@gmail.com + founder@globeskimmers.io; migration
+  20261016230000_two_admins narrows the refresh_access rules).
+- Open: keep or remove the sign-up code (founder deciding; removing it first needs the admin and held-name
+  email paths closed, and still leaves Supabase joining a later Google sign-in to an account someone made
+  with that email); the letters' From address (hello@ is not a mailbox; support@ in the Terms may bounce).
+- **Activate:** push → workers and both migrations apply on their own. The app side (Release confirm, Seal
+  picker on held names, the admin list) reaches phones with `npm run ota`.
