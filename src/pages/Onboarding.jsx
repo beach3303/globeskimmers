@@ -14,6 +14,7 @@ import LocationStep from "../components/onboarding/LocationStep";
 import HomeCountryStep from "../components/onboarding/HomeCountryStep";
 import PassportStep from "../components/onboarding/PassportStep";
 import FirstNameStep from "../components/onboarding/FirstNameStep";
+import UsernameStep from "../components/onboarding/UsernameStep";
 
 // Account-tied onboarding. The user is ALWAYS authenticated here (App.jsx's
 // forced gate guarantees a Supabase session). On the final step we write the
@@ -24,6 +25,9 @@ import FirstNameStep from "../components/onboarding/FirstNameStep";
 //   1. first name (skipped if we already know it from the provider),
 //   2. location (also grants the OS location permission early),
 //   3. home city (gives country + exact timezone for the home clock).
+// Since 2026-10-16 every new member also picks an @username, right after the first
+// name, with the birthday the worker needs before it hands out a username (founder:
+// "for everyone joining, require them to select a @handle"). Under 18 goes on without one.
 // Everything the old flow ASKED for is now INFERRED (currency / language /
 // temperature / distance unit — from home country + device locale, see
 // inferProfileDefaults) or DEFERRED (travel frequency / purpose / traveler
@@ -44,6 +48,7 @@ export default function OnboardingPage() {
   const steps = useMemo(() => {
     const list = [];
     if (!initialFirstName) list.push("first_name");
+    list.push("username");
     // v2 order (founder queue #1, 2026-09-29): the city first so page one can
     // render, then the passport explainer, then the location ask — by then the
     // traveler knows exactly why the app wants it (stamps are earned by being
@@ -159,6 +164,9 @@ export default function OnboardingPage() {
   switch (key) {
     case "first_name":
       content = <FirstNameStep defaultValue={initialFirstName} onNext={(d) => advance(d)} onBack={onBack} />;
+      break;
+    case "username":
+      content = <UsernameStep onNext={() => advance()} onBack={onBack} />;
       break;
     case "location":
       content = (

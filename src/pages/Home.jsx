@@ -6,6 +6,7 @@ import { createPageUrl } from "@/utils";
 import { trackEvent } from "../Layout";
 import { useLocation, isLocationAskSnoozedToday, snoozeLocationAskToday, readOpenBehavior } from "../components/location/LocationContext";
 import LocationModePicker from "../components/location/LocationModePicker";
+import UsernameNudge from "@/components/social/UsernameNudge";
 import StampsNearYou from "../components/home/StampsNearYou";
 import DreamShelf from "../components/home/DreamShelf";
 import WanderlustLine from "../components/home/WanderlustLine";
@@ -677,6 +678,8 @@ export default function HomePage() {
         lastLocation={getActiveLocation()}
         onSnoozeToday={snoozeLocationAskToday}
       />
+
+      <UsernameNudge hold={showLocationPicker || showAllServices} />
 
       {/* Arrival stamps — airport (domestic + international) + land/boat border crossings */}
       {profile?.onboarding_completed && !showWelcome && <AirportArrivalPrompt />}
