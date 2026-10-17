@@ -400,6 +400,22 @@ function NewestMembers({ focus, refreshKey }) {
   // the worker can't give numbers right now.
   const [st, setSt] = React.useState({ members: [], older: null, numbered: true, error: null, loaded: false });
   const [showAll, setShowAll] = React.useState(false);
+  // Find a member (founder, 2026-10-16): a sign-in email exactly, else part of a name or
+  // @username; the worker answers with rows shaped like the newest 50.
+  const [q, setQ] = React.useState('');
+  const [search, setSearch] = React.useState(null);   // null | { q, busy } | { q, members } | { q, error }
+  const searchSeq = React.useRef(0);
+  const runSearch = async () => {
+    const term = q.replace(/\s+/g, ' ').trim();
+    if (!term) return;
+    const my = ++searchSeq.current;
+    setSearch({ q: term, busy: true });
+    const { data, error } = await callWorker('admin/members', { q: term });
+    if (my !== searchSeq.current) return;
+    const err = error || data?.error || null;
+    setSearch(err ? { q: term, error: err } : { q: term, members: Array.isArray(data?.members) ? data.members : [] });
+  };
+  const clearSearch = () => { searchSeq.current += 1; setSearch(null); setQ(''); };
   const [open, setOpen] = React.useState(null);          // { id, busy } | { id, res }: the row showing its activity
   const [scrollTo, setScrollTo] = React.useState(null);  // a row to bring into view once it's on screen
   const pullSeq = React.useRef(0);
@@ -482,6 +498,32 @@ function NewestMembers({ focus, refreshKey }) {
   return (
     <Section title="🆕 Newest members" icon={Users}>
       <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>Your alerts show a member number, never a name. Here&rsquo;s who each number is. Tap a row to pull their activity, for support, safety or legal requests only.</div>
+      <form onSubmit={(e) => { e.preventDefault(); runSearch(); }} style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a member — name, @username or email" aria-label="Find a member"
+          autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={80}
+          style={{ flex: 1, minWidth: 0, minHeight: 40, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '8px 10px', fontSize: 13 }} />
+        <button type="submit" disabled={!q.trim() || !!search?.busy}
+          style={{ borderRadius: 8, padding: '8px 14px', fontWeight: 600, fontSize: 13, background: COLORS.dark, color: '#fff', border: 'none', opacity: !q.trim() || search?.busy ? 0.6 : 1 }}>
+          {search?.busy ? 'Finding…' : 'Find'}
+        </button>
+        {search && <button type="button" onClick={clearSearch} style={xbtn}>Clear</button>}
+      </form>
+      {search && !search.busy && (
+        <div style={{ marginBottom: 12, paddingBottom: 10, borderBottom: `1px solid ${COLORS.border}` }}>
+          {search.error && <div style={{ fontSize: 12.5, color: COLORS.red }}>Couldn&rsquo;t search: {search.error}</div>}
+          {search.members && search.members.length === 0 && (
+            <div style={{ fontSize: 12.5, color: COLORS.gray }}>No member matches &ldquo;{search.q}&rdquo;. An email must be exact; a name or @username can be part of one.</div>
+          )}
+          {search.members && search.members.length > 0 && (
+            <>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.accent, marginBottom: 2 }}>
+                {search.members.length === 1 ? '1 member' : `${search.members.length} members`} matching &ldquo;{search.q}&rdquo;
+              </div>
+              {search.members.map((m) => row(m))}
+            </>
+          )}
+        </div>
+      )}
       {st.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>Couldn&rsquo;t load members: {st.error}</div>}
       {st.loaded && !st.error && !st.numbered && <div style={{ fontSize: 12, color: COLORS.amber, marginBottom: 8 }}>Member numbers aren&rsquo;t available right now. Tap Refresh to try again.</div>}
       {missing && st.numbered && <div style={{ fontSize: 12, color: COLORS.amber, marginBottom: 8 }}>No account has member #{focus} now. It may have been deleted.</div>}

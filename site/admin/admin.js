@@ -877,26 +877,21 @@ function build() {
       chartBlock({ name: 'Events per day, last 14 days', unit: ['event', 'events'], points, colHead: 'Day (UTC)', valueHead: 'Events' })];
   });
 
-  // Members
-  const m = card($('members-grid'), { title: 'The 50 newest', meta: 'Joined times in your time zone' });
-  panel(m.body, [D.members], (d) => {
-    const list = listOf(d.members, 'the member list');
-    if (!list.length) return emptyState('No members yet.');
-    const lim = 15;
-    const trs = list.map((x, i) => el('tr', { hidden: i >= lim },
-      el('td', { class: 'num', 'data-label': 'Member', text: x.n != null ? `#${x.n}` : '—' }),
-      el('td', { class: !x.name || x.name === 'No name yet' ? 'muted' : 'name', 'data-label': 'Name', text: x.name || 'No name yet' }),
-      el('td', { 'data-label': 'Handle', text: x.handle ? '@' + String(x.handle).replace(/^@/, '') : '—' }),
-      el('td', { 'data-label': 'Sign-in', text: providerName(x.provider) }),
-      el('td', { 'data-label': 'Country' }, x.country ? named(x.country, 'region') : '—'),
-      el('td', { class: 'num', 'data-label': 'Joined', text: localStamp(x.joined) })));
-    const out = [];
-    if (d.numbered === false) out.push(warn('Member numbers aren’t available right now. Refresh to try again.'));
-    out.push(el('div', { class: 'scroll-x' }, el('table', { class: 'tbl members' },
-      el('caption', { class: 'sr', text: 'Newest members, newest first' }),
+  // Members — one table for the newest 50 and for a search's matches.
+  const memberRow = (x) => el('tr', null,
+    el('td', { class: 'num', 'data-label': 'Member', text: x.n != null ? `#${x.n}` : '—' }),
+    el('td', { class: !x.name || x.name === 'No name yet' ? 'muted' : 'name', 'data-label': 'Name', text: x.name || 'No name yet' }),
+    el('td', { 'data-label': 'Handle', text: x.handle ? '@' + String(x.handle).replace(/^@/, '') : '—' }),
+    el('td', { 'data-label': 'Sign-in', text: providerName(x.provider) }),
+    el('td', { 'data-label': 'Country' }, x.country ? named(x.country, 'region') : '—'),
+    el('td', { class: 'num', 'data-label': 'Joined', text: localStamp(x.joined) }));
+  const memberTable = (list, caption, lim) => {
+    const trs = list.map((x, i) => { const tr = memberRow(x); if (lim && i >= lim) tr.hidden = true; return tr; });
+    const out = [el('div', { class: 'scroll-x' }, el('table', { class: 'tbl members' },
+      el('caption', { class: 'sr', text: caption }),
       el('thead', null, el('tr', null, ['Member', 'Name', 'Handle', 'Sign-in', 'Country', 'Joined'].map((h) => el('th', { scope: 'col', text: h })))),
-      el('tbody', null, trs))));
-    if (list.length > lim) {
+      el('tbody', null, trs)))];
+    if (lim && list.length > lim) {
       const btn = el('button', { class: 'btn-link', type: 'button', 'aria-expanded': 'false', text: `Show all ${list.length}` });
       btn.addEventListener('click', () => {
         const showAll = btn.getAttribute('aria-expanded') !== 'true';
@@ -906,6 +901,48 @@ function build() {
       });
       out.push(btn);
     }
+    return out;
+  };
+  const m = card($('members-grid'), { title: 'The 50 newest', meta: 'Joined times in your time zone' });
+  // Find a member (founder, 2026-10-16): a sign-in email exactly, else part of a name or
+  // @username. The matches draw above the newest 50, in the same table, until Clear.
+  const findInput = el('input', { id: 'find-member', type: 'search', placeholder: 'Find a member — name, @username or email', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', maxlength: '80' });
+  const find = el('form', { class: 'find', role: 'search' },
+    el('label', { class: 'sr', for: 'find-member', text: 'Find a member' }), findInput,
+    el('button', { class: 'btn', type: 'submit', text: 'Find' }));
+  const found = el('div', { class: 'found', hidden: true });
+  m.body.before(find, found);
+  const clearFound = () => { found.hidden = true; found.replaceChildren(); findInput.value = ''; };
+  find.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const q = findInput.value.replace(/\s+/g, ' ').trim();
+    if (!q) { clearFound(); return; }
+    const mine = gen;
+    found.hidden = false;
+    found.replaceChildren(...loadingState(true));
+    let r;
+    try { r = await worker('admin/members', { q }); } catch (err) {
+      if (err instanceof AuthEnded) { authEnded(err.message); return; }
+      r = fail('bug', 0, err?.message || String(err));
+    }
+    if (mine !== gen) return;
+    const clear = el('button', { class: 'btn-link', type: 'button', text: 'Clear' });
+    clear.addEventListener('click', clearFound);
+    if (!r.ok) { found.replaceChildren(warn(r.message || 'Couldn’t search just now. Try again.'), clear); return; }
+    const list = Array.isArray(r.data?.members) ? r.data.members : [];
+    if (!list.length) {
+      found.replaceChildren(el('p', { class: 'muted', text: `No member matches “${q}”. An email must be exact; a name or @username can be part of one.` }), clear);
+      return;
+    }
+    found.replaceChildren(el('p', { class: 'count', text: `${list.length === 1 ? '1 member' : list.length + ' members'} matching “${q}”` }),
+      ...memberTable(list, `Members matching ${q}`), clear);
+  });
+  panel(m.body, [D.members], (d) => {
+    const list = listOf(d.members, 'the member list');
+    if (!list.length) return emptyState('No members yet.');
+    const out = [];
+    if (d.numbered === false) out.push(warn('Member numbers aren’t available right now. Refresh to try again.'));
+    out.push(...memberTable(list, 'Newest members, newest first', 15));
     return out;
   }, { soon: soonMembers });
 

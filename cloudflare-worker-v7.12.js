@@ -25892,7 +25892,44 @@ async function handleAdminUserActivity(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
-// POST /admin/members { n? } (founder, 2026-10-13) — Admin → Newest members,
+// Admin → Find a member (founder, 2026-10-16): a sign-in email exactly, else part
+// of a first name, display name or @username. Up to 50 matches, newest first;
+// null when the profiles read failed. Rows are shaped like the newest-50 rows.
+async function gbMemberSearch(env, q, cols) {
+  const pub = { headers: { 'Accept-Profile': 'public' } };
+  const ids = new Set();
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(q)) {
+    try {
+      const r = await gbRest(env, 'rpc/user_id_by_email', { method: 'POST', body: JSON.stringify({ p_email: q.toLowerCase() }) });
+      if (r.ok) {
+        const v = await r.json();
+        const id = String((typeof v === 'string' ? v : Array.isArray(v) ? v[0] : v?.user_id) || '').toLowerCase();
+        if (BL_UUID.test(id)) ids.add(id);
+      }
+    } catch { /* no match */ }
+  } else {
+    const term = q.replace(/^@+/, '');
+    if (!term) return [];
+    const like = `*${pcLike(term)}*`;
+    const json = async (req) => { try { const r = await req; return r && r.ok ? await r.json() : null; } catch { return null; } };
+    const [p, sp, sh] = await Promise.all([
+      json(gbRest(env, `profiles?first_name=ilike.${like}&select=id&limit=50`, pub)),
+      json(gbRest(env, `social_profiles?display_name=ilike.${like}&select=user_id&limit=50`, {})),
+      json(gbRest(env, `passport_shares?handle=ilike.${like}&select=user_id&limit=50`, {})),
+    ]);
+    if (p === null) return null;
+    for (const r of p) if (r?.id) ids.add(String(r.id).toLowerCase());
+    for (const r of [...(sp || []), ...(sh || [])]) if (r?.user_id) ids.add(String(r.user_id).toLowerCase());
+  }
+  const list = [...ids].filter((id) => BL_UUID.test(id)).slice(0, 50);
+  if (!list.length) return [];
+  const pq = await gbRest(env, `profiles?id=in.(${list.join(',')})&select=${cols}&order=created_at.desc,id.desc&limit=50`, pub);
+  if (!pq.ok) return null;
+  const rows = await pq.json().catch(() => []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+// POST /admin/members { n?, q? } (founder, 2026-10-13) — Admin → Newest members,
 // where a bell alert's member number becomes a name. The newest 50 members,
 // newest first, plus member n as `focus` when an alert asks for one who isn't
 // among them: { members: [...], focus: {...} | null, numbered }, each member
@@ -25902,16 +25939,25 @@ async function handleAdminUserActivity(request, env) {
 // gbMemberNumber's (member_numbers); a member shown without one is numbered
 // here, oldest first. numbered is false when D1 can't give numbers right now
 // (every n is then null); focus is null when no account holds number n now.
+// With q (2026-10-16) the members are gbMemberSearch's matches instead, and
+// `query` echoes q; n is ignored.
 async function handleAdminMembers(request, env) {
   const denied = await requireAdmin(request, env);
   if (denied) return denied;
   try {
     const b = await request.json().catch(() => ({}));
-    const want = /^\d{1,9}$/.test(String(b?.n ?? '')) ? gbMemberN(b.n) : null;
+    const q = String(b?.q || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    const want = !q && /^\d{1,9}$/.test(String(b?.n ?? '')) ? gbMemberN(b.n) : null;
     const COLS = 'id,created_at,home_country,first_name';
-    const pq = await gbRest(env, `profiles?select=${COLS}&order=created_at.desc,id.desc&limit=50`, { headers: { 'Accept-Profile': 'public' } });
-    if (!pq.ok) return jsonResponse({ error: `profiles read failed (${pq.status})` }, 502);
-    const rows = await pq.json().then((r) => (Array.isArray(r) ? r : [])).catch(() => []);
+    let rows;
+    if (q) {
+      rows = await gbMemberSearch(env, q, COLS);
+      if (rows === null) return jsonResponse({ error: 'profiles read failed' }, 502);
+    } else {
+      const pq = await gbRest(env, `profiles?select=${COLS}&order=created_at.desc,id.desc&limit=50`, { headers: { 'Accept-Profile': 'public' } });
+      if (!pq.ok) return jsonResponse({ error: `profiles read failed (${pq.status})` }, 502);
+      rows = await pq.json().then((r) => (Array.isArray(r) ? r : [])).catch(() => []);
+    }
     const idOf = (r) => String(r?.id || '').toLowerCase();
     const nums = new Map();   // user id → member number
     let numbered = false;
@@ -25946,7 +25992,7 @@ async function handleAdminMembers(request, env) {
       } catch { focusRow = null; }
     }
     const all = focusRow ? [...rows, focusRow] : rows;
-    if (!all.length) return jsonResponse({ members: [], focus: null, numbered });
+    if (!all.length) return jsonResponse({ members: [], focus: null, numbered, query: q || null });
     const ids = all.map(idOf);
     const inList = `(${ids.filter((id) => BL_UUID.test(id)).join(',')})`;
     const authHeaders = { apikey: GB_KEY(env), Authorization: `Bearer ${GB_KEY(env)}` };
@@ -25983,7 +26029,7 @@ async function handleAdminMembers(request, env) {
         joined: r.created_at || u.created_at || null,
       };
     };
-    return jsonResponse({ members: rows.map(build), focus: focusRow ? build(focusRow) : null, numbered });
+    return jsonResponse({ members: rows.map(build), focus: focusRow ? build(focusRow) : null, numbered, query: q || null });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
