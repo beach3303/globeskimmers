@@ -2242,3 +2242,32 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - **Demo account:** appreview@ now has **@appreview** (founder's OK, set 10-18 through /social/handle as the demo
   session: before `handle:null`, after `"handle":"appreview"`), so App Review goes straight into the app.
 - **Activate:** push → the worker (5 changes) deploys itself; the screen reaches phones with `npm run ota`.
+
+## 2026-10-18 (evening) — The Empire State Building stamps from inside only (PUSHED)
+- **Founder:** "for empire state building in new york specifically, only allow stamp if users are inside the
+  building, not outside … they could be at the top"; "we only do inside of premises permission for empire
+  state building only".
+- **Worker:** PP_SHAPES gains a building outline — OpenStreetMap way 34633854 (350 Fifth Ave, ~129 × 60 m) —
+  with `inside_only`, buffer 0, matched by icon:Q9188 and its aliases, or by name (/empire\s+state\s+building/i)
+  within 400 m (Google listings, Stamp-a-place visits, older rows). `ppMetersToShape` returns 0 inside an outline
+  (ray casting), else the distance to the nearest wall.
+  - GPS stamp: inside the outline, no GPS slack; refusal "The Empire State Building is stamped from inside — the
+    lobby or the observatory. Your GPS shows you outside the building." (`inside_only: true`).
+  - "I'm here, but the app is saying I'm not" no longer grants it from outside (or with no reading).
+  - Photo proof: the photo's location tag must fall inside the outline (not within 400 m), and recognition
+    (photo_ai) is skipped — a facade photo is taken from outside.
+  - A Stamp-a-place visit named after it: the phone's own GPS check is not trusted (the worker can't see it), so
+    it needs a photo taken inside.
+- **App:** the attraction page and the nearby prompt show the worker's inside message and hide the report button
+  for inside-only refusals.
+- Verified: node --check; geometry run on real points — the pin and near the 34th St wall INSIDE; Fifth Ave
+  sidewalk 18 m, across 34th 23 m, across 33rd 30 m, Herald Square 163 m outside; photo inside → proves, from the
+  sidewalk → doesn't; other places keep the 400 m rule; "Empire State Diner" nearby and Albany unaffected.
+  eslint + no-undef, build, boot-check. Not verified on a phone inside the building (indoor GPS can drift outside
+  the walls — such a visitor gets the inside message and can retry from the observatory or near a window).
+- **@erikakristaa's stamp** (founder: her photo was not inside — remove it, no explanation): no admin tool can
+  delete another member's stamp, so it's a two-step SQL for the founder (look, then delete; the photos cascade),
+  plus `npx wrangler r2 object delete globeskimmers-media/<photo_key> --remote` for each photo file.
+- **Activate:** push → the worker deploys itself; the app's message reaches phones with `npm run ota`.
+- Height isn't checked (latitude/longitude only): the 86th-floor deck and the 102nd-floor observatory sit over the
+  outline, so the top floors stamp like the lobby (founder asked, 10-18).
