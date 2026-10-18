@@ -20749,8 +20749,19 @@ async function handleAdminHeldHandles(request, env) {
       if (res.sent) await gbRest(env, `held_handles?handle=eq.${encodeURIComponent(clean(b.handle))}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ invited_at: new Date().toISOString() }) });
       return jsonResponse({ sent: res.sent, reason: res.reason || null, subject: res.subject, text: res.text });
     }
-    const list = await gbRest(env, 'held_handles?select=*&order=created_at.asc', {});
-    return jsonResponse({ rows: list.ok ? await list.json() : [], emailConfigured: !!env.RESEND_API_KEY });
+    // Every held name (founder, 2026-10-18: a row vanished right after Save). PostgREST answers at
+    // most 1,000 rows a read and ~1,400 names are held, most seeded in two statements that share a
+    // created_at, so one capped read returned a different 1,000 each time. Read page by page in an
+    // order that never shuffles; a failed read keeps the desk's last list (no rows in the reply).
+    const rows = [];
+    for (let page = 0; page < 30; page++) {
+      const r = await gbRest(env, `held_handles?select=*&order=created_at.asc,handle.asc&offset=${rows.length}&limit=1000`, {});
+      if (!r.ok) return jsonResponse({ error: 'Couldn\u2019t load the held names \u2014 try again' }, 502);
+      const got = await r.json();
+      if (!got.length) break;   // an empty page ends it, whatever the server's own page cap is
+      rows.push(...got);
+    }
+    return jsonResponse({ rows, emailConfigured: !!env.RESEND_API_KEY });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -20943,7 +20954,9 @@ async function handleSocialRequest(request, env, ctx) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
-// POST /admin/handle-requests { op:'list'|'resolve', id?, status? } — the queue.
+// POST /admin/handle-requests { op:'list'|'resolve', id?, status? } — the queue; rows carry the
+// requester's member_handle / member_seal. Approving runs in the desk: Seal → admin/verified grant
+// (letter to the sign-in email); username → admin/held-handles add + invite (claim link).
 async function handleAdminHandleRequests(request, env) {
   const denied = await requireAdmin(request, env);
   if (denied) return denied;
@@ -20954,7 +20967,16 @@ async function handleAdminHandleRequests(request, env) {
       await gbRest(env, `handle_requests?id=eq.${encodeURIComponent(String(b.id))}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status, resolved_at: new Date().toISOString() }) });
     }
     const q = await gbRest(env, 'handle_requests?status=eq.open&select=*&order=created_at.asc&limit=100', {});
-    return jsonResponse({ rows: q.ok ? await q.json() : [] });
+    const rows = q.ok ? await q.json() : [];
+    // Each requester's own @username and Seal (founder, 2026-10-18: approving should finish the job),
+    // so the desk can grant the Seal to that username or tell a name change apart.
+    const ids = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
+    if (ids.length) {
+      const sq = await gbRest(env, `passport_shares?user_id=in.(${ids.join(',')})&select=user_id,handle,seal,verified`, {});
+      const by = Object.fromEntries((sq.ok ? await sq.json() : []).map((x) => [x.user_id, x]));
+      for (const r of rows) { const m = by[r.user_id]; r.member_handle = m?.handle || null; r.member_seal = m?.verified ? (m.seal || null) : null; }
+    }
+    return jsonResponse({ rows });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 

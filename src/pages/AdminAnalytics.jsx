@@ -1102,6 +1102,7 @@ export default function AdminAnalytics() {
   const [heldEdits, setHeldEdits] = useState({});      // handle -> email draft
   const [heldNames, setHeldNames] = useState({});      // handle -> first-name draft (brand reserve)
   const [heldBusy, setHeldBusy] = useState(null);      // handle being acted on
+  const [heldNote, setHeldNote] = useState({});        // handle -> { ok, text } after Save or Send
   const [inviteCopy, setInviteCopy] = useState(null);  // { handle, text } when email isn't configured
   const [seals, setSeals] = useState({ rows: [], error: null });
   const [sealDraft, setSealDraft] = useState('');
@@ -1121,12 +1122,67 @@ export default function AdminAnalytics() {
     const { data, error } = await callWorker('admin/handle-requests', body || {});
     setRequests({ rows: data?.rows || [], error: error || data?.error || null });
   };
+  // Approving a request finishes it (founder, 2026-10-18: "after I [pick] the handle and approve it
+  // we're done"): a Seal request grants the Seal to the member's @username, and the letter goes to
+  // the email they signed in with; a username request holds the name for them and emails the claim
+  // link to that same address, with a Seal riding along if one is picked. The request then closes, so
+  // the outcome is kept at the top of the desk (the row itself leaves the open list).
+  const [reqSeal, setReqSeal] = useState({});     // request id -> Seal choice
+  const [reqBusy, setReqBusy] = useState(null);
+  const [reqDone, setReqDone] = useState([]);     // [{ ok, text }] newest first
+  const reqResult = (ok, text) => setReqDone((d) => [{ ok, text, at: Date.now() }, ...d].slice(0, 6));
+  const approveRequest = async (r) => {
+    const choice = reqSeal[r.id] ?? (r.kind === 'seal' ? 'burgundy:person' : '');
+    const label = (HELD_SEAL_OPTS.find(([v]) => v === choice) || [])[1] || '';
+    const { seal, seal_kind: kind } = heldSealPatch(choice);
+    if (r.kind === 'seal') {
+      if (!r.member_handle) { reqResult(false, `That member has no @username yet — they need one before a Seal (${r.email || 'no email'}).`); return; }
+      const letter = r.member_seal ? 'They already have a Seal: this changes its color, and no new letter is sent.'
+        : seal === 'teal' ? 'The team Seal sends no letter.' : `The Seal letter goes to ${r.email || 'the email they signed in with'}.`;
+      if (!window.confirm(`Give @${r.member_handle} the ${label} Seal?\n\n${letter}`)) return;
+      setReqBusy(r.id);
+      const { data, error } = await sealCall({ op: 'grant', handle: r.member_handle, seal, ...(seal === 'burgundy' ? { kind } : {}) });
+      if (error) { setReqBusy(null); reqResult(false, `@${r.member_handle}: ${error}`); return; }
+      const l = data?.letter;
+      if (l && !l.sent) {
+        try { await navigator.clipboard.writeText(`Subject: ${l.subject}\n\n${l.text}`); } catch { /* the Seal desk shows it too */ }
+        setSealLetter(l);
+      }
+      reqResult(true, `✪ @${r.member_handle} has the ${label} Seal${l?.sent ? ` — letter sent to ${r.email || 'their sign-in email'}` : l ? ` — the letter didn’t go out (${l.reason || 'not sent'}); it’s copied to your clipboard` : ''}.`);
+    } else {
+      const handle = String(r.handle || '').toLowerCase();
+      if (!handle || !r.email) { reqResult(false, `@${handle || '?'}: the request has no email to send the claim link to.`); return; }
+      const change = r.member_handle && r.member_handle !== handle ? `\n\nClaiming changes their username from @${r.member_handle}.` : '';
+      if (!window.confirm(`Hold @${handle} for them and email the claim link to ${r.email}?${seal ? `\n\nWith the ${label} Seal, switched on when they claim.` : ''}${change}`)) return;
+      setReqBusy(r.id);
+      let step = await heldCall({ op: 'add', handle, email: r.email, kind: 'family', ...heldSealPatch(choice) });
+      // Already held (for them or for someone else): approving gives it to this requester.
+      if (step.error && /already on the list/i.test(step.error)) step = await heldCall({ op: 'update', handle, email: r.email, ...heldSealPatch(choice) });
+      if (step.error) { setReqBusy(null); reqResult(false, `@${handle}: ${step.error}`); return; }
+      const { data, error } = await heldCall({ op: 'invite', handle });
+      if (error) { setReqBusy(null); reqResult(false, `@${handle}: ${error}`); return; }
+      if (data?.sent) { await heldCall({ op: 'list' }); reqResult(true, `✉️ @${handle} is held for them — claim link sent to ${r.email}.`); }
+      else {
+        if (data?.text) { try { await navigator.clipboard.writeText(`Subject: ${data.subject}\n\n${data.text}`); } catch { /* shown on the held desk */ } setInviteCopy({ handle, text: `Subject: ${data.subject}\n\n${data.text}` }); }
+        reqResult(false, `@${handle} is held for them, but the email didn’t go out (${data?.reason || 'not sent'}) — the message is copied to your clipboard.`);
+      }
+    }
+    await reqCall({ op: 'resolve', id: r.id, status: 'done' });
+    setReqBusy(null);
+  };
   const famRows = held.rows.filter((r) => r.kind !== 'brand');
   const brandRows = held.rows.filter((r) => r.kind === 'brand');
   const heldCall = async (body) => {
     const { data, error } = await callWorker('admin/held-handles', body);
     if (data?.rows) setHeld({ rows: data.rows, emailConfigured: !!data.emailConfigured, error: error || data?.error || null });
+    // A failed read keeps the last list on screen and says so (it used to come back empty).
+    else if ((error || data?.error) && (!body?.op || body.op === 'list')) setHeld((h) => ({ ...h, error: error || data?.error }));
     return { data, error: error || data?.error || null };
+  };
+  const noteFor = (handle, ok, text) => setHeldNote((n) => ({ ...n, [handle]: { ok, text } }));
+  const clearDrafts = (handle) => {
+    setHeldEdits((e) => { const n = { ...e }; delete n[handle]; return n; });
+    setHeldNames((e) => { const n = { ...e }; delete n[handle]; return n; });
   };
   const sealCall = async (body) => {
     const { data, error } = await callWorker('admin/verified', body);
@@ -1137,22 +1193,40 @@ export default function AdminAnalytics() {
     const { error } = await heldCall({ op: 'add', handle: heldDraft.handle, display_name: heldDraft.name, email: heldDraft.email, kind: heldDraft.kind || 'family', ...heldSealPatch(heldDraft.seal) });
     if (error) setHeld((h) => ({ ...h, error })); else setHeldDraft({ handle: '', name: '', email: '', kind: heldDraft.kind || 'family', seal: '' });
   };
+  // "Save for later" keeps the email (and name) without sending anything, and says so.
   const saveHeldEmail = async (handle) => {
     setHeldBusy(handle);
     const { error } = await heldCall({ op: 'update', handle, ...(heldEdits[handle] !== undefined ? { email: heldEdits[handle] } : {}), ...(heldNames[handle] !== undefined ? { display_name: heldNames[handle] } : {}) });
     setHeldBusy(null);
-    if (error) setHeld((h) => ({ ...h, error }));
-    else { setHeldEdits((e) => { const n = { ...e }; delete n[handle]; return n; }); setHeldNames((e) => { const n = { ...e }; delete n[handle]; return n; }); }
+    if (error) { noteFor(handle, false, error); return; }
+    clearDrafts(handle);
+    noteFor(handle, true, 'Saved — not sent yet. Tap Send invitation to email them.');
   };
+  // One tap (founder, 2026-10-18: "I thought when I typed the email address and click save that it
+  // would send the email"): what's typed is saved first, then the invitation goes, after a confirm
+  // that names the address and the Seal. The Seal picked on the row writes the letter, and claiming
+  // the name switches the Seal on.
   const inviteHeld = async (handle) => {
-    setHeldBusy(handle); setInviteCopy(null);
+    const r = held.rows.find((x) => x.handle === handle) || {};
+    const email = String(heldEdits[handle] ?? r.email ?? '').trim();
+    if (!email) return;
+    const seal = (HELD_SEAL_OPTS.find(([v]) => v === heldSealValue(r)) || [])[1];
+    const what = r.seal ? `It comes with the ${seal} Seal, switched on when they claim the name.` : 'Username only — no Seal.';
+    if (!window.confirm(`Send @${handle}'s invitation to ${email}?\n\n${what}`)) return;
+    setHeldBusy(handle); setInviteCopy(null); setHeldNote((n) => { const m = { ...n }; delete m[handle]; return m; });
+    if (heldEdits[handle] !== undefined || heldNames[handle] !== undefined) {
+      const saved = await heldCall({ op: 'update', handle, ...(heldEdits[handle] !== undefined ? { email: heldEdits[handle] } : {}), ...(heldNames[handle] !== undefined ? { display_name: heldNames[handle] } : {}) });
+      if (saved.error) { setHeldBusy(null); noteFor(handle, false, saved.error); return; }
+      clearDrafts(handle);
+    }
     const { data, error } = await heldCall({ op: 'invite', handle });
     setHeldBusy(null);
-    if (error) { setHeld((h) => ({ ...h, error })); return; }
-    if (data?.sent) { await heldCall({ op: 'list' }); }
+    if (error) { noteFor(handle, false, error); return; }
+    if (data?.sent) { noteFor(handle, true, `✉️ Invitation sent to ${email}`); await heldCall({ op: 'list' }); }
     else if (data?.text) {
       setInviteCopy({ handle, text: `Subject: ${data.subject}\n\n${data.text}` });
       try { await navigator.clipboard.writeText(`Subject: ${data.subject}\n\n${data.text}`); } catch { /* shown below anyway */ }
+      if (data.reason && data.reason !== 'no-key') noteFor(handle, false, `The email didn’t go out (${data.reason}) — the message is copied below to send yourself.`);
     }
   };
   // Release frees a held name for anyone (no email is sent), so it asks first (2026-10-16).
@@ -1539,6 +1613,9 @@ export default function AdminAnalytics() {
             <Section title={`👑 Held usernames — ${famRows.filter(r => r.claimed_at).length} claimed of ${famRows.length}`} icon={UserCheck}
               empty={famRows.length === 0 && !held.error ? 'No names on the hold list yet. Add one below — it instantly reads as "taken" to everyone except the email you attach.' : null}>
               {held.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{held.error}</div>}
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>
+                To give a name: type their email, pick a Seal if they get one, then <b>Send invitation</b> — it saves and emails their claim link in one tap. The Seal switches on when they claim.
+              </div>
               {!held.emailConfigured && famRows.length > 0 && (
                 <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 10 }}>
                   ✉️ Invitation email isn&rsquo;t wired yet (needs the RESEND_API_KEY secret) — &ldquo;Compose invite&rdquo; copies the message so you can text/email it yourself.
@@ -1552,7 +1629,7 @@ export default function AdminAnalytics() {
                     {r.claimed_at
                       ? <span style={{ color: COLORS.green, fontWeight: 700 }}>🎉 Claimed {String(r.claimed_at).slice(0, 10)}</span>
                       : r.invited_at
-                        ? <span style={{ color: COLORS.amber, fontWeight: 600 }}>Invited {String(r.invited_at).slice(0, 10)}</span>
+                        ? <span style={{ color: COLORS.amber, fontWeight: 600 }}>Invited {String(r.invited_at).slice(0, 10)}{r.email ? ` · ${r.email}` : ''}</span>
                         : <span style={{ color: COLORS.gray }}>Saved</span>}
                   </div>
                   {!r.claimed_at && (
@@ -1561,7 +1638,7 @@ export default function AdminAnalytics() {
                         placeholder="their-email@example.com" aria-label={`Email for @${r.handle}`}
                         style={{ flex: '1 1 220px', minWidth: 180, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
                       <button type="button" onClick={() => saveHeldEmail(r.handle)} disabled={heldBusy === r.handle || heldEdits[r.handle] === undefined}
-                        style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: heldEdits[r.handle] === undefined ? 0.5 : 1 }}>Save email</button>
+                        style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: heldEdits[r.handle] === undefined ? 0.5 : 1 }}>Save for later</button>
                       <HeldSealPicker value={heldSealValue(r)} label={`Seal for @${r.handle}`}
                         onPick={(v) => heldCall({ op: 'update', handle: r.handle, ...heldSealPatch(v) })} />
                       <button type="button" onClick={() => inviteHeld(r.handle)} disabled={heldBusy === r.handle || !(heldEdits[r.handle] ?? r.email)}
@@ -1570,6 +1647,9 @@ export default function AdminAnalytics() {
                       </button>
                       <button type="button" onClick={() => removeHeld(r.handle)} style={{ padding: '7px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.red, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Release</button>
                     </div>
+                  )}
+                  {heldNote[r.handle] && (
+                    <div role="status" style={{ marginTop: 6, fontSize: 12, fontWeight: 600, color: heldNote[r.handle].ok ? COLORS.green : COLORS.red }}>{heldNote[r.handle].text}</div>
                   )}
                   {inviteCopy?.handle === r.handle && (
                     <div style={{ marginTop: 8 }}>
@@ -1601,7 +1681,7 @@ export default function AdminAnalytics() {
             <Section title={`🏷️ Brand & entity reserve — ${brandRows.length} names held`} icon={UserCheck}
               empty={brandRows.length === 0 ? 'No brand names held yet.' : null}>
               <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>
-                Sports, parks, hotels, airlines, luxury, officials — all read as &ldquo;taken&rdquo; to everyone. Tap one to attach a partner&rsquo;s email when a deal lands.
+                Sports, parks, hotels, airlines, luxury, officials — all read as &ldquo;taken&rdquo; to everyone. Tap one, type the partner&rsquo;s email, pick a Seal if they get one, then <b>Send invitation</b> — one tap saves and sends.
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                 {brandRows.map((r) => (
@@ -1621,7 +1701,7 @@ export default function AdminAnalytics() {
                     placeholder="partner-email@brand.com" aria-label={`Email for @${r.handle}`}
                     style={{ flex: '1 1 200px', minWidth: 170, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
                   <button type="button" onClick={() => saveHeldEmail(r.handle)} disabled={heldBusy === r.handle || (heldEdits[r.handle] === undefined && heldNames[r.handle] === undefined)}
-                    style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: heldEdits[r.handle] === undefined && heldNames[r.handle] === undefined ? 0.5 : 1 }}>Save</button>
+                    style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: heldEdits[r.handle] === undefined && heldNames[r.handle] === undefined ? 0.5 : 1 }}>Save for later</button>
                   <HeldSealPicker value={heldSealValue(r)} label={`Seal for @${r.handle}`}
                     onPick={(v) => heldCall({ op: 'update', handle: r.handle, ...heldSealPatch(v) })} />
                   <button type="button" onClick={() => inviteHeld(r.handle)} disabled={heldBusy === r.handle || !(heldEdits[r.handle] ?? r.email)}
@@ -1630,6 +1710,9 @@ export default function AdminAnalytics() {
                   </button>
                   <button type="button" onClick={() => removeHeld(r.handle)} style={{ padding: '7px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.red, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Release</button>
                 
+                  {heldNote[r.handle] && (
+                    <div role="status" style={{ flex: '1 1 100%', fontSize: 12, fontWeight: 600, color: heldNote[r.handle].ok ? COLORS.green : COLORS.red }}>{heldNote[r.handle].text}</div>
+                  )}
                   {inviteCopy?.handle === r.handle && (
                     <div style={{ flex: '1 1 100%', marginTop: 4 }}>
                       <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600, marginBottom: 4 }}>Copied to your clipboard — paste it into a text or email:</div>
@@ -1664,8 +1747,14 @@ export default function AdminAnalytics() {
             </Section>
 
             <Section title={`📨 Username & Seal requests — ${requests.rows.length} open`} icon={Mail}
-              empty={requests.rows.length === 0 && !requests.error ? 'No requests yet. Businesses and people can ask for a username or the Seal from Settings.' : null}>
+              empty={requests.rows.length === 0 && !requests.error && !reqDone.length ? 'No requests yet. Businesses and people can ask for a username or the Seal from Settings.' : null}>
               {requests.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{requests.error}</div>}
+              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>
+                Approving finishes it: a Seal request gets the Seal and its letter; a username request gets the name held and the claim link emailed. Both go to the email they signed in with.
+              </div>
+              {reqDone.map((d) => (
+                <div key={d.at} role="status" style={{ fontSize: 12, fontWeight: 600, color: d.ok ? COLORS.green : COLORS.red, marginBottom: 6 }}>{d.text}</div>
+              ))}
               {requests.rows.map((r) => (
                 <div key={r.id} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border}` }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', fontSize: 13 }}>
@@ -1674,9 +1763,17 @@ export default function AdminAnalytics() {
                     <span style={{ color: COLORS.gray, marginLeft: 'auto' }}>{String(r.created_at || '').slice(0, 10)}</span>
                   </div>
                   {r.note && <div style={{ fontSize: 12.5, color: COLORS.dark, whiteSpace: 'pre-wrap', marginTop: 4 }}>{r.note}</div>}
-                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                    <button type="button" onClick={() => reqCall({ op: 'resolve', id: r.id, status: 'done' })} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: COLORS.green, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Done</button>
-                    <button type="button" onClick={() => reqCall({ op: 'resolve', id: r.id, status: 'dismissed' })} style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.gray, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Dismiss</button>
+                  <div style={{ fontSize: 12, color: COLORS.gray, marginTop: 4 }}>
+                    {r.member_handle ? `Their username now: @${r.member_handle}` : 'No username yet'}{r.member_seal ? ` · has the ${SEAL_TIER_LABEL[r.member_seal] || r.member_seal} Seal` : ''}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                    <HeldSealPicker value={reqSeal[r.id] ?? (r.kind === 'seal' ? 'burgundy:person' : '')} label={`Seal for this request`}
+                      onPick={(v) => setReqSeal((m) => ({ ...m, [r.id]: v }))} />
+                    <button type="button" onClick={() => approveRequest(r)} disabled={reqBusy === r.id || (r.kind === 'seal' && !(reqSeal[r.id] ?? 'burgundy:person'))}
+                      style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: COLORS.green, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: reqBusy === r.id ? 0.6 : 1 }}>
+                      {reqBusy === r.id ? 'Working…' : r.kind === 'seal' ? 'Approve & send the letter' : 'Approve & send the claim link'}
+                    </button>
+                    <button type="button" onClick={() => reqCall({ op: 'resolve', id: r.id, status: 'dismissed' })} disabled={reqBusy === r.id} style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.gray, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Dismiss</button>
                   </div>
                 </div>
               ))}
