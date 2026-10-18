@@ -24,6 +24,7 @@ const config: CapacitorConfig = {
       '@capacitor/preferences',
       '@capacitor/share',
       '@capacitor/splash-screen',
+      '@capgo/capacitor-share-target',
       '@capgo/capacitor-updater',
     ],
   },
@@ -86,6 +87,14 @@ const config: CapacitorConfig = {
     // @capacitor/core — no extra dependency.
     CapacitorHttp: {
       enabled: true,
+    },
+
+    // Photos shared into the app from the phone's share sheet (2026-10-17). iOS: the
+    // ShareExtension target (ios/App/ShareExtension) leaves them in this app group, which both
+    // targets' entitlements list. Android: the SEND intent filters in AndroidManifest.xml.
+    // The JS side is src/lib/sharedPhotos.js. Native: ships in a store build, not over the air.
+    CapacitorShareTarget: {
+      appGroupId: 'group.com.globeskimmers.app',
     },
 
     // Capgo OTA live updates. appId MUST match the native bundle id

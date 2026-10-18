@@ -34,6 +34,7 @@ import {
 import { callWorker } from '@/lib/callWorker';
 import { syncAppTransaction, syncOsAge } from "@/lib/ageSignal";
 import { AGE_GATE_EVENT } from '@/lib/ageGate';
+import { listenForSharedPhotos } from '@/lib/sharedPhotos';
 
 // sessionStorage flag set the moment the USER initiates a sign-in/sign-up, so we
 // can tell a fresh sign-in from a plain app-launch session restore. sessionStorage
@@ -110,6 +111,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     let mounted = true;
     let appListener;
+    let shareListener;
 
     // 1) Initial session (for first paint).
     supabase.auth.getSession().then(({ data: { session: s } }) => {
@@ -207,12 +209,19 @@ export const AuthProvider = ({ children }) => {
           setAuthError({ type: 'oauth', message: e?.message || 'Sign-in failed' });
         }
       }).then((l) => { appListener = l; });
+
+      // Photos shared from the phone's gallery (src/lib/sharedPhotos.js) open Stamp a place on
+      // the Passport, once the session is in. A Passport already open takes them itself.
+      listenForSharedPhotos(() => {
+        if (window.location.pathname !== '/Passport') setPendingRoute('/Passport');
+      }).then((l) => { shareListener = l; });
     }
 
     return () => {
       mounted = false;
       sub?.subscription?.unsubscribe?.();
       appListener?.remove?.();
+      shareListener?.remove?.();
     };
   }, [loadProfile]);
 

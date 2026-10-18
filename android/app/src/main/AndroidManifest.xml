@@ -32,6 +32,20 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="globeskimmers" />
             </intent-filter>
+
+            <!-- "Globeskimmers" in the Gallery / Photos share list (2026-10-17): one photo or
+                 several. @capgo/capacitor-share-target copies them to the cache and
+                 src/lib/sharedPhotos.js opens Stamp a place with them. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
         </activity>
 
         <provider
