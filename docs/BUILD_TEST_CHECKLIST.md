@@ -2175,3 +2175,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   (`capgo channel list` ✓, production, iOS + Android): phones get Upload photos + the photo sorter, the
   two-choice empty passport, the Home changes, City Board place labels and the photo packets two across.
   Sharing INTO the app still waits for the next store builds (both platforms).
+- **Home, later 10-17** (founder): "See all City Boards" is now a gold tab on the City Board row's upper left
+  (Zone's HOME_TAB, exported; the right-aligned link under the row is gone); "Hello" 10.5 → 13.5 px and the
+  first name 24 → 32 px (line 36 px, flag 19 px). The tab's link reaches 15 px above it, invisibly, for a
+  44 px tap target (the gap above shrinks by the same, so nothing moves). Captured as the demo account.

@@ -2,7 +2,7 @@
 // "explore City Board photo posts from other travelers … i want 'City board' to be there"). One
 // airmail row with the city's postmark that opens the board. It shows only when there is something
 // honest to show: posts on the board, or a board you may post to (you stamped the city, verified).
-// Under it, 'See all City Boards' opens the list. When this city has no board but others do, a row
+// On its upper left, a gold tab 'See all City Boards' opens the list. When this city has no board but others do, a row
 // 'Explore City Boards' stands in its place. Nothing while the age tier is unknown,
 // for a held account, or before the worker has boards.
 //
@@ -15,15 +15,31 @@ import { cityBoard, cityBoards } from "@/lib/passport";
 import { cityBoardUrl, cityBoardsUrl } from "@/lib/boardLinks";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { PostmarkRing } from "@/components/social/Envelope";
+import { HOME_TAB } from "@/components/redesign/Zone";
 
 const MANY_BOARDS = 50;
 const MANY_POSTS = 25;
 
 const SERIF = "'Instrument Serif', Georgia, serif";
+const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
 const BLUE = NEUTRAL.airmailBlue;
 
 /** @type {import('react').CSSProperties} */
 const ROW = { display: "flex", alignItems: "center", gap: 12, minHeight: 64, boxSizing: "border-box", padding: "8px 12px 8px 14px", background: NEUTRAL.airmail, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16, textDecoration: "none" };
+
+// 'See all City Boards' as a gold tab on the row's upper left (founder, 2026-10-17), the same
+// gold as every Home tab (Zone's HOME_TAB) and a link to the list of boards. The link reaches
+// 15 px above the 29 px tab, invisibly, for a 44 px tap target; the zone's gap shrinks to match.
+const TAB_REACH = 15;
+/** @type {import('react').CSSProperties} */
+const TAB_LINK = { position: "relative", zIndex: 1, display: "block", width: "fit-content", margin: "0 0 -1px 16px", paddingTop: TAB_REACH, textDecoration: "none" };
+/** @type {import('react').CSSProperties} */
+const TAB = {
+  display: "flex", alignItems: "center", gap: 2, minHeight: 29, boxSizing: "border-box",
+  padding: "4px 8px 5px 14px", borderRadius: "10px 10px 0 0",
+  fontFamily: MONO, fontSize: fs(9.5), lineHeight: 1.2, letterSpacing: ".16em", textTransform: "uppercase",
+  ...HOME_TAB,
+};
 
 export default function CityBoardRow({ city = "", country = "", region = "" }) {
   const r = String(region || "").trim();
@@ -65,10 +81,18 @@ export default function CityBoardRow({ city = "", country = "", region = "" }) {
 
   return (
     // The zones' own column: px-4 outside, the same max width inside (Zone.jsx columnClass).
-    <div className="px-4" style={{ marginTop: 12 }}>
+    <div className="px-4" style={{ marginTop: showHere && boards.length ? 16 - TAB_REACH : 12 }}>
       <div className="mx-auto max-w-md md:max-w-[720px]">
         {showHere ? (
           <>
+            {boards.length ? (
+              <Link to={cityBoardsUrl()} style={TAB_LINK}>
+                <span style={TAB}>
+                  See all City Boards
+                  <ChevronRight size={13} strokeWidth={2.4} aria-hidden="true" focusable="false" />
+                </span>
+              </Link>
+            ) : null}
             <Link to={cityBoardUrl(c, k, r)} style={ROW}>
               <PostmarkRing city={c} date={new Date().toISOString()} color={BLUE} size={44} style={{ flexShrink: 0 }} />
               <span style={{ flex: 1, minWidth: 0 }}>
@@ -79,13 +103,6 @@ export default function CityBoardRow({ city = "", country = "", region = "" }) {
               </span>
               <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
             </Link>
-            {boards.length ? (
-              <Link to={cityBoardsUrl()}
-                style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2, minHeight: 44, padding: "0 4px", fontSize: fs(13), fontWeight: 600, color: BLUE, textDecoration: "none" }}>
-                See all City Boards
-                <ChevronRight size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
-              </Link>
-            ) : null}
           </>
         ) : (
           <Link to={cityBoardsUrl()} style={ROW}>

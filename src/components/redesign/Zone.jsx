@@ -389,7 +389,7 @@ function BandOrnament({ zone }) {
  */
 // Every Home tab in one gold with navy caps (founder, 2026-10-17: "for consistency let's make all
 // tab with same background color as my virtual passport"). A zone's tabStyle still goes on top.
-const HOME_TAB = {
+export const HOME_TAB = {
   background: 'linear-gradient(180deg, #F7D37C, #E3AE45)',
   color: NEUTRAL.navy,
   fontWeight: 700,

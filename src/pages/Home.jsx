@@ -724,13 +724,14 @@ function HomeLobby({ firstName, localGreeting, flag, weatherInfo, tempUnit, onTo
     <div className="px-4 pt-3">
       <div className="max-w-md mx-auto md:max-w-[720px]">
         {/* LINE 1 */}
-        <p className="m-0 flex flex-wrap items-baseline" style={{ columnGap: 8, minHeight: 28 }}>
-          <span className="font-mono uppercase" style={{ fontSize: fs(10.5), letterSpacing: '.12em', color: NEUTRAL.ink3 }}>Hello</span>
+        {/* Hello and the name two sizes up (founder, 2026-10-17): 10.5 → 13.5, 24 → 32. */}
+        <p className="m-0 flex flex-wrap items-baseline" style={{ columnGap: 8, minHeight: 36 }}>
+          <span className="font-mono uppercase" style={{ fontSize: fs(13.5), letterSpacing: '.12em', color: NEUTRAL.ink3 }}>Hello</span>
           {greeting && (
             <span className="font-serif italic" style={{ fontSize: fs(14), color: NEUTRAL.brandTeal }}>{greeting}</span>
           )}
           {firstName && (
-            <span className="font-serif italic" style={{ fontSize: fs(24), lineHeight: '28px', color: NEUTRAL.brandTeal, overflowWrap: 'anywhere' }}>{firstName}</span>
+            <span className="font-serif italic" style={{ fontSize: fs(32), lineHeight: '36px', color: NEUTRAL.brandTeal, overflowWrap: 'anywhere' }}>{firstName}</span>
           )}
           {flag && (
             // A hairline drop-shadow follows the flag's own shape (no box around
@@ -741,7 +742,7 @@ function HomeLobby({ firstName, localGreeting, flag, weatherInfo, tempUnit, onTo
               src={flag.url}
               alt={flag.country ? `Home country: ${flag.country}` : 'Home country flag'}
               className="self-center rounded-[3px]"
-              style={{ height: fs(15), width: 'auto', filter: 'drop-shadow(0 0 0.5px rgba(22,17,13,.6))' }}
+              style={{ height: fs(19), width: 'auto', filter: 'drop-shadow(0 0 0.5px rgba(22,17,13,.6))' }}
               onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
           )}
