@@ -2171,3 +2171,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   Captured as the demo account with a mocked passport list.
   Copy shortened (founder: "sure"): above, "Each album is as private as its stamp. 🌍 prints also hang on the
   city board." (the board disclosure stays); below, "Tap + to add prints."
+- **Done:** main ae418b6 — no workflow runs (nothing deployable). OTA **1.0.2610180210** by the founder
+  (`capgo channel list` ✓, production, iOS + Android): phones get Upload photos + the photo sorter, the
+  two-choice empty passport, the Home changes, City Board place labels and the photo packets two across.
+  Sharing INTO the app still waits for the next store builds (both platforms).
