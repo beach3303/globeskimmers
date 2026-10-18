@@ -2271,3 +2271,49 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - **Activate:** push → the worker deploys itself; the app's message reaches phones with `npm run ota`.
 - Height isn't checked (latitude/longitude only): the 86th-floor deck and the 102nd-floor observatory sit over the
   outline, so the top floors stamp like the lobby (founder asked, 10-18).
+
+## 2026-10-18 (late) — Privacy, solid on every surface (PUSHED)
+- **Founder:** "can we solidify our privacy please in all aspects, settings and passport stamps and albums" (after
+  @erikakristaa's photos hung on the LA City Board). Decisions: a private passport takes your photos off City
+  Boards ("my answer is yes"); members made 🌍 Everyone by the 10-15 backfill get a one-time, kindly worded
+  check-up, never a silent change ("ok i agree").
+- **Why Erika's photos were on the board:** the 2026-10-15 tiers migration set every stamp of a public passport to
+  🌍 Everyone; Settings → "New stamps start at" only ever touched new stamps.
+- **One rule, every surface:** a stamp's tier (accepted follows only) → its photos follow it, narrowed by the albums
+  dial → a City Board shows only 🌍 Everyone photos of an adult with open albums AND a public passport, not taken down.
+- **Worker:**
+  - **Signed photo links.** Every stamp photo handed to someone else is `/pp-photo/p/<id>?l=&e=&s=` — HMAC for the
+    level it was shown at ('0' stranger, '1' follower, '2' inner circle, 'b' board), expiring 6 h past the hour.
+    Opening it re-checks the photo is still visible at that level (tier, albums dial, private switch, under-18 or
+    held owner, review status, board takedown). Unsigned or expired → 404. Owners keep their own key links.
+  - **Boards:** `pcBoardOwners` (adult + albums open + passport public) gates the wall, the covers, board guestbook
+    shares, the board read and the "your photos hang on a board" notice. Covers skip blocked owners (were cached
+    5 min with the first owner's photo for everyone); cache key `photoboards:v2`, 2 min, busted on every privacy change.
+  - **Share links:** a public-level link from a private passport shows nothing (app and web /p/); an inner-circle
+    link the owner sent still works; an empty slice reads private (no name over an empty book).
+  - **Traveler page:** a muted follow no longer counts as an accepted one.
+  - **Mailbox feed:** honours each stamp's tier (it showed every stamp of everyone you follow).
+  - **Guestbook read:** photo ids pass only when the albums dial allows the viewer.
+  - **Profile read `{ privacy: true }`** adds `{ is_public, counts: { me, inner, followers, public } }`;
+    `privacy_checked` read/write (`social_profiles.privacy_checkup_at`).
+- **Migration:** `20261018230000_privacy_checkup.sql` — adds `privacy_checkup_at timestamptz` (applies itself on push).
+- **App:**
+  - **Privacy check-up** (`src/components/auth/PrivacyCheckup.jsx`, mounted after FinishPassport's required steps):
+    only for an adult with a public passport and ≥1 🌍 Everyone stamp who hasn't answered. "Keep it public"
+    (nothing changes) or "Switch to Inner circle" (passport private first, then every stamp → Inner circle, new
+    stamps start there). Equal-weight buttons; "Decide later" asks again next open.
+  - **Settings → Privacy:** new "Keep my passport private" switch (ON = private, confirms before going public);
+    "Set all my stamps" shows the real counts ("Right now: 12 🌍 Everyone · 3 🤝 Inner circle · 1 🔒 Only me");
+    changing "New stamps start at" asks "Also move your N existing stamps there?"; the albums line names City Boards;
+    the airport row no longer says "only you can see it".
+  - **Passport:** the badge says who can really see it ("🔒 Private — only your circle sees the stamps you share
+    with them" / "🌍 Public — anyone can see your N 🌍 Everyone stamps"); the share panel and first-visit tip match.
+- Verified: node --check; a harness over the real worker functions — every tier × public/private passport × albums
+  dial × takedown × unreviewed × teen owner opens exactly where it should; tampered/expired/other-level signatures
+  fail; `pcBoardOwners` drops private passports; the count summary pages past 1,000 stamps. eslint + no-undef,
+  build, boot-check. Captured as the demo account (profile/share replies mocked): the check-up sheet, Settings
+  privacy rows, the "move existing stamps" ask, the Passport badge.
+- **Not verified live:** the signed links on a phone (old app bundles keep working — the worker builds every link).
+  Photo links already sitting in a phone's cache keep showing for up to 10 min.
+- **Activate:** push → the worker deploys itself and the migration applies itself (~20 s); the app changes reach
+  phones with `npm run ota`.

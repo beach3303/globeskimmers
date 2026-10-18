@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-10-13
+Last updated: 2026-10-18
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -807,6 +807,18 @@ and starts with no photos; they add their own. Needs profile photos before faces
 9. **Honest flight prices** (N14): say "Lowest fare seen this week", never "cheapest month". Start recording flight prices daily per route so "usually lowest in …" becomes true after a year.
 
 Suggested by Claude, not yet agreed: a "See all hotels" link from a package into Find a Hotel with the same dates.
+
+## Growth audiences (founder, 2026-10-18) — feed the growth plan once privacy ships
+
+The founder wants to reach: **Filipinos who love to travel and post on social media**; **American missionaries,
+military (and their families) and Americans who travel**; travelers who post events — **people who came to the US
+for the 2026 World Cup**; those who will **explore the US for the LA 2028 Olympics**; **Europeans who love to
+travel**; **tech-savvy digital nomads**; **frequent flyers**. The 2026-10-13 growth plan
+(https://claude.ai/artifact/3mFy6c8s3p2Vqbn3p8K6xn) still holds in shape (count honestly → share links that land →
+alerts → Stamp Desk → Your 2026 in Stamps); it is to be updated with these audiences AFTER the privacy
+hardening (founder: privacy first, 2026-10-18 — share previews must never show a photo its owner thinks private).
+Privacy decisions the same day: a private passport takes your photos off City Boards; members whose stamps became
+🌍 Everyone in the 2026-10-15 backfill get a one-time, kind privacy check-up (no silent change).
 
 ## Website (globeskimmers.io)
 
