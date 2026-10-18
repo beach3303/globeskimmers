@@ -7,7 +7,7 @@
 //   Near:   'Be there, and it's *yours*' + the deck, iconic first, then nearest.
 //   Far:    nothing within ~25 mi, so one wider look: 'The nearest *stamps*' and
 //           '{distance} AWAY · WORTH THE TRIP', nearest first.
-//   None:   no stamps even then: 'No famous stamps around here yet' with 'Add a past
+//   None:   no stamps even then: 'No places to stamp around here yet' with 'Add a past
 //           trip' and 'Things to do nearby'.
 //   Nothing while loading, without coordinates, or when the read fails.
 //
@@ -128,7 +128,7 @@ export default function StampsNearYou({ onAction, onNearest, unit = "mi" }) {
     return (
       <HomeZone zone="stamps" label="Stamps near you">
         <h3 className="font-serif m-0" style={{ fontWeight: 400, fontSize: fs(22), lineHeight: 1.15, color: NEUTRAL.ink }}>
-          No famous stamps around here <em style={{ color: RED }}>yet</em>
+          No places to stamp around here <em style={{ color: RED }}>yet</em>
         </h3>
         <p style={{ margin: "6px 0 0", fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}>
           Stamps live at the world&rsquo;s iconic places. Been somewhere before? Add the trip with a photo you took there.
@@ -176,7 +176,8 @@ export default function StampsNearYou({ onAction, onNearest, unit = "mi" }) {
         farLabel && <p className="font-mono" style={{ margin: "4px 0 0", fontSize: fs(10.5), lineHeight: 1.4, letterSpacing: ".06em", color: NEUTRAL.ink3 }}>{farLabel} AWAY · WORTH THE TRIP</p>
       ) : (
         <p style={{ margin: "4px 0 0", fontSize: fs(12.5), lineHeight: 1.3, color: NEUTRAL.ink3 }}>
-          The famous places around you. Be at one and its stamp is yours for life, dated and verified.
+          {/* No "famous" (founder, 2026-10-17: "famous place is a claim"). */}
+          Places to stamp around you. Be at one and its stamp is yours for life, dated and verified.
         </p>
       )}
       <div className="flex items-start overflow-x-auto" style={{ gap: 12, marginTop: 12, marginRight: -16, paddingRight: 16, paddingBottom: 2, scrollbarWidth: "none" }}>

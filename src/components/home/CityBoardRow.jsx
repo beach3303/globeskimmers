@@ -1,9 +1,9 @@
-// CityBoardRow: 'Postcards from Lisbon' on Home, under your circle (City Board,
-// 2026-10-14). One airmail row with the city's postmark that opens the board. It shows
-// only when there is something honest to show: cards on the board, or a board you may
-// post to (you stamped the city, verified). Under it, 'See all cities & countries' opens the
-// City Boards (founder, 2026-10-14). When this city has no board but others do, a row
-// 'Postcards and photos from cities & countries' (founder, 2026-10-16) stands in its place. Nothing while the age tier is unknown,
+// CityBoardRow: 'Lisbon City Board' on Home (City Board, 2026-10-14; named so 2026-10-17, founder:
+// "explore City Board photo posts from other travelers … i want 'City board' to be there"). One
+// airmail row with the city's postmark that opens the board. It shows only when there is something
+// honest to show: posts on the board, or a board you may post to (you stamped the city, verified).
+// Under it, 'See all City Boards' opens the list. When this city has no board but others do, a row
+// 'Explore City Boards' stands in its place. Nothing while the age tier is unknown,
 // for a held account, or before the worker has boards.
 //
 //   <CityBoardRow city country />   the active location's city and country.
@@ -60,8 +60,8 @@ export default function CityBoardRow({ city = "", country = "", region = "" }) {
   // Counts stay quiet until they're big (founder, 2026-10-16: "we don't need to say this until
   // there are many posts") — a small number reads as empty.
   const line = n >= MANY_POSTS
-    ? `${here.next ? `${n}+` : n} from travelers who were really there`
-    : n ? "From travelers who were really there" : "You were here. Post the first one.";
+    ? `${here.next ? `${n}+` : n} photo posts from travelers who were really there`
+    : n ? "Explore photo posts from travelers who were really there" : "You were here. Post the first one.";
 
   return (
     // The zones' own column: px-4 outside, the same max width inside (Zone.jsx columnClass).
@@ -73,7 +73,7 @@ export default function CityBoardRow({ city = "", country = "", region = "" }) {
               <PostmarkRing city={c} date={new Date().toISOString()} color={BLUE} size={44} style={{ flexShrink: 0 }} />
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: "block", fontFamily: SERIF, fontSize: fs(19), lineHeight: 1.15, color: NEUTRAL.ink, overflowWrap: "anywhere" }}>
-                  Postcards from <em style={{ fontStyle: "italic", color: BLUE }}>{c}</em>
+                  <em style={{ fontStyle: "italic", color: BLUE }}>{c}</em> City Board
                 </span>
                 <span style={{ display: "block", marginTop: 2, fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink2 }}>{line}</span>
               </span>
@@ -82,7 +82,7 @@ export default function CityBoardRow({ city = "", country = "", region = "" }) {
             {boards.length ? (
               <Link to={cityBoardsUrl()}
                 style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2, minHeight: 44, padding: "0 4px", fontSize: fs(13), fontWeight: 600, color: BLUE, textDecoration: "none" }}>
-                See all cities &amp; countries
+                See all City Boards
                 <ChevronRight size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
               </Link>
             ) : null}
@@ -94,10 +94,10 @@ export default function CityBoardRow({ city = "", country = "", region = "" }) {
             </span>
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", fontFamily: SERIF, fontSize: fs(19), lineHeight: 1.15, color: NEUTRAL.ink }}>
-                Postcards and photos from <em style={{ fontStyle: "italic", color: BLUE }}>cities &amp; countries</em>
+                Explore <em style={{ fontStyle: "italic", color: BLUE }}>City Boards</em>
               </span>
               <span style={{ display: "block", marginTop: 2, fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink2 }}>
-                {total >= MANY_BOARDS ? `${total}${boards.length >= 60 ? "+" : ""} boards, from travelers who were really there` : "From travelers who were really there"}
+                {total >= MANY_BOARDS ? `${total}${boards.length >= 60 ? "+" : ""} boards of photo posts from travelers who were really there` : "Photo posts from travelers who were really there"}
               </span>
             </span>
             <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />

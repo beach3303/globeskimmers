@@ -17,7 +17,7 @@ import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
 import StampThumb from "@/components/passport/StampThumb";
 import { KM_PER_MI, distanceLabel } from "@/lib/units";
 
-// The 64px tile with the gold edge that holds the newest stamp (cream), or the
+// The 50px tile with the gold edge that holds the newest stamp (cream), or the
 // zero state's globe (night navy).
 function Tile({ children, night = false }) {
   return (
@@ -25,8 +25,8 @@ function Tile({ children, night = false }) {
       aria-hidden="true"
       style={{
         flex: "none",
-        width: 64,
-        height: 64,
+        width: 50,
+        height: 50,
         boxSizing: "border-box",
         borderRadius: 12,
         background: night ? NEUTRAL.coverNight : NEUTRAL.cream,
@@ -42,6 +42,20 @@ function Tile({ children, night = false }) {
   );
 }
 
+// On the gold every Home tab shares (Zone's HOME_TAB), the passport's name is set in the serif,
+// italic and larger, with a light emboss: the one tab that reads as a title, not a label.
+const TAB_POP = {
+  fontFamily: "'Instrument Serif', Georgia, serif",
+  fontStyle: "italic",
+  fontSize: fs(17),
+  fontWeight: 400,
+  letterSpacing: ".01em",
+  textTransform: "none",
+  lineHeight: 1,
+  padding: "6px 16px 6px 15px",
+  textShadow: "0 1px 0 rgba(255,244,214,.65)",
+};
+
 export default function PassportHero({ total, newest = null, nearest = null, unit = "mi", error = null, onOpen }) {
   const loading = total == null && !error;
   const failed = !!error;
@@ -56,13 +70,13 @@ export default function PassportHero({ total, newest = null, nearest = null, uni
   if (nearest && nearest.name) next = `NEXT STAMP · ${String(nearest.name).toUpperCase()}${dist ? ` · ${dist}` : ""}`;
   else if (!loading && !failed) next = has ? "OPEN THE BOOKLET · SHARE A PAGE" : "STAMP YOUR HOME CITY TO BEGIN";
 
-  const headStyle = { display: "block", fontSize: fs(28), lineHeight: 1.15, color: NEUTRAL.cream };
+  const headStyle = { display: "block", fontSize: fs(22), lineHeight: 1.15, color: NEUTRAL.cream };
   const accent = { fontStyle: "italic", color: NEUTRAL.gold };
 
   let headline;
   if (loading) {
     // A quiet, wordless placeholder: a bar where the count goes, no number.
-    headline = <span aria-hidden="true" style={{ display: "block", width: "62%", height: 26, borderRadius: 6, background: rgba(NEUTRAL.cream, 0.12) }} />;
+    headline = <span aria-hidden="true" style={{ display: "block", width: "62%", height: 22, borderRadius: 6, background: rgba(NEUTRAL.cream, 0.12) }} />;
   } else if (failed) {
     headline = <span className="font-serif" style={headStyle}>Open your Virtual <em style={accent}>Passport</em></span>;
   } else if (has) {
@@ -72,12 +86,15 @@ export default function PassportHero({ total, newest = null, nearest = null, uni
   }
 
   let tile = null;
-  if (loading) tile = <Tile><span style={{ display: "block", width: 40, height: 40, borderRadius: 999, background: rgba(NEUTRAL.navy, 0.08) }} /></Tile>;
-  else if (has && newest) tile = <Tile><StampThumb stamp={newest} size={52} /></Tile>;
-  else if (!failed && count === 0) tile = <Tile night><Globe size={28} color={NEUTRAL.gold} strokeWidth={2} /></Tile>;
+  if (loading) tile = <Tile><span style={{ display: "block", width: 32, height: 32, borderRadius: 999, background: rgba(NEUTRAL.navy, 0.08) }} /></Tile>;
+  else if (has && newest) tile = <Tile><StampThumb stamp={newest} size={40} /></Tile>;
+  else if (!failed && count === 0) tile = <Tile night><Globe size={22} color={NEUTRAL.gold} strokeWidth={2} /></Tile>;
 
   return (
-    <HomeZone zone="passport" label="My Virtual Passport" onPress={onOpen} ariaLabel="Open your Virtual Passport">
+    // Shorter, under Nearby services, its name the one serif tab (founder, 2026-10-17: "shrink the size
+    // … make 'my virtual passport' attractive to look at and pop"). Home only: Profile keeps its look.
+    <HomeZone zone="passport" label="My Virtual Passport" onPress={onOpen} ariaLabel="Open your Virtual Passport"
+      boxPadding="14px 16px 13px" tabStyle={TAB_POP}>
       <span style={{ position: "relative", display: "flex", alignItems: "center", gap: 14 }}>
         <span style={{ flex: 1, minWidth: 0, display: "block" }}>
           {headline}

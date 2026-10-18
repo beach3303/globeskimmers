@@ -626,9 +626,12 @@ export default function HomePage() {
       {destSearch && !destDismissed && (
         <DestinationStrip place={destSearch} onAction={handleQuickAction} onDismiss={() => setDestDismissed(true)} />
       )}
+      {/* Nearby services right under the search (founder, 2026-10-17): Eat, Coffee, Things to do
+          are the first thing a traveler reaches for, before the passport. */}
+      <NearbyServices wide={isTablet} onAction={handleQuickAction} onAllServices={openAllServices} />
 
       {/* THE ZONES — one fixed order, each zone its own <section data-zone>
-          (bible.home.order): passport, the boards row, nearby services, stamps
+          (bible.home.order; nearby services moved above them, 2026-10-17): passport, the boards row, stamps
           near you, the stamp shelf (dream stack only), local favorites, then
           the closing quote. Your circle's activity lives in the Mailbox only
           (founder, 2026-10-16: "remove your circle activity post from Home page"). Each zone renders nothing when it has nothing
@@ -644,7 +647,6 @@ export default function HomePage() {
       />
       {/* City Board: 'Postcards from Lisbon', only when that board has something to show. */}
       <CityBoardRow city={activeLocation?.address?.city} country={activeLocation?.address?.country} region={activeLocation?.address?.state} />
-      <NearbyServices wide={isTablet} onAction={handleQuickAction} onAllServices={openAllServices} />
       {isTablet && rowsFirst && <HomeRows unit={unit} onAction={handleQuickAction} />}
       <StampsNearYou unit={unit} onAction={handleQuickAction} onNearest={setNearestStamp} />
       {isTablet && !rowsFirst && <HomeRows unit={unit} onAction={handleQuickAction} />}

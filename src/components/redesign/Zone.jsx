@@ -37,6 +37,9 @@
 //        Boxes: px-4 and a max-w-md column (720px from md), 16px above each box, the tab as
 //          the h2, then the folder at size 'home' with ZONE.padBox. A zone whose box padding
 //          has no right side (services) gets a 16px fade in its fill on the right edge.
+//          Every tab is gold with navy caps (HOME_TAB, 2026-10-17). boxPadding replaces
+//          ZONE.padBox and tabStyle restyles one box's tab (the passport: shorter, its name in
+//          the serif).
 //        Bands: a full-bleed fill with ZONE.padBand around the same column, opened by a
 //          kicker row (the h2 and a hairline in ZONE.rule). Passport: gold double rule;
 //          circle: 5px airmail chevron; stamps: perforated top edge pulled 4px over the band
@@ -256,6 +259,7 @@ export function Folder({
   padding = undefined,
   as: Box = 'div',
   tabAs = 'h2',
+  tabStyle = undefined,
   tabId = undefined,
   className = undefined,
   style = undefined,
@@ -278,7 +282,7 @@ export function Folder({
     // beat its own box, and a menu that opens inside a folder can still overlap the next.
     <div className={className} style={style}>
       {hasTab ? (
-        <FolderTab tone={z.key} size={size} as={tabAs} id={tabId}>
+        <FolderTab tone={z.key} size={size} as={tabAs} id={tabId} style={tabStyle}>
           {tab}
         </FolderTab>
       ) : null}
@@ -383,6 +387,18 @@ function BandOrnament({ zone }) {
 /**
  * @param {{ zone: string, label?: import('react').ReactNode, onPress?: (e: any) => void, ariaLabel?: string, wide?: boolean, variant?: 'boxes'|'bands', kicker?: 'top'|'inline', kickerGap?: number, className?: string, style?: CSS, children?: import('react').ReactNode }} props
  */
+// Every Home tab in one gold with navy caps (founder, 2026-10-17: "for consistency let's make all
+// tab with same background color as my virtual passport"). A zone's tabStyle still goes on top.
+const HOME_TAB = {
+  background: 'linear-gradient(180deg, #F7D37C, #E3AE45)',
+  color: NEUTRAL.navy,
+  fontWeight: 700,
+  borderTop: '1px solid rgba(178,128,38,.55)',
+  borderLeft: '1px solid rgba(178,128,38,.55)',
+  borderRight: '1px solid rgba(178,128,38,.55)',
+  boxShadow: '0 2px 6px -2px rgba(227,174,69,.7)',
+};
+
 export function HomeZone({
   zone,
   label = undefined,
@@ -392,6 +408,8 @@ export function HomeZone({
   variant = undefined,
   kicker = 'top',
   kickerGap = 8,
+  boxPadding = undefined,
+  tabStyle = undefined,
   className = undefined,
   style = undefined,
   children = null,
@@ -422,6 +440,8 @@ export function HomeZone({
               size="home"
               tab={text}
               tabId={headId}
+              tabStyle={tabStyle ? { ...HOME_TAB, ...tabStyle } : HOME_TAB}
+              padding={boxPadding}
               as={pressable ? 'button' : 'div'}
               onClick={pressable ? onPress : undefined}
               aria-label={pressable ? name : undefined}
