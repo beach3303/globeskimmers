@@ -2076,3 +2076,91 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   COOL! press answered ok). OTA **1.0.2610170249** by the founder (`capgo channel list` ✓): phones get the
   doodle fix, the Admin Portal's Find box, and everything from ce4c9a4 (required @username at sign-up,
   the Home username sheet, the boards wording, Home without the circle zone).
+
+## 2026-10-17 — Globeskimmers in the phone's share list + Upload photos sorted by place and day + Home/Passport wording (NOT COMMITTED)
+- **Why:** founder 10-17: "upload photos from gallery … could not find the app on the list of apps". The app
+  never told either OS it takes photos: no iOS Share Extension, no Android SEND intent filter. The in-app
+  photo buttons were fine; the Photos/Gallery → Share list had no Globeskimmers.
+- **Plugin:** `@capgo/capacitor-share-target` 8.0.62 (Capacitor 8, same vendor as the updater); added to
+  `android.includePlugins` and `plugins.CapacitorShareTarget.appGroupId = group.com.globeskimmers.app`.
+- **iOS:** new target `ShareExtension` (ios/App/ShareExtension, bundle com.globeskimmers.app.ShareExtension,
+  embedded in App via "Embed Foundation Extensions"). Up to 10 images; each becomes a ≤2560 px upright JPEG in
+  the app group that KEEPS the photo's EXIF GPS + capture time (a raw iPhone HEIC reads as no proof — JPEG only),
+  then opens globeskimmers://share. If iOS won't let it open the app it says "Your photos are ready. Open
+  Globeskimmers to stamp them." — the plugin also checks every time the app comes forward. App group on both
+  targets' entitlements.
+- **Android:** SEND + SEND_MULTIPLE image/* filters on MainActivity. Capacitor's BridgeActivity already hands
+  the launch intent to plugins, so a share into a closed app arrives too.
+- **App:** src/lib/sharedPhotos.js (listener in AuthContext; routes to /Passport once signed in). Old store
+  builds: the listener fails quietly.
+- **Upload photos + the photo sorter** (founder 10-17: "people get so confused"; photos taken on different
+  dates in different places). Passport: a red **📷 Upload photos** button (gallery, several at once) beside a
+  white **📍 Stamp where I am** (was ✍️ Stamp a place; founder 10-17 — it's the on-the-spot GPS stamp; the form it opens keeps the title Stamp a place); final wording and layout below
+  Upload photos and shared photos both open `components/passport/PhotoSorter.jsx`:
+  - a share asks first: **Get a stamp** ("Where this photo was taken.") or, for several, **Get stamps**
+    ("Where each photo was taken, one place at a time.") / **Send as a postcard** (several photos → "Pick the photo for
+    your postcard"; PostcardCompose opens with it, addressed to your circle);
+  - photos group by their own location + capture day: within 300 m and 2 days of the group's first photo
+    (the worker's photo proof is 400 m / 2 days, and the stamp sits at the first photo rounded to a block),
+    so every group proves its own stamp. Same place 3+ days later = its own visit (visit ids carry the date);
+  - a group at a stamp you already have (400 m, 2 days, album under 30) → "Add N photos to your stamp";
+    no location → one row per day ("you'll search for the place"); before 2021-01-01 → greyed, not stamped;
+  - "These photos are from N places — We stamp one place at a time" with ticks; Continue adds to existing
+    stamps, then Stamp a place opens per new place with "Place 1 of 3 · Skip", already filled from the
+    sorter's lookup (no second /photo-place call). A place with more than 4 photos: first 4 in the form
+    (the print), the rest go to the stamp's album. One place and nothing else → straight to Stamp a place.
+  - **Empty passport = two choices only** (founder 10-17: "Stamp Los Angeles" — what in Los Angeles? — and
+    "famous places" is a claim): the card keeps "Your passport is ready" + "Stamps are earned by being there:
+    stamp the place you're at right now, or upload a photo from a trip."; "🏠 Stamp <home city>" / "Set your
+    home city" and "📍 Stamps near me" are gone, and so is mintHomeCity (the fallback for members whose
+    onboarding page-one mint never happened — onboarding itself still mints it). Under the card, stacked:
+    **📷 Upload photo to get a stamp** ("One photo or many. We find where each was taken.") and
+    **📍 Stamp where I am** ("At a place right now? Your phone's location proves it."). Same two on a passport
+    with stamps.
+  - **Home:** Nearby services (Eat / Coffee / Things to do) moved directly under the search bar, above the
+    passport hero (founder 10-17). **City Board row** reworded (founder: "i want 'City board' to be there"):
+    "<City> City Board" · "Explore photo posts from travelers who were really there" (25+: "N photo posts
+    from…"), link "See all City Boards"; with no board here, "Explore City Boards" · "Photo posts from
+    travelers who were really there". **Passport card on Home** (founder: "shrink the size … make 'my virtual
+    passport' brighter and make it pop"): padding 22/18/18 → 14/16/13, headline 28 → 22 px, tile 64 → 50 px,
+    Home only, through new HomeZone props boxPadding + tabStyle (Folder gains tabStyle); Profile's passport
+    folder is unchanged. **Every Home tab is gold** (founder: "for consistency let's make all tab with same
+    background color as my virtual passport"; "only for tabs"): HOME_TAB in Zone.jsx — gradient #F7D37C →
+    #E3AE45, bold navy mono caps, gold edge — on Nearby services, Stamps near you, Stamp shelf, Local favorites
+    (and Your circle / Around you where they show); the boxes keep their own colours. The passport tab keeps the
+    gold with its name in Instrument Serif italic, 17 px, navy, light emboss ("attractive to look at and pop").
+    **Stamps near you** drops "famous" (founder: "famous place is a claim"): "Places to stamp around you. Be at
+    one and its stamp is yours for life, dated and verified."; empty state "No places to stamp around here yet".
+    All captured as the demo account (passport list mocked empty).
+  - `STAMP_EARLIEST` + `photoOptions` moved to src/lib/passport.js; the too-old note said "January 1, 2026"
+    while stamps reach back to 2021 — it now reads the real first day.
+- Verified: eslint + no-undef (touched files), build, boot-check; `npx cap sync`; iOS Debug simulator build ✓
+  (pluginkit lists com.globeskimmers.app.ShareExtension(1.0.4)); HEIC 4032×3024 orientation 6 + GPS → JPEG
+  1920×2560 orientation 1, readPhotoExif → 48.8584, 2.2945, 2026-10-12T14:03:22; cold start with a staged share
+  → the app's listener produced the photo, app-group data consumed; Android assembleDebug ✓, merged manifest
+  has both filters. NOT verified: tapping Share → Globeskimmers on a real phone (simulator headless, no Android
+  emulator image), the extension opening the app, the Stamp a place screen with shared photos (sign-in gate).
+  Sorter: grouping run on 8 real JPEGs with EXIF (esbuild + stubs) → Eiffel Oct 12–13 (3), Sagrada Oct 15,
+  Eiffel Oct 16 (own visit), Louvre → add to the existing stamp, no-location Oct 13, 2019 greyed. Screens
+  captured in headless Chrome with a fake /photo-place (share choice, list, postcard pick; Continue → the
+  add, then four Stamp a place steps in order with their hints). The Passport button and the queued
+  Stamp a place header were not captured (sign-in gate).
+- **Versions:** the extension has its own MARKETING_VERSION / CURRENT_PROJECT_VERSION (now 1.0.4 / 14). Bump
+  all FOUR build configs together (App + ShareExtension, Debug + Release) or App Store Connect flags the mismatch.
+- **Activate (founder):** native builds only — an OTA cannot add an extension or intent filters.
+  (1) Xcode → App target and ShareExtension target → Signing & Capabilities: confirm the App Groups capability
+  shows group.com.globeskimmers.app on both (automatic signing registers the group and the extension's App ID
+  on first archive; click "+" / the refresh if it reports a missing group). (2) bump versions (all four
+  configs), `npm run cap:all`, archive → TestFlight; Android Studio → aab → Play. (3) On the phone: Photos →
+  a photo → Share → Globeskimmers (first time: "More" / Edit Actions may be needed to show it in the row) →
+  Stamp the places → Stamp a place opens with the photo, place and date filled. (4) The sorter and the Upload
+  photos button are JS: they also reach phones with `npm run ota`, but sharing INTO the app needs (2).
+- **City Board wall:** the @username chip is gone from every photo tile (founder 10-17: "remove @handle from
+  this feed page … from each photo") and the tile names WHERE the photo was taken instead ("put the text of
+  attraction name instead … or the city"): the stamp's name (row.place, e.g. "Universal Studios Hollywood"), or
+  the city when the stamp is city-wide; white 8.5 px type with a soft shadow on a light see-through chip
+  (founder: "lighter background … so the photo can be seen … a tad smaller text"), two lines at most. No worker change (rows
+  already carry place + city). The poster still shows when a photo is opened, and the tile's screen-reader
+  label still names them. Captured on the Los Angeles board as the demo account.
+- **Open (founder's call):** the demo account appreview@ has no @username, so since 10-16 App Review lands on
+  Home's un-dismissable "Pick your @username" sheet. Set one (e.g. @appreview) before the next submission.
