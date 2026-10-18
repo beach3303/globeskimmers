@@ -7149,14 +7149,14 @@ async function ttdPlaceTruth(env, entityId, origin) {
   const k = ttdIdKind(entityId);
   if (k === 'd1' && env.ATTRACTIONS_DB) {
     const r = await env.ATTRACTIONS_DB.prepare('SELECT * FROM attractions WHERE id = ?1 LIMIT 1').bind(entityId).first().catch(() => null);
-    if (r && Number.isFinite(+r.lat) && Number.isFinite(+r.lng)) return { lat: +r.lat, lng: +r.lng, radius: ppStampRadius(r), shape: ppShapeFor(entityId, null), name: r.name || null };
+    if (r && Number.isFinite(+r.lat) && Number.isFinite(+r.lng)) return { lat: +r.lat, lng: +r.lng, radius: ppStampRadius(r), shape: ppShapeFor(entityId, null) || ppShapeNear(r.name, +r.lat, +r.lng), name: r.name || null };
     return null;
   }
   let gid = String(entityId).startsWith('places:') ? String(entityId).slice(7) : String(entityId).startsWith('owned:') ? await ttdGidFor(env, entityId) : null;
   const d = gid ? await ttdPlaceDetails(env, gid, origin) : null;
   const lat = Number(d?.latitude ?? d?.location?.latitude), lng = Number(d?.longitude ?? d?.location?.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { lat, lng, radius: ppStampRadius({ category: [d.primaryType, ...(d.types || [])].filter(Boolean).join(' ') }), shape: ppShapeFor(null, gid), gid, name: d.name || null, types: [d.primaryType, ...(d.types || [])].filter(Boolean) };
+  return { lat, lng, radius: ppStampRadius({ category: [d.primaryType, ...(d.types || [])].filter(Boolean).join(' ') }), shape: ppShapeFor(null, gid) || ppShapeNear(d.name, lat, lng), gid, name: d.name || null, types: [d.primaryType, ...(d.types || [])].filter(Boolean) };
 }
 
 // POST /attractions/link { placeId, name, lat, lng } → { stamp: {id,…} | null }
@@ -14348,6 +14348,23 @@ function ppStampRadius(place) {
 // ([lat, lng], from OpenStreetMap) plus buffer_m, which covers both sidewalks;
 // GPS counts anywhere within buffer_m of a line. Matched by D1 id or Google id.
 const PP_SHAPES = [
+  // Inside only (founder, 2026-10-18: "only allow stamp if users are inside the building, not outside
+  // … they could be at the top"): the stamp is earned within the walls — the lobby or the
+  // observatory — never from the sidewalk. The outline is OpenStreetMap way 34633854 (350 Fifth
+  // Avenue); a GPS reading or a photo's location tag must fall inside it, with no GPS slack, and a
+  // photo is never proven by recognition (a picture of the facade is taken from outside). name_re
+  // finds it from a Google listing or a Stamp-a-place visit too.
+  {
+    key: 'empire-state-building',
+    stamp_id: 'icon:Q9188',
+    ids: ['icon:Q9188', 'curated:united-states-new-york-empire-state-building', 'curated:united-states-new-york-city-empire-state-building', 'wikidata:Q9188'],
+    gids: [],
+    name_re: /empire\s+state\s+building/i,   // not the Empire State Diner around the corner
+    inside_only: true,
+    buffer_m: 0,
+    polygon: [[40.748491, -73.986501], [40.747926, -73.985160], [40.748393, -73.984817], [40.748959, -73.986157], [40.748730, -73.986325], [40.748689, -73.986355], [40.748514, -73.986484]],
+    inside_note: 'The Empire State Building is stamped from inside — the lobby or the observatory.',
+  },
   {
     key: 'hollywood-walk-of-fame',
     stamp_id: 'icon:Q71719', // the official stamp every id of this place resolves to
@@ -14363,12 +14380,29 @@ const PP_SHAPES = [
 function ppShapeFor(id, gid) {
   return PP_SHAPES.find((s) => (id && s.ids.includes(id)) || (gid && s.gids.includes(gid))) || null;
 }
+// A shaped place found by its name close to it (a Google listing whose id isn't on the shape, a
+// Stamp-a-place visit, an older stamp row): within 400 m of the shape, the reach of photo proof.
+function ppShapeNear(name, lat, lng) {
+  if (!name || !Number.isFinite(+lat) || !Number.isFinite(+lng)) return null;
+  return PP_SHAPES.find((sh) => sh.name_re && sh.name_re.test(String(name)) && ppMetersToShape(sh, +lat, +lng) <= 400) || null;
+}
+function ppInPolygon(poly, lat, lng) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [yi, xi] = poly[i], [yj, xj] = poly[j];
+    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
 // Metres from a point to the nearest line of a shape, on a flat local
 // projection (exact to well under a metre across a few kilometres).
 function ppMetersToShape(shape, lat, lng) {
   const ky = 110574, kx = 111320 * Math.cos(lat * Math.PI / 180);
+  // A building outline: 0 inside it, else the distance to its nearest wall.
+  if (shape.polygon && ppInPolygon(shape.polygon, lat, lng)) return 0;
+  const lines = shape.polygon ? [[...shape.polygon, shape.polygon[0]]] : shape.lines;
   let best = Infinity;
-  for (const line of shape.lines) {
+  for (const line of lines) {
     for (let i = 0; i + 1 < line.length; i++) {
       const ax = (line[i][1] - lng) * kx, ay = (line[i][0] - lat) * ky;
       const bx = (line[i + 1][1] - lng) * kx, by = (line[i + 1][0] - lat) * ky;
@@ -14606,7 +14640,7 @@ async function handlePassportStamp(request, env, ctx) {
         if (k1 === 'tagged' || k1 == null) { b.entity_type = 'local'; startPrivate = ppSensitivePlace(name, []); }
       } else if (!hasFix) refusal = 'proof_needed';
       else {
-        const slack = Number.isFinite(fix.acc) && fix.acc >= 0 ? Math.min(fix.acc, 100) : 50;
+        const slack = truth.shape?.inside_only ? 0 : Number.isFinite(fix.acc) && fix.acc >= 0 ? Math.min(fix.acc, 100) : 50;
         // A shaped place measures to its nearest line; everything else to its pin.
         meters = truth.shape ? ppMetersToShape(truth.shape, fix.lat, fix.lng) : haversineMilesLoc(truth.lat, truth.lng, fix.lat, fix.lng) * 1609.34;
         reach = truth.shape ? truth.shape.buffer_m : truth.radius;
@@ -14619,11 +14653,16 @@ async function handlePassportStamp(request, env, ctx) {
       }
       // The anti-spoof checks above can still have taken the \u2713 away.
       if (!refusal && verified !== 'gps') refusal = 'unconfirmed';
+      // An inside-only place is never granted from outside, reported or not (founder, 2026-10-18).
+      if ((refusal === 'not_here' || refusal === 'proof_needed') && reporting && truth?.shape?.inside_only) {
+        return jsonResponse({ error: refusal === 'not_here' ? `${truth.shape.inside_note} Your GPS shows you outside the building.` : `${truth.shape.inside_note} Turn on location and try again from inside.`, code: refusal, inside_only: true, ...(Number.isFinite(meters) ? { distance_m: Math.round(meters) } : {}) }, 409);
+      }
       if (refusal) {
         // Counted per place with no position (founder: a place that fails
         // quietly still shows up), whether or not the person reports it.
         if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp_refused', { code: refusal, entity_id: countedAs, name: countedName, d: ppBand(meters, [50, 150, 500, 1500, 5000]), radius_m: reach, acc: ppBand(fix?.acc, [20, 65, 100, 300]), reported: reporting }));
         if (!reporting) {
+          if (refusal === 'not_here' && truth.shape?.inside_only) return jsonResponse({ error: `${truth.shape.inside_note} Your GPS shows you outside the building.`, code: 'not_here', inside_only: true, distance_m: Math.round(meters) }, 409);
           if (refusal === 'not_here' || refusal === 'other_variant') return jsonResponse({ error: 'Your GPS doesn\u2019t show you at this place yet \u2014 stamping opens when you\u2019re here', code: 'not_here', distance_m: Math.round(meters), radius_m: reach, ...(refusal === 'other_variant' ? { other_variant: true } : {}) }, 409);
           // 'unconfirmed' falls through to the proof gate below, exactly as
           // before \u2014 and a reading we don't trust keeps no zone, re-keys nothing.
@@ -14746,6 +14785,10 @@ async function handlePassportStamp(request, env, ctx) {
       ...(startPrivate ? { hidden: true } : {}),
     };
     if (row.visibility === 'me') row.hidden = true;
+    // A Stamp-a-place visit to an inside-only place: the phone measured its own GPS, which the worker
+    // can't see, so it is proven by a photo taken inside instead (founder, 2026-10-18).
+    const insideVisit = kind === 'city' && String(b.entity_type || '') === 'visit' ? ppShapeNear(name, lat, lng) : null;
+    if (insideVisit?.inside_only && verified === 'gps') verified = 'self';
     // No stamp without proof (founder doctrine, 2026-10-03). A new stamp is
     // either GPS-corroborated, or arrives with a proof photo (await_proof —
     // the client uploads it next and deletes the stamp if it proves nothing).
@@ -14759,7 +14802,9 @@ async function handlePassportStamp(request, env, ctx) {
       }
       if (!exists) {
         return jsonResponse({
-          error: b.verified === 'gps'
+          error: insideVisit?.inside_only
+            ? `${insideVisit.inside_note} Add a photo you took inside to stamp it.`
+            : b.verified === 'gps'
             ? "We couldn\u2019t confirm you\u2019re here \u2014 add a photo you took here to earn this stamp"
             : 'Stamps need proof \u2014 be there, or add a photo you took there',
           code: 'proof_needed',
@@ -15272,8 +15317,10 @@ function ppPhotoLocProves(stamp, exif) {
   if (!exif || !Number.isFinite(+stamp?.lat) || !Number.isFinite(+stamp?.lng)) return false;
   const lat = +exif.lat, lng = +exif.lng;
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return false;
-  const meters = haversineMilesLoc(+stamp.lat, +stamp.lng, lat, lng) * 1609.34;
-  if (meters > (stamp.kind === 'airport' ? 3000 : 400)) return false;
+  // An inside-only place: the photo was taken inside its outline, or it proves nothing.
+  const inside = ppShapeNear(stamp.name, +stamp.lat, +stamp.lng);
+  const meters = inside?.inside_only ? ppMetersToShape(inside, lat, lng) : haversineMilesLoc(+stamp.lat, +stamp.lng, lat, lng) * 1609.34;
+  if (inside?.inside_only ? meters > 0 : meters > (stamp.kind === 'airport' ? 3000 : 400)) return false;
   const d = String(exif.taken_at || '').slice(0, 10);
   if (stamp.visited_on && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
     if (Math.abs(Date.parse(d) - Date.parse(stamp.visited_on)) / 86400000 > 2) return false;
@@ -15384,7 +15431,10 @@ async function handlePassportPhotoUpload(request, env, ctx) {
     const tooOld = /^\d{4}-\d{2}-\d{2}$/.test(takenDay) && takenDay < PP_EARLIEST;
     let proof = null, ai = null;
     if (!tooOld && rankOf(stamp.verified) < rankOf('photo_loc') && ppPhotoLocProves(forCheck, exif)) proof = 'photo_loc';
-    if (!proof && !tooOld && rankOf(stamp.verified) < rankOf('photo_ai') && mediaType === 'image/jpeg' && await ppVisionAllowed(env, user.id)) {
+    // Recognition can't tell inside from outside (a facade photo is taken from the street), so an
+    // inside-only place is proven by the photo's location tag alone.
+    const insideOnly = !!ppShapeNear(stamp.name, +stamp.lat, +stamp.lng)?.inside_only;
+    if (!proof && !insideOnly && !tooOld && rankOf(stamp.verified) < rankOf('photo_ai') && mediaType === 'image/jpeg' && await ppVisionAllowed(env, user.id)) {
       ai = await ppRecognizePlace(env, bytes, mediaType, stamp);
       if (ppAiProves(ai)) proof = 'photo_ai';
     }

@@ -54,7 +54,8 @@ const filmLabel = (f) => (f && f.title ? `Filmed here: ${f.title}${f.year ? ` ($
 // "I'm here, but the app is saying I'm not" always grants it and tells us.
 function RefusedNote({ r, name, busy, onReport, fmt }) {
   const away = (m) => (fmt ? fmt(m) : m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`);
-  const text = r.why === "denied" ? "Location is off for GlobeSkimmers — turn it on in Settings, then try again."
+  const text = r.inside && r.message ? r.message
+    : r.why === "denied" ? "Location is off for GlobeSkimmers — turn it on in Settings, then try again."
     : r.why === "no_fix" ? "We couldn’t get a GPS reading just now — step outside or give it a moment, then try again."
     : r.why === "unlocatable" ? "We can’t place this attraction on our map yet."
     : r.why === "unconfirmed" ? "We couldn’t confirm your GPS reading — a VPN, or a long trip today, can cause this."
@@ -63,11 +64,16 @@ function RefusedNote({ r, name, busy, onReport, fmt }) {
   return (
     <div className="w-full rounded-[12px] px-3 py-2.5 mt-2" style={{ background: "#FFF8EC", border: "1px solid #FCD9A8" }}>
       <p style={{ fontSize: fs(12.5), color: "#7A4A0C", lineHeight: 1.4 }}>{text}</p>
-      <button type="button" onClick={onReport} disabled={busy} className="w-full rounded-[10px] py-2 mt-2 font-bold disabled:opacity-60"
-        style={{ background: "#fff", color: STAMP, border: `1.5px solid ${STAMP}`, fontSize: fs(13), fontFamily: "inherit" }}>
-        {busy ? "Sending…" : "I’m here, but the app is saying I’m not"}
-      </button>
-      <p className="text-center" style={{ fontSize: fs(11), color: "#7A4A0C", marginTop: 4 }}>You&rsquo;ll get the stamp, and we&rsquo;ll check our map for this place.</p>
+      {/* An inside-only place (the Empire State Building) is never granted from outside: no report door. */}
+      {!r.inside && (
+        <>
+          <button type="button" onClick={onReport} disabled={busy} className="w-full rounded-[10px] py-2 mt-2 font-bold disabled:opacity-60"
+            style={{ background: "#fff", color: STAMP, border: `1.5px solid ${STAMP}`, fontSize: fs(13), fontFamily: "inherit" }}>
+            {busy ? "Sending…" : "I’m here, but the app is saying I’m not"}
+          </button>
+          <p className="text-center" style={{ fontSize: fs(11), color: "#7A4A0C", marginTop: 4 }}>You&rsquo;ll get the stamp, and we&rsquo;ll check our map for this place.</p>
+        </>
+      )}
     </div>
   );
 }
@@ -171,7 +177,7 @@ export default function NearbyStampPrompt({ stamps, onStamped }) {
     if (payload && STAMP_REFUSALS.includes(res.data?.code)) {
       // proof_needed WITH a fix: the worker measured you inside but didn't
       // trust the reading (a VPN, or impossible travel since your last stamp).
-      setRefused({ key: c.key, why: res.data.code === "proof_needed" && payload.refused.fix ? "unconfirmed" : res.data.code, meters: Number.isFinite(res.data.distance_m) ? res.data.distance_m : null, payload: payload.report });
+      setRefused({ key: c.key, why: res.data.code === "proof_needed" && payload.refused.fix ? "unconfirmed" : res.data.code, meters: Number.isFinite(res.data.distance_m) ? res.data.distance_m : null, inside: res.data.inside_only === true, message: res.data.error || null, payload: payload.report });
       return;
     }
     if (res.error || !res.data?.id) { showToast(/sign in/i.test(res.error || "") ? "Sign in to stamp your Virtual Passport" : (res.error || "Could not add stamp"), "error"); return; }

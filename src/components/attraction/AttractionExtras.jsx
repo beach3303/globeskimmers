@@ -212,7 +212,7 @@ export function StampHereButton({ a, link: resolved, formatDistance = undefined,
     if (STAMP_REFUSALS.includes(data?.code)) {
       // proof_needed WITH a fix: the worker measured you inside but didn't
       // trust the reading (a VPN, or impossible travel since your last stamp).
-      setRefused({ why: data.code === "proof_needed" ? "unconfirmed" : data.code, meters: Number.isFinite(data.distance_m) ? data.distance_m : null, message: data.error || null, req: reportReq });
+      setRefused({ why: data.code === "proof_needed" ? "unconfirmed" : data.code, meters: Number.isFinite(data.distance_m) ? data.distance_m : null, message: data.error || null, inside: data.inside_only === true, req: reportReq });
       return;
     }
     if (error) { showToast(/sign in/i.test(error) ? "Sign in to stamp your Virtual Passport" : error, "error"); return; }
@@ -233,8 +233,10 @@ export function StampHereButton({ a, link: resolved, formatDistance = undefined,
     granted(data, refused.req, true);
   };
   const away = (m) => fmtDist(m / 1609.34);
+  // An inside-only place (the Empire State Building) says so in the worker's words (2026-10-18).
   const refusalText = (r) => (
-    r.why === "denied" ? "Location is off for GlobeSkimmers — turn it on in Settings, then tap Stamp again."
+    r.inside && r.message ? r.message
+      : r.why === "denied" ? "Location is off for GlobeSkimmers — turn it on in Settings, then tap Stamp again."
       : r.why === "no_fix" ? "We couldn’t get a GPS reading just now — step outside or give it a moment, then tap Stamp again."
       : r.why === "unlocatable" ? "We can’t place this attraction on our map yet."
       : r.why === "unconfirmed" ? "We couldn’t confirm your GPS reading — a VPN, or a long trip today, can cause this."
@@ -311,11 +313,15 @@ export function StampHereButton({ a, link: resolved, formatDistance = undefined,
         {refused && !stamped && (
           <div style={{ marginTop: 8, borderRadius: 14, border: `1px solid ${NEUTRAL.creamRule}`, background: NEUTRAL.cream, padding: "12px 12px 8px" }}>
             <p style={{ fontSize: fs(13), lineHeight: 1.45, color: NEUTRAL.ink }}>{refusalText(refused)}</p>
-            <button type="button" onClick={report} aria-disabled={reportBusy || undefined}
-              style={{ ...stampOutline, marginTop: 10, width: "100%", padding: "8px 12px", fontSize: fs(13.5), cursor: reportBusy ? "default" : "pointer" }}>
-              {reportBusy ? "Sending…" : "I’m here, but the app is saying I’m not"}
-            </button>
-            <p style={{ marginTop: 6, fontSize: fs(12), lineHeight: 1.4, color: NEUTRAL.ink3, textAlign: "center" }}>You&rsquo;ll get the stamp, and we&rsquo;ll check our map for this place.</p>
+            {!refused.inside && (
+              <>
+                <button type="button" onClick={report} aria-disabled={reportBusy || undefined}
+                  style={{ ...stampOutline, marginTop: 10, width: "100%", padding: "8px 12px", fontSize: fs(13.5), cursor: reportBusy ? "default" : "pointer" }}>
+                  {reportBusy ? "Sending…" : "I’m here, but the app is saying I’m not"}
+                </button>
+                <p style={{ marginTop: 6, fontSize: fs(12), lineHeight: 1.4, color: NEUTRAL.ink3, textAlign: "center" }}>You&rsquo;ll get the stamp, and we&rsquo;ll check our map for this place.</p>
+              </>
+            )}
           </div>
         )}
       </div>
