@@ -2169,3 +2169,5 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   to the column (grid minmax 140 px, max 190 px each; flap drawn with clip-path so it scales; label 14 px,
   the privacy mark in the top corner) — two across on a phone, more on an iPad; Profile and visit pages too.
   Captured as the demo account with a mocked passport list.
+  Copy shortened (founder: "sure"): above, "Each album is as private as its stamp. 🌍 prints also hang on the
+  city board." (the board disclosure stays); below, "Tap + to add prints."

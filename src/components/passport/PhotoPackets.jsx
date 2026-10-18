@@ -104,7 +104,8 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
       <div style={{ fontFamily: SERIF, fontSize: fs(22), color: "#16110D", lineHeight: 1.1 }}>Prints from every place</div>
       {owner ? (
         <p style={{ margin: "4px 0 0", fontFamily: MONO, fontSize: fs(9), letterSpacing: ".06em", lineHeight: 1.5, color: INK3 }}>
-          Each album is exactly as private as its stamp — 🔒 only me · 🤝 inner circle · ✓ followers · 🌍 everyone, and 🌍 prints also hang on the city board.
+          {/* Short (founder, 2026-10-17), but 🌍 prints showing on the city board is never left out. */}
+          Each album is as private as its stamp. 🌍 prints also hang on the city board.
         </p>
       ) : null}
       <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPick} />
@@ -136,7 +137,7 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
         </section>
       ))}
       <p style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, letterSpacing: ".03em", marginTop: 10 }}>
-        {owner ? "Every destination gathers your memory photos, a year at a time. Tap + to add prints — captions can wait for later." : "Every destination gathers their memory photos, a year at a time."}
+        {owner ? "Tap + to add prints." : "Every destination gathers their memory photos, a year at a time."}
       </p>
       {open && (
         <PhotoLightbox
