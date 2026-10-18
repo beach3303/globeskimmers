@@ -20411,7 +20411,7 @@ async function handleSocialBlock(request, env, ctx) {
 }
 
 // POST /social/handle {} reads mine; { handle } claims/changes it.
-// ^[a-z0-9_]{3,20}$, unique (case-insensitive), 2 changes per 30 days, the old
+// ^[a-z0-9_]{3,20}$, unique (case-insensitive), 5 changes per 30 days, the old
 // handle is released by the overwrite. Worker-side so moderation has one door.
 const HANDLE_RESERVED = new Set(['admin', 'administrator', 'globeskimmers', 'globeskimmer', 'support', 'help', 'official', 'staff', 'mod', 'moderator', 'root', 'system', 'passport', 'founder', 'api', 'null', 'undefined', 'me', 'you', 'user', 'test']);
 // Blocked outright (founder policy 2026-10-03): evil/satanic names, violent,
@@ -20613,11 +20613,12 @@ async function handleSocialHandle(request, env, ctx) {
       return await gbTakenResponse(env, want);
     }
     if (mine?.handle && mine.handle.toLowerCase() === want) return jsonResponse({ handle: mine.handle });
-    // 2 changes per rolling 30 days (the first claim is free).
+    // 5 changes per rolling 30 days (founder, 2026-10-18; was 2), each to a free name: taken, held
+    // and reserved names are refused above. The first claim is free.
     if (mine?.handle) {
       const within = mine.handle_changed_at && (Date.now() - Date.parse(mine.handle_changed_at)) < 30 * 864e5;
       const used = within ? (mine.handle_changes || 0) : 0;
-      if (used >= 2) return jsonResponse({ error: 'You can change your username again next month' }, 429);
+      if (used >= 5) return jsonResponse({ error: 'You’ve changed your username 5 times this month — you can change it again next month' }, 429);
       var changes = used + 1;
     }
     const taken = await gbRest(env, `passport_shares?handle=eq.${encodeURIComponent(want)}&select=user_id&limit=1`, {});

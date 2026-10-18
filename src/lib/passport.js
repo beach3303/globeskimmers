@@ -202,7 +202,7 @@ export async function unblockTraveler(user_id) {
   const err = error || data?.error || null;
   return { ok: !err && data?.ok === true, error: err || (data?.ok === true ? null : 'Couldn’t unblock right now') };
 }
-// Username: read (no args) or claim/change. 3–20 [a-z0-9_], 2 changes/30 days.
+// Username: read (no args) or claim/change. 3–20 [a-z0-9_], 5 changes/30 days.
 export async function getHandle() {
   const { data, error } = await callWorker('social/handle', {});
   return { handle: data?.handle || null, verified: data?.verified === true, seal: data?.seal || null, error };

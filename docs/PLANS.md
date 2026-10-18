@@ -62,7 +62,7 @@ Awaiting the founder's reaction to round three and to postcards.
 - KEEP the existing share-to-social of passport pages ("I was here") — nothing replaces it
   until the network is large; the trunk share is additive. (Nothing was removed.)
 - Usernames: yes — every user creates a handle and can change it (worker-side uniqueness,
-  reserved list, 2 changes/30 days, old handle released; per the social architecture).
+  reserved list, 5 changes/30 days (founder 2026-10-18; was 2), old handle released; per the social architecture).
 - Teen/child protection must match what Meta, Instagram, TikTok and Snapchat actually do —
   DONE, docs/research/teen-safety-platforms-2026-09.md. Verdict: our spec already meets or
   beats platform parity on substance (forced private for minors, no DMs, tag consent, 24h

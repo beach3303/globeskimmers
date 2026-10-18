@@ -428,7 +428,7 @@ export default function SettingsPage() {
   const [cityPrompt, setCityPrompt] = useState(() => { try { return localStorage.getItem("pp_city_prompt") !== "0"; } catch { return true; } });
   // Nearby-stamp sensing on the Passport page (default ON; the page has its own small switch too).
   const [suggestNearby, setSuggestNearby] = useState(() => { try { return localStorage.getItem("pp_suggest_nearby") !== "0"; } catch { return true; } });
-  // Username (Social P0, 2026-09-29): claimed through the worker, 2 changes a
+  // Username (Social P0, 2026-09-29): claimed through the worker, 5 changes a
   // month. Empty until the traveler picks one; the social layer needs it.
   const [handle, setHandleState] = useState("");
   const [handleDraft, setHandleDraft] = useState("");
@@ -861,7 +861,7 @@ export default function SettingsPage() {
             <EdRow isTablet={isTablet} step={fontStep} icon={User} iconBg={CAT.culture.ink} title="First Name" desc="Used to greet you across the app"
               control={{ below: true, node: <Input type="text" value={firstName} onFocus={() => { firstNameFocused.current = true; }} onBlur={() => { firstNameFocused.current = false; const v = firstName.trim(); if (v !== (profile?.first_name || "")) persist({ first_name: v }); }} onChange={(e) => setFirstName(e.target.value)} placeholder="Enter your first name" className="h-12 rounded-xl" style={{ borderColor: ED_RULE }} /> }}
             />
-            <EdRow isTablet={isTablet} step={fontStep} icon={AtSign} iconBg={CAT.culture.ink} title="Username" desc="How your circle finds you, follows you, and sends you postcards. Letters, numbers and underscore; you can change it twice a month."
+            <EdRow isTablet={isTablet} step={fontStep} icon={AtSign} iconBg={CAT.culture.ink} title="Username" desc="How your circle finds you, follows you, and sends you postcards. Letters, numbers and underscore; you can change it up to 5 times a month."
               control={{ below: true, node: ( <>
                 <div className="flex gap-2 items-center">
                   <div className="flex-1 min-w-0 flex items-center rounded-xl px-3 h-12" style={{ border: `1px solid ${ED_RULE}`, background: '#fff' }}>
