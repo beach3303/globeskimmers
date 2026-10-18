@@ -2265,9 +2265,9 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   sidewalk → doesn't; other places keep the 400 m rule; "Empire State Diner" nearby and Albany unaffected.
   eslint + no-undef, build, boot-check. Not verified on a phone inside the building (indoor GPS can drift outside
   the walls — such a visitor gets the inside message and can retry from the observatory or near a window).
-- **@erikakristaa's stamp** (founder: her photo was not inside — remove it, no explanation): no admin tool can
-  delete another member's stamp, so it's a two-step SQL for the founder (look, then delete; the photos cascade),
-  plus `npx wrangler r2 object delete globeskimmers-media/<photo_key> --remote` for each photo file.
+- **@erikakristaa's stamp:** the founder first asked to remove it (photo not taken inside), then decided to leave
+  it alone (10-18) — nothing was deleted; don't run the removal SQL. The rule applies to new stamps from now on.
+  (No admin tool deletes another member's stamp; removal would be SQL in Supabase plus an R2 delete per photo.)
 - **Activate:** push → the worker deploys itself; the app's message reaches phones with `npm run ota`.
 - Height isn't checked (latitude/longitude only): the 86th-floor deck and the 102nd-floor observatory sit over the
   outline, so the top floors stamp like the lobby (founder asked, 10-18).
