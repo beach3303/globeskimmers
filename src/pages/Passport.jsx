@@ -24,7 +24,6 @@ import { useDistanceUnit } from "@/components/location/distanceUnit";
 import PassportBook, { packBookPages, readFontScale, fitsTogether } from "@/components/passport/PassportBook";
 import BlotterStrip from "@/components/passport/Blotter";
 import { isAdminEmail } from "@/lib/admins";
-import { countryCode } from "@/lib/countries";
 import { localISODate } from "@/lib/localDate";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { getStampFix } from "@/lib/geolocation";
@@ -1320,37 +1319,6 @@ function PassportInner() {
   };
   const queued = stampQueue ? stampQueue.items[stampQueue.i] : null;
   const nextInQueue = () => setStampQueue((q) => (q && q.i + 1 < q.items.length ? { ...q, i: q.i + 1 } : null));
-  // Page one for an owner whose onboarding mint never happened — the same
-  // origin stamp Onboarding.jsx creates (cover page, not an achievement).
-  const [mintingHome, setMintingHome] = useState(false);
-  const mintHomeCity = async () => {
-    if (!profile?.home_city || mintingHome) return;
-    setMintingHome(true);
-    // Page one is earned at home, like every stamp: one GPS fix within the
-    // home city (40 km of its saved centre).
-    const pos = await new Promise((res) => {
-      if (!navigator.geolocation) return res(null);
-      navigator.geolocation.getCurrentPosition(res, () => res(null), { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
-    });
-    const home = Number.isFinite(+profile.home_lat) && Number.isFinite(+profile.home_lng);
-    if (!pos || !home || metersBetween(pos.coords.latitude, pos.coords.longitude, +profile.home_lat, +profile.home_lng) > 40000) {
-      setMintingHome(false);
-      showToast(`Page one is stamped at home — open this when you're in ${profile.home_city}`, "error");
-      return;
-    }
-    const { error } = await addStamp({
-      kind: "city", entity_type: "origin", entity_id: `origin:${profile.home_city}`,
-      name: profile.home_city, city: profile.home_city,
-      country: profile.home_country || undefined,
-      cc: countryCode(profile.home_country || "") || undefined,
-      lat: profile.home_lat ?? undefined, lng: profile.home_lng ?? undefined,
-      visited_on: localISODate(), verified: "gps", origin: true, // the fix proves home; the stamp keeps the city centre, never the doorstep
-    });
-    setMintingHome(false);
-    if (error) { showToast(error, "error"); return; }
-    showToast("Page one — your home city 🛂", "success");
-    load();
-  };
   const stampsView = preview ? SAMPLE_STAMPS : stamps;
   const statsView = preview ? SAMPLE_STATS : stats;
   // Flat, newest-first stamp list — PassportBook paginates it to fit each page
@@ -1625,32 +1593,25 @@ function PassportInner() {
             {!readOnly && isAuthenticated && !preview && stamps.length === 0 && (
               <div className="mt-4 rounded-[18px] p-4 text-center" style={{ background: "#FFFBF0", border: "1px solid #EAD9AE" }}>
                 <p style={{ fontFamily: SERIF, fontSize: fs(19), color: INK }}>Your passport is ready</p>
+                {/* Two ways in, nothing else (founder, 2026-10-17: "Stamp Los Angeles" — what in Los
+                    Angeles? — and "famous places" — a claim — confused more than they helped). */}
                 <p style={{ color: INK2, fontSize: fs(13), lineHeight: 1.5, marginTop: 4 }}>
-                  Stamps are earned by being there. Page one is your home city, stamped while you're home — then stamp places as you go, or add a trip from before with a photo you took there.
+                  Stamps are earned by being there: stamp the place you’re at right now, or upload a photo from a trip.
                 </p>
-                <div className="flex gap-2 justify-center flex-wrap mt-3">
-                  {profile?.home_city ? (
-                    <button onClick={mintHomeCity} disabled={mintingHome} className="rounded-full px-4 py-2.5 font-semibold disabled:opacity-60" style={{ background: STAMP, color: "#fff", fontSize: fs(13) }}>
-                      {mintingHome ? "Stamping…" : `🏠 Stamp ${profile.home_city}`}
-                    </button>
-                  ) : (
-                    <button onClick={() => navigate(createPageUrl("Settings"))} className="rounded-full px-4 py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13) }}>
-                      🏠 Set your home city
-                    </button>
-                  )}
-                  <button onClick={() => navigate(createPageUrl("Home"))} className="rounded-full px-4 py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13) }}>
-                    📍 Stamps near me
-                  </button>
-                </div>
               </div>
             )}
             {!readOnly && isAuthenticated && !preview && (
               <div className="text-center mt-4">
-                <div className="flex gap-2 justify-center flex-wrap">
-                  <button onClick={() => uploadRef.current?.click()} className="rounded-full px-5 py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>📷 Upload photos</button>
-                  <button onClick={() => setShowStampPlace(true)} className="rounded-full px-5 py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13.5) }}>📍 Stamp where I am</button>
+                <div className="mx-auto flex flex-col gap-3" style={{ maxWidth: 340 }}>
+                  <div>
+                    <button onClick={() => uploadRef.current?.click()} className="w-full rounded-full px-5 py-3 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(14) }}>📷 Upload photo to get a stamp</button>
+                    <p style={{ color: INK3, fontSize: fs(12), lineHeight: 1.4, marginTop: 5 }}>One photo or many. We find where each was taken.</p>
+                  </div>
+                  <div>
+                    <button onClick={() => setShowStampPlace(true)} className="w-full rounded-full px-5 py-3 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(14) }}>📍 Stamp where I am</button>
+                    <p style={{ color: INK3, fontSize: fs(12), lineHeight: 1.4, marginTop: 5 }}>At a place right now? Your phone’s location proves it.</p>
+                  </div>
                 </div>
-                <p style={{ color: INK3, fontSize: fs(12), lineHeight: 1.4, marginTop: 6 }}>Get a stamp where each photo was taken. One photo or many.</p>
                 <input ref={uploadRef} type="file" accept="image/*" multiple className="hidden" onChange={onUploadPhotos} />
                 {/* Small switch — the same setting as Settings → Virtual Passport → Sense nearby stamps */}
                 <button type="button" onClick={toggleSenseNearby} role="switch" aria-checked={senseNearby} aria-label="Sense nearby stamps when the Passport opens"
