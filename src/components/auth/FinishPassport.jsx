@@ -9,7 +9,7 @@
 // to skip and no close: Sign out is the only other way. A read that fails never locks anyone
 // out — the screen stays away until the next open. Onboarding asks both itself, so a member
 // still in it isn't asked twice. When nothing is missing, ConfirmBirthday keeps its old job: the
-// re-ask when a stamp or a post is refused.
+// re-ask when a stamp or a post is refused — and the one-time privacy check-up gets its turn.
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
@@ -18,6 +18,7 @@ import { getAgeInfo, getHandle } from "@/lib/passport";
 import ConfirmBirthday, { ConfirmSheet } from "@/components/auth/ConfirmBirthday";
 import useUsernameClaim from "@/components/social/useUsernameClaim";
 import UsernameFields from "@/components/social/UsernameFields";
+import PrivacyCheckup from "@/components/auth/PrivacyCheckup";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 
 const IVORY = "#FFFCF7", STAMP = "#B0472F";
@@ -26,25 +27,27 @@ export default function FinishPassport() {
   const { user, profile, refreshSocialTier, logout } = useAuth();
   const { pathname } = useLocation();
   const [need, setNeed] = useState(null);   // { birthday, handle, steps } while something is missing
+  const [clear, setClear] = useState(false); // read, and nothing is missing: the privacy check-up may ask
   const total = useRef(0);                   // the steps counted at the start, so step 2 still reads "2 of 2"
   const firstName = String(profile?.first_name || "").trim() || null;
   const onboarded = profile?.onboarding_completed === true && !/^\/onboarding/i.test(pathname);
 
   const check = useCallback(async () => {
     const [age, h] = await Promise.all([getAgeInfo(), getHandle()]);
-    if (age.error || h.error) { setNeed(null); return; }
+    if (age.error || h.error) { setNeed(null); setClear(false); return; }
     const birthday = !age.set || !age.birth_md;
     const handle = !h.handle && age.tier !== "teen" && age.tier !== "blocked";
     const steps = (birthday ? 1 : 0) + (handle ? 1 : 0);
     if (steps > total.current) total.current = steps;
     setNeed(steps ? { birthday, handle, steps } : null);
+    setClear(!steps);
   }, []);
   useEffect(() => {
-    if (!user?.id || !onboarded) { setNeed(null); return; }
+    if (!user?.id || !onboarded) { setNeed(null); setClear(false); return; }
     check();
   }, [user?.id, onboarded, check]);
 
-  if (!need) return <ConfirmBirthday />;
+  if (!need) return <><ConfirmBirthday /><PrivacyCheckup enabled={clear} /></>;
   const label = (n) => (total.current > 1 ? `Step ${n} of ${total.current}` : null);
 
   if (need.birthday) {

@@ -1071,6 +1071,15 @@ function PassportInner() {
   const [explainArrivals, setExplainArrivals] = useState(() => { try { return !localStorage.getItem("pp_arrival_explained"); } catch { return false; } });
   const openShare = async () => { setShareOpen(true); if (!share) { const { data } = await getShareLink(); if (data) setShare(data); } };
   const setPublic = async (pub) => { setShareBusy(true); const { data, error } = await getShareLink(pub); setShareBusy(false); if (error) showToast(error, "error"); else setShare(data); };
+  // The badge says who can actually see the booklet (founder, 2026-10-18): strangers only ever
+  // see 🌍 Everyone stamps, and only while the passport is public; the circle sees what each
+  // stamp is set to. Rows from before the tiers read as the booklet showed them.
+  const everyoneCount = stamps.filter((st) => (st.visibility || (st.hidden ? "me" : share?.is_public ? "public" : "inner")) === "public").length;
+  const passportPill = !share?.is_public
+    ? "🔒 Private — only your circle sees the stamps you share with them"
+    : everyoneCount
+      ? `🌍 Public — anyone can see your ${everyoneCount} 🌍 Everyone ${everyoneCount === 1 ? "stamp" : "stamps"}`
+      : "🌍 Public — but no stamps are set to 🌍 Everyone yet";
   // Read share state on mount so the privacy badge reflects the real status (default private).
   useEffect(() => { if (readOnly) return; (async () => { const { data } = await getShareLink(); if (data) setShare(data); })(); }, [readOnly]);
 
@@ -1364,7 +1373,7 @@ function PassportInner() {
         <div className="text-center pt-1 pb-3">
           {!readOnly && (
             <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full" style={{ background: share?.is_public ? "#F3E2C7" : IVORY_2, color: share?.is_public ? "#7E601F" : INK3, fontSize: fs(11.5), fontWeight: 600 }}>
-              {share?.is_public ? "🔗 Shared — anyone with your link can view" : "🔒 Only you can see this"}
+              {passportPill}
             </div>
           )}
         </div>
@@ -1377,7 +1386,7 @@ function PassportInner() {
         {!readOnly && explainArrivals && (
           <div className="mb-4 rounded-[16px] p-3.5" style={{ background: "#FFFBF0", border: `1px solid #EAD9AE` }}>
             <p style={{ color: INK2, fontSize: fs(13), lineHeight: 1.5 }}>
-              ✈️ You&rsquo;ll get an arrival stamp when you land at an airport in a new country, and you can stamp iconic attractions you visit — you always tap to confirm, we never stamp automatically. Your passport is <b>private</b> (only you can see it) unless you choose to share a link. You can turn suggestions off anytime in Settings.
+              ✈️ You&rsquo;ll get an arrival stamp when you land at an airport in a new country, and you can stamp iconic attractions you visit — you always tap to confirm, we never stamp automatically. You choose who sees each stamp — 🔒 Only me, 🤝 Inner circle, ✓ Followers or 🌍 Everyone. You can turn suggestions off anytime in Settings.
             </p>
             <button onClick={() => { try { localStorage.setItem("pp_arrival_explained", "1"); } catch { /* ignore */ } setExplainArrivals(false); }} className="mt-2 rounded-lg px-3 py-1.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12) }}>Got it</button>
           </div>
@@ -1479,7 +1488,7 @@ function PassportInner() {
                 )}
 
                 <div className="flex items-center gap-2 mt-3 pt-2.5" style={{ borderTop: `1px dashed ${RULE}` }}>
-                  <span className="flex-1" style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.4 }}>Can strangers open my booklet by @handle? {share?.is_public ? "Yes — my public pages." : "No — it reads private."}</span>
+                  <span className="flex-1" style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.4 }}>Can strangers open my booklet by @handle? {share?.is_public ? "Yes — my 🌍 Everyone stamps, and their photos on City Boards." : "No — it reads private, and my photos stay off City Boards."}</span>
                   <button onClick={() => setPublic(!share?.is_public)} disabled={shareBusy} className="rounded-lg px-3 py-1.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(11.5) }}>
                     {share?.is_public ? "Make private" : "Make public"}
                   </button>

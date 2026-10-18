@@ -5,9 +5,9 @@ import { searchHomeCities, resolveHomePlace } from "@/lib/homePlace";
 import { searchCountries, countryCode } from "@/lib/countries";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2, UserX, LayoutGrid, UserCheck, Images, PenLine } from "lucide-react";
+import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2, UserX, LayoutGrid, UserCheck, Images, PenLine, Lock } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
-import { setAllStampsVisibility } from "@/lib/passport";
+import { setAllStampsVisibility, getPrivacy, getShareLink } from "@/lib/passport";
 import { useHomeZoneStyle, setHomeZoneStyle } from "@/components/redesign/Zone";
 import ContactUsModal from "../components/ContactUsModal";
 import RefreshAccessModal from "../components/RefreshAccessModal";
@@ -588,31 +588,64 @@ export default function SettingsPage() {
   // The privacy dials live on the worker's social profile (founder, 2026-10-15):
   // read once, save on change, keep the switch honest if a save fails.
   const [dials, setDials] = useState(null); // { approve_followers, albums_audience, comments_audience }
-  useEffect(() => {
-    let gone = false;
-    callWorker("social/profile", {}).then(({ data }) => {
-      if (!gone && data?.profile) setDials({ approve_followers: data.profile.approve_followers !== false, albums_audience: data.profile.albums_audience || "passport", comments_audience: data.profile.comments_audience || "inner", default_stamp_tier: data.profile.default_stamp_tier || "inner", circle_public: data.profile.circle_public === true });
-    });
-    return () => { gone = true; };
-  }, []);
+  // The truth beside the dials (founder, 2026-10-18): is the passport public, and how many
+  // stamps sit at each tier — { is_public, counts: { me, inner, followers, public } }.
+  const [priv, setPriv] = useState(null);
+  const loadPrivacy = () => getPrivacy().then(({ profile: p, privacy }) => {
+    if (p) setDials({ approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || "passport", comments_audience: p.comments_audience || "inner", default_stamp_tier: p.default_stamp_tier || "inner", circle_public: p.circle_public === true });
+    if (privacy) setPriv(privacy);
+  });
+  useEffect(() => { loadPrivacy(); }, []);
   // The bulk mover and the circle switch keep their own little confirms.
   const [bulkPick, setBulkPick] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [circleAsk, setCircleAsk] = useState(false);
+  const [publicAsk, setPublicAsk] = useState(false);
+  const [passBusy, setPassBusy] = useState(false);
+  const [moveAsk, setMoveAsk] = useState(null);   // the tier "New stamps start at" just moved to
   const TIER_OPTS = [["me", "🔒 Only me"], ["inner", "🤝 Inner circle"], ["followers", "✓ Followers"], ["public", "🌍 Everyone"]];
-  const applyBulk = async () => {
-    if (!bulkPick || bulkBusy) return;
+  const tierName = Object.fromEntries(TIER_OPTS);
+  const tierCounts = priv?.counts || null;
+  const stampTotal = tierCounts ? TIER_OPTS.reduce((n, [k]) => n + (tierCounts[k] || 0), 0) : 0;
+  const countsLine = tierCounts && stampTotal
+    ? [...TIER_OPTS].reverse().filter(([k]) => tierCounts[k]).map(([k, label]) => `${tierCounts[k]} ${label}`).join(" · ")
+    : null;
+  const moveAll = async (tier) => {
+    if (!tier || bulkBusy) return;
     setBulkBusy(true);
-    const { ok, error } = await setAllStampsVisibility(bulkPick);
+    const { ok, error } = await setAllStampsVisibility(tier);
     setBulkBusy(false);
     setBulkPick(null);
+    setMoveAsk(null);
     if (!ok) { showToast(error || "Couldn't update — try again", "error"); return; }
-    showToast(`Every stamp is now ${Object.fromEntries(TIER_OPTS)[bulkPick]}`, "success");
+    showToast(`Every stamp is now ${tierName[tier]}`, "success");
+    loadPrivacy();
+  };
+  const applyBulk = () => moveAll(bulkPick);
+  // The passport's public switch (ON = private, like every privacy switch). Private takes the
+  // booklet from strangers and its photos off City Boards (founder, 2026-10-18).
+  const setPassportPublic = async (pub) => {
+    if (passBusy) return;
+    setPassBusy(true);
+    const { data, error } = await getShareLink(pub);
+    setPassBusy(false);
+    setPublicAsk(false);
+    if (error || !data) { showToast(error || "Couldn't save — try again", "error"); return; }
+    setPriv((v) => ({ ...(v || {}), is_public: data.is_public === true }));
+    showToast(data.is_public ? "Your passport is public" : "Your passport is private 🔒", "success");
   };
   const saveDial = async (field, value, prev) => {
     setDials((d) => ({ ...d, [field]: value }));
     const { data, error } = await callWorker("social/profile", { [field]: value });
-    if (error || !data) { setDials((d) => ({ ...d, [field]: prev })); showToast(error || "Couldn't save — try again", "error"); }
+    if (error || !data) { setDials((d) => ({ ...d, [field]: prev })); showToast(error || "Couldn't save — try again", "error"); return false; }
+    return true;
+  };
+  // "New stamps start at" only moves new stamps; when older ones sit elsewhere, ask once
+  // whether to move them too, so a change here is never mistaken for a change to all.
+  const pickDefaultTier = async (v) => {
+    setMoveAsk(null);
+    const ok = await saveDial("default_stamp_tier", v, dials.default_stamp_tier);
+    if (ok && tierCounts && stampTotal - (tierCounts[v] || 0) > 0) setMoveAsk(v);
   };
 
   // Close the home-country dropdown when tapping outside it.
@@ -970,7 +1003,7 @@ export default function SettingsPage() {
 
           {/* Virtual Passport group */}
           <EdGroup kicker="Virtual Passport" isTablet={isTablet}>
-            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Airport arrival stamps" desc="Offer a passport stamp when you land at an airport. Your passport stays private — only you can see it."
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Airport arrival stamps" desc="Offer a passport stamp when you land at an airport. It starts where new stamps start (Privacy, below)."
               control={{ node: <EdToggle on={suggestArrivals} onClick={() => { const next = !suggestArrivals; setSuggestArrivals(next); try { localStorage.setItem("pp_suggest_arrivals", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle airport arrival stamps" /> }}
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="New-city pop-ups" desc="Offer a stamp when you arrive in — or open the app in — a new city or country. Turn off to never be prompted (you can still add stamps yourself)."
@@ -1028,6 +1061,35 @@ export default function SettingsPage() {
                 control={{ node: <EdToggle on={!showHomeCity} onClick={() => { const next = !showHomeCity; setShowHomeCity(next); persist({ show_home_city: next }); }} label="Keep my home city private" /> }}
               />
             )}
+            {priv && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={Lock} iconBg={CAT.food.ink} title="Keep my passport private"
+                desc={priv.is_public
+                  ? "Not private — strangers see your 🌍 Everyone stamps and City Board photos"
+                  : "Private — strangers see nothing, and your photos stay off City Boards"}
+                control={{ below: true, node: (
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#3A3128" }}>{priv.is_public ? "Not private" : "Private"}</span>
+                      <EdToggle on={!priv.is_public} label="Keep my passport private"
+                        onClick={() => { if (passBusy) return; if (priv.is_public) setPassportPublic(false); else setPublicAsk(true); }} />
+                    </div>
+                    {publicAsk && !priv.is_public && (
+                      <div className="mt-2 rounded-xl px-3 py-2.5" style={{ background: "#FBF3E2", border: "1px solid #E5CA98" }}>
+                        <p style={{ fontSize: "calc(13px*var(--fs,1))", color: "#16110D", lineHeight: 1.45 }}>
+                          {tierCounts?.public
+                            ? `Strangers will see your ${tierCounts.public} 🌍 Everyone ${tierCounts.public === 1 ? "stamp" : "stamps"} and their photos, and those photos can hang on City Boards. Continue?`
+                            : "Strangers will be able to open your passport. Only stamps set to 🌍 Everyone show — you have none yet. Continue?"}
+                        </p>
+                        <div className="flex gap-2 mt-2">
+                          <button type="button" onClick={() => setPassportPublic(true)} disabled={passBusy} className="flex-1 h-10 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>{passBusy ? "Saving…" : "Continue"}</button>
+                          <button type="button" onClick={() => setPublicAsk(false)} className="flex-1 h-10 rounded-xl font-semibold" style={{ border: "1.5px solid rgba(22,17,13,.16)", background: "#fff", color: "#3A3128", fontSize: "calc(12.5px*var(--fs,1))" }}>Keep private</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) }}
+              />
+            )}
             {dials && (
               <EdRow isTablet={isTablet} step={fontStep} icon={UserCheck} iconBg={CAT.coffee.ink} title="Approve my followers"
                 desc={dials.approve_followers ? "New followers wait for your yes — approve them in your circle" : "Anyone can follow you without asking"}
@@ -1036,7 +1098,11 @@ export default function SettingsPage() {
             )}
             {dials && (
               <EdRow isTablet={isTablet} step={fontStep} icon={Images} iconBg={CAT.shopping.ink} title="Who sees my photo albums"
-                desc="A stamp's photos are seen by the same people who can see the stamp."
+                desc={dials.albums_audience === "passport"
+                  ? "Photos follow each stamp — 🌍 Everyone photos can hang on City Boards"
+                  : dials.albums_audience === "inner"
+                  ? "Only your inner circle — never strangers, never City Boards"
+                  : "Only you — never anyone else, never City Boards"}
                 control={{ below: true, node: (
                   <EdChoices label="Who sees my photo albums" value={dials.albums_audience}
                     options={[["passport", "Same as each stamp"], ["inner", "Inner circle only"], ["me", "Only me"]]}
@@ -1048,21 +1114,34 @@ export default function SettingsPage() {
               <EdRow isTablet={isTablet} step={fontStep} icon={LayoutGrid} iconBg={CAT.weather.ink} title="New stamps start at"
                 desc="Where each new stamp begins. You can change any stamp later."
                 control={{ below: true, node: (
-                  <EdChoices label="New stamps start at" value={dials.default_stamp_tier}
-                    options={TIER_OPTS}
-                    onPick={(v) => saveDial("default_stamp_tier", v, dials.default_stamp_tier)} />
+                  <div>
+                    <EdChoices label="New stamps start at" value={dials.default_stamp_tier}
+                      options={TIER_OPTS}
+                      onPick={pickDefaultTier} />
+                    {moveAsk && moveAsk === dials.default_stamp_tier && (
+                      <div className="mt-2 rounded-xl px-3 py-2.5" style={{ background: "#FBF3E2", border: "1px solid #E5CA98" }}>
+                        <p style={{ fontSize: "calc(13px*var(--fs,1))", color: "#16110D", lineHeight: 1.45 }}>
+                          {`New stamps will start at ${tierName[moveAsk]}. Also move your ${stampTotal - (tierCounts?.[moveAsk] || 0)} existing ${stampTotal - (tierCounts?.[moveAsk] || 0) === 1 ? "stamp" : "stamps"} there?`}
+                        </p>
+                        <div className="flex gap-2 mt-2">
+                          <button type="button" onClick={() => moveAll(moveAsk)} disabled={bulkBusy} className="flex-1 h-10 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>{bulkBusy ? "Moving…" : "Move them too"}</button>
+                          <button type="button" onClick={() => setMoveAsk(null)} className="flex-1 h-10 rounded-xl font-semibold" style={{ border: "1.5px solid rgba(22,17,13,.16)", background: "#fff", color: "#3A3128", fontSize: "calc(12.5px*var(--fs,1))" }}>Just new ones</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ) }}
               />
             )}
             {dials && (
               <EdRow isTablet={isTablet} step={fontStep} icon={LayoutGrid} iconBg={CAT.atm.ink} title="Set all my stamps to one level"
-                desc="One tap moves every stamp — the way to go fully private, or fully public, at once."
+                desc={countsLine ? `Right now: ${countsLine}` : "One tap moves every stamp — the way to go fully private, or fully public, at once."}
                 control={{ below: true, node: (
                   <div>
                     <EdChoices label="Set all my stamps to one level" value={bulkPick} options={TIER_OPTS} onPick={setBulkPick} />
                     {bulkPick && (
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="flex-1" style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#3A3128" }}>Move every stamp to {Object.fromEntries(TIER_OPTS)[bulkPick]}?</span>
+                        <span className="flex-1" style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#3A3128" }}>Move every stamp to {tierName[bulkPick]}?</span>
                         <button type="button" onClick={applyBulk} disabled={bulkBusy} className="h-10 px-4 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>{bulkBusy ? "Moving…" : "Move them"}</button>
                         <button type="button" onClick={() => setBulkPick(null)} className="h-10 px-3 rounded-xl" style={{ color: "#736657", fontSize: "calc(12px*var(--fs,1))" }}>Cancel</button>
                       </div>

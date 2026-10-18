@@ -318,6 +318,12 @@ export async function getSocialProfile() {
   const { data, error } = await callWorker('social/profile', {});
   return { profile: data?.profile || null, error };
 }
+// The privacy truth (founder, 2026-10-18): { profile, privacy: { is_public, counts: { me,
+// inner, followers, public } } } — what Settings and the one-time check-up show.
+export async function getPrivacy() {
+  const { data, error } = await callWorker('social/profile', { privacy: true });
+  return { profile: data?.profile || null, privacy: data?.privacy || null, error };
+}
 export async function setSocialProfile(patch) {
   const { data, error } = await callWorker('social/profile', patch || {});
   return { profile: data?.profile || null, error: error || data?.error || null };
