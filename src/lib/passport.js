@@ -61,6 +61,29 @@ export async function listPassport() {
   return { stamps: data?.stamps || [], stats: data?.stats || {}, booklet: data?.booklet || null, error };
 }
 
+// The earliest day a stamp can carry (the 5-year date picker, 2026-10-16).
+export const STAMP_EARLIEST = "2021-01-01";
+
+// Up to three answers to "where was this photo taken?" (founder, 2026-10-14: "the app senses
+// which city and state the photo was taken from … give three options"): the famous places
+// within reach first, then the city, and the wider city around a ward ("Taito", in "Tokyo"):
+// cities keep up to two of the three places, so Tokyo isn't crowded out by temples.
+export function photoOptions(data) {
+  const cities = (data?.cities || []).filter((c) => c?.city).map((c) => ({
+    key: `c:${c.city}`, kind: "city", name: c.city, local: c.local || null,
+    city: c.city, country: c.country || "", cc: c.cc || "", region: c.region || null,
+    sub: [c.within, c.region, c.country].filter(Boolean).join(", "),
+  }));
+  const here = cities[0] || {};
+  const places = (data?.places || []).filter((p) => p?.name).map((p) => ({
+    key: `p:${p.id}`, kind: "place", name: p.name, local: null,
+    city: p.city || here.city || "", country: p.country || here.country || "", cc: here.cc || "", region: here.region || null,
+    sub: [p.city, p.country].filter(Boolean).join(", "), meters: p.meters,
+  }));
+  const nCities = Math.min(cities.length, places.length ? 2 : 3);
+  return [...places.slice(0, 3 - nCities), ...cities.slice(0, nCities)];
+}
+
 // Where a trip photo was taken, from its location tag: { places, cities } — the famous
 // places within reach and the city it's in (worker /photo-place) — or null.
 export async function photoPlace(lat, lng) {

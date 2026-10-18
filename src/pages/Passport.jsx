@@ -7,7 +7,7 @@ import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { cityBoardUrl, hasBoard } from "@/lib/boardLinks";
 import { showToast } from "@/components/Toast";
-import { addStamp, metersBetween, proofToast, listPassport, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead, socialFollow, photoPlace, sortStamps, mintShareLink, listShareLinks, revokeShareLink, setBookletOrder } from "@/lib/passport";
+import { addStamp, metersBetween, proofToast, listPassport, STAMP_EARLIEST, photoOptions, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead, socialFollow, photoPlace, sortStamps, mintShareLink, listShareLinks, revokeShareLink, setBookletOrder } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
 import { TAGGING_ENABLED } from "@/lib/flags";
@@ -30,9 +30,11 @@ import { stampRadiusFor } from "@/lib/stampRadius";
 import { getStampFix } from "@/lib/geolocation";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { readPhotoExif } from "@/lib/photoExif";
+import { takeSharedPhotos, SHARED_PHOTOS_EVENT } from "@/lib/sharedPhotos";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import NearbyStampPrompt, { NEARBY_KEY, nearbySensingOn } from "@/components/passport/NearbyStampPrompt";
 import StampActions from "@/components/passport/StampActions";
+import PhotoSorter from "@/components/passport/PhotoSorter";
 import Luggage from "@/components/passport/Luggage";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import HeldHandleClaim from "@/components/passport/HeldHandleClaim";
@@ -499,28 +501,7 @@ const SAMPLE_STATS = { countries: 3, verified: 6 };
 // How far back a visit can be stamped (founder, 2026-10-14: "all the way back from Jan 1,
 // 2026"). The worker holds the same line.
 // Five years back (founder, 2026-10-16); the worker holds the same floor (PP_EARLIEST).
-const STAMP_EARLIEST = "2021-01-01";
 const longDay = (d) => new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-
-// Up to three answers to "where was this photo taken?" (founder, 2026-10-14: "the app senses
-// which city and state the photo was taken from … give three options"): the famous places
-// within reach first, then the city, and the wider city around a ward ("Taito", in "Tokyo"):
-// cities keep up to two of the three places, so Tokyo isn't crowded out by temples.
-function photoOptions(data) {
-  const cities = (data?.cities || []).filter((c) => c?.city).map((c) => ({
-    key: `c:${c.city}`, kind: "city", name: c.city, local: c.local || null,
-    city: c.city, country: c.country || "", cc: c.cc || "", region: c.region || null,
-    sub: [c.within, c.region, c.country].filter(Boolean).join(", "),
-  }));
-  const here = cities[0] || {};
-  const places = (data?.places || []).filter((p) => p?.name).map((p) => ({
-    key: `p:${p.id}`, kind: "place", name: p.name, local: null,
-    city: p.city || here.city || "", country: p.country || here.country || "", cc: here.cc || "", region: here.region || null,
-    sub: [p.city, p.country].filter(Boolean).join(", "), meters: p.meters,
-  }));
-  const nCities = Math.min(cities.length, places.length ? 2 : 3);
-  return [...places.slice(0, 3 - nCities), ...cities.slice(0, nCities)];
-}
 
 // ── Arrange (founder, 2026-10-15): drag stamps into your own order ──────────
 // A vertical list of every stamp; hold the handle and drag a row where you want it.
@@ -590,7 +571,7 @@ function ArrangeSheet({ stamps, onClose, onSaved }) {
   );
 }
 
-function StampPlaceModal({ onClose, onDone, preset = null }) {
+function StampPlaceModal({ onClose, onDone, preset = null, sharedPhotos = null, placeHint = null, queue = null, onSkip = null }) {
   // No preset → start from where GPS says you are (founder, 2026-10-05:
   // "provide them the city where they currently are"). The city field is
   // filled, not locked — the GPS check at submit is what verifies the stamp.
@@ -693,6 +674,9 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
   const onPickPhotos = (e) => {
     const f = [...(e.target.files || [])];
     e.target.value = "";
+    addPhotos(f);
+  };
+  const addPhotos = (f) => {
     if (!f.length) return;
     const senseThis = photos.length === 0 && !preset && !located &&
       !venue.trim() && !((city || cityQ).trim() && (city || cityQ).trim() !== (sensed?.city || ""));
@@ -712,7 +696,7 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
         await settle();
         if (!live()) return;
         if (senseThis) setLocated(null);
-        setPhotoNote(`This photo is from ${longDay(days[0])}. Stamps go back to January 1, 2026.`);
+        setPhotoNote(`This photo is from ${longDay(days[0])}. Stamps go back to ${longDay(STAMP_EARLIEST)}.`);
         return;
       }
       if (inRange.length && !dateByHand.current) {
@@ -733,7 +717,10 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
       // three seconds"): past 4 s the card says it's still looking; past 10 s it stops and
       // offers the search instead of holding the form (the network call alone would wait 25 s).
       const slowTimer = setTimeout(() => { if (live()) setLocated((l) => (l?.loading ? { ...l, slow: true } : l)); }, 4000);
-      const data = await Promise.race([photoPlace(at.lat, at.lng), new Promise((r) => setTimeout(() => r("slow"), 10000))]);
+      // The photo sorter already looked this photo up (PhotoSorter): its answer, once.
+      const hint = hintRef.current;
+      hintRef.current = null;
+      const data = await Promise.race([hint ? Promise.resolve(hint) : photoPlace(at.lat, at.lng), new Promise((r) => setTimeout(() => r("slow"), 10000))]);
       clearTimeout(slowTimer);
       await settle();
       if (!live()) return;
@@ -744,6 +731,18 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
       choose(options[0], at);
     });
   };
+  // Photos from the photo sorter (Upload photos, or shared from the phone's gallery) arrive
+  // already picked, and the first one senses the place as a picked one would. A place with more
+  // than 4 keeps the first 4 here, the page's print; the rest join the stamp's album.
+  const hintRef = useRef(placeHint);
+  const extraRef = useRef([]);
+  const sharedTaken = useRef(false);
+  useEffect(() => {
+    if (sharedTaken.current || !sharedPhotos?.length) return;
+    sharedTaken.current = true;
+    extraRef.current = sharedPhotos.slice(4);
+    addPhotos(sharedPhotos.slice(0, 4));
+  }, [sharedPhotos]);
   const submit = async () => {
     const cityName = (city || cityQ).trim();
     // The sensed spot and country belong to where you are: they anchor the
@@ -783,9 +782,10 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     }
     // Each photo's own location tag and time, read before resizing strips them. Photos all
     // dated before stamps reach back prove nothing, so nothing is created.
-    const exifs = await Promise.all(photos.map((f) => readPhotoExif(f).catch(() => null)));
+    const sending = [...photos, ...extraRef.current];
+    const exifs = await Promise.all(sending.map((f) => readPhotoExif(f).catch(() => null)));
     const photoDays = exifs.map((x) => String(x?.taken_at || "").slice(0, 10)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
-    if (verified !== "gps" && photoDays.length === photos.length && photoDays.every((d) => d < STAMP_EARLIEST)) {
+    if (verified !== "gps" && photoDays.length === sending.length && photoDays.every((d) => d < STAMP_EARLIEST)) {
       setBusy(false);
       showToast("Those photos are from before 2021. Stamps go back to January 1, 2021.", "error");
       return;
@@ -805,12 +805,12 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
     if (error || !data?.id) { setBusy(false); showToast(error || "Could not add stamp", "error"); return; }
     if (data.private) showToast("This may be a sensitive place ❤️ — the stamp starts private. Share it from the stamp anytime.", "success");
     let proof = null;
-    for (let i = 0; i < photos.length; i++) {
+    for (let i = 0; i < sending.length; i++) {
       // Say which photo is traveling (founder, 2026-10-14: "how much time do you need to
       // send the photo?" — this is where the photo really goes, 1–3 s each, so narrate it).
-      setBusyMsg(photos.length > 1 ? `Sending photo ${i + 1} of ${photos.length}…` : "Sending your photo — checking it proves the visit…");
+      setBusyMsg(sending.length > 1 ? `Sending photo ${i + 1} of ${sending.length}…` : "Sending your photo — checking it proves the visit…");
       try {
-        const image = await resizePhoto(photos[i]);
+        const image = await resizePhoto(sending[i]);
         const up = await uploadStampPhoto({ stamp_id: data.id, image, visited_on: dateVal, exif: exifs[i] });
         if (up?.data?.proof && !proof) proof = up.data.proof;
       } catch { /* skip a bad photo */ }
@@ -833,6 +833,12 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
   return (
     <div onClick={onClose} className="fixed inset-0 z-[9998] flex items-start justify-center p-4 overflow-y-auto" style={{ background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)" }}>
       <div onClick={(e) => e.stopPropagation()} className="w-full bg-white" style={{ maxWidth: 400, marginTop: 28, marginBottom: 40, borderRadius: 22, padding: 20, boxShadow: SHADOW_CARD_SOFT }}>
+        {queue && (
+          <div className="flex items-center justify-between" style={{ marginBottom: 2 }}>
+            <span style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".08em", textTransform: "uppercase", color: INK3 }}>Place {queue.at} of {queue.of}</span>
+            {onSkip && <button type="button" onClick={onSkip} disabled={busy} style={{ fontSize: fs(13), fontWeight: 600, color: INK2 }}>{queue.at < queue.of ? "Skip" : "Skip this one"}</button>}
+          </div>
+        )}
         <p style={{ fontFamily: SERIF, fontSize: fs(24), color: INK }}>Stamp a place</p>
         <p style={{ color: INK3, fontSize: fs(12.5), lineHeight: 1.4, marginTop: 2 }}>A quick ink stamp for a city or spot you visited — with your own photos.</p>
 
@@ -865,6 +871,9 @@ function StampPlaceModal({ onClose, onDone, preset = null }) {
                 <button onClick={() => fileRef.current?.click()} aria-label="Add another photo" className="rounded-xl flex items-center justify-center" style={{ width: 56, height: 56, border: `1px dashed ${RULE}`, background: IVORY_2 }}><Plus size={18} color={INK3} /></button>
               )}
             </div>
+            {extraRef.current.length > 0 && (
+              <p style={{ color: INK3, fontSize: fs(12), marginTop: 6 }}>+{extraRef.current.length} more from here go in the stamp’s album.</p>
+            )}
           </>
         )}
         {/* The first pick takes ONE photo (the sensing photo); more can join after. */}
@@ -1285,6 +1294,32 @@ function PassportInner() {
   }, [loading]);
   const [showStampPlace, setShowStampPlace] = useState(false); // "Stamp a place" form
   const [stampPreset, setStampPreset] = useState(null);         // a tag's place, handed to the form
+  // Upload photos (founder, 2026-10-17: its own button, "people get so confused"), and photos
+  // shared from the phone's gallery (src/lib/sharedPhotos.js), go to the photo sorter, which
+  // groups them by where and when they were taken; each new place then gets Stamp a place in
+  // turn ("Place 1 of 3"). A share arriving on a cold start waits for the Passport to open.
+  const [sorter, setSorter] = useState(null);       // { files, shared, n }
+  const [stampQueue, setStampQueue] = useState(null); // { items: [{ files, placeHint }], i, n }
+  const uploadRef = useRef(null);
+  useEffect(() => {
+    if (readOnly) return;
+    const take = () => {
+      const files = takeSharedPhotos();
+      if (!files.length) return;
+      setShowStampPlace(false); setStampPreset(null); setStampQueue(null);
+      setSorter({ files, shared: true, n: Date.now() });
+    };
+    take();
+    window.addEventListener(SHARED_PHOTOS_EVENT, take);
+    return () => window.removeEventListener(SHARED_PHOTOS_EVENT, take);
+  }, [readOnly]);
+  const onUploadPhotos = (e) => {
+    const files = [...(e.target.files || [])];
+    e.target.value = "";
+    if (files.length) setSorter({ files, shared: false, n: Date.now() });
+  };
+  const queued = stampQueue ? stampQueue.items[stampQueue.i] : null;
+  const nextInQueue = () => setStampQueue((q) => (q && q.i + 1 < q.items.length ? { ...q, i: q.i + 1 } : null));
   // Page one for an owner whose onboarding mint never happened — the same
   // origin stamp Onboarding.jsx creates (cover page, not an achievement).
   const [mintingHome, setMintingHome] = useState(false);
@@ -1611,7 +1646,12 @@ function PassportInner() {
             )}
             {!readOnly && isAuthenticated && !preview && (
               <div className="text-center mt-4">
-                <button onClick={() => setShowStampPlace(true)} className="rounded-full px-5 py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>✍️ Stamp a place</button>
+                <div className="flex gap-2 justify-center flex-wrap">
+                  <button onClick={() => uploadRef.current?.click()} className="rounded-full px-5 py-2.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>📷 Upload photos</button>
+                  <button onClick={() => setShowStampPlace(true)} className="rounded-full px-5 py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(13.5) }}>📍 Stamp where I am</button>
+                </div>
+                <p style={{ color: INK3, fontSize: fs(12), lineHeight: 1.4, marginTop: 6 }}>Get a stamp where each photo was taken. One photo or many.</p>
+                <input ref={uploadRef} type="file" accept="image/*" multiple className="hidden" onChange={onUploadPhotos} />
                 {/* Small switch — the same setting as Settings → Virtual Passport → Sense nearby stamps */}
                 <button type="button" onClick={toggleSenseNearby} role="switch" aria-checked={senseNearby} aria-label="Sense nearby stamps when the Passport opens"
                   className="mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5"
@@ -1691,6 +1731,16 @@ function PassportInner() {
           onSaved={(ids) => { setArranging(false); setBooklet((b) => ({ ...(b || {}), order: "custom", custom: ids })); }} />
       )}
       {showStampPlace && <StampPlaceModal preset={stampPreset} onClose={() => { setShowStampPlace(false); setStampPreset(null); }} onDone={() => { setShowStampPlace(false); setStampPreset(null); load(); }} />}
+      {sorter && (
+        <PhotoSorter key={sorter.n} files={sorter.files} shared={sorter.shared} stamps={stamps}
+          onClose={() => setSorter(null)} onChanged={load}
+          onStamp={(items) => { setSorter(null); setStampQueue({ items, i: 0, n: Date.now() }); }} />
+      )}
+      {queued && (
+        <StampPlaceModal key={`${stampQueue.n}-${stampQueue.i}`} sharedPhotos={queued.files} placeHint={queued.placeHint}
+          queue={stampQueue.items.length > 1 ? { at: stampQueue.i + 1, of: stampQueue.items.length } : null} onSkip={nextInQueue}
+          onClose={() => setStampQueue(null)} onDone={() => { load(); nextInQueue(); }} />
+      )}
 
       {/* Friend view: the quiet report door (and the sheet of reasons), and Block */}
       {readOnly && (
