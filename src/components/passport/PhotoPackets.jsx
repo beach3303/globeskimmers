@@ -30,27 +30,27 @@ function Envelope({ packet, onOpen }) {
   const marks = marksOf(packet.tiers);
   return (
     <button type="button" onClick={onOpen} aria-label={`Open the ${packet.city} photo packet — ${packet.photos.length} prints`}
-      className="flex-none active:scale-95 transition-transform" style={{ width: 176 }}>
-      <div style={{ position: "relative", height: 128 }}>
+      className="block w-full active:scale-95 transition-transform">
+      <div style={{ position: "relative", height: 118 }}>
         {/* prints peeking out -->*/}
         {/* lazy <img> peeks, not CSS backgrounds: a lifetime of envelopes loads as it scrolls */}
         {peek && (
-          <div aria-hidden style={{ position: "absolute", left: 14, right: 14, top: 0, height: 78, borderRadius: 6, overflow: "hidden", background: "#8FB2C8", transform: "rotate(-3deg)", border: "3px solid #fff", boxShadow: "0 2px 6px rgba(0,0,0,.18)" }}>
+          <div aria-hidden style={{ position: "absolute", left: 12, right: 12, top: 0, height: 72, borderRadius: 6, overflow: "hidden", background: "#8FB2C8", transform: "rotate(-3deg)", border: "3px solid #fff", boxShadow: "0 2px 6px rgba(0,0,0,.18)" }}>
             <img src={peek} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           </div>
         )}
         {packet.photos[1] && (
-          <div aria-hidden style={{ position: "absolute", left: 26, right: 6, top: 6, height: 70, borderRadius: 6, overflow: "hidden", background: "#D9C9A8", transform: "rotate(4deg)", border: "3px solid #fff", boxShadow: "0 2px 6px rgba(0,0,0,.15)", zIndex: 0 }}>
+          <div aria-hidden style={{ position: "absolute", left: 22, right: 6, top: 6, height: 64, borderRadius: 6, overflow: "hidden", background: "#D9C9A8", transform: "rotate(4deg)", border: "3px solid #fff", boxShadow: "0 2px 6px rgba(0,0,0,.15)", zIndex: 0 }}>
             <img src={packet.photos[1].src} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           </div>
         )}
         {/* the envelope */}
-        <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 82, borderRadius: 10, background: "linear-gradient(180deg,#EBDDB6,#E2D1A4)", border: "1.5px solid #C9B583", boxShadow: "0 4px 10px -6px rgba(0,0,0,.3)", zIndex: 2 }}>
-          <div aria-hidden style={{ position: "absolute", top: 0, left: 0, right: 0, height: 0, borderLeft: "88px solid transparent", borderRight: "88px solid transparent", borderTop: "26px solid rgba(201,181,131,.55)" }} />
-          {marks ? <span aria-hidden="true" style={{ position: "absolute", right: 8, top: 30, fontSize: fs(10.5), lineHeight: 1, opacity: 0.8 }}>{marks}</span> : null}
+        <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 76, borderRadius: 10, background: "linear-gradient(180deg,#EBDDB6,#E2D1A4)", border: "1.5px solid #C9B583", boxShadow: "0 4px 10px -6px rgba(0,0,0,.3)", zIndex: 2 }}>
+          <div aria-hidden style={{ position: "absolute", top: 0, left: 0, right: 0, height: 24, background: "rgba(201,181,131,.55)", clipPath: "polygon(0 0, 100% 0, 50% 100%)", borderRadius: "10px 10px 0 0" }} />
+          {marks ? <span aria-hidden="true" style={{ position: "absolute", right: 7, top: 5, fontSize: fs(10.5), lineHeight: 1, opacity: 0.8 }}>{marks}</span> : null}
           <div className="absolute inset-x-0 bottom-2 text-center px-2">
-            <div className="truncate" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: fs(15), color: "#6B4F1E", letterSpacing: ".04em" }}>{packet.city.toUpperCase()}</div>
-            <div style={{ fontFamily: MONO, fontSize: fs(8.5), color: "#8A6E33", letterSpacing: ".14em" }}>
+            <div className="truncate" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: fs(14), color: "#6B4F1E", letterSpacing: ".04em" }}>{packet.city.toUpperCase()}</div>
+            <div className="truncate" style={{ fontFamily: MONO, fontSize: fs(8), color: "#8A6E33", letterSpacing: ".12em" }}>
               {packet.photos.length} PRINT{packet.photos.length === 1 ? "" : "S"}{packet.range ? ` · ${packet.range.toUpperCase()}` : ""}
             </div>
           </div>
@@ -94,7 +94,9 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
   };
   if (!packets.length) return null;
   // The shelf used to scroll sideways; a lifetime of prints reads top to bottom, a year at
-  // a time (founder, 2026-10-14 night). Newest year first, two envelopes across on a phone.
+  // a time (founder, 2026-10-14 night). Newest year first, two envelopes across on a phone:
+  // the envelopes size to the column (they were a fixed 176 px, and inside the Passport's own
+  // padding only one fit a row — founder, 2026-10-17: "a waste of space").
   const years = packetsByYear(packets);
   return (
     <div className={className}>
@@ -115,9 +117,9 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
             </span>
             <span aria-hidden="true" className="flex-1" style={{ borderTop: "1px dashed rgba(22,17,13,.18)", transform: "translateY(-3px)" }} />
           </div>
-          <div className="grid justify-items-center" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(176px, 1fr))", gap: "16px 10px", paddingTop: 12 }}>
+          <div className="grid justify-items-center" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "16px 12px", paddingTop: 12 }}>
             {list.map((p) => (
-              <div key={p.key} style={{ position: "relative" }}>
+              <div key={p.key} style={{ position: "relative", width: "100%", maxWidth: 190 }}>
                 <Envelope packet={p} onOpen={() => setOpen({ photos: p.photos, index: 0, city: p.city, range: p.range, packet: p })} />
                 {owner && p.stampId && (
                   // A 44px target around the 28px badge on the envelope's corner.

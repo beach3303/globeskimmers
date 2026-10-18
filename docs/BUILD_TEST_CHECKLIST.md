@@ -2164,3 +2164,8 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   label still names them. Captured on the Los Angeles board as the demo account.
 - **Open (founder's call):** the demo account appreview@ has no @username, so since 10-16 App Review lands on
   Home's un-dismissable "Pick your @username" sheet. Set one (e.g. @appreview) before the next submission.
+- **Photo packets two across** (founder 10-17: "a waste of space" — one envelope per row): the envelopes
+  were a fixed 176 px, and inside the Passport's own padding only one fit a row (338 px wide). They now size
+  to the column (grid minmax 140 px, max 190 px each; flap drawn with clip-path so it scales; label 14 px,
+  the privacy mark in the top corner) — two across on a phone, more on an iPad; Profile and visit pages too.
+  Captured as the demo account with a mocked passport list.
