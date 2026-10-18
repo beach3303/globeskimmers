@@ -2180,7 +2180,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   first name 24 → 32 px (line 36 px, flag 19 px). The tab's link reaches 15 px above it, invisibly, for a
   44 px tap target (the gap above shrinks by the same, so nothing moves). Captured as the demo account.
 
-## 2026-10-18 — Held names: the desk shows every name, and Send invitation saves and sends in one tap (NOT COMMITTED)
+## 2026-10-18 — Held names: the desk shows every name, and Send invitation saves and sends in one tap (PUSHED 17ef717, worker run 39164883897 ✓)
 - **Why:** founder 10-18: typed a friend's email on a held name (@royals, Brand reserve), tapped Save, and the
   whole row — email, Save, Seal picker, Send invitation — vanished; no email went out.
 - **Cause 1 (the vanishing row):** `/admin/held-handles` read the list in ONE PostgREST call; PostgREST caps a read
@@ -2215,3 +2215,30 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   is read-only by design and has no held-name, Seal or request desks.
 - **Activate:** push → the worker deploys itself; the app side reaches phones with `npm run ota`. Then the desk
   should read about 1,400 names and @royals should show the email you saved.
+
+## 2026-10-18 (later) — Everyone finishes their passport: a full birthday, and a @username at 18+ (PUSHED)
+- **Founder 10-18:** "allow users to change their handle five times per month as long as the one they are
+  requesting is available"; "I want all users to have a full birthday disclosed … everybody who has access
+  before has to choose a handle and also enter their birthdate … a hard lock … but let's be nice about it."
+- **Username changes: 5 per rolling 30 days** (was 2), worker /social/handle; taken / held / reserved names are
+  still refused; Settings copy "up to 5 times a month".
+- **The birthday was already full for new sign-ups** (social_profiles.birth_year + birth_md); Settings showed
+  only month and day by design. It now shows the locked year beside them. Most early members have month and
+  day only (no year) — they are the main case below.
+- **FinishPassport (src/components/auth/FinishPassport.jsx)**, over every route in place of ConfirmBirthday:
+  until the account has birth_year AND birth_md and, unless teen/blocked, a @username, it covers the app.
+  Step 1 the birthday — ConfirmSheet in a new `required` mode (no Not now, no closing, "Welcome back, <name>!"
+  copy, "Step 1 of 2", Sign out): no year but month/day on file → asks the YEAR only ("We have your birthday as
+  August 30 — add the year you were born"), keeps the month/day, then the neutral check "Is your birthday August
+  30, 1990?"; nothing on file → the full date; year only → month and day. Step 2 the @username (full screen,
+  the sign-up fields; a held name comes filled in). Under 18: birthday only (usernames open at 18); under 13:
+  the frozen screen. A failed read never locks anyone (asked again next open); members still in onboarding
+  aren't asked twice. With nothing missing it renders ConfirmBirthday for its old re-ask job.
+  ConfirmSheet bug fixed on the way: it treated "month and day on file" as nothing to ask even with no year.
+- **Home's UsernameNudge removed** (superseded; left open under the new screen it would have asked again).
+- Verified: eslint + no-undef, build, boot-check; captured as the demo account — real reads (birthday on file, no
+  username → the username step), mocked: nothing on file (Step 1 of 2, full date), year only (month and day),
+  month/day only + no username driven end to end (writes mocked: age 1990-08-30 > handle margaret_t → Home).
+- **Demo account:** appreview@ now has **@appreview** (founder's OK, set 10-18 through /social/handle as the demo
+  session: before `handle:null`, after `"handle":"appreview"`), so App Review goes straight into the app.
+- **Activate:** push → the worker (5 changes) deploys itself; the screen reaches phones with `npm run ota`.
