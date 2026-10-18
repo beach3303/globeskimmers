@@ -14860,6 +14860,7 @@ async function handlePassportStampVisibility(request, env) {
         const w = await gbRest(env, `passport_stamps?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: patch });
         if (!w.ok) return jsonResponse({ error: 'Could not update' }, 502);
         if (b.visibility === 'public') await pcNoticeForStamps(env, user.id, null);
+        await pcBoardsCacheBust(env);
         return jsonResponse({ ok: true, visibility: b.visibility, all: true });
       }
       const id2 = String(b.stamp_id || '');
@@ -14868,6 +14869,7 @@ async function handlePassportStampVisibility(request, env) {
       const rows = w.ok ? await w.json() : [];
       if (!rows.length) return jsonResponse({ error: 'Not found' }, 404);
       if (b.visibility === 'public') await pcNoticeForStamps(env, user.id, [id2]);
+      await pcBoardsCacheBust(env);
       return jsonResponse({ ok: true, visibility: rows[0].visibility, hidden: rows[0].hidden === true });
     }
     const id = String(b.stamp_id || '');
@@ -14875,6 +14877,7 @@ async function handlePassportStampVisibility(request, env) {
     const w = await gbRest(env, `passport_stamps?id=eq.${id}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ hidden: b.hidden, visibility: b.hidden ? 'me' : 'inner', updated_at: new Date().toISOString() }) });
     const rows = w.ok ? await w.json() : [];
     if (!rows.length) return jsonResponse({ error: 'Not found' }, 404);
+    await pcBoardsCacheBust(env);
     return jsonResponse({ ok: true, hidden: rows[0].hidden === true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -15019,6 +15022,7 @@ async function handlePassportShare(request, env) {
       // 2026-10-05. There is no deeper tier: not-public IS the friends tier.
       await gbRest(env, `passport_shares?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ is_public: b.is_public, visibility: b.is_public ? 'public' : 'friends', updated_at: new Date().toISOString() }) });
       row.is_public = b.is_public;
+      await pcBoardsCacheBust(env);   // a private passport's photos leave the board covers now
     }
     const origin = new URL(request.url).origin;
     return jsonResponse({ slug: row.slug, is_public: !!row.is_public, url: `${origin}/p/${row.slug}` });
@@ -15069,18 +15073,65 @@ function ppAlbumsAllowedAt(ownerSp, lvl) {
   if (aud === 'passport') return true;
   return lvl >= 2;
 }
-function ppShareStamps(stamps, origin, withPhotos = true, lvl = null, fb = 'inner') {
-  return (stamps || [])
-    .filter((st) => (lvl === null ? !st.hidden : ppTierVisible(st, lvl, fb)))
-    .map(({ lat, lng, note, note_public, meta, tagged_by, user_id, visibility, hidden, ...rest }) => ({
+// ── Photo links for other people (founder, 2026-10-18: "solidify our privacy") ──────────
+// Every stamp photo shown to someone other than its owner goes out signed for the level it
+// was shown at — '0' a stranger, '1' a follower, '2' the inner circle, 'b' a City Board — and
+// expires (PP_PHOTO_TTL past the next hour, so a link stays the same for an hour). Opening it
+// checks the signature, then checks again that the photo is still visible at that level: its
+// stamp's tier, the albums dial, the private-passport switch, a held or under-18 owner, and on
+// a board its takedown. Narrowing a stamp, closing the albums or going private takes effect at
+// once; a block (enforced where the link is handed out) within the TTL. Owners keep their own
+// key links (/pp-photo/<key>), which nobody else is given.
+const PP_PHOTO_TTL = 6 * 3600;
+const PP_PHOTO_LEVELS = new Set(['0', '1', '2', 'b']);
+let ppPhotoKeyCache = null;
+async function ppPhotoSig(env, id, lvl, exp) {
+  if (!ppPhotoKeyCache) ppPhotoKeyCache = await crypto.subtle.importKey('raw', new TextEncoder().encode(`pp-photo:${GB_KEY(env)}`), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', ppPhotoKeyCache, new TextEncoder().encode(`${String(id).toLowerCase()}.${lvl}.${exp}`)));
+  return btoa(String.fromCharCode(...mac.slice(0, 18))).replace(/\+/g, '-').replace(/\//g, '_');
+}
+async function ppPhotoUrl(env, origin, id, lvl) {
+  const exp = Math.ceil(Date.now() / 3600e3) * 3600 + PP_PHOTO_TTL;
+  return `${origin}/pp-photo/p/${id}?l=${lvl}&e=${exp}&s=${await ppPhotoSig(env, id, String(lvl), exp)}`;
+}
+// The photo's key when it may still be opened at this level, else null (fail closed).
+async function ppPhotoOpenable(env, id, lvl) {
+  const q = await gbRest(env, `passport_stamp_photos?id=eq.${id}&select=photo_key,mod_status,board_hidden,user_id,passport_stamps(visibility,hidden,user_id)`, {});
+  const row = q.ok ? (await q.json())[0] : null;
+  const st = row?.passport_stamps;
+  if (!row || row.mod_status !== 'ok' || !st || st.user_id !== row.user_id || !String(row.photo_key || '').startsWith('pp/') || String(row.photo_key).includes('..')) return null;
+  const [pq, sq] = await Promise.all([
+    gbRest(env, `social_profiles?user_id=eq.${st.user_id}&select=user_id,albums_audience,${GB_TIER_COLS}`, {}),
+    gbRest(env, `passport_shares?user_id=eq.${st.user_id}&select=is_public`, {}),
+  ]);
+  if (!pq.ok || !sq.ok) return null;
+  const sp = gbTierRow((await pq.json())[0]);
+  const isPublic = (await sq.json())[0]?.is_public === true;
+  if (gbOffSocial(sp)) return null;
+  const fb = isPublic ? 'public' : 'inner';
+  if (lvl === 'b') {
+    if (!isPublic || st.hidden || ppStampTier(st, fb) !== 'public' || row.board_hidden || !pcAdultRow(sp) || ['inner', 'me'].includes(sp?.albums_audience)) return null;
+  } else {
+    const n = Number(lvl);
+    if (n === 0 && !isPublic) return null;
+    if (!ppTierVisible(st, n, fb) || !ppAlbumsAllowedAt(sp, n)) return null;
+  }
+  return row.photo_key;
+}
+async function ppShareStamps(env, stamps, origin, withPhotos = true, lvl = null, fb = 'inner') {
+  const level = lvl === null ? 0 : lvl;
+  const sign = String(Math.min(2, Math.max(0, level)));
+  const list = (stamps || []).filter((st) => (lvl === null ? !st.hidden : ppTierVisible(st, lvl, fb)));
+  return Promise.all(list.map(async ({ lat, lng, note, note_public, meta, tagged_by, user_id, visibility, hidden, ...rest }) => ({
       ...rest,
       ...(meta && typeof meta === 'object' ? { meta: (({ presence, birthday, ...m }) => m)(meta) } : {}),
       // A trip note is private unless its owner chose to share it.
       ...(note_public && note ? { note, note_public: true } : {}),
       // Fail-closed: another viewer sees only photos that PASSED moderation,
       // each by its id, never by its key (gbRowMedia).
-      photos: withPhotos ? (rest.photos || []).filter((p) => p.mod_status === 'ok').map((p) => ({ ...p, photo_url: `${origin}/pp-photo/p/${p.id}` })) : [],
-    }));
+      // The owner (level 3) keeps their key links; everyone else gets a signed one.
+      photos: withPhotos ? await Promise.all((rest.photos || []).filter((p) => p.mod_status === 'ok').map(async (p) => ({ ...p, photo_url: level >= 3 && p.photo_url ? p.photo_url : await ppPhotoUrl(env, origin, p.id, sign) }))) : [],
+    })));
 }
 
 // Reviews stored passport photos ({ id, photo_key }), four at a time: 'ok' or 'blocked' by
@@ -15149,8 +15200,15 @@ async function handlePassportPublic(request, env, ctx) {
       const lq = await gbRest(env, `share_links?token=eq.${slug}&select=user_id,level,expires_at,revoked_at`, {});
       const link = (lq.ok ? await lq.json() : [])[0];
       if (link && !link.revoked_at && (!link.expires_at || Date.parse(link.expires_at) > Date.now())) {
-        share = { user_id: link.user_id, is_public: false };
-        linkLevel = link.level === 'inner' ? 2 : 0;
+        // The private switch means private (founder, 2026-10-18): a public-level link from a
+        // private passport shows nothing; an inner-circle link the owner chose to send still works.
+        const oq = await gbRest(env, `passport_shares?user_id=eq.${link.user_id}&select=is_public`, {});
+        if (!oq.ok) return jsonResponse({ private: true });
+        const ownerPublic = (await oq.json())[0]?.is_public === true;
+        if (link.level === 'inner' || ownerPublic) {
+          share = { user_id: link.user_id, is_public: ownerPublic, via_link: true };
+          linkLevel = link.level === 'inner' ? 2 : 0;
+        }
       }
     }
     if (!share) return jsonResponse({ private: true });
@@ -15175,7 +15233,7 @@ async function handlePassportPublic(request, env, ctx) {
     const holder = await ppHolder(env, share.user_id);
     const { stamps } = await ppLoad(env, share.user_id);
     const origin = new URL(request.url).origin;
-    const shared = ppShareStamps(stamps, origin, withPhotos, lvl, share.is_public ? 'public' : 'inner');
+    const shared = await ppShareStamps(env, stamps, origin, withPhotos, lvl, share.is_public ? 'public' : 'inner');
     if (!shared.length && lvl < 3) return jsonResponse({ private: true });
     // The cloth the owner's world is bound in (B2), for the visit page's cover.
     const holderCloth = (await gbFaces(env, [share.user_id], origin))[share.user_id]?.cloth || null;
@@ -15235,8 +15293,11 @@ async function handlePassportShareLanding(request, env, ctx) {
         const lq = await gbRest(env, `share_links?token=eq.${slug}&select=user_id,level,expires_at,revoked_at`, {});
         const link = (lq.ok ? await lq.json() : [])[0];
         if (link && !link.revoked_at && (!link.expires_at || Date.parse(link.expires_at) > Date.now())) {
-          share = { user_id: link.user_id, is_public: true };
-          landingLvl = link.level === 'inner' ? 2 : 0;
+          // As in the app (founder, 2026-10-18): a public-level link from a private passport shows
+          // nothing; an inner-circle link still does.
+          const oq = await gbRest(env, `passport_shares?user_id=eq.${link.user_id}&select=is_public`, {});
+          const ownerPublic = oq.ok && (await oq.json())[0]?.is_public === true;
+          if (link.level === 'inner' || ownerPublic) { share = { user_id: link.user_id, is_public: true, owner_public: ownerPublic }; landingLvl = link.level === 'inner' ? 2 : 0; }
         }
       }
       // The web page shows a name and stamps, so it gets the in-app rule
@@ -15248,8 +15309,11 @@ async function handlePassportShareLanding(request, env, ctx) {
         holder = await ppHolder(env, share.user_id);
         // Only the slice this link may show reaches the web page — not as a
         // name, not as a count. Only-me stamps never, whatever the link.
-        const visible = (await ppLoad(env, share.user_id)).stamps.filter((st) => ppTierVisible(st, landingLvl ?? 0, 'public'));
+        const visible = (await ppLoad(env, share.user_id)).stamps.filter((st) => ppTierVisible(st, landingLvl ?? 0, share.owner_public === false ? 'inner' : 'public'));
         stats = ppStats(visible); sample = visible.slice(0, 8);
+        // Nothing this link may show reads like a private passport (as /passport/public does),
+        // never a name over an empty book.
+        if (!visible.length) { holder = null; stats = null; sample = []; }
       }
     }
     const esc = (s) => String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -16776,8 +16840,16 @@ async function handleDishPhotoServe(request, env) {
 async function handlePassportPhotoServe(request, env) {
   try {
     if (!env.MEDIA) return new Response('Not found', { status: 404 });
-    const byRow = /^\/pp-photo\/p\/([0-9a-f-]{36})$/i.exec(new URL(request.url).pathname);
-    if (byRow) return gbMediaResp(await gbRowMedia(env, 'passport_stamp_photos', byRow[1], 'photo_key', (r) => r.mod_status === 'ok' && String(r.photo_key || '').startsWith('pp/')), 'image/jpeg', 'private, max-age=3600');
+    const u = new URL(request.url);
+    const byRow = /^\/pp-photo\/p\/([0-9a-f-]{36})$/i.exec(u.pathname);
+    if (byRow) {
+      // A signed link only (ppPhotoUrl), unexpired, and the photo still visible at its level.
+      const id = byRow[1].toLowerCase(), lvl = u.searchParams.get('l') || '', exp = Number(u.searchParams.get('e')), sig = u.searchParams.get('s') || '';
+      const now = Date.now() / 1000;
+      if (!PP_PHOTO_LEVELS.has(lvl) || !Number.isFinite(exp) || exp < now || exp > now + PP_PHOTO_TTL + 3600 || sig !== await ppPhotoSig(env, id, lvl, exp)) return new Response('Not found', { status: 404 });
+      const key = await ppPhotoOpenable(env, id, lvl);
+      return gbMediaResp(key ? await env.MEDIA.get(key) : null, 'image/jpeg', 'private, max-age=600');
+    }
     const key = decodeURIComponent(new URL(request.url).pathname.replace(/^\/pp-photo\//, ''));
     if (!key || key.includes('..') || !key.startsWith('pp/')) return new Response('Bad key', { status: 400 });
     const obj = await env.MEDIA.get(key);
@@ -17833,6 +17905,22 @@ async function handleSocialAge(request, env, ctx) {
 // POST /social/profile {} reads mine; { display_name?, bio?, favorites?, dreams? }
 // writes. One moderated door: lengths clamped, URLs stripped from the bio, no
 // free-text anywhere else. Favorites/dreams are ≤3 short {name, country} pairs.
+// The owner's privacy at a glance: { is_public, counts: { me, inner, followers, public } }.
+// Rows from before the tiers count as what they meant (ppStampTier's fallback).
+async function ppPrivacySummary(env, userId) {
+  const sh = await gbRest(env, `passport_shares?user_id=eq.${userId}&select=is_public&limit=1`, {}).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+  const isPublic = sh[0]?.is_public === true;
+  const counts = { me: 0, inner: 0, followers: 0, public: 0 };
+  for (let from = 0; from < 10000; from += 1000) {
+    const r = await gbRest(env, `passport_stamps?user_id=eq.${userId}&select=visibility,hidden&order=id&limit=1000&offset=${from}`, {});
+    if (!r.ok) return null;
+    const rows = await r.json();
+    for (const st of rows) { const t = ppStampTier(st, isPublic ? 'public' : 'inner'); if (t in counts) counts[t] += 1; }
+    if (rows.length < 1000) break;
+  }
+  return { is_public: isPublic, counts };
+}
+
 async function handleSocialProfile(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -17840,11 +17928,14 @@ async function handleSocialProfile(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const mine = await gbSocialProfile(env, user.id);
     const origin = new URL(request.url).origin;
-    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, website: p.website || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null, approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || 'passport', comments_audience: p.comments_audience || 'inner', default_stamp_tier: PP_TIERS.includes(p.default_stamp_tier) ? p.default_stamp_tier : 'inner', circle_public: p.circle_public === true, booklet_order: p.booklet_order || 'newest', shuffle_seed: p.shuffle_seed ?? null, custom_order: Array.isArray(p.custom_order) ? p.custom_order : null };
+    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, website: p.website || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null, approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || 'passport', comments_audience: p.comments_audience || 'inner', default_stamp_tier: PP_TIERS.includes(p.default_stamp_tier) ? p.default_stamp_tier : 'inner', circle_public: p.circle_public === true, booklet_order: p.booklet_order || 'newest', shuffle_seed: p.shuffle_seed ?? null, custom_order: Array.isArray(p.custom_order) ? p.custom_order : null, privacy_checked: !!p.privacy_checkup_at };
     // A patch with only a website saves it (B5: it used to read as a read).
     if (b.display_name === undefined && b.bio === undefined && b.favorites === undefined && b.dreams === undefined && b.website === undefined
       && b.approve_followers === undefined && b.albums_audience === undefined && b.comments_audience === undefined
-      && b.default_stamp_tier === undefined && b.circle_public === undefined && b.booklet_order === undefined && b.reshuffle === undefined && b.custom_order === undefined) {
+      && b.default_stamp_tier === undefined && b.circle_public === undefined && b.booklet_order === undefined && b.reshuffle === undefined && b.custom_order === undefined && b.privacy_checked === undefined) {
+      // { privacy: true } adds the truth Settings and the check-up show (founder, 2026-10-18):
+      // the passport's public switch and how many stamps sit at each tier.
+      if (b.privacy === true) return jsonResponse({ profile: pick(mine) || null, privacy: await ppPrivacySummary(env, user.id) });
       return jsonResponse({ profile: pick(mine) || null });
     }
     if (gbUnderAge(mine)) return gbUnderAgeResp();
@@ -17861,6 +17952,8 @@ async function handleSocialProfile(request, env, ctx) {
     if (b.albums_audience !== undefined && ['passport', 'inner', 'me'].includes(b.albums_audience)) patch.albums_audience = b.albums_audience;
     if (b.comments_audience !== undefined && ['inner', 'audience', 'off'].includes(b.comments_audience)) patch.comments_audience = b.comments_audience;
     if (b.default_stamp_tier !== undefined && PP_TIERS.includes(b.default_stamp_tier)) patch.default_stamp_tier = b.default_stamp_tier;
+    // The one-time privacy check-up was answered (founder, 2026-10-18).
+    if (b.privacy_checked === true) patch.privacy_checkup_at = new Date().toISOString();
     // The circle switch (founder, 2026-10-15): public lists are an adult's explicit choice;
     // the app confirms in the founder's words before this write arrives.
     if (b.circle_public !== undefined) patch.circle_public = b.circle_public === true;
@@ -17891,6 +17984,7 @@ async function handleSocialProfile(request, env, ctx) {
       ? await gbRest(env, `social_profiles?user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) })
       : await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, ...patch }) });
     if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
+    if (patch.albums_audience) await pcBoardsCacheBust(env);
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_profile_set', {}));
     const after = await gbSocialProfile(env, user.id).catch(() => ({ ...(mine || {}), ...patch }));
     return jsonResponse({ profile: pick(after) });
@@ -18241,6 +18335,25 @@ async function handleKitServe(request, env) {
 // not yet taken down (board_hidden), never from anyone the viewer blocked. `before`
 // pages by the photo's created_at. Fails to none: a missing column (deploy race)
 // or an unreadable table never breaks the board — the cards still show.
+// Who may hang photos on a City Board (founder, 2026-10-18: "a private passport takes your
+// photos off City Boards"): an adult whose albums are open to passport viewers ('passport', or
+// unset) AND whose passport is public. The wall, its covers and its guestbooks all ask here.
+// Fails closed: an unreadable profile or share row hangs nothing (null).
+async function pcBoardOwners(env, ownerIds) {
+  const ok = new Set();
+  const ids = [...new Set((ownerIds || []).filter((x) => BL_UUID.test(String(x || ''))))];
+  for (let i = 0; i < ids.length; i += 100) {
+    const part = ids.slice(i, i + 100).join(',');
+    const [r, sq] = await Promise.all([
+      gbRest(env, `social_profiles?user_id=in.(${part})&select=user_id,albums_audience,${GB_TIER_COLS}`, {}),
+      gbRest(env, `passport_shares?user_id=in.(${part})&is_public=eq.true&select=user_id`, {}),
+    ]);
+    if (!r.ok || !sq.ok) return null;
+    const pub = new Set((await sq.json()).map((x) => x.user_id));
+    for (const row of await r.json()) if (pub.has(row.user_id) && pcAdultRow(gbTierRow(row)) && !['inner', 'me'].includes(row.albums_audience)) ok.add(row.user_id);
+  }
+  return ok;
+}
 async function pcBoardPhotos(env, board, before, blocked, origin) {
   const none = { photos: [], more: false, total: 0 };
   try {
@@ -18255,16 +18368,10 @@ async function pcBoardPhotos(env, board, before, blocked, origin) {
     stamps = stamps.filter((st) => board.kind === 'city' ? pcCityKey(st.city, st.country, st.region) === board.key
       : board.kind === 'state' ? pcFold(pcUSState(st.region) || st.region) === pcFold(board.region) : true);
     if (!stamps.length) return none;
-    // Owners first: an adult whose albums are open to passport viewers (the dial that
-    // defaults to "same as the stamp" since 2026-10-16). Minors and 'inner'/'me' owners
-    // drop out here, so the count below is the wall's true size.
-    const owners = [...new Set(stamps.map((st) => st.user_id))];
-    const okOwner = new Set();
-    for (let i = 0; i < owners.length; i += 100) {
-      const r = await gbRest(env, `social_profiles?user_id=in.(${owners.slice(i, i + 100).join(',')})&select=user_id,albums_audience,${GB_TIER_COLS}`, {});
-      if (!r.ok) return none;
-      for (const row of await r.json()) { const t = gbTierRow(row); if (pcAdultRow(t) && !['inner', 'me'].includes(row.albums_audience)) okOwner.add(row.user_id); }
-    }
+    // Owners first (pcBoardOwners): an adult, albums open, passport public. Minors, 'inner'/'me'
+    // albums and private passports drop out here, so the count below is the wall's true size.
+    const okOwner = await pcBoardOwners(env, stamps.map((st) => st.user_id));
+    if (!okOwner) return none;
     stamps = stamps.filter((st) => okOwner.has(st.user_id) && !blocked.has(st.user_id));
     if (!stamps.length) return none;
     const byId = Object.fromEntries(stamps.map((st) => [st.id, st]));
@@ -18277,7 +18384,9 @@ async function pcBoardPhotos(env, board, before, blocked, origin) {
     if (!pq.ok) return none;
     const got = (await pq.json()).filter((ph) => byId[ph.stamp_id] && !blocked.has(ph.user_id));
     const total = cq.ok ? parseInt((cq.headers.get('content-range') || '').split('/')[1] || '0', 10) || got.length : got.length;
-    return { photos: got.slice(0, PC_WALL_PAGE).map((ph) => ({ ...ph, stamp: byId[ph.stamp_id], photo: `${origin}/pp-photo/p/${ph.id}` })), more: got.length > PC_WALL_PAGE, total };
+    const page = got.slice(0, PC_WALL_PAGE);
+    const urls = await Promise.all(page.map((ph) => ppPhotoUrl(env, origin, ph.id, 'b')));
+    return { photos: page.map((ph, i) => ({ ...ph, stamp: byId[ph.stamp_id], photo: urls[i] })), more: got.length > PC_WALL_PAGE, total };
   } catch { return none; }
 }
 // The heads-up (founder, 2026-10-16: no ask — "give them a heads up"): one Mailbox
@@ -18286,6 +18395,9 @@ async function pcBoardPhotos(env, board, before, blocked, origin) {
 async function pcNoticeForStamps(env, userId, stampIds) {
   try {
     if (Array.isArray(stampIds) && !stampIds.length) return;
+    // Only when the photos really hang there (pcBoardOwners: adult, albums open, passport public).
+    const gate = await pcBoardOwners(env, [userId]);
+    if (!gate || !gate.has(userId)) return;
     const where = Array.isArray(stampIds) ? `id=in.(${stampIds.filter((x) => BL_UUID.test(x)).join(',')})&` : '';
     const sq = await gbRest(env, `passport_stamps?${where}user_id=eq.${userId}&visibility=eq.public&hidden=eq.false&select=id,name,city,region,country&limit=500`, {});
     const stamps = sq.ok ? await sq.json() : [];
@@ -18397,6 +18509,7 @@ async function handlePassportPhotoBoard(request, env) {
     if (!w.ok) return jsonResponse({ error: 'Could not update' }, 502);
     const rows = await w.json();
     if (!rows.length) return jsonResponse({ error: 'Not found' }, 404);
+    await pcBoardsCacheBust(env);
     return jsonResponse({ ok: true, board_hidden: rows[0].board_hidden === true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -18748,11 +18861,12 @@ async function blBoardShare(env, target) {
     const q = await gbRest(env, `passport_stamp_photos?id=eq.${m[2]}&mod_status=eq.ok&board_hidden=eq.false&select=id,user_id,stamp_id`, {});
     const ph = (q.ok ? await q.json() : [])[0];
     if (!ph) return null;
-    const [sq, pq] = await Promise.all([
+    // The owner through the boards' own gate (pcBoardOwners: adult, albums open, passport public).
+    const [sq, owners] = await Promise.all([
       gbRest(env, `passport_stamps?id=eq.${ph.stamp_id}&visibility=eq.public&hidden=eq.false&select=id`, {}),
-      gbRest(env, `social_profiles?user_id=eq.${ph.user_id}&select=user_id,albums_audience`, {}),
+      pcBoardOwners(env, [ph.user_id]),
     ]);
-    const open = !['inner', 'me'].includes(((pq.ok ? await pq.json() : [])[0] || {}).albums_audience);
+    const open = !!owners && owners.has(ph.user_id);
     return sq.ok && (await sq.json()).length && open ? { user_id: ph.user_id, is_public: true, board: true, photo: true } : null;
   }
   const q = await gbRest(env, `postcards?id=eq.${m[2]}&select=id,sender_id,to_city`, {});
@@ -19132,7 +19246,10 @@ async function handleBlotterRead(request, env) {
         const extra = await gbRest(env, `passport_stamps?id=in.(${parent.join(',')})&user_id=eq.${owner}&select=id,hidden,visibility`, {});
         for (const r of (extra.ok ? await extra.json() : [])) if (ppTierVisible(r, viewerLvl, share.is_public ? 'public' : 'inner')) okSt.add(r.id);
       }
-      for (const r of phRows) if (okSt.has(r.stamp_id)) okPh.add(r.id);
+      // A photo's activity also needs the albums dial open at this level (founder, 2026-10-18
+      // privacy audit): a closed album leaks no photo ids through its likes and notes.
+      const albumsOpen = ppAlbumsAllowedAt(ownerSp, viewerLvl);
+      for (const r of phRows) if (albumsOpen && okSt.has(r.stamp_id)) okPh.add(r.id);
       const visible = (t) => (t.startsWith('st:') ? okSt.has(t.slice(3)) : t.startsWith('ph:') ? okPh.has(t.slice(3)) : false);
       marks = marks.filter((m) => visible(String(m.target || '')));
       entries = entries.filter((e) => visible(String(e.target || '')));
@@ -19238,7 +19355,9 @@ async function blReadBoard(env, request, user, ids, photoIds = []) {
     if (phs.length) {
       const sq = await gbRest(env, `passport_stamps?id=in.(${[...new Set(phs.map((p) => p.stamp_id))].join(',')})&visibility=eq.public&hidden=eq.false&select=id`, {});
       const pub = new Set((sq.ok ? await sq.json() : []).map((st) => st.id));
-      photos = phs.filter((p) => pub.has(p.stamp_id));
+      // Still hanging: its owner passes the boards' gate (adult, albums open, passport public).
+      const owners = await pcBoardOwners(env, phs.map((p) => p.user_id));
+      photos = owners ? phs.filter((p) => pub.has(p.stamp_id) && owners.has(p.user_id)) : [];
     }
   }
   const senders = [...new Set([...cards.map((p) => p.sender_id), ...photos.map((p) => p.user_id)])];
@@ -19533,15 +19652,12 @@ async function handleSocialFeed(request, env) {
     const prof = Object.fromEntries(((spq && spq.ok) ? await spq.json() : []).map((r) => [r.user_id, gbTierRow(r)]));
     const minor = (id) => { const r = prof[id]; return !!r && (gbUnderAge(r) || gbAgeHeld(r)); };
     const mutual = new Set(((backq && backq.ok) ? await backq.json() : []).map((r) => r.follower_id));
-    const visible = ids.filter((id) => {
-      if (minor(id)) return false;   // never asked for, so they can't crowd out others
-      const v = share[id]?.visibility || (share[id]?.is_public ? 'public' : 'private');
-      if (v === 'public') return true;
-      // 'friends' — and legacy 'private' rows mean the same now (founder,
-      // 2026-10-05: private = you + your friends): mutual follows only.
-      return mutual.has(id);
-    });
-    const sq = visible.length && profOk ? await gbRest(env, `passport_stamps?user_id=in.(${visible.join(',')})&hidden=eq.false&order=created_at.desc&limit=40&select=user_id,name,city,country,kind,visited_on,created_at,verified,meta`, {}) : null;
+    // Each stamp by its own level (founder, 2026-10-18 privacy audit): every id here is an accepted
+    // follow, so a follower sees Followers and Everyone stamps and the inner circle (mutual) sees
+    // Inner circle ones too — the old passport-wide switch no longer decides (it showed followers
+    // inner-circle stamps of a public passport, and nothing at all of a private one).
+    const visible = ids.filter((id) => !minor(id));   // never asked for, so they can't crowd out others
+    const sq = visible.length && profOk ? await gbRest(env, `passport_stamps?user_id=in.(${visible.join(',')})&hidden=eq.false&order=created_at.desc&limit=120&select=user_id,name,city,country,kind,visited_on,created_at,verified,meta,visibility,hidden`, {}) : null;
     // Postcards addressed to ME (from anyone I follow or not — a direct card
     // is a consented tag-like object; blocks were enforced at send) plus
     // BROADCAST cards from the people I follow.
@@ -19605,6 +19721,7 @@ async function handleSocialFeed(request, env) {
       // Teen hold: a held teen's stamps reach no feed at all (nor a frozen or
       // unconfirmed account's); with the hold off, the 24h teen delay applies.
       .filter((s) => !minor(s.user_id) && (prof[s.user_id]?.social_tier !== 'teen' || Date.parse(s.created_at) < dayAgo))
+      .filter((s) => ppTierVisible(s, mutual.has(s.user_id) ? 2 : 1, share[s.user_id]?.is_public ? 'public' : 'inner'))
       .slice(0, 30)
       .map((s) => ({
         type: 'stamp',
@@ -19824,7 +19941,7 @@ const PC_BOARDS_TTL = 300;
 // five minutes; a read that fails lists no photo boards rather than wrong ones.
 async function pcPhotoBoards(env, origin) {
   const kv = env.GLOBESKIMMERS_KV;
-  if (kv) { try { const c = JSON.parse((await kv.get('photoboards:v1')) || 'null'); if (c) return c; } catch { /* rebuild */ } }
+  if (kv) { try { const c = JSON.parse((await kv.get('photoboards:v2')) || 'null'); if (c) return c; } catch { /* rebuild */ } }
   const out = { city: {}, state: {}, country: {} };
   try {
     const sq = await gbRest(env, `passport_stamps?visibility=eq.public&hidden=eq.false&select=id,user_id,city,region,country,lat,lng&limit=3000`, {});
@@ -19834,18 +19951,16 @@ async function pcPhotoBoards(env, origin) {
     const byId = Object.fromEntries(stamps.map((st) => [st.id, st]));
     const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${stamps.map((st) => st.id).join(',')})&mod_status=eq.ok&board_hidden=eq.false&order=created_at.desc&select=id,stamp_id,user_id,created_at&limit=6000`, {});
     const photos = pq.ok ? (await pq.json()).filter((ph) => byId[ph.stamp_id]) : [];
-    const owners = [...new Set(photos.map((ph) => ph.user_id))];
-    const okOwner = new Set();
-    for (let i = 0; i < owners.length; i += 100) {
-      const r = await gbRest(env, `social_profiles?user_id=in.(${owners.slice(i, i + 100).join(',')})&select=user_id,albums_audience,${GB_TIER_COLS}`, {});
-      for (const row of (r.ok ? await r.json() : [])) { const t = gbTierRow(row); if (pcAdultRow(t) && !['inner', 'me'].includes(row.albums_audience)) okOwner.add(row.user_id); }
-    }
+    const okOwner = await pcBoardOwners(env, photos.map((ph) => ph.user_id));
+    if (!okOwner) return out;
     const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
     const add = (bucket, bd, ph) => {
       if (!bd) return;
-      const e = bucket[bd.key] || (bucket[bd.key] = { kind: bd.kind, key: bd.key, name: bd.name, city: bd.city, region: bd.region, country: bd.country, photos: 0, recent: 0, last_at: null, cover: null });
+      const e = bucket[bd.key] || (bucket[bd.key] = { kind: bd.kind, key: bd.key, name: bd.name, city: bd.city, region: bd.region, country: bd.country, photos: 0, recent: 0, last_at: null, covers: [] });
       e.photos += 1; if (ph.created_at > weekAgo) e.recent += 1;
-      if (!e.last_at || ph.created_at > e.last_at) { e.last_at = ph.created_at; e.cover = `${origin}/pp-photo/p/${ph.id}`; }
+      if (!e.last_at || ph.created_at > e.last_at) e.last_at = ph.created_at;
+      // Up to four newest, with their owners: each reader's blocks pick the cover (handleCityBoards).
+      if (e.covers.length < 4) e.covers.push({ id: ph.id, owner: ph.user_id });
     };
     for (const ph of photos) {
       if (!okOwner.has(ph.user_id)) continue;
@@ -19854,10 +19969,15 @@ async function pcPhotoBoards(env, origin) {
       if (st.region && pcIsUS(st.country)) add(out.state, pcBoardOf({ kind: 'state', region: st.region, country: st.country }), ph);
       add(out.country, pcBoardOf({ kind: 'country', country: st.country }), ph);
     }
+    // Signed for the board level (ppPhotoUrl); a link lives past the two-minute cache.
+    for (const bucket of [out.city, out.state, out.country]) for (const e of Object.values(bucket)) e.covers = await Promise.all(e.covers.map(async (c) => ({ owner: c.owner, url: await ppPhotoUrl(env, origin, c.id, 'b') })));
   } catch { return out; }
-  if (kv) await kv.put('photoboards:v1', JSON.stringify(out), { expirationTtl: 300 }).catch(() => {});
+  if (kv) await kv.put('photoboards:v2', JSON.stringify(out), { expirationTtl: 120 }).catch(() => {});
   return out;
 }
+// A privacy change (passport switch, albums dial, a stamp's level, a takedown) clears the cached
+// covers at once rather than waiting out the two minutes.
+async function pcBoardsCacheBust(env) { if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.delete('photoboards:v2').catch(() => {}); }
 
 async function handleCityBoards(request, env) {
   try {
@@ -19892,16 +20012,18 @@ async function handleCityBoards(request, env) {
     // Photo boards (City Billboards, 2026-10-16) join the list: a city with only photos is a
     // board too, and every US state and every country with anything inside it. Counts add up.
     const pb = await pcPhotoBoards(env, origin);
+    // A photo board's cover: its newest photo whose owner this reader hasn't blocked (or none).
+    const pickCover = (e) => (Array.isArray(e?.covers) ? e.covers : []).find((c) => c && c.url && !blocked.has(c.owner))?.url || null;
     const byKey = Object.fromEntries(boards.map((x) => [x.key, x]));
     for (const e of Object.values(pb.city)) {
       if (q && !(`${pcNorm(e.city)} ${pcNorm(e.country)}`.includes(q))) continue;
       const x = byKey[e.key];
-      if (x) { x.photos = e.photos; x.count += e.photos; x.recent += e.recent; if (!x.last_at || (e.last_at && e.last_at > x.last_at)) { x.last_at = e.last_at; x.cover = x.cover || e.cover; } }
-      else boards.push({ kind: 'city', key: e.key, city: e.city, region: e.region || null, country: e.country, count: e.photos, cards: 0, photos: e.photos, recent: e.recent, last_at: e.last_at, cover: e.cover });
+      if (x) { x.photos = e.photos; x.count += e.photos; x.recent += e.recent; if (!x.last_at || (e.last_at && e.last_at > x.last_at)) { x.last_at = e.last_at; x.cover = x.cover || pickCover(e); } }
+      else boards.push({ kind: 'city', key: e.key, city: e.city, region: e.region || null, country: e.country, count: e.photos, cards: 0, photos: e.photos, recent: e.recent, last_at: e.last_at, cover: pickCover(e) });
     }
     const rollups = [...Object.values(pb.state), ...Object.values(pb.country)]
       .filter((e) => !q || `${pcNorm(e.name)} ${pcNorm(e.country)}`.includes(q))
-      .map((e) => ({ kind: e.kind, name: e.name, region: e.region, country: e.country, count: e.photos, cards: 0, photos: e.photos, recent: e.recent, last_at: e.last_at, cover: e.cover }));
+      .map((e) => ({ kind: e.kind, name: e.name, region: e.region, country: e.country, count: e.photos, cards: 0, photos: e.photos, recent: e.recent, last_at: e.last_at, cover: pickCover(e) }));
     boards.sort((x, y) => (y.recent - x.recent) || (y.count - x.count));
     return jsonResponse({ boards, rollups });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
@@ -20062,8 +20184,11 @@ async function handleSocialWorld(request, env, ctx) {
       city: prof.show_home_city === true && prof.home_city ? prof.home_city : null,
     };
     const relation = { self: false, i_follow: iFollow, follows_me: followsMe, inner };
-    // The viewer's level, from the edges already read: inner 2, approved follower 1.
-    const lvl = inner ? 2 : iFollow === 'accepted' ? 1 : 0;
+    // The viewer's level, from the edges already read: inner 2, approved follower 1 — counted
+    // from ACCEPTED follows only (founder, 2026-10-18 privacy audit): a muted follow, made during
+    // a block or while the owner was held, shows as followed to its maker but opens nothing.
+    const accepted = mine?.status === 'accepted';
+    const lvl = accepted && followsMe ? 2 : accepted ? 1 : 0;
     const visible = !!share && (share.is_public === true || lvl >= 1);
     if (!visible) return jsonResponse({ person, relation, private: true });
     const withPhotos = ppAlbumsAllowedAt(ownerSp, lvl);
@@ -20078,7 +20203,7 @@ async function handleSocialWorld(request, env, ctx) {
       gbRest(env, `user_follows?follower_id=eq.${sid}&status=eq.accepted&select=followee_id&limit=2000`, { headers: { Prefer: 'count=exact' } }),
       gbRest(env, `user_follows?followee_id=eq.${sid}&status=eq.accepted&select=follower_id&limit=2000`, { headers: { Prefer: 'count=exact' } }),
     ]);
-    const shared = ppShareStamps(stamps, origin, withPhotos, lvl, share.is_public ? 'public' : 'inner');
+    const shared = await ppShareStamps(env, stamps, origin, withPhotos, lvl, share.is_public ? 'public' : 'inner');
     const lug = (lq.ok ? await lq.json() : [])[0];
     const gearRow = (gq.ok ? await gq.json() : [])[0] || {};
     const gear = gearRow.gear && typeof gearRow.gear === 'object' ? { ...gearRow.gear } : {};
