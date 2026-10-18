@@ -440,6 +440,8 @@ export default function SettingsPage() {
   // complete theirs here and their tier is recomputed exactly.
   const [bMonth, setBMonth] = useState(""); const [bDay, setBDay] = useState("");
   const [bLocked, setBLocked] = useState(false);
+  // The year shows beside it, locked (founder, 2026-10-18: the row read as if no year was kept).
+  const [bYear, setBYear] = useState(null);
   const saveBirthday = async () => {
     if (!bMonth || !bDay || bLocked) return;
     const { error } = await setBirthday(`${bMonth}-${bDay}`);
@@ -501,7 +503,7 @@ export default function SettingsPage() {
   // The saved birthday (month and day), read again when the tier changes: a
   // 'confirm' account that finishes it in the sheet comes back to this row
   // locked, not empty.
-  useEffect(() => { (async () => { const { birth_md } = await getAgeInfo(); if (birth_md) { setBMonth(birth_md.slice(0, 2)); setBDay(birth_md.slice(3, 5)); setBLocked(true); } })(); }, [socialTier]);
+  useEffect(() => { (async () => { const { birth_md, birth_year } = await getAgeInfo(); setBYear(birth_year || null); if (birth_md) { setBMonth(birth_md.slice(0, 2)); setBDay(birth_md.slice(3, 5)); setBLocked(true); } })(); }, [socialTier]);
   const countryBoxRef = useRef(null);
   const [countryOpen, setCountryOpen] = useState(false);
   const [countryQuery, setCountryQuery] = useState("");
@@ -995,6 +997,9 @@ export default function SettingsPage() {
                     <option value="">Day</option>
                     {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((d) => <option key={d} value={d}>{Number(d)}</option>)}
                   </select>
+                  {bYear ? (
+                    <span aria-label={`Birth year ${bYear}`} className="h-12 rounded-xl px-3 flex items-center opacity-60" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 14 }}>{bYear}</span>
+                  ) : null}
                   {!bLocked && <button type="button" onClick={saveBirthday} disabled={!bMonth || !bDay} className="h-12 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 14 }}>Save</button>}
                 </div>
               ) }}

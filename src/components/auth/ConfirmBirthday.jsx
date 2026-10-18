@@ -13,6 +13,9 @@
 // "Not now" is a real choice: the travel tools keep working, the sheet stays
 // away for the rest of the session, and it comes back only when a stamp or a
 // post needs it (callWorker announces the refusal, src/lib/ageGate.js).
+// `required` (FinishPassport, founder 2026-10-18: everyone gives a full birthday, "kind about it,
+// but it's a requirement"): no Not now and no closing, warmer words, an optional step label, and
+// Sign out as the only other way.
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
@@ -62,17 +65,21 @@ export default function ConfirmBirthday() {
   return <ConfirmSheet onLater={putAway} onSaved={saved} onNothingToAsk={nothingToAsk} account={user} />;
 }
 
-function ConfirmSheet({ onLater, onSaved, onNothingToAsk, account }) {
+export function ConfirmSheet({ onLater, onSaved, onNothingToAsk, account, required = false, stepLabel = null, firstName = null, onSignOut = null }) {
   const [phase, setPhase] = useState("loading"); // loading | ask | check | saving
   const [needYear, setNeedYear] = useState(false); // no birth year either: ask the full date
   const [month, setMonth] = useState("");
   const [day, setDay] = useState("");
   const [dob, setDob] = useState("");               // 'YYYY-MM-DD', only when needYear
   const [storedYear, setStoredYear] = useState(null); // the year on the account, read back in the check
+  // Most early members gave the month and day only (founder, 2026-10-18: "I want all users to have a
+  // full birthday"): those keep theirs and are asked for the year alone.
+  const [storedMd, setStoredMd] = useState(null);
+  const [yearSel, setYearSel] = useState("");
   const [err, setErr] = useState(null);
   const panel = useRef(null);
   const head = useRef(null);
-  useOverlayClose(true, () => { if (phase !== "saving") onLater(); }, panel);
+  useOverlayClose(!required, () => { if (phase !== "saving") onLater(); }, panel);
 
   // Focus moves into the sheet, and back to where it was when the sheet closes.
   useEffect(() => {
@@ -88,9 +95,10 @@ function ConfirmSheet({ onLater, onSaved, onNothingToAsk, account }) {
     (async () => {
       const info = await getAgeInfo();
       if (gone) return;
-      if (!info.error && info.birth_md) { onNothingToAsk(); return; }
+      if (!info.error && info.set && info.birth_md) { onNothingToAsk(); return; }
       setNeedYear(!info.error && !info.set);
       setStoredYear(info.birth_year || null);
+      setStoredMd(!info.error && !info.set && info.birth_md ? info.birth_md : null);
       setPhase("ask");
     })();
     return () => { gone = true; };
@@ -99,8 +107,12 @@ function ConfirmSheet({ onLater, onSaved, onNothingToAsk, account }) {
 
   const m = Number(month);
   const full = splitDob(dob);
-  const ready = needYear ? !!full : !!(month && day);
-  const pick = needYear && full ? { m: Number(full.md.slice(0, 2)), d: Number(full.md.slice(3, 5)), y: full.year } : { m, d: Number(day), y: storedYear };
+  const yearOnly = needYear && !!storedMd;
+  const ready = yearOnly ? !!yearSel : needYear ? !!full : !!(month && day);
+  const pick = yearOnly ? { m: Number(storedMd.slice(0, 2)), d: Number(storedMd.slice(3, 5)), y: Number(yearSel) || null }
+    : needYear && full ? { m: Number(full.md.slice(0, 2)), d: Number(full.md.slice(3, 5)), y: full.year } : { m, d: Number(day), y: storedYear };
+  const mdSpoken = storedMd ? `${MONTHS[Number(storedMd.slice(0, 2)) - 1] || ""} ${Number(storedMd.slice(3, 5))}` : "";
+  const thisYear = new Date().getFullYear();
   const spoken = `${MONTHS[pick.m - 1] || ""} ${pick.d || ""}${pick.y ? `, ${pick.y}` : ""}`;
   // "The year is wrong": a mail to us with the account in it (unseen body),
   // and the sheet goes away for this session without saving anything.
@@ -114,7 +126,8 @@ function ConfirmSheet({ onLater, onSaved, onNothingToAsk, account }) {
   const save = async () => {
     if (phase === "saving") return;
     setPhase("saving"); setErr(null);
-    const res = needYear ? await setAgeGate(full.year, full.md) : await setBirthday(`${month}-${day}`);
+    const res = yearOnly ? await setAgeGate(Number(yearSel), storedMd)
+      : needYear ? await setAgeGate(full.year, full.md) : await setBirthday(`${month}-${day}`);
     if (res.error && res.error !== "age_required") { setErr(res.error); setPhase("ask"); return; }
     onSaved();
   };
@@ -125,10 +138,10 @@ function ConfirmSheet({ onLater, onSaved, onNothingToAsk, account }) {
 
   return createPortal(
     <div className="fixed inset-0 z-[10030] flex items-end sm:items-center justify-center p-3 sm:p-4"
-      style={{ background: "rgba(22,17,13,.5)", paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
+      style={{ background: required ? "rgba(22,17,13,.72)" : "rgba(22,17,13,.5)", paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
       <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="gs-bday-confirm-h" aria-describedby="gs-bday-confirm-d" aria-busy={phase === "saving" || phase === "loading"}
         className="relative w-full max-w-md rounded-[18px] px-5 py-6 outline-none" style={{ background: IVORY, border: `1px solid ${RULE}` }}>
-        <div className="uppercase" style={{ fontSize: fs(10), letterSpacing: ".2em", color: STAMP, fontWeight: 700 }}>Globeskimmers</div>
+        <div className="uppercase" style={{ fontSize: fs(10), letterSpacing: ".2em", color: STAMP, fontWeight: 700 }}>Globeskimmers{stepLabel ? ` · ${stepLabel}` : ""}</div>
 
         {phase === "loading" && (
           <>
@@ -137,26 +150,42 @@ function ConfirmSheet({ onLater, onSaved, onNothingToAsk, account }) {
               <span id="gs-bday-confirm-h">Confirm your birthday</span>
               <span id="gs-bday-confirm-d" className="sr-only">Loading</span>
             </div>
-            <div className="flex gap-2 mt-5">
-              <button type="button" onClick={onLater} className={btn} style={{ ...btnStyle, background: "#fff", color: INK2, border: `1px solid ${RULE}` }}>Not now</button>
-            </div>
+            {!required && (
+              <div className="flex gap-2 mt-5">
+                <button type="button" onClick={onLater} className={btn} style={{ ...btnStyle, background: "#fff", color: INK2, border: `1px solid ${RULE}` }}>Not now</button>
+              </div>
+            )}
           </>
         )}
 
         {phase === "ask" && (
           <>
             <h2 id="gs-bday-confirm-h" ref={head} tabIndex={-1} className="outline-none" style={{ fontFamily: SERIF, fontWeight: 400, fontSize: fs(26), lineHeight: 1.1, color: INK, marginTop: 6 }}>
-              Confirm your birthday
+              {required ? (yearOnly ? "Add the year you were born" : needYear ? "Your birthday" : "Add your birthday") : "Confirm your birthday"}
             </h2>
             <p id="gs-bday-confirm-d" style={{ fontSize: fs(14.5), lineHeight: 1.5, color: INK2, marginTop: 10 }}>
-              {needYear
-                ? "We don’t have your birthday yet. Stamps and posts wait until we do; everything else works as usual."
-                : "We have the year you were born, but not the month and day. Stamps and posts wait until we have them; everything else works as usual."}
+              {required
+                ? (yearOnly
+                  ? `Welcome back${firstName ? `, ${firstName}` : ""}! We have your birthday as ${mdSpoken} — add the year you were born, and you’re all set.`
+                  : needYear
+                  ? `Welcome back${firstName ? `, ${firstName}` : ""}! Everyone on GlobeSkimmers now adds their birthday — it takes a moment, and then you’re all set.`
+                  : `Welcome back${firstName ? `, ${firstName}` : ""}! We have the year you were born — add the month and day, and you’re all set.`)
+                : yearOnly
+                  ? `We have your birthday as ${mdSpoken}, but not the year. Stamps and posts wait until we have it; everything else works as usual.`
+                  : needYear
+                  ? "We don’t have your birthday yet. Stamps and posts wait until we do; everything else works as usual."
+                  : "We have the year you were born, but not the month and day. Stamps and posts wait until we have them; everything else works as usual."}
             </p>
             <p style={{ fontSize: fs(12.5), lineHeight: 1.45, color: INK3, marginTop: 6 }}>
               It keeps GlobeSkimmers safe and sets the right privacy for your age. Private: never shown on your profile or passport.
             </p>
-            {needYear ? (
+            {yearOnly ? (
+              <select value={yearSel} onChange={(e) => { setYearSel(e.target.value); setErr(null); }} aria-label="The year you were born" autoComplete="bday-year"
+                className="mt-4 w-full rounded-xl px-3" style={field}>
+                <option value="">Year</option>
+                {Array.from({ length: thisYear - 1899 }, (_, i) => String(thisYear - i)).map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            ) : needYear ? (
               <input type="date" value={dob} onChange={(e) => { setDob(e.target.value); setErr(null); }} aria-label="Your birthday" autoComplete="bday"
                 min="1900-01-01" max={new Date().toISOString().slice(0, 10)}
                 className="mt-4 w-full rounded-xl px-3 outline-none" style={field} />
@@ -176,7 +205,7 @@ function ConfirmSheet({ onLater, onSaved, onNothingToAsk, account }) {
             )}
             {err && <p role="alert" style={{ fontSize: fs(13), color: STAMP, lineHeight: 1.4, marginTop: 8 }}>{err}</p>}
             <div className="flex gap-2 mt-5">
-              <button type="button" onClick={onLater} className={btn} style={{ ...btnStyle, background: "#fff", color: INK2, border: `1px solid ${RULE}` }}>Not now</button>
+              {!required && <button type="button" onClick={onLater} className={btn} style={{ ...btnStyle, background: "#fff", color: INK2, border: `1px solid ${RULE}` }}>Not now</button>}
               <button type="button" onClick={() => setPhase("check")} disabled={!ready} className={btn} style={{ ...btnStyle, background: INK, color: "#fff" }}>Continue</button>
             </div>
           </>
@@ -198,12 +227,15 @@ function ConfirmSheet({ onLater, onSaved, onNothingToAsk, account }) {
               </button>
             </div>
             {!needYear && storedYear && phase !== "saving" && (
-              <a href={correctHref} onClick={() => onLater()} className="mt-2 flex items-center justify-center underline underline-offset-2"
+              <a href={correctHref} onClick={() => { if (!required) onLater(); }} className="mt-2 flex items-center justify-center underline underline-offset-2"
                 style={{ minHeight: 44, fontSize: fs(13), color: INK3 }}>
                 The year is wrong
               </a>
             )}
           </>
+        )}
+        {required && onSignOut && phase !== "saving" && (
+          <button type="button" onClick={onSignOut} className="mt-3 w-full flex items-center justify-center" style={{ minHeight: 44, fontSize: fs(13), color: INK3, background: "transparent", border: 0 }}>Sign out</button>
         )}
       </div>
     </div>,
