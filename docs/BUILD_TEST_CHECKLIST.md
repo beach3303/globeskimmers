@@ -2179,3 +2179,39 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   (Zone's HOME_TAB, exported; the right-aligned link under the row is gone); "Hello" 10.5 → 13.5 px and the
   first name 24 → 32 px (line 36 px, flag 19 px). The tab's link reaches 15 px above it, invisibly, for a
   44 px tap target (the gap above shrinks by the same, so nothing moves). Captured as the demo account.
+
+## 2026-10-18 — Held names: the desk shows every name, and Send invitation saves and sends in one tap (NOT COMMITTED)
+- **Why:** founder 10-18: typed a friend's email on a held name (@royals, Brand reserve), tapped Save, and the
+  whole row — email, Save, Seal picker, Send invitation — vanished; no email went out.
+- **Cause 1 (the vanishing row):** `/admin/held-handles` read the list in ONE PostgREST call; PostgREST caps a read
+  at 1,000 rows and ~1,400 names are held (637 + 754 seeded on 10-03, each batch sharing one created_at), so the
+  desk always showed 1,000 (454 + 546) and WHICH 1,000 changed from read to read. After Save the reload dropped
+  @royals, so its open controls had no row. The email itself was saved. **Fix (worker):** read page by page,
+  `order=created_at.asc,handle.asc`, until an empty page; a failed read now answers 502 with no rows, and the
+  desk keeps its last list and shows the error (it used to come back as an empty list).
+- **Cause 2 (no email):** Save only saved; only Send invitation emails. **Fix (app, AdminAnalytics):** Send
+  invitation saves what's typed (email, name) first, then sends, after a confirm that names the address and the
+  Seal ("…It comes with the Sunshine ★ — Friends & Family Seal, switched on when they claim the name."). Save is
+  now "Save for later" and says "Saved — not sent yet". Each row shows the result ("✉️ Invitation sent to …", or
+  the reason it didn't go); Invited rows show the address. A how-to line heads both sections.
+- **Seals:** unchanged and already right — the Seal picked on a held row writes the invitation as that Seal's
+  letter (gbHeldSealLetter), and claiming the name switches the Seal on. For someone who already has a username,
+  "✪ The GlobeSkimmers Seal" desk grants it and sends the Seal letter.
+- Verified: node --check, eslint + no-undef, build, boot-check. The desk driven in headless Chrome (demo session
+  relabelled admin for the UI only; every admin route mocked): pick Seal → type email → Send invitation → calls
+  update[seal] → update(email) → invite → list; the row reads "Invited 2026-10-18 · friend@example.com".
+  Not verified live: the paged read against the real ~1,400 rows (admin-only route).
+- **Username & Seal requests: Approve finishes it** (founder: "after I [pick] the handle and approve it we're
+  done"). "Done" used to only close the request — no name, no Seal, no email. Now each request has a Seal choice
+  and **Approve & send**: a Seal request → admin/verified grant to the member's @username (the letter goes to
+  their sign-in email; teal and recolors send none); a username request → admin/held-handles add (or update when
+  already held — approving gives it to this requester) + invite, the claim link to the request's email (the
+  sign-in email), with the Seal riding along if picked. Then the request closes; the outcome stays at the top of
+  the desk ("✪ @x has the … Seal — letter sent to …" / "✉️ @x is held for them — claim link sent to …").
+  Worker: the request list now carries member_handle / member_seal. Dismiss stays.
+  Driven in headless Chrome with mocks: grant @jahmai burgundy:person > resolve > hold-add @royals (409) >
+  hold-update > invite > resolve; both outcomes shown.
+- **Where:** all of this is in the app only (Settings → Admin Portal). The website admin (globeskimmers.io/admin)
+  is read-only by design and has no held-name, Seal or request desks.
+- **Activate:** push → the worker deploys itself; the app side reaches phones with `npm run ota`. Then the desk
+  should read about 1,400 names and @royals should show the email you saved.
