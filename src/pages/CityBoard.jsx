@@ -266,9 +266,15 @@ function BoardGuestbookSheet({ name, gb, signBoard, onClose, onCount }) {
   );
 }
 
-// A tile on the wall: the photo, and the @username when the owner signed it.
+// A tile on the wall: the photo and where it was taken (founder, 2026-10-17: "put the text of
+// attraction name instead … or the city the photo was taken from"), never the @username. The
+// place is the stamp the photo belongs to; a city-wide stamp names the city. A light see-through
+// label, small type, so the photo shows through (founder, same day). Who posted it shows
+// when the photo is opened; screen readers still hear it on the tile.
+const sameName = (a, b) => { const n = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase(); return !!n(a) && n(a) === n(b); };
 function PhotoTile({ row, onOpen, index = 0 }) {
   const handle = lc(row?.by?.handle);
+  const where = row?.place && !sameName(row.place, row.city) ? row.place : (row?.city || row?.place || "");
   const pinned = WALL === "pins";
   return (
     <button type="button" onClick={() => onOpen(row)} aria-label={`Open the photo${row.place ? ` from ${row.place}` : ""}${handle ? ` by @${handle}` : ""}`}
@@ -279,8 +285,8 @@ function PhotoTile({ row, onOpen, index = 0 }) {
       <span style={{ position: "relative", display: "block", width: "100%", aspectRatio: "1 / 1", overflow: "hidden", borderRadius: pinned ? 2 : 8, background: NEUTRAL.airmailHair }}>
         <img src={row.photo} alt="" loading="lazy" decoding="async" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-        {handle ? (
-          <span style={{ position: "absolute", left: 5, bottom: 5, padding: "2px 6px", borderRadius: 999, background: "rgba(22,17,13,.72)", color: NEUTRAL.white, fontFamily: MONO, fontSize: fs(7.5), letterSpacing: ".1em", textTransform: "uppercase" }}>@{handle}</span>
+        {where ? (
+          <span style={{ position: "absolute", left: 5, bottom: 5, maxWidth: "calc(100% - 10px)", boxSizing: "border-box", padding: "2px 6px", borderRadius: 6, background: "rgba(22,17,13,.36)", color: NEUTRAL.white, textShadow: "0 1px 2px rgba(0,0,0,.55)", fontSize: fs(8.5), fontWeight: 600, lineHeight: 1.2, textAlign: "left", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{where}</span>
         ) : null}
       </span>
     </button>
