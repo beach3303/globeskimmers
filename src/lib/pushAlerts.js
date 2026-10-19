@@ -9,6 +9,8 @@
 //   attachPushListeners(onRoute)  once, at start: registration → the worker; a tap → onRoute
 //   syncPushToken()               every open once signed in: re-register when already allowed
 //   askForAlerts()                the in-context ask; resolves the permission ('granted' …)
+//   askAlertsOnce()               the first open after sign-up asks once (founder, 2026-10-19: "on by
+//                                 default" — the phone still needs one Allow; it's asked up front)
 //   pushPermission()              'granted' | 'denied' | 'prompt' | 'prompt-with-rationale' | 'unavailable'
 //   unregisterPush()              on sign-out: this phone stops getting this account's alerts
 //   testAlerts()                  Settings → Alerts & Notifications "Send a test": re-registers, then knocks once
@@ -71,6 +73,18 @@ export async function askForAlerts() {
     if (p.receive === 'granted') await PushNotifications.register();
     return p.receive || 'unavailable';
   } catch { return 'unavailable'; }
+}
+
+const ASKED = 'gs_push_asked_v1';
+export async function askAlertsOnce() {
+  if (!native()) return;
+  try {
+    if (localStorage.getItem(ASKED)) return;
+    const p = await PushNotifications.checkPermissions();
+    if (p.receive !== 'prompt' && p.receive !== 'prompt-with-rationale') { localStorage.setItem(ASKED, '1'); return; }
+    localStorage.setItem(ASKED, '1');
+    await askForAlerts();
+  } catch { /* asked another time, in context */ }
 }
 
 export async function unregisterPush() {

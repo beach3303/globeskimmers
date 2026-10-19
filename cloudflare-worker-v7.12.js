@@ -17950,11 +17950,11 @@ async function handleSocialProfile(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const mine = await gbSocialProfile(env, user.id);
     const origin = new URL(request.url).origin;
-    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, website: p.website || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null, approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || 'passport', comments_audience: p.comments_audience || 'inner', default_stamp_tier: PP_TIERS.includes(p.default_stamp_tier) ? p.default_stamp_tier : 'inner', circle_public: p.circle_public === true, booklet_order: p.booklet_order || 'newest', shuffle_seed: p.shuffle_seed ?? null, custom_order: Array.isArray(p.custom_order) ? p.custom_order : null, privacy_checked: !!p.privacy_checkup_at, find_by_name: p.find_by_name !== false, find_by_email: p.find_by_email !== false, alert_postcards: p.alert_postcards !== false, alert_follows: p.alert_follows !== false, alert_pages: p.alert_pages !== false, alert_friend_stamps: p.alert_friend_stamps === true, alert_news: p.alert_news === true };
+    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, website: p.website || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null, approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || 'passport', comments_audience: p.comments_audience || 'inner', default_stamp_tier: PP_TIERS.includes(p.default_stamp_tier) ? p.default_stamp_tier : 'inner', circle_public: p.circle_public === true, booklet_order: p.booklet_order || 'newest', shuffle_seed: p.shuffle_seed ?? null, custom_order: Array.isArray(p.custom_order) ? p.custom_order : null, privacy_checked: !!p.privacy_checkup_at, find_by_name: p.find_by_name !== false, find_by_email: p.find_by_email !== false, alert_postcards: p.alert_postcards !== false, alert_follows: p.alert_follows !== false, alert_pages: p.alert_pages !== false, alert_friend_stamps: p.alert_friend_stamps !== false, alert_news: p.alert_news === true, alert_previews: p.alert_previews === true };
     // A patch with only a website saves it (B5: it used to read as a read).
     if (b.display_name === undefined && b.bio === undefined && b.favorites === undefined && b.dreams === undefined && b.website === undefined
       && b.approve_followers === undefined && b.albums_audience === undefined && b.comments_audience === undefined
-      && b.default_stamp_tier === undefined && b.circle_public === undefined && b.booklet_order === undefined && b.reshuffle === undefined && b.custom_order === undefined && b.privacy_checked === undefined && b.find_by_name === undefined && b.find_by_email === undefined && b.alert_postcards === undefined && b.alert_follows === undefined && b.alert_pages === undefined && b.alert_friend_stamps === undefined && b.alert_news === undefined) {
+      && b.default_stamp_tier === undefined && b.circle_public === undefined && b.booklet_order === undefined && b.reshuffle === undefined && b.custom_order === undefined && b.privacy_checked === undefined && b.find_by_name === undefined && b.find_by_email === undefined && b.alert_postcards === undefined && b.alert_follows === undefined && b.alert_pages === undefined && b.alert_friend_stamps === undefined && b.alert_news === undefined && b.alert_previews === undefined) {
       // { privacy: true } adds the truth Settings and the check-up show (founder, 2026-10-18):
       // the passport's public switch and how many stamps sit at each tier.
       if (b.privacy === true) return jsonResponse({ profile: pick(mine) || null, privacy: await ppPrivacySummary(env, user.id) });
@@ -17980,7 +17980,7 @@ async function handleSocialProfile(request, env, ctx) {
     if (b.find_by_name !== undefined) patch.find_by_name = b.find_by_name === true;
     if (b.find_by_email !== undefined) patch.find_by_email = b.find_by_email === true;
     // The alert switches (push, 2026-10-19).
-    for (const k of ['alert_postcards', 'alert_follows', 'alert_pages', 'alert_friend_stamps', 'alert_news']) if (b[k] !== undefined) patch[k] = b[k] === true;
+    for (const k of ['alert_postcards', 'alert_follows', 'alert_pages', 'alert_friend_stamps', 'alert_news', 'alert_previews']) if (b[k] !== undefined) patch[k] = b[k] === true;
     // The circle switch (founder, 2026-10-15): public lists are an adult's explicit choice;
     // the app confirms in the founder's words before this write arrives.
     if (b.circle_public !== undefined) patch.circle_public = b.circle_public === true;
@@ -18818,7 +18818,7 @@ async function handlePostcardSend(request, env, ctx) {
       const place = row.place_name || row.city || null;
       ctx.waitUntil(pushNotify(env, toUser, 'postcards', (n) => (n > 1
         ? { title: `${n} new postcards`, body: `${senderName} and others sent you postcards`, route: '/Postcards' }
-        : { title: `${senderName} sent you a postcard${place ? ` from ${place}` : ''}`, body: msg ? `“${msg.slice(0, 90)}”` : 'Open it in your Mailbox', route: madeId ? `/Postcards?pc=${madeId}` : '/Postcards' })));
+        : { title: `${senderName} sent you a postcard${place ? ` from ${place}` : ''}`, body: 'Open it in your Mailbox', preview: msg ? `“${msg.slice(0, 90)}”` : null, route: madeId ? `/Postcards?pc=${madeId}` : '/Postcards' })));
     }
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: !!toUser, city: !!toCity, has_dish: !!(b.meta && b.meta.dish), anon: anonLabel || undefined }));
     // A new board card shows in the City Boards list at once, not after its five minutes.
@@ -19302,7 +19302,7 @@ async function handleBlotterSign(request, env, ctx) {
     // The knock (push, 2026-10-19): someone signed or doodled on my pages.
     if (ctx && share?.user_id && share.user_id !== user.id) {
       const who = await ppHolder(env, user.id);
-      ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your circle', route: '/Passport' } : { title: doodleKey && !text ? `${who} left a doodle on your passport` : `${who} signed your passport`, body: text ? `“${String(text).slice(0, 90)}”` : 'Open your passport to see it', route: '/Passport' })));
+      ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your circle', route: '/Passport' } : { title: doodleKey && !text ? `${who} left a doodle on your passport` : `${who} signed your passport`, body: 'Open your passport to see it', preview: text ? `“${String(text).slice(0, 90)}”` : null, route: '/Passport' })));
     }
     const origin = new URL(request.url).origin;
     return jsonResponse({ entry: { id: row.id, target: row.target, body: row.body, doodle: row.doodle_key ? `${origin}/bl-doodle/e/${row.id}` : null, created_at: row.created_at } });
@@ -19627,7 +19627,9 @@ async function gbHandleToUser(env, handle) {
 const PUSH_WEEKLY_CAP = 40;
 const PUSH_QUIET = { from: 22, to: 8 };
 const PUSH_PREF = { postcards: 'alert_postcards', telegrams: 'alert_postcards', follows: 'alert_follows', pages: 'alert_pages', friend_stamps: 'alert_friend_stamps', news: 'alert_news' };
-const PUSH_DEFAULT_ON = new Set(['postcards', 'telegrams', 'follows', 'pages']);
+// On unless switched off (founder, 2026-10-19: "turned on by default"); News stays opt-in — Apple
+// allows marketing alerts only to people who chose them.
+const PUSH_DEFAULT_ON = new Set(['postcards', 'telegrams', 'follows', 'pages', 'friend_stamps']);
 const BL_PUSH_LABEL = { wow: 'WOW', takeme: 'TAKE ME', wannago: 'I WANNA GO!', cool: 'COOL!' };
 const pushPrefOn = (sp, kind) => { const col = PUSH_PREF[kind]; if (!col) return false; const v = sp?.[col]; return v == null ? PUSH_DEFAULT_ON.has(kind) : v === true; };
 const pushB64u = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -19748,6 +19750,9 @@ async function pushNotify(env, uid, kind, make, opts = {}) {
     // opts.each: every one is its own alert (telegrams), never folded into "N new".
     if (kv && !opts.now && !opts.each) { const nk = `pushn:${uid}:${kind}`; n = (parseInt((await kv.get(nk).catch(() => null)) || '0', 10) || 0) + 1; await kv.put(nk, String(n), { expirationTtl: 6 * 3600 }).catch(() => {}); }
     const msg = { kind, ...(typeof make === 'function' ? make(n) : make) };
+    // Previews (founder, 2026-10-19): off unless the member turned them on. An alert may carry
+    // `preview` (someone's words); it replaces the plain body only then. Telegrams never carry one.
+    if ('preview' in msg) { if (msg.preview && sp?.alert_previews === true) msg.body = msg.preview; delete msg.preview; }
     if (!msg.title || !msg.body) return;
     if (!opts.now && kv && pushQuiet(pushLocalHour(await pushTimezone(env, uid)))) {
       // Held until 8 in the member's morning (pushHourly); one line per kind.

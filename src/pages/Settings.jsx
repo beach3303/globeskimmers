@@ -593,7 +593,7 @@ export default function SettingsPage() {
   // stamps sit at each tier — { is_public, counts: { me, inner, followers, public } }.
   const [priv, setPriv] = useState(null);
   const loadPrivacy = () => getPrivacy().then(({ profile: p, privacy }) => {
-    if (p) setDials({ approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || "passport", comments_audience: p.comments_audience || "inner", default_stamp_tier: p.default_stamp_tier || "inner", circle_public: p.circle_public === true, find_by_name: p.find_by_name !== false, find_by_email: p.find_by_email !== false, alert_postcards: p.alert_postcards !== false, alert_follows: p.alert_follows !== false, alert_pages: p.alert_pages !== false, alert_friend_stamps: p.alert_friend_stamps === true, alert_news: p.alert_news === true });
+    if (p) setDials({ approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || "passport", comments_audience: p.comments_audience || "inner", default_stamp_tier: p.default_stamp_tier || "inner", circle_public: p.circle_public === true, find_by_name: p.find_by_name !== false, find_by_email: p.find_by_email !== false, alert_postcards: p.alert_postcards !== false, alert_follows: p.alert_follows !== false, alert_pages: p.alert_pages !== false, alert_friend_stamps: p.alert_friend_stamps !== false, alert_news: p.alert_news === true, alert_previews: p.alert_previews === true });
     if (privacy) setPriv(privacy);
   });
   useEffect(() => { loadPrivacy(); }, []);
@@ -1252,8 +1252,10 @@ export default function SettingsPage() {
               ["alert_pages", "Your passport", "Reactions, signatures and tags on your pages"],
               ["alert_friend_stamps", "Inner circle stamps", "Once a day: new stamps from people you follow who follow you back"],
               ["alert_news", "News from GlobeSkimmers", "Seasonal editions and new things to collect"],
+              // Previews (founder, 2026-10-19): off by default. Telegram words never leave the app.
+              ["alert_previews", "Show previews", "Postcard words and comments show. Telegram words never do"],
             ].map(([key, title, desc]) => (
-              <EdRow key={key} isTablet={isTablet} step={fontStep} icon={Bell} iconBg={CAT.weather.ink} title={title} desc={dials[key] ? desc : `Off — ${desc.charAt(0).toLowerCase()}${desc.slice(1)}`}
+              <EdRow key={key} isTablet={isTablet} step={fontStep} icon={Bell} iconBg={CAT.weather.ink} title={title} desc={key === "alert_previews" ? (dials[key] ? desc : "Off — alerts never show anyone’s words") : dials[key] ? desc : `Off — ${desc.charAt(0).toLowerCase()}${desc.slice(1)}`}
                 control={{ node: <EdToggle on={!!dials[key]} label={title} onClick={() => saveDial(key, !dials[key], dials[key])} /> }} />
             ))}
           </EdGroup>

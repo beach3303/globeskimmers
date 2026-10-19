@@ -19,7 +19,7 @@ import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { supabase } from '@/lib/supabaseClient';
 import { isAdminEmail } from '@/lib/admins';
-import { attachPushListeners, syncPushToken, unregisterPush } from '@/lib/pushAlerts';
+import { attachPushListeners, syncPushToken, unregisterPush, askAlertsOnce } from '@/lib/pushAlerts';
 import {
   startProviderSignIn,
   signInWithApple,
@@ -373,7 +373,12 @@ export const AuthProvider = ({ children }) => {
   // exists (the boot check caught exactly that).
   useEffect(() => { attachPushListeners((route) => setPendingRoute(route)); }, []);
   useEffect(() => {
-    if (user?.id && socialTierReady && socialTier === 'adult') syncPushToken();
+    if (!(user?.id && socialTierReady && socialTier === 'adult')) return undefined;
+    syncPushToken();
+    // Alerts on from the start (founder, 2026-10-19): the phone's one Allow is asked on the first
+    // open, a moment after the app settles, instead of after a first postcard or follow.
+    const t = setTimeout(() => { askAlertsOnce(); }, 2500);
+    return () => clearTimeout(t);
   }, [user?.id, socialTierReady, socialTier]);
 
   // canRefresh = admin email (always) OR an email an admin granted in the
