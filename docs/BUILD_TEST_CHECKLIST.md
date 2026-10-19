@@ -2693,3 +2693,11 @@ card, or opens the postcard box at it); telegrams arrive SEALED and are opened w
   7:42 AM).
 - **Activate:** push, then after the deploy `npm run ota`.
 
+## 2026-10-19 — Telegrams: four words max (COMMITTED, not pushed)
+
+Founder: "change the maximum limit to four words maximum … the fifth has a charge (we're not really charging)".
+`TG_MAX_WORDS` / `TELEGRAM_WORDS` = 4; the meter has four boxes; "4 WORDS MAX! MAKE IT COUNT."; the tolls read FOUR
+WORDS MAX! / FIRST 4 WORDS — FREE / EACH EXTRA WORD — 4¢ (ON THE HOUSE); privacy policy "four words or fewer".
+Captured: "Landed safe in Manila today" stops at "LANDED SAFE IN MANILA" (4/4). eslint + no-undef; build;
+boot-check ✅. **Activate:** push, then `npm run ota`.
+
