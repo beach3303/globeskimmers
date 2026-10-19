@@ -1,7 +1,11 @@
 // FinishPassport — the one required step for every member (founder, 2026-10-18: "everybody who
 // logged onto the app now who has an access before has to choose a handle and also enter their
-// birthdate … a hard lock … but let's be nice about it"). Over the whole app until the account
-// holds its full birthday (year, month and day) and, at 18 and over, a @username:
+// birthdate … a hard lock … but let's be nice about it"). Since 2026-10-19 (founder: "yes") it
+// no longer stands at the door: a member looks around, sorts their photos, sees their places —
+// and the screens come up the first time something must be SAVED or SHARED (a stamp, a photo,
+// a postcard, a share link, a follow: src/lib/passport.js → requirePassport). Then, over the
+// whole app, until the account holds its full birthday (year, month and day) and, at 18 and
+// over, a @username:
 //   1. the birthday — ConfirmSheet in its required mode: the full date when no year is stored,
 //      else the month and day, with the neutral check of the whole date;
 //   2. the @username — under 18 there is none yet (useUsernameClaim's `minor`), so it's skipped.
@@ -15,6 +19,7 @@ import { useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { showToast } from "@/components/Toast";
 import { getAgeInfo, getHandle } from "@/lib/passport";
+import { registerPassportGate, passportGateDone } from "@/lib/passportGate";
 import ConfirmBirthday, { ConfirmSheet } from "@/components/auth/ConfirmBirthday";
 import useUsernameClaim from "@/components/social/useUsernameClaim";
 import UsernameFields from "@/components/social/UsernameFields";
@@ -27,6 +32,8 @@ export default function FinishPassport() {
   const { user, profile, refreshSocialTier, logout } = useAuth();
   const { pathname } = useLocation();
   const [need, setNeed] = useState(null);   // { birthday, handle, steps } while something is missing
+  const needRef = useRef(null);
+  const [armed, setArmed] = useState(false); // a save or a share asked for the passport: show the screens
   const [clear, setClear] = useState(false); // read, and nothing is missing: the privacy check-up may ask
   const total = useRef(0);                   // the steps counted at the start, so step 2 still reads "2 of 2"
   const firstName = String(profile?.first_name || "").trim() || null;
@@ -34,25 +41,30 @@ export default function FinishPassport() {
 
   const check = useCallback(async () => {
     const [age, h] = await Promise.all([getAgeInfo(), getHandle()]);
-    if (age.error || h.error) { setNeed(null); setClear(false); return; }
+    if (age.error || h.error) { setNeed(null); needRef.current = null; setClear(false); return; }
     const birthday = !age.set || !age.birth_md;
     const handle = !h.handle && age.tier !== "teen" && age.tier !== "blocked";
     const steps = (birthday ? 1 : 0) + (handle ? 1 : 0);
     if (steps > total.current) total.current = steps;
-    setNeed(steps ? { birthday, handle, steps } : null);
+    const next = steps ? { birthday, handle, steps } : null;
+    setNeed(next); needRef.current = next;
     setClear(!steps);
+    // Complete: whoever was waiting (a stamp, a postcard…) goes on.
+    if (!steps) { setArmed(false); passportGateDone(true); }
   }, []);
   useEffect(() => {
-    if (!user?.id || !onboarded) { setNeed(null); setClear(false); return; }
+    if (!user?.id || !onboarded) { setNeed(null); needRef.current = null; setClear(false); setArmed(false); return undefined; }
     check();
+    // The trigger: a save or a share needs the passport. Nothing missing → it goes on at once.
+    return registerPassportGate(() => { if (needRef.current) setArmed(true); else passportGateDone(true); });
   }, [user?.id, onboarded, check]);
 
-  if (!need) return <><ConfirmBirthday /><PrivacyCheckup enabled={clear} /></>;
+  if (!need || !armed) return <><ConfirmBirthday /><PrivacyCheckup enabled={clear} /></>;
   const label = (n) => (total.current > 1 ? `Step ${n} of ${total.current}` : null);
 
   if (need.birthday) {
     return (
-      <ConfirmSheet required account={user} firstName={firstName} stepLabel={label(1)} onSignOut={logout}
+      <ConfirmSheet required account={user} firstName={firstName} stepLabel={label(1)} onSignOut={() => { passportGateDone(false); logout(); }}
         onLater={() => {}}
         onNothingToAsk={async () => { await refreshSocialTier(); check(); }}
         onSaved={async () => {
@@ -63,7 +75,7 @@ export default function FinishPassport() {
     );
   }
   return (
-    <UsernameStepRequired firstName={firstName} stepLabel={label(total.current)} onSignOut={logout}
+    <UsernameStepRequired firstName={firstName} stepLabel={label(total.current)} onSignOut={() => { passportGateDone(false); logout(); }}
       onDone={(h, teen) => {
         showToast(teen ? "Usernames open at 18 — until then, your passport stays yours and private" : `You’re @${h} — welcome back!`, "success");
         check();
@@ -87,7 +99,7 @@ function UsernameStepRequired({ firstName, stepLabel, onDone, onSignOut }) {
           Pick your <em style={{ color: NEUTRAL.brandTeal }}>@username</em>
         </h1>
         <p style={{ margin: "10px 0 18px", fontSize: fs(15), lineHeight: 1.5, color: NEUTRAL.ink2 }}>
-          {`Welcome back${firstName ? `, ${firstName}` : ""}! Everyone on GlobeSkimmers now has a @username — it’s how your circle finds you, follows you and sends you postcards. Pick yours and you’re all set.`}
+          {`One more thing${firstName ? `, ${firstName}` : ""}: everyone on GlobeSkimmers has a @username — it’s how your circle finds you, follows you and sends you postcards. Pick yours and you’re all set.`}
         </p>
         <UsernameFields claim={claim} idPrefix="gs-finish" />
         <button type="button" onClick={submit} disabled={checking || !ready || busy}

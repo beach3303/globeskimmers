@@ -3,6 +3,7 @@
 // it), so nothing here trusts a client-supplied user id. See the meaning model:
 // docs/PASSPORT_MEANING_MODEL.md.
 import { callWorker } from '@/lib/callWorker';
+import { requirePassport } from '@/lib/passportGate';
 import { appInfo } from '@/lib/appInfo';
 import { announceAgeGate, BIRTHDAY_SAVED } from '@/lib/ageGate';
 
@@ -29,7 +30,10 @@ function announceStamp(place) {
   try { window.dispatchEvent(new CustomEvent('gs:stamped', { detail: place })); } catch { /* no window */ }
 }
 
+// A stamp, a photo, a postcard, a share and a follow wait for the required passport
+// (requirePassport, 2026-10-19); 'finish_passport' is the answer when the member signed out.
 export async function addStamp(opts) {
+  if (!(await requirePassport())) return { data: null, error: 'finish_passport' };
   const { data, error } = await callWorker('passport/stamp', opts || {});
   const city = String(opts?.city || '').trim();
   const country = String(opts?.country || '').trim();
@@ -97,6 +101,7 @@ export async function photoPlace(lat, lng) {
 // — the worker's photo-location proof; never stored. Resolves data.proof =
 // 'photo_loc' | 'photo_ai' | null and data.verified = the stamp's new status.
 export async function uploadStampPhoto({ stamp_id, image, caption, visited_on, content_type, exif }) {
+  if (!(await requirePassport())) return { data: null, error: 'finish_passport' };
   const { data, error } = await callWorker('passport/photo', { stamp_id, image, caption, visited_on, content_type, exif: exif || undefined });
   const waiting = awaitingProof.get(stamp_id);
   if (waiting && !error && data?.proof && VERIFIED.has(data.verified)) {
@@ -243,6 +248,7 @@ export async function setAllStampsVisibility(visibility) {
 // Ask-first share links (founder, 2026-10-15): mint { level, hours? } → { url, token,
 // expires_at }; list() → { links }; revoke(token).
 export async function mintShareLink(level, hours) {
+  if (!(await requirePassport())) return { data: null, error: 'finish_passport' };
   const { data, error } = await callWorker('passport/share-link', { level, hours });
   return { data, error: error || data?.error || null };
 }
@@ -339,6 +345,7 @@ export async function setSocialProfile(patch) {
 // 'accept'/'decline' {user_id} | 'unblock' {user_id}. The feed is reverse-chron
 // stamps of accepted followees whose visibility allows it.
 export async function socialFollow(op, args) {
+  if (op === 'follow' && !(await requirePassport())) return { data: null, error: 'finish_passport' };
   const { data, error } = await callWorker('social/follow', { op, ...(args || {}) });
   return { data, error: error || data?.error || null };
 }
@@ -413,6 +420,7 @@ export async function getAgeInfo() {
 // line, optional dish meta, and either to_handle, to_city ({ city, country }:
 // that city's board, City Board) or nothing (= followers).
 export async function sendPostcard({ image, message, place_name, city, country, region, meta, to_handle, to_user_id, to_email, to_city, anon }) {
+  if (!(await requirePassport())) return { data: null, error: 'finish_passport' };
   const { data, error } = await callWorker('postcards/send', { image, message, place_name, city, country, ...(region ? { region } : {}), meta, to_handle, ...(to_user_id ? { to_user_id } : {}), ...(to_email ? { to_email } : {}), to_city, ...(anon ? { anon: true } : {}) });
   return { data, error: error || data?.error || null };
 }
@@ -484,6 +492,7 @@ export async function respondTag(tag_id, action) {
 // Shareable booklet. getShareLink() reads the current state; pass a boolean to
 // toggle public/private. Returns { slug, is_public, url }.
 export async function getShareLink(is_public) {
+  if (is_public === true && !(await requirePassport())) return { data: null, error: 'finish_passport' };
   const body = typeof is_public === "boolean" ? { is_public } : {};
   const { data, error } = await callWorker('passport/share', body);
   return { data, error };

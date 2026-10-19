@@ -64,7 +64,8 @@ const AuthenticatedApp = () => {
   }
 
   // Authenticated → render the app. Onboarding gating happens in Layout.
-  // FinishPassport sits over every route (founder, 2026-10-18): until the account has its full
+  // FinishPassport is mounted over every route (founder, 2026-10-18; deferred 2026-10-19: it shows
+  // the first time a save or a share needs the passport, not at the door): until the account has its full
   // birthday and, at 18+, a @username, it covers the app — kindly, but there's no skipping it.
   // With nothing missing it renders ConfirmBirthday, which re-asks when a stamp or post is
   // refused for the birthday.

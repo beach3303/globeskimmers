@@ -166,10 +166,10 @@ export function ConfirmSheet({ onLater, onSaved, onNothingToAsk, account, requir
             <p id="gs-bday-confirm-d" style={{ fontSize: fs(14.5), lineHeight: 1.5, color: INK2, marginTop: 10 }}>
               {required
                 ? (yearOnly
-                  ? `Welcome back${firstName ? `, ${firstName}` : ""}! We have your birthday as ${mdSpoken} — add the year you were born, and you’re all set.`
+                  ? `One thing first${firstName ? `, ${firstName}` : ""}: we have your birthday as ${mdSpoken} — add the year you were born, and you’re all set.`
                   : needYear
-                  ? `Welcome back${firstName ? `, ${firstName}` : ""}! Everyone on GlobeSkimmers now adds their birthday — it takes a moment, and then you’re all set.`
-                  : `Welcome back${firstName ? `, ${firstName}` : ""}! We have the year you were born — add the month and day, and you’re all set.`)
+                  ? `One thing first${firstName ? `, ${firstName}` : ""}: everyone on GlobeSkimmers adds their birthday — it takes a moment, and then you’re all set.`
+                  : `One thing first${firstName ? `, ${firstName}` : ""}: we have the year you were born — add the month and day, and you’re all set.`)
                 : yearOnly
                   ? `We have your birthday as ${mdSpoken}, but not the year. Stamps and posts wait until we have it; everything else works as usual.`
                   : needYear
