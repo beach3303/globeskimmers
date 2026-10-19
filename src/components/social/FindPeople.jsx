@@ -43,7 +43,9 @@ const classify = (raw) => {
 
 const RELATION = { requested: 'Requested', following: 'Following', friends: 'Friends' };
 
-export default function FindPeople({ accent = undefined, cloth = undefined, onFollowed = undefined,
+// With onPick (the postcard composer, 2026-10-18) every row ends in a Choose button that
+// calls onPick(person) instead of following.
+export default function FindPeople({ accent = undefined, cloth = undefined, onFollowed = undefined, onPick = undefined,
   label = 'Find people', placeholder = 'name, @username or email', style = undefined, className = undefined }) {
   const circle = useCircle();
   const auto = useId();
@@ -137,7 +139,12 @@ export default function FindPeople({ accent = undefined, cloth = undefined, onFo
                         {p.handle ? `@${p.handle}` : 'no @username yet'}
                       </div>
                     </div>
-                    {can ? (
+                    {typeof onPick === 'function' ? (
+                      <button type="button" onClick={() => onPick(p)} aria-label={`Choose ${p.name}`}
+                        style={{ flex: 'none', minHeight: 44, padding: '0 16px', borderRadius: 12, border: `1px solid ${color}`, background: color, color: NEUTRAL.white, fontSize: fs(13), fontWeight: 600, cursor: 'pointer' }}>
+                        Choose
+                      </button>
+                    ) : can ? (
                       <button type="button" onClick={() => follow(p)} aria-disabled={isBusy || undefined} aria-busy={isBusy || undefined}
                         aria-label={`${p.relation === 'follows_you' ? 'Follow back' : 'Follow'} ${p.name}`}
                         style={{ flex: 'none', minHeight: 44, padding: '0 14px', display: 'flex', alignItems: 'center', gap: 6, borderRadius: 12, border: `1px solid ${isBusy ? fieldLine : color}`,

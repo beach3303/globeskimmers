@@ -325,9 +325,21 @@ function MailboxBody() {
             </div>
           ) : (
             <>
+              {rows.some((r) => r.type === "postcard" && r.from_new) ? (
+                <>
+                  <h2 style={KICKER}>From someone new</h2>
+                  <p style={{ margin: "4px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink3 }}>Postcards from people you don’t follow. The ••• on a card reports or blocks the sender.</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8, marginBottom: 20 }}>
+                    {rows.filter((r) => r.type === "postcard" && r.from_new).map((r, i) => (
+                      <PostcardCard key={`pcn-${r.created_at}-${i}`} row={r} me={me.handle} meName={myName || profile?.first_name || null} onKeep={keep}
+                        onReport={(row) => openTraveler({ ...row.by, postcard_id: row.id || null }, { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(`Postcard from someone new${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}`, 480) })} />
+                    ))}
+                  </div>
+                </>
+              ) : null}
               <h2 style={KICKER}>From your circle · newest first</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
-                {rows.map((r, i) => (r.type === "postcard" ? (
+                {rows.filter((r) => !(r.type === "postcard" && r.from_new)).map((r, i) => (r.type === "postcard" ? (
                   <PostcardCard key={`pc-${r.created_at}-${i}`} row={r} me={me.handle} meName={myName || profile?.first_name || null} onKeep={keep}
                     onReport={(row) => openTraveler({ ...row.by, postcard_id: row.id || null }, { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(`Postcard${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.message ? `: "${row.message}"` : ""}`, 480) })} />
                 ) : (
