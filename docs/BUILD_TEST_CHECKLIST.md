@@ -2566,7 +2566,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   on → /push/test; `cd android && ./gradlew bundleRelease`; submit both. The JS half reaches current phones by
   `npm run ota`, where it stays quiet until the native build with the plugin arrives.
 
-## 2026-10-19 — Postcards: the recipient can Delete or Reply; the passport activity shows the newest 3 (COMMITTED, not pushed)
+## 2026-10-19 — Postcards: the recipient can Delete or Reply; the passport activity shows the newest 3 (PUSHED — worker + migration live; OTA pending)
 
 Founder: "allow post card receipient to delete a post card or reply … when collapse then only the top 3
 notifications are viewable."
@@ -2588,5 +2588,7 @@ notifications are viewable."
 - Verified: `node --check`; eslint with no-undef on the five touched files; build; boot-check ✅; captured (mocked
   feed, demo account): the 3 rows + "Show 2 more", expanded + "Show fewer", the card's Reply / Delete, the inline
   confirm, the reply composer.
-  NOT verified: a real delete and a real reply against production (the worker change is not deployed yet).
+  Live (main 81b591b, both deploy runs green): signed in as the demo account, a delete and a reply naming a
+  postcard that does not exist both answer 404 "That postcard isn’t here any more"; the column exists.
+  NOT verified: a real delete and a real reply on a phone (needs the OTA).
 - **Activate:** push (worker + migration deploy themselves), then the founder's `npm run ota`. No native build.
