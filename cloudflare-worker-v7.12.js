@@ -20248,13 +20248,6 @@ async function handleSocialFeed(request, env) {
     // sender in followers' feeds would unmask it (founder, 2026-10-15).
     pcs = pcs.filter((p) => !p.meta?.anon && !blocked.has(p.sender_id) && (ids.includes(p.sender_id) ? profOk : pcProfOk) && !minor(p.sender_id));
     tgs = tgs.filter((t) => !blocked.has(t.sender_id) && (ids.includes(t.sender_id) ? profOk : pcProfOk) && !minor(t.sender_id));
-    // RECEIVED: the first time a telegram reaches my Mailbox, stamped once (2026-10-19).
-    const unstamped = tgs.filter((t) => !t.received_at).map((t) => t.id);
-    if (unstamped.length) {
-      const nowIso = new Date().toISOString();
-      await gbRest(env, `telegrams?id=in.(${unstamped.join(',')})&to_user_id=eq.${user.id}&received_at=is.null`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ received_at: nowIso }) }).catch(() => {});
-      for (const t of tgs) if (!t.received_at) t.received_at = nowIso;
-    }
     // Which cards sent to everyone I kept in my postcard box (2026-10-14). Unreadable keeps
     // (the table not there yet) leave `kept` off, and the app shows no Keep.
     const bIds = pcs.filter((p) => p.to_user_id === null).map((p) => p.id);
@@ -20616,8 +20609,9 @@ async function handleCityBoards(request, env) {
 // (what a full stop or ! becomes) doesn't count, an emoji counts as one word, and a word past
 // 15 letters counts as two, the old telegraph rule. Capitals, letters, digits, plain
 // punctuation and emoji; links don't go by wire. Its alert names the sender and never shows
-// the words (founder: the point is to open it), one alert per telegram. SENT is created_at;
-// RECEIVED (received_at) is the first time it reached the recipient's Mailbox. One person by @username, or a reply to a telegram or postcard sent to you.
+// the words (founder: the point is to open it), one alert per telegram. It arrives SEALED in
+// an envelope; SENT is created_at, and RECEIVED (received_at) is stamped when the recipient
+// opens it (/telegrams/open). One person by @username, or a reply to a telegram or postcard sent to you.
 // Adults only, both ways; the words are checked; blocks and a minor recipient are answered
 // like a send and stored nowhere. No daily limit, except five a day to people who don't follow
 // you (a reply is never capped that way) and twenty a minute against bots. The recipient can
@@ -20714,6 +20708,25 @@ async function handleTelegramSend(request, env, ctx) {
       ctx.waitUntil(gbLogEvent(env, 'telegram_send', { reply: !!replyTo, words }));
     }
     return jsonResponse({ ok: true, id: made?.id || null });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /telegrams/open { telegram_id } — the recipient broke the seal: RECEIVED is now, once.
+async function handleTelegramOpen(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const body = await request.json().catch(() => ({}));
+    const id = BL_UUID.test(String(body.telegram_id || '')) ? String(body.telegram_id).toLowerCase() : null;
+    if (!id) return jsonResponse({ error: 'Which telegram?' }, 400);
+    const w = await gbRest(env, `telegrams?id=eq.${id}&to_user_id=eq.${user.id}&received_at=is.null`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ received_at: new Date().toISOString() }) });
+    if (!w.ok) return jsonResponse({ error: 'That didn’t go through — try again' }, 503);
+    const made = (await w.json())[0];
+    if (made) return jsonResponse({ ok: true, received_at: made.received_at });
+    const q = await gbRest(env, `telegrams?id=eq.${id}&to_user_id=eq.${user.id}&select=received_at`, {});
+    const row = q.ok ? (await q.json())[0] : null;
+    if (!row) return jsonResponse({ error: 'That telegram isn’t here any more' }, 404);
+    return jsonResponse({ ok: true, received_at: row.received_at });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -27777,6 +27790,7 @@ export default {
       if (pathname === '/postcards/delete' && request.method === 'POST') return await handlePostcardDelete(request, env);
       if (pathname === '/telegrams/send' && request.method === 'POST') return await handleTelegramSend(request, env, ctx);
       if (pathname === '/telegrams/delete' && request.method === 'POST') return await handleTelegramDelete(request, env);
+      if (pathname === '/telegrams/open' && request.method === 'POST') return await handleTelegramOpen(request, env);
       if (pathname === '/social/world' && request.method === 'POST') return await handleSocialWorld(request, env, ctx);
       if (pathname === '/city/board' && request.method === 'POST') return await handleCityBoard(request, env);
       if (pathname === '/passport/photo/board' && request.method === 'POST') return await handlePassportPhotoBoard(request, env);
