@@ -7,6 +7,7 @@
 //   telegramText(raw)          the wire text, e.g. "Safe in Manila. Miss you!" → "SAFE IN MANILA STOP MISS YOU STOP"
 //   telegramWords(text)        how many words count (STOP doesn't)
 //   sendTelegram({ to_handle, reply_to, body })   → { data, error }
+//   openTelegram(id)           the recipient breaks the seal; RECEIVED is stamped → { receivedAt, error }
 //   deleteTelegram(id)         the recipient takes it out of their Mailbox → { ok, error }
 //   telegramNumber(id)         a four-digit form number from the id, for the blank's NO. box
 import { callWorker } from '@/lib/callWorker';
@@ -61,6 +62,12 @@ export async function sendTelegram({ to_handle, reply_to, body }) {
   if (!(await requirePassport())) return { data: null, error: 'finish_passport' };
   const { data, error } = await callWorker('telegrams/send', { body, ...(reply_to ? { reply_to } : { to_handle }) });
   return { data, error: error || data?.error || null };
+}
+
+// The recipient broke the seal (2026-10-19): the worker stamps RECEIVED now → { received_at }.
+export async function openTelegram(id) {
+  const { data, error } = await callWorker('telegrams/open', { telegram_id: String(id || '') });
+  return { receivedAt: data?.received_at || null, error: error || data?.error || null };
 }
 
 export async function deleteTelegram(id) {
