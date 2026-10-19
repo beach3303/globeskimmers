@@ -2366,7 +2366,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   `gbDayCount` the board cap uses.
 - **Activate:** push → the worker deploys itself; the screens reach phones with `npm run ota`.
 
-## 2026-10-19 (early) — A postcard that waits for an email (Step B) (COMMITTED, awaiting push)
+## 2026-10-19 (early) — A postcard that waits for an email (Step B) (PUSHED)
 - **Founder (10-18):** "can we send it to their email address" for people who aren't on the app.
 - **Worker:** `/postcards/send` takes `to_email`. A member's email (rpc `user_id_by_email`) delivers like any direct
   card — whatever their Find people switches say, and the sender is told nothing either way. Anyone else's:
