@@ -17928,11 +17928,11 @@ async function handleSocialProfile(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const mine = await gbSocialProfile(env, user.id);
     const origin = new URL(request.url).origin;
-    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, website: p.website || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null, approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || 'passport', comments_audience: p.comments_audience || 'inner', default_stamp_tier: PP_TIERS.includes(p.default_stamp_tier) ? p.default_stamp_tier : 'inner', circle_public: p.circle_public === true, booklet_order: p.booklet_order || 'newest', shuffle_seed: p.shuffle_seed ?? null, custom_order: Array.isArray(p.custom_order) ? p.custom_order : null, privacy_checked: !!p.privacy_checkup_at };
+    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, website: p.website || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null, approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || 'passport', comments_audience: p.comments_audience || 'inner', default_stamp_tier: PP_TIERS.includes(p.default_stamp_tier) ? p.default_stamp_tier : 'inner', circle_public: p.circle_public === true, booklet_order: p.booklet_order || 'newest', shuffle_seed: p.shuffle_seed ?? null, custom_order: Array.isArray(p.custom_order) ? p.custom_order : null, privacy_checked: !!p.privacy_checkup_at, find_by_name: p.find_by_name !== false, find_by_email: p.find_by_email !== false };
     // A patch with only a website saves it (B5: it used to read as a read).
     if (b.display_name === undefined && b.bio === undefined && b.favorites === undefined && b.dreams === undefined && b.website === undefined
       && b.approve_followers === undefined && b.albums_audience === undefined && b.comments_audience === undefined
-      && b.default_stamp_tier === undefined && b.circle_public === undefined && b.booklet_order === undefined && b.reshuffle === undefined && b.custom_order === undefined && b.privacy_checked === undefined) {
+      && b.default_stamp_tier === undefined && b.circle_public === undefined && b.booklet_order === undefined && b.reshuffle === undefined && b.custom_order === undefined && b.privacy_checked === undefined && b.find_by_name === undefined && b.find_by_email === undefined) {
       // { privacy: true } adds the truth Settings and the check-up show (founder, 2026-10-18):
       // the passport's public switch and how many stamps sit at each tier.
       if (b.privacy === true) return jsonResponse({ profile: pick(mine) || null, privacy: await ppPrivacySummary(env, user.id) });
@@ -17954,6 +17954,9 @@ async function handleSocialProfile(request, env, ctx) {
     if (b.default_stamp_tier !== undefined && PP_TIERS.includes(b.default_stamp_tier)) patch.default_stamp_tier = b.default_stamp_tier;
     // The one-time privacy check-up was answered (founder, 2026-10-18).
     if (b.privacy_checked === true) patch.privacy_checkup_at = new Date().toISOString();
+    // Find people (founder, 2026-10-18): a name or an email finds you unless you say no.
+    if (b.find_by_name !== undefined) patch.find_by_name = b.find_by_name === true;
+    if (b.find_by_email !== undefined) patch.find_by_email = b.find_by_email === true;
     // The circle switch (founder, 2026-10-15): public lists are an adult's explicit choice;
     // the app confirms in the founder's words before this write arrives.
     if (b.circle_public !== undefined) patch.circle_public = b.circle_public === true;
@@ -19423,6 +19426,97 @@ async function gbHandleToUser(env, handle) {
   return (q.ok ? await q.json() : [])[0] || null;
 }
 
+// ── Find people (founder, 2026-10-18): by @username, by name or by email ───────────────
+// POST /social/find { q } → { people: [{ user_id, name, handle, avatar, cloth, relation }], mode }.
+// Who can be found: adults only (pcAdultRow) — never a frozen or held account, never a teen,
+// never anyone in a block with the searcher, never the searcher. A @username always finds
+// its owner; a name finds only members who kept "find me by name" on, an email only those
+// who kept "find me by email" on (both on by default for adults; NULL = on). An account with
+// no social profile has no known age and is not found (fail closed). Against scraping: a
+// name needs 3 characters and matches the start of a word, a handle needs 2, an email must
+// be the whole address, at most 20 answers, 30 searches a minute per member, and the search
+// text is never logged. relation: 'friends' | 'following' | 'requested' | 'follows_you' | null.
+async function handleSocialFind(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const meSp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (meSp === undefined) return gbAgeUnknownResp();
+    if (gbUnderAge(meSp)) return gbUnderAgeResp();
+    if (gbAgeHeld(meSp)) return gbAgeHeldResp(meSp);
+    if (meSp?.social_tier === 'teen') return jsonResponse({ people: [], mode: 'off' });
+    const kv = env.GLOBESKIMMERS_KV;
+    if (kv) {
+      const rk = `find:${user.id}:${Math.floor(Date.now() / 60000)}`;
+      const n = parseInt((await kv.get(rk).catch(() => null)) || '0', 10) || 0;
+      if (n >= 30) return jsonResponse({ error: 'Slow down a moment, then try again' }, 429);
+      await kv.put(rk, String(n + 1), { expirationTtl: 120 }).catch(() => {});
+    }
+    const b = await request.json().catch(() => ({}));
+    const q = String(b.q || '').trim().slice(0, 80);
+    const byHandle = new Set(), byName = new Set(), byEmail = new Set();
+    const json = async (req) => { try { const r = await req; return r && r.ok ? await r.json() : []; } catch { return []; } };
+    const pub = { headers: { 'Accept-Profile': 'public' } };
+    const low = (v) => String(v || '').toLowerCase();
+    let mode = 'name';
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(q)) {
+      mode = 'email';
+      const r = await gbRest(env, 'rpc/user_id_by_email', { method: 'POST', body: JSON.stringify({ p_email: q.toLowerCase() }) }).catch(() => null);
+      if (r && r.ok) {
+        const v = await r.json().catch(() => null);
+        const id = low(typeof v === 'string' ? v : Array.isArray(v) ? v[0] : v?.user_id);
+        if (BL_UUID.test(id)) byEmail.add(id);
+      }
+    } else {
+      const term = q.replace(/^@+/, '').trim();
+      const h = term.toLowerCase().replace(/[^a-z0-9_]/g, '');
+      if (h.length >= 2) for (const r of await json(gbRest(env, `passport_shares?handle=ilike.${pcLike(h)}*&select=user_id&limit=20`, {}))) if (r?.user_id) byHandle.add(low(r.user_id));
+      if (term.length >= 3) {
+        const start = `${pcLike(term)}*`, word = `*%20${pcLike(term)}*`;
+        const [p, sp] = await Promise.all([
+          json(gbRest(env, `profiles?or=(first_name.ilike.${start},first_name.ilike.${word},display_name.ilike.${start},display_name.ilike.${word})&select=id&limit=20`, pub)),
+          json(gbRest(env, `social_profiles?or=(display_name.ilike.${start},display_name.ilike.${word})&select=user_id&limit=20`, {})),
+        ]);
+        for (const r of p) if (r?.id) byName.add(low(r.id));
+        for (const r of sp) if (r?.user_id) byName.add(low(r.user_id));
+      }
+    }
+    const ids = [...new Set([...byHandle, ...byEmail, ...byName])].filter((id) => BL_UUID.test(id) && id !== low(user.id)).slice(0, 40);
+    if (!ids.length) return jsonResponse({ people: [], mode });
+    const blk = await gbBlockSets(env, user.id);
+    if (!blk) return jsonResponse({ people: [], mode });
+    const inList = ids.join(',');
+    const [sps, prs, shs, fwd, back] = await Promise.all([
+      json(gbRest(env, `social_profiles?user_id=in.(${inList})&select=*`, {})),
+      json(gbRest(env, `profiles?id=in.(${inList})&select=id,first_name,display_name`, pub)),
+      json(gbRest(env, `passport_shares?user_id=in.(${inList})&select=user_id,handle`, {})),
+      json(gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=in.(${inList})&select=followee_id,status`, {})),
+      json(gbRest(env, `user_follows?followee_id=eq.${user.id}&follower_id=in.(${inList})&status=eq.accepted&select=follower_id`, {})),
+    ]);
+    const spBy = Object.fromEntries(sps.map((r) => [low(r.user_id), r]));
+    const prBy = Object.fromEntries(prs.map((r) => [low(r.id), r]));
+    const hBy = Object.fromEntries(shs.map((r) => [low(r.user_id), r.handle || null]));
+    const mine = Object.fromEntries(fwd.map((r) => [low(r.followee_id), r.status]));
+    const theirs = new Set(back.map((r) => low(r.follower_id)));
+    const keep = ids.filter((id) => {
+      if (blk.either.has(id)) return false;
+      const sp = spBy[id];
+      if (!pcAdultRow(gbTierRow(sp))) return false;
+      return byHandle.has(id) || (byEmail.has(id) && sp.find_by_email !== false) || (byName.has(id) && sp.find_by_name !== false);
+    });
+    const origin = new URL(request.url).origin;
+    const faces = await gbFaces(env, keep, origin);
+    const people = keep.slice(0, 20).map((id) => {
+      const sp = spBy[id] || {}, pr = prBy[id] || {}, st = mine[id];
+      const relation = st === 'accepted' ? (theirs.has(id) ? 'friends' : 'following')
+        : (st === 'pending' || st === 'muted') ? 'requested' : theirs.has(id) ? 'follows_you' : null;
+      return { user_id: id, name: sp.display_name || pr.first_name || pr.display_name || 'A traveler', handle: hBy[id] || null, avatar: faces[id]?.avatar || null, cloth: faces[id]?.cloth || null, relation };
+    });
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_find', { mode, n: people.length }));
+    return jsonResponse({ people, mode });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleSocialFollow(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -19548,8 +19642,11 @@ async function handleSocialFollow(request, env, ctx) {
       if (meSp === undefined) return gbAgeUnknownResp();
       if (gbUnderAge(meSp)) return gbUnderAgeResp();
       if (gbAgeHeld(meSp)) return gbAgeHeldResp(meSp);
-      const target = b.handle ? await gbHandleToUser(env, b.handle) : null;
-      if (!target) return jsonResponse({ error: 'No traveler with that username' }, 404);
+      // By @username, or by account id for someone Find people found who has no @username yet
+      // (2026-10-18). The checks below are the same either way.
+      const target = b.handle ? await gbHandleToUser(env, b.handle)
+        : BL_UUID.test(String(b.user_id || '')) ? { user_id: String(b.user_id).toLowerCase(), handle: null } : null;
+      if (!target) return jsonResponse({ error: b.user_id ? 'Who?' : 'No traveler with that username' }, 404);
       if (target.user_id === user.id) return jsonResponse({ error: "That's you 🙂" }, 400);
       // A follow that can't reach its target — a block either way, or a
       // target who gains no followers: a frozen account, a birth year that
@@ -20950,6 +21047,23 @@ async function handleAdminHeldHandles(request, env) {
 // hidden, the same rail as the who-signed lists.
 // yummy stays only as a label, so Mailbox rows from before its retirement still read right.
 const BL_KIND_LABEL = { wow: 'WOW!', cool: 'COOL!', takeme: 'TAKE ME!', been: 'BEEN THERE!', wannago: 'I WANNA GO!', morepics: 'MORE PICS PLEASE!', yummy: 'YUMMY!' };
+// When the "people can find you" heads-up started for this member (ISO), kept in KV for 7
+// days from the first Mailbox read; null for anyone who can't be found (a minor, a held
+// account) or when KV is away.
+async function gbFindNoticeAt(env, me) {
+  const kv = env.GLOBESKIMMERS_KV;
+  if (!kv) return null;
+  const key = `findnote:${me}`;
+  const seen = await kv.get(key);
+  if (seen === 'off') return null;
+  if (seen) return seen;
+  const sp = await gbSocialProfile(env, me).catch(() => undefined);
+  if (!pcAdultRow(sp)) { await kv.put(key, 'off', { expirationTtl: 60 * 60 * 24 * 30 }).catch(() => {}); return null; }
+  const at = new Date().toISOString();
+  await kv.put(key, at, { expirationTtl: 60 * 60 * 24 * 7 }).catch(() => {});
+  return at;
+}
+
 async function handleSocialUnread(request, env) {
   try {
     const user = await gbUser(request, env);
@@ -21007,6 +21121,10 @@ async function handleSocialUnread(request, env) {
     for (const r of entries) items.push({ type: 'signature', uid: r.author_user_id, entry_id: r.id, target: r.target, body: r.body ? String(r.body).slice(0, 90) : null, doodle: !!r.doodle_key, at: r.created_at });
     for (const r of tags) items.push({ type: 'tag', uid: r.from_user_id, place: r.name || null, at: r.created_at });
     for (const r of (Array.isArray(notices) ? notices : [])) items.push({ type: 'board', uid: null, board_name: r.board_name, board_kind: r.kind, photos: r.photos, at: r.created_at });
+    // The heads-up that people can now find you by name and email (Find people, 2026-10-18;
+    // founder: no silent changes): one line for 7 days from the first Mailbox read, adults only.
+    const findAt = await gbFindNoticeAt(env, me).catch(() => null);
+    if (findAt) items.push({ type: 'board', uid: null, board_name: 'Find people', board_kind: 'find', photos: 0, at: findAt });
 
     for (let i = items.length - 1; i >= 0; i--) {
       const onMyPages = items[i].type === 'signature' || items[i].type === 'reaction';
@@ -26995,6 +27113,7 @@ export default {
       if (pathname === '/social/profile' && request.method === 'POST') return await handleSocialProfile(request, env, ctx);
       if (pathname === '/social/report' && request.method === 'POST') return await handleSocialReport(request, env, ctx);
       if (pathname === '/social/follow' && request.method === 'POST') return await handleSocialFollow(request, env, ctx);
+      if (pathname === '/social/find' && request.method === 'POST') return await handleSocialFind(request, env, ctx);
       if (pathname === '/social/unread' && request.method === 'POST') return await handleSocialUnread(request, env);
       if (pathname === '/social/feed' && request.method === 'POST') return await handleSocialFeed(request, env);
       if (pathname === '/postcards/send' && request.method === 'POST') return await handlePostcardSend(request, env, ctx);
