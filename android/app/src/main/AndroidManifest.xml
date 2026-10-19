@@ -48,6 +48,12 @@
             </intent-filter>
         </activity>
 
+        <!-- Alerts outside the app (build 1.0.6, 2026-10-19): the small white icon and the brand
+             colour the status bar shows for a push, and the channel the app creates ('alerts'). -->
+        <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_globeskimmers" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/gs_alert" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="alerts" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -60,6 +66,8 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Alerts outside the app (Android 13+ asks the member; build 1.0.6). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- No ads and no advertising ID (Play Console declaration "No", 2026-10-08):
          strip AD_ID even if a library's manifest adds it. -->
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />

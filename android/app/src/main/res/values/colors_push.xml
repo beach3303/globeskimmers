@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The brand teal behind a push alert's icon (build 1.0.6, 2026-10-19). -->
+    <color name="gs_alert">#0E7C73</color>
+</resources>

@@ -18,6 +18,7 @@ dependencies {
     implementation project(':capacitor-splash-screen')
     implementation project(':capgo-capacitor-share-target')
     implementation project(':capgo-capacitor-updater')
+    implementation project(':capacitor-push-notifications')
 
 }
 

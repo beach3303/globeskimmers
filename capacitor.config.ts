@@ -26,6 +26,7 @@ const config: CapacitorConfig = {
       '@capacitor/splash-screen',
       '@capgo/capacitor-share-target',
       '@capgo/capacitor-updater',
+      '@capacitor/push-notifications',
     ],
   },
 
@@ -95,6 +96,14 @@ const config: CapacitorConfig = {
     // The JS side is src/lib/sharedPhotos.js. Native: ships in a store build, not over the air.
     CapacitorShareTarget: {
       appGroupId: 'group.com.globeskimmers.app',
+    },
+
+    // Alerts outside the app (build 1.0.6, 2026-10-19): shown as a banner even while the app is
+    // open. The JS side is src/lib/pushAlerts.js; the sender is the worker's pushNotify. Native:
+    // ships in a store build (iOS needs the push capability on the App ID, Android the Firebase
+    // google-services.json in android/app — kept out of git).
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert'],
     },
 
     // Capgo OTA live updates. appId MUST match the native bundle id
