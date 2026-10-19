@@ -20616,7 +20616,9 @@ async function handleCityBoards(request, env) {
 // Adults only, both ways; the words are checked; blocks and a minor recipient are answered
 // like a send and stored nowhere. No daily limit, except five a day to people who don't follow
 // you (a reply is never capped that way) and twenty a minute against bots. The recipient can
-// delete one from their Mailbox.
+// delete one from their Mailbox, which erases it. Private to the two of them: every read is
+// scoped to the recipient, the words never ride in an alert, a log or a queue, and deleting
+// either account erases their telegrams both ways.
 const TG_MAX_WORDS = 4;
 const TG_MAX_CHARS = 120;
 const TG_STRANGER_DAILY = 5;
@@ -20738,9 +20740,12 @@ async function handleTelegramDelete(request, env) {
     const body = await request.json().catch(() => ({}));
     const id = BL_UUID.test(String(body.telegram_id || '')) ? String(body.telegram_id).toLowerCase() : null;
     if (!id) return jsonResponse({ error: 'Which telegram?' }, 400);
-    const w = await gbRest(env, `telegrams?id=eq.${id}&to_user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ recipient_deleted_at: new Date().toISOString() }) });
+    // Strictly private (founder, 2026-10-19): a deleted telegram is ERASED, not hidden — the sender
+    // has no copy in the app, so nothing needs to keep it. Any older hidden ones go with it.
+    const w = await gbRest(env, `telegrams?id=eq.${id}&to_user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=representation' } });
     if (!w.ok) return jsonResponse({ error: 'That didn’t go through — try again' }, 503);
     if (!(await w.json()).length) return jsonResponse({ error: 'That telegram isn’t here any more' }, 404);
+    await gbRest(env, `telegrams?to_user_id=eq.${user.id}&recipient_deleted_at=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => {});
     return jsonResponse({ ok: true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }

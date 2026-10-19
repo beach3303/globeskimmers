@@ -212,7 +212,7 @@ export default function TravelerSheet({ person, list: listProp = null, report = 
           <>
             <h2 id="gs-traveler-h" ref={head} tabIndex={-1} style={titleStyle}>Delete this {what}?</h2>
             <p style={{ fontSize: fs(13.5), color: INK2, lineHeight: 1.45, marginTop: 6 }}>
-              It leaves your Mailbox. {name === "A traveler" ? "The sender isn’t" : `${name} isn’t`} told.
+              {what === "telegram" ? "It’s erased for good." : "It leaves your Mailbox."} {name === "A traveler" ? "The sender isn’t" : `${name} isn’t`} told.
             </p>
             {err && <p role="alert" style={{ fontSize: fs(13), color: STAMP, lineHeight: 1.4, marginTop: 8 }}>{err}</p>}
             <div className="flex gap-2 mt-4">
