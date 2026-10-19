@@ -18526,6 +18526,80 @@ async function handlePassportPhotoBoard(request, env) {
 // sender may only address mutuals); no address → everyone who follows the
 // sender (teen senders cannot broadcast). Photos serve from /pc-photo/ by
 // unguessable key, the house private-by-obscurity pattern.
+// ── A postcard that waits (Step B, founder 2026-10-18) ───────────────────────────────
+// A card addressed to an email nobody on the app uses yet. The card is stored in
+// pending_postcards under a keyed hash of the address (never the address itself), the
+// address gets ONE email with a link to join (per sender, per 30 days), and the card is
+// delivered into postcards the first time an account with that email reads its Mailbox.
+// Five such cards a day per sender. Undelivered cards and their photos go after 90 days.
+const PC_EMAIL_DAILY = 5;
+async function pcEmailHash(env, email) {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(`pc-email:${GB_KEY(env)}`), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(String(email).trim().toLowerCase())));
+  return [...mac].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+// The one email. No photo, no message (someone else may read the inbox), no copy kept.
+async function pcSendWaitingEmail(env, senderId, email, where) {
+  if (!env.RESEND_API_KEY) return false;
+  const first = await ppHolder(env, senderId);
+  const subject = `${first} sent you a postcard on GlobeSkimmers`;
+  const text = `Hello,
+
+${first} sent you a postcard${where ? ` from ${where}` : ''} on GlobeSkimmers, the virtual passport app. It’s waiting for you.
+
+Get the app and sign up with this email address to open it:
+https://globeskimmers.io/get?src=postcard
+
+— GlobeSkimmers
+
+You’re getting this one email because ${first} typed your address. We keep only a scrambled form of it, so the card can find you, and we won’t write again unless someone sends you another postcard.`;
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: env.RESEND_FROM || 'GlobeSkimmers <hello@globeskimmers.io>', reply_to: env.RESEND_REPLY_TO || 'founder@globeskimmers.io', to: [email], subject, text, tags: [{ name: 'kind', value: 'postcard_waiting' }] }),
+      signal: AbortSignal.timeout(8000),
+    });
+    return r.ok;
+  } catch { return false; }
+}
+// Deliver what waits for this reader's sign-in email, once a day at most (KV). A card
+// from someone they've blocked, from themselves, or from a sender who has since left is
+// dropped; a card that can't be written stays pending for the next read.
+async function pcDeliverWaiting(env, user) {
+  const kv = env.GLOBESKIMMERS_KV;
+  const email = String(user?.email || '').trim().toLowerCase();
+  if (!email || !user?.id) return;
+  const key = `pcdeliv:${user.id}`;
+  if (kv && await kv.get(key)) return;
+  const hash = await pcEmailHash(env, email);
+  const q = await gbRest(env, `pending_postcards?email_hash=eq.${hash}&delivered_at=is.null&select=id,sender_id,photo_key,message,place_name,city,country,region,meta&order=created_at.asc&limit=20`, {});
+  if (!q.ok) return;
+  const rows = await q.json();
+  const done = (id, to) => gbRest(env, `pending_postcards?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ delivered_at: new Date().toISOString(), delivered_to: to }) });
+  for (const r of rows) {
+    const sq = await gbRest(env, `profiles?id=eq.${r.sender_id}&select=id`, { headers: { 'Accept-Profile': 'public' } });
+    const senderThere = sq.ok && (await sq.json()).length > 0;
+    if (!senderThere || r.sender_id === user.id || await gbBlockedEither(env, user.id, r.sender_id, { failClosed: true })) { await done(r.id, null); continue; }
+    const row = { sender_id: r.sender_id, to_user_id: user.id, photo_key: r.photo_key, message: r.message, place_name: r.place_name, city: r.city, country: r.country, region: r.region, meta: r.meta };
+    let w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+    if (!w.ok && w.status === 400) { const { region: _r, ...rest } = row; w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(rest) }); }
+    if (!w.ok) return;
+    await done(r.id, user.id);
+  }
+  if (kv) await kv.put(key, '1', { expirationTtl: 60 * 60 * 24 }).catch(() => {});
+}
+// The daily prune: rows older than 90 days go; an undelivered one takes its photo with it.
+async function pcPendingPrune(env) {
+  const floor = new Date(Date.now() - 90 * 86400000).toISOString();
+  const q = await gbRest(env, `pending_postcards?created_at=lt.${floor}&select=id,photo_key,delivered_at&limit=200`, {});
+  if (!q.ok) return;
+  const rows = await q.json();
+  if (!rows.length) return;
+  if (env.MEDIA) for (const r of rows) if (!r.delivered_at && r.photo_key) await env.MEDIA.delete(r.photo_key).catch(() => {});
+  await gbRest(env, `pending_postcards?id=in.(${rows.map((r) => r.id).join(',')})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+}
+
 async function handlePostcardSend(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -18549,6 +18623,7 @@ async function handlePostcardSend(request, env, ctx) {
     let boardRegion = null;
     let toTeen = false;
     let anonLabel = null;
+    let toEmail = null;
     if (b.to_handle || BL_UUID.test(String(b.to_user_id || ''))) {
       // By @username, or by account id — someone Find people found, perhaps with no @username
       // yet (founder, 2026-10-18: "send postcards to people who we are not friends with").
@@ -18586,6 +18661,21 @@ async function handlePostcardSend(request, env, ctx) {
       // No name on the board (founder, 2026-10-15): the card signs "a local"
       // or "a traveler" instead — which one is decided here, never client-side.
       if (b.anon === true) anonLabel = await pcAnonLabel(env, user.id, boardCity);
+    } else if (typeof b.to_email === 'string' && b.to_email.trim()) {
+      // An email address (Step B, 2026-10-18). A member's email delivers like any direct card,
+      // whether or not they let Find people show them — the sender learns nothing either way.
+      // Anyone else's: the card waits for them (pcDeliverWaiting), and they get one email.
+      const email = String(b.to_email).trim().toLowerCase().slice(0, 254);
+      if (!nuiteeEmailAddressOk(email)) return jsonResponse({ error: 'That doesn’t look like an email address' }, 400);
+      if (email === String(user.email || '').trim().toLowerCase()) return jsonResponse({ error: 'A postcard to yourself? Frame it instead 🙂' }, 400);
+      let memberId = null;
+      try {
+        const r = await gbRest(env, 'rpc/user_id_by_email', { method: 'POST', body: JSON.stringify({ p_email: email }) });
+        if (r.ok) { const v = await r.json().catch(() => null); const id = String((typeof v === 'string' ? v : Array.isArray(v) ? v[0] : v?.user_id) || '').toLowerCase(); if (BL_UUID.test(id)) memberId = id; }
+      } catch { /* not a member, as far as we can tell */ }
+      if (memberId === user.id) return jsonResponse({ error: 'A postcard to yourself? Frame it instead 🙂' }, 400);
+      if (memberId) to = { user_id: memberId, handle: null };
+      else toEmail = email;
     } else if (sp.social_tier === 'teen') {
       return jsonResponse({ error: 'Address your postcard to a friend — broadcast opens at age 18' }, 403);
     } else {
@@ -18640,10 +18730,36 @@ async function handlePostcardSend(request, env, ctx) {
         if (n != null && n > PC_STRANGER_DAILY) return jsonResponse({ error: 'That’s five postcards today to people who don’t follow you. Try again tomorrow.' }, 429);
       }
     }
+    if (toEmail) {
+      const n = await gbDayCount(env, `pce:${user.id}`);
+      if (n != null && n > PC_EMAIL_DAILY) return jsonResponse({ error: 'That’s five postcards to email addresses today. Try again tomorrow.' }, 429);
+    }
     const cardRegion = !toCity && pcIsUSName(b.country) && b.city ? (pcUSCity(b.city, b.region).state || await pcStampState(env, user.id, b.city, b.country)) : null;
     const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
     const key = `pc/${crypto.randomUUID()}.${ext}`;
     await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: mediaType, cacheControl: 'public, max-age=31536000, immutable' } });
+
+    // The card that waits (Step B): stored apart, one email, answered like any send.
+    if (toEmail) {
+      const hash = await pcEmailHash(env, toEmail);
+      const prow = {
+        sender_id: user.id, email_hash: hash, photo_key: key, message: msg,
+        place_name: clean(b.place_name, 80), city: clean(b.city, 60), country: clean(b.country, 60), region: cardRegion || clean(b.region, 60),
+        ...(b.meta && typeof b.meta === 'object' ? { meta: { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60) } } : {}),
+      };
+      const pw = await gbRest(env, 'pending_postcards', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(prow) });
+      if (!pw.ok) { if (ctx) ctx.waitUntil(env.MEDIA.delete(key).catch(() => {})); return jsonResponse({ error: 'Could not send' }, 502); }
+      const kv = env.GLOBESKIMMERS_KV;
+      const onceKey = `pceonce:${user.id}:${hash}`;
+      const already = kv ? await kv.get(onceKey).catch(() => null) : null;
+      let emailed = false;
+      if (!already) {
+        emailed = await pcSendWaitingEmail(env, user.id, toEmail, prow.place_name || prow.city || null);
+        if (emailed && kv) await kv.put(onceKey, '1', { expirationTtl: 60 * 60 * 24 * 30 }).catch(() => {});
+      }
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: false, waiting: true, emailed }));
+      return jsonResponse({ ok: true, waiting: true, emailed });
+    }
 
     const row = {
       sender_id: user.id, to_user_id: toUser, photo_key: key, message: msg,
@@ -19748,6 +19864,8 @@ async function handleSocialFeed(request, env) {
     if (mySp === undefined) return jsonResponse({ rows: [], error: 'Couldn’t check your account — try again', code: 'age_unknown' }, 503);
     if (gbUnderAge(mySp)) return jsonResponse({ rows: [], held: 'blocked' });
     if (gbAgeHeld(mySp)) return jsonResponse({ rows: [], held: gbNeedsConfirm(mySp) ? 'confirm' : 'teen' });
+    // Postcards that waited for this email (Step B, 2026-10-18) arrive first; a teen gets none.
+    if (mySp?.social_tier !== 'teen') await pcDeliverWaiting(env, user).catch(() => {});
     // Blocks hide the pair both ways (block_v2, 2026-10-13) — including edges
     // and cards from before the block; unreadable blocks show nothing.
     const blocked = await gbBlockSet(env, user.id);
@@ -27255,6 +27373,8 @@ export default {
     const benv = gbBudgetEnv(env);
     // The daily counters (gbDayCount) older than two days go.
     try { await gbDayCountsPrune(benv); } catch (_e) { /* tomorrow's cron tries again */ }
+    // Postcards that waited 90 days for an email that never joined go, photos included.
+    try { await pcPendingPrune(benv); } catch (_e) { /* tomorrow's cron tries again */ }
     // Under-age freeze: delete content of accounts frozen past the window.
     try { await freezeSweep(benv); } catch (_e) { /* tomorrow's cron tries again */ }
     // Deleted accounts whose clean-up had a failed step: finish it.
