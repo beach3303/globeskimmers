@@ -1600,6 +1600,8 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
   if (pcGot && await r2('postcards_received_r2', pcGot.map((r) => r.photo_key))) {
     await del('postcards_received', `postcards?to_user_id=eq.${userId}`);
   }
+  // Telegrams they sent or received (2026-10-19); no media.
+  await del('telegrams', `telegrams?or=(sender_id.eq.${userId},to_user_id.eq.${userId})`);
   await del('user_follows', `user_follows?or=(follower_id.eq.${userId},followee_id.eq.${userId})`);
   // Postcards they kept (2026-10-14); a worker that runs before that table exists has none.
   try {
@@ -17471,6 +17473,7 @@ const ORPHAN_SCAN_COLS = [
   ['social_profiles', 'user_id'], ['blotter_entries', 'author_user_id'], ['blotter_cosigns', 'user_id'],
   ['blotter_marks', 'user_id'], ['postcards', 'sender_id'], ['place_dishes', 'user_id'], ['guestbook_entries', 'user_id'],
   ['blotter_entries', 'owner_user_id'], ['blotter_marks', 'owner_user_id'], ['postcards', 'to_user_id'], ['push_tokens', 'user_id'],
+  ['telegrams', 'sender_id'], ['telegrams', 'to_user_id'],
   ['user_follows', 'follower_id'], ['user_follows', 'followee_id'], ['user_blocks', 'user_id'],
   ['owner_notes', 'user_id'], ['luggage_state', 'user_id'], ['profile_gear', 'user_id'], ['user_saves', 'user_id'],
   ['handle_requests', 'user_id'], ['passport_shares', 'user_id'], ['passport_stamps', 'user_id'], ['passport_stamp_photos', 'user_id'],
@@ -18036,7 +18039,7 @@ async function handleSocialReport(request, env, ctx) {
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
     const reason = ['minor_safety', 'nudity', 'harassment', 'spam', 'other'].includes(b.reason) ? b.reason : 'other';
-    const kind = ['passport', 'photo', 'tag', 'handle', 'profile', 'postcard', 'signature', 'stamp'].includes(b.kind) ? b.kind : 'passport';
+    const kind = ['passport', 'photo', 'tag', 'handle', 'profile', 'postcard', 'telegram', 'signature', 'stamp'].includes(b.kind) ? b.kind : 'passport';
     // One person files at most REPORTS_DAILY_MAX reports a day, across every
     // report door (go-live round 3: with no limit, one account could bury a
     // real child-safety report on the desk); past that the words point to email.
@@ -19623,8 +19626,8 @@ async function gbHandleToUser(env, handle) {
 // FCM_PROJECT_ID). Tokens live in push_tokens; one Apple or Google reports gone is deleted.
 const PUSH_WEEKLY_CAP = 40;
 const PUSH_QUIET = { from: 22, to: 8 };
-const PUSH_PREF = { postcards: 'alert_postcards', follows: 'alert_follows', pages: 'alert_pages', friend_stamps: 'alert_friend_stamps', news: 'alert_news' };
-const PUSH_DEFAULT_ON = new Set(['postcards', 'follows', 'pages']);
+const PUSH_PREF = { postcards: 'alert_postcards', telegrams: 'alert_postcards', follows: 'alert_follows', pages: 'alert_pages', friend_stamps: 'alert_friend_stamps', news: 'alert_news' };
+const PUSH_DEFAULT_ON = new Set(['postcards', 'telegrams', 'follows', 'pages']);
 const BL_PUSH_LABEL = { wow: 'WOW', takeme: 'TAKE ME', wannago: 'I WANNA GO!', cool: 'COOL!' };
 const pushPrefOn = (sp, kind) => { const col = PUSH_PREF[kind]; if (!col) return false; const v = sp?.[col]; return v == null ? PUSH_DEFAULT_ON.has(kind) : v === true; };
 const pushB64u = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -20211,10 +20214,13 @@ async function handleSocialFeed(request, env) {
     // are direct cards that predate the send-side rail.
     const teenMe = mySp?.social_tier === 'teen';
     const bcastFrom = (teenMe ? visible.filter((id) => mutual.has(id)) : visible).filter((id) => profOk && !minor(id));
-    const [pcTo, pcBroadcast] = await Promise.all([
+    const [pcTo, pcBroadcast, tgTo] = await Promise.all([
       gbRest(env, `postcards?to_user_id=eq.${user.id}&order=created_at.desc&limit=20&select=*`, {}),
       bcastFrom.length ? gbRest(env, `postcards?sender_id=in.(${bcastFrom.join(',')})&to_user_id=is.null&order=created_at.desc&limit=20&select=*`, {}) : Promise.resolve({ ok: false }),
+      // Telegrams to me (2026-10-19); before the table exists there are none.
+      teenMe ? Promise.resolve({ ok: false }) : gbRest(env, `telegrams?to_user_id=eq.${user.id}&recipient_deleted_at=is.null&order=created_at.desc&limit=20&select=id,sender_id,body,reply_to,created_at`, {}).catch(() => ({ ok: false })),
     ]);
+    let tgs = tgTo.ok ? await tgTo.json().catch(() => []) : [];
     let pcs = [...(pcTo.ok ? (await pcTo.json()).filter((p) => !p.recipient_deleted_at) : []), ...(pcBroadcast.ok ? await pcBroadcast.json() : [])];
     // A card to a city's board belongs to the board, not to followers' feeds.
     pcs = pcs.filter((p) => !p.to_city);
@@ -20222,7 +20228,7 @@ async function handleSocialFeed(request, env) {
     if (teenMe) pcs = [];
     // Senders I don't follow: their handle, name and age (a card from an
     // account that has since turned out to be a minor is dropped too).
-    const pcSenders = [...new Set(pcs.map((p) => p.sender_id))].filter((id) => !ids.includes(id));
+    const pcSenders = [...new Set([...pcs.map((p) => p.sender_id), ...tgs.map((t) => t.sender_id)])].filter((id) => !ids.includes(id));
     let pcProfOk = true;
     if (pcSenders.length) {
       const [h2, p2] = await Promise.all([
@@ -20236,6 +20242,7 @@ async function handleSocialFeed(request, env) {
     // A card signed "a local"/"a traveler" lives on its board only — naming its
     // sender in followers' feeds would unmask it (founder, 2026-10-15).
     pcs = pcs.filter((p) => !p.meta?.anon && !blocked.has(p.sender_id) && (ids.includes(p.sender_id) ? profOk : pcProfOk) && !minor(p.sender_id));
+    tgs = tgs.filter((t) => !blocked.has(t.sender_id) && (ids.includes(t.sender_id) ? profOk : pcProfOk) && !minor(t.sender_id));
     // Which cards sent to everyone I kept in my postcard box (2026-10-14). Unreadable keeps
     // (the table not there yet) leave `kept` off, and the app shows no Keep.
     const bIds = pcs.filter((p) => p.to_user_id === null).map((p) => p.id);
@@ -20246,11 +20253,16 @@ async function handleSocialFeed(request, env) {
     }
     // A traveler already deleted, whose clean-up hasn't reached them yet, is
     // never named (go-live round 2, gbPurgeQueued).
-    const shownIds = [...new Set([...pcs.map((p) => p.sender_id), ...visible])];
+    const shownIds = [...new Set([...pcs.map((p) => p.sender_id), ...tgs.map((t) => t.sender_id), ...visible])];
     const gone = await gbPurgeQueued(env, shownIds.filter((id) => !share[id]?.handle && prof[id]?.display_name));
     const nameOf = (id) => (gone.has(id) ? null : prof[id]?.display_name || null);
     // Faces (B2) for the people this feed names; none for a deleted traveler.
     const faces = await gbFaces(env, shownIds.filter((id) => !gone.has(id)), origin);
+    const tgRows = tgs.map((t) => ({
+      type: 'telegram', id: t.id, created_at: t.created_at, body: t.body, to_me: true, reply: !!t.reply_to,
+      from_new: !ids.includes(t.sender_id),
+      by: { handle: share[t.sender_id]?.handle || null, name: nameOf(t.sender_id), ...(faces[t.sender_id] || {}) },
+    }));
     const cardRows = pcs.map((p) => ({
       type: 'postcard', id: p.id, created_at: p.created_at,
       photo: `${origin}/pc-photo/${p.photo_key}`,
@@ -20277,11 +20289,11 @@ async function handleSocialFeed(request, env) {
         film: s.meta && s.meta.film ? { title: s.meta.film.title, year: s.meta.film.year } : null,
         by: { handle: share[s.user_id]?.handle || null, name: nameOf(s.user_id), ...(faces[s.user_id] || {}) },
       }));
-    const rows = [...cardRows, ...stampRows]
+    const rows = [...cardRows, ...tgRows, ...stampRows]
       .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
       .slice(0, 40);
-    // 'world': faces may open someone's page (/social/world, B3).
-    return jsonResponse({ rows, features: ['world'] });
+    // 'world': faces may open someone's page (/social/world, B3). 'telegrams': the wire is open.
+    return jsonResponse({ rows, features: ['world', ...(tgTo.ok ? ['telegrams'] : [])] });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -20586,6 +20598,113 @@ async function handleCityBoards(request, env) {
 // the app shows no Keep.
 // POST /postcards/delete { postcard_id } — the recipient deletes a card addressed to them (founder,
 // 2026-10-19). It leaves their Mailbox, postcard box and activity; the sender's card is untouched.
+// ── Telegrams (founder, 2026-10-19) ─────────────────────────────────────────────────────────
+// Words by wire, no photo. A real telegram's base rate covered ten words; ours carries THREE
+// (founder, 2026-10-19: "spike curiosity" — send as many as you like, three words each). STOP
+// (what a full stop or ! becomes) rides free, and a word past 15 letters counts as two, the
+// old telegraph rule. Capitals only, letters, digits and plain punctuation; links and emoji
+// don't go by wire. One person by @username, or a reply to a telegram or postcard sent to you.
+// Adults only, both ways; the words are checked; blocks and a minor recipient are answered
+// like a send and stored nowhere. No daily limit, except five a day to people who don't follow
+// you (a reply is never capped that way) and twenty a minute against bots. The recipient can
+// delete one from their Mailbox.
+const TG_MAX_WORDS = 3;
+const TG_MAX_CHARS = 120;
+const TG_STRANGER_DAILY = 5;
+const TG_PER_MINUTE = 20;
+function tgClean(text) {
+  let t = String(text == null ? '' : text).normalize('NFC').replace(/https?:\S+/gi, ' ');
+  t = t.replace(/[^\p{L}\p{N}\s.,!?'’&@#-]/gu, ' ');
+  t = t.replace(/[.!]+(?=\s|$)/g, ' STOP ');
+  t = t.replace(/\s+/g, ' ').trim().toUpperCase().replace(/\bSTOP(\s+STOP\b)+/g, 'STOP').replace(/^STOP\b\s*/, '');
+  return t.slice(0, TG_MAX_CHARS);
+}
+const tgWordCount = (t) => String(t || '').split(' ').filter((w) => w && w !== 'STOP' && /[\p{L}\p{N}]/u.test(w)).reduce((n, w) => n + Math.ceil(w.replace(/[^\p{L}\p{N}]/gu, '').length / 15), 0);
+
+async function handleTelegramSend(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const body = tgClean(b.body);
+    const words = tgWordCount(body);
+    if (!words) return jsonResponse({ error: 'Write your telegram first' }, 400);
+    if (words > TG_MAX_WORDS) return jsonResponse({ error: 'Three words at most. STOP is free.' }, 400);
+    const sp = await gbSocialProfile(env, user.id);
+    if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
+    if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Telegrams aren’t available on this account' }, 403);
+    if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
+    if (sp.social_tier === 'teen') return jsonResponse({ error: 'Telegrams open at age 18', code: 'teen_hold' }, 403);
+
+    // The address: a reply goes back to whoever sent me that telegram or postcard.
+    let toId = null;
+    let replyTo = null;
+    const rid = String(b.reply_to || '').toLowerCase();
+    if (BL_UUID.test(rid)) {
+      const [tq, pq] = await Promise.all([
+        gbRest(env, `telegrams?id=eq.${rid}&to_user_id=eq.${user.id}&select=sender_id`, {}),
+        gbRest(env, `postcards?id=eq.${rid}&to_user_id=eq.${user.id}&select=sender_id`, {}),
+      ]);
+      const orig = (tq.ok ? (await tq.json())[0] : null) || (pq.ok ? (await pq.json())[0] : null);
+      if (!orig) return jsonResponse({ error: 'That message isn’t here any more' }, 404);
+      toId = orig.sender_id;
+      replyTo = rid;
+    } else if (b.to_handle) {
+      const to = await gbHandleToUser(env, String(b.to_handle));
+      if (!to) return jsonResponse({ error: 'No traveler with that username' }, 404);
+      toId = to.user_id;
+    } else {
+      return jsonResponse({ error: 'Who is it for? Pick a @username.' }, 400);
+    }
+    if (toId === user.id) return jsonResponse({ error: 'A telegram to yourself? STOP 🙂' }, 400);
+    if (!(await gbModerate(env, body)).allow) return jsonResponse({ error: 'Let’s keep it kind. Try different words.' }, 422);
+
+    // The recipient's rails, after the words: a blocked pair or a minor gets nothing, answered
+    // exactly like a send.
+    if (await gbBlockedEither(env, user.id, toId)) return jsonResponse({ ok: true });
+    const rsp = await gbSocialProfile(env, toId).catch(() => undefined);
+    if (rsp === undefined) return jsonResponse({ error: 'Couldn’t send right now — try again' }, 503);
+    if (rsp === null) return jsonResponse({ error: 'They haven’t finished their passport yet, so telegrams can’t reach them' }, 409);
+    if (rsp.social_tier === 'blocked' || rsp.social_tier === 'teen' || gbAgeHeld(rsp)) return jsonResponse({ ok: true });
+    if (!replyTo) {
+      const fq = await gbRest(env, `user_follows?follower_id=eq.${toId}&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id&limit=1`, {});
+      const followsMe = fq.ok && (await fq.json()).length > 0;
+      if (!followsMe) {
+        const n = await gbDayCount(env, `tgs:${user.id}`);
+        if (n != null && n > TG_STRANGER_DAILY) return jsonResponse({ error: 'That’s five telegrams today to people who don’t follow you. Try again tomorrow.' }, 429);
+      }
+    }
+    const burst = await gbDayCount(env, `tgm:${user.id}:${Math.floor(Date.now() / 60000)}`);
+    if (burst != null && burst > TG_PER_MINUTE) return jsonResponse({ error: 'The wire is busy. Try again in a minute.' }, 429);
+
+    const w = await gbRest(env, 'telegrams', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ sender_id: user.id, to_user_id: toId, body, reply_to: replyTo }) });
+    if (!w.ok) return jsonResponse({ error: w.status === 404 ? 'Telegrams open with the next update' : 'Could not send' }, w.status === 404 ? 503 : 502);
+    const made = await w.json().then((r) => (Array.isArray(r) ? r[0] : null)).catch(() => null);
+    if (ctx) {
+      const senderName = await ppHolder(env, user.id);
+      ctx.waitUntil(pushNotify(env, toId, 'telegrams', (n) => (n > 1
+        ? { title: `${n} new telegrams`, body: `${senderName} and others wired you`, route: '/Mailbox' }
+        : { title: `Telegram from ${senderName}`, body, route: made?.id ? `/Mailbox?tg=${made.id}` : '/Mailbox' })));
+      ctx.waitUntil(gbLogEvent(env, 'telegram_send', { reply: !!replyTo, words }));
+    }
+    return jsonResponse({ ok: true, id: made?.id || null });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+async function handleTelegramDelete(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const body = await request.json().catch(() => ({}));
+    const id = BL_UUID.test(String(body.telegram_id || '')) ? String(body.telegram_id).toLowerCase() : null;
+    if (!id) return jsonResponse({ error: 'Which telegram?' }, 400);
+    const w = await gbRest(env, `telegrams?id=eq.${id}&to_user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ recipient_deleted_at: new Date().toISOString() }) });
+    if (!w.ok) return jsonResponse({ error: 'That didn’t go through — try again' }, 503);
+    if (!(await w.json()).length) return jsonResponse({ error: 'That telegram isn’t here any more' }, 404);
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handlePostcardDelete(request, env) {
   try {
     const user = await gbUser(request, env);
@@ -21548,10 +21667,12 @@ async function handleSocialUnread(request, env) {
     const floor = encodeURIComponent(new Date(Date.now() - 30 * 864e5).toISOString());
     const j = async (r) => (r.ok ? await r.json() : []);
     await pcNoticeSweep(env, me);
-    const [follows, following, direct, marks, entries, tags, notices] = await Promise.all([
+    const [follows, following, direct, wires, marks, entries, tags, notices] = await Promise.all([
       gbRest(env, `user_follows?followee_id=eq.${me}&created_at=gte.${floor}&select=follower_id,status,created_at&order=created_at.desc&limit=50`, {}).then(j),
       gbRest(env, `user_follows?follower_id=eq.${me}&status=eq.accepted&select=followee_id&limit=200`, {}).then(j),
       gbRest(env, `postcards?to_user_id=eq.${me}&created_at=gte.${floor}&select=*&order=created_at.desc&limit=50`, {}).then(j).then((rows) => rows.filter((r) => !r.recipient_deleted_at)),
+      // Telegrams to me (2026-10-19); none before the table exists.
+      gbRest(env, `telegrams?to_user_id=eq.${me}&recipient_deleted_at=is.null&created_at=gte.${floor}&select=id,sender_id,created_at&order=created_at.desc&limit=50`, {}).then(j).catch(() => []),
       gbRest(env, `blotter_marks?owner_user_id=eq.${me}&user_id=neq.${me}&created_at=gte.${floor}&select=target,user_id,kind,created_at&order=created_at.desc&limit=150`, {}).then(j),
       gbRest(env, `blotter_entries?owner_user_id=eq.${me}&author_user_id=neq.${me}&created_at=gte.${floor}&select=id,target,author_user_id,body,doodle_key,created_at&order=created_at.desc&limit=50`, {}).then(j),
       gbRest(env, `passport_tags?to_user_id=eq.${me}&status=eq.pending&created_at=gte.${floor}&select=from_user_id,name,created_at&order=created_at.desc&limit=50`, {}).then(j),
@@ -21576,6 +21697,7 @@ async function handleSocialUnread(request, env) {
     for (const r of follows) if (r.status !== 'muted') items.push({ type: r.status === 'pending' ? 'follow_request' : 'follow', uid: r.follower_id, at: r.created_at });
     for (const r of direct) items.push({ type: 'postcard', uid: r.sender_id, pc_id: r.id, place: r.place_name || null, at: r.created_at, to_me: true });
     for (const r of broadcasts) items.push({ type: 'postcard', uid: r.sender_id, place: r.place_name || null, at: r.created_at });
+    for (const r of (Array.isArray(wires) ? wires : [])) items.push({ type: 'telegram', uid: r.sender_id, tg_id: r.id, at: r.created_at, to_me: true });
     // One row per person per page, however many stamps they pressed.
     const grouped = new Map();
     for (const r of marks) {
@@ -21664,6 +21786,7 @@ async function handleSocialUnread(request, env) {
         ...(i.to_me ? { to_me: true } : {}),
         // The card's id on a postcard to me (2026-10-19): its ••• offers Reply and Delete.
         ...(i.to_me && i.pc_id ? { postcard_id: i.pc_id } : {}),
+        ...(i.tg_id ? { telegram_id: i.tg_id } : {}),
         ...(i.type === 'board' ? { board: i.board_name, board_kind: i.board_kind, photos: i.photos } : {}),
       }));
     const total = activity.filter((a) => a.unread).length;
@@ -27626,6 +27749,8 @@ export default {
       if (pathname === '/postcards/box' && request.method === 'POST') return await handlePostcardBox(request, env);
       if (pathname === '/postcards/keep' && request.method === 'POST') return await handlePostcardKeep(request, env);
       if (pathname === '/postcards/delete' && request.method === 'POST') return await handlePostcardDelete(request, env);
+      if (pathname === '/telegrams/send' && request.method === 'POST') return await handleTelegramSend(request, env, ctx);
+      if (pathname === '/telegrams/delete' && request.method === 'POST') return await handleTelegramDelete(request, env);
       if (pathname === '/social/world' && request.method === 'POST') return await handleSocialWorld(request, env, ctx);
       if (pathname === '/city/board' && request.method === 'POST') return await handleCityBoard(request, env);
       if (pathname === '/passport/photo/board' && request.method === 'POST') return await handlePassportPhotoBoard(request, env);
