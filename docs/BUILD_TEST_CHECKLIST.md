@@ -2706,3 +2706,15 @@ boot-check ✅. **Activate:** push, then `npm run ota`.
 `/social/feed` advertises `telegrams`; `/push/test` as a non-admin adult → `{ sent: 0, phones: 0 }`.
 Remaining: the founder's `npm run ota`, then Settings → Alerts & Notifications → Send a test on a phone.
 
+## 2026-10-19 — Telegrams strictly private: delete erases (COMMITTED, not pushed)
+
+Founder: "make sure that all the telegrams sent and received are strictly private to Only Me".
+Audit, live: `api.telegrams` refuses direct reads and writes (signed out 401, signed in 403 — service role only);
+every worker read is scoped `to_user_id = caller` (feed, unread, open, reply lookup, delete); the words are never
+in an alert ("Open it in your Mailbox to read it"), a D1 event (`telegram_send` = reply + word count), or the
+quiet-hours KV queue; account deletion erases telegrams both ways. Who else can ever see words: the moderation
+check at send (Claude, nothing stored) and our team ONLY if the recipient reports that telegram (the report
+carries its words). Fixed: `/telegrams/delete` now DELETEs the row (and any rows hidden by the earlier soft
+delete); the sheet says "It's erased for good."; privacy policy updated (site). **Activate:** push; the sheet's
+wording needs `npm run ota`.
+
