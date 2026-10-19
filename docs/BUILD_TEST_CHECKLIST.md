@@ -2393,7 +2393,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   Not verified live: a real send (creates a real row and sends a real email). `RESEND_API_KEY` is already set.
 - **Activate:** push → the worker and the migration deploy themselves; the screens reach phones with `npm run ota`.
 
-## 2026-10-19 — Our own photo looks (COMMITTED, awaiting push)
+## 2026-10-19 — Our own photo looks (PUSHED; on phones by the founder's OTA)
 - **Founder (10-18):** "allow them to have filters, cool filters that like Instagram does not have, our own type of
   filters: make the photos professional looking, clearer, crisper, brighter, darker, different grains, cooler
   warmer." Decisions 10-19: one editor for postcards AND stamp photos; keep only the edited photo (undo = add it again).
