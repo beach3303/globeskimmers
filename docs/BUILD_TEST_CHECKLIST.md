@@ -2345,3 +2345,23 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   node --check, eslint + no-undef, build, boot-check; captured as the demo account with `/social/find` mocked:
   the Circle screen with results, the Settings row.
 - **Activate:** push → worker + migration deploy themselves; the screens reach phones with `npm run ota`.
+
+## 2026-10-18 (late night) — Postcards to anyone on the app (Step A) (COMMITTED, awaiting push)
+- **Founder:** "Can we send postcards to people who we are not friends with or if they don't have handle yet"
+  → order agreed: Step A (anyone on the app) → Step B (an email that waits) → our own photo filters.
+- **Already true:** an adult could postcard ANY @handle; only the composer never offered anyone outside the circle.
+- **Worker:** `/postcards/send` takes `to_user_id` (a Find people result, incl. members with no @username) beside
+  `to_handle`; the same rails (self, blocks → silent ok, minors → silent ok, held); an account with no social
+  profile gets a plain 409 ("haven't finished their passport"). A card to someone who doesn't follow the sender
+  counts against `PC_STRANGER_DAILY = 5` a day (D1 `day_counts` key `pcs:<uid>`, 429 on the 6th). The feed marks
+  such cards `from_new: true` (to me, sender not followed by me).
+- **App:** FindPeople gains `onPick` (a Choose button per row); the composer's To row gains **Someone else…**,
+  which opens the picker ("Send to someone else"); the chosen person shows as the chip (@handle or name);
+  `sendPostcard` passes `to_user_id`. Mailbox: a **From someone new** shelf above "From your circle" with the note
+  "Postcards from people you don't follow. The ••• on a card reports or blocks the sender." (the existing report
+  door → TravelerSheet → Report / Block).
+- Verified: node --check, eslint + no-undef, build, boot-check; captured as the demo account with `/social/find`,
+  `/social/feed` and the follow list mocked: the composer with the picker open, the Mailbox shelf with a card.
+  Not verified live: a real send to a non-follower (would create real mail); the 5/day cap is the same
+  `gbDayCount` the board cap uses.
+- **Activate:** push → the worker deploys itself; the screens reach phones with `npm run ota`.
