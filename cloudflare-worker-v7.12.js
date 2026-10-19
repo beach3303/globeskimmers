@@ -19653,7 +19653,7 @@ async function apnsSend(env, token, msg, sandbox = false) {
   try {
     const r = await fetch(`https://${host}/3/device/${token}`, {
       method: 'POST',
-      headers: { authorization: `bearer ${jwt}`, 'apns-topic': env.APNS_BUNDLE_ID || 'com.globeskimmers.app', 'apns-push-type': 'alert', 'apns-priority': '10', 'apns-collapse-id': String(msg.kind || 'gs').slice(0, 64), 'content-type': 'application/json' },
+      headers: { authorization: `bearer ${jwt}`, 'apns-topic': env.APNS_BUNDLE_ID || 'com.globeskimmers.app', 'apns-push-type': 'alert', 'apns-priority': '10', 'apns-collapse-id': String(msg.collapse || msg.kind || 'gs').slice(0, 64), 'content-type': 'application/json' },
       body: JSON.stringify(body), signal: AbortSignal.timeout(8000),
     });
     if (r.ok) return { ok: true };
@@ -19690,8 +19690,9 @@ async function fcmSend(env, token, msg) {
   if (!bearer) return { ok: false, reason: 'no-key' };
   const project = env.FCM_PROJECT_ID || FCM_TOKEN?.project;
   const kind = String(msg.kind || 'gs');
+  const group = String(msg.collapse || kind).slice(0, 64);
   const body = { message: { token, notification: { title: msg.title, body: msg.body }, data: { route: String(msg.route || ''), kind },
-    android: { priority: 'HIGH', collapse_key: kind, notification: { channel_id: 'alerts', icon: 'ic_stat_globeskimmers', color: '#0E7C73', tag: kind } } } };
+    android: { priority: 'HIGH', collapse_key: group, notification: { channel_id: 'alerts', icon: 'ic_stat_globeskimmers', color: '#0E7C73', tag: group } } } };
   try {
     const r = await fetch(`https://fcm.googleapis.com/v1/projects/${project}/messages:send`, { method: 'POST', headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(8000) });
     if (r.ok) return { ok: true };
@@ -19744,14 +19745,17 @@ async function pushNotify(env, uid, kind, make, opts = {}) {
     const used = kv ? parseInt((await kv.get(capKey).catch(() => null)) || '0', 10) || 0 : 0;
     if (used >= PUSH_WEEKLY_CAP) return;
     let n = 1;
-    if (kv && !opts.now) { const nk = `pushn:${uid}:${kind}`; n = (parseInt((await kv.get(nk).catch(() => null)) || '0', 10) || 0) + 1; await kv.put(nk, String(n), { expirationTtl: 6 * 3600 }).catch(() => {}); }
+    // opts.each: every one is its own alert (telegrams), never folded into "N new".
+    if (kv && !opts.now && !opts.each) { const nk = `pushn:${uid}:${kind}`; n = (parseInt((await kv.get(nk).catch(() => null)) || '0', 10) || 0) + 1; await kv.put(nk, String(n), { expirationTtl: 6 * 3600 }).catch(() => {}); }
     const msg = { kind, ...(typeof make === 'function' ? make(n) : make) };
     if (!msg.title || !msg.body) return;
     if (!opts.now && kv && pushQuiet(pushLocalHour(await pushTimezone(env, uid)))) {
       // Held until 8 in the member's morning (pushHourly); one line per kind.
       const qk = `pushq:${uid}`;
       let q = []; try { q = JSON.parse((await kv.get(qk)) || '[]'); } catch { q = []; }
-      q = q.filter((x) => x.kind !== kind); q.push({ kind, title: msg.title, body: msg.body, route: msg.route || '', at: Date.now() });
+      // One line per kind waits; for one-each kinds, one line per sender (the title names them).
+      q = q.filter((x) => !(x.kind === kind && (!opts.each || x.title === msg.title)));
+      q.push({ kind, title: msg.title, body: msg.body, route: msg.route || '', ...(msg.collapse ? { collapse: msg.collapse } : {}), at: Date.now() });
       await kv.put(qk, JSON.stringify(q.slice(-10)), { expirationTtl: 36 * 3600 }).catch(() => {});
       await gbLogEvent(env, 'push_held', { kind, to: String(uid).slice(0, 8) });
       return;
@@ -19777,7 +19781,7 @@ async function pushHourly(env) {
       if (pushQuiet(pushLocalHour(await pushTimezone(env, uid)))) continue;
       let q = []; try { q = JSON.parse((await kv.get(k.name)) || '[]'); } catch { q = []; }
       await kv.delete(k.name).catch(() => {});
-      for (const m of q) await pushNotify(env, uid, m.kind, { title: m.title, body: m.body, route: m.route }, { now: true });
+      for (const m of q) await pushNotify(env, uid, m.kind, { title: m.title, body: m.body, route: m.route, ...(m.collapse ? { collapse: m.collapse } : {}) }, { now: true });
     }
     cursor = page.list_complete ? null : page.cursor;
   } while (cursor);
@@ -20218,7 +20222,7 @@ async function handleSocialFeed(request, env) {
       gbRest(env, `postcards?to_user_id=eq.${user.id}&order=created_at.desc&limit=20&select=*`, {}),
       bcastFrom.length ? gbRest(env, `postcards?sender_id=in.(${bcastFrom.join(',')})&to_user_id=is.null&order=created_at.desc&limit=20&select=*`, {}) : Promise.resolve({ ok: false }),
       // Telegrams to me (2026-10-19); before the table exists there are none.
-      teenMe ? Promise.resolve({ ok: false }) : gbRest(env, `telegrams?to_user_id=eq.${user.id}&recipient_deleted_at=is.null&order=created_at.desc&limit=20&select=id,sender_id,body,reply_to,created_at`, {}).catch(() => ({ ok: false })),
+      teenMe ? Promise.resolve({ ok: false }) : gbRest(env, `telegrams?to_user_id=eq.${user.id}&recipient_deleted_at=is.null&order=created_at.desc&limit=20&select=*`, {}).catch(() => ({ ok: false })),
     ]);
     let tgs = tgTo.ok ? await tgTo.json().catch(() => []) : [];
     let pcs = [...(pcTo.ok ? (await pcTo.json()).filter((p) => !p.recipient_deleted_at) : []), ...(pcBroadcast.ok ? await pcBroadcast.json() : [])];
@@ -20243,6 +20247,13 @@ async function handleSocialFeed(request, env) {
     // sender in followers' feeds would unmask it (founder, 2026-10-15).
     pcs = pcs.filter((p) => !p.meta?.anon && !blocked.has(p.sender_id) && (ids.includes(p.sender_id) ? profOk : pcProfOk) && !minor(p.sender_id));
     tgs = tgs.filter((t) => !blocked.has(t.sender_id) && (ids.includes(t.sender_id) ? profOk : pcProfOk) && !minor(t.sender_id));
+    // RECEIVED: the first time a telegram reaches my Mailbox, stamped once (2026-10-19).
+    const unstamped = tgs.filter((t) => !t.received_at).map((t) => t.id);
+    if (unstamped.length) {
+      const nowIso = new Date().toISOString();
+      await gbRest(env, `telegrams?id=in.(${unstamped.join(',')})&to_user_id=eq.${user.id}&received_at=is.null`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ received_at: nowIso }) }).catch(() => {});
+      for (const t of tgs) if (!t.received_at) t.received_at = nowIso;
+    }
     // Which cards sent to everyone I kept in my postcard box (2026-10-14). Unreadable keeps
     // (the table not there yet) leave `kept` off, and the app shows no Keep.
     const bIds = pcs.filter((p) => p.to_user_id === null).map((p) => p.id);
@@ -20259,7 +20270,7 @@ async function handleSocialFeed(request, env) {
     // Faces (B2) for the people this feed names; none for a deleted traveler.
     const faces = await gbFaces(env, shownIds.filter((id) => !gone.has(id)), origin);
     const tgRows = tgs.map((t) => ({
-      type: 'telegram', id: t.id, created_at: t.created_at, body: t.body, to_me: true, reply: !!t.reply_to,
+      type: 'telegram', id: t.id, created_at: t.created_at, received_at: t.received_at || null, body: t.body, to_me: true, reply: !!t.reply_to,
       from_new: !ids.includes(t.sender_id),
       by: { handle: share[t.sender_id]?.handle || null, name: nameOf(t.sender_id), ...(faces[t.sender_id] || {}) },
     }));
@@ -20601,9 +20612,11 @@ async function handleCityBoards(request, env) {
 // ── Telegrams (founder, 2026-10-19) ─────────────────────────────────────────────────────────
 // Words by wire, no photo. A real telegram's base rate covered ten words; ours carries THREE
 // (founder, 2026-10-19: "spike curiosity" — send as many as you like, three words each). STOP
-// (what a full stop or ! becomes) rides free, and a word past 15 letters counts as two, the
-// old telegraph rule. Capitals only, letters, digits and plain punctuation; links and emoji
-// don't go by wire. One person by @username, or a reply to a telegram or postcard sent to you.
+// (what a full stop or ! becomes) doesn't count, an emoji counts as one word, and a word past
+// 15 letters counts as two, the old telegraph rule. Capitals, letters, digits, plain
+// punctuation and emoji; links don't go by wire. Its alert names the sender and never shows
+// the words (founder: the point is to open it), one alert per telegram. SENT is created_at;
+// RECEIVED (received_at) is the first time it reached the recipient's Mailbox. One person by @username, or a reply to a telegram or postcard sent to you.
 // Adults only, both ways; the words are checked; blocks and a minor recipient are answered
 // like a send and stored nowhere. No daily limit, except five a day to people who don't follow
 // you (a reply is never capped that way) and twenty a minute against bots. The recipient can
@@ -20612,14 +20625,25 @@ const TG_MAX_WORDS = 3;
 const TG_MAX_CHARS = 120;
 const TG_STRANGER_DAILY = 5;
 const TG_PER_MINUTE = 20;
+// Emoji go by wire too (founder, 2026-10-19), and each one counts as a word: 3️⃣ is one word.
+const TG_EMOJI = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u;
+const TG_SEG = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter('en', { granularity: 'grapheme' }) : null;
+const tgGraphemes = (x) => (TG_SEG ? [...TG_SEG.segment(x)].map((g) => g.segment) : Array.from(x));
 function tgClean(text) {
   let t = String(text == null ? '' : text).normalize('NFC').replace(/https?:\S+/gi, ' ');
-  t = t.replace(/[^\p{L}\p{N}\s.,!?'’&@#-]/gu, ' ');
+  t = t.replace(/[^\p{L}\p{N}\s.,!?'’&@#\-\p{Extended_Pictographic}\p{Regional_Indicator}\u200D\uFE0F\u20E3\u{1F3FB}-\u{1F3FF}\u{E0020}-\u{E007F}]/gu, ' ');
   t = t.replace(/[.!]+(?=\s|$)/g, ' STOP ');
   t = t.replace(/\s+/g, ' ').trim().toUpperCase().replace(/\bSTOP(\s+STOP\b)+/g, 'STOP').replace(/^STOP\b\s*/, '');
-  return t.slice(0, TG_MAX_CHARS);
+  return Array.from(t).slice(0, TG_MAX_CHARS).join('');
 }
-const tgWordCount = (t) => String(t || '').split(' ').filter((w) => w && w !== 'STOP' && /[\p{L}\p{N}]/u.test(w)).reduce((n, w) => n + Math.ceil(w.replace(/[^\p{L}\p{N}]/gu, '').length / 15), 0);
+// Words: each emoji is one; a run of letters is one (two past 15 letters); STOP is none.
+const tgWordCount = (t) => String(t || '').split(' ').filter((w) => w && w !== 'STOP').reduce((n, w) => {
+  let emoji = 0;
+  let rest = '';
+  for (const g of tgGraphemes(w)) { if (TG_EMOJI.test(g)) emoji += 1; else rest += g; }
+  const letters = rest.replace(/[^\p{L}\p{N}]/gu, '').length;
+  return n + emoji + (letters ? Math.ceil(letters / 15) : 0);
+}, 0);
 
 async function handleTelegramSend(request, env, ctx) {
   try {
@@ -20682,9 +20706,10 @@ async function handleTelegramSend(request, env, ctx) {
     const made = await w.json().then((r) => (Array.isArray(r) ? r[0] : null)).catch(() => null);
     if (ctx) {
       const senderName = await ppHolder(env, user.id);
-      ctx.waitUntil(pushNotify(env, toId, 'telegrams', (n) => (n > 1
-        ? { title: `${n} new telegrams`, body: `${senderName} and others wired you`, route: '/Mailbox' }
-        : { title: `Telegram from ${senderName}`, body, route: made?.id ? `/Mailbox?tg=${made.id}` : '/Mailbox' })));
+      ctx.waitUntil(pushNotify(env, toId, 'telegrams', {
+        title: `Telegram from ${senderName}`, body: 'Open it in your Mailbox to read it',
+        route: made?.id ? `/Mailbox?tg=${made.id}` : '/Mailbox', collapse: made?.id ? `tg-${made.id}` : undefined,
+      }, { each: true }));
       ctx.waitUntil(gbLogEvent(env, 'telegram_send', { reply: !!replyTo, words }));
     }
     return jsonResponse({ ok: true, id: made?.id || null });
