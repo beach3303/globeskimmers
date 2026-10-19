@@ -2417,7 +2417,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   Not verified: speed on an old Android for a 1600 px render (one pass, ~1.9 M pixels; est. well under a second).
 - **Activate:** app only — reaches phones with `npm run ota` after the push (no worker, no migration).
 
-## 2026-10-19 — The first session: the required passport waits for the first save (COMMITTED, awaiting push)
+## 2026-10-19 — The first session: the required passport waits for the first save (PUSHED)
 - **Founder (10-19):** "1. yes" to moving the birthday + @username screen from the open to right after the first
   stamps appear, still required before saving or sharing. Context: 80 accounts, 6 ever stamped.
 - **Gate `src/lib/passportGate.js`:** `requirePassport()` resolves true once the account is complete (at once when
@@ -2442,7 +2442,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   required sheet covered the app); tapping Follow on a Find people result brings up "Step 1 of 2 · Your birthday".
 - **Activate:** app only — `npm run ota` after the push.
 
-## 2026-10-19 — Edited photos refused; crop and zoom (COMMITTED, awaiting push)
+## 2026-10-19 — Edited photos refused; crop and zoom (PUSHED)
 - **Founder:** an edited postcard photo (their cat, "My Old Man") answered "This photo can't go on a postcard";
   "Can you also allow crop, zoom in and zoom out."
 - **Cause, two parts.** (1) The photo review prompt refuses "content that is clearly not a travel/food/place
@@ -2465,7 +2465,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   real send) — the prompt text allows "pets … homes and indoor scenes" by name.
 - **Activate:** push → the worker deploys itself; the editor reaches phones with `npm run ota`.
 
-## 2026-10-19 — Counting strangers: the campaign token, "Where did you hear about us?", the funnel (COMMITTED, awaiting push)
+## 2026-10-19 — Counting strangers: the campaign token, "Where did you hear about us?", the funnel (PUSHED)
 - **Growth plan week 1, item 2.** The founder created App Store campaign "Lobster1" (10-18): provider token
   `pt=121139771`. Apple shows a campaign only after 5 first-time installs — the empty Campaigns page is normal.
 - **Install links:** `site/get` sets `APPLE_PT`, and the Play referrer's medium is now per source (print for the card,
