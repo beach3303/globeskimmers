@@ -17470,7 +17470,7 @@ async function purgeRetrySweep(env, now = new Date()) {
 const ORPHAN_SCAN_COLS = [
   ['social_profiles', 'user_id'], ['blotter_entries', 'author_user_id'], ['blotter_cosigns', 'user_id'],
   ['blotter_marks', 'user_id'], ['postcards', 'sender_id'], ['place_dishes', 'user_id'], ['guestbook_entries', 'user_id'],
-  ['blotter_entries', 'owner_user_id'], ['blotter_marks', 'owner_user_id'], ['postcards', 'to_user_id'],
+  ['blotter_entries', 'owner_user_id'], ['blotter_marks', 'owner_user_id'], ['postcards', 'to_user_id'], ['push_tokens', 'user_id'],
   ['user_follows', 'follower_id'], ['user_follows', 'followee_id'], ['user_blocks', 'user_id'],
   ['owner_notes', 'user_id'], ['luggage_state', 'user_id'], ['profile_gear', 'user_id'], ['user_saves', 'user_id'],
   ['handle_requests', 'user_id'], ['passport_shares', 'user_id'], ['passport_stamps', 'user_id'], ['passport_stamp_photos', 'user_id'],
@@ -17947,11 +17947,11 @@ async function handleSocialProfile(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const mine = await gbSocialProfile(env, user.id);
     const origin = new URL(request.url).origin;
-    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, website: p.website || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null, approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || 'passport', comments_audience: p.comments_audience || 'inner', default_stamp_tier: PP_TIERS.includes(p.default_stamp_tier) ? p.default_stamp_tier : 'inner', circle_public: p.circle_public === true, booklet_order: p.booklet_order || 'newest', shuffle_seed: p.shuffle_seed ?? null, custom_order: Array.isArray(p.custom_order) ? p.custom_order : null, privacy_checked: !!p.privacy_checkup_at, find_by_name: p.find_by_name !== false, find_by_email: p.find_by_email !== false };
+    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, website: p.website || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null, approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || 'passport', comments_audience: p.comments_audience || 'inner', default_stamp_tier: PP_TIERS.includes(p.default_stamp_tier) ? p.default_stamp_tier : 'inner', circle_public: p.circle_public === true, booklet_order: p.booklet_order || 'newest', shuffle_seed: p.shuffle_seed ?? null, custom_order: Array.isArray(p.custom_order) ? p.custom_order : null, privacy_checked: !!p.privacy_checkup_at, find_by_name: p.find_by_name !== false, find_by_email: p.find_by_email !== false, alert_postcards: p.alert_postcards !== false, alert_follows: p.alert_follows !== false, alert_pages: p.alert_pages !== false, alert_friend_stamps: p.alert_friend_stamps === true, alert_news: p.alert_news === true };
     // A patch with only a website saves it (B5: it used to read as a read).
     if (b.display_name === undefined && b.bio === undefined && b.favorites === undefined && b.dreams === undefined && b.website === undefined
       && b.approve_followers === undefined && b.albums_audience === undefined && b.comments_audience === undefined
-      && b.default_stamp_tier === undefined && b.circle_public === undefined && b.booklet_order === undefined && b.reshuffle === undefined && b.custom_order === undefined && b.privacy_checked === undefined && b.find_by_name === undefined && b.find_by_email === undefined) {
+      && b.default_stamp_tier === undefined && b.circle_public === undefined && b.booklet_order === undefined && b.reshuffle === undefined && b.custom_order === undefined && b.privacy_checked === undefined && b.find_by_name === undefined && b.find_by_email === undefined && b.alert_postcards === undefined && b.alert_follows === undefined && b.alert_pages === undefined && b.alert_friend_stamps === undefined && b.alert_news === undefined) {
       // { privacy: true } adds the truth Settings and the check-up show (founder, 2026-10-18):
       // the passport's public switch and how many stamps sit at each tier.
       if (b.privacy === true) return jsonResponse({ profile: pick(mine) || null, privacy: await ppPrivacySummary(env, user.id) });
@@ -17976,6 +17976,8 @@ async function handleSocialProfile(request, env, ctx) {
     // Find people (founder, 2026-10-18): a name or an email finds you unless you say no.
     if (b.find_by_name !== undefined) patch.find_by_name = b.find_by_name === true;
     if (b.find_by_email !== undefined) patch.find_by_email = b.find_by_email === true;
+    // The alert switches (push, 2026-10-19).
+    for (const k of ['alert_postcards', 'alert_follows', 'alert_pages', 'alert_friend_stamps', 'alert_news']) if (b[k] !== undefined) patch[k] = b[k] === true;
     // The circle switch (founder, 2026-10-15): public lists are an adult's explicit choice;
     // the app confirms in the founder's words before this write arrives.
     if (b.circle_public !== undefined) patch.circle_public = b.circle_public === true;
@@ -18793,10 +18795,20 @@ async function handlePostcardSend(request, env, ctx) {
       // A board card carries the board's city and country.
       ...(toCity ? { to_city: toCity, city: boardCity, country: boardCountry, region: boardRegion } : {}),
     };
-    let w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+    let w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
     // The seconds before postcards.region exists (2026-10-16): send without it.
-    if (!w.ok && w.status === 400) { const { region: _r, ...rest } = row; w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(rest) }); }
+    if (!w.ok && w.status === 400) { const { region: _r, ...rest } = row; w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(rest) }); }
     if (!w.ok) { if (ctx) ctx.waitUntil(env.MEDIA.delete(key).catch(() => {})); return jsonResponse({ error: 'Could not send' }, 502); }
+    const madeId = await w.json().then((rows) => (Array.isArray(rows) && rows[0] && rows[0].id) || null).catch(() => null);
+    // The knock on the recipient's phone (push, 2026-10-19): the sender's first name, the place
+    // and a line of the words; several within six hours fold into one. Never for a board card.
+    if (toUser && ctx) {
+      const senderName = await ppHolder(env, user.id);
+      const place = row.place_name || row.city || null;
+      ctx.waitUntil(pushNotify(env, toUser, 'postcards', (n) => (n > 1
+        ? { title: `${n} new postcards`, body: `${senderName} and others sent you postcards`, route: '/Postcards' }
+        : { title: `${senderName} sent you a postcard${place ? ` from ${place}` : ''}`, body: msg ? `“${msg.slice(0, 90)}”` : 'Open it in your Mailbox', route: madeId ? `/Postcards?pc=${madeId}` : '/Postcards' })));
+    }
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: !!toUser, city: !!toCity, has_dish: !!(b.meta && b.meta.dish), anon: anonLabel || undefined }));
     // A new board card shows in the City Boards list at once, not after its five minutes.
     if (toCity && env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.delete('cityboards:v1').catch(() => {});
@@ -19165,6 +19177,12 @@ async function handleBlotterMark(request, env, ctx) {
     if (op === 'press') {
       const w = await gbRest(env, 'blotter_marks?on_conflict=target,user_id,kind', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ owner_user_id: share.user_id, target, user_id: user.id, kind }) });
       if (!w.ok) return jsonResponse({ error: 'Could not press' }, 502);
+      // The knock (push, 2026-10-19): someone pressed a reaction on my pages.
+      if (ctx && share?.user_id && share.user_id !== user.id) {
+        const who = await ppHolder(env, user.id);
+        const label = BL_PUSH_LABEL[kind] || String(kind).toUpperCase();
+        ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your circle', route: '/Passport' } : { title: `${who} stamped ${label} on your passport`, body: 'Open your passport to see where', route: '/Passport' })));
+      }
       if (kind === 'wannago' && ctx) ctx.waitUntil(blAddHorizon(env, user.id, st || tgt.place || { city: tgt.pc?.city, name: tgt.pc?.city }));
     } else {
       await gbRest(env, `blotter_marks?target=eq.${encodeURIComponent(target)}&user_id=eq.${user.id}&kind=eq.${kind}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
@@ -19270,6 +19288,11 @@ async function handleBlotterSign(request, env, ctx) {
     if (!w.ok) return jsonResponse({ error: 'Could not sign' }, 502);
     const row = (await w.json())[0];
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'blotter_sign', { doodle: !!doodleKey }));
+    // The knock (push, 2026-10-19): someone signed or doodled on my pages.
+    if (ctx && share?.user_id && share.user_id !== user.id) {
+      const who = await ppHolder(env, user.id);
+      ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your circle', route: '/Passport' } : { title: doodleKey && !text ? `${who} left a doodle on your passport` : `${who} signed your passport`, body: text ? `“${String(text).slice(0, 90)}”` : 'Open your passport to see it', route: '/Passport' })));
+    }
     const origin = new URL(request.url).origin;
     return jsonResponse({ entry: { id: row.id, target: row.target, body: row.body, doodle: row.doodle_key ? `${origin}/bl-doodle/e/${row.id}` : null, created_at: row.created_at } });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
@@ -19580,6 +19603,235 @@ async function gbHandleToUser(env, handle) {
   return (q.ok ? await q.json() : [])[0] || null;
 }
 
+// ── Alerts outside the app (push), build 1.0.6 (founder, 2026-10-19) ─────────────────
+// What a phone gets: a postcard, a follow or a follow request, a reaction / signature / tag
+// on the member's own pages, the inner circle's new stamps once a day (opt-in), news (opt-in).
+// What it never gets: anything for a teen, a frozen or a held account; anything from a block;
+// where a friend is right now (the stamps digest is daily); more than PUSH_WEEKLY_CAP a week;
+// anything 22:00–08:00 in the member's home timezone (held in KV, sent at 8). The Mailbox is
+// the record; an alert is only a knock. Apple: APNs over HTTP/2 with an ES256 token from the
+// .p8 (secrets APNS_KEY_P8; vars APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID). Google: FCM v1
+// with an OAuth token from the service account (secret FCM_SERVICE_ACCOUNT; var
+// FCM_PROJECT_ID). Tokens live in push_tokens; one Apple or Google reports gone is deleted.
+const PUSH_WEEKLY_CAP = 40;
+const PUSH_QUIET = { from: 22, to: 8 };
+const PUSH_PREF = { postcards: 'alert_postcards', follows: 'alert_follows', pages: 'alert_pages', friend_stamps: 'alert_friend_stamps', news: 'alert_news' };
+const PUSH_DEFAULT_ON = new Set(['postcards', 'follows', 'pages']);
+const BL_PUSH_LABEL = { wow: 'WOW', takeme: 'TAKE ME', wannago: 'I WANNA GO!', cool: 'COOL!' };
+const pushPrefOn = (sp, kind) => { const col = PUSH_PREF[kind]; if (!col) return false; const v = sp?.[col]; return v == null ? PUSH_DEFAULT_ON.has(kind) : v === true; };
+const pushB64u = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const pushB64uStr = (s) => pushB64u(new TextEncoder().encode(s));
+const pushPemToDer = (pem) => { const b = String(pem).replace(/-----[^-]+-----/g, '').replace(/\s+/g, ''); const bin = atob(b); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; };
+let APNS_JWT = null;   // { token, at } — Apple accepts a provider token for an hour
+async function apnsJwt(env) {
+  if (!env.APNS_KEY_P8 || !env.APNS_KEY_ID || !env.APNS_TEAM_ID) return null;
+  const now = Math.floor(Date.now() / 1000);
+  if (APNS_JWT && now - APNS_JWT.at < 50 * 60) return APNS_JWT.token;
+  const key = await crypto.subtle.importKey('pkcs8', pushPemToDer(env.APNS_KEY_P8), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const head = pushB64uStr(JSON.stringify({ alg: 'ES256', kid: env.APNS_KEY_ID }));
+  const claims = pushB64uStr(JSON.stringify({ iss: env.APNS_TEAM_ID, iat: now }));
+  const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, new TextEncoder().encode(`${head}.${claims}`));
+  APNS_JWT = { token: `${head}.${claims}.${pushB64u(sig)}`, at: now };
+  return APNS_JWT.token;
+}
+async function apnsSend(env, token, msg, sandbox = false) {
+  const jwt = await apnsJwt(env);
+  if (!jwt) return { ok: false, reason: 'no-key' };
+  const host = sandbox ? 'api.sandbox.push.apple.com' : 'api.push.apple.com';
+  const body = { aps: { alert: { title: msg.title, body: msg.body }, sound: 'default', 'thread-id': String(msg.kind || 'gs') }, route: String(msg.route || ''), kind: String(msg.kind || '') };
+  try {
+    const r = await fetch(`https://${host}/3/device/${token}`, {
+      method: 'POST',
+      headers: { authorization: `bearer ${jwt}`, 'apns-topic': env.APNS_BUNDLE_ID || 'com.globeskimmers.app', 'apns-push-type': 'alert', 'apns-priority': '10', 'apns-collapse-id': String(msg.kind || 'gs').slice(0, 64), 'content-type': 'application/json' },
+      body: JSON.stringify(body), signal: AbortSignal.timeout(8000),
+    });
+    if (r.ok) return { ok: true };
+    const t = await r.text().catch(() => '');
+    const reason = (t.match(/"reason"\s*:\s*"([^"]+)"/) || [])[1] || `http_${r.status}`;
+    if (r.status === 410 || reason === 'Unregistered') return { ok: false, gone: true, reason };
+    // A build run from Xcode registers in Apple's sandbox: the same token, the other host.
+    if (reason === 'BadDeviceToken') return sandbox ? { ok: false, gone: true, reason } : apnsSend(env, token, msg, true);
+    if (reason === 'ExpiredProviderToken' || reason === 'InvalidProviderToken') APNS_JWT = null;
+    return { ok: false, reason };
+  } catch (e) { return { ok: false, reason: e?.name === 'TimeoutError' ? 'timeout' : 'network' }; }
+}
+let FCM_TOKEN = null;   // { token, at, project }
+async function fcmToken(env) {
+  if (!env.FCM_SERVICE_ACCOUNT) return null;
+  const now = Math.floor(Date.now() / 1000);
+  if (FCM_TOKEN && now - FCM_TOKEN.at < 50 * 60) return FCM_TOKEN.token;
+  let sa; try { sa = JSON.parse(env.FCM_SERVICE_ACCOUNT); } catch { return null; }
+  if (!sa?.private_key || !sa?.client_email) return null;
+  const tokenUri = sa.token_uri || 'https://oauth2.googleapis.com/token';
+  const key = await crypto.subtle.importKey('pkcs8', pushPemToDer(sa.private_key), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const head = pushB64uStr(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const claims = pushB64uStr(JSON.stringify({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.messaging', aud: tokenUri, iat: now, exp: now + 3600 }));
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(`${head}.${claims}`));
+  const r = await fetch(tokenUri, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${head}.${claims}.${pushB64u(sig)}`, signal: AbortSignal.timeout(8000) }).catch(() => null);
+  if (!r || !r.ok) return null;
+  const d = await r.json().catch(() => ({}));
+  if (!d.access_token) return null;
+  FCM_TOKEN = { token: d.access_token, at: now, project: sa.project_id };
+  return FCM_TOKEN.token;
+}
+async function fcmSend(env, token, msg) {
+  const bearer = await fcmToken(env);
+  if (!bearer) return { ok: false, reason: 'no-key' };
+  const project = env.FCM_PROJECT_ID || FCM_TOKEN?.project;
+  const kind = String(msg.kind || 'gs');
+  const body = { message: { token, notification: { title: msg.title, body: msg.body }, data: { route: String(msg.route || ''), kind },
+    android: { priority: 'HIGH', collapse_key: kind, notification: { channel_id: 'alerts', icon: 'ic_stat_globeskimmers', color: '#0E7C73', tag: kind } } } };
+  try {
+    const r = await fetch(`https://fcm.googleapis.com/v1/projects/${project}/messages:send`, { method: 'POST', headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(8000) });
+    if (r.ok) return { ok: true };
+    const t = await r.text().catch(() => '');
+    if (r.status === 404 || /UNREGISTERED|NOT_FOUND/.test(t)) return { ok: false, gone: true, reason: 'unregistered' };
+    if (r.status === 401) FCM_TOKEN = null;
+    return { ok: false, reason: `http_${r.status}` };
+  } catch (e) { return { ok: false, reason: e?.name === 'TimeoutError' ? 'timeout' : 'network' }; }
+}
+// Every phone this member has the app on. A token the store reports gone is forgotten.
+async function pushDeliver(env, uid, msg) {
+  const q = await gbRest(env, `push_tokens?user_id=eq.${uid}&select=token,platform&limit=10`, {}).catch(() => null);
+  if (!q || !q.ok) return 0;
+  let sent = 0;
+  for (const t of await q.json()) {
+    const r = t.platform === 'ios' ? await apnsSend(env, t.token, msg) : await fcmSend(env, t.token, msg);
+    if (r.ok) sent += 1;
+    else if (r.gone) await gbRest(env, `push_tokens?token=eq.${encodeURIComponent(t.token)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => {});
+  }
+  return sent;
+}
+function pushLocalHour(tz) {
+  if (!tz) return null;
+  try { return Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(new Date())) % 24; } catch { return null; }
+}
+const pushQuiet = (h) => h != null && (h >= PUSH_QUIET.from || h < PUSH_QUIET.to);
+async function pushTimezone(env, uid) {
+  const r = await gbRest(env, `profiles?id=eq.${uid}&select=home_timezone`, { headers: { 'Accept-Profile': 'public' } }).catch(() => null);
+  const row = r && r.ok ? (await r.json().catch(() => []))[0] : null;
+  return row?.home_timezone || null;
+}
+const pushWeek = () => { const d = new Date(); const y = d.getUTCFullYear(); return `${y}-${Math.floor((d - Date.UTC(y, 0, 1)) / 6048e5)}`; };
+// The one door every alert goes through. `make` is { title, body, route } or (n) => that,
+// where n counts this kind in the last six hours, so several fold into one line.
+async function pushNotify(env, uid, kind, make, opts = {}) {
+  try {
+    if (!uid || !BL_UUID.test(String(uid))) return;
+    const sp = await gbSocialProfile(env, uid).catch(() => undefined);
+    if (!pcAdultRow(sp) || !pushPrefOn(sp, kind)) return;
+    const kv = env.GLOBESKIMMERS_KV;
+    const capKey = `pushwk:${uid}:${pushWeek()}`;
+    const used = kv ? parseInt((await kv.get(capKey).catch(() => null)) || '0', 10) || 0 : 0;
+    if (used >= PUSH_WEEKLY_CAP) return;
+    let n = 1;
+    if (kv && !opts.now) { const nk = `pushn:${uid}:${kind}`; n = (parseInt((await kv.get(nk).catch(() => null)) || '0', 10) || 0) + 1; await kv.put(nk, String(n), { expirationTtl: 6 * 3600 }).catch(() => {}); }
+    const msg = { kind, ...(typeof make === 'function' ? make(n) : make) };
+    if (!msg.title || !msg.body) return;
+    if (!opts.now && kv && pushQuiet(pushLocalHour(await pushTimezone(env, uid)))) {
+      // Held until 8 in the member's morning (pushHourly); one line per kind.
+      const qk = `pushq:${uid}`;
+      let q = []; try { q = JSON.parse((await kv.get(qk)) || '[]'); } catch { q = []; }
+      q = q.filter((x) => x.kind !== kind); q.push({ kind, title: msg.title, body: msg.body, route: msg.route || '', at: Date.now() });
+      await kv.put(qk, JSON.stringify(q.slice(-10)), { expirationTtl: 36 * 3600 }).catch(() => {});
+      return;
+    }
+    const sent = await pushDeliver(env, uid, msg);
+    if (sent && kv) await kv.put(capKey, String(used + 1), { expirationTtl: 8 * 86400 }).catch(() => {});
+  } catch { /* an alert is only a knock; the Mailbox has the news */ }
+}
+// The hourly cron: what waited through quiet hours goes out once the member's morning has
+// come, and the inner circle's new stamps go out at 9 (opt-in), once a day.
+async function pushHourly(env) {
+  const kv = env.GLOBESKIMMERS_KV;
+  if (!kv) return;
+  let cursor = null;
+  do {
+    const page = await kv.list({ prefix: 'pushq:', cursor: cursor || undefined });
+    for (const k of page.keys || []) {
+      const uid = k.name.slice('pushq:'.length);
+      if (pushQuiet(pushLocalHour(await pushTimezone(env, uid)))) continue;
+      let q = []; try { q = JSON.parse((await kv.get(k.name)) || '[]'); } catch { q = []; }
+      await kv.delete(k.name).catch(() => {});
+      for (const m of q) await pushNotify(env, uid, m.kind, { title: m.title, body: m.body, route: m.route }, { now: true });
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  const q = await gbRest(env, 'social_profiles?alert_friend_stamps=eq.true&select=user_id&limit=2000', {}).catch(() => null);
+  if (!q || !q.ok) return;
+  const today = new Date().toISOString().slice(0, 10);
+  for (const r of await q.json()) {
+    const uid = r.user_id;
+    if (pushLocalHour(await pushTimezone(env, uid)) !== 9) continue;
+    const dk = `pushdg:${uid}:${today}`;
+    if (await kv.get(dk).catch(() => null)) continue;
+    await kv.put(dk, '1', { expirationTtl: 2 * 86400 }).catch(() => {});
+    await pushFriendStamps(env, uid);
+  }
+}
+// "Mary stamped the Eiffel Tower" / "Mary and 2 others stamped new places": mutual friends
+// only, their stamps of the last day at the inner-circle tier, never where they are now.
+async function pushFriendStamps(env, uid) {
+  const since = new Date(Date.now() - 24 * 3600e3).toISOString();
+  const [f1, f2] = await Promise.all([
+    gbRest(env, `user_follows?follower_id=eq.${uid}&status=eq.accepted&select=followee_id&limit=500`, {}),
+    gbRest(env, `user_follows?followee_id=eq.${uid}&status=eq.accepted&select=follower_id&limit=500`, {}),
+  ]);
+  if (!f1.ok || !f2.ok) return;
+  const back = new Set((await f2.json()).map((r) => r.follower_id));
+  const blocked = await gbBlockSet(env, uid);
+  if (!blocked) return;
+  const mutual = (await f1.json()).map((r) => r.followee_id).filter((id) => back.has(id) && !blocked.has(id)).slice(0, 100);
+  if (!mutual.length) return;
+  const sq = await gbRest(env, `passport_stamps?user_id=in.(${mutual.join(',')})&created_at=gte.${encodeURIComponent(since)}&hidden=eq.false&select=user_id,name,visibility,hidden&order=created_at.desc&limit=200`, {});
+  if (!sq.ok) return;
+  const stamps = (await sq.json()).filter((s) => ppTierVisible(s, 2, 'inner'));
+  if (!stamps.length) return;
+  const who = [...new Set(stamps.map((s) => s.user_id))];
+  const first = await ppHolder(env, who[0]);
+  const others = who.length - 1, places = stamps.length;
+  const title = others ? `${first} and ${others} other${others === 1 ? '' : 's'} stamped new places` : `${first} stamped ${places === 1 ? stamps[0].name : `${places} new places`}`;
+  const body = others ? `${places} new stamp${places === 1 ? '' : 's'} in your inner circle since yesterday` : (places === 1 ? 'A new stamp in your inner circle' : stamps.slice(0, 3).map((s) => s.name).join(', '));
+  await pushNotify(env, uid, 'friend_stamps', { title, body, route: '/Mailbox' }, { now: true });
+}
+// POST /push/register { token, platform, app_version } — this phone, this account. A token
+// moving to another account (a shared phone) follows the sign-in. Never read back to the app.
+async function handlePushRegister(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const token = String(b.token || '').trim();
+    const platform = b.platform === 'ios' ? 'ios' : b.platform === 'android' ? 'android' : null;
+    if (!token || token.length > 400 || !/^[A-Za-z0-9:_-]+$/.test(token) || !platform) return jsonResponse({ error: 'Bad token' }, 400);
+    const row = { token, user_id: user.id, platform, app_version: String(b.app_version || '').slice(0, 40) || null, seen_at: new Date().toISOString() };
+    const w = await gbRest(env, 'push_tokens?on_conflict=token', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(row) });
+    if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+async function handlePushUnregister(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const token = String(b.token || '').trim();
+    if (token && token.length <= 400) await gbRest(env, `push_tokens?token=eq.${encodeURIComponent(token)}&user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => {});
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+// POST /push/test — an admin knocks on their own phones, past every switch (the founder's check).
+async function handlePushTest(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    if (!ADMIN_EMAILS_WORKER.includes(String(user.email || '').trim().toLowerCase())) return jsonResponse({ error: 'Forbidden' }, 403);
+    const sent = await pushDeliver(env, user.id, { kind: 'news', title: 'GlobeSkimmers', body: 'Alerts are working on this phone 🛂', route: '/Mailbox' });
+    const q = await gbRest(env, `push_tokens?user_id=eq.${user.id}&select=platform`, {}).catch(() => null);
+    return jsonResponse({ sent, phones: q && q.ok ? (await q.json()).map((r) => r.platform) : [], keys: { apns: !!env.APNS_KEY_P8, fcm: !!env.FCM_SERVICE_ACCOUNT } });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 // ── Find people (founder, 2026-10-18): by @username, by name or by email ───────────────
 // POST /social/find { q } → { people: [{ user_id, name, handle, avatar, cloth, relation }], mode }.
 // Who can be found: adults only (pcAdultRow) — never a frozen or held account, never a teen,
@@ -19830,6 +20082,13 @@ async function handleSocialFollow(request, env, ctx) {
       // A muted edge from before (the block is gone, the teen turned 18)
       // becomes a real follow when it is asked for again.
       if (!muted) await gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${target.user_id}&status=eq.muted`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status }) });
+      // The knock (push, 2026-10-19): a request to allow, or a new follower. Never for a muted edge.
+      if (!muted && ctx) {
+        const who = await ppHolder(env, user.id);
+        ctx.waitUntil(pushNotify(env, target.user_id, 'follows', (n) => (status === 'pending'
+          ? (n > 1 ? { title: `${n} people asked to follow you`, body: 'Allow them in your circle', route: '/Circle?tab=followers' } : { title: `${who} asked to follow you`, body: 'Allow or not — it’s your circle', route: '/Circle?tab=followers' })
+          : (n > 1 ? { title: `${n} new followers`, body: 'See them in your circle', route: '/Circle?tab=followers' } : { title: `${who} followed you`, body: 'Their postcards can reach you now', route: '/Circle?tab=followers' }))));
+      }
       if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_follow', { status: muted ? 'muted' : status }));
       // With approval the default, 'pending' is the ordinary answer — so a muted follow
       // (a block, a minor) answers 'pending' too, indistinguishable from any other.
@@ -19860,6 +20119,8 @@ async function handleSocialFollow(request, env, ctx) {
           return jsonResponse({ ok: true });
         }
         await gbRest(env, `user_follows?follower_id=eq.${fid}&followee_id=eq.${user.id}&status=eq.pending`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'accepted', responded_at: new Date().toISOString() }) });
+        // The knock (push): the follow was allowed.
+        if (ctx) { const who = await ppHolder(env, user.id); ctx.waitUntil(pushNotify(env, fid, 'follows', { title: `${who} accepted your follow`, body: 'Their new stamps land in your Mailbox', route: '/Mailbox' })); }
       } else {
         await gbRest(env, `user_follows?follower_id=eq.${fid}&followee_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
       }
@@ -21653,6 +21914,11 @@ async function handlePassportTag(request, env, ctx) {
     const ins = await gbRest(env, 'passport_tags', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
     if (!ins.ok) return jsonResponse({ error: 'Could not create invite', details: await ins.text().catch(() => '') }, 502);
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_tag', { is_user: !!row.to_user_id, via: toHandle ? 'handle' : 'link' }));
+    // The knock (push, 2026-10-19): a travel-buddy tag to allow or decline.
+    if (ctx && row.to_user_id) {
+      const who = fromName || await ppHolder(env, user.id);
+      ctx.waitUntil(pushNotify(env, row.to_user_id, 'pages', { title: `${who} tagged you at ${row.name}`, body: 'Were you there together? Allow or decline in your passport', route: '/Passport' }));
+    }
     const origin = new URL(request.url).origin;
     return jsonResponse({ status: 'created', token, url: `${origin}/t/${token}`, to_handle: toHandle });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
@@ -27301,6 +27567,9 @@ export default {
       if (pathname === '/social/report' && request.method === 'POST') return await handleSocialReport(request, env, ctx);
       if (pathname === '/social/follow' && request.method === 'POST') return await handleSocialFollow(request, env, ctx);
       if (pathname === '/social/find' && request.method === 'POST') return await handleSocialFind(request, env, ctx);
+      if (pathname === '/push/register' && request.method === 'POST') return await handlePushRegister(request, env);
+      if (pathname === '/push/unregister' && request.method === 'POST') return await handlePushUnregister(request, env);
+      if (pathname === '/push/test' && request.method === 'POST') return await handlePushTest(request, env);
       if (pathname === '/social/unread' && request.method === 'POST') return await handleSocialUnread(request, env);
       if (pathname === '/social/feed' && request.method === 'POST') return await handleSocialFeed(request, env);
       if (pathname === '/postcards/send' && request.method === 'POST') return await handlePostcardSend(request, env, ctx);
@@ -27422,6 +27691,12 @@ export default {
     // gets the same counted bindings, and the deletion and age work runs
     // first, so nothing else can use up what it needs (go-live round 3).
     const benv = gbBudgetEnv(env);
+    // The hourly trigger (push, 2026-10-19): what waited through quiet hours goes out at 8 in
+    // the member's morning, the inner circle's stamps at 9. Nothing else runs on it.
+    if (event && event.cron === '0 * * * *') {
+      try { await pushHourly(env); } catch (_e) { /* next hour tries again */ }
+      return;
+    }
     // The daily counters (gbDayCount) older than two days go.
     try { await gbDayCountsPrune(benv); } catch (_e) { /* tomorrow's cron tries again */ }
     // Postcards that waited 90 days for an email that never joined go, photos included.

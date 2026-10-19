@@ -58,6 +58,13 @@ bucket_name = "globeskimmers-media"
 # Flip to "production" when the in-app hotel lane goes live to travelers.
 [vars]
 NUITEE_ENV = "production"
+# Alerts outside the app (push, 2026-10-19). Not secrets: the key id, team and bundle Apple
+# shows, and the Firebase project. The keys themselves are secrets: APNS_KEY_P8 (the .p8 file)
+# and FCM_SERVICE_ACCOUNT (the service-account JSON), set with `npx wrangler secret put`.
+APNS_KEY_ID = "K792MFVWCV"
+APNS_TEAM_ID = "6C6X2RV7CC"
+APNS_BUNDLE_ID = "com.globeskimmers.app"
+FCM_PROJECT_ID = "globeskimmers"
 
 # ── CRON TRIGGERS ───────────────────────────────────────────────────────────
 # Daily Deal Radar sweep at 15:00 UTC (≈ 7am PT): fetches each airline's own
@@ -68,4 +75,6 @@ NUITEE_ENV = "production"
 # Manual test trigger: POST /deals/sweep, gated on the out-of-band secret
 # DEAL_SWEEP_KEY (npx wrangler secret put DEAL_SWEEP_KEY).
 [triggers]
-crons = ["0 15 * * *"]
+# The hourly one carries push alerts only (quiet-hours release at 8, the inner circle's stamps
+# at 9, in each member's own timezone); the daily one runs everything else.
+crons = ["0 15 * * *", "0 * * * *"]
