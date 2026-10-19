@@ -2416,3 +2416,28 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   captured in the composer with a canvas-drawn test photo: Golden Hour, Ink, custom dials.
   Not verified: speed on an old Android for a 1600 px render (one pass, ~1.9 M pixels; est. well under a second).
 - **Activate:** app only — reaches phones with `npm run ota` after the push (no worker, no migration).
+
+## 2026-10-19 — The first session: the required passport waits for the first save (COMMITTED, awaiting push)
+- **Founder (10-19):** "1. yes" to moving the birthday + @username screen from the open to right after the first
+  stamps appear, still required before saving or sharing. Context: 80 accounts, 6 ever stamped.
+- **Gate `src/lib/passportGate.js`:** `requirePassport()` resolves true once the account is complete (at once when
+  it already is), false on sign-out; with no FinishPassport mounted (mid-onboarding, signed out) it resolves true
+  and the worker's own gates decide. `registerPassportGate(fn)` / `passportGateDone(ok)`.
+- **Library:** `addStamp`, `uploadStampPhoto`, `sendPostcard`, `getShareLink(true)`, `mintShareLink` and
+  `socialFollow('follow')` await the gate first — every stamp, photo, postcard, share and follow path in the app
+  passes through these, so no call site has to remember. A refused call answers `error: 'finish_passport'`.
+- **FinishPassport:** still reads what's missing at open, but renders the required screens only when armed by a
+  save or a share; completing them answers every waiting call (true) and the action goes on; Sign out answers
+  false. Copy no longer says "Welcome back" (new members hit it too): "One thing first…" / "One more thing…".
+- **Onboarding:** the `username` step is gone (birthday + @username come at the first save instead), the
+  home-city origin stamp is no longer minted at the end (it would have stored a stamp before any birthday; the
+  Passport offers page one later, behind the gate), and onboarding ends on the **Passport** (Upload photo to get a
+  stamp / Stamp where I am), not Home. UsernameStep.jsx is unused now (kept on disk).
+- **COPPA posture:** the birthday still precedes every stored stamp, photo and post — it is asked at the moment
+  of the first save, before the write. Browsing, the finders and sorting one's own photos on the phone need none.
+- Verified: 7 gate checks (resolves at once with no screens; each call triggers; waits; both waiting calls
+  resolve together; sign-out → false; unmount releases; after unregister resolves at once); eslint + no-undef on
+  the changed files (passport.js's pre-existing `window`/`Event` lines are outside lint scope), build, boot-check;
+  captured as the demo account with age unset + no handle mocked: the Passport opens unblocked (before: the
+  required sheet covered the app); tapping Follow on a Find people result brings up "Step 1 of 2 · Your birthday".
+- **Activate:** app only — `npm run ota` after the push.
