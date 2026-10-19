@@ -13,7 +13,7 @@
 //   onOpen   (destination) => void, where destination is 'passport' or 'circle'.
 //   onMore   (item) => void: a 44px '•••' beside each row ('Options for {name}'), outside
 //            the row's own button, e.g. TravelerSheet for Report and Block (go-live decision 6).
-import React from "react";
+import React, { useState } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { Face } from "@/components/social/SocialMarks";
@@ -21,7 +21,9 @@ import { whenLabel } from "@/components/social/Envelope";
 import OfficialSeal from "@/components/passport/OfficialSeal";
 
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
-const MAX_ROWS = 12;
+const MAX_ROWS = 30;
+// Collapsed to this many rows (founder, 2026-10-19: "quite a scroll"); "Show N more" opens the rest.
+const SHOW_ROWS = 4;
 
 /**
  * One line per thing that happened to you.
@@ -52,6 +54,8 @@ export function activityLine(a) {
     // The heads-up that photos hang on a board (City Billboards, 2026-10-16): no `who`, the board speaks.
     // The heads-up that people can now find you by name and email (Find people, 2026-10-18).
     case "board": if (a.board_kind === "find") return { who: "Find people", text: "is new: members can now find you by your name or the email you signed up with. Turn either off in Settings → Privacy." };
+      // Several boards at once (2026-10-19): one line instead of one per board.
+      if (a.board_kind === "many") { const names = a.boards || []; const shown = names.slice(0, 3).join(", "); const rest = names.length - 3; return { who: "Your photos", text: `now hang on ${names.length} boards — ${shown}${rest > 0 ? ` and ${rest} more` : ""}. Take any down from your album.` }; }
       return { who: a.board || "A city", text: `${a.board_kind === "state" ? "state" : a.board_kind === "country" ? "country" : "city"} board now shows ${a.photos === 1 ? "one of your photos" : `${a.photos || "some"} of your photos`} — take any down from your album` };
     default: return { who, text: "" };
   }
@@ -68,9 +72,12 @@ const destinationOf = (a) => {
  * @param {{ items?: any[], onOpen?: (to: string) => void, className?: string, style?: import('react').CSSProperties }} props
  */
 export default function ActivityList({ items = [], onOpen = undefined, onMore = undefined, className = undefined, style = undefined }) {
-  const list = (Array.isArray(items) ? items : []).filter((a) => a && typeof a === "object" && activityLine(a).text).slice(0, MAX_ROWS);
-  if (!list.length) return null;
-  const fresh = list.filter((a) => a.unread).length;
+  const [open, setOpen] = useState(false);
+  const all = (Array.isArray(items) ? items : []).filter((a) => a && typeof a === "object" && activityLine(a).text).slice(0, MAX_ROWS);
+  const list = open ? all : all.slice(0, SHOW_ROWS);
+  const hidden = all.length - list.length;
+  if (!all.length) return null;
+  const fresh = all.filter((a) => a.unread).length;
   return (
     <section aria-label="On your passport" className={className} style={style}>
       <h2 style={{ margin: 0, fontFamily: MONO, fontSize: fs(10), fontWeight: 500, letterSpacing: ".16em", lineHeight: 1.2, textTransform: "uppercase", color: NEUTRAL.airmailBlue }}>
@@ -117,6 +124,13 @@ export default function ActivityList({ items = [], onOpen = undefined, onMore = 
             </li>
           );
         })}
+        {hidden > 0 ? (
+          <li>
+            <button type="button" onClick={() => setOpen(true)} style={{ display: "block", width: "100%", minHeight: 44, padding: "8px 14px", margin: 0, border: 0, borderTop: `1px solid ${NEUTRAL.airmailHair}`, background: "transparent", font: "inherit", fontSize: fs(13), fontWeight: 600, color: NEUTRAL.airmailBlue, textAlign: "left", cursor: "pointer" }}>
+              Show {hidden} more
+            </button>
+          </li>
+        ) : null}
       </ul>
     </section>
   );

@@ -230,6 +230,18 @@ function MailboxBody() {
   const [feed, setFeed] = useState(null);        // { rows, held, error } once read
   const [me, setMe] = useState({ loaded: false, handle: null });
   const [activity, setActivity] = useState([]);
+  // Several "city board now shows…" lines fold into one (founder, 2026-10-19: "quite a scroll");
+  // the Find people heads-up and a single board line stay as they are.
+  const foldBoards = (items) => {
+    const boards = items.filter((a) => a?.type === "board" && a.board_kind !== "find" && a.board_kind !== "many");
+    if (boards.length < 2) return items;
+    const first = items.findIndex((a) => a?.type === "board" && a.board_kind !== "find");
+    const folded = { type: "board", board_kind: "many", boards: boards.map((b) => b.board_name).filter(Boolean), photos: boards.reduce((n, b) => n + (b.photos || 0), 0),
+      at: boards.map((b) => b.at).sort().pop(), unread: boards.some((b) => b.unread) };
+    const rest = items.filter((a) => !(a?.type === "board" && a.board_kind !== "find"));
+    const at = Math.min(Math.max(first, 0), rest.length);
+    return [...rest.slice(0, at), folded, ...rest.slice(at)];
+  };
   const [compose, setCompose] = useState(false);
   const [traveler, setTraveler] = useState(null); // { person, report } in the TravelerSheet
   const openTraveler = (person, report = null) => setTraveler({ person: person || {}, report });
@@ -246,7 +258,7 @@ function MailboxBody() {
     const [f, h, u] = await Promise.all([socialFeed(), getHandle(), socialUnread({ mark: true })]);
     setFeed(f);
     setMe({ loaded: true, handle: h.handle || null });
-    setActivity(u.activity || []);
+    setActivity(foldBoards(u.activity || []));
   };
   useEffect(() => { load(); }, []);
   const retry = () => { setFeed(null); load(); };
@@ -284,14 +296,16 @@ function MailboxBody() {
         <FindPeople onFollowed={() => load()} style={{ marginTop: 16 }} />
         {!emptyFeed ? <InviteButton style={{ marginTop: 8 }} /> : null}
         {me.loaded && !me.handle ? <ClaimCard onClaimed={(h) => setMe({ loaded: true, handle: h })} style={{ marginTop: GAP }} /> : null}
+        {/* The doors first (founder, 2026-10-19: "quite a scroll"): the postcard box and the boards sit
+            above the activity, which collapses to a few rows. */}
+        {rows.length ? <PostcardBoxRow style={{ marginTop: GAP }} /> : null}
+        <CityBoardsRow style={{ marginTop: rows.length ? 8 : GAP }} />
         <ActivityList items={activity} onOpen={openFrom} style={{ marginTop: GAP }}
           onMore={(a) => openTraveler({ ...a.by, entry_id: a.entry_id || null }, { kind: ACTIVITY_KIND[a.type] || "profile", note: clip(`Mailbox, ${whenLabel(a.at)}: ${whoOf(a.by)} (${a.type})`, 480) })} />
         {circle.status === "ready" && circle.requests?.length ? (
           <Requests rows={circle.requests} onAccept={answer("accept")} onDecline={answer("decline")} style={{ marginTop: GAP }}
             onMore={(r) => openTraveler(r, { kind: "profile", note: "Asked to follow me" })} />
         ) : null}
-        {rows.length ? <PostcardBoxRow style={{ marginTop: GAP }} /> : null}
-        <CityBoardsRow style={{ marginTop: rows.length ? 8 : GAP }} />
 
         <section aria-label="Where your circle has been" style={{ marginTop: GAP }}>
           {!feed ? (
