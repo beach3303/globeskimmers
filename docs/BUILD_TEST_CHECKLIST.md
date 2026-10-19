@@ -2592,3 +2592,29 @@ notifications are viewable."
   postcard that does not exist both answer 404 "That postcard isn’t here any more"; the column exists.
   NOT verified: a real delete and a real reply on a phone (needs the OTA).
 - **Activate:** push (worker + migration deploy themselves), then the founder's `npm run ota`. No native build.
+
+## 2026-10-19 — Postcard ••• menus (Delete / Reply), the alert trace and "Send a test" (COMMITTED, not pushed)
+
+Founder: "allow user to delete postcard from the mailbox also, by user clicking the 3 dots … delete and reply
+from there also" and "no duplicate task please in one section"; then "a reply to post card was sent to me and i
+did not get a notification".
+
+- **Menus.** The TravelerSheet opened from a postcard sent to you reads "POSTCARD FROM / Mary" and leads with
+  **Delete this postcard** (a "Delete this postcard? It leaves your Mailbox. Mary keeps their own copy." step,
+  Keep it / Delete). From a notification row's ••• it also offers **Reply to Mary** first. The card itself keeps
+  ONE Reply button (full width) and no Delete of its own: one place per action in each section. The worker's
+  `/social/unread` gives a postcard-to-me row its `postcard_id`.
+- **The missed alert, traced.** KV `pushn:89cc7046…:postcards` at 15:31 UTC = the gate ran (adult, switch on,
+  not quiet hours); no `pushwk:` key = no phone took it. An APNs call with a dummy token and our key answers
+  `BadDeviceToken` on both hosts, so the key, team and topic are accepted: the server half works. So the
+  founder's phone most likely never registered (the Alerts row says "On" from the phone's permission alone).
+- **Trace + self-test.** `pushDeliver(env, uid, msg, out)` reports `{ phones, reasons }` (never a token);
+  `pushNotify` logs D1 `push_outcome { kind, to: <8 chars of the id>, phones, sent, reasons, n }` and `push_held`.
+  `/push/test` opens to any adult (3 an hour, `pusht:` day_counts); Settings → Alerts shows **Send a test** when
+  allowed: `testAlerts()` registers again, waits for the worker to have the token (≤ 6 s), then knocks once and
+  says which of: sent / this phone couldn't sign up / signed up but it didn't go through.
+  Read the trace: `npx wrangler d1 execute globeskimmers-events --remote --command "select datetime(ts,'unixepoch'), payload from events where event_type in ('push_outcome','push_held') order by ts desc limit 20"`.
+- Verified: `node --check`; eslint + no-undef on the touched pages; build; boot-check ✅; captured (mocked):
+  the card's single Reply, the card's ••• (Delete, Unfollow, Report, Block), the row's ••• (Reply first), the
+  delete step.
+- **Activate:** push, then `npm run ota`; then Settings → Alerts → **Send a test** on the founder's phone.
