@@ -2706,7 +2706,7 @@ boot-check ✅. **Activate:** push, then `npm run ota`.
 `/social/feed` advertises `telegrams`; `/push/test` as a non-admin adult → `{ sent: 0, phones: 0 }`.
 Remaining: the founder's `npm run ota`, then Settings → Alerts & Notifications → Send a test on a phone.
 
-## 2026-10-19 — Telegrams strictly private: delete erases (COMMITTED, not pushed)
+## 2026-10-19 — Telegrams strictly private: delete erases (PUSHED — main 521aada, worker + site live; the sheet wording waits for an OTA)
 
 Founder: "make sure that all the telegrams sent and received are strictly private to Only Me".
 Audit, live: `api.telegrams` refuses direct reads and writes (signed out 401, signed in 403 — service role only);
