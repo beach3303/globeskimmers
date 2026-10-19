@@ -14045,10 +14045,17 @@ async function gbModerate(env, text) {
 // violence, hate symbols, illegal content, private documents, and non-travel junk
 // (memes/text screenshots). Fails CLOSED on error — a bad photo is public + permanent,
 // so we'd rather reject than let one slip (text moderation fails open; images do not).
-async function gbModeratePhoto(env, base64, mediaType) {
+// kind 'place' (default): a photo meant to show a place, dish or drink in public (guestbooks,
+// dish posts, Suggest a place) — anything that clearly isn't one is refused. kind 'memory'
+// (2026-10-19, founder's cat postcard refused as "not a travel photo"): a member's own memory
+// going to people they chose — a postcard, a stamp's album, an avatar — so pets, selfies,
+// family, homes and indoor scenes are ordinary; only the safety list refuses.
+async function gbModeratePhoto(env, base64, mediaType, kind = 'place') {
   if (!env.ANTHROPIC_API_KEY) return { allow: false, reason: 'moderation-unavailable' };
   try {
-    const system = 'You are an image safety reviewer for a public travel app where people share photos of food, drinks, dishes, cafes, storefronts, attractions, landmarks, and scenery. Reply with ONLY {"allow":true,"food":false} (booleans as appropriate). Set allow=false if the image contains ANY of: nudity or sexual content, graphic violence or gore, hate symbols, illegal drugs, weapons brandished as a threat, personal documents / credit cards / screens showing private info, or content that is clearly not a travel/food/place photo (memes, pure-text screenshots, spam, ads). Allow ordinary photos of food, drinks, interiors, storefronts, landmarks, nature, and people enjoying a place. Set food=true ONLY when food or drink is the MAIN subject of the photo (a dish, plate, drink or spread filling the frame) — not when food is merely on a table behind a person or in the background of a scene.';
+    const system = kind === 'memory'
+      ? 'You are an image safety reviewer for a travel app. This photo is a personal memory a member is sharing with people they chose: their trips, places, meals, friends, family, pets, home. Reply with ONLY {"allow":true,"food":false} (booleans as appropriate). Set allow=false ONLY if the image contains: nudity or sexual content, graphic violence or gore, hate symbols, illegal drugs, weapons brandished as a threat, personal documents / credit cards / screens showing private info, or spam, ads or pure-text screenshots. Allow every ordinary photo, including pets, selfies, groups, homes and indoor scenes. Set food=true ONLY when food or drink is the MAIN subject of the photo (a dish, plate, drink or spread filling the frame).'
+      : 'You are an image safety reviewer for a public travel app where people share photos of food, drinks, dishes, cafes, storefronts, attractions, landmarks, and scenery. Reply with ONLY {"allow":true,"food":false} (booleans as appropriate). Set allow=false if the image contains ANY of: nudity or sexual content, graphic violence or gore, hate symbols, illegal drugs, weapons brandished as a threat, personal documents / credit cards / screens showing private info, or content that is clearly not a travel/food/place photo (memes, pure-text screenshots, spam, ads). Allow ordinary photos of food, drinks, interiors, storefronts, landmarks, nature, and people enjoying a place. Set food=true ONLY when food or drink is the MAIN subject of the photo (a dish, plate, drink or spread filling the frame) — not when food is merely on a table behind a person or in the background of a scene.';
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -15142,7 +15149,7 @@ async function ppReviewPhotos(env, rows) {
     try {
       const obj = await env.MEDIA.get(p.photo_key);
       if (!obj) return;
-      const v = await gbModeratePhoto(env, ppBytesToB64(new Uint8Array(await obj.arrayBuffer())), obj.httpMetadata?.contentType || 'image/jpeg');
+      const v = await gbModeratePhoto(env, ppBytesToB64(new Uint8Array(await obj.arrayBuffer())), obj.httpMetadata?.contentType || 'image/jpeg', 'memory');
       if (!v || v.reason) return;
       await gbRest(env, `passport_stamp_photos?id=eq.${p.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mod_status: v.allow ? 'ok' : 'blocked', food_subject: v.allow && v.food ? 1 : 0 }) });
       // Now that it may hang on a board (a public stamp's photo), the owner hears about it.
@@ -15475,7 +15482,7 @@ async function handlePassportPhotoUpload(request, env, ctx) {
     // albums (founder, 2026-10-14). A minor's passport is seen by no one else: no review.
     if (ctx && !gbOffSocial(upSp)) ctx.waitUntil((async () => {
       try {
-        const v = await gbModeratePhoto(env, data, mediaType);
+        const v = await gbModeratePhoto(env, data, mediaType, 'memory');
         if (!v || v.reason) return; // the review itself failed: unchecked, so a visit retries it
         await gbRest(env, `passport_stamp_photos?photo_key=eq.${encodeURIComponent(key)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mod_status: v.allow ? 'ok' : 'blocked', food_subject: v.allow && v.food ? 1 : 0 }) });
       } catch { /* stays unchecked → stays owner-only until a visit retries it */ }
@@ -18109,7 +18116,7 @@ async function handleSocialAvatar(request, env, ctx) {
     let bytes;
     try { bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0)); } catch { return jsonResponse({ error: 'Bad image data' }, 400); }
     if (bytes.length > 2 * 1024 * 1024) return jsonResponse({ error: 'Photo too large' }, 400);
-    const verdict = await gbModeratePhoto(env, ppBytesToB64(bytes), mediaType);
+    const verdict = await gbModeratePhoto(env, ppBytesToB64(bytes), mediaType, 'memory');
     if (!verdict || !verdict.allow) return jsonResponse({ error: "That photo can't be an avatar" }, 422);
     const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
     const key = `av/${crypto.randomUUID()}.${ext}`;
@@ -18694,8 +18701,11 @@ async function handlePostcardSend(request, env, ctx) {
     try { bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0)); } catch { return jsonResponse({ error: 'Bad image data' }, 400); }
     if (bytes.length > 4 * 1024 * 1024) return jsonResponse({ error: 'Photo too large' }, 400);
     if (bytes.length < 500) return jsonResponse({ error: 'That image is too small' }, 400);
-    const verdict = await gbModeratePhoto(env, ppBytesToB64(bytes), mediaType);
-    if (!verdict || !verdict.allow) return jsonResponse({ error: "This photo can't go on a postcard" }, 422);
+    const verdict = await gbModeratePhoto(env, ppBytesToB64(bytes), mediaType, 'memory');
+    if (!verdict || !verdict.allow) {
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_photo_refused', { reason: verdict?.reason || 'not_allowed', bytes: bytes.length }));
+      return jsonResponse({ error: verdict?.reason ? "We couldn't check this photo right now — try again in a moment" : "This photo can't go on a postcard" }, 422);
+    }
 
     // The recipient's rails, AFTER the photo (go-live round 3: answered
     // first, a card with no photo was a free test of an @handle — "needs its
