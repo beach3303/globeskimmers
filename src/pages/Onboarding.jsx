@@ -5,16 +5,12 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { extractFirstName } from "@/lib/extractFirstName";
 import { inferProfileDefaults } from "@/lib/inferProfileDefaults";
-import { addStamp } from "@/lib/passport";
-import { countryCode } from "@/lib/countries";
-import { metersBetween } from "@/lib/passport";
 
 // Essential steps only — the rest is inferred or deferred.
 import LocationStep from "../components/onboarding/LocationStep";
 import HomeCountryStep from "../components/onboarding/HomeCountryStep";
 import PassportStep from "../components/onboarding/PassportStep";
 import FirstNameStep from "../components/onboarding/FirstNameStep";
-import UsernameStep from "../components/onboarding/UsernameStep";
 
 // Account-tied onboarding. The user is ALWAYS authenticated here (App.jsx's
 // forced gate guarantees a Supabase session). On the final step we write the
@@ -25,9 +21,9 @@ import UsernameStep from "../components/onboarding/UsernameStep";
 //   1. first name (skipped if we already know it from the provider),
 //   2. location (also grants the OS location permission early),
 //   3. home city (gives country + exact timezone for the home clock).
-// Since 2026-10-16 every new member also picks an @username, right after the first
-// name, with the birthday the worker needs before it hands out a username (founder:
-// "for everyone joining, require them to select a @handle"). Under 18 goes on without one.
+// The @username and the birthday moved OUT of onboarding on 2026-10-19 (founder: "yes"):
+// FinishPassport asks for them the first time something must be saved or shared — after a
+// new member has seen their trips become stamps (src/lib/passportGate.js).
 // Everything the old flow ASKED for is now INFERRED (currency / language /
 // temperature / distance unit — from home country + device locale, see
 // inferProfileDefaults) or DEFERRED (travel frequency / purpose / traveler
@@ -48,7 +44,6 @@ export default function OnboardingPage() {
   const steps = useMemo(() => {
     const list = [];
     if (!initialFirstName) list.push("first_name");
-    list.push("username");
     // v2 order (founder queue #1, 2026-09-29): the city first so page one can
     // render, then the passport explainer, then the location ask — by then the
     // traveler knows exactly why the app wants it (stamps are earned by being
@@ -120,33 +115,12 @@ export default function OnboardingPage() {
       } catch { /* last-resort: ignore */ }
     }
 
-    // Page one = the home-city origin stamp (meaning model: "make your
-    // passport"). No stamp without proof: it mints only when a GPS fix puts
-    // the traveler inside their home city (40 km of its centre); otherwise the
-    // Passport offers it later, at home. A failed mint never blocks the account.
-    try {
-      const pos = collected.home_city && collected.home_lat != null && collected.home_lng != null
-        ? await new Promise((res) => {
-            if (!navigator.geolocation) return res(null);
-            navigator.geolocation.getCurrentPosition(res, () => res(null), { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
-          })
-        : null;
-      if (pos && metersBetween(pos.coords.latitude, pos.coords.longitude, +collected.home_lat, +collected.home_lng) <= 40000) {
-        await addStamp({
-          kind: "city", entity_type: "origin", entity_id: `origin:${collected.home_city}`,
-          name: collected.home_city, city: collected.home_city,
-          country: collected.home_country || undefined,
-          cc: countryCode(collected.home_country || "") || undefined,
-          lat: collected.home_lat ?? undefined, lng: collected.home_lng ?? undefined,
-          visited_on: new Date().toISOString().slice(0, 10),
-          verified: "gps", origin: true,
-        });
-      }
-    } catch { /* the passport can mint page one later */ }
+    // Page one (the home-city origin stamp) is offered by the Passport later, at home — after the
+    // required birthday (2026-10-19), never from here.
 
     try { sessionStorage.setItem("gsk_review_toured", "1"); } catch { /* fine */ } // review account: one tour per launch
     await refreshProfile(); // so Layout's gate sees onboarding_completed = true
-    navigate(createPageUrl("Home"));
+    navigate(createPageUrl("Passport"));   // the first thing a new member sees: Upload photos / Stamp where I am
   };
 
   // Merge any answer, then advance — or finish on the last step.
@@ -164,9 +138,6 @@ export default function OnboardingPage() {
   switch (key) {
     case "first_name":
       content = <FirstNameStep defaultValue={initialFirstName} onNext={(d) => advance(d)} onBack={onBack} />;
-      break;
-    case "username":
-      content = <UsernameStep onNext={() => advance()} onBack={onBack} />;
       break;
     case "location":
       content = (
