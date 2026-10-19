@@ -2519,7 +2519,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - Verified: eslint + no-undef, build, boot-check; captured with the unread list and feed mocked.
 - **Activate:** `npm run ota` after the push (app only).
 
-## 2026-10-19 — Alerts outside the app (push), build 1.0.6 = iOS 1.0.5 (15) · Android 1.0.9 (12) (COMMITTED, awaiting push)
+## 2026-10-19 — Alerts outside the app (push), build 1.0.6 = iOS 1.0.5 (15) · Android 1.0.9 (12) (PUSHED — worker + migration live; store builds pending)
 - **Founder (10-19):** lock-screen / banner alerts for a postcard (with a line of its words; tap → that card; ten
   → one), a follow request, a comment on a photo, a guestbook signature; opt-in "inner circle stamped a place".
   Setup done the same evening: APNs key `K792MFVWCV` (team `6C6X2RV7CC`, file in ~/Desktop/push-keys), Firebase
