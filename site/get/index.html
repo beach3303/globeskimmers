@@ -43,15 +43,18 @@ p { font-size: 15.5px; line-height: 1.5; color: var(--ink-3); margin: 0 0 8px; }
   // here as ?src=card. A strict character check keeps it a plain label.
   var m = /[?&]src=([A-Za-z0-9_-]{1,32})/.exec(location.search);
   var src = m ? m[1] : "";
+  // The medium Play Console files the install under: print for the card, social for the
+  // platforms, referral for everything else (2026-10-19).
+  var medium = src === "card" ? "print" : /^(fb|ig|tiktok|yt|pinterest|threads)/.test(src) ? "social" : "referral";
   // App Store campaign link: paste the provider token (pt) from App Store
   // Connect → App Analytics → Campaigns to see downloads per source.
-  var APPLE_PT = "";
+  var APPLE_PT = "121139771";   // App Store Connect campaign provider token (2026-10-18)
   var ios = APPLE_PT && src
     ? "https://apps.apple.com/app/apple-store/id6753154199?pt=" + APPLE_PT + "&ct=" + encodeURIComponent(src) + "&mt=8"
     : "https://apps.apple.com/us/app/globeskimmers/id6753154199";
   // Google Play reads the referrer into Play Console's acquisition reports.
   var play = "https://play.google.com/store/apps/details?id=com.globeskimmers.app"
-    + (src ? "&referrer=" + encodeURIComponent("utm_source=" + src + "&utm_medium=print") : "");
+    + (src ? "&referrer=" + encodeURIComponent("utm_source=" + src + "&utm_medium=" + medium) : "");
   document.getElementById("ios").setAttribute("href", ios);
   document.getElementById("play").setAttribute("href", play);
   var ua = navigator.userAgent || "";
