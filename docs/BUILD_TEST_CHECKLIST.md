@@ -2464,3 +2464,26 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   the peak, 1.6× 3:2 with Golden Hour. Not verified live: the founder's cat through the memory prompt (needs a
   real send) — the prompt text allows "pets … homes and indoor scenes" by name.
 - **Activate:** push → the worker deploys itself; the editor reaches phones with `npm run ota`.
+
+## 2026-10-19 — Counting strangers: the campaign token, "Where did you hear about us?", the funnel (COMMITTED, awaiting push)
+- **Growth plan week 1, item 2.** The founder created App Store campaign "Lobster1" (10-18): provider token
+  `pt=121139771`. Apple shows a campaign only after 5 first-time installs — the empty Campaigns page is normal.
+- **Install links:** `site/get` sets `APPLE_PT`, and the Play referrer's medium is now per source (print for the card,
+  social for fb/ig/tiktok/yt/pinterest/threads, referral otherwise — it was print for everything). The worker's
+  `/go/ios` (share pages) sends `pt=121139771&ct=share&mt=8` — Apple counts a download only with BOTH, and `ct` is a
+  fixed code now, never the share's slug (per-share codes can't reach Apple's 5-download threshold).
+- **The honest source:** a new optional onboarding step **"Where did you hear about us?"** (`HeardFromStep.jsx`:
+  Facebook, TikTok, Instagram, YouTube, A friend or family, A group or an event, Somewhere else; Skip is a first-class
+  answer) between home country and the passport explainer. Saved to `public.profiles.heard_from` (migration
+  `20261019020000_profiles_heard_from.sql`) and logged as `signed_up { source }` — 'unknown' when skipped, never a guess.
+- **People, not sessions:** `ANALYTICS_QUERIES.active_users` / `active_users_by_day_30d` count
+  `COALESCE(user_id, anon_id, session_id)` and drop the worker's own `session_id='server'` row (it counted as one
+  person); `mau_accounts` added (signed-in people, 30 days).
+- **The funnel** (`/admin/activity-overview` → `funnel`; Admin → Activity overview, a card at the top): accounts
+  (profiles count), ever stamped (distinct stampers in the 12-month read), stamped · 30d, sent a postcard · 30d, new
+  accounts · 30d and how many stamped within 7 days of joining (the plan's 40% target shown beside it), and the
+  heard-about-us answers. People counts only. Baseline 10-18: 80 / 6 / 6.
+- Verified: node --check; eslint + no-undef, build, boot-check; captured Admin → Activity overview with the reply
+  mocked (80 · 6 · 6 · 2; 9 new, 2 activated = 22% vs target 40%; A friend 3 · Facebook 1). The onboarding step
+  couldn't be captured as the demo account (already onboarded → Home); it uses the standard step layout.
+- **Activate:** push → worker + site + migration deploy themselves; the step and the card reach phones with `npm run ota`.
