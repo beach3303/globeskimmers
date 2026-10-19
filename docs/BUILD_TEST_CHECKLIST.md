@@ -2346,7 +2346,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   the Circle screen with results, the Settings row.
 - **Activate:** push → worker + migration deploy themselves; the screens reach phones with `npm run ota`.
 
-## 2026-10-18 (late night) — Postcards to anyone on the app (Step A) (COMMITTED, awaiting push)
+## 2026-10-18 (late night) — Postcards to anyone on the app (Step A) (PUSHED)
 - **Founder:** "Can we send postcards to people who we are not friends with or if they don't have handle yet"
   → order agreed: Step A (anyone on the app) → Step B (an email that waits) → our own photo filters.
 - **Already true:** an adult could postcard ANY @handle; only the composer never offered anyone outside the circle.
