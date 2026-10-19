@@ -2913,17 +2913,21 @@ const ANALYTICS_QUERIES = {
   // ── Growth & retention ────────────────────────────────────────────────────
   // Unique active users use COALESCE(user_id, session_id) so anonymous devices
   // count too. DAU/WAU/MAU in one row.
+  // People, not sessions (growth plan, 2026-10-19): an account, else the device before sign-in
+  // (anon_id), else the session; the worker's own 'server' row never counts as a person.
   active_users: `
     SELECT
-      COUNT(DISTINCT CASE WHEN ts >= strftime('%s','now','-1 day')  THEN COALESCE(user_id, session_id) END) AS dau,
-      COUNT(DISTINCT CASE WHEN ts >= strftime('%s','now','-7 days')  THEN COALESCE(user_id, session_id) END) AS wau,
-      COUNT(DISTINCT CASE WHEN ts >= strftime('%s','now','-30 days') THEN COALESCE(user_id, session_id) END) AS mau
+      COUNT(DISTINCT CASE WHEN ts >= strftime('%s','now','-1 day')  THEN COALESCE(user_id, anon_id, session_id) END) AS dau,
+      COUNT(DISTINCT CASE WHEN ts >= strftime('%s','now','-7 days')  THEN COALESCE(user_id, anon_id, session_id) END) AS wau,
+      COUNT(DISTINCT CASE WHEN ts >= strftime('%s','now','-30 days') THEN COALESCE(user_id, anon_id, session_id) END) AS mau,
+      COUNT(DISTINCT CASE WHEN ts >= strftime('%s','now','-30 days') AND user_id IS NOT NULL THEN user_id END) AS mau_accounts
     FROM events
+    WHERE session_id <> 'server'
   `,
   active_users_by_day_30d: `
-    SELECT date(ts,'unixepoch') AS day, COUNT(DISTINCT COALESCE(user_id, session_id)) AS active
+    SELECT date(ts,'unixepoch') AS day, COUNT(DISTINCT COALESCE(user_id, anon_id, session_id)) AS active
     FROM events
-    WHERE ts >= strftime('%s','now','-30 days')
+    WHERE ts >= strftime('%s','now','-30 days') AND session_id <> 'server'
     GROUP BY day
     ORDER BY day
   `,
@@ -15569,7 +15573,8 @@ function handleStoreGo(request, env, ctx) {
   const src = String(u.searchParams.get('src') || '').replace(/[^a-z0-9]/gi, '').slice(0, 24);
   const dest = store === 'android'
     ? `${PP_PLAY_URL}&referrer=${encodeURIComponent(`utm_source=share&utm_content=${src}`)}`
-    : `${PP_IOS_URL}?ct=share-${src || 'unknown'}`;
+    // Apple counts a download only with BOTH pt and ct (2026-10-19); ct is a fixed code, never the slug.
+    : `${PP_IOS_URL}?pt=121139771&ct=share&mt=8`;
   if (ctx) ctx.waitUntil(gbLogEvent(env, 'share_landing_store', { slug: src, store: store === 'android' ? 'android' : 'ios' }));
   return new Response(null, { status: 302, headers: { Location: dest, 'Cache-Control': 'no-store' } });
 }
@@ -26175,7 +26180,7 @@ async function handleAdminActivityOverview(request, env) {
       return m ? Number(m[1]) : null;
     };
     const [st, gb, dp, on] = await Promise.all([
-      readAll('passport_stamps?select=created_at,kind,city,country,name'),
+      readAll('passport_stamps?select=created_at,kind,city,country,name,user_id'),
       readAll('guestbook_entries?select=created_at,is_doodle'),
       readAll('place_dishes?select=created_at,kind'),
       readAll('owner_notes?select=created_at'),
@@ -26217,7 +26222,36 @@ async function handleAdminActivityOverview(request, env) {
     };
     const attractionish = st.rows.filter((r) => r.kind !== 'country' && r.kind !== 'airport');
     const series = (map) => Object.entries(map).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([key, v]) => ({ key, ...v }));
+    // The funnel (growth plan, 2026-10-19): accounts → ever stamped → stamped in 30 days → sent a
+    // postcard in 30 days; new accounts (30 days) that stamped within 7 days of joining; and where
+    // new members said they heard about us. Counts of people, never names.
+    const funnel = await (async () => {
+      const pub = { headers: { 'Accept-Profile': 'public' } };
+      const j = async (r) => { try { return r && r.ok ? await r.json() : []; } catch { return []; } };
+      const d30 = new Date(Date.now() - 30 * 86400000).toISOString();
+      const [acq, aq, pq, hq] = await Promise.all([
+        gbRest(env, 'profiles?select=id&limit=1', { headers: { 'Accept-Profile': 'public', Prefer: 'count=exact' } }),
+        gbRest(env, `profiles?select=id,created_at&created_at=gte.${encodeURIComponent(d30)}&limit=2000`, pub),
+        gbRest(env, `postcards?select=sender_id&created_at=gte.${encodeURIComponent(d30)}&limit=5000`, {}),
+        gbRest(env, 'profiles?select=heard_from&heard_from=not.is.null&limit=5000', pub),
+      ]);
+      const accounts = (() => { const m = String(acq.headers.get('content-range') || '').match(/\/(\d+)$/); return m ? Number(m[1]) : null; })();
+      const firstStamp = {};
+      for (const r of st.rows) { const u = r.user_id; if (u && (!firstStamp[u] || r.created_at < firstStamp[u])) firstStamp[u] = r.created_at; }
+      const stamped30 = new Set(st.rows.filter((r) => r.user_id && r.created_at >= d30).map((r) => r.user_id)).size;
+      const newAcc = await j(aq);
+      const activated = newAcc.filter((p) => firstStamp[p.id] && (Date.parse(firstStamp[p.id]) - Date.parse(p.created_at)) <= 7 * 86400000).length;
+      const bySource = {};
+      for (const r of await j(hq)) { const k = String(r.heard_from || '').slice(0, 24); if (k) bySource[k] = (bySource[k] || 0) + 1; }
+      return {
+        accounts, ever_stamped: Object.keys(firstStamp).length, stamped_30d: stamped30,
+        sent_postcard_30d: new Set((await j(pq)).map((r) => r.sender_id)).size,
+        new_accounts_30d: newAcc.length, activated_7d: activated,
+        by_source: Object.entries(bySource).sort((a, b) => b[1] - a[1]).map(([source, n]) => ({ source, n })),
+      };
+    })().catch(() => null);
     return jsonResponse({
+      funnel,
       since,
       truncated: !!(st.truncated || gb.truncated || dp.truncated || on.truncated),
       allTime: { stamps: stN, guestbook: gbN, dish_photos: dpN, owner_messages: onN },
