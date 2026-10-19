@@ -2509,3 +2509,12 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   dev server (Eiffel Tower, Paris · France, Oct 19, 2026, VERIFIED, link). Not verified: a real stamp through the
   sheet on a phone; previews fetched by Messenger/WhatsApp bots (check after the push with a shared link).
 - **Activate:** push → the worker deploys itself; the sheet reaches phones with `npm run ota`.
+
+## 2026-10-19 — Mailbox: the doors on top, the activity folded (COMMITTED, awaiting push)
+- **Founder:** "quite a scroll to reach the bottom of mailbox to open postcard and postcard box".
+- **App:** `PostcardBoxRow` and `CityBoardsRow` moved above the activity; `ActivityList` shows 4 rows with
+  "Show N more" (cap 30); the Mailbox folds every "<board> now shows N of your photos" line into one — "Your photos
+  now hang on 7 boards — Grand Canyon Village, Stone Mountain, Georgia and 4 more. Take any down from your album."
+  (the Find people heads-up and a lone board line stay as they are).
+- Verified: eslint + no-undef, build, boot-check; captured with the unread list and feed mocked.
+- **Activate:** `npm run ota` after the push (app only).

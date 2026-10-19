@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-10-18
+Last updated: 2026-10-19
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -837,6 +837,28 @@ Money path (section 4): keepsakes first (book, cosmetic extras) → sponsors at 
 courting Filipino travelers, luggage partners, a city's own board, the Burgundy Seal) → event seasons and a
 Disneyland Resort pilot at ~25–100K → the park rate card's dream tiers at 100–250K+. New 90 days: 2026-10-19 to
 2027-01-17 (section 10).
+
+## Alerts outside the app (push) — founder asks, 2026-10-19
+
+Asked while reviewing the Mailbox: a postcard's recipient gets a lock-screen / banner alert; the alert
+may preview the postcard's words (the phone's own preview setting decides); tapping it opens THAT
+postcard; ten new postcards collapse into one alert; also alerts for a follow request, a comment on
+one of their photos, a guestbook signature on their passport, and — opt-in in Settings — "someone in
+my inner circle stamped a place". Plus place-triggered nudges: at a border crossing, inside an
+airport / after landing, at one of the ~1,000 icons, at a filming spot ("You're at one of the 1,000
+most iconic places — stamp it to collect the memory?").
+
+Claude's answer the same day: the social alerts are the growth plan's build 1.0.6 (Engine 2) and
+need no new decision — the rules already agreed: ask for permission in context (after a first
+postcard or follow), postcards / reactions / requests / signatures at once, a friend's stamp only from
+mutual friends and only as a daily digest or 6+ hours later (never where someone is right now), a
+switch per kind in Settings, a weekly cap, quiet hours, nothing to teens 21:00–07:00 and no social
+alerts to teens at all. Founder one-time setup: an APNs key (.p8) from the Apple Developer portal and
+a Firebase project (google-services.json) for Android, then `npx wrangler secret put` for each.
+Place-triggered nudges are a separate, later decision: they need "Always" location on iPhone and
+background location on Android (a Play declaration form + prominent disclosure), geofences for the
+20 nearest icons refreshed as the member moves, a privacy-policy line, and never for teens. Airport
+and border nudges can come first through significant-change location, which is cheaper on battery.
 
 ## Website (globeskimmers.io)
 
