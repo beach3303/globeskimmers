@@ -2556,8 +2556,8 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   cap, gone-token deletion, bad id, quiet-hour maths); the APNs JWT verifies against the key's own public half
   (64-byte raw signature, cached); a REAL FCM OAuth exchange issued a token; eslint + no-undef; build;
   boot-check ✅; `npx cap sync` registers the plugin on both platforms; Android `assembleDebug` BUILD SUCCESSFUL;
-  iOS launch check (iOS 27 runtime): iPad Air ✓, iPhone ✓ (first run; a second run on the fixed bundle was
-  started); captured: Settings → Alerts, a postcard opened by id.
+  iOS launch check (iOS 27 runtime), twice — the second on the fixed bundle: iPad Air ✓, iPhone 18 Pro ✓ both
+  times; captured: Settings → Alerts, a postcard opened by id.
   NOT verified: a real knock on a phone — needs the secrets, the store build and a device (the admin's
   /push/test is for that moment).
 - **Activate:** founder: `npx wrangler secret put APNS_KEY_P8 < ~/Desktop/push-keys/AuthKey_K792MFVWCV.p8` and
