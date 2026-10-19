@@ -2487,3 +2487,25 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   mocked (80 · 6 · 6 · 2; 9 new, 2 activated = 22% vs target 40%; A friend 3 · Facebook 1). The onboarding step
   couldn't be captured as the demo account (already onboarded → Home); it uses the standard step layout.
 - **Activate:** push → worker + site + migration deploy themselves; the step and the card reach phones with `npm run ota`.
+
+## 2026-10-19 — Shares that land: /p/ link previews, the stamp-earned share card (COMMITTED, awaiting push)
+- **Growth plan week 2, item 3.** Where the first audience shares — Messenger, WhatsApp, iMessage, Facebook and
+  Instagram Stories — a shared passport link showed no preview, and a verified stamp ended in a toast.
+- **Worker `/p/<slug>`:** `og:title` ("<First name>’s Virtual Passport · GlobeSkimmers", or "A Virtual Passport on
+  GlobeSkimmers" when it reads private), `og:description` (the stamp · country · city counts, or the promise),
+  `og:image` = the site's own `img/og.jpg` (1200×630 — never a member's photo), `og:url`, `og:site_name`,
+  `twitter:card`, `<meta name="robots" content="noindex">`, and the Smart App Banner (`apple-itunes-app` with the
+  `globeskimmers://passport/view` argument). The `/t/` page is unchanged (it shares the old title string).
+- **App:** `stampCard(stamp, { presetId, artSrc, link })` in `src/lib/shareCanvas.js` — a 1080×1920 story: the stamp
+  art from the worker (CORS, skipped if it won't load), a solid VERIFIED ✓ pill for a proven stamp, the place, city
+  · country · date, "I was here", the brand line "My Virtual Passport · verified stamps carry proof" and
+  `globeskimmers.io/p/<slug>`; everything inside Meta's story safe zone. `StampEarnedSheet.jsx` opens the moment a
+  stamp lands from the Passport's stamp modal (Stamp where I am, Upload photos — once, after the last place of a
+  queue): adults only, verified stamps only, never a sensitive place (the worker starts those private) or a
+  place of respect; "Share this stamp" → the phone's share sheet with the card (a link share where files can't be
+  shared, a copy where nothing can); logs `stamp_earned_sheet` / `stamp_share { how }`. Done closes it.
+- **Wording rule kept:** the footer says "verified stamps carry proof", never "only by being there".
+- Verified: node --check; eslint + no-undef, build, boot-check; the card rendered through the real library in the
+  dev server (Eiffel Tower, Paris · France, Oct 19, 2026, VERIFIED, link). Not verified: a real stamp through the
+  sheet on a phone; previews fetched by Messenger/WhatsApp bots (check after the push with a shared link).
+- **Activate:** push → the worker deploys itself; the sheet reaches phones with `npm run ota`.
