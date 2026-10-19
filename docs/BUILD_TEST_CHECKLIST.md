@@ -2618,3 +2618,37 @@ did not get a notification".
   the card's single Reply, the card's ••• (Delete, Unfollow, Report, Block), the row's ••• (Reply first), the
   delete step.
 - **Activate:** push, then `npm run ota`; then Settings → Alerts → **Send a test** on the founder's phone.
+
+## 2026-10-19 — Telegrams: three words by wire, no photo (COMMITTED, not pushed)
+
+Founder: "another form of messaging … telegram … just messaging without photos … short message to individual
+handles and recipient can reply … realistic and super cool"; "only allowing 3 words … you can send as much
+telegrams as you want"; "3 words max! make it count, 4 cents per extra word design but we won't really charge
+them". It also answers "allow for reply to be sent even without a photo": a postcard's Reply now asks "a
+postcard back or a telegram back", so postcards keep their photo and there is one words-only form, not two.
+
+- **Rules (worker `tgClean` / `tgWordCount`, mirrored in `src/lib/telegram.js`).** Capitals; letters, digits,
+  plain punctuation; a full stop or ! → STOP (free); links and emoji dropped; THREE words max; a word past 15
+  letters counts as two (the old telegraph rule); ≤ 120 characters.
+- **Worker.** `/telegrams/send { to_handle | reply_to, body }`: adults only (sender and recipient), words through
+  `gbModerate`, a block or a minor recipient answered `{ ok: true }` and stored nowhere, no finished passport =
+  409; five a day to people who don't follow you (`tgs:`; a reply is exempt), twenty a minute (`tgm:`), no other
+  limit. `reply_to` = a telegram or postcard addressed to the caller → its sender. `/telegrams/delete` (recipient,
+  soft). Feed rows `{ type: 'telegram', id, body, reply, from_new, by }` + feature `telegrams`; unread rows
+  `{ type: 'telegram', telegram_id }`; push kind `telegrams` (the Postcards switch, its own fold: "Telegram from
+  Mary", body = the words, route `/Mailbox?tg=<id>`); report kind `telegram`; deletion + orphan scan.
+  Migration `20261019190000_telegrams.sql`.
+- **App.** `TelegramPaper` (perforated buff blank, wires + bird, bolt seal, CLASS OF SERVICE, NO./CHECK/FILED,
+  words on typewriter tape in Special Elite, red RECEIVED stamp, TOLLS: "THREE WORDS MAX!", first 3 FREE, each
+  extra word 4¢ — stamped ON THE HOUSE, Morse rule spelling GLOBESKIMMERS). `TelegramCompose` (the dark telegraph
+  office: pick a @username or type one, type on the blank, a three-box meter, "On the wire" preview, "3 WORDS MAX!
+  MAKE IT COUNT.", Wire it; over three it says "Cut 1 to wire it" and the 4¢ line turns red). `TelegramCard`
+  (one Reply = a telegram back; ••• = Delete / Report / Block). `ReplyWays` on a postcard's Reply (Mailbox and the
+  postcard box). Mailbox: a Telegram button under Postcard; "Mary sent you a telegram"; tapping a postcard or
+  telegram row brings its card into view; `?tg=` from an alert does too. Settings switch → "Postcards and
+  telegrams". Privacy policy names telegrams (site).
+- Verified: `node --check`; the word rules on six samples; eslint + no-undef; build; boot-check ✅; captured
+  (mocked feed): the Mailbox head with both buttons, a received telegram, the writer at 3/3 and at 4/3, the
+  reply chooser.
+  NOT verified: a real send / reply / delete against production (needs the push).
+- **Activate:** push (worker + migration + site deploy themselves), then `npm run ota`.
