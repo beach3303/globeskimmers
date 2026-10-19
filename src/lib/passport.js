@@ -412,8 +412,8 @@ export async function getAgeInfo() {
 // Send a postcard: image (data URL from resizePhoto), message, the place
 // line, optional dish meta, and either to_handle, to_city ({ city, country }:
 // that city's board, City Board) or nothing (= followers).
-export async function sendPostcard({ image, message, place_name, city, country, region, meta, to_handle, to_user_id, to_city, anon }) {
-  const { data, error } = await callWorker('postcards/send', { image, message, place_name, city, country, ...(region ? { region } : {}), meta, to_handle, ...(to_user_id ? { to_user_id } : {}), to_city, ...(anon ? { anon: true } : {}) });
+export async function sendPostcard({ image, message, place_name, city, country, region, meta, to_handle, to_user_id, to_email, to_city, anon }) {
+  const { data, error } = await callWorker('postcards/send', { image, message, place_name, city, country, ...(region ? { region } : {}), meta, to_handle, ...(to_user_id ? { to_user_id } : {}), ...(to_email ? { to_email } : {}), to_city, ...(anon ? { anon: true } : {}) });
   return { data, error: error || data?.error || null };
 }
 // A city's board (City Board, 2026-10-14): postcards from travelers who were really

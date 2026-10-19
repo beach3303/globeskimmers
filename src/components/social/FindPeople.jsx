@@ -45,7 +45,9 @@ const RELATION = { requested: 'Requested', following: 'Following', friends: 'Fri
 
 // With onPick (the postcard composer, 2026-10-18) every row ends in a Choose button that
 // calls onPick(person) instead of following.
-export default function FindPeople({ accent = undefined, cloth = undefined, onFollowed = undefined, onPick = undefined,
+// onPickEmail (the composer too): an email nobody uses yet offers "Send it anyway" — the
+// postcard waits for them — instead of the invite button.
+export default function FindPeople({ accent = undefined, cloth = undefined, onFollowed = undefined, onPick = undefined, onPickEmail = undefined,
   label = 'Find people', placeholder = 'name, @username or email', style = undefined, className = undefined }) {
   const circle = useCircle();
   const auto = useId();
@@ -123,7 +125,15 @@ export default function FindPeople({ accent = undefined, cloth = undefined, onFo
               <p style={{ margin: 0, fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
                 {mode === 'email' ? 'No member uses that email yet.' : 'No one by that name. Try their @username, or the email they signed up with.'}
               </p>
-              {mode === 'email' ? <InviteButton label="Invite them" color={color} style={{ marginTop: 10 }} /> : null}
+              {mode === 'email' ? (typeof onPickEmail === 'function' ? (
+                <>
+                  <button type="button" onClick={() => onPickEmail(q.trim().toLowerCase())}
+                    style={{ marginTop: 10, minHeight: 44, padding: '0 16px', borderRadius: 12, border: `1px solid ${color}`, background: color, color: NEUTRAL.white, fontSize: fs(13.5), fontWeight: 600, cursor: 'pointer' }}>
+                    Send it anyway — it waits for them
+                  </button>
+                  <p style={{ margin: '8px 0 0', fontSize: fs(11.5), lineHeight: 1.4, color: NEUTRAL.ink3 }}>They get one email with a link to join. The card opens the moment they sign up with that address.</p>
+                </>
+              ) : <InviteButton label="Invite them" color={color} style={{ marginTop: 10 }} />) : null}
             </div>
           ) : (
             <ul style={{ listStyle: 'none', margin: 0, padding: '2px 0', background: NEUTRAL.white, border: `1px solid ${fieldLine}`, borderRadius: 14 }}>

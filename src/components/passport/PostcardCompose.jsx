@@ -200,7 +200,8 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
       region: board?.region || preset?.region || undefined,
       meta: dish ? { dish } : undefined,
       to_handle: address || undefined,
-      to_user_id: toOther ? toOther.user_id : undefined,
+      to_user_id: toOther && !toOther.email ? toOther.user_id : undefined,
+      to_email: toOther && toOther.email ? toOther.email : undefined,
       to_city: board || undefined,
       anon: board && sign === "anon" ? true : undefined,
     });
@@ -210,7 +211,9 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     if (error) { showToast(workerMessage(error, "Couldn't send the postcard. Try again."), "error"); return; }
     showToast(board
       ? (sign === "anon" ? `Posted to ${board.city}’s city board, no name on it` : `Posted to ${board.city}’s city board`)
-      : address ? `Postcard sent to @${address}` : toOther ? `Postcard sent to ${toOther.handle ? `@${toOther.handle}` : toOther.name}` : "Postcard sent to everyone who follows you", "success");
+      : address ? `Postcard sent to @${address}`
+        : toOther && data?.waiting ? (data.emailed ? `Saved for ${toOther.email} — we emailed them a link to join` : `Saved for ${toOther.email} — it opens when they join`)
+          : toOther ? `Postcard sent to ${toOther.handle ? `@${toOther.handle}` : toOther.name}` : "Postcard sent to everyone who follows you", "success");
     // The pin ask (founder, 2026-10-15): a direct card from a city the sender
     // verifiably stamped may hang on that city's board too — their choice,
     // asked now, while the card is in hand. The mail itself is already away.
@@ -386,7 +389,8 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
             </div>
           )}
           {!board && !fixedTo && picking ? (
-            <FindPeople label="Send to someone else" onPick={(p) => { setOther(p); setTo(""); setPicking(false); }} style={{ marginTop: 10 }} />
+            <FindPeople label="Send to someone else" onPick={(p) => { setOther(p); setTo(""); setPicking(false); }}
+              onPickEmail={(email) => { setOther({ email, name: email, handle: null, user_id: null }); setTo(""); setPicking(false); }} style={{ marginTop: 10 }} />
           ) : null}
 
           {nowhere || fixedBlocked ? (
