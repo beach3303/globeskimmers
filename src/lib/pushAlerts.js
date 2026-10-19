@@ -11,6 +11,8 @@
 //   askForAlerts()                the in-context ask; resolves the permission ('granted' …)
 //   pushPermission()              'granted' | 'denied' | 'prompt' | 'prompt-with-rationale' | 'unavailable'
 //   unregisterPush()              on sign-out: this phone stops getting this account's alerts
+//   testAlerts()                  Settings → Alerts "Send a test": re-registers, then knocks once
+//                                 → { sent, phones, error }
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import { PushNotifications } from '@capacitor/push-notifications';
@@ -21,6 +23,7 @@ const worker = async (route, body) => (await import('@/lib/callWorker')).callWor
 const KEY = 'gs_push_token';
 const native = () => Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('PushNotifications');
 let listening = false;
+let onRegistered = null; // testAlerts waits here until the worker has this phone's token
 
 async function versionLabel() {
   try { const i = await App.getInfo(); return `${i.version} (${i.build})`; } catch { return null; }
@@ -38,6 +41,7 @@ export function attachPushListeners(onRoute) {
     if (!value) return;
     try { localStorage.setItem(KEY, value); } catch { /* storage off */ }
     await worker('push/register', { token: value, platform: Capacitor.getPlatform(), app_version: await versionLabel() }).catch(() => {});
+    if (onRegistered) { const done = onRegistered; onRegistered = null; done(); }
   });
   PushNotifications.addListener('registrationError', () => { /* no token this time; the next open tries again */ });
   PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
@@ -74,4 +78,19 @@ export async function unregisterPush() {
   let t = null;
   try { t = localStorage.getItem(KEY); localStorage.removeItem(KEY); } catch { /* storage off */ }
   if (t) await worker('push/unregister', { token: t }).catch(() => {});
+}
+
+export async function testAlerts() {
+  if (!native()) return { sent: 0, phones: 0, error: 'unavailable' };
+  try {
+    if ((await PushNotifications.checkPermissions()).receive !== 'granted') return { sent: 0, phones: 0, error: 'not_allowed' };
+    // Register again first, so a phone whose token never reached us is fixed by the test itself.
+    await new Promise((resolve) => {
+      onRegistered = resolve;
+      setTimeout(() => { if (onRegistered === resolve) onRegistered = null; resolve(); }, 6000);
+      PushNotifications.register().catch(() => resolve());
+    });
+    const { data, error } = await worker('push/test', {});
+    return { sent: Number(data?.sent) || 0, phones: Number(data?.phones) || 0, error: error || data?.error || null };
+  } catch { return { sent: 0, phones: 0, error: 'failed' }; }
 }

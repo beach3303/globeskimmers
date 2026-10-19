@@ -19699,15 +19699,23 @@ async function fcmSend(env, token, msg) {
   } catch (e) { return { ok: false, reason: e?.name === 'TimeoutError' ? 'timeout' : 'network' }; }
 }
 // Every phone this member has the app on. A token the store reports gone is forgotten.
-async function pushDeliver(env, uid, msg) {
+// out (optional) gets { phones, reasons }: how many phones the member has and why any failed —
+// never a token. The outcome is logged so a missing alert can be traced (2026-10-19).
+async function pushDeliver(env, uid, msg, out = null) {
   const q = await gbRest(env, `push_tokens?user_id=eq.${uid}&select=token,platform&limit=10`, {}).catch(() => null);
-  if (!q || !q.ok) return 0;
+  if (!q || !q.ok) { if (out) { out.phones = null; out.reasons = ['tokens_unreadable']; } return 0; }
+  const rows = await q.json();
   let sent = 0;
-  for (const t of await q.json()) {
+  const reasons = [];
+  for (const t of rows) {
     const r = t.platform === 'ios' ? await apnsSend(env, t.token, msg) : await fcmSend(env, t.token, msg);
     if (r.ok) sent += 1;
-    else if (r.gone) await gbRest(env, `push_tokens?token=eq.${encodeURIComponent(t.token)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => {});
+    else {
+      reasons.push(`${t.platform}:${r.reason || 'failed'}`);
+      if (r.gone) await gbRest(env, `push_tokens?token=eq.${encodeURIComponent(t.token)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => {});
+    }
   }
+  if (out) { out.phones = rows.length; out.reasons = reasons; }
   return sent;
 }
 function pushLocalHour(tz) {
@@ -19742,10 +19750,15 @@ async function pushNotify(env, uid, kind, make, opts = {}) {
       let q = []; try { q = JSON.parse((await kv.get(qk)) || '[]'); } catch { q = []; }
       q = q.filter((x) => x.kind !== kind); q.push({ kind, title: msg.title, body: msg.body, route: msg.route || '', at: Date.now() });
       await kv.put(qk, JSON.stringify(q.slice(-10)), { expirationTtl: 36 * 3600 }).catch(() => {});
+      await gbLogEvent(env, 'push_held', { kind, to: String(uid).slice(0, 8) });
       return;
     }
-    const sent = await pushDeliver(env, uid, msg);
+    const out = {};
+    const sent = await pushDeliver(env, uid, msg, out);
     if (sent && kv) await kv.put(capKey, String(used + 1), { expirationTtl: 8 * 86400 }).catch(() => {});
+    // The trace (2026-10-19): kind, how many phones, how many took it, and Apple's or Google's
+    // reason for any that didn't. The member is named only by the first 8 characters of the id.
+    await gbLogEvent(env, 'push_outcome', { kind, to: String(uid).slice(0, 8), phones: out.phones, sent, reasons: out.reasons && out.reasons.length ? out.reasons : undefined, n });
   } catch { /* an alert is only a knock; the Mailbox has the news */ }
 }
 // The hourly cron: what waited through quiet hours goes out once the member's morning has
@@ -19833,10 +19846,19 @@ async function handlePushTest(request, env) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
-    if (!ADMIN_EMAILS_WORKER.includes(String(user.email || '').trim().toLowerCase())) return jsonResponse({ error: 'Forbidden' }, 403);
-    const sent = await pushDeliver(env, user.id, { kind: 'news', title: 'GlobeSkimmers', body: 'Alerts are working on this phone 🛂', route: '/Mailbox' });
-    const q = await gbRest(env, `push_tokens?user_id=eq.${user.id}&select=platform`, {}).catch(() => null);
-    return jsonResponse({ sent, phones: q && q.ok ? (await q.json()).map((r) => r.platform) : [], keys: { apns: !!env.APNS_KEY_P8, fcm: !!env.FCM_SERVICE_ACCOUNT } });
+    // Any adult can knock on their own phones from Settings → Alerts (2026-10-19), three times an
+    // hour; an admin also sees which keys the worker holds.
+    const admin = ADMIN_EMAILS_WORKER.includes(String(user.email || '').trim().toLowerCase());
+    if (!admin) {
+      const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+      if (!pcAdultRow(sp)) return jsonResponse({ error: 'Not available' }, 403);
+      const n = await gbDayCount(env, `pusht:${user.id}:${new Date().getUTCHours()}`);
+      if (n != null && n > 3) return jsonResponse({ error: 'That’s three tests this hour. Try again later.' }, 429);
+    }
+    const out = {};
+    const sent = await pushDeliver(env, user.id, { kind: 'news', title: 'GlobeSkimmers', body: 'Alerts are working on this phone 🛂', route: '/Mailbox' }, out);
+    await gbLogEvent(env, 'push_outcome', { kind: 'test', to: String(user.id).slice(0, 8), phones: out.phones, sent, reasons: out.reasons && out.reasons.length ? out.reasons : undefined });
+    return jsonResponse({ sent, phones: out.phones || 0, ...(admin ? { reasons: out.reasons || [], keys: { apns: !!env.APNS_KEY_P8, fcm: !!env.FCM_SERVICE_ACCOUNT } } : {}) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 

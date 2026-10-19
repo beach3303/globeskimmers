@@ -8,7 +8,7 @@ import { createPageUrl } from "@/utils";
 import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2, UserX, LayoutGrid, UserCheck, Images, PenLine, Lock, Bell } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { setAllStampsVisibility, getPrivacy, getShareLink } from "@/lib/passport";
-import { pushPermission, askForAlerts } from "@/lib/pushAlerts";
+import { pushPermission, askForAlerts, testAlerts } from "@/lib/pushAlerts";
 import { useHomeZoneStyle, setHomeZoneStyle } from "@/components/redesign/Zone";
 import ContactUsModal from "../components/ContactUsModal";
 import RefreshAccessModal from "../components/RefreshAccessModal";
@@ -600,6 +600,18 @@ export default function SettingsPage() {
   // Alerts on this phone (push, 2026-10-19): what the phone says, and the ask.
   const [pushPerm, setPushPerm] = useState("unknown");
   useEffect(() => { pushPermission().then(setPushPerm); }, []);
+  // "Send a test" (2026-10-19): this phone signs up again, then gets one knock.
+  const [testing, setTesting] = useState(false);
+  const sendTest = async () => {
+    if (testing) return;
+    setTesting(true);
+    const r = await testAlerts();
+    setTesting(false);
+    if (r.sent > 0) showToast("Sent. Look for it on your lock screen.", "success");
+    else if (r.error && r.error !== "failed" && r.error !== "not_allowed") showToast(r.error, "error");
+    else if (!r.phones) showToast("This phone couldn’t sign up for alerts yet. Close the app, open it again, and try once more.", "error");
+    else showToast("Your phone is signed up, but the alert didn’t go through. We’ve noted it and will look into it.", "error");
+  };
   // The bulk mover and the circle switch keep their own little confirms.
   const [bulkPick, setBulkPick] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -1230,7 +1242,9 @@ export default function SettingsPage() {
                 : "A knock when a postcard or a follow arrives. The Mailbox keeps the record either way."}
               control={{ node: (pushPerm === "prompt" || pushPerm === "prompt-with-rationale")
                 ? <button type="button" onClick={async () => setPushPerm(await askForAlerts())} className="h-10 px-4 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>Turn on</button>
-                : <span style={{ fontSize: "calc(12.5px*var(--fs,1))", color: pushPerm === "granted" ? TEAL_DEEP : "#736657", fontWeight: 600 }}>{pushPerm === "granted" ? "On" : pushPerm === "denied" ? "Off" : ""}</span> }}
+                : pushPerm === "granted"
+                  ? <button type="button" onClick={sendTest} disabled={testing} aria-busy={testing || undefined} className="h-10 px-4 rounded-xl font-semibold disabled:opacity-60" style={{ background: "#fff", color: TEAL_DEEP, border: `1px solid ${TEAL_DEEP}`, fontSize: "calc(12.5px*var(--fs,1))" }}>{testing ? "Sending…" : "Send a test"}</button>
+                  : <span style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#736657", fontWeight: 600 }}>{pushPerm === "denied" ? "Off" : ""}</span> }}
             />
             {dials && [
               ["alert_postcards", "Postcards", "Someone sent you a postcard"],
