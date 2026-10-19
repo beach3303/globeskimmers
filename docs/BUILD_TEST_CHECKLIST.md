@@ -2593,7 +2593,7 @@ notifications are viewable."
   NOT verified: a real delete and a real reply on a phone (needs the OTA).
 - **Activate:** push (worker + migration deploy themselves), then the founder's `npm run ota`. No native build.
 
-## 2026-10-19 — Postcard ••• menus (Delete / Reply), the alert trace and "Send a test" (COMMITTED, not pushed)
+## 2026-10-19 — Postcard ••• menus (Delete / Reply), the alert trace and "Send a test" (PUSHED — main 271b712 / 7f6d159, deploys green; OTA pending)
 
 Founder: "allow user to delete postcard from the mailbox also, by user clicking the 3 dots … delete and reply
 from there also" and "no duplicate task please in one section"; then "a reply to post card was sent to me and i
@@ -2619,7 +2619,7 @@ did not get a notification".
   delete step.
 - **Activate:** push, then `npm run ota`; then Settings → Alerts → **Send a test** on the founder's phone.
 
-## 2026-10-19 — Telegrams: three words by wire, no photo (COMMITTED, not pushed)
+## 2026-10-19 — Telegrams: three words by wire, no photo (PUSHED — main 271b712 / 7f6d159, deploys green; OTA pending)
 
 Founder: "another form of messaging … telegram … just messaging without photos … short message to individual
 handles and recipient can reply … realistic and super cool"; "only allowing 3 words … you can send as much
@@ -2657,7 +2657,7 @@ postcard back or a telegram back", so postcards keep their photo and there is on
   NOT verified: a real send / reply / delete against production (needs the push).
 - **Activate:** push (worker + migration + site deploy themselves), then `npm run ota`.
 
-## 2026-10-19 — Telegrams follow-up: emoji, one alert each with no preview, SENT / RECEIVED (COMMITTED, not pushed)
+## 2026-10-19 — Telegrams follow-up: emoji, one alert each with no preview, SENT / RECEIVED (PUSHED — main 271b712 / 7f6d159, deploys green; OTA pending)
 
 Founder: "a date and time the telegram was sent and … received"; "can users put emoji … 3️⃣ … is the equivalent
 to one word … still max of three"; "notifications … for each telegram … but do not allow telegram message to be
@@ -2678,7 +2678,7 @@ previewed".
 - Note: the 16:13 UTC deploy runs (main 7f6d159) sat queued behind a GitHub Actions incident ("Degraded
   availability for GitHub Actions"); they run on their own once Actions recovers.
 
-## 2026-10-19 — A telegram arrives sealed; RECEIVED = opened (COMMITTED, not pushed)
+## 2026-10-19 — A telegram arrives sealed; RECEIVED = opened (PUSHED — main 271b712 / 7f6d159, deploys green; OTA pending)
 
 Founder: "when a notification is selected by user, take user to that new postcard … telegram to open? or straight
 to view?" → Claude: postcards straight to view (already built: a tapped row or alert scrolls to and rings the
@@ -2693,11 +2693,16 @@ card, or opens the postcard box at it); telegrams arrive SEALED and are opened w
   7:42 AM).
 - **Activate:** push, then after the deploy `npm run ota`.
 
-## 2026-10-19 — Telegrams: four words max (COMMITTED, not pushed)
+## 2026-10-19 — Telegrams: four words max (PUSHED — main 271b712 / 7f6d159, deploys green; OTA pending)
 
 Founder: "change the maximum limit to four words maximum … the fifth has a charge (we're not really charging)".
 `TG_MAX_WORDS` / `TELEGRAM_WORDS` = 4; the meter has four boxes; "4 WORDS MAX! MAKE IT COUNT."; the tolls read FOUR
 WORDS MAX! / FIRST 4 WORDS — FREE / EACH EXTRA WORD — 4¢ (ON THE HOUSE); privacy policy "four words or fewer".
 Captured: "Landed safe in Manila today" stops at "LANDED SAFE IN MANILA" (4/4). eslint + no-undef; build;
 boot-check ✅. **Activate:** push, then `npm run ota`.
+
+**Live check, 2026-10-19 (main 271b712, worker + migrations + site deployed):** as the demo account — five words →
+400 "4 words max! Make it count."; an unknown @username → 404; a reply / open / delete naming no telegram → 404;
+`/social/feed` advertises `telegrams`; `/push/test` as a non-admin adult → `{ sent: 0, phones: 0 }`.
+Remaining: the founder's `npm run ota`, then Settings → Alerts & Notifications → Send a test on a phone.
 
