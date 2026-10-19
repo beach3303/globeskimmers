@@ -22,6 +22,7 @@ import PostcardCompose from "@/components/passport/PostcardCompose";
 import { metersBetween, photoOptions, photoPlace, uploadStampPhoto, STAMP_EARLIEST } from "@/lib/passport";
 import { readPhotoExif } from "@/lib/photoExif";
 import { resizePhoto } from "@/lib/resizePhoto";
+import { LOOKS, isPlain, lookFor, renderLook } from "@/lib/photoLook";
 import { localISODate } from "@/lib/localDate";
 import { useDismissable } from "@/lib/dismissStack";
 import useCircle from "@/lib/useCircle";
@@ -124,6 +125,7 @@ export default function PhotoSorter({ files, stamps = [], shared = false, onClos
   const [rows, setRows] = useState([]);
   const [names, setNames] = useState({});        // row key → { name, sub, data }
   const [picked, setPicked] = useState(() => new Set());
+  const [look, setLook] = useState("none");   // one of our looks for every photo here (2026-10-19)
   const [busy, setBusy] = useState(null);        // "Adding photos to Eiffel Tower…"
   const [postcardImage, setPostcardImage] = useState(null);
   const startedRef = useRef(false);
@@ -186,7 +188,8 @@ export default function PhotoSorter({ files, stamps = [], shared = false, onClos
       for (let i = 0; i < list.length; i++) {
         setBusy(list.length > 1 ? `Adding photo ${i + 1} of ${list.length} to ${r.stamp.name}…` : `Adding your photo to ${r.stamp.name}…`);
         try {
-          const image = await resizePhoto(list[i].file);
+          const plain = await resizePhoto(list[i].file);
+          const image = isPlain(lookFor(look)) ? plain : await renderLook(plain, lookFor(look));
           const up = await uploadStampPhoto({ stamp_id: r.stamp.id, image, exif: list[i].exif || undefined });
           if (!up?.error) added += 1;
         } catch { /* skip a bad photo */ }
@@ -195,7 +198,7 @@ export default function PhotoSorter({ files, stamps = [], shared = false, onClos
     }
     setBusy(null);
     if (toAdd.length) onChanged?.();
-    if (toStamp.length) onStamp(toStamp.map((r) => ({ files: r.items.map((p) => p.file), placeHint: names[r.key]?.data || null })));
+    if (toStamp.length) onStamp(toStamp.map((r) => ({ files: r.items.map((p) => p.file), placeHint: names[r.key]?.data || null, look: look === "none" ? null : lookFor(look) })));
     else onClose();
   };
   const goLabel = toStamp.length && !toAdd.length ? `Stamp ${plural(toStamp.length, "place", "places")}`
@@ -288,6 +291,14 @@ export default function PhotoSorter({ files, stamps = [], shared = false, onClos
                   </button>
                 );
               })}
+            </div>
+            <div role="group" aria-label="A look for these photos" className="flex gap-2 overflow-x-auto mt-2" style={{ scrollbarWidth: "none" }}>
+              {LOOKS.map((l) => (
+                <button key={l.key} type="button" onClick={() => setLook(l.key)} aria-pressed={look === l.key} disabled={!!busy}
+                  className="flex-none rounded-full px-3" style={{ minHeight: 36, border: `1px solid ${look === l.key ? STAMP : RULE}`, background: look === l.key ? STAMP : "#fff", color: look === l.key ? "#fff" : INK2, fontSize: fs(12.5), fontWeight: 600, whiteSpace: "nowrap" }}>
+                  {l.name}
+                </button>
+              ))}
             </div>
             {busy && <p className="mt-2 flex items-center gap-2" style={{ fontSize: fs(12.5), color: INK2 }}><Loader2 size={14} className="animate-spin" /> {busy}</p>}
             <div className="flex gap-2 mt-3">

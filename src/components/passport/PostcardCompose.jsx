@@ -22,7 +22,7 @@
 // Sending keeps today's call and errors; the toasts use the circle wording ('Postcard sent to
 // everyone who follows you').
 import React, { useEffect, useId, useRef, useState } from "react";
-import { ImagePlus, Info, Loader2, Send } from "lucide-react";
+import { ImagePlus, Info, Loader2, Send, SlidersHorizontal } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { sendPostcard } from "@/lib/passport";
@@ -31,6 +31,7 @@ import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
 import { AirmailChevron } from "@/components/redesign/ornaments";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import FindPeople from "@/components/social/FindPeople";
+import PhotoEditor from "@/components/passport/PhotoEditor";
 
 /** @typedef {import('react').CSSProperties} CSS */
 
@@ -138,6 +139,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   // Someone outside the circle, chosen through Find people (2026-10-18): { user_id, handle, name }.
   const [other, setOther] = useState(/** @type {any} */ (null));
   const [picking, setPicking] = useState(false);
+  const [editing, setEditing] = useState(false);   // our looks on the front (PhotoEditor, 2026-10-19)
   const [busy, setBusy] = useState(false);
   // Board cards sign with your name, or with none at all (founder, 2026-10-15):
   // 'anon' posts as "a local" / "a traveler" — the worker decides which.
@@ -323,6 +325,14 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
             )}
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pick} />
+          {image ? (
+            <button type="button" onClick={() => setEditing(true)}
+              style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, minHeight: 40, padding: "0 12px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(12.5), fontWeight: 600 }}>
+              <SlidersHorizontal size={15} strokeWidth={2} aria-hidden="true" focusable="false" />
+              Edit the photo — our looks
+            </button>
+          ) : null}
+          <PhotoEditor open={editing} image={image} onDone={(u) => { setImage(u); setEditing(false); }} onClose={() => setEditing(false)} />
 
           {/* the back */}
           <textarea

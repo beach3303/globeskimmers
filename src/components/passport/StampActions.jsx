@@ -25,6 +25,7 @@ import { localISODate } from "@/lib/localDate";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { useDismissable } from "@/lib/dismissStack";
 import PostcardCompose from "@/components/passport/PostcardCompose";
+import PhotoEditor from "@/components/passport/PhotoEditor";
 import { isLocalFavorite, localFavoriteLine } from "@/components/passport/LocalFavoriteStamp";
 import { socialFollow, setStampNote, setStampVisibility, setStampArt } from "@/lib/passport";
 import { respectPlaceFor } from "@/lib/respectPlaces";
@@ -130,23 +131,36 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   const memorial = respectPlaceFor(stamp)?.kind === "memorial";
   const artStyle = stamp.meta?.art === "plain" ? "plain" : "art";
 
-  const onPick = async (e) => {
-    const files = [...(e.target.files || [])].slice(0, room);
-    e.target.value = "";
-    if (!files.length) return;
+  // Upload prepared photos ({ image, exif }). One photo passes through our looks first
+  // (PhotoEditor, 2026-10-19); a batch goes up as it is.
+  const [edit, setEdit] = useState(null);
+  const sendPhotos = async (items) => {
     setBusy("photos");
     let added = 0, proof = null;
-    for (const f of files) {
+    for (const it of items) {
       try {
-        const exif = await readPhotoExif(f);   // before resizing strips it
-        logEvent("passport_photo_exif", { has_gps: !!(exif && exif.lat != null), has_time: !!(exif && exif.taken_at) }, "Passport");
-        const image = await resizePhoto(f);
-        const { data, error } = await uploadStampPhoto({ stamp_id: stamp.id, image, visited_on: stamp.visited_on || undefined, exif });
+        const { data, error } = await uploadStampPhoto({ stamp_id: stamp.id, image: it.image, visited_on: stamp.visited_on || undefined, exif: it.exif });
         if (error) showToast(error, "error"); else { added += 1; if (data?.proof && !proof) proof = data.proof; }
       } catch (err) { showToast(err?.message || "Upload failed", "error"); }
     }
     setBusy(null);
     if (added) { showToast(proofToast(proof) || `${added} photo${added === 1 ? "" : "s"} added 📸`, "success"); onChanged?.(); }
+  };
+  const onPick = async (e) => {
+    const files = [...(e.target.files || [])].slice(0, room);
+    e.target.value = "";
+    if (!files.length) return;
+    const items = [];
+    for (const f of files) {
+      try {
+        const exif = await readPhotoExif(f);   // before resizing strips it
+        logEvent("passport_photo_exif", { has_gps: !!(exif && exif.lat != null), has_time: !!(exif && exif.taken_at) }, "Passport");
+        items.push({ image: await resizePhoto(f), exif });
+      } catch (err) { showToast(err?.message || "Couldn't read that photo", "error"); }
+    }
+    if (!items.length) return;
+    if (items.length === 1) { setEdit(items[0]); return; }
+    await sendPhotos(items);
   };
   const removePhoto = async (photoId) => {
     const { error } = await deleteStampPhoto(photoId);
@@ -544,6 +558,9 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
         <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={() => setCompose(false)} following={following} blocked={blocked}
         preset={{ image: null, place_name: stamp.name, city: stamp.city, country: stamp.country }} />
       <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPick} />
+      <PhotoEditor open={!!edit} image={edit?.image || null}
+        onDone={(u) => { const it = edit; setEdit(null); if (it) sendPhotos([{ ...it, image: u }]); }}
+        onClose={() => { const it = edit; setEdit(null); if (it) sendPhotos([it]); }} />
         {!readOnly && <p className="text-center mt-2" style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, letterSpacing: ".04em" }}>Stamp ink: {STAMP === "#B0472F" ? "passport red" : STAMP}</p>}
       </div>
     </div>

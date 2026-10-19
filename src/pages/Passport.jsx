@@ -28,6 +28,8 @@ import { localISODate } from "@/lib/localDate";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { getStampFix } from "@/lib/geolocation";
 import { resizePhoto } from "@/lib/resizePhoto";
+import { isPlain, renderLook } from "@/lib/photoLook";
+import PhotoEditor from "@/components/passport/PhotoEditor";
 import { readPhotoExif } from "@/lib/photoExif";
 import { takeSharedPhotos, SHARED_PHOTOS_EVENT } from "@/lib/sharedPhotos";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
@@ -181,19 +183,30 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
   const place = [stamp.city, stamp.region, stamp.country].filter(Boolean).join(", ");
   const photos = stamp.photos || [];
 
+  // The photo passes through our looks first (PhotoEditor, 2026-10-19), then uploads.
+  const [edit, setEdit] = useState(null);
   const onPick = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    setBusy(true);
     try {
       const exif = await readPhotoExif(file);   // before resizing strips it
-      const image = await resizePhoto(file);
+      setEdit({ image: await resizePhoto(file), exif });
+    } catch (err) { showToast(err?.message || "Couldn't read that photo", "error"); }
+  };
+  const sendPhoto = async ({ image, exif }) => {
+    setBusy(true);
+    try {
       const { data, error } = await uploadStampPhoto({ stamp_id: stamp.id, image, visited_on: stamp.visited_on || undefined, exif });
       if (error) showToast(error, "error"); else { showToast(proofToast(data?.proof) || "Photo added 📸", "success"); onChanged(); }
     } catch (err) { showToast(err?.message || "Upload failed", "error"); }
     finally { setBusy(false); }
   };
+  const editor = (
+    <PhotoEditor open={!!edit} image={edit?.image || null}
+      onDone={(u) => { const it = edit; setEdit(null); if (it) sendPhoto({ ...it, image: u }); }}
+      onClose={() => { const it = edit; setEdit(null); if (it) sendPhoto(it); }} />
+  );
   const saveDate = async () => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) { setShowDate(false); return; }
     if (dateVal < STAMP_EARLIEST) { showToast("Stamps go back to January 1, 2021", "error"); return; }
@@ -280,6 +293,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
             {photos.length ? "Add another photo" : "Add a memory photo"}
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
+          {editor}
         </>)}
       </div>
     );
@@ -397,6 +411,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
         {photos.length ? "Add another photo" : "Add a memory photo"}
       </button>
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
+          {editor}
 
       {/* Tag who you were with — pick a friend (@username → their Mailbox,
           Allow/Decline on their own Virtual Passport), or share a link for
@@ -570,7 +585,7 @@ function ArrangeSheet({ stamps, onClose, onSaved }) {
   );
 }
 
-function StampPlaceModal({ onClose, onDone, preset = null, sharedPhotos = null, placeHint = null, queue = null, onSkip = null }) {
+function StampPlaceModal({ onClose, onDone, preset = null, sharedPhotos = null, placeHint = null, queue = null, onSkip = null, look = null }) {
   // No preset → start from where GPS says you are (founder, 2026-10-05:
   // "provide them the city where they currently are"). The city field is
   // filled, not locked — the GPS check at submit is what verifies the stamp.
@@ -809,7 +824,8 @@ function StampPlaceModal({ onClose, onDone, preset = null, sharedPhotos = null, 
       // send the photo?" — this is where the photo really goes, 1–3 s each, so narrate it).
       setBusyMsg(sending.length > 1 ? `Sending photo ${i + 1} of ${sending.length}…` : "Sending your photo — checking it proves the visit…");
       try {
-        const image = await resizePhoto(sending[i]);
+        const plain = await resizePhoto(sending[i]);
+        const image = look && !isPlain(look) ? await renderLook(plain, look) : plain;   // Upload photos' chosen look
         const up = await uploadStampPhoto({ stamp_id: data.id, image, visited_on: dateVal, exif: exifs[i] });
         if (up?.data?.proof && !proof) proof = up.data.proof;
       } catch { /* skip a bad photo */ }
@@ -1707,7 +1723,7 @@ function PassportInner() {
           onStamp={(items) => { setSorter(null); setStampQueue({ items, i: 0, n: Date.now() }); }} />
       )}
       {queued && (
-        <StampPlaceModal key={`${stampQueue.n}-${stampQueue.i}`} sharedPhotos={queued.files} placeHint={queued.placeHint}
+        <StampPlaceModal key={`${stampQueue.n}-${stampQueue.i}`} sharedPhotos={queued.files} placeHint={queued.placeHint} look={queued.look || null}
           queue={stampQueue.items.length > 1 ? { at: stampQueue.i + 1, of: stampQueue.items.length } : null} onSkip={nextInQueue}
           onClose={() => setStampQueue(null)} onDone={() => { load(); nextInQueue(); }} />
       )}
