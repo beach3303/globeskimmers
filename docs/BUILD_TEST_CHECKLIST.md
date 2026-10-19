@@ -2678,3 +2678,18 @@ previewed".
 - Note: the 16:13 UTC deploy runs (main 7f6d159) sat queued behind a GitHub Actions incident ("Degraded
   availability for GitHub Actions"); they run on their own once Actions recovers.
 
+## 2026-10-19 — A telegram arrives sealed; RECEIVED = opened (COMMITTED, not pushed)
+
+Founder: "when a notification is selected by user, take user to that new postcard … telegram to open? or straight
+to view?" → Claude: postcards straight to view (already built: a tapped row or alert scrolls to and rings the
+card, or opens the postcard box at it); telegrams arrive SEALED and are opened with a tap. Founder: "yes".
+
+- `TelegramEnvelope`: the back of a buff envelope, GLOBESKIMMERS TELEGRAPH on the flap, DELIVER AT ONCE (red stamp),
+  a red wax seal with the bolt, TELEGRAM / FOR <name · @handle> / FROM <name · @handle> / TAP TO OPEN. Tap → the seal
+  breaks, the flap lifts (rotateX), the telegram rises out (keyframe); reduced motion skips it. Reply only once open.
+- Worker `/telegrams/open { telegram_id }` stamps `received_at` once (a second open answers the same time); the
+  feed no longer stamps on load. The RECEIVED stamp = the moment it was opened.
+- Verified: eslint + no-undef; build; boot-check ✅; captured sealed / mid-lift / opened (RECEIVED 9:40 AM vs SENT
+  7:42 AM).
+- **Activate:** push, then after the deploy `npm run ota`.
+
