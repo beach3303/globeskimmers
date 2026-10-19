@@ -21552,7 +21552,7 @@ async function handleSocialUnread(request, env) {
     const items = [];
     // A muted follow (see /social/follow) is never news to its target.
     for (const r of follows) if (r.status !== 'muted') items.push({ type: r.status === 'pending' ? 'follow_request' : 'follow', uid: r.follower_id, at: r.created_at });
-    for (const r of direct) items.push({ type: 'postcard', uid: r.sender_id, place: r.place_name || null, at: r.created_at, to_me: true });
+    for (const r of direct) items.push({ type: 'postcard', uid: r.sender_id, pc_id: r.id, place: r.place_name || null, at: r.created_at, to_me: true });
     for (const r of broadcasts) items.push({ type: 'postcard', uid: r.sender_id, place: r.place_name || null, at: r.created_at });
     // One row per person per page, however many stamps they pressed.
     const grouped = new Map();
@@ -21640,6 +21640,8 @@ async function handleSocialUnread(request, env) {
         ...(i.body !== undefined ? { body: i.body, doodle: i.doodle } : {}),
         ...(i.place !== undefined ? { place: i.place } : {}),
         ...(i.to_me ? { to_me: true } : {}),
+        // The card's id on a postcard to me (2026-10-19): its ••• offers Reply and Delete.
+        ...(i.to_me && i.pc_id ? { postcard_id: i.pc_id } : {}),
         ...(i.type === 'board' ? { board: i.board_name, board_kind: i.board_kind, photos: i.photos } : {}),
       }));
     const total = activity.filter((a) => a.unread).length;

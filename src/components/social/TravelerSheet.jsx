@@ -5,12 +5,16 @@
 // traveler" shows only when the worker advertises block_v2 and we know who
 // the person is (src/lib/blocks.js), and it asks once, saying exactly what a
 // block does, before it blocks. Unfollow shows for someone you follow.
+// On a postcard sent to you (2026-10-19), Delete comes first (and Reply, when
+// the caller has no Reply button of its own); Delete asks once before the card
+// leaves your Mailbox.
 // Rendered on document.body so it opens over any sheet it was called from.
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2 } from "lucide-react";
+import { Loader2, CornerUpLeft, Trash2 } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import OfficialSeal from "@/components/passport/OfficialSeal";
+import { NEUTRAL } from "@/components/redesign/constants";
 import { useOverlayClose } from "@/components/home/SuggestPlaceSection";
 import { socialFollow, blockTraveler, unblockTraveler, reportShared } from "@/lib/passport";
 import { resolveTraveler, relationTo, blockTarget, travelerLabel } from "@/lib/blocks";
@@ -32,9 +36,11 @@ const REASONS = [["minor_safety", "A child's safety"], ["nudity", "Nudity or sex
 //   photo, tag, handle (an older worker files the newer ones as 'passport').
 // start: 'menu' | 'block' (straight to the block question).
 // onChanged(what): 'blocked' | 'unblocked' | 'unfollowed', after it happened.
-export default function TravelerSheet({ person, list: listProp = null, report = null, start = "menu", onClose, onChanged }) {
+// postcard: { onReply?: () => void, onDelete: () => Promise<boolean> } when the sheet
+//   opened from a postcard sent to you; null otherwise.
+export default function TravelerSheet({ person, list: listProp = null, report = null, start = "menu", postcard = null, onClose, onChanged }) {
   const [list, setList] = useState(listProp);
-  const [view, setView] = useState(start); // menu | report | block
+  const [view, setView] = useState(start); // menu | report | block | delete
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const panel = useRef(null);
@@ -97,6 +103,15 @@ export default function TravelerSheet({ person, list: listProp = null, report = 
     onChanged?.("unfollowed");
     onClose?.();
   };
+  const doReply = () => { if (busy) return; onClose?.(); postcard?.onReply?.(); };
+  const doDelete = async () => {
+    if (busy || !postcard?.onDelete) return;
+    setBusy(true); setErr(null);
+    const ok = await postcard.onDelete();
+    setBusy(false);
+    if (ok) onClose?.();
+    else setErr("Couldn’t delete it. Try again.");
+  };
   const doReport = async (reason) => {
     if (busy) return;
     // The person by default; a caller adds what it is about (a postcard, an
@@ -125,7 +140,7 @@ export default function TravelerSheet({ person, list: listProp = null, report = 
 
         {view === "menu" && (
           <>
-            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".18em", color: STAMP }}>Traveler</div>
+            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".18em", color: STAMP }}>{postcard ? "Postcard from" : "Traveler"}</div>
             <h2 id="gs-traveler-h" ref={head} tabIndex={-1} className="flex items-center gap-1.5" style={{ ...titleStyle, marginTop: 2 }}>
               <span className="truncate">{name}</span>
               {who.verified ? <OfficialSeal size={14} tier={who.seal || "burgundy"} /> : null}
@@ -133,6 +148,18 @@ export default function TravelerSheet({ person, list: listProp = null, report = 
             {who.handle && who.name && <div style={{ fontFamily: MONO, fontSize: fs(11.5), color: INK3, marginTop: 2 }}>@{who.handle}</div>}
             {rel.blocked && <p style={{ fontSize: fs(13), color: INK2, marginTop: 6 }}>You&rsquo;ve blocked {name}.</p>}
             <div className="flex flex-col gap-2 mt-4">
+              {postcard && typeof postcard.onReply === "function" && (
+                <button type="button" onClick={doReply} disabled={busy} className={row} style={{ ...rowStyle, color: NEUTRAL.airmailBlue }}>
+                  <CornerUpLeft size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
+                  Reply{who.name || who.handle ? ` to ${name}` : ""}
+                </button>
+              )}
+              {postcard && typeof postcard.onDelete === "function" && (
+                <button type="button" onClick={() => setView("delete")} disabled={busy} className={row} style={rowStyle}>
+                  <Trash2 size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
+                  Delete this postcard
+                </button>
+              )}
               {rel.following && !rel.blocked && (who.user_id || who.handle) && (
                 <button type="button" onClick={doUnfollow} disabled={busy} className={row} style={rowStyle}>
                   {rel.pending ? "Cancel follow request" : "Unfollow"}
@@ -175,6 +202,25 @@ export default function TravelerSheet({ person, list: listProp = null, report = 
               {err && <p role="alert" style={{ fontSize: fs(13), color: STAMP, lineHeight: 1.4 }}>{err}</p>}
               <button type="button" onClick={() => (start === "menu" ? setView("menu") : close())} disabled={busy} className="w-full rounded-[12px] font-semibold" style={quiet}>
                 {start === "menu" ? "Back" : "Cancel"}
+              </button>
+            </div>
+          </>
+        )}
+
+        {view === "delete" && (
+          <>
+            <h2 id="gs-traveler-h" ref={head} tabIndex={-1} style={titleStyle}>Delete this postcard?</h2>
+            <p style={{ fontSize: fs(13.5), color: INK2, lineHeight: 1.45, marginTop: 6 }}>
+              It leaves your Mailbox. {name === "A traveler" ? "The sender keeps" : `${name} keeps`} their own copy.
+            </p>
+            {err && <p role="alert" style={{ fontSize: fs(13), color: STAMP, lineHeight: 1.4, marginTop: 8 }}>{err}</p>}
+            <div className="flex gap-2 mt-4">
+              <button type="button" onClick={() => setView("menu")} disabled={busy} className="flex-1 rounded-[12px] font-semibold" style={quiet}>
+                Keep it
+              </button>
+              <button type="button" onClick={doDelete} disabled={busy} className="flex-1 rounded-[12px] font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+                style={{ minHeight: 48, background: STAMP, color: "#fff", fontSize: fs(14) }}>
+                {busy && <Loader2 size={15} className="animate-spin" aria-hidden="true" />}{busy ? "Deleting…" : "Delete"}
               </button>
             </div>
           </>

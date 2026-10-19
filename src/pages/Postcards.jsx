@@ -135,14 +135,17 @@ function PostcardBox({ onBack }) {
   const replyFor = (row) => setReplyTo({ postcard_id: row.id, name: row.by?.name || (row.by?.handle ? `@${row.by.handle}` : null) });
   const removeCard = async (row) => {
     const r = await deletePostcard(row.id);
-    if (!r.ok) { showToast(workerMessage(r.error, "Couldn’t delete it. Try again."), "error"); return; }
+    if (!r.ok) { showToast(workerMessage(r.error, "Couldn’t delete it. Try again."), "error"); return false; }
     setBox((b) => ({ ...b, rows: (b.rows || []).filter((x) => x.id !== row.id) }));
     showToast("Postcard deleted", "success");
+    return true;
   };
   const blocked = circle.blockedHandles || new Set();
   const rows = box && !box.error && !box.held ? (box.rows || []).filter((r) => !blocked.has(lc(r?.by?.handle))) : [];
   const meName = me.name || profile?.first_name || null;
   const report = (row) => setTraveler({
+    // A postcard sent to me also gets Delete in the sheet (2026-10-19); Reply is on the card.
+    pc: row.to_me === true && row.id ? { id: row.id, by: row.by } : null,
     person: { ...(row.by || {}), postcard_id: row.id || null },
     report: { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(`Postcard box${row.place ? `, from ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.message ? `: "${row.message}"` : ""}`, 480) },
   });
@@ -189,7 +192,7 @@ function PostcardBox({ onBack }) {
         <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: 16, marginTop: 8, alignItems: "start" }}>
           {rows.map((r, i) => (
             <div key={r.id || `pc-${r.created_at}-${i}`} id={r.id ? `pc-${r.id}` : undefined} style={wanted && r.id === wanted ? { outline: "3px solid #0E7C73", outlineOffset: 4, borderRadius: 16 } : undefined}>
-              <PostcardCard row={r} me={me.handle} meName={meName} onReport={report} onKeep={letGo} onReply={replyFor} onDelete={removeCard} />
+              <PostcardCard row={r} me={me.handle} meName={meName} onReport={report} onKeep={letGo} onReply={replyFor} />
             </div>
           ))}
         </div>
@@ -225,6 +228,7 @@ function PostcardBox({ onBack }) {
       ) : null}
       {traveler ? (
         <TravelerSheet person={traveler.person} report={traveler.report}
+          postcard={traveler.pc ? { onDelete: () => removeCard(traveler.pc) } : null}
           onClose={() => setTraveler(null)} onChanged={() => { setTraveler(null); circle.retry(); retry(); }} />
       ) : null}
     </div>

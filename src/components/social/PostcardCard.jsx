@@ -19,9 +19,9 @@
 //            into the postcard box or lets it go. Cards addressed to you are always kept.
 // The postmark opens that city's board (City Boards, 2026-10-14): a 44px link wherever the
 // card names a city and a country, except on the board itself and for a held account.
-import React, { useState } from "react";
+import React from "react";
 import { Link } from "react-router-dom";
-import { Bookmark, BookmarkCheck, CornerUpLeft, Trash2 } from "lucide-react";
+import { Bookmark, BookmarkCheck, CornerUpLeft } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { cityBoardUrl, hasBoard } from "@/lib/boardLinks";
 import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
@@ -42,11 +42,10 @@ const handleOf = (v) => String((v && typeof v === "object" ? v.handle : v) ?? ""
 /**
  * @param {{ row: any, me?: any, meName?: string|null, onReport?: (row: any) => void, onKeep?: (row: any) => void, className?: string, style?: import('react').CSSProperties }} props
  */
-// onReply / onDelete (2026-10-19): a card addressed to me gets Reply and Delete under it; Delete
-// asks once, in the card.
-export default function PostcardCard({ row, me = undefined, meName = null, onReport = undefined, onKeep = undefined, onReply = undefined, onDelete = undefined, className = undefined, style = undefined }) {
+// onReply (2026-10-19): a card addressed to me gets one Reply button under it. Delete lives in
+// its ••• (the caller's TravelerSheet), so each action has one place on the card.
+export default function PostcardCard({ row, me = undefined, meName = null, onReport = undefined, onKeep = undefined, onReply = undefined, className = undefined, style = undefined }) {
   const { socialTier } = useAuth();
-  const [asking, setAsking] = useState(false);
   if (!row || typeof row !== "object") return null;
   const by = row.by || {};
   // A city-board card signed without a name (founder, 2026-10-15/16): "@local"
@@ -119,29 +118,13 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
           {toMe ? <span>· To you</span> : null}
           {when ? <span style={{ marginLeft: "auto" }}>{when}</span> : null}
         </div>
-        {toMe && row.id && (typeof onReply === "function" || typeof onDelete === "function") ? (
-          asking ? (
-            <div role="group" aria-label="Delete this postcard?" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${DIVIDE}` }}>
-              <span style={{ flex: 1, fontSize: fs(13), color: NEUTRAL.ink2 }}>Delete this postcard? It leaves your Mailbox.</span>
-              <button type="button" onClick={() => { setAsking(false); onDelete(row); }} style={{ minHeight: 40, padding: "0 14px", borderRadius: 10, border: 0, background: NEUTRAL.stamp, color: NEUTRAL.white, fontSize: fs(13), fontWeight: 600 }}>Delete</button>
-              <button type="button" onClick={() => setAsking(false)} style={{ minHeight: 40, padding: "0 12px", borderRadius: 10, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.ink2, fontSize: fs(13), fontWeight: 600 }}>Keep</button>
-            </div>
-          ) : (
-            <div style={{ display: "flex", gap: 8, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${DIVIDE}` }}>
-              {typeof onReply === "function" ? (
-                <button type="button" onClick={() => onReply(row)} aria-label={`Reply to ${from}`}
-                  style={{ flex: 1, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, border: `1px solid ${NEUTRAL.airmailBlue}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(13.5), fontWeight: 600 }}>
-                  <CornerUpLeft size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Reply
-                </button>
-              ) : null}
-              {typeof onDelete === "function" ? (
-                <button type="button" onClick={() => setAsking(true)} aria-label="Delete this postcard"
-                  style={{ flex: "none", minHeight: 44, padding: "0 14px", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.ink2, fontSize: fs(13.5), fontWeight: 600 }}>
-                  <Trash2 size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Delete
-                </button>
-              ) : null}
-            </div>
-          )
+        {toMe && row.id && typeof onReply === "function" ? (
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${DIVIDE}` }}>
+            <button type="button" onClick={() => onReply(row)} aria-label={`Reply to ${from}`}
+              style={{ width: "100%", minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, border: `1px solid ${NEUTRAL.airmailBlue}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(13.5), fontWeight: 600 }}>
+              <CornerUpLeft size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Reply
+            </button>
+          </div>
         ) : null}
       </div>
       <ReportControl row={row} me={me} onReport={onReport} style={{ position: "absolute", top: 8, right: 8 }} />
