@@ -19815,11 +19815,12 @@ async function pushFriendStamps(env, uid) {
   if (!sq.ok) return;
   const stamps = (await sq.json()).filter((s) => ppTierVisible(s, 2, 'inner'));
   if (!stamps.length) return;
+  // Plain and simple (founder, 2026-10-19): who stamped what, and where to see it.
   const who = [...new Set(stamps.map((s) => s.user_id))];
-  const first = await ppHolder(env, who[0]);
-  const others = who.length - 1, places = stamps.length;
-  const title = others ? `${first} and ${others} other${others === 1 ? '' : 's'} stamped new places` : `${first} stamped ${places === 1 ? stamps[0].name : `${places} new places`}`;
-  const body = others ? `${places} new stamp${places === 1 ? '' : 's'} in your inner circle since yesterday` : (places === 1 ? 'A new stamp in your inner circle' : stamps.slice(0, 3).map((s) => s.name).join(', '));
+  const places = stamps.length;
+  const title = who.length > 1 ? `Your inner circle stamped ${places} places`
+    : `${await ppHolder(env, who[0])} stamped ${places === 1 ? stamps[0].name : `${places} places`}`;
+  const body = places === 1 ? 'See it in your Mailbox' : 'See them in your Mailbox';
   await pushNotify(env, uid, 'friend_stamps', { title, body, route: '/Mailbox' }, { now: true });
 }
 // POST /push/register { token, platform, app_version } — this phone, this account. A token
