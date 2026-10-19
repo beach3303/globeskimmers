@@ -15335,7 +15335,7 @@ async function handlePassportShareLanding(request, env, ctx) {
     const ogTitle = holder ? `${holder}’s Virtual Passport · GlobeSkimmers` : 'A Virtual Passport on GlobeSkimmers';
     const ogDesc = holder && stats
       ? `${stats.total || 0} stamps · ${stats.countries || 0} countries · ${stats.cities || 0} cities. Verified stamps carry proof.`
-      : 'Collect stamps where you go — verified by being there. Free on iPhone and Android.';
+      : 'Collect stamps where you go. Verified stamps carry proof. Free on iPhone and Android.';
     const chips = sample.map((s) => `<span class="chip">${esc(s.name)}</span>`).join('');
     const inner = !holder
       ? `<div class="stamp">🛂</div><h1>You’re invited to Globeskimmers</h1><p class="muted">This traveler shares with friends only — get the app, follow them, and start your own.</p>
