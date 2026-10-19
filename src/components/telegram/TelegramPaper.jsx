@@ -11,7 +11,8 @@
 //   mode      'received' (tape + stamp) | 'blank' (children in the message area)
 //   body      the wire text (telegramText), for 'received'
 //   to, from  { name, handle } — either may be missing
-//   at        ISO time it was filed (a blank shows NOW)
+//   at        ISO time it was sent (SENT; a blank shows NOW)
+//   receivedAt ISO time it first reached the recipient's Mailbox (the RECEIVED stamp; else at)
 //   number    the form's NO. (telegramNumber(id))
 //   words     words counted (CHECK); maxWords the ceiling — over it, CHECK reads red
 import React from "react";
@@ -133,9 +134,10 @@ function Box({ label, children, red = false, style = undefined }) {
   );
 }
 
-export default function TelegramPaper({ mode = "received", body = "", to = null, from = null, at = null, number = "0000", words = null, maxWords = 3, children = null, style = undefined }) {
+export default function TelegramPaper({ mode = "received", body = "", to = null, from = null, at = null, receivedAt = null, number = "0000", words = null, maxWords = 3, children = null, style = undefined }) {
   const received = mode === "received";
   const when = wireTime(at);
+  const got = wireTime(receivedAt) || when;
   const over = words != null && words > maxWords;
   return (
     <div style={{ filter: "drop-shadow(0 10px 12px rgba(70,45,10,.16)) drop-shadow(0 1px 1px rgba(70,45,10,.22))", ...style }}>
@@ -169,7 +171,7 @@ export default function TelegramPaper({ mode = "received", body = "", to = null,
         <div style={{ display: "grid", gridTemplateColumns: "0.8fr 1fr 2fr", borderBottom: `1px solid ${TINK}`, marginLeft: -1 }}>
           <Box label="NO.">{number}</Box>
           <Box label="CHECK" red={over}>{words == null ? "—" : `${words}/${maxWords} WDS`}</Box>
-          <Box label={received ? "FILED" : "FILED"}>{when ? when.line : "NOW"}</Box>
+          <Box label="SENT">{when ? when.line : "NOW"}</Box>
         </div>
 
         {/* to */}
@@ -202,11 +204,11 @@ export default function TelegramPaper({ mode = "received", body = "", to = null,
         <div style={{ position: "relative", display: "flex", alignItems: "baseline", gap: 8 }}>
           <span style={{ fontFamily: MONO, fontSize: fs(8.5), fontWeight: 600, letterSpacing: ".16em", color: TINK3 }}>FROM</span>
           <span style={{ flex: 1, minWidth: 0, borderBottom: `1px dotted rgba(42,34,25,.55)`, fontFamily: TYPE, fontSize: fs(14), lineHeight: 1.35, color: TINK, overflowWrap: "anywhere", paddingRight: received ? 92 : 0 }}>{name(from) || "\u00A0"}</span>
-          {received && when ? (
+          {received && got ? (
             <div aria-hidden="true" style={{ position: "absolute", right: 0, top: -24, transform: "rotate(-9deg)", padding: "3px 8px 4px", border: `2px solid ${TRED}`, borderRadius: 7, boxShadow: `inset 0 0 0 1.5px ${PAPER}, inset 0 0 0 2.5px ${TRED}`, color: TRED, opacity: 0.82, mixBlendMode: "multiply", textAlign: "center", fontFamily: MONO, lineHeight: 1.15 }}>
               <div style={{ fontSize: fs(7.5), fontWeight: 700, letterSpacing: ".24em" }}>RECEIVED</div>
-              <div style={{ fontSize: fs(11), fontWeight: 700, letterSpacing: ".06em" }}>{when.day}</div>
-              <div style={{ fontSize: fs(7.5), letterSpacing: ".14em" }}>{when.time}</div>
+              <div style={{ fontSize: fs(11), fontWeight: 700, letterSpacing: ".06em" }}>{got.day}</div>
+              <div style={{ fontSize: fs(7.5), letterSpacing: ".14em" }}>{got.time}</div>
             </div>
           ) : null}
         </div>

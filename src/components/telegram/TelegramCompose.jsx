@@ -163,7 +163,7 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
             <span role="status" style={{ fontFamily: MONO, fontSize: fs(11.5), letterSpacing: ".06em", color: over || full ? "#F0907C" : "#CBB994" }}>
               {over ? `${words} words · 3 max! Cut ${words - TELEGRAM_WORDS} to wire it`
                 : full ? "3 words max!"
-                : `${words} of ${TELEGRAM_WORDS} words · ${/[\p{L}\p{N}]{16,}/u.test(wire) ? "a word past 15 letters counts as two" : "punctuation is okay"}`}
+                : `${words} of ${TELEGRAM_WORDS} words · ${/[\p{L}\p{N}]{16,}/u.test(wire) ? "a word past 15 letters counts as two" : "punctuation is okay · an emoji is a word"}`}
             </span>
           </div>
           {wire ? (
@@ -178,7 +178,7 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
             {busy ? "Wiring…" : "Wire it"}
           </button>
           <p style={{ margin: "8px 0 0", fontFamily: MONO, fontSize: fs(9), letterSpacing: ".08em", lineHeight: 1.45, textAlign: "center", color: "#8E7E62", textTransform: "uppercase" }}>
-            Send as many as you like · words are checked before they travel · links and emoji don’t go by wire
+            Send as many as you like · words are checked before they travel · links don’t go by wire
           </p>
         </div>
       </div>

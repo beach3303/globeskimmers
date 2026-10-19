@@ -24,7 +24,7 @@ export default function TelegramCard({ row, me = undefined, meName = null, onRep
       {row.reply ? (
         <div style={{ margin: "0 0 4px 2px", fontFamily: MONO, fontSize: fs(9), letterSpacing: ".18em", textTransform: "uppercase", color: TINK3 }}>A reply by wire</div>
       ) : null}
-      <TelegramPaper mode="received" body={row.body} to={{ name: firstName, handle: myHandle }} from={row.by} at={row.created_at}
+      <TelegramPaper mode="received" body={row.body} to={{ name: firstName, handle: myHandle }} from={row.by} at={row.created_at} receivedAt={row.received_at}
         number={telegramNumber(row.id)} words={telegramWords(row.body)} />
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
         {typeof onReply === "function" && row.id ? (
