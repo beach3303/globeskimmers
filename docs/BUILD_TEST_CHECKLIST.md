@@ -2441,3 +2441,26 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   captured as the demo account with age unset + no handle mocked: the Passport opens unblocked (before: the
   required sheet covered the app); tapping Follow on a Find people result brings up "Step 1 of 2 · Your birthday".
 - **Activate:** app only — `npm run ota` after the push.
+
+## 2026-10-19 — Edited photos refused; crop and zoom (COMMITTED, awaiting push)
+- **Founder:** an edited postcard photo (their cat, "My Old Man") answered "This photo can't go on a postcard";
+  "Can you also allow crop, zoom in and zoom out."
+- **Cause, two parts.** (1) The photo review prompt refuses "content that is clearly not a travel/food/place
+  photo" — right for public guestbook and dish photos, wrong for a member's own postcard or album: a cat at home
+  is not a travel photo. (2) The editor rendered at 1600 px / q .86, and grain fights JPEG — a heavier file than
+  the original, and one message covered both "not allowed" and "couldn't check".
+- **Worker:** `gbModeratePhoto(env, b64, type, kind)` gains kind `'memory'` — a personal memory going to people the
+  member chose: pets, selfies, family, homes and indoor scenes are ordinary, only the safety list refuses (nudity,
+  gore, hate symbols, drugs, brandished weapons, private documents, spam/ads/text screenshots). Used by the
+  postcard, the stamp's album upload, the stored-album review (`ppReviewPhotos`) and the avatar. Guestbook, dish
+  and Suggest-a-place photos keep the strict `'place'` prompt. The postcard now says "We couldn't check this photo
+  right now — try again in a moment" when the review itself failed, and logs `postcard_photo_refused { reason }`.
+- **Engine:** `renderLook(src, look, maxDim, quality, crop)` — crop as fractions of the photo, applied before the
+  look, never upscaled; output ≤1280 px at q .84, re-encoded at .74 / .64 when the file passes ~1 MB.
+- **Editor:** a frame (Original · 3:2 · Square · 4:5), a Zoom slider 1–4× ("Whole photo" ↔ "Closer · drag to
+  move"), drag to pan, pinch to zoom (pointer events, touch-action none); the photo covers the frame at 1×. The
+  composer starts on 3:2 (its front); stamps on Original. "Use this" when anything changed.
+- Verified: node --check; 15 engine checks still pass; eslint + no-undef, build, boot-check; captured: 2× Square on
+  the peak, 1.6× 3:2 with Golden Hour. Not verified live: the founder's cat through the memory prompt (needs a
+  real send) — the prompt text allows "pets … homes and indoor scenes" by name.
+- **Activate:** push → the worker deploys itself; the editor reaches phones with `npm run ota`.
