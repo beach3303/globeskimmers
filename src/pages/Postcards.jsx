@@ -18,6 +18,8 @@ import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
 import { postcardBox, keepPostcard, deletePostcard, getHandle, getSocialProfile } from "@/lib/passport";
 import PostcardCompose from "@/components/passport/PostcardCompose";
+import TelegramCompose from "@/components/telegram/TelegramCompose";
+import ReplyWays from "@/components/telegram/ReplyWays";
 import { showToast } from "@/components/Toast";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import { AirmailChevron } from "@/components/redesign/ornaments";
@@ -132,7 +134,11 @@ function PostcardBox({ onBack }) {
 
   // Reply and Delete on a card addressed to me (2026-10-19).
   const [replyTo, setReplyTo] = useState(null);
-  const replyFor = (row) => setReplyTo({ postcard_id: row.id, name: row.by?.name || (row.by?.handle ? `@${row.by.handle}` : null) });
+  // Reply asks which way (2026-10-19): a postcard back, or a telegram back (three words, no photo).
+  const [replyPick, setReplyPick] = useState(null);
+  const [wireTo, setWireTo] = useState(null);
+  const nameFor = (by) => by?.name || (by?.handle ? `@${by.handle}` : null);
+  const replyFor = (row) => setReplyPick(row);
   const removeCard = async (row) => {
     const r = await deletePostcard(row.id);
     if (!r.ok) { showToast(workerMessage(r.error, "Couldn’t delete it. Try again."), "error"); return false; }
@@ -222,9 +228,18 @@ function PostcardBox({ onBack }) {
       <div className={COLUMN}>
         <section aria-label="Your postcards" style={{ marginTop: 20 }}>{body}</section>
       </div>
+      {replyPick ? (
+        <ReplyWays name={nameFor(replyPick.by)} onClose={() => setReplyPick(null)}
+          onPostcard={() => setReplyTo({ postcard_id: replyPick.id, name: nameFor(replyPick.by) })}
+          onTelegram={() => setWireTo({ reply_to: replyPick.id, name: replyPick.by?.name || null, handle: replyPick.by?.handle || null })} />
+      ) : null}
       {replyTo ? (
         <PostcardCompose open replyTo={replyTo} onClose={() => setReplyTo(null)} onSent={() => setReplyTo(null)}
           following={circle.acc || []} blocked={circle.blocked} />
+      ) : null}
+      {wireTo ? (
+        <TelegramCompose open replyTo={wireTo} onClose={() => setWireTo(null)} onSent={() => setWireTo(null)}
+          following={circle.acc || []} blocked={circle.blocked} meName={meName} meHandle={me.handle} />
       ) : null}
       {traveler ? (
         <TravelerSheet person={traveler.person} report={traveler.report}

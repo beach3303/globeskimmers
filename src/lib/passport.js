@@ -354,7 +354,8 @@ export async function socialFollow(op, args) {
 // error too, so read error before treating an empty feed as a quiet week.
 export async function socialFeed() {
   const { data, error } = await callWorker('social/feed', {});
-  return { rows: data?.rows || [], held: data?.held || null, error };
+  // features: what the worker has open, e.g. 'telegrams' (2026-10-19).
+  return { rows: data?.rows || [], held: data?.held || null, error, features: Array.isArray(data?.features) ? data.features : [] };
 }
 // The postcard box (2026-10-14): every postcard sent to you, newest first, a page at a
 // time from the worker's /postcards/box; before = the previous page's `next` (the last

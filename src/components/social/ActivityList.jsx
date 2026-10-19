@@ -10,7 +10,8 @@
 //   items    social/unread activity ({ type, by: { name, handle, verified, seal, cloth?,
 //            avatar? }, at, unread, to_me, place, reactions, photo, stamp, board, doodle, body }).
 //            Hidden when empty.
-//   onOpen   (destination) => void, where destination is 'passport' or 'circle'.
+//   onOpen   (destination) => void, where destination is 'passport', 'circle', or a card sent to
+//            you: 'pc:<id>' / 'tg:<id>' (2026-10-19), which the Mailbox brings into view.
 //   onMore   (item) => void: a 44px '•••' beside each row ('Options for {name}'), outside
 //            the row's own button, e.g. TravelerSheet for Report and Block (go-live decision 6).
 import React, { useState } from "react";
@@ -38,6 +39,7 @@ export function activityLine(a) {
     case "follow_request": return { who, text: "asked to follow you" };
     case "follow": return { who, text: "followed you" };
     case "postcard": return { who, text: a.to_me ? `sent you a postcard${from}` : `sent a postcard${from}` };
+    case "telegram": return { who, text: "sent you a telegram" };
     case "reaction": {
       const marks = Array.isArray(a.reactions) ? a.reactions.join(" · ") : "";
       // A board postcard (City Boards, 2026-10-14) carries `board`, its city.
@@ -65,6 +67,8 @@ export function activityLine(a) {
 const destinationOf = (a) => {
   if (a?.type === "reaction" || a?.type === "signature" || a?.type === "tag") return "passport";
   if (a?.type === "follow" || a?.type === "follow_request") return "circle";
+  if (a?.type === "postcard" && a.to_me && a.postcard_id) return `pc:${a.postcard_id}`;
+  if (a?.type === "telegram" && a.telegram_id) return `tg:${a.telegram_id}`;
   return null;
 };
 

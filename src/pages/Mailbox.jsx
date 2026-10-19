@@ -14,8 +14,8 @@
 // block_v2 (go-live decision 6, 2026-10-13; Apple 1.2). A 'confirm' account (a birthday
 // still to complete) gets the note that lets it finish.
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ChevronRight, Globe, Lock, Mail, Mailbox as MailboxIcon } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ChevronRight, Globe, Lock, Mail, Mailbox as MailboxIcon, Zap } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { cityBoardsUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
@@ -35,6 +35,10 @@ import ActivityList from "@/components/social/ActivityList";
 import PostcardCard from "@/components/social/PostcardCard";
 import InviteButton from "@/components/passport/InviteButton";
 import PostcardCompose from "@/components/passport/PostcardCompose";
+import TelegramCard from "@/components/telegram/TelegramCard";
+import TelegramCompose from "@/components/telegram/TelegramCompose";
+import ReplyWays from "@/components/telegram/ReplyWays";
+import { deleteTelegram } from "@/lib/telegram";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
 
 const SERIF = "'Instrument Serif', Georgia, serif";
@@ -45,7 +49,7 @@ const GAP = 20;
 
 const lc = (v) => String(v ?? "").trim().replace(/^@+/, "").toLowerCase();
 // What a report from an activity line is about (the report queue's kinds), and a short note.
-const ACTIVITY_KIND = { follow_request: "profile", follow: "profile", postcard: "postcard", reaction: "profile", signature: "signature", tag: "tag" };
+const ACTIVITY_KIND = { follow_request: "profile", follow: "profile", postcard: "postcard", telegram: "telegram", reaction: "profile", signature: "signature", tag: "tag" };
 const clip = (t, n) => { const v = String(t || "").replace(/\s+/g, " ").trim(); return v.length > n ? `${v.slice(0, n - 1)}…` : v; };
 const whoOf = (by) => String(by?.name ?? "").trim() || (by?.handle ? `@${lc(by.handle)}` : "A traveler");
 
@@ -53,7 +57,7 @@ const whoOf = (by) => String(by?.name ?? "").trim() || (by?.handle ? `@${lc(by.h
 const KICKER = { margin: 0, fontFamily: MONO, fontSize: fs(10), fontWeight: 500, letterSpacing: ".16em", lineHeight: 1.2, textTransform: "uppercase", color: BLUE };
 
 // The masthead on the page, then the full-bleed chevron (Mailbox L28-41).
-function Masthead({ onPostcard = undefined, addressable = false }) {
+function Masthead({ onPostcard = undefined, onTelegram = undefined, addressable = false }) {
   return (
     <>
       <div aria-hidden="true" style={{ height: 12 }} />
@@ -64,11 +68,21 @@ function Masthead({ onPostcard = undefined, addressable = false }) {
             Where your <em style={{ fontStyle: "italic", color: BLUE }}>circle</em> has been
           </h1>
           {onPostcard ? (
-            <button type="button" onClick={onPostcard}
-              style={{ flex: "none", display: "flex", alignItems: "center", gap: 8, minHeight: 44, padding: "0 16px", borderRadius: 999, border: addressable ? 0 : `1px solid ${BLUE}`, background: addressable ? NEUTRAL.stamp : "transparent", font: "inherit", fontSize: fs(13), fontWeight: 600, color: addressable ? NEUTRAL.white : BLUE, cursor: "pointer" }}>
-              <Mail size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
-              Postcard
-            </button>
+            <div style={{ flex: "none", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 6 }}>
+              <button type="button" onClick={onPostcard}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44, padding: "0 16px", borderRadius: 999, border: addressable ? 0 : `1px solid ${BLUE}`, background: addressable ? NEUTRAL.stamp : "transparent", font: "inherit", fontSize: fs(13), fontWeight: 600, color: addressable ? NEUTRAL.white : BLUE, cursor: "pointer" }}>
+                <Mail size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
+                Postcard
+              </button>
+              {/* Telegrams (2026-10-19): three words by wire, no photo. */}
+              {onTelegram ? (
+                <button type="button" onClick={onTelegram}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44, padding: "0 16px", borderRadius: 999, border: "1px solid #2A2219", background: "#F2E4BC", font: "inherit", fontSize: fs(13), fontWeight: 600, color: "#2A2219", cursor: "pointer" }}>
+                  <Zap size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
+                  Telegram
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
         {/* The seal (founder, 2026-10-15): say out loud that a mailbox is private — people
@@ -243,23 +257,42 @@ function MailboxBody() {
     return [...rest.slice(0, at), folded, ...rest.slice(at)];
   };
   const [compose, setCompose] = useState(false);
-  // Reply and Delete on a card addressed to me (2026-10-19).
-  const [replyTo, setReplyTo] = useState(null);
-  const replyFor = (row) => setReplyTo({ postcard_id: row.id, name: row.by?.name || (row.by?.handle ? `@${row.by.handle}` : null) });
+  // Reply and Delete on a postcard or telegram addressed to me (2026-10-19). A postcard's Reply
+  // asks which way (ReplyWays: a postcard back or a telegram back) once telegrams are open; a
+  // telegram's Reply is a telegram back.
+  const wires = Array.isArray(feed?.features) && feed.features.includes("telegrams");
+  const nameFor = (by) => by?.name || (by?.handle ? `@${by.handle}` : null);
+  const [replyTo, setReplyTo] = useState(null);     // the postcard composer, as a reply
+  const [wireTo, setWireTo] = useState(null);       // the telegram composer: {} new, { reply_to, … } a reply
+  const [replyPick, setReplyPick] = useState(null); // a postcard row: which way to answer it
+  const replyFor = (row) => (wires ? setReplyPick(row) : setReplyTo({ postcard_id: row.id, name: nameFor(row.by) }));
+  const wireBack = (row) => setWireTo({ reply_to: row.id, name: row.by?.name || null, handle: row.by?.handle || null });
   const removeCard = async (row) => {
-    const r = await deletePostcard(row.id);
+    const tg = row.kind === "telegram";
+    const r = tg ? await deleteTelegram(row.id) : await deletePostcard(row.id);
     if (!r.ok) { showToast(workerMessage(r.error, "Couldn’t delete it. Try again."), "error"); return false; }
-    setFeed((f) => (f && Array.isArray(f.rows) ? { ...f, rows: f.rows.filter((x) => !(x?.type === "postcard" && x.id === row.id)) } : f));
-    setActivity((list) => list.filter((a) => a.postcard_id !== row.id));
-    showToast("Postcard deleted", "success");
+    const type = tg ? "telegram" : "postcard";
+    setFeed((f) => (f && Array.isArray(f.rows) ? { ...f, rows: f.rows.filter((x) => !(x?.type === type && x.id === row.id)) } : f));
+    setActivity((list) => list.filter((a) => (tg ? a.telegram_id : a.postcard_id) !== row.id));
+    showToast(tg ? "Telegram deleted" : "Postcard deleted", "success");
     load();
     return true;
   };
   const [traveler, setTraveler] = useState(null); // { person, report, pc } in the TravelerSheet
-  // pc: a postcard sent to me ({ id, by, reply }), so the sheet also offers Delete, and Reply
-  // when the place it opened from has no Reply button of its own (a notification row).
+  // pc: a postcard or telegram sent to me ({ id, by, reply, kind }), so the sheet also offers
+  // Delete, and Reply when the place it opened from has no Reply button of its own (a row).
   const openTraveler = (person, report = null, pc = null) => setTraveler({ person: person || {}, report, pc });
-  const mine = (row, reply = false) => (row && row.to_me === true && row.id ? { id: row.id, by: row.by, reply } : null);
+  const mine = (row, reply = false, kind = "postcard") => (row && row.to_me === true && row.id ? { id: row.id, by: row.by, reply, kind } : null);
+  // A tapped alert (/Mailbox?tg=<id>) or notification row brings its telegram or postcard into view.
+  const wanted = new URLSearchParams(useLocation().search).get("tg");
+  const bringIntoView = (kind, id) => {
+    const el = id ? document.querySelector(`[data-${kind}="${String(id).replace(/[^a-f0-9-]/gi, "")}"]`) : null;
+    if (!el) return false;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.animate?.([{ boxShadow: `0 0 0 3px ${BLUE}` }, { boxShadow: "0 0 0 0 rgba(0,0,0,0)" }], { duration: 1800, easing: "ease-out" });
+    return true;
+  };
+  useEffect(() => { if (wanted && feed?.rows) setTimeout(() => bringIntoView("tg", wanted), 300); }, [wanted, feed]);
   const [myName, setMyName] = useState(null);   // for a postcard's address line
 
   useEffect(() => {
@@ -283,7 +316,11 @@ function MailboxBody() {
   const counts = circle.counts || {};
   const addressable = (circle.acc || []).some((r) => r.handle) || (counts.followYou || 0) > 0;
   const emptyFeed = !!feed && !feed.error && !feed.held && rows.length === 0;
-  const openFrom = (to) => navigate(to === "passport" ? createPageUrl("Passport") : `${createPageUrl("Circle")}?tab=followers`);
+  const openFrom = (to) => {
+    const [k, id] = String(to).split(":");
+    if (k === "tg" || k === "pc") { if (!bringIntoView(k, id) && k === "pc") navigate(`${createPageUrl("Postcards")}?pc=${id}`); return; }
+    navigate(to === "passport" ? createPageUrl("Passport") : `${createPageUrl("Circle")}?tab=followers`);
+  };
 
   // Keep a card sent to everyone in your postcard box, or let it go: the pill flips at once
   // and flips back when the worker says no.
@@ -304,9 +341,35 @@ function MailboxBody() {
     return res;
   };
 
+  // One row of the feed: a postcard, a telegram or a stamp. `fresh`: the "From someone new" shelf.
+  const isNew = (r) => (r.type === "postcard" || r.type === "telegram") && r.from_new;
+  const meName = myName || profile?.first_name || null;
+  const card = (r, i, fresh) => {
+    if (r.type === "telegram") {
+      return (
+        <div key={`tg-${r.id}`} data-tg={r.id} style={{ borderRadius: 4 }}>
+          <TelegramCard row={r} me={me.handle} meName={meName} onReply={wireBack}
+            onReport={(row) => openTraveler(row.by, { kind: "telegram", ref: `tg:${row.id}`, note: clip(`Telegram${fresh ? " from someone new" : ""}, ${whenLabel(row.created_at)}: "${row.body || ""}"`, 480) }, mine(row, false, "telegram"))} />
+        </div>
+      );
+    }
+    if (r.type === "postcard") {
+      return (
+        <div key={`pc-${r.created_at}-${i}`} data-pc={r.id || undefined} style={{ borderRadius: 14 }}>
+          <PostcardCard row={r} onReply={replyFor} me={me.handle} meName={meName} onKeep={keep}
+            onReport={(row) => openTraveler({ ...row.by, postcard_id: row.id || null }, { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(fresh ? `Postcard from someone new${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}` : `Postcard${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.message ? `: "${row.message}"` : ""}`, 480) }, mine(row))} />
+        </div>
+      );
+    }
+    return (
+      <Envelope key={`st-${r.created_at}-${i}`} row={r} variant="full" me={me.handle}
+        onReport={(row) => openTraveler(row.by, { kind: "stamp", note: clip(`Stamp in my Mailbox, ${whenLabel(row.created_at)}: ${row.name}${row.city ? `, ${row.city}` : ""}`, 480) })} />
+    );
+  };
+
   return (
     <div>
-      <Masthead onPostcard={() => setCompose(true)} addressable={addressable} />
+      <Masthead onPostcard={() => setCompose(true)} onTelegram={wires ? () => setWireTo({}) : undefined} addressable={addressable} />
       <div className={COLUMN}>
         <FindPeople onFollowed={() => load()} style={{ marginTop: 16 }} />
         {!emptyFeed ? <InviteButton style={{ marginTop: 8 }} /> : null}
@@ -316,8 +379,9 @@ function MailboxBody() {
         {rows.length ? <PostcardBoxRow style={{ marginTop: GAP }} /> : null}
         <CityBoardsRow style={{ marginTop: rows.length ? 8 : GAP }} />
         <ActivityList items={activity} onOpen={openFrom} style={{ marginTop: GAP }}
-          onMore={(a) => openTraveler({ ...a.by, entry_id: a.entry_id || null }, { kind: ACTIVITY_KIND[a.type] || "profile", ...(a.postcard_id ? { ref: `pc:${a.postcard_id}` } : {}), note: clip(`Mailbox, ${whenLabel(a.at)}: ${whoOf(a.by)} (${a.type})`, 480) },
-            a.type === "postcard" ? mine({ to_me: a.to_me, id: a.postcard_id, by: a.by }, true) : null)} />
+          onMore={(a) => openTraveler({ ...a.by, entry_id: a.entry_id || null }, { kind: ACTIVITY_KIND[a.type] || "profile", ...(a.postcard_id ? { ref: `pc:${a.postcard_id}` } : a.telegram_id ? { ref: `tg:${a.telegram_id}` } : {}), note: clip(`Mailbox, ${whenLabel(a.at)}: ${whoOf(a.by)} (${a.type})`, 480) },
+            a.type === "postcard" ? mine({ to_me: a.to_me, id: a.postcard_id, by: a.by }, true)
+              : a.type === "telegram" ? mine({ to_me: a.to_me, id: a.telegram_id, by: a.by }, true, "telegram") : null)} />
         {circle.status === "ready" && circle.requests?.length ? (
           <Requests rows={circle.requests} onAccept={answer("accept")} onDecline={answer("decline")} style={{ marginTop: GAP }}
             onMore={(r) => openTraveler(r, { kind: "profile", note: "Asked to follow me" })} />
@@ -355,27 +419,18 @@ function MailboxBody() {
             </div>
           ) : (
             <>
-              {rows.some((r) => r.type === "postcard" && r.from_new) ? (
+              {rows.some(isNew) ? (
                 <>
                   <h2 style={KICKER}>From someone new</h2>
-                  <p style={{ margin: "4px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink3 }}>Postcards from people you don’t follow. The ••• on a card reports or blocks the sender.</p>
+                  <p style={{ margin: "4px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink3 }}>Postcards and telegrams from people you don’t follow. The ••• reports or blocks the sender.</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8, marginBottom: 20 }}>
-                    {rows.filter((r) => r.type === "postcard" && r.from_new).map((r, i) => (
-                      <PostcardCard key={`pcn-${r.created_at}-${i}`} row={r} onReply={replyFor} me={me.handle} meName={myName || profile?.first_name || null} onKeep={keep}
-                        onReport={(row) => openTraveler({ ...row.by, postcard_id: row.id || null }, { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(`Postcard from someone new${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}`, 480) }, mine(row))} />
-                    ))}
+                    {rows.filter(isNew).map((r, i) => card(r, i, true))}
                   </div>
                 </>
               ) : null}
               <h2 style={KICKER}>From your circle · newest first</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
-                {rows.filter((r) => !(r.type === "postcard" && r.from_new)).map((r, i) => (r.type === "postcard" ? (
-                  <PostcardCard key={`pc-${r.created_at}-${i}`} row={r} onReply={replyFor} me={me.handle} meName={myName || profile?.first_name || null} onKeep={keep}
-                    onReport={(row) => openTraveler({ ...row.by, postcard_id: row.id || null }, { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(`Postcard${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.message ? `: "${row.message}"` : ""}`, 480) }, mine(row))} />
-                ) : (
-                  <Envelope key={`st-${r.created_at}-${i}`} row={r} variant="full" me={me.handle}
-                    onReport={(row) => openTraveler(row.by, { kind: "stamp", note: clip(`Stamp in my Mailbox, ${whenLabel(row.created_at)}: ${row.name}${row.city ? `, ${row.city}` : ""}`, 480) })} />
-                )))}
+                {rows.filter((r) => !isNew(r)).map((r, i) => card(r, i, false))}
               </div>
             </>
           )}
@@ -386,11 +441,19 @@ function MailboxBody() {
 
       {traveler ? (
         <TravelerSheet person={traveler.person} report={traveler.report}
-          postcard={traveler.pc ? { onReply: traveler.pc.reply ? () => replyFor(traveler.pc) : undefined, onDelete: () => removeCard(traveler.pc) } : null}
+          postcard={traveler.pc ? { what: traveler.pc.kind, onReply: traveler.pc.reply ? () => (traveler.pc.kind === "telegram" ? wireBack(traveler.pc) : replyFor(traveler.pc)) : undefined, onDelete: () => removeCard(traveler.pc) } : null}
           onClose={() => setTraveler(null)} onChanged={() => { setTraveler(null); circle.retry(); load(); }} />
       ) : null}
       <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={load}
         following={circle.acc || []} followerCount={counts.followYou ?? null} blocked={circle.blocked} />
+      {wireTo ? (
+        <TelegramCompose open replyTo={wireTo.reply_to ? wireTo : null} onClose={() => setWireTo(null)} onSent={() => { setWireTo(null); load(); }}
+          following={circle.acc || []} blocked={circle.blocked} meName={meName} meHandle={me.handle} />
+      ) : null}
+      {replyPick ? (
+        <ReplyWays name={nameFor(replyPick.by)} onClose={() => setReplyPick(null)}
+          onPostcard={() => setReplyTo({ postcard_id: replyPick.id, name: nameFor(replyPick.by) })} onTelegram={() => wireBack(replyPick)} />
+      ) : null}
       {replyTo ? (
         <PostcardCompose open replyTo={replyTo} onClose={() => setReplyTo(null)} onSent={() => { setReplyTo(null); load(); }}
           following={circle.acc || []} blocked={circle.blocked} />

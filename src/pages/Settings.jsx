@@ -1247,7 +1247,7 @@ export default function SettingsPage() {
                   : <span style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#736657", fontWeight: 600 }}>{pushPerm === "denied" ? "Off" : ""}</span> }}
             />
             {dials && [
-              ["alert_postcards", "Postcards", "Someone sent you a postcard"],
+              ["alert_postcards", "Postcards and telegrams", "Someone sent you a postcard or a telegram"],
               ["alert_follows", "Follows", "A follow request, a new follower, a follow allowed"],
               ["alert_pages", "Your passport", "Reactions, signatures and tags on your pages"],
               ["alert_friend_stamps", "Inner circle stamps", "Once a day: new stamps from people you follow who follow you back"],

@@ -36,8 +36,8 @@ const REASONS = [["minor_safety", "A child's safety"], ["nudity", "Nudity or sex
 //   photo, tag, handle (an older worker files the newer ones as 'passport').
 // start: 'menu' | 'block' (straight to the block question).
 // onChanged(what): 'blocked' | 'unblocked' | 'unfollowed', after it happened.
-// postcard: { onReply?: () => void, onDelete: () => Promise<boolean> } when the sheet
-//   opened from a postcard sent to you; null otherwise.
+// postcard: { onReply?: () => void, onDelete: () => Promise<boolean>, what?: 'postcard' | 'telegram' }
+//   when the sheet opened from a postcard or a telegram sent to you; null otherwise.
 export default function TravelerSheet({ person, list: listProp = null, report = null, start = "menu", postcard = null, onClose, onChanged }) {
   const [list, setList] = useState(listProp);
   const [view, setView] = useState(start); // menu | report | block | delete
@@ -103,6 +103,7 @@ export default function TravelerSheet({ person, list: listProp = null, report = 
     onChanged?.("unfollowed");
     onClose?.();
   };
+  const what = postcard?.what === "telegram" ? "telegram" : "postcard";
   const doReply = () => { if (busy) return; onClose?.(); postcard?.onReply?.(); };
   const doDelete = async () => {
     if (busy || !postcard?.onDelete) return;
@@ -140,7 +141,7 @@ export default function TravelerSheet({ person, list: listProp = null, report = 
 
         {view === "menu" && (
           <>
-            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".18em", color: STAMP }}>{postcard ? "Postcard from" : "Traveler"}</div>
+            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".18em", color: STAMP }}>{postcard ? (what === "telegram" ? "Telegram from" : "Postcard from") : "Traveler"}</div>
             <h2 id="gs-traveler-h" ref={head} tabIndex={-1} className="flex items-center gap-1.5" style={{ ...titleStyle, marginTop: 2 }}>
               <span className="truncate">{name}</span>
               {who.verified ? <OfficialSeal size={14} tier={who.seal || "burgundy"} /> : null}
@@ -157,7 +158,7 @@ export default function TravelerSheet({ person, list: listProp = null, report = 
               {postcard && typeof postcard.onDelete === "function" && (
                 <button type="button" onClick={() => setView("delete")} disabled={busy} className={row} style={rowStyle}>
                   <Trash2 size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
-                  Delete this postcard
+                  Delete this {what}
                 </button>
               )}
               {rel.following && !rel.blocked && (who.user_id || who.handle) && (
@@ -209,9 +210,9 @@ export default function TravelerSheet({ person, list: listProp = null, report = 
 
         {view === "delete" && (
           <>
-            <h2 id="gs-traveler-h" ref={head} tabIndex={-1} style={titleStyle}>Delete this postcard?</h2>
+            <h2 id="gs-traveler-h" ref={head} tabIndex={-1} style={titleStyle}>Delete this {what}?</h2>
             <p style={{ fontSize: fs(13.5), color: INK2, lineHeight: 1.45, marginTop: 6 }}>
-              It leaves your Mailbox. {name === "A traveler" ? "The sender keeps" : `${name} keeps`} their own copy.
+              It leaves your Mailbox. {name === "A traveler" ? "The sender isn’t" : `${name} isn’t`} told.
             </p>
             {err && <p role="alert" style={{ fontSize: fs(13), color: STAMP, lineHeight: 1.4, marginTop: 8 }}>{err}</p>}
             <div className="flex gap-2 mt-4">
