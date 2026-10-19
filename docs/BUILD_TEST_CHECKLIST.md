@@ -2656,3 +2656,25 @@ postcard back or a telegram back", so postcards keep their photo and there is on
   "Landed safe in Manila" at "LANDED SAFE IN", the reply chooser.
   NOT verified: a real send / reply / delete against production (needs the push).
 - **Activate:** push (worker + migration + site deploy themselves), then `npm run ota`.
+
+## 2026-10-19 — Telegrams follow-up: emoji, one alert each with no preview, SENT / RECEIVED (COMMITTED, not pushed)
+
+Founder: "a date and time the telegram was sent and … received"; "can users put emoji … 3️⃣ … is the equivalent
+to one word … still max of three"; "notifications … for each telegram … but do not allow telegram message to be
+previewed".
+
+- **Emoji** go by wire; each emoji grapheme (keycap 3️⃣, flags, skin tones, ZWJ families) counts as ONE word,
+  letters as before; `Intl.Segmenter` in the worker and the app. The writer cuts a whole emoji at a time.
+- **Alerts:** "Telegram from Mary" / "Open it in your Mailbox to read it" — the words never ride in the alert;
+  `pushNotify(..., { each: true })` = never folded; `msg.collapse = tg-<id>` gives each its own APNs collapse id and
+  FCM tag (so one doesn't replace another); in quiet hours one line per sender waits for the morning.
+- **SENT / RECEIVED:** the form row reads SENT (created_at); `received_at` (migration
+  `20261019200000_telegram_received.sql`) is stamped the first time the telegram reaches the recipient's Mailbox
+  (`/social/feed`), and the red RECEIVED stamp shows it.
+- Verified: emoji counting on 7 samples (worker) and the fit on 5 (app); eslint + no-undef; build; boot-check ✅;
+  captured: a telegram with 👋🏽 ❤️, SENT 7:42 AM vs RECEIVED 9:05 AM; the writer cutting "3️⃣ days left 🎉😘" to
+  "3️⃣ DAYS LEFT".
+- **Activate:** push, then — after the deploy runs finish — `npm run ota`.
+- Note: the 16:13 UTC deploy runs (main 7f6d159) sat queued behind a GitHub Actions incident ("Degraded
+  availability for GitHub Actions"); they run on their own once Actions recovers.
+
