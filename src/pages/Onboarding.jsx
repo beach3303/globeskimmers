@@ -11,6 +11,8 @@ import LocationStep from "../components/onboarding/LocationStep";
 import HomeCountryStep from "../components/onboarding/HomeCountryStep";
 import PassportStep from "../components/onboarding/PassportStep";
 import FirstNameStep from "../components/onboarding/FirstNameStep";
+import HeardFromStep from "../components/onboarding/HeardFromStep";
+import { logEvent } from "@/lib/analytics";
 
 // Account-tied onboarding. The user is ALWAYS authenticated here (App.jsx's
 // forced gate guarantees a Supabase session). On the final step we write the
@@ -48,7 +50,8 @@ export default function OnboardingPage() {
     // render, then the passport explainer, then the location ask — by then the
     // traveler knows exactly why the app wants it (stamps are earned by being
     // there), which is the honest frame for the permission.
-    list.push("home_country", "passport", "location");
+    // "Where did you hear about us?" (2026-10-19): one optional tap, the honest install source.
+    list.push("home_country", "heard_from", "passport", "location");
     return list;
   }, [initialFirstName]);
 
@@ -69,6 +72,9 @@ export default function OnboardingPage() {
     const update = { onboarding_completed: true };
     if (fn) update.first_name = fn;
     if (collected.home_country) update.home_country = collected.home_country;
+    if (collected.heard_from) update.heard_from = collected.heard_from;
+    // The sign-up event with its source (growth plan, 2026-10-19): the answer, or 'unknown' — never a guess.
+    logEvent("signed_up", { source: collected.heard_from || "unknown" }, "Onboarding");
     // Home city + coordinates + exact timezone (from HomeCityField) so the home
     // clock is accurate worldwide, not just the country default.
     if (collected.home_city) update.home_city = collected.home_city;
@@ -151,6 +157,9 @@ export default function OnboardingPage() {
       break;
     case "home_country":
       content = <HomeCountryStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.home_country} />;
+      break;
+    case "heard_from":
+      content = <HeardFromStep value={data.heard_from || null} onNext={(d) => advance(d)} onBack={onBack} />;
       break;
     case "passport":
       content = (

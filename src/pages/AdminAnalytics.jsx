@@ -114,8 +114,32 @@ function ActivityOverview() {
   }, []);
   if (!ov) return <Section title="📈 Activity overview" icon={Activity}><div style={{ color: COLORS.gray, fontSize: 13 }}>Counting…</div></Section>;
   if (ov.error) return <Section title="📈 Activity overview" icon={Activity}><div style={{ color: '#B0472F', fontSize: 13 }}>{ov.error}</div></Section>;
+  // (the funnel card renders at the top of the section, below)
   const rows = ov[gran] || [];
   const shown = gran === 'day' ? rows.slice(-14) : rows.slice(-12);
+  // The funnel (growth plan, 2026-10-19): people, not sessions — the number the plan steers by.
+  const fn = ov.funnel || null;
+  const SOURCE_LABEL = { fb: 'Facebook', tiktok: 'TikTok', ig: 'Instagram', yt: 'YouTube', friend: 'A friend', group: 'A group or event', other: 'Elsewhere' };
+  const funnelCard = fn ? (
+    <div style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 12, background: '#FBF7EE', border: '1px solid #E5D9C2' }}>
+      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#8B6A2B' }}>The funnel · people</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 8 }}>
+        {[['Accounts', fn.accounts], ['Ever stamped', fn.ever_stamped], ['Stamped · 30d', fn.stamped_30d], ['Sent a postcard · 30d', fn.sent_postcard_30d]].map(([l, v]) => (
+          <div key={l} style={{ background: '#fff', borderRadius: 10, padding: '8px 10px', border: '1px solid #EADFC9' }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#16110D', lineHeight: 1.1 }}>{v ?? '—'}</div>
+            <div style={{ fontSize: 11, color: '#736657', marginTop: 2 }}>{l}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 12.5, color: '#3A3128', marginTop: 8 }}>
+        New accounts in 30 days: <b>{fn.new_accounts_30d}</b> · stamped within 7 days of joining: <b>{fn.activated_7d}</b>
+        {fn.new_accounts_30d ? <> (<b>{Math.round((fn.activated_7d / fn.new_accounts_30d) * 100)}%</b> — the plan's target is 40%)</> : null}
+      </div>
+      <div style={{ fontSize: 12.5, color: '#3A3128', marginTop: 4 }}>
+        Where new members heard about us: {fn.by_source?.length ? fn.by_source.map((s) => `${SOURCE_LABEL[s.source] || s.source} ${s.n}`).join(' · ') : 'no answers yet (the question is new)'}
+      </div>
+    </div>
+  ) : null;
   const metrics = ['total', ...Object.keys(OV_LABELS).filter((k) => k !== 'total' && shown.some((r) => r[k]))];
   const keyLabel = (k) => (gran === 'month' ? k.slice(2) : k.slice(5));
   const delta = (k) => {
@@ -134,6 +158,7 @@ function ActivityOverview() {
   );
   return (
     <Section title="📈 Activity overview — the investor view" icon={Activity}>
+      {funnelCard}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'baseline', marginBottom: 8, fontSize: 13 }}>
         <span>All-time: <b>{ov.allTime.stamps ?? '—'}</b> stamps · <b>{ov.allTime.guestbook ?? '—'}</b> notes &amp; doodles · <b>{ov.allTime.dish_photos ?? '—'}</b> food photos · <b>{ov.allTime.owner_messages ?? '—'}</b> owner messages</span>
         <span style={{ color: COLORS.gray }}>This month vs last: {delta('total') || '—'} overall{delta('stamps_airport') ? `, airports ${delta('stamps_airport')}` : ''}{delta('dish_photos_restaurant') ? `, food ${delta('dish_photos_restaurant')}` : ''}</span>
