@@ -11,7 +11,7 @@
 //   askForAlerts()                the in-context ask; resolves the permission ('granted' …)
 //   pushPermission()              'granted' | 'denied' | 'prompt' | 'prompt-with-rationale' | 'unavailable'
 //   unregisterPush()              on sign-out: this phone stops getting this account's alerts
-//   testAlerts()                  Settings → Alerts "Send a test": re-registers, then knocks once
+//   testAlerts()                  Settings → Alerts & Notifications "Send a test": re-registers, then knocks once
 //                                 → { sent, phones, error }
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';

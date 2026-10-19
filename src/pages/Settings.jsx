@@ -1232,7 +1232,7 @@ export default function SettingsPage() {
           </EdGroup>
 
           {/* Currency & language group */}
-          <EdGroup kicker="Alerts" isTablet={isTablet}>
+          <EdGroup kicker={"Alerts & Notifications"} isTablet={isTablet}>
             {/* Alerts outside the app (push, 2026-10-19). ON = you get that kind. Adults only;
                 8am–10pm in your home timezone; a few a week at most. */}
             <EdRow isTablet={isTablet} step={fontStep} icon={Bell} iconBg={CAT.weather.ink} title="Alerts on this phone"
