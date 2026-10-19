@@ -2718,7 +2718,7 @@ carries its words). Fixed: `/telegrams/delete` now DELETEs the row (and any rows
 delete); the sheet says "It's erased for good."; privacy policy updated (site). **Activate:** push; the sheet's
 wording needs `npm run ota`.
 
-## 2026-10-19 — Alerts on by default, previews off by default (COMMITTED, not pushed)
+## 2026-10-19 — Alerts on by default, previews off by default (PUSHED — main ffacaf5, worker + migration + site live; live check: a default account reads stamps ON, news OFF, previews OFF; OTA pending)
 
 Founder: "can notifications be turned on by default? with the previews turned off by default? but always strictly
 that telegram messages preview cannot be opened on lock screen nor on banners, it has to be in app".
