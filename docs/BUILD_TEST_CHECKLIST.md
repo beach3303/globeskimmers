@@ -2365,3 +2365,30 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   Not verified live: a real send to a non-follower (would create real mail); the 5/day cap is the same
   `gbDayCount` the board cap uses.
 - **Activate:** push → the worker deploys itself; the screens reach phones with `npm run ota`.
+
+## 2026-10-19 (early) — A postcard that waits for an email (Step B) (COMMITTED, awaiting push)
+- **Founder (10-18):** "can we send it to their email address" for people who aren't on the app.
+- **Worker:** `/postcards/send` takes `to_email`. A member's email (rpc `user_id_by_email`) delivers like any direct
+  card — whatever their Find people switches say, and the sender is told nothing either way. Anyone else's:
+  the card is stored in **`api.pending_postcards`** under an HMAC of the lower-cased address (`pcEmailHash`,
+  keyed by the service key — the address itself is never stored), the address gets ONE plain-text email
+  (`pcSendWaitingEmail` via Resend: sender's first name, the place, a `globeskimmers.io/get?src=postcard` link; no
+  photo, no message), at most once per sender per address per 30 days (KV `pceonce:`), and `PC_EMAIL_DAILY = 5`
+  such cards a day per sender (D1 `pce:<uid>`). The reply is `{ ok, waiting: true, emailed }`.
+  **Delivery:** `pcDeliverWaiting` runs at the top of `/social/feed` (not for teens), at most once a day per
+  reader (KV `pcdeliv:`): every undelivered row for the reader's sign-in email becomes a normal `postcards` row
+  addressed to them; a card from a sender who left, from themselves, or from someone in a block with them is
+  marked delivered-to-nobody and dropped; a failed write leaves the row for the next read. **Prune:**
+  `pcPendingPrune` in the daily cron deletes rows older than 90 days and the photos of the undelivered ones.
+- **Migration:** `20261019003000_pending_postcards.sql` (service-role only; partial index on undelivered hashes).
+- **App:** FindPeople gains `onPickEmail`: an email nobody uses offers **"Send it anyway — it waits for them"**
+  (+ the one-email explanation) instead of Invite. The composer passes `to_email`; the chip shows the address;
+  the toast says "Saved for <email> — we emailed them a link to join" (or "— it opens when they join" when the
+  email didn't go). Privacy policy: one sentence under "Content you share".
+- Verified: harness over the real helpers — hash ignores case/spaces, 64 hex; delivery picks only live,
+  unblocked senders' cards for the matching hash, marks gone/blocked senders' cards dropped, leaves others'
+  hashes alone, remembers the read for a day, leaves a card pending on a failed write; prune deletes old rows
+  and only the undelivered photos. node --check, eslint + no-undef, build, boot-check; captured as the demo
+  account with `/social/find` returning no one for an email: the offer, then the email chip.
+  Not verified live: a real send (creates a real row and sends a real email). `RESEND_API_KEY` is already set.
+- **Activate:** push → the worker and the migration deploy themselves; the screens reach phones with `npm run ota`.
