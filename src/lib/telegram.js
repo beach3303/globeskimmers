@@ -1,7 +1,7 @@
 // telegram — words by wire, no photo (founder, 2026-10-19). The same rules as the worker's
 // tgClean / tgWordCount, so what the blank shows is what arrives: capitals, letters, digits and
-// plain punctuation and emoji; a full stop or ! becomes STOP; links don't go by wire. Three
-// words at most (founder, 2026-10-19: "spike curiosity"); STOP doesn't count, an emoji counts as
+// plain punctuation and emoji; a full stop or ! becomes STOP; links don't go by wire. Four
+// words at most (founder, 2026-10-19: "spike curiosity"; three at first, then four); STOP doesn't count, an emoji counts as
 // one word (3️⃣ is one), and a word past 15 letters counts as two, the old telegraph rule.
 //
 //   telegramText(raw)          the wire text, e.g. "Safe in Manila. Miss you!" → "SAFE IN MANILA STOP MISS YOU STOP"
@@ -13,7 +13,7 @@
 import { callWorker } from '@/lib/callWorker';
 import { requirePassport } from '@/lib/passportGate';
 
-export const TELEGRAM_WORDS = 3;
+export const TELEGRAM_WORDS = 4;   // founder, 2026-10-19 (was 3)
 const MAX_CHARS = 120;
 export const WORD_NAMES = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 
@@ -38,8 +38,8 @@ export const telegramWords = (text) => String(text || '').split(' ').filter((w) 
   return n + emoji + (letters ? Math.ceil(letters / 15) : 0);
 }, 0);
 
-// The typed text cut back to the words that fit (founder, 2026-10-19: "only 3 words max!"): a
-// fourth word or emoji can't be typed, and a paste keeps its first three. Spaces and punctuation
+// The typed text cut back to the words that fit (founder, 2026-10-19: "4 words max"): a fifth
+// word or emoji can't be typed, and a paste keeps its first three. Spaces and punctuation
 // as typed; cut a character (a whole emoji) at a time.
 export function telegramFit(raw, max = TELEGRAM_WORDS) {
   const s = String(raw == null ? '' : raw);

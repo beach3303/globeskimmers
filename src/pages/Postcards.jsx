@@ -134,7 +134,7 @@ function PostcardBox({ onBack }) {
 
   // Reply and Delete on a card addressed to me (2026-10-19).
   const [replyTo, setReplyTo] = useState(null);
-  // Reply asks which way (2026-10-19): a postcard back, or a telegram back (three words, no photo).
+  // Reply asks which way (2026-10-19): a postcard back, or a telegram back (four words, no photo).
   const [replyPick, setReplyPick] = useState(null);
   const [wireTo, setWireTo] = useState(null);
   const nameFor = (by) => by?.name || (by?.handle ? `@${by.handle}` : null);

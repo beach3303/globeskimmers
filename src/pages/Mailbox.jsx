@@ -74,7 +74,7 @@ function Masthead({ onPostcard = undefined, onTelegram = undefined, addressable 
                 <Mail size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
                 Postcard
               </button>
-              {/* Telegrams (2026-10-19): three words by wire, no photo. */}
+              {/* Telegrams (2026-10-19): four words by wire, no photo. */}
               {onTelegram ? (
                 <button type="button" onClick={onTelegram}
                   style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44, padding: "0 16px", borderRadius: 999, border: "1px solid #2A2219", background: "#F2E4BC", font: "inherit", fontSize: fs(13), fontWeight: 600, color: "#2A2219", cursor: "pointer" }}>

@@ -2,7 +2,7 @@
 // and super cool"). Buff paper torn off a pad (a perforated top edge), telegraph wires with a
 // bird across the head, the GlobeSkimmers bolt seal, TELEGRAM in heavy capitals between double
 // rules, the CLASS OF SERVICE boxes, a ruled form row (NO. / CHECK / FILED), the TO and FROM
-// lines, the TOLLS box ("3 WORDS MAX!", extra words 4¢ — stamped ON THE HOUSE: nobody is ever
+// lines, the TOLLS box ("FOUR WORDS MAX!", first 4 free, each extra word 4¢ — stamped ON THE HOUSE: nobody is ever
 // charged, founder 2026-10-19), a Morse rule that spells GLOBESKIMMERS, and the fine print. A received telegram's words
 // arrive the way they did on paper: typed on strips of tape pasted onto the blank, with the
 // office's red RECEIVED stamp. A blank being written takes its message area from children.
@@ -134,7 +134,7 @@ function Box({ label, children, red = false, style = undefined }) {
   );
 }
 
-export default function TelegramPaper({ mode = "received", body = "", to = null, from = null, at = null, receivedAt = null, number = "0000", words = null, maxWords = 3, children = null, style = undefined }) {
+export default function TelegramPaper({ mode = "received", body = "", to = null, from = null, at = null, receivedAt = null, number = "0000", words = null, maxWords = 4, children = null, style = undefined }) {
   const received = mode === "received";
   const when = wireTime(at);
   const got = wireTime(receivedAt) || when;
@@ -213,7 +213,7 @@ export default function TelegramPaper({ mode = "received", body = "", to = null,
           ) : null}
         </div>
 
-        {/* the tolls: three words, and what more would cost — on the house */}
+        {/* the tolls: four words, and what a fifth would cost — on the house */}
         <div style={{ position: "relative", marginTop: 12, padding: "4px 8px 5px", border: `1px solid ${TINK}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontFamily: MONO, fontSize: fs(7.5), fontWeight: 600, letterSpacing: ".16em", lineHeight: 1.4, color: TINK3 }}>
             <span>TOLLS</span><span style={{ color: TRED }}>{String(WORD_NAMES[maxWords] || maxWords).toUpperCase()} WORDS MAX!</span>

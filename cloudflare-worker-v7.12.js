@@ -20605,7 +20605,8 @@ async function handleCityBoards(request, env) {
 // 2026-10-19). It leaves their Mailbox, postcard box and activity; the sender's card is untouched.
 // ── Telegrams (founder, 2026-10-19) ─────────────────────────────────────────────────────────
 // Words by wire, no photo. A real telegram's base rate covered ten words; ours carries THREE
-// (founder, 2026-10-19: "spike curiosity" — send as many as you like, three words each). STOP
+// (founder, 2026-10-19: "spike curiosity" — send as many as you like; four words each since the
+// founder's change the same day, the fifth would be the 4¢ "on the house" toll). STOP
 // (what a full stop or ! becomes) doesn't count, an emoji counts as one word, and a word past
 // 15 letters counts as two, the old telegraph rule. Capitals, letters, digits, plain
 // punctuation and emoji; links don't go by wire. Its alert names the sender and never shows
@@ -20616,7 +20617,7 @@ async function handleCityBoards(request, env) {
 // like a send and stored nowhere. No daily limit, except five a day to people who don't follow
 // you (a reply is never capped that way) and twenty a minute against bots. The recipient can
 // delete one from their Mailbox.
-const TG_MAX_WORDS = 3;
+const TG_MAX_WORDS = 4;
 const TG_MAX_CHARS = 120;
 const TG_STRANGER_DAILY = 5;
 const TG_PER_MINUTE = 20;
@@ -20648,7 +20649,7 @@ async function handleTelegramSend(request, env, ctx) {
     const body = tgClean(b.body);
     const words = tgWordCount(body);
     if (!words) return jsonResponse({ error: 'Write your telegram first' }, 400);
-    if (words > TG_MAX_WORDS) return jsonResponse({ error: '3 words max! Make it count.' }, 400);
+    if (words > TG_MAX_WORDS) return jsonResponse({ error: '4 words max! Make it count.' }, 400);
     const sp = await gbSocialProfile(env, user.id);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Telegrams aren’t available on this account' }, 403);

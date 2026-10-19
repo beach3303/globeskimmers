@@ -1,7 +1,7 @@
-// TelegramCompose — write and wire a telegram (founder, 2026-10-19): words only, three at most,
+// TelegramCompose — write and wire a telegram (founder, 2026-10-19): words only, four at most,
 // to one person by @username, or back to whoever sent you a telegram or a postcard. The sheet
 // is the telegraph office's counter (dark), the blank sits on it, and you type straight onto
-// the form; a meter of three boxes fills as words go on, and "On the wire" shows the words as
+// the form; a meter of four boxes fills as words go on, and "On the wire" shows the words as
 // they'll arrive (capitals, a full stop becomes STOP). The worker checks the words at send.
 // The chevron at the top right (or a tap above the sheet) collapses it without sending, and the
 // words wait: opening the same telegram again brings the draft back (founder, 2026-10-19).
@@ -117,7 +117,7 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
           <h3 id={titleId} style={{ margin: "3px 0 0", fontFamily: SERIF, fontSize: fs(24), fontWeight: 400, lineHeight: 1.1, color: "#FBF3E2" }}>
             {reply ? <>A telegram back to <em style={{ fontStyle: "italic", color: BRASS }}>{reply.name || (reply.handle ? `@${reply.handle}` : "them")}</em></> : <>Send a <em style={{ fontStyle: "italic", color: BRASS }}>telegram</em></>}
           </h3>
-          <p style={{ margin: "6px 0 0", fontFamily: MONO, fontSize: fs(13), fontWeight: 500, letterSpacing: ".08em", textTransform: "uppercase", color: BRASS }}>3 words max! Make it count.</p>
+          <p style={{ margin: "6px 0 0", fontFamily: MONO, fontSize: fs(13), fontWeight: 500, letterSpacing: ".08em", textTransform: "uppercase", color: BRASS }}>{TELEGRAM_WORDS} words max! Make it count.</p>
 
           {/* the address */}
           {reply ? null : fixedTo ? (
@@ -161,8 +161,8 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
               ))}
             </div>
             <span role="status" style={{ fontFamily: MONO, fontSize: fs(11.5), letterSpacing: ".06em", color: over || full ? "#F0907C" : "#CBB994" }}>
-              {over ? `${words} words · 3 max! Cut ${words - TELEGRAM_WORDS} to wire it`
-                : full ? "3 words max!"
+              {over ? `${words} words · ${TELEGRAM_WORDS} max! Cut ${words - TELEGRAM_WORDS} to wire it`
+                : full ? `${TELEGRAM_WORDS} words max!`
                 : `${words} of ${TELEGRAM_WORDS} words · ${/[\p{L}\p{N}]{16,}/u.test(wire) ? "a word past 15 letters counts as two" : "punctuation is okay · an emoji is a word"}`}
             </span>
           </div>
