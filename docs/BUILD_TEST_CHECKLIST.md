@@ -2565,3 +2565,28 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   push (worker + migration deploy themselves); Xcode archive 1.0.5 (15) → TestFlight → Settings → Alerts → Turn
   on → /push/test; `cd android && ./gradlew bundleRelease`; submit both. The JS half reaches current phones by
   `npm run ota`, where it stays quiet until the native build with the plugin arrives.
+
+## 2026-10-19 — Postcards: the recipient can Delete or Reply; the passport activity shows the newest 3 (COMMITTED, not pushed)
+
+Founder: "allow post card receipient to delete a post card or reply … when collapse then only the top 3
+notifications are viewable."
+
+- **Delete (the recipient's side only).** A card addressed to you carries **Reply** and **Delete** under its
+  footer. Delete asks inline ("Delete this postcard? It leaves your Mailbox." Delete / Keep). The worker's
+  `/postcards/delete` (`handlePostcardDelete`) sets `postcards.recipient_deleted_at` on a row whose `to_user_id`
+  is the caller (404 otherwise) and drops the caller's keep of it. Soft, so the sender's own copy and the
+  moderation record stay. The feed, the postcard box and the unread count filter such rows in JS, so the deploy is
+  safe in either order with the migration.
+- **Reply.** The reply opens the composer titled "A postcard back to *Mary*", addressed "Reply to Mary" (the
+  picker and "Someone else…" are off). The app sends `reply_to: <postcard id>`; the worker resolves the sender
+  only from a postcard addressed to the caller and then runs the normal addressed-postcard path (self, teen
+  mutual-follow, block, moderation, push). No account id is handed to the app.
+- **The newest 3.** "On your passport" shows 3 rows, then "Show N more"; open, a **Show fewer** row folds it
+  back to 3. `SHOW_ROWS = 3` in `ActivityList.jsx`; the 30-row ceiling and the board fold line stay.
+- Wired on both the Mailbox and the postcard box (`Postcards.jsx`).
+- Migration `20261019160000_postcard_recipient_delete.sql` (one nullable column + PostgREST reload).
+- Verified: `node --check`; eslint with no-undef on the five touched files; build; boot-check ✅; captured (mocked
+  feed, demo account): the 3 rows + "Show 2 more", expanded + "Show fewer", the card's Reply / Delete, the inline
+  confirm, the reply composer.
+  NOT verified: a real delete and a real reply against production (the worker change is not deployed yet).
+- **Activate:** push (worker + migration deploy themselves), then the founder's `npm run ota`. No native build.
