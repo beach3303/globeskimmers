@@ -371,6 +371,11 @@ export async function postcardBox(before = null) {
 // Keep a card someone sent to everyone in your postcard box (keep true), or let it go
 // (false): worker /postcards/keep. { ok, kept, error }. The feed marks the cards it can
 // keep with a boolean `kept`; without one the app offers no Keep.
+// The recipient deletes a postcard addressed to them (2026-10-19): it leaves their Mailbox and box.
+export async function deletePostcard(postcard_id) {
+  const { data, error } = await callWorker('postcards/delete', { postcard_id: String(postcard_id || '') });
+  return { ok: !error && data?.ok === true, error: error || data?.error || null };
+}
 export async function keepPostcard(postcard_id, keep = true) {
   const id = String(postcard_id ?? '').trim();
   if (!id) return { ok: false, kept: null, error: 'postcard_id required' };
@@ -419,9 +424,9 @@ export async function getAgeInfo() {
 // Send a postcard: image (data URL from resizePhoto), message, the place
 // line, optional dish meta, and either to_handle, to_city ({ city, country }:
 // that city's board, City Board) or nothing (= followers).
-export async function sendPostcard({ image, message, place_name, city, country, region, meta, to_handle, to_user_id, to_email, to_city, anon }) {
+export async function sendPostcard({ image, message, place_name, city, country, region, meta, to_handle, to_user_id, to_email, to_city, anon, reply_to }) {
   if (!(await requirePassport())) return { data: null, error: 'finish_passport' };
-  const { data, error } = await callWorker('postcards/send', { image, message, place_name, city, country, ...(region ? { region } : {}), meta, to_handle, ...(to_user_id ? { to_user_id } : {}), ...(to_email ? { to_email } : {}), to_city, ...(anon ? { anon: true } : {}) });
+  const { data, error } = await callWorker('postcards/send', { image, message, place_name, city, country, ...(region ? { region } : {}), meta, to_handle, ...(to_user_id ? { to_user_id } : {}), ...(to_email ? { to_email } : {}), ...(reply_to ? { reply_to } : {}), to_city, ...(anon ? { anon: true } : {}) });
   return { data, error: error || data?.error || null };
 }
 // A city's board (City Board, 2026-10-14): postcards from travelers who were really

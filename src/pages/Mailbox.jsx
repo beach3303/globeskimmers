@@ -20,7 +20,7 @@ import { createPageUrl } from "@/utils";
 import { cityBoardsUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
-import { socialFeed, getHandle, getSocialProfile, setHandle, setAgeGate, splitDob, socialUnread, keepPostcard } from "@/lib/passport";
+import { socialFeed, getHandle, getSocialProfile, setHandle, setAgeGate, splitDob, socialUnread, keepPostcard, deletePostcard } from "@/lib/passport";
 import { showToast } from "@/components/Toast";
 import { AirmailChevron } from "@/components/redesign/ornaments";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
@@ -243,6 +243,16 @@ function MailboxBody() {
     return [...rest.slice(0, at), folded, ...rest.slice(at)];
   };
   const [compose, setCompose] = useState(false);
+  // Reply and Delete on a card addressed to me (2026-10-19).
+  const [replyTo, setReplyTo] = useState(null);
+  const replyFor = (row) => setReplyTo({ postcard_id: row.id, name: row.by?.name || (row.by?.handle ? `@${row.by.handle}` : null) });
+  const removeCard = async (row) => {
+    const r = await deletePostcard(row.id);
+    if (!r.ok) { showToast(workerMessage(r.error, "Couldn’t delete it. Try again."), "error"); return; }
+    setFeed((f) => (f && Array.isArray(f.rows) ? { ...f, rows: f.rows.filter((x) => !(x?.type === "postcard" && x.id === row.id)) } : f));
+    showToast("Postcard deleted", "success");
+    load();
+  };
   const [traveler, setTraveler] = useState(null); // { person, report } in the TravelerSheet
   const openTraveler = (person, report = null) => setTraveler({ person: person || {}, report });
   const [myName, setMyName] = useState(null);   // for a postcard's address line
@@ -345,7 +355,7 @@ function MailboxBody() {
                   <p style={{ margin: "4px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink3 }}>Postcards from people you don’t follow. The ••• on a card reports or blocks the sender.</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8, marginBottom: 20 }}>
                     {rows.filter((r) => r.type === "postcard" && r.from_new).map((r, i) => (
-                      <PostcardCard key={`pcn-${r.created_at}-${i}`} row={r} me={me.handle} meName={myName || profile?.first_name || null} onKeep={keep}
+                      <PostcardCard key={`pcn-${r.created_at}-${i}`} row={r} onReply={replyFor} onDelete={removeCard} me={me.handle} meName={myName || profile?.first_name || null} onKeep={keep}
                         onReport={(row) => openTraveler({ ...row.by, postcard_id: row.id || null }, { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(`Postcard from someone new${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}`, 480) })} />
                     ))}
                   </div>
@@ -354,7 +364,7 @@ function MailboxBody() {
               <h2 style={KICKER}>From your circle · newest first</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
                 {rows.filter((r) => !(r.type === "postcard" && r.from_new)).map((r, i) => (r.type === "postcard" ? (
-                  <PostcardCard key={`pc-${r.created_at}-${i}`} row={r} me={me.handle} meName={myName || profile?.first_name || null} onKeep={keep}
+                  <PostcardCard key={`pc-${r.created_at}-${i}`} row={r} onReply={replyFor} onDelete={removeCard} me={me.handle} meName={myName || profile?.first_name || null} onKeep={keep}
                     onReport={(row) => openTraveler({ ...row.by, postcard_id: row.id || null }, { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(`Postcard${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.message ? `: "${row.message}"` : ""}`, 480) })} />
                 ) : (
                   <Envelope key={`st-${r.created_at}-${i}`} row={r} variant="full" me={me.handle}
@@ -374,6 +384,10 @@ function MailboxBody() {
       ) : null}
       <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={load}
         following={circle.acc || []} followerCount={counts.followYou ?? null} blocked={circle.blocked} />
+      {replyTo ? (
+        <PostcardCompose open replyTo={replyTo} onClose={() => setReplyTo(null)} onSent={() => { setReplyTo(null); load(); }}
+          following={circle.acc || []} blocked={circle.blocked} />
+      ) : null}
     </div>
   );
 }

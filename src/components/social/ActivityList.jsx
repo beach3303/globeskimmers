@@ -23,7 +23,7 @@ import OfficialSeal from "@/components/passport/OfficialSeal";
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
 const MAX_ROWS = 30;
 // Collapsed to this many rows (founder, 2026-10-19: "quite a scroll"); "Show N more" opens the rest.
-const SHOW_ROWS = 4;
+const SHOW_ROWS = 3;
 
 /**
  * One line per thing that happened to you.
@@ -124,6 +124,13 @@ export default function ActivityList({ items = [], onOpen = undefined, onMore = 
             </li>
           );
         })}
+        {open && all.length > SHOW_ROWS ? (
+          <li>
+            <button type="button" onClick={() => setOpen(false)} style={{ display: "block", width: "100%", minHeight: 44, padding: "8px 14px", margin: 0, border: 0, borderTop: `1px solid ${NEUTRAL.airmailHair}`, background: "transparent", font: "inherit", fontSize: fs(13), fontWeight: 600, color: NEUTRAL.airmailBlue, textAlign: "left", cursor: "pointer" }}>
+              Show fewer
+            </button>
+          </li>
+        ) : null}
         {hidden > 0 ? (
           <li>
             <button type="button" onClick={() => setOpen(true)} style={{ display: "block", width: "100%", minHeight: 44, padding: "8px 14px", margin: 0, border: 0, borderTop: `1px solid ${NEUTRAL.airmailHair}`, background: "transparent", font: "inherit", fontSize: fs(13), fontWeight: 600, color: NEUTRAL.airmailBlue, textAlign: "left", cursor: "pointer" }}>

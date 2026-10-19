@@ -16,7 +16,8 @@ import { ChevronLeft, Mail } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
-import { postcardBox, keepPostcard, getHandle, getSocialProfile } from "@/lib/passport";
+import { postcardBox, keepPostcard, deletePostcard, getHandle, getSocialProfile } from "@/lib/passport";
+import PostcardCompose from "@/components/passport/PostcardCompose";
 import { showToast } from "@/components/Toast";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import { AirmailChevron } from "@/components/redesign/ornaments";
@@ -129,6 +130,15 @@ function PostcardBox({ onBack }) {
     showToast("Removed from your postcard box", "success");
   };
 
+  // Reply and Delete on a card addressed to me (2026-10-19).
+  const [replyTo, setReplyTo] = useState(null);
+  const replyFor = (row) => setReplyTo({ postcard_id: row.id, name: row.by?.name || (row.by?.handle ? `@${row.by.handle}` : null) });
+  const removeCard = async (row) => {
+    const r = await deletePostcard(row.id);
+    if (!r.ok) { showToast(workerMessage(r.error, "Couldn’t delete it. Try again."), "error"); return; }
+    setBox((b) => ({ ...b, rows: (b.rows || []).filter((x) => x.id !== row.id) }));
+    showToast("Postcard deleted", "success");
+  };
   const blocked = circle.blockedHandles || new Set();
   const rows = box && !box.error && !box.held ? (box.rows || []).filter((r) => !blocked.has(lc(r?.by?.handle))) : [];
   const meName = me.name || profile?.first_name || null;
@@ -179,7 +189,7 @@ function PostcardBox({ onBack }) {
         <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: 16, marginTop: 8, alignItems: "start" }}>
           {rows.map((r, i) => (
             <div key={r.id || `pc-${r.created_at}-${i}`} id={r.id ? `pc-${r.id}` : undefined} style={wanted && r.id === wanted ? { outline: "3px solid #0E7C73", outlineOffset: 4, borderRadius: 16 } : undefined}>
-              <PostcardCard row={r} me={me.handle} meName={meName} onReport={report} onKeep={letGo} />
+              <PostcardCard row={r} me={me.handle} meName={meName} onReport={report} onKeep={letGo} onReply={replyFor} onDelete={removeCard} />
             </div>
           ))}
         </div>
@@ -209,6 +219,10 @@ function PostcardBox({ onBack }) {
       <div className={COLUMN}>
         <section aria-label="Your postcards" style={{ marginTop: 20 }}>{body}</section>
       </div>
+      {replyTo ? (
+        <PostcardCompose open replyTo={replyTo} onClose={() => setReplyTo(null)} onSent={() => setReplyTo(null)}
+          following={circle.acc || []} blocked={circle.blocked} />
+      ) : null}
       {traveler ? (
         <TravelerSheet person={traveler.person} report={traveler.report}
           onClose={() => setTraveler(null)} onChanged={() => { setTraveler(null); circle.retry(); retry(); }} />
