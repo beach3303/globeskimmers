@@ -3,6 +3,8 @@
 // is the telegraph office's counter (dark), the blank sits on it, and you type straight onto
 // the form; a meter of three boxes fills as words go on, and "On the wire" shows the words as
 // they'll arrive (capitals, a full stop becomes STOP). The worker checks the words at send.
+// The chevron at the top right (or a tap above the sheet) collapses it without sending, and the
+// words wait: opening the same telegram again brings the draft back (founder, 2026-10-19).
 //
 //   <TelegramCompose open onClose onSent following blocked replyTo toHandle meName meHandle />
 //   following  op:list `following` rows: accepted people you follow with a @username (12 at most)
@@ -10,7 +12,7 @@
 //   replyTo    { reply_to, name, handle } — a reply; the address is fixed
 //   toHandle   a fixed @username
 import React, { useEffect, useId, useRef, useState } from "react";
-import { Loader2, Zap } from "lucide-react";
+import { ChevronDown, Loader2, Zap } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { useDismissable } from "@/lib/dismissStack";
 import { askForAlerts } from "@/lib/pushAlerts";
@@ -25,6 +27,9 @@ const DESK = "#231C15";
 const BRASS = "#C9A35A";
 const lc = (v) => String(v ?? "").trim().replace(/^@+/, "").toLowerCase();
 const HANDLE = /^[a-z0-9._]{2,30}$/;
+// Drafts kept while the app is open, one per reply (or one for a new telegram).
+const DRAFTS = new Map();
+const draftKey = (replyTo, toHandle) => (replyTo && replyTo.reply_to ? `re:${replyTo.reply_to}` : toHandle ? `to:${lc(toHandle)}` : "new");
 
 function Chip({ on = false, fixed = false, onClick = undefined, children }) {
   const style = { minHeight: 36, padding: "0 12px", marginTop: 6, borderRadius: 999, border: `1px solid ${on ? BRASS : "rgba(201,163,90,.4)"}`, background: on ? BRASS : "transparent", color: on ? DESK : "#EADBBE", fontFamily: MONO, fontSize: fs(12), letterSpacing: ".04em", fontWeight: 500 };
@@ -36,9 +41,11 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
   const sheetRef = useRef(/** @type {HTMLDivElement|null} */ (null));
   const titleId = `tg-title-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const fixedTo = lc(toHandle);
-  const [raw, setRaw] = useState("");
-  const [to, setTo] = useState(fixedTo);
-  const [typing, setTyping] = useState(false);   // "Someone else…": a typed @username
+  const key = draftKey(replyTo, toHandle);
+  const [raw, setRaw] = useState(() => DRAFTS.get(key)?.raw || "");
+  const [to, setTo] = useState(() => (fixedTo || DRAFTS.get(key)?.to || ""));
+  // "Someone else…": a typed @username — open again when a kept draft was addressed that way.
+  const [typing, setTyping] = useState(() => { const t = DRAFTS.get(key)?.to; return !fixedTo && !!t && !(Array.isArray(following) ? following : []).some((f) => lc(f?.handle) === t); });
   const [busy, setBusy] = useState(false);
   const [full, setFull] = useState(false);       // a fourth word was refused just now
   const type = (v) => {
@@ -46,9 +53,13 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
     setFull(fit.length < String(v).length && telegramWords(telegramText(v)) > TELEGRAM_WORDS);
     setRaw(fit);
   };
-  const close = () => { if (!busy && typeof onClose === "function") onClose(); };
+  const close = () => {
+    if (busy) return;
+    if (raw.trim() || (!fixedTo && to)) DRAFTS.set(key, { raw, to }); else DRAFTS.delete(key);
+    if (typeof onClose === "function") onClose();
+  };
   useDismissable(open, close);
-  useEffect(() => { setTo(fixedTo); }, [fixedTo]);
+  useEffect(() => { if (fixedTo) setTo(fixedTo); }, [fixedTo]);
   useEffect(() => {
     if (!open) return undefined;
     const before = document.activeElement;
@@ -84,6 +95,7 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
     if (error) { showToast(workerMessage(error, "Couldn’t wire it. Try again."), "error"); return; }
     showToast(`Telegram sent to ${reply ? reply.name || "them" : `@${address}`} STOP`, "success");
     setRaw("");
+    DRAFTS.delete(key);
     askForAlerts();
     if (typeof onSent === "function") onSent();
     if (typeof onClose === "function") onClose();
@@ -94,8 +106,14 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
       <div ref={sheetRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
         className="w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}
         style={{ position: "relative", outline: "none", borderRadius: "22px 22px 0 0", background: `radial-gradient(120% 60% at 50% 0%, #3A2E22, ${DESK} 60%)`, color: "#EADBBE" }}>
+        <button type="button" onClick={close} aria-label={raw.trim() ? "Close without sending. Your words wait here." : "Close without sending"}
+          style={{ position: "absolute", top: 8, right: 8, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, border: 0, background: "transparent", cursor: "pointer" }}>
+          <span aria-hidden="true" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 999, border: "1px solid rgba(201,163,90,.5)", color: BRASS }}>
+            <ChevronDown size={20} strokeWidth={2} focusable="false" />
+          </span>
+        </button>
         <div style={{ padding: "18px 18px calc(24px + env(safe-area-inset-bottom))" }}>
-          <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".24em", lineHeight: 1.3, textTransform: "uppercase", color: BRASS }}>GlobeSkimmers telegraph office</div>
+          <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".24em", lineHeight: 1.3, textTransform: "uppercase", color: BRASS, paddingRight: 44 }}>GlobeSkimmers telegraph office</div>
           <h3 id={titleId} style={{ margin: "3px 0 0", fontFamily: SERIF, fontSize: fs(24), fontWeight: 400, lineHeight: 1.1, color: "#FBF3E2" }}>
             {reply ? <>A telegram back to <em style={{ fontStyle: "italic", color: BRASS }}>{reply.name || (reply.handle ? `@${reply.handle}` : "them")}</em></> : <>Send a <em style={{ fontStyle: "italic", color: BRASS }}>telegram</em></>}
           </h3>
@@ -145,7 +163,7 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
             <span role="status" style={{ fontFamily: MONO, fontSize: fs(11.5), letterSpacing: ".06em", color: over || full ? "#F0907C" : "#CBB994" }}>
               {over ? `${words} words · 3 max! Cut ${words - TELEGRAM_WORDS} to wire it`
                 : full ? "3 words max!"
-                : `${words} of ${TELEGRAM_WORDS} words${/[\p{L}\p{N}]{16,}/u.test(wire) ? " · a word past 15 letters counts as two" : ""}`}
+                : `${words} of ${TELEGRAM_WORDS} words · ${/[\p{L}\p{N}]{16,}/u.test(wire) ? "a word past 15 letters counts as two" : "punctuation is okay"}`}
             </span>
           </div>
           {wire ? (

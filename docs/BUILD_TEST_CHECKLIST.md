@@ -2644,7 +2644,9 @@ postcard back or a telegram back", so postcards keep their photo and there is on
   words on typewriter tape in Special Elite, red RECEIVED stamp, TOLLS: "THREE WORDS MAX!", first 3 FREE, each
   extra word 4¢ — stamped ON THE HOUSE, Morse rule spelling GLOBESKIMMERS). `TelegramCompose` (the dark telegraph
   office: pick a @username or type one, type on the blank, a three-box meter, "On the wire" preview, "3 WORDS MAX!
-  MAKE IT COUNT.", Wire it; a fourth word can't be typed). `TelegramCard`
+  MAKE IT COUNT.", Wire it; a fourth word can't be typed; the meter says "punctuation is okay"; a chevron at
+  the top right collapses it without sending and the words wait — reopening the same telegram brings the draft back,
+  kept while the app is open). `TelegramCard`
   (one Reply = a telegram back; ••• = Delete / Report / Block). `ReplyWays` on a postcard's Reply (Mailbox and the
   postcard box). Mailbox: a Telegram button under Postcard; "Mary sent you a telegram"; tapping a postcard or
   telegram row brings its card into view; `?tg=` from an alert does too. Settings switch → "Postcards and
