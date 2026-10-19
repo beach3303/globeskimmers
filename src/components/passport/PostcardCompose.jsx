@@ -332,7 +332,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
               Edit the photo — our looks
             </button>
           ) : null}
-          <PhotoEditor open={editing} image={image} onDone={(u) => { setImage(u); setEditing(false); }} onClose={() => setEditing(false)} />
+          <PhotoEditor open={editing} image={image} aspect="3:2" onDone={(u) => { setImage(u); setEditing(false); }} onClose={() => setEditing(false)} />
 
           {/* the back */}
           <textarea

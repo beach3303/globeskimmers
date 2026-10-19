@@ -8,7 +8,7 @@
 //   EMPTY_LOOK             every dial at rest
 //   isPlain(look)          true when a look changes nothing
 //   applyLook(imageData, look)       edits the pixels in place
-//   renderLook(dataUrl, look, maxDim, quality) → Promise<dataUrl>   a JPEG with the look applied
+//   renderLook(dataUrl, look, maxDim, quality, crop) → Promise<dataUrl>   a JPEG, cropped, with the look applied
 //
 // A look's dials: brightness, contrast, warmth, saturation −100..100; clarity, grain, fade,
 // vignette 0..100; mono true = black and white. Clarity is an unsharp mask against a 3×3
@@ -98,23 +98,33 @@ export function applyLook(img, look) {
   return img;
 }
 
-export function renderLook(src, look, maxDim = 1280, quality = 0.86) {
+// renderLook(src, look, maxDim, quality, crop): crop = { x, y, w, h } as FRACTIONS of the
+// photo (0..1), applied before the look; the output never upscales the cropped pixels and
+// never exceeds maxDim. A heavy result (grain fights JPEG) is re-encoded smaller, so the
+// file stays under about a megabyte for the review step and the upload.
+export function renderLook(src, look, maxDim = 1280, quality = 0.84, crop = null) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      let { width, height } = img;
-      const s = Math.min(1, maxDim / Math.max(width, height));
-      width = Math.max(1, Math.round(width * s)); height = Math.max(1, Math.round(height * s));
+      const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+      const c = crop && crop.w > 0 && crop.h > 0
+        ? { x: Math.max(0, Math.min(1, crop.x)) * iw, y: Math.max(0, Math.min(1, crop.y)) * ih, w: Math.min(1, crop.w) * iw, h: Math.min(1, crop.h) * ih }
+        : { x: 0, y: 0, w: iw, h: ih };
+      c.w = Math.max(1, Math.min(c.w, iw - c.x)); c.h = Math.max(1, Math.min(c.h, ih - c.y));
+      const s = Math.min(1, maxDim / Math.max(c.w, c.h));
+      const width = Math.max(1, Math.round(c.w * s)), height = Math.max(1, Math.round(c.h * s));
       const canvas = document.createElement("canvas");
       canvas.width = width; canvas.height = height;
       const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, width, height);
+      ctx.drawImage(img, c.x, c.y, c.w, c.h, 0, 0, width, height);
       if (!isPlain(look)) {
         const id = ctx.getImageData(0, 0, width, height);
         applyLook(id, look);
         ctx.putImageData(id, 0, 0);
       }
-      resolve(canvas.toDataURL("image/jpeg", quality));
+      let out = canvas.toDataURL("image/jpeg", quality);
+      for (const q of [0.74, 0.64]) { if (out.length <= 1.45e6) break; out = canvas.toDataURL("image/jpeg", q); }
+      resolve(out);
     };
     img.onerror = () => reject(new Error("Could not read image"));
     img.src = src;
