@@ -2488,7 +2488,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   couldn't be captured as the demo account (already onboarded → Home); it uses the standard step layout.
 - **Activate:** push → worker + site + migration deploy themselves; the step and the card reach phones with `npm run ota`.
 
-## 2026-10-19 — Shares that land: /p/ link previews, the stamp-earned share card (COMMITTED, awaiting push)
+## 2026-10-19 — Shares that land: /p/ link previews, the stamp-earned share card (PUSHED)
 - **Growth plan week 2, item 3.** Where the first audience shares — Messenger, WhatsApp, iMessage, Facebook and
   Instagram Stories — a shared passport link showed no preview, and a verified stamp ended in a toast.
 - **Worker `/p/<slug>`:** `og:title` ("<First name>’s Virtual Passport · GlobeSkimmers", or "A Virtual Passport on
