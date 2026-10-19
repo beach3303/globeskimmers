@@ -2317,3 +2317,31 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   Photo links already sitting in a phone's cache keep showing for up to 10 min.
 - **Activate:** push → the worker deploys itself and the migration applies itself (~20 s); the app changes reach
   phones with `npm run ota`.
+
+## 2026-10-18 (night) — Find people: by @username, name or email (COMMITTED, awaiting push)
+- **Founder:** "allow users in app to find other users … can they find via handle, name and email address?" → "yes
+  name and email and handle, but name and email both findable by default for adults". Until now members could
+  only follow an exact @handle; the name/@/email search lived in Admin alone.
+- **Worker:** `POST /social/find { q }` → `{ people: [{ user_id, name, handle, avatar, cloth, relation }], mode }`.
+  Adults only (pcAdultRow; no social profile = unknown age = not found), never a block in either direction,
+  never the searcher. A @username always finds its owner; a name only members with `find_by_name` on, an email
+  only members with `find_by_email` on (NULL = on). A name needs 3 characters (start of a word in first_name /
+  display_name), a handle 2, an email the whole address (via `rpc/user_id_by_email`, service role) — nothing
+  enumerates members; ≤20 answers; 30 searches/minute/member (KV); the search text is never logged
+  (`social_find` logs mode + count). `/social/follow` op follow now takes `user_id` for someone without a handle
+  (same muted/pending rules). `/social/profile` reads/writes `find_by_name`, `find_by_email`. Mailbox: one
+  heads-up line ("Find people is new: members can now find you by your name or email…") for 7 days from the
+  first Mailbox read, adults only (KV `findnote:<uid>`), rendered through the 'board' item with kind 'find'.
+- **Migration:** `20261018235000_find_people.sql` — `social_profiles.find_by_name`, `find_by_email` (boolean,
+  NULL = on). Applies itself on push.
+- **App:** `FindPeople.jsx` replaces FollowByHandle on the Circle screen and in the Mailbox (FollowByHandle stays
+  for its `workerMessage`): one field, 350 ms debounce, hints until the words are worth sending, rows with Face +
+  name + '@handle' / 'no @username yet' + Follow / Follow back / Requested / Following / Friends; an unknown email
+  offers Invite. Settings → Privacy "Who can find me": "Hide my name from search", "Hide my email from search"
+  (ON = private). Privacy policy: one sentence in "Profile & social information".
+- Verified: harness over the real route (adult by name ✓; name-off adult only via @handle ✓; teen, no-profile,
+  blocked, self excluded ✓; email-off not found ✓; exact email case-insensitive ✓; partial email = name ✓;
+  relations ✓; teen searcher gets nothing ✓; 429 after 30/min ✓; the email never enters a query path ✓).
+  node --check, eslint + no-undef, build, boot-check; captured as the demo account with `/social/find` mocked:
+  the Circle screen with results, the Settings row.
+- **Activate:** push → worker + migration deploy themselves; the screens reach phones with `npm run ota`.

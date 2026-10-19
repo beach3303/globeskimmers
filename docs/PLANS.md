@@ -820,6 +820,19 @@ hardening (founder: privacy first, 2026-10-18 — share previews must never show
 Privacy decisions the same day: a private passport takes your photos off City Boards; members whose stamps became
 🌍 Everyone in the 2026-10-15 backfill get a one-time, kind privacy check-up (no silent change).
 
+**Growth plan updated 2026-10-18 (same artifact, version 3)** — privacy shipped (main b1071c6; founder's OTA the same
+evening). Starting point: **~4 daily / ~7 monthly users** (founder, 2026-10-18; confirm once Admin counts people).
+Verdict: the 10-13 plan still holds in order; changes: Android live on Play (88% of Philippine phones are Android),
+Upload photos (back to 2021-01-01) is the first-five-minutes promise — "Turn your trip photos into passport stamps".
+Suggested, awaiting the founder (section 11, decisions 1–7): **beachhead = Filipino travelers** (with Asia-bound
+travelers and frequent flyers alongside); a Facebook Page + Reels beside TikTok/Instagram; app in English, Taglish
+captions; **the Founding 100 by hand by 2026-11-30**; print-on-demand quotes for a **printed passport book** in
+December; no FIFA/Olympic/LA28/Disney marks; ticket commissions stay off (no-booking rule) until ~5K MAU.
+Money path (section 4): keepsakes first (book, cosmetic extras) → sponsors at ~5–25K MAU (Asian tourism boards
+courting Filipino travelers, luggage partners, a city's own board, the Burgundy Seal) → event seasons and a
+Disneyland Resort pilot at ~25–100K → the park rate card's dream tiers at 100–250K+. New 90 days: 2026-10-19 to
+2027-01-17 (section 10).
+
 ## Website (globeskimmers.io)
 
 - Deployed 2026-09-14 (48e1c81, 1d1e3b0, a3cdab8) to the globeskimmers-site Worker. **Live on https://globeskimmers.io since 2026-09-21**: the founder attached globeskimmers.io and www in Cloudflare; pages, redirects, app-ads.txt and security headers verified on the real domain. Test addresses switched off (9d766af). www serves the same site; the platform rejects host redirects in _redirects, so a www→plain 301 would be a Cloudflare Redirect Rule if ever wanted.
