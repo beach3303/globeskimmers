@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-10-19 (push build 1.0.6 added)
+Last updated: 2026-10-19 (push build 1.0.6 added; telegrams; the alert trace)
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -865,10 +865,25 @@ screen. **Founder steps left:** (1) store the two secrets — `npx wrangler secr
 account) to see the first knock; submit to both stores with the Android bundle (`cd android && ./gradlew
 bundleRelease`). The Push Notifications capability on the App ID is ticked in the Developer portal; Xcode's
 automatic signing adds it to the profile at the archive.
+**2026-10-19 later:** the founder's first real alert (a postcard reply, 8:31 PT) reached the gate but no phone:
+the founder's phone had never registered (Apple accepts our key; checked with a dummy token). Built: a trace of
+every alert in D1 (`push_outcome` / `push_held`) and Settings → Alerts → **Send a test** for every adult, which
+signs the phone up again first. After the push + OTA: tap Send a test on the founder's phone.
+
 Place-triggered nudges are a separate, later decision: they need "Always" location on iPhone and
 background location on Android (a Play declaration form + prominent disclosure), geofences for the
 20 nearest icons refreshed as the member moves, a privacy-policy line, and never for teens. Airport
 and border nudges can come first through significant-change location, which is cheaper on battery.
+
+## Telegrams — founder, 2026-10-19 (BUILT, awaiting push + OTA)
+
+Words-only messages: three words max ("spike curiosity"), as many as you like, to one @username or as a reply
+to a telegram or postcard; a full stop becomes STOP; the blank is a realistic telegram (tape strips, RECEIVED
+stamp, TOLLS: extra words 4¢, ON THE HOUSE — nobody is ever charged). A postcard's Reply asks: a postcard back
+(with a photo) or a telegram back (no photo). Rails: adults only, words checked, five a day to people who don't
+follow you, twenty a minute. Details: docs/BUILD_TEST_CHECKLIST.md, 2026-10-19 "Telegrams".
+Open ideas, not decided: a "Sent" list so the sender can see what they wired; telegrams on someone's page
+("Send a telegram" beside "Send a postcard").
 
 ## Website (globeskimmers.io)
 
