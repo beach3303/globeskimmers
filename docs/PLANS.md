@@ -828,6 +828,11 @@ Suggested, awaiting the founder (section 11, decisions 1–7): **beachhead = Fil
 travelers and frequent flyers alongside); a Facebook Page + Reels beside TikTok/Instagram; app in English, Taglish
 captions; **the Founding 100 by hand by 2026-11-30**; print-on-demand quotes for a **printed passport book** in
 December; no FIFA/Olympic/LA28/Disney marks; ticket commissions stay off (no-booking rule) until ~5K MAU.
+**Baseline measured 2026-10-18 (Supabase, founder ran the query):** 80 accounts · 6 ever stamped · 6 stamped in the
+last 30 days (incl. the founder and the @appreview demo). 74 of 80 signed up and never placed a stamp — the
+activation gap is the first problem, before any marketing. D1 events the same day: ~20 people opened the app in 30
+days, 49 stamps (21 on 10-18, 12 on 10-15 — test days). Target in the growth plan: ≥40% of new accounts stamp within
+7 days.
 Money path (section 4): keepsakes first (book, cosmetic extras) → sponsors at ~5–25K MAU (Asian tourism boards
 courting Filipino travelers, luggage partners, a city's own board, the Burgundy Seal) → event seasons and a
 Disneyland Resort pilot at ~25–100K → the park rate card's dream tiers at 100–250K+. New 90 days: 2026-10-19 to

@@ -2392,3 +2392,27 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   account with `/social/find` returning no one for an email: the offer, then the email chip.
   Not verified live: a real send (creates a real row and sends a real email). `RESEND_API_KEY` is already set.
 - **Activate:** push → the worker and the migration deploy themselves; the screens reach phones with `npm run ota`.
+
+## 2026-10-19 — Our own photo looks (COMMITTED, awaiting push)
+- **Founder (10-18):** "allow them to have filters, cool filters that like Instagram does not have, our own type of
+  filters: make the photos professional looking, clearer, crisper, brighter, darker, different grains, cooler
+  warmer." Decisions 10-19: one editor for postcards AND stamp photos; keep only the edited photo (undo = add it again).
+- **Engine `src/lib/photoLook.js`:** pure pixel math on ImageData (no `ctx.filter`, so WKWebView renders it the same):
+  brightness, contrast, warmth (R up / B down), saturation, clarity (unsharp mask against a separable 3×3 box blur),
+  grain (deterministic LCG, so preview = saved file), fade (lift blacks toward matte), vignette (radial, past 45%),
+  mono. Presets `LOOKS`: Original, Airmail (cool, crisp), Golden Hour (warm, bright), Film (grain, matte, desat),
+  Ink (B&W, grain, contrast), Dusk (darker, cool, vignette), Postcard (rich colour, crisp, vignette).
+  `renderLook(dataUrl, look, maxDim, quality)` → JPEG data URL; `isPlain` skips the pass when nothing changed.
+- **Sheet `src/components/passport/PhotoEditor.jsx`:** 560 px live preview (late renders dropped), preset chips +
+  Black & white, six dials with end labels (Darker/Brighter, Softer/Punchier, Cooler/Warmer, Crisper, Grainier,
+  Matte), reset, "Keep original", "Use this look" (full render at ≤1600 px, q .86). z-[10010], above the composer.
+- **Hooked in:** PostcardCompose ("Edit the photo — our looks" under the front); StampActions (one photo → editor
+  before upload, a batch goes as it is; Keep original / backdrop = upload as picked); Passport StampCard's "Add a
+  memory photo" (both layouts); PhotoSorter (Upload photos) gets a look chip row — one look for every photo in the
+  batch, applied to the album adds in `go()` and carried as `look` into StampPlaceModal's sending loop.
+- Verified: 15 engine checks (plain = no-op, brightness ±, warmth ±, mono, saturation, fade, clarity sharpens an
+  edge and leaves flat areas, grain deterministic and varied, vignette centre vs corner, every preset renders);
+  eslint + no-undef (photoLook declares `Image`/`document` — src/lib has no browser env), build, boot-check;
+  captured in the composer with a canvas-drawn test photo: Golden Hour, Ink, custom dials.
+  Not verified: speed on an old Android for a 1600 px render (one pass, ~1.9 M pixels; est. well under a second).
+- **Activate:** app only — reaches phones with `npm run ota` after the push (no worker, no migration).
