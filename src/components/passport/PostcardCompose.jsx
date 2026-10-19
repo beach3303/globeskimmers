@@ -32,6 +32,7 @@ import { AirmailChevron } from "@/components/redesign/ornaments";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import FindPeople from "@/components/social/FindPeople";
 import PhotoEditor from "@/components/passport/PhotoEditor";
+import { askForAlerts } from "@/lib/pushAlerts";
 
 /** @typedef {import('react').CSSProperties} CSS */
 
@@ -227,6 +228,8 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     setImage(preset?.image || null);
     setMessage("");
     setDish("");
+    // The moment to ask for alerts (push, 2026-10-19): a card just went to someone.
+    if (!board) askForAlerts();
     if (typeof onSent === "function") onSent();
     if (!offer) close();
   };

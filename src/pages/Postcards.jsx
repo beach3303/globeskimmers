@@ -11,7 +11,7 @@
 // Unfollow, Block). On a worker without /postcards/box the page shows the cards the feed
 // holds and says the older ones arrive with the update.
 import React, { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronLeft, Mail } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -79,6 +79,13 @@ function PostcardBox({ onBack }) {
   const [me, setMe] = useState({ handle: null, name: null });
   const [traveler, setTraveler] = useState(null); // { person, report } in the TravelerSheet
   const live = useRef(0);
+  // ?pc=<id> (a tapped alert, 2026-10-19): that card scrolls into view, ringed.
+  const wanted = new URLSearchParams(useLocation().search).get("pc");
+  useEffect(() => {
+    if (!wanted) return undefined;
+    const t = setTimeout(() => { document.getElementById(`pc-${wanted}`)?.scrollIntoView({ block: "center", behavior: "smooth" }); }, 300);
+    return () => clearTimeout(t);
+  }, [wanted, box]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let gone = false;
@@ -171,7 +178,9 @@ function PostcardBox({ onBack }) {
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: 16, marginTop: 8, alignItems: "start" }}>
           {rows.map((r, i) => (
-            <PostcardCard key={r.id || `pc-${r.created_at}-${i}`} row={r} me={me.handle} meName={meName} onReport={report} onKeep={letGo} />
+            <div key={r.id || `pc-${r.created_at}-${i}`} id={r.id ? `pc-${r.id}` : undefined} style={wanted && r.id === wanted ? { outline: "3px solid #0E7C73", outlineOffset: 4, borderRadius: 16 } : undefined}>
+              <PostcardCard row={r} me={me.handle} meName={meName} onReport={report} onKeep={letGo} />
+            </div>
           ))}
         </div>
         {box.partial ? (

@@ -26,6 +26,7 @@ import { clothRow } from '@/components/profile/CoverBand';
 import { Face } from '@/components/social/SocialMarks';
 import InviteButton from '@/components/passport/InviteButton';
 import { workerMessage } from '@/components/social/FollowByHandle';
+import { askForAlerts } from '@/lib/pushAlerts';
 
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -89,6 +90,7 @@ export default function FindPeople({ accent = undefined, cloth = undefined, onFo
     if (!res.ok) { showToast(workerMessage(res.error, 'Couldn’t follow them. Try again.'), 'error'); return; }
     const status = res.data?.status === 'pending' ? 'pending' : 'accepted';
     const who = p.handle ? `@${p.handle}` : p.name;
+    askForAlerts();   // the moment to ask (push, 2026-10-19): they just followed someone
     setRows((rs) => (rs || []).map((r) => (r.user_id === p.user_id ? { ...r, relation: status === 'pending' ? 'requested' : (r.relation === 'follows_you' ? 'friends' : 'following') } : r)));
     showToast(status === 'pending' ? `Asked to follow ${who} — they approve first` : `Following ${who}`, 'success');
     if (typeof onFollowed === 'function') onFollowed({ user_id: p.user_id, handle: p.handle, status });

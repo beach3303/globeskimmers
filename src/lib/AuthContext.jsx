@@ -19,6 +19,7 @@ import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { supabase } from '@/lib/supabaseClient';
 import { isAdminEmail } from '@/lib/admins';
+import { attachPushListeners, syncPushToken, unregisterPush } from '@/lib/pushAlerts';
 import {
   startProviderSignIn,
   signInWithApple,
@@ -277,6 +278,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(async () => {
+    await unregisterPush().catch(() => {});   // this phone stops getting this account's alerts
     try { await authSignOut(); } finally {
       setSession(null); setUser(null); setProfile(null); setCanRefresh(false);
     }
@@ -364,6 +366,15 @@ export const AuthProvider = ({ children }) => {
     })();
     return () => { gone = true; };
   }, [user?.id, socialTierReady, refreshSocialTier]);
+
+  // Alerts outside the app (push, 2026-10-19): a tapped alert opens the screen it names, the
+  // same way a deep link does; the phone's token goes to the worker whenever an adult opens
+  // the app with alerts already allowed (tokens rotate). Below the tier state on purpose: a hook above its `const` reads it before it
+  // exists (the boot check caught exactly that).
+  useEffect(() => { attachPushListeners((route) => setPendingRoute(route)); }, []);
+  useEffect(() => {
+    if (user?.id && socialTierReady && socialTier === 'adult') syncPushToken();
+  }, [user?.id, socialTierReady, socialTier]);
 
   // canRefresh = admin email (always) OR an email an admin granted in the
   // Supabase `refresh_access` table. Re-evaluated whenever the user changes, so

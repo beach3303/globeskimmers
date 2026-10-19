@@ -5,9 +5,10 @@ import { searchHomeCities, resolveHomePlace } from "@/lib/homePlace";
 import { searchCountries, countryCode } from "@/lib/countries";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2, UserX, LayoutGrid, UserCheck, Images, PenLine, Lock } from "lucide-react";
+import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2, UserX, LayoutGrid, UserCheck, Images, PenLine, Lock, Bell } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
 import { setAllStampsVisibility, getPrivacy, getShareLink } from "@/lib/passport";
+import { pushPermission, askForAlerts } from "@/lib/pushAlerts";
 import { useHomeZoneStyle, setHomeZoneStyle } from "@/components/redesign/Zone";
 import ContactUsModal from "../components/ContactUsModal";
 import RefreshAccessModal from "../components/RefreshAccessModal";
@@ -592,10 +593,13 @@ export default function SettingsPage() {
   // stamps sit at each tier — { is_public, counts: { me, inner, followers, public } }.
   const [priv, setPriv] = useState(null);
   const loadPrivacy = () => getPrivacy().then(({ profile: p, privacy }) => {
-    if (p) setDials({ approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || "passport", comments_audience: p.comments_audience || "inner", default_stamp_tier: p.default_stamp_tier || "inner", circle_public: p.circle_public === true, find_by_name: p.find_by_name !== false, find_by_email: p.find_by_email !== false });
+    if (p) setDials({ approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || "passport", comments_audience: p.comments_audience || "inner", default_stamp_tier: p.default_stamp_tier || "inner", circle_public: p.circle_public === true, find_by_name: p.find_by_name !== false, find_by_email: p.find_by_email !== false, alert_postcards: p.alert_postcards !== false, alert_follows: p.alert_follows !== false, alert_pages: p.alert_pages !== false, alert_friend_stamps: p.alert_friend_stamps === true, alert_news: p.alert_news === true });
     if (privacy) setPriv(privacy);
   });
   useEffect(() => { loadPrivacy(); }, []);
+  // Alerts on this phone (push, 2026-10-19): what the phone says, and the ask.
+  const [pushPerm, setPushPerm] = useState("unknown");
+  useEffect(() => { pushPermission().then(setPushPerm); }, []);
   // The bulk mover and the circle switch keep their own little confirms.
   const [bulkPick, setBulkPick] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -1216,6 +1220,30 @@ export default function SettingsPage() {
           </EdGroup>
 
           {/* Currency & language group */}
+          <EdGroup kicker="Alerts" isTablet={isTablet}>
+            {/* Alerts outside the app (push, 2026-10-19). ON = you get that kind. Adults only;
+                8am–10pm in your home timezone; a few a week at most. */}
+            <EdRow isTablet={isTablet} step={fontStep} icon={Bell} iconBg={CAT.weather.ink} title="Alerts on this phone"
+              desc={pushPerm === "granted" ? "On. They arrive between 8am and 10pm your time, and never more than a few a day."
+                : pushPerm === "denied" ? "Off in your phone's settings — Settings → GlobeSkimmers → Notifications turns them on."
+                : pushPerm === "unavailable" || pushPerm === "unknown" ? "Alerts come with the app on your phone."
+                : "A knock when a postcard or a follow arrives. The Mailbox keeps the record either way."}
+              control={{ node: (pushPerm === "prompt" || pushPerm === "prompt-with-rationale")
+                ? <button type="button" onClick={async () => setPushPerm(await askForAlerts())} className="h-10 px-4 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>Turn on</button>
+                : <span style={{ fontSize: "calc(12.5px*var(--fs,1))", color: pushPerm === "granted" ? TEAL_DEEP : "#736657", fontWeight: 600 }}>{pushPerm === "granted" ? "On" : pushPerm === "denied" ? "Off" : ""}</span> }}
+            />
+            {dials && [
+              ["alert_postcards", "Postcards", "Someone sent you a postcard"],
+              ["alert_follows", "Follows", "A follow request, a new follower, a follow allowed"],
+              ["alert_pages", "Your passport", "Reactions, signatures and tags on your pages"],
+              ["alert_friend_stamps", "Inner circle stamps", "Once a day: new stamps from people you follow who follow you back"],
+              ["alert_news", "News from GlobeSkimmers", "Seasonal editions and new things to collect"],
+            ].map(([key, title, desc]) => (
+              <EdRow key={key} isTablet={isTablet} step={fontStep} icon={Bell} iconBg={CAT.weather.ink} title={title} desc={dials[key] ? desc : `Off — ${desc.charAt(0).toLowerCase()}${desc.slice(1)}`}
+                control={{ node: <EdToggle on={!!dials[key]} label={title} onClick={() => saveDial(key, !dials[key], dials[key])} /> }} />
+            ))}
+          </EdGroup>
+
           <EdGroup kicker="Currency & language" isTablet={isTablet}>
             <EdRow isTablet={isTablet} step={fontStep} icon={DollarSign} iconBg={CAT.money.ink} title="Preferred Currency" desc="How prices are displayed across the app"
               control={{ below: true, node: (<Select value={preferredCurrency} onValueChange={(v) => { setPreferredCurrency(v); persist({ preferred_currency: v }); }}><SelectTrigger className="h-12 rounded-xl" style={{ borderColor: ED_RULE }}><SelectValue placeholder="Select preferred currency" /></SelectTrigger><SelectContent className="max-h-[300px] rounded-xl">{CURRENCIES.map((currency) => (<SelectItem key={currency.code} value={currency.code}>{currency.flag} {currency.name} ({currency.code})</SelectItem>))}</SelectContent></Select>) }}

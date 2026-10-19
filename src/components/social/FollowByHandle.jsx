@@ -26,6 +26,7 @@ import { showToast } from '@/components/Toast';
 import { CLOTH, NEUTRAL, fs } from '@/components/redesign/constants';
 import useCircle from '@/lib/useCircle';
 import { clothRow } from '@/components/profile/CoverBand';
+import { askForAlerts } from '@/lib/pushAlerts';
 
 /** @typedef {import('react').CSSProperties} CSS */
 
@@ -105,6 +106,7 @@ export default function FollowByHandle({
     }
     const who = String(res.data?.handle || handle).replace(/^@+/, '');
     const status = res.data?.status === 'pending' ? 'pending' : 'accepted';
+    askForAlerts();   // the moment to ask (push, 2026-10-19)
     setDraft('');
     showToast(status === 'pending' ? `Asked to follow @${who} — they approve first` : `Following @${who}`, 'success');
     if (typeof onFollowed === 'function') onFollowed({ handle: who, status });
