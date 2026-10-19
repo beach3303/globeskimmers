@@ -18645,6 +18645,14 @@ async function handlePostcardSend(request, env, ctx) {
     let toTeen = false;
     let anonLabel = null;
     let toEmail = null;
+    // A reply (2026-10-19): to the sender of a card addressed to me, looked up here so no account id
+    // is handed to the app. Then the same rails as any direct card.
+    if (!b.to_handle && !b.to_user_id && BL_UUID.test(String(b.reply_to || ''))) {
+      const rq = await gbRest(env, `postcards?id=eq.${String(b.reply_to).toLowerCase()}&to_user_id=eq.${user.id}&select=sender_id`, {});
+      const orig = rq.ok ? (await rq.json())[0] : null;
+      if (!orig) return jsonResponse({ error: 'That postcard isn’t here any more' }, 404);
+      b.to_user_id = orig.sender_id;
+    }
     if (b.to_handle || BL_UUID.test(String(b.to_user_id || ''))) {
       // By @username, or by account id — someone Find people found, perhaps with no @username
       // yet (founder, 2026-10-18: "send postcards to people who we are not friends with").
@@ -20185,7 +20193,7 @@ async function handleSocialFeed(request, env) {
       gbRest(env, `postcards?to_user_id=eq.${user.id}&order=created_at.desc&limit=20&select=*`, {}),
       bcastFrom.length ? gbRest(env, `postcards?sender_id=in.(${bcastFrom.join(',')})&to_user_id=is.null&order=created_at.desc&limit=20&select=*`, {}) : Promise.resolve({ ok: false }),
     ]);
-    let pcs = [...(pcTo.ok ? await pcTo.json() : []), ...(pcBroadcast.ok ? await pcBroadcast.json() : [])];
+    let pcs = [...(pcTo.ok ? (await pcTo.json()).filter((p) => !p.recipient_deleted_at) : []), ...(pcBroadcast.ok ? await pcBroadcast.json() : [])];
     // A card to a city's board belongs to the board, not to followers' feeds.
     pcs = pcs.filter((p) => !p.to_city);
     // A minor reads no postcards at all (founder, 2026-10-16).
@@ -20283,7 +20291,8 @@ async function handlePostcardBox(request, env) {
     let q = await gbRest(env, 'rpc/postcard_box', { method: 'POST', body: JSON.stringify({ p_user: user.id, p_before: before, p_limit: PC_BOX_PAGE + 1 }) });
     if (q.status === 404) q = await gbRest(env, `postcards?to_user_id=eq.${user.id}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {});
     if (!q.ok) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
-    const got = await q.json();
+    // A card I deleted (2026-10-19) leaves my box; a kept broadcast is let go through /postcards/keep.
+    const got = (await q.json()).filter((p) => !(p.to_user_id === user.id && p.recipient_deleted_at));
     const page = got.slice(0, PC_BOX_PAGE);
     const next = got.length > PC_BOX_PAGE ? page[page.length - 1].created_at : null;
     const teenMe = mySp?.social_tier === 'teen';
@@ -20553,6 +20562,23 @@ async function handleCityBoards(request, env) {
 // Letting go always works. A card addressed to me is in the box already. Before the
 // keeps table exists the answer is keep_unavailable, and the feed sends no `kept`, so
 // the app shows no Keep.
+// POST /postcards/delete { postcard_id } — the recipient deletes a card addressed to them (founder,
+// 2026-10-19). It leaves their Mailbox, postcard box and activity; the sender's card is untouched.
+async function handlePostcardDelete(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const body = await request.json().catch(() => ({}));
+    const pid = BL_UUID.test(String(body.postcard_id || '')) ? String(body.postcard_id).toLowerCase() : null;
+    if (!pid) return jsonResponse({ error: 'Which postcard?' }, 400);
+    const w = await gbRest(env, `postcards?id=eq.${pid}&to_user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ recipient_deleted_at: new Date().toISOString() }) });
+    if (!w.ok) return jsonResponse({ error: 'That didn’t go through — try again' }, 503);
+    if (!(await w.json()).length) return jsonResponse({ error: 'That postcard isn’t here any more' }, 404);
+    await gbRest(env, `postcard_keeps?user_id=eq.${user.id}&postcard_id=eq.${pid}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => {});
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handlePostcardKeep(request, env) {
   try {
     const user = await gbUser(request, env);
@@ -21503,7 +21529,7 @@ async function handleSocialUnread(request, env) {
     const [follows, following, direct, marks, entries, tags, notices] = await Promise.all([
       gbRest(env, `user_follows?followee_id=eq.${me}&created_at=gte.${floor}&select=follower_id,status,created_at&order=created_at.desc&limit=50`, {}).then(j),
       gbRest(env, `user_follows?follower_id=eq.${me}&status=eq.accepted&select=followee_id&limit=200`, {}).then(j),
-      gbRest(env, `postcards?to_user_id=eq.${me}&created_at=gte.${floor}&select=sender_id,place_name,created_at&order=created_at.desc&limit=50`, {}).then(j),
+      gbRest(env, `postcards?to_user_id=eq.${me}&created_at=gte.${floor}&select=*&order=created_at.desc&limit=50`, {}).then(j).then((rows) => rows.filter((r) => !r.recipient_deleted_at)),
       gbRest(env, `blotter_marks?owner_user_id=eq.${me}&user_id=neq.${me}&created_at=gte.${floor}&select=target,user_id,kind,created_at&order=created_at.desc&limit=150`, {}).then(j),
       gbRest(env, `blotter_entries?owner_user_id=eq.${me}&author_user_id=neq.${me}&created_at=gte.${floor}&select=id,target,author_user_id,body,doodle_key,created_at&order=created_at.desc&limit=50`, {}).then(j),
       gbRest(env, `passport_tags?to_user_id=eq.${me}&status=eq.pending&created_at=gte.${floor}&select=from_user_id,name,created_at&order=created_at.desc&limit=50`, {}).then(j),
@@ -27575,6 +27601,7 @@ export default {
       if (pathname === '/postcards/send' && request.method === 'POST') return await handlePostcardSend(request, env, ctx);
       if (pathname === '/postcards/box' && request.method === 'POST') return await handlePostcardBox(request, env);
       if (pathname === '/postcards/keep' && request.method === 'POST') return await handlePostcardKeep(request, env);
+      if (pathname === '/postcards/delete' && request.method === 'POST') return await handlePostcardDelete(request, env);
       if (pathname === '/social/world' && request.method === 'POST') return await handleSocialWorld(request, env, ctx);
       if (pathname === '/city/board' && request.method === 'POST') return await handleCityBoard(request, env);
       if (pathname === '/passport/photo/board' && request.method === 'POST') return await handlePassportPhotoBoard(request, env);
