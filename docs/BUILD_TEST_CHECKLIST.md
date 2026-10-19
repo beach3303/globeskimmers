@@ -2718,3 +2718,20 @@ carries its words). Fixed: `/telegrams/delete` now DELETEs the row (and any rows
 delete); the sheet says "It's erased for good."; privacy policy updated (site). **Activate:** push; the sheet's
 wording needs `npm run ota`.
 
+## 2026-10-19 — Alerts on by default, previews off by default (COMMITTED, not pushed)
+
+Founder: "can notifications be turned on by default? with the previews turned off by default? but always strictly
+that telegram messages preview cannot be opened on lock screen nor on banners, it has to be in app".
+- **On by default:** iOS / Android 13+ need the person's one Allow; `askAlertsOnce()` asks it on the first adult
+  open (2.5 s after the app settles; flag `gs_push_asked_v1`), not after a first postcard or follow. In-app switches:
+  Postcards and telegrams, Follows, Your passport, and now Inner circle stamps are on unless switched off; News stays
+  opt-in (App Review 4.5.4: marketing alerts need explicit consent).
+- **Previews off by default:** migration `20261019210000_alert_previews.sql` (`social_profiles.alert_previews`, NULL =
+  off). `pushNotify` swaps in `msg.preview` (a postcard's words, a comment's words) only when it is true. Settings →
+  Show previews: "Off — alerts never show anyone's words" / "Postcard words and comments show. Telegram words never
+  do". Telegram alerts carry no preview at all, so no phone setting can show their words.
+- Privacy policy: who-sent-what only; words only with Show previews; never a telegram's.
+- Verified: `node --check`; eslint; build; boot-check ✅; captured Settings (before the deploy, so Inner circle
+  stamps read the live server's old default).
+- **Activate:** push (worker + migration + site), then `npm run ota`.
+
