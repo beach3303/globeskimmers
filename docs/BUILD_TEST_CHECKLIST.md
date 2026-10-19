@@ -2318,7 +2318,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
 - **Activate:** push → the worker deploys itself and the migration applies itself (~20 s); the app changes reach
   phones with `npm run ota`.
 
-## 2026-10-18 (night) — Find people: by @username, name or email (COMMITTED, awaiting push)
+## 2026-10-18 (night) — Find people: by @username, name or email (PUSHED)
 - **Founder:** "allow users in app to find other users … can they find via handle, name and email address?" → "yes
   name and email and handle, but name and email both findable by default for adults". Until now members could
   only follow an exact @handle; the name/@/email search lived in Admin alone.
