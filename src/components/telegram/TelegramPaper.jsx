@@ -226,7 +226,7 @@ export default function TelegramPaper({ mode = "received", body = "", to = null,
         <div style={{ marginTop: 10 }}><MorseRule /></div>
         <div aria-hidden="true" style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 5, fontFamily: MONO, fontSize: fs(6.5), letterSpacing: ".1em", color: TINK3 }}>
           <span>FORM GS-10 · NO PHOTOS BY WIRE</span>
-          <span>{String(WORD_NAMES[maxWords] || maxWords).toUpperCase()} WORDS · STOP RIDES FREE</span>
+          <span>GLOBESKIMMERS TELEGRAPH</span>
         </div>
       </div>
     </div>

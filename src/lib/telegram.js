@@ -2,7 +2,7 @@
 // tgClean / tgWordCount, so what the blank shows is what arrives: capitals, letters, digits and
 // plain punctuation; a full stop or ! becomes STOP; links and emoji don't go by wire. Three
 // words at most (founder, 2026-10-19: "spike curiosity"; a real telegram's base rate covered
-// ten); STOP rides free, and a word past 15 letters counts as two, the old telegraph rule.
+// ten); STOP doesn't count, and a word past 15 letters counts as two, the old telegraph rule.
 //
 //   telegramText(raw)          the wire text, e.g. "Safe in Manila. Miss you!" → "SAFE IN MANILA STOP MISS YOU STOP"
 //   telegramWords(text)        how many words count (STOP doesn't)
@@ -25,6 +25,20 @@ export function telegramText(raw) {
 }
 
 export const telegramWords = (text) => String(text || '').split(' ').filter((w) => w && w !== 'STOP' && /[\p{L}\p{N}]/u.test(w)).reduce((n, w) => n + Math.ceil(w.replace(/[^\p{L}\p{N}]/gu, '').length / 15), 0);
+
+// The typed text cut back to the words that fit (founder, 2026-10-19: "only 3 words max!"): a
+// fourth word can't be typed, and a paste keeps its first three. Spaces and punctuation as typed.
+export function telegramFit(raw, max = TELEGRAM_WORDS) {
+  const s = String(raw == null ? '' : raw);
+  if (telegramWords(telegramText(s)) <= max) return s;
+  const parts = s.match(/\S+\s*/g) || [];
+  let out = '';
+  for (const p of parts) {
+    if (telegramWords(telegramText(out + p)) > max) break;
+    out += p;
+  }
+  return out;
+}
 
 export function telegramNumber(id) {
   let h = 0;

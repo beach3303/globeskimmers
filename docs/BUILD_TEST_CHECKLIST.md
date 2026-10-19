@@ -2628,8 +2628,10 @@ them". It also answers "allow for reply to be sent even without a photo": a post
 postcard back or a telegram back", so postcards keep their photo and there is one words-only form, not two.
 
 - **Rules (worker `tgClean` / `tgWordCount`, mirrored in `src/lib/telegram.js`).** Capitals; letters, digits,
-  plain punctuation; a full stop or ! → STOP (free); links and emoji dropped; THREE words max; a word past 15
-  letters counts as two (the old telegraph rule); ≤ 120 characters.
+  plain punctuation; a full stop or ! → STOP (not counted); links and emoji dropped; THREE words max; a word past
+  15 letters counts as two (the old telegraph rule); ≤ 120 characters. The writer refuses a fourth word as it's
+  typed (`telegramFit`; a paste keeps its first three) and says "3 words max!" in red. Founder 10-19: no "price
+  once covered ten words" line and no "STOP rides free" label (the fine print reads GLOBESKIMMERS TELEGRAPH).
 - **Worker.** `/telegrams/send { to_handle | reply_to, body }`: adults only (sender and recipient), words through
   `gbModerate`, a block or a minor recipient answered `{ ok: true }` and stored nowhere, no finished passport =
   409; five a day to people who don't follow you (`tgs:`; a reply is exempt), twenty a minute (`tgm:`), no other
@@ -2642,13 +2644,13 @@ postcard back or a telegram back", so postcards keep their photo and there is on
   words on typewriter tape in Special Elite, red RECEIVED stamp, TOLLS: "THREE WORDS MAX!", first 3 FREE, each
   extra word 4¢ — stamped ON THE HOUSE, Morse rule spelling GLOBESKIMMERS). `TelegramCompose` (the dark telegraph
   office: pick a @username or type one, type on the blank, a three-box meter, "On the wire" preview, "3 WORDS MAX!
-  MAKE IT COUNT.", Wire it; over three it says "Cut 1 to wire it" and the 4¢ line turns red). `TelegramCard`
+  MAKE IT COUNT.", Wire it; a fourth word can't be typed). `TelegramCard`
   (one Reply = a telegram back; ••• = Delete / Report / Block). `ReplyWays` on a postcard's Reply (Mailbox and the
   postcard box). Mailbox: a Telegram button under Postcard; "Mary sent you a telegram"; tapping a postcard or
   telegram row brings its card into view; `?tg=` from an alert does too. Settings switch → "Postcards and
   telegrams". Privacy policy names telegrams (site).
 - Verified: `node --check`; the word rules on six samples; eslint + no-undef; build; boot-check ✅; captured
-  (mocked feed): the Mailbox head with both buttons, a received telegram, the writer at 3/3 and at 4/3, the
-  reply chooser.
+  (mocked feed): the Mailbox head with both buttons, a received telegram, the writer empty, at 3/3, and refusing
+  "Landed safe in Manila" at "LANDED SAFE IN", the reply chooser.
   NOT verified: a real send / reply / delete against production (needs the push).
 - **Activate:** push (worker + migration + site deploy themselves), then `npm run ota`.

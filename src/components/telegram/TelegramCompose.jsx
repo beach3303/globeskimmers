@@ -16,7 +16,7 @@ import { useDismissable } from "@/lib/dismissStack";
 import { askForAlerts } from "@/lib/pushAlerts";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
-import { TELEGRAM_WORDS, sendTelegram, telegramText, telegramWords } from "@/lib/telegram";
+import { TELEGRAM_WORDS, sendTelegram, telegramFit, telegramText, telegramWords } from "@/lib/telegram";
 import TelegramPaper, { TINK, TINK3, TRED, TYPE } from "@/components/telegram/TelegramPaper";
 
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
@@ -40,6 +40,12 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
   const [to, setTo] = useState(fixedTo);
   const [typing, setTyping] = useState(false);   // "Someone else…": a typed @username
   const [busy, setBusy] = useState(false);
+  const [full, setFull] = useState(false);       // a fourth word was refused just now
+  const type = (v) => {
+    const fit = telegramFit(String(v).slice(0, 200));
+    setFull(fit.length < String(v).length && telegramWords(telegramText(v)) > TELEGRAM_WORDS);
+    setRaw(fit);
+  };
   const close = () => { if (!busy && typeof onClose === "function") onClose(); };
   useDismissable(open, close);
   useEffect(() => { setTo(fixedTo); }, [fixedTo]);
@@ -94,7 +100,6 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
             {reply ? <>A telegram back to <em style={{ fontStyle: "italic", color: BRASS }}>{reply.name || (reply.handle ? `@${reply.handle}` : "them")}</em></> : <>Send a <em style={{ fontStyle: "italic", color: BRASS }}>telegram</em></>}
           </h3>
           <p style={{ margin: "6px 0 0", fontFamily: MONO, fontSize: fs(13), fontWeight: 500, letterSpacing: ".08em", textTransform: "uppercase", color: BRASS }}>3 words max! Make it count.</p>
-          <p style={{ margin: "2px 0 0", fontSize: fs(12), lineHeight: 1.45, color: "#CBB994" }}>A telegram’s price once covered ten words; ours covers three. STOP rides free, and so does every telegram.</p>
 
           {/* the address */}
           {reply ? null : fixedTo ? (
@@ -118,8 +123,8 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
 
           {/* the blank, typed on directly */}
           <TelegramPaper mode="blank" to={toLine} from={{ name: meName, handle: meHandle }} number="NEW" words={words} maxWords={TELEGRAM_WORDS} style={{ marginTop: 14 }}>
-            <textarea value={raw} onChange={(e) => setRaw(e.target.value.slice(0, 200))} rows={2} aria-label="Your telegram"
-              placeholder="THREE WORDS. STOP IS FREE."
+            <textarea value={raw} onChange={(e) => type(e.target.value)} rows={2} aria-label="Your telegram"
+              placeholder="TYPE YOUR TELEGRAM"
               autoCapitalize="characters" spellCheck={false}
               className="resize-none placeholder:text-[color:var(--tg-ph)]"
               style={{
@@ -137,8 +142,10 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
                 <span key={i} style={{ width: 22, height: 18, borderRadius: 2, border: `1px solid ${over ? TRED : "rgba(201,163,90,.6)"}`, background: i < Math.min(words, TELEGRAM_WORDS) ? (over ? TRED : BRASS) : "transparent" }} />
               ))}
             </div>
-            <span role="status" style={{ fontFamily: MONO, fontSize: fs(11.5), letterSpacing: ".06em", color: over ? "#F0907C" : "#CBB994" }}>
-              {over ? `${words} words · 3 max! Cut ${words - TELEGRAM_WORDS} to wire it` : `${words} of ${TELEGRAM_WORDS} words · past 15 letters, a word counts as two`}
+            <span role="status" style={{ fontFamily: MONO, fontSize: fs(11.5), letterSpacing: ".06em", color: over || full ? "#F0907C" : "#CBB994" }}>
+              {over ? `${words} words · 3 max! Cut ${words - TELEGRAM_WORDS} to wire it`
+                : full ? "3 words max!"
+                : `${words} of ${TELEGRAM_WORDS} words${/[\p{L}\p{N}]{16,}/u.test(wire) ? " · a word past 15 letters counts as two" : ""}`}
             </span>
           </div>
           {wire ? (

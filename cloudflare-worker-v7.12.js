@@ -20629,7 +20629,7 @@ async function handleTelegramSend(request, env, ctx) {
     const body = tgClean(b.body);
     const words = tgWordCount(body);
     if (!words) return jsonResponse({ error: 'Write your telegram first' }, 400);
-    if (words > TG_MAX_WORDS) return jsonResponse({ error: 'Three words at most. STOP is free.' }, 400);
+    if (words > TG_MAX_WORDS) return jsonResponse({ error: '3 words max! Make it count.' }, 400);
     const sp = await gbSocialProfile(env, user.id);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Telegrams aren’t available on this account' }, 403);
