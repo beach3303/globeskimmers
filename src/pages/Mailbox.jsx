@@ -28,7 +28,8 @@ import Envelope, { whenLabel } from "@/components/social/Envelope";
 import TravelerSheet from "@/components/social/TravelerSheet";
 import ConfirmBirthdayNote from "@/components/social/ConfirmBirthdayNote";
 import { Face } from "@/components/social/SocialMarks";
-import FollowByHandle, { workerMessage } from "@/components/social/FollowByHandle";
+import { workerMessage } from "@/components/social/FollowByHandle";
+import FindPeople from "@/components/social/FindPeople";
 import Requests from "@/components/social/Requests";
 import ActivityList from "@/components/social/ActivityList";
 import PostcardCard from "@/components/social/PostcardCard";
@@ -280,7 +281,7 @@ function MailboxBody() {
     <div>
       <Masthead onPostcard={() => setCompose(true)} addressable={addressable} />
       <div className={COLUMN}>
-        <FollowByHandle onFollowed={() => load()} style={{ marginTop: 16 }} />
+        <FindPeople onFollowed={() => load()} style={{ marginTop: 16 }} />
         {!emptyFeed ? <InviteButton style={{ marginTop: 8 }} /> : null}
         {me.loaded && !me.handle ? <ClaimCard onClaimed={(h) => setMe({ loaded: true, handle: h })} style={{ marginTop: GAP }} /> : null}
         <ActivityList items={activity} onOpen={openFrom} style={{ marginTop: GAP }}

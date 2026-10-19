@@ -50,7 +50,9 @@ export function activityLine(a) {
     }
     case "tag": return { who, text: `tagged you${a.place ? ` at ${a.place}` : ""}. Were you there together?` };
     // The heads-up that photos hang on a board (City Billboards, 2026-10-16): no `who`, the board speaks.
-    case "board": return { who: a.board || "A city", text: `${a.board_kind === "state" ? "state" : a.board_kind === "country" ? "country" : "city"} board now shows ${a.photos === 1 ? "one of your photos" : `${a.photos || "some"} of your photos`} — take any down from your album` };
+    // The heads-up that people can now find you by name and email (Find people, 2026-10-18).
+    case "board": if (a.board_kind === "find") return { who: "Find people", text: "is new: members can now find you by your name or the email you signed up with. Turn either off in Settings → Privacy." };
+      return { who: a.board || "A city", text: `${a.board_kind === "state" ? "state" : a.board_kind === "country" ? "country" : "city"} board now shows ${a.photos === 1 ? "one of your photos" : `${a.photos || "some"} of your photos`} — take any down from your album` };
     default: return { who, text: "" };
   }
 }

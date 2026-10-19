@@ -28,7 +28,8 @@ import CircleList from "@/components/social/CircleList";
 import BlockedList from "@/components/social/BlockedList";
 import Requests from "@/components/social/Requests";
 import TravelerSheet from "@/components/social/TravelerSheet";
-import FollowByHandle, { workerMessage } from "@/components/social/FollowByHandle";
+import { workerMessage } from "@/components/social/FollowByHandle";
+import FindPeople from "@/components/social/FindPeople";
 import InviteButton from "@/components/passport/InviteButton";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
 
@@ -232,7 +233,7 @@ function CircleScreen({ mine, onBack }) {
           </>
         )}
 
-        <FollowByHandle cloth={mine.key} style={{ marginTop: 24 }} />
+        <FindPeople cloth={mine.key} style={{ marginTop: 24 }} />
         {/* An empty tab already carries the invite ('No one here yet'). */}
         {ready && shown.length ? (
           <>

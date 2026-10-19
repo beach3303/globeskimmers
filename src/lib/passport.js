@@ -324,6 +324,13 @@ export async function getPrivacy() {
   const { data, error } = await callWorker('social/profile', { privacy: true });
   return { profile: data?.profile || null, privacy: data?.privacy || null, error };
 }
+// Find people (founder, 2026-10-18): a name, a @username or the sign-up email →
+// { people: [{ user_id, name, handle, avatar, cloth, relation }], mode: 'name' | 'email' | 'off' }.
+// The worker decides who can be found (adults only; name and email only when they allow it).
+export async function findPeople(q) {
+  const { data, error } = await callWorker('social/find', { q });
+  return { people: Array.isArray(data?.people) ? data.people : [], mode: data?.mode || 'name', error: error || data?.error || null };
+}
 export async function setSocialProfile(patch) {
   const { data, error } = await callWorker('social/profile', patch || {});
   return { profile: data?.profile || null, error: error || data?.error || null };
