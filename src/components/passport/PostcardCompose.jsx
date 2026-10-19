@@ -320,7 +320,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
             value={message}
             onChange={(e) => setMessage(e.target.value.slice(0, 240))}
             rows={2}
-            placeholder="Best shrimp & grits of my life — Southern cooking is no joke."
+            placeholder="Say something about the photo…"
             aria-label="Your message"
             className="resize-none placeholder:text-[color:var(--gs-ph)]"
             style={css({ ...FIELD, display: "block", marginTop: 12, fontFamily: SERIF, fontStyle: "italic", fontSize: fs(16), lineHeight: 1.35, color: NEUTRAL.ink2, "--gs-ph": NEUTRAL.ink3 })}
