@@ -2510,7 +2510,7 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   sheet on a phone; previews fetched by Messenger/WhatsApp bots (check after the push with a shared link).
 - **Activate:** push → the worker deploys itself; the sheet reaches phones with `npm run ota`.
 
-## 2026-10-19 — Mailbox: the doors on top, the activity folded (COMMITTED, awaiting push)
+## 2026-10-19 — Mailbox: the doors on top, the activity folded (PUSHED)
 - **Founder:** "quite a scroll to reach the bottom of mailbox to open postcard and postcard box".
 - **App:** `PostcardBoxRow` and `CityBoardsRow` moved above the activity; `ActivityList` shows 4 rows with
   "Show N more" (cap 30); the Mailbox folds every "<board> now shows N of your photos" line into one — "Your photos
