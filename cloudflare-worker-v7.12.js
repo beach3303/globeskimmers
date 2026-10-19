@@ -18185,6 +18185,8 @@ const pcCityKey = (city, country, region = null) => {
   return `${c}${st ? `, ${pcFold(st)}` : ''}|${k}`.slice(0, 140);
 };
 const PC_CITY_DAILY = 5;
+// Postcards a day to people who don't follow the sender (Step A, 2026-10-18).
+const PC_STRANGER_DAILY = 5;
 // Was this traveler really in that city? A verified stamp of theirs there; false
 // when the stamps can't be read, so a board fails closed.
 async function pcWasThere(env, userId, key) {
@@ -18547,8 +18549,10 @@ async function handlePostcardSend(request, env, ctx) {
     let boardRegion = null;
     let toTeen = false;
     let anonLabel = null;
-    if (b.to_handle) {
-      to = await gbHandleToUser(env, b.to_handle);
+    if (b.to_handle || BL_UUID.test(String(b.to_user_id || ''))) {
+      // By @username, or by account id — someone Find people found, perhaps with no @username
+      // yet (founder, 2026-10-18: "send postcards to people who we are not friends with").
+      to = b.to_handle ? await gbHandleToUser(env, b.to_handle) : { user_id: String(b.to_user_id).toLowerCase(), handle: null };
       if (!to) return jsonResponse({ error: 'No traveler with that username' }, 404);
       if (to.user_id === user.id) return jsonResponse({ error: 'A postcard to yourself? Frame it instead 🙂' }, 400);
       if (sp.social_tier === 'teen') {
@@ -18616,6 +18620,8 @@ async function handlePostcardSend(request, env, ctx) {
       if (await gbBlockedEither(env, user.id, to.user_id)) return jsonResponse({ ok: true });
       const rsp = await gbSocialProfile(env, to.user_id).catch(() => undefined);
       if (rsp === undefined) return jsonResponse({ error: 'Couldn’t send right now — try again' }, 503);
+      // No social profile = an account that never finished its passport: no known age, no mail.
+      if (rsp === null) return jsonResponse({ error: 'They haven’t finished their passport yet, so postcards can’t reach them' }, 409);
       // A minor receives no postcards (founder, 2026-10-16): stored nowhere, answered like any send.
       if (rsp?.social_tier === 'blocked' || rsp?.social_tier === 'teen' || gbAgeHeld(rsp)) return jsonResponse({ ok: true });
       if (rsp?.social_tier === 'teen' && !(await gbMutualFriends(env, user.id, to.user_id))) {
@@ -18623,6 +18629,16 @@ async function handlePostcardSend(request, env, ctx) {
       }
       toTeen = rsp?.social_tier === 'teen';
       toUser = to.user_id;
+    }
+    // A card to someone who doesn't follow the sender lands under "From someone new" in their
+    // Mailbox (2026-10-18); a sender gets five such cards a day, so nobody can paper strangers.
+    if (toUser) {
+      const fq2 = await gbRest(env, `user_follows?follower_id=eq.${toUser}&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id&limit=1`, {});
+      const followsMe = fq2.ok && (await fq2.json()).length > 0;
+      if (!followsMe) {
+        const n = await gbDayCount(env, `pcs:${user.id}`);
+        if (n != null && n > PC_STRANGER_DAILY) return jsonResponse({ error: 'That’s five postcards today to people who don’t follow you. Try again tomorrow.' }, 429);
+      }
     }
     const cardRegion = !toCity && pcIsUSName(b.country) && b.city ? (pcUSCity(b.city, b.region).state || await pcStampState(env, user.id, b.city, b.country)) : null;
     const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
@@ -19810,6 +19826,8 @@ async function handleSocialFeed(request, env) {
       message: p.message, place: p.place_name, city: p.city, region: p.region || null, country: p.country,
       dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
       to_me: p.to_user_id === user.id,
+      // From someone I don't follow (Step A, 2026-10-18): the Mailbox shelves it apart.
+      from_new: p.to_user_id === user.id && !ids.includes(p.sender_id),
       ...(p.to_user_id === null && keptSet ? { kept: keptSet.has(p.id) } : {}),
       by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
     }));
