@@ -193,3 +193,60 @@ export async function photoSlide(src, stamp, presetId = "post_4x5") {
   if (!blob) throw new Error("a slide could not be encoded");
   return { blob, url: URL.createObjectURL(blob), dataUrl: c.toDataURL("image/jpeg", 0.92) };
 }
+
+// The stamp-earned card (growth plan, 2026-10-19: "ask at the right moment"): one story-sized
+// image for the moment a stamp lands — the stamp art (when it loads) on the navy ground, the
+// place, city · country · date, a solid "Verified ✓" pill for a proven stamp, the brand line
+// and the member's passport link. The footer says only what is true: verified stamps carry
+// proof; it never says a stamp can only be earned by being there.
+export async function stampCard(stamp, { presetId = "story_meta", artSrc = null, link = null } = {}) {
+  const P = SHARE_PRESETS[presetId] || SHARE_PRESETS.story_meta;
+  const { W, H } = P;
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const ctx = c.getContext("2d");
+  paintShareBackground(ctx, W, H);
+  const pad = 72, maxW = W - pad - Math.max(pad, P.right);
+  // the art, centred in the upper half; a tainted or missing image leaves the ground bare
+  let artBottom = P.top + 120;
+  if (artSrc) {
+    try {
+      const img = await loadImage(artSrc);
+      const size = Math.min(W - 2 * pad, Math.round(H * 0.34));
+      const x = (W - size) / 2, y = P.top + 120;
+      ctx.save(); ctx.shadowColor = "rgba(0,0,0,0.35)"; ctx.shadowBlur = 40; ctx.shadowOffsetY = 18;
+      ctx.drawImage(img, x, y, size, size); ctx.restore();
+      artBottom = y + size;
+    } catch { /* no art on this card */ }
+  }
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  let y = artBottom + 120;
+  const verified = ["gps", "photo_loc", "photo_ai"].includes(stamp?.verified);
+  if (verified) {
+    ctx.font = `600 36px ${SHARE_SANS}`; setSpacing(ctx, 4);
+    const t = "VERIFIED  ✓", tw = ctx.measureText(t).width, pw = tw + 64, ph = 68;
+    ctx.fillStyle = STAMP;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(W / 2 - pw / 2, y - 48, pw, ph, 34); ctx.fill(); } else ctx.fillRect(W / 2 - pw / 2, y - 48, pw, ph);
+    ctx.fillStyle = "#FFFFFF"; ctx.fillText(t, W / 2, y); setSpacing(ctx, 0);
+    y += 110;
+  }
+  const name = String(stamp?.name || "");
+  let size = 84; ctx.font = `${size}px ${SHARE_SERIF}`;
+  while (size > 48 && ctx.measureText(name).width > maxW) { size -= 2; ctx.font = `${size}px ${SHARE_SERIF}`; }
+  const nameLines = wrapText(ctx, name, maxW, 2);
+  ctx.fillStyle = "#FFFFFF";
+  nameLines.forEach((l, i) => ctx.fillText(l, W / 2, y + i * (size + 10)));
+  y += (nameLines.length - 1) * (size + 10) + 70;
+  const where = [stamp?.city, stamp?.country].filter(Boolean).join(", ");
+  const line = [where, slideDate(stamp?.visited_on)].filter(Boolean).join("  ·  ");
+  if (line) { ctx.font = `500 40px ${SHARE_SANS}`; ctx.fillStyle = "rgba(251,246,236,0.92)"; ctx.fillText(line, W / 2, y, maxW); y += 60; }
+  ctx.font = `italic 56px ${SHARE_SERIF}`; ctx.fillStyle = GOLD; ctx.fillText("I was here", W / 2, y + 16);
+  // the bottom: brand, then the link
+  const brandY = H - P.bottom - 110;
+  ctx.font = `600 36px ${SHARE_SANS}`; setSpacing(ctx, 6); ctx.fillStyle = GOLD; ctx.fillText("GLOBESKIMMERS", W / 2, brandY); setSpacing(ctx, 0);
+  ctx.font = `40px ${SHARE_SERIF}`; ctx.fillStyle = "#FBF6EC"; ctx.fillText("My Virtual Passport  ·  verified stamps carry proof", W / 2, brandY + 54, maxW);
+  if (link) { ctx.font = `500 38px ${SHARE_SANS}`; ctx.fillStyle = "rgba(251,246,236,0.8)"; ctx.fillText(link, W / 2, brandY + 112, maxW); }
+  const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.92));
+  if (!blob) throw new Error("the card could not be encoded");
+  return { blob, url: URL.createObjectURL(blob), dataUrl: c.toDataURL("image/jpeg", 0.92) };
+}

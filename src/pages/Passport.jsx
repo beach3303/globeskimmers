@@ -30,6 +30,7 @@ import { getStampFix } from "@/lib/geolocation";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { isPlain, renderLook } from "@/lib/photoLook";
 import PhotoEditor from "@/components/passport/PhotoEditor";
+import StampEarnedSheet from "@/components/passport/StampEarnedSheet";
 import { readPhotoExif } from "@/lib/photoExif";
 import { takeSharedPhotos, SHARED_PHOTOS_EVENT } from "@/lib/sharedPhotos";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
@@ -838,7 +839,9 @@ function StampPlaceModal({ onClose, onDone, preset = null, sharedPhotos = null, 
       showToast("We couldn't confirm this place from those photos — use one you took there, with its location on", "error");
       return;
     }
-    setBusy(false); showToast(data.verified === "gps" ? "✓ Verified — place stamped 🛂" : (proofToast(proof) || "Place stamped 🛂"), "success"); onDone();
+    setBusy(false); showToast(data.verified === "gps" ? "✓ Verified — place stamped 🛂" : (proofToast(proof) || "Place stamped 🛂"), "success");
+    // The stamp as made, for the stamp-earned sheet (2026-10-19): the worker's row plus what the form knew.
+    onDone({ ...data, name: venue.trim() || cityName, city: cityName, country: country || null, visited_on: dateVal });
   };
 
   const inputStyle = { width: "100%", border: `1px solid ${RULE}`, borderRadius: 12, padding: "10px 12px", fontSize: fs(14), color: INK, fontFamily: SANS, background: "#fff" };
@@ -1343,6 +1346,16 @@ function PassportInner() {
     if (files.length) setSorter({ files, shared: false, n: Date.now() });
   };
   const queued = stampQueue ? stampQueue.items[stampQueue.i] : null;
+  // The stamp-earned sheet (growth plan, 2026-10-19: "ask at the right moment"): adults only,
+  // verified stamps only, never a sensitive place (the worker starts those private) or a place
+  // of respect; for an Upload-photos queue, once, after the last place.
+  const [earned, setEarned] = useState(null);
+  const offerShare = (d) => {
+    if (!d || !d.id || d.private || !["gps", "photo_loc", "photo_ai"].includes(d.verified)) return;
+    if (socialTier !== "adult") return;
+    try { if (respectPlaceFor(d)) return; } catch { /* no rule, no bar */ }
+    setEarned(d);
+  };
   const nextInQueue = () => setStampQueue((q) => (q && q.i + 1 < q.items.length ? { ...q, i: q.i + 1 } : null));
   const stampsView = preview ? SAMPLE_STAMPS : stamps;
   const statsView = preview ? SAMPLE_STATS : stats;
@@ -1716,7 +1729,7 @@ function PassportInner() {
         <ArrangeSheet stamps={bookStamps} onClose={() => setArranging(false)}
           onSaved={(ids) => { setArranging(false); setBooklet((b) => ({ ...(b || {}), order: "custom", custom: ids })); }} />
       )}
-      {showStampPlace && <StampPlaceModal preset={stampPreset} onClose={() => { setShowStampPlace(false); setStampPreset(null); }} onDone={() => { setShowStampPlace(false); setStampPreset(null); load(); }} />}
+      {showStampPlace && <StampPlaceModal preset={stampPreset} onClose={() => { setShowStampPlace(false); setStampPreset(null); }} onDone={(d) => { setShowStampPlace(false); setStampPreset(null); load(); offerShare(d); }} />}
       {sorter && (
         <PhotoSorter key={sorter.n} files={sorter.files} shared={sorter.shared} stamps={stamps}
           onClose={() => setSorter(null)} onChanged={load}
@@ -1725,8 +1738,9 @@ function PassportInner() {
       {queued && (
         <StampPlaceModal key={`${stampQueue.n}-${stampQueue.i}`} sharedPhotos={queued.files} placeHint={queued.placeHint} look={queued.look || null}
           queue={stampQueue.items.length > 1 ? { at: stampQueue.i + 1, of: stampQueue.items.length } : null} onSkip={nextInQueue}
-          onClose={() => setStampQueue(null)} onDone={() => { load(); nextInQueue(); }} />
+          onClose={() => setStampQueue(null)} onDone={(d) => { const last = !stampQueue || stampQueue.i + 1 >= stampQueue.items.length; load(); nextInQueue(); if (last) offerShare(d); }} />
       )}
+      <StampEarnedSheet stamp={earned} slug={share?.slug || null} onClose={() => setEarned(null)} />
 
       {/* Friend view: the quiet report door (and the sheet of reasons), and Block */}
       {readOnly && (
