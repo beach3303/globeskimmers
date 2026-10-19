@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-10-19
+Last updated: 2026-10-19 (push build 1.0.6 added)
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -855,6 +855,16 @@ mutual friends and only as a daily digest or 6+ hours later (never where someone
 switch per kind in Settings, a weekly cap, quiet hours, nothing to teens 21:00–07:00 and no social
 alerts to teens at all. Founder one-time setup: an APNs key (.p8) from the Apple Developer portal and
 a Firebase project (google-services.json) for Android, then `npx wrangler secret put` for each.
+**Built 2026-10-19 (build 1.0.6 = iOS 1.0.5 (15) / Android 1.0.9 (12)):** the worker sends through APNs
+(ES256 from the founder's .p8, Key ID K792MFVWCV, Team 6C6X2RV7CC) and FCM v1 (the Firebase project
+`globeskimmers`); one gate (`pushNotify`) with the agreed rules; Settings → Alerts; a tapped alert opens its
+screen. **Founder steps left:** (1) store the two secrets — `npx wrangler secret put APNS_KEY_P8 <
+~/Desktop/push-keys/AuthKey_K792MFVWCV.p8` and `npx wrangler secret put FCM_SERVICE_ACCOUNT <
+~/Desktop/push-keys/globeskimmers-firebase-adminsdk-fbsvc-0c83c38c35.json`; (2) push; (3) Xcode: archive
+1.0.5 (15) → TestFlight → Settings → Alerts → Turn on, then Admin's /push/test (or a postcard from another
+account) to see the first knock; submit to both stores with the Android bundle (`cd android && ./gradlew
+bundleRelease`). The Push Notifications capability on the App ID is ticked in the Developer portal; Xcode's
+automatic signing adds it to the profile at the archive.
 Place-triggered nudges are a separate, later decision: they need "Always" location on iPhone and
 background location on Android (a Play declaration form + prominent disclosure), geofences for the
 20 nearest icons refreshed as the member moves, a privacy-policy line, and never for teens. Airport

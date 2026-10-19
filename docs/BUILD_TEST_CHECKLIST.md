@@ -2518,3 +2518,50 @@ State: Brief delivered · hygiene #1 (poisoned homerows cache) ALREADY SHIPPED (
   (the Find people heads-up and a lone board line stay as they are).
 - Verified: eslint + no-undef, build, boot-check; captured with the unread list and feed mocked.
 - **Activate:** `npm run ota` after the push (app only).
+
+## 2026-10-19 — Alerts outside the app (push), build 1.0.6 = iOS 1.0.5 (15) · Android 1.0.9 (12) (COMMITTED, awaiting push)
+- **Founder (10-19):** lock-screen / banner alerts for a postcard (with a line of its words; tap → that card; ten
+  → one), a follow request, a comment on a photo, a guestbook signature; opt-in "inner circle stamped a place".
+  Setup done the same evening: APNs key `K792MFVWCV` (team `6C6X2RV7CC`, file in ~/Desktop/push-keys), Firebase
+  project `globeskimmers` (google-services.json + service-account JSON; the org policy "disable service account
+  key creation" had to be overridden at the organization). **Secrets NOT yet stored** at write time.
+- **Worker:** the push module (before `handleSocialFind`). `pushNotify(env, uid, kind, make, opts)` is the one
+  gate: `pcAdultRow` only; the member's `alert_*` switch (postcards / follows / pages on by default,
+  friend_stamps / news off); `PUSH_WEEKLY_CAP` 40 (KV `pushwk:`); quiet hours 22:00–08:00 in
+  `profiles.home_timezone` — the line waits in KV `pushq:<uid>` and the hourly cron (`0 * * * *` →
+  `pushHourly(env)`) sends it once the member's morning comes; several of a kind within six hours fold ("3 new
+  postcards", KV `pushn:`). `apnsSend` (HTTP/2 to api.push.apple.com, ES256 JWT cached 50 min, collapse-id per
+  kind; a `BadDeviceToken` retries the sandbox host once — an Xcode build's token lives there) and `fcmSend` (v1,
+  OAuth from the service account, channel `alerts`, icon `ic_stat_globeskimmers`); a token reported gone is
+  deleted. Hooks: a direct postcard (`return=representation` → the card's id → `/Postcards?pc=<id>`), a follow
+  request / a follow / an accepted follow, a reaction (press), a signature or doodle, a tag invite. The inner
+  circle's stamps: `pushFriendStamps` at local 9, mutual friends only, tier ≥ inner, never where they are now.
+  Routes `/push/register` (upsert on token; a shared phone follows the sign-in), `/push/unregister`, `/push/test`
+  (admin: knocks on the caller's phones, reports which keys exist). Account deletion takes `push_tokens`.
+  Migration `20261019050000_push_alerts.sql`. wrangler.toml: `[vars]` APNS_KEY_ID / APNS_TEAM_ID /
+  APNS_BUNDLE_ID / FCM_PROJECT_ID, crons `["0 15 * * *", "0 * * * *"]` (the hourly one runs ONLY `pushHourly`).
+- **App:** `src/lib/pushAlerts.js` — `attachPushListeners` (registration → `/push/register`; a tap → the route
+  through AuthContext's `pendingRoute`; Android channel), `syncPushToken` on every adult open, `askForAlerts`
+  after a postcard send (not a board) and after a follow (FindPeople, FollowByHandle), `unregisterPush` on
+  sign-out. Settings → **Alerts**: the phone's state (On / Off in phone settings / Turn on) and five switches.
+  Postcards `?pc=<id>` scrolls to the card, ringed. Privacy policy: the token and its deletion.
+- **Native:** `@capacitor/push-notifications@8.1.3`; iOS `aps-environment` entitlement + AppDelegate token
+  hand-off; Android POST_NOTIFICATIONS, Firebase meta-data (icon / colour / channel), monochrome status icons
+  generated in 5 densities, `google-services.json` in android/app (gitignored). Versions bumped in all four iOS
+  configs (app + ShareExtension) and Android.
+- **Two bugs the gates caught before anyone saw them:** a static `callWorker` import in pushAlerts and an
+  effect placed above the `socialTier` declarations produced "Cannot access 'q' before initialization" at boot
+  (white screen) — lazy import + the effect moved below the state.
+- Verified: 14 gate checks (adult/teen, switches, folding, quiet-hours queue + replace + forced flush, weekly
+  cap, gone-token deletion, bad id, quiet-hour maths); the APNs JWT verifies against the key's own public half
+  (64-byte raw signature, cached); a REAL FCM OAuth exchange issued a token; eslint + no-undef; build;
+  boot-check ✅; `npx cap sync` registers the plugin on both platforms; Android `assembleDebug` BUILD SUCCESSFUL;
+  iOS launch check (iOS 27 runtime): iPad Air ✓, iPhone ✓ (first run; a second run on the fixed bundle was
+  started); captured: Settings → Alerts, a postcard opened by id.
+  NOT verified: a real knock on a phone — needs the secrets, the store build and a device (the admin's
+  /push/test is for that moment).
+- **Activate:** founder: `npx wrangler secret put APNS_KEY_P8 < ~/Desktop/push-keys/AuthKey_K792MFVWCV.p8` and
+  `npx wrangler secret put FCM_SERVICE_ACCOUNT < ~/Desktop/push-keys/globeskimmers-firebase-adminsdk-fbsvc-0c83c38c35.json`;
+  push (worker + migration deploy themselves); Xcode archive 1.0.5 (15) → TestFlight → Settings → Alerts → Turn
+  on → /push/test; `cd android && ./gradlew bundleRelease`; submit both. The JS half reaches current phones by
+  `npm run ota`, where it stays quiet until the native build with the plugin arrives.
