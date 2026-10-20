@@ -14,7 +14,15 @@
 import { callWorker } from '@/lib/callWorker';
 import { requirePassport } from '@/lib/passportGate';
 
-export const TELEGRAM_WORDS = 4;   // founder, 2026-10-19 (was 3)
+export const TELEGRAM_WORDS = 4;
+// The inks (founder, 2026-10-19: "black, red, green but text should be visible"): dark shades that
+// read at 7:1 or better on the tape and about 6:1 on the buff blank.
+export const TELEGRAM_INKS = [
+  { key: "black", name: "Black", color: "#1E1913" },
+  { key: "red", name: "Red", color: "#9E2A1C" },
+  { key: "green", name: "Green", color: "#1E5B32" },
+];
+export const inkColor = (key) => (TELEGRAM_INKS.find((i) => i.key === key) || TELEGRAM_INKS[0]).color;   // founder, 2026-10-19 (was 3)
 const MAX_CHARS = 120;
 export const WORD_NAMES = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 
@@ -59,10 +67,10 @@ export function telegramNumber(id) {
   return String(1000 + (h % 9000));
 }
 
-export async function sendTelegram({ to_handle, to_handles, mode, reply_to, reply_all, body }) {
+export async function sendTelegram({ to_handle, to_handles, mode, reply_to, reply_all, body, ink }) {
   if (!(await requirePassport())) return { data: null, error: 'finish_passport' };
   const to = Array.isArray(to_handles) ? to_handles : to_handle ? [to_handle] : [];
-  const { data, error } = await callWorker('telegrams/send', { body, ...(reply_to ? { reply_to, ...(reply_all ? { reply_all: true } : {}) } : { to_handles: to, mode: mode === 'group' ? 'group' : 'each' }) });
+  const { data, error } = await callWorker('telegrams/send', { body, ...(ink === 'red' || ink === 'green' ? { ink } : {}), ...(reply_to ? { reply_to, ...(reply_all ? { reply_all: true } : {}) } : { to_handles: to, mode: mode === 'group' ? 'group' : 'each' }) });
   return { data, error: error || data?.error || null };
 }
 

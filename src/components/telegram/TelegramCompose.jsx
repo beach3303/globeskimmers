@@ -21,8 +21,8 @@ import { useDismissable } from "@/lib/dismissStack";
 import { askForAlerts } from "@/lib/pushAlerts";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
-import { TELEGRAM_WORDS, sendTelegram, telegramFit, telegramText, telegramWords } from "@/lib/telegram";
-import TelegramPaper, { TINK, TINK3, TRED, TYPE } from "@/components/telegram/TelegramPaper";
+import { TELEGRAM_INKS, TELEGRAM_WORDS, inkColor, sendTelegram, telegramFit, telegramText, telegramWords } from "@/lib/telegram";
+import TelegramPaper, { TINK3, TRED, TYPE } from "@/components/telegram/TelegramPaper";
 
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
 const SERIF = "'Instrument Serif', Georgia, serif";
@@ -55,6 +55,7 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
   const [typing, setTyping] = useState(false);   // "Someone else…": the box for a typed @username
   const [mode, setMode] = useState(() => DRAFTS.get(key)?.mode || "each");   // each | group
   const [toAll, setToAll] = useState(false);     // a reply to a group telegram: everyone on it
+  const [ink, setInk] = useState(() => DRAFTS.get(key)?.ink || "black");   // black | red | green
   const [busy, setBusy] = useState(false);
   const [full, setFull] = useState(false);       // a fourth word was refused just now
   const type = (v) => {
@@ -64,7 +65,7 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
   };
   const close = () => {
     if (busy) return;
-    if (raw.trim() || (!fixedTo && list.length)) DRAFTS.set(key, { raw, list, mode }); else DRAFTS.delete(key);
+    if (raw.trim() || (!fixedTo && list.length)) DRAFTS.set(key, { raw, list, mode, ink }); else DRAFTS.delete(key);
     if (typeof onClose === "function") onClose();
   };
   useDismissable(open, close);
@@ -105,7 +106,7 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
     }
     setBusy(true);
     const group = !reply && recipients.length > 1 && mode === "group";
-    const { data, error } = await sendTelegram({ body: raw, ...(reply ? { reply_to: reply.reply_to, ...(toAll && others.length ? { reply_all: true } : {}) } : { to_handles: recipients, mode: group ? "group" : "each" }) });
+    const { data, error } = await sendTelegram({ body: raw, ink, ...(reply ? { reply_to: reply.reply_to, ...(toAll && others.length ? { reply_all: true } : {}) } : { to_handles: recipients, mode: group ? "group" : "each" }) });
     setBusy(false);
     if (error === "age_required") { showToast("Set your birth year in Settings first (one time)", "error"); return; }
     if (error === "finish_passport") return;
@@ -198,10 +199,22 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
               style={{
                 display: "block", width: "100%", minHeight: 56, padding: "2px 2px 0", border: 0, outline: "none",
                 background: `repeating-linear-gradient(transparent 0 25px, rgba(42,34,25,.28) 25px 26px)`,
-                fontFamily: TYPE, fontSize: fs(16), lineHeight: "26px", letterSpacing: ".04em", color: TINK,
+                fontFamily: TYPE, fontSize: fs(16), lineHeight: "26px", letterSpacing: ".04em", color: inkColor(ink),
                 "--tg-ph": TINK3,
               }} />
           </TelegramPaper>
+
+          {/* the ink (2026-10-19): black, red or green — all dark enough to read */}
+          <div role="radiogroup" aria-label="Ink" style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+            <span style={{ fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".18em", textTransform: "uppercase", color: "#CBB994" }}>Ink</span>
+            {TELEGRAM_INKS.map((i) => (
+              <button key={i.key} type="button" role="radio" aria-checked={ink === i.key} aria-label={`${i.name} ink`} onClick={() => setInk(i.key)}
+                style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 36, padding: "0 10px 0 6px", borderRadius: 999, border: `1px solid ${ink === i.key ? BRASS : "rgba(201,163,90,.35)"}`, background: ink === i.key ? "rgba(201,163,90,.16)" : "transparent", cursor: "pointer" }}>
+                <span aria-hidden="true" style={{ width: 20, height: 20, borderRadius: 999, background: i.color, boxShadow: `0 0 0 2px #F2E4BC${ink === i.key ? `, 0 0 0 3.5px ${BRASS}` : ""}` }} />
+                <span style={{ fontFamily: MONO, fontSize: fs(11.5), color: ink === i.key ? "#FBF3E2" : "#CBB994" }}>{i.name}</span>
+              </button>
+            ))}
+          </div>
 
           {/* the meter: one box per word */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>

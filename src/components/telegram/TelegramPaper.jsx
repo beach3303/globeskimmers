@@ -12,13 +12,14 @@
 //   body      the wire text (telegramText), for 'received'
 //   to, from  { name, handle } — either may be missing; `to` may be a line naming several
 //   also      the other @usernames on a group telegram ("ALSO TO …")
+//   ink       'black' | 'red' | 'green' — the words' color on the tape
 //   at        ISO time it was sent (SENT; a blank shows NOW)
 //   receivedAt ISO time it first reached the recipient's Mailbox (the RECEIVED stamp; else at)
 //   number    the form's NO. (telegramNumber(id))
 //   words     words counted (CHECK); maxWords the ceiling — over it, CHECK reads red
 import React from "react";
 import { fs } from "@/components/redesign/constants";
-import { WORD_NAMES } from "@/lib/telegram";
+import { WORD_NAMES, inkColor } from "@/lib/telegram";
 
 export const PAPER = "#F2E4BC";
 export const TINK = "#2A2219";      // printer's ink on the blank
@@ -136,7 +137,7 @@ function Box({ label, children, red = false, style = undefined }) {
   );
 }
 
-export default function TelegramPaper({ mode = "received", body = "", to = null, also = null, from = null, at = null, receivedAt = null, number = "0000", words = null, maxWords = 4, children = null, style = undefined }) {
+export default function TelegramPaper({ mode = "received", body = "", to = null, also = null, ink = null, from = null, at = null, receivedAt = null, number = "0000", words = null, maxWords = 4, children = null, style = undefined }) {
   const received = mode === "received";
   const when = wireTime(at);
   const got = wireTime(receivedAt) || when;
@@ -199,7 +200,7 @@ export default function TelegramPaper({ mode = "received", body = "", to = null,
                     boxShadow: "0 1px 1.5px rgba(80,58,20,.28), 0 0 0 .5px rgba(80,58,20,.12)",
                     clipPath: "polygon(0 6%, 2% 0, 97% 4%, 100% 0, 100% 94%, 98% 100%, 3% 96%, 0 100%)",
                     transform: `translateX(${NUDGE[i % NUDGE.length]}px) rotate(${TILT[i % TILT.length]}deg)`,
-                    fontFamily: TYPE, fontSize: fs(16), letterSpacing: ".07em", lineHeight: 1.25, color: "#1E1913", textShadow: "0 0 .5px rgba(30,25,19,.55)", whiteSpace: "nowrap",
+                    fontFamily: TYPE, fontSize: fs(16), letterSpacing: ".07em", lineHeight: 1.25, color: inkColor(ink), textShadow: "0 0 .5px rgba(30,25,19,.45)", whiteSpace: "nowrap",
                   }}>
                   {l}
                 </span>

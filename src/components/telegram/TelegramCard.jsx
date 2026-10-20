@@ -45,7 +45,7 @@ export default function TelegramCard({ row, me = undefined, meName = null, onRep
       {state === "open" ? (
         <div style={{ animation: row.received_at && receivedAt === row.received_at ? undefined : "gsTgReveal .45s ease-out both" }}>
           <style>{REVEAL}</style>
-          <TelegramPaper mode="received" body={row.body} to={{ name: firstName, handle: myHandle }} also={row.group} from={row.by} at={row.created_at} receivedAt={receivedAt}
+          <TelegramPaper mode="received" body={row.body} to={{ name: firstName, handle: myHandle }} also={row.group} ink={row.ink} from={row.by} at={row.created_at} receivedAt={receivedAt}
             number={telegramNumber(row.id)} words={telegramWords(row.body)} />
         </div>
       ) : (
