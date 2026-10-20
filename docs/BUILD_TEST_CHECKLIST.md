@@ -2865,3 +2865,19 @@ the X with a card started and the discard question. **Activate:** push, then `np
 the postcard X / Change tag / "Your message…" / "Where was this taken?", the one-time Allow prompt. Main 1fe6cbe
 matches what phones run. Still to do on a phone: Settings → Alerts & Notifications → Send a test.
 
+## 2026-10-20 — Growth week: admin alerts never lost, honest counts, Seal desk up, Desk wave 1 (COMMITTED, not pushed)
+
+Founder: "all of them" (the four offers after the growth check-in).
+- **Admin alerts:** ntfy refused 47 founder alerts (429) and 9 (522) in a week — anonymous sends from Cloudflare's
+  shared addresses. A refused alert now waits in KV `bellq:v1`; the hourly cron sends one roundup by ntfy, else by email
+  to founder@globeskimmers.io (Resend), then clears it (`bell_emailed`). Tested with a refusing ntfy. Optional founder
+  step that removes the cause: a free ntfy.sh account → access token → `npx wrangler secret put NTFY_TOKEN` (the code
+  already sends it; limits become per account).
+- **Honest counts:** `gbTestAccountIds` (admin emails + appreview@, KV a day) → active users, active by day, retention
+  7d and the 90-day cohorts drop those accounts and any device that ever signed in as one; the funnel drops them too.
+  D1 check: last-7-days people 17 → 16 without the demo.
+- **Seal desk** moved above Held usernames in Admin (app; OTA).
+- **Stamp Desk wave 1:** docs/growth/stamp-desk-wave-1.md — six posts (hooks, shots, captions + Taglish, hashtags,
+  src links, order, what to measure).
+- **Activate:** push (worker), `npm run ota` (the Seal move).
+
