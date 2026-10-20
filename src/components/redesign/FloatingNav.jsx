@@ -34,21 +34,26 @@ export default function FloatingNav({ active, dark = false }) {
   // back to the foreground (at most once a minute), cleared the moment the
   // Mailbox marks everything seen (the gs:unread event).
   const [unread, setUnread] = useState(0);
+  // The number (2026-10-19): unread postcards + sealed telegrams. It outlives a Mailbox visit for
+  // a telegram until its seal is broken (gs:mail asks again).
+  const [mail, setMail] = useState(0);
   const lastCheck = useRef(0);
   useEffect(() => {
     let gone = false;
     const check = async (force = false) => {
       if (!force && Date.now() - lastCheck.current < 60000) return;
       lastCheck.current = Date.now();
-      const { total, error } = await socialUnread();
-      if (!gone && !error) setUnread(total);
+      const { total, mail: m, error } = await socialUnread();
+      if (!gone && !error) { setUnread(total); setMail(m); }
     };
     check();
-    const onSeen = () => { setUnread(0); lastCheck.current = Date.now(); };
+    const onSeen = () => { setUnread(0); lastCheck.current = Date.now(); setTimeout(() => check(true), 1500); };
+    const onMail = () => { setTimeout(() => check(true), 800); };
+    window.addEventListener('gs:mail', onMail);
     const onVisible = () => { if (document.visibilityState === 'visible') check(); };
     window.addEventListener('gs:unread', onSeen);
     document.addEventListener('visibilitychange', onVisible);
-    return () => { gone = true; window.removeEventListener('gs:unread', onSeen); document.removeEventListener('visibilitychange', onVisible); };
+    return () => { gone = true; window.removeEventListener('gs:unread', onSeen); window.removeEventListener('gs:mail', onMail); document.removeEventListener('visibilitychange', onVisible); };
   }, [location.pathname]);
 
   // Emoji nav icons (matches the iPad redesign spec). Shown on BOTH phone and
@@ -123,7 +128,7 @@ export default function FloatingNav({ active, dark = false }) {
           <button
             key={it.id}
             onClick={() => navigate(createPageUrl(it.route))}
-            aria-label={it.id === 'mailbox' && unread > 0 ? `mailbox, ${unread} new` : it.id}
+            aria-label={it.id === 'mailbox' && mail > 0 ? `mailbox, ${mail} unread` : it.id === 'mailbox' && unread > 0 ? `mailbox, ${unread} new` : it.id}
             style={{
               minWidth: 62,
               display: 'flex',
@@ -143,9 +148,14 @@ export default function FloatingNav({ active, dark = false }) {
           >
             <span style={{ fontSize: 22, lineHeight: 1, position: 'relative' }}>
               {it.emoji}
-              {it.id === 'mailbox' && unread > 0 && !isActive && (
+              {it.id === 'mailbox' && mail > 0 ? (
+                // Unread postcards + sealed telegrams: a number, shown even on the Mailbox itself.
+                <span aria-hidden="true" style={{ position: 'absolute', top: -6, right: -12, minWidth: 18, height: 18, padding: '0 5px', boxSizing: 'border-box', borderRadius: 9999, background: '#E0533C', boxShadow: `0 0 0 2px ${bg}`, color: '#fff', fontSize: 11, fontWeight: 800, lineHeight: '18px', textAlign: 'center', fontFamily: 'system-ui, sans-serif' }}>
+                  {mail > 99 ? '99+' : mail}
+                </span>
+              ) : it.id === 'mailbox' && unread > 0 && !isActive ? (
                 <span aria-hidden="true" style={{ position: 'absolute', top: -2, right: -4, width: 10, height: 10, borderRadius: 9999, background: '#E0533C', boxShadow: `0 0 0 2px ${bg}` }} />
-              )}
+              ) : null}
             </span>
             <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.2, lineHeight: 1 }}>{it.label}</span>
           </button>

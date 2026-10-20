@@ -434,7 +434,7 @@ function MailboxBody() {
                   </div>
                 </>
               ) : null}
-              <h2 style={KICKER}>From your circle · newest first</h2>
+              <h2 style={KICKER}>{(() => { const n = rows.filter((r) => r.type === "telegram" && !r.received_at).length; return n ? `From your circle · ${n} sealed ${n === 1 ? "telegram" : "telegrams"}` : "From your circle · newest first"; })()}</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
                 {rows.filter((r) => !isNew(r)).map((r, i) => card(r, i, false))}
               </div>

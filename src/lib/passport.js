@@ -223,7 +223,8 @@ export async function socialRequest({ kind, handle, note }) {
 export async function socialUnread({ mark = false } = {}) {
   const { data, error } = await callWorker('social/unread', mark ? { mark: true } : {});
   if (mark && !error) { try { window.dispatchEvent(new Event("gs:unread")); } catch { /* no window */ } }
-  return { total: data?.total || 0, activity: data?.activity || [], error };
+  // mail (2026-10-19): unread postcards to me + sealed telegrams — the number on the Mailbox tab.
+  return { total: data?.total || 0, mail: Number(data?.mail) || 0, activity: data?.activity || [], error };
 }
 // A stamp's trip note ("what was this trip for?") — private unless shared.
 export async function setStampNote(stamp_id, { note, isPublic } = {}) {

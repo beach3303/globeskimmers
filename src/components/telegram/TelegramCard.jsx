@@ -29,7 +29,10 @@ export default function TelegramCard({ row, me = undefined, meName = null, onRep
     if (state !== "sealed") return;
     const now = new Date().toISOString();
     setReceivedAt(now);
-    openTelegram(row.id).then((r) => { if (r.receivedAt) setReceivedAt(r.receivedAt); }).catch(() => {});
+    openTelegram(row.id).then((r) => {
+      if (r.receivedAt) setReceivedAt(r.receivedAt);
+      try { window.dispatchEvent(new Event("gs:mail")); } catch { /* no window */ }   // the Mailbox badge counts one fewer
+    }).catch(() => {});
     if (reduced()) { setState("open"); return; }
     setState("opening");
     setTimeout(() => setState("open"), 720);
