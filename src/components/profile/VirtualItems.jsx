@@ -1,3 +1,8 @@
+// PETS ONLY since 2026-10-19 (founder: "remove virtual items except virtual pets. remove virtual
+// laptop and virtual drinking cup/virtual water bottles"): SHOW_GEAR = false hides the laptop and
+// the drinks everywhere — the kit is the travel buddies alone. Saved gear stays in profile_gear,
+// so flipping SHOW_GEAR back restores it untouched.
+//
 // "My virtual items" (founder, 2026-10-05): beside the trunk, a generic laptop
 // and a drink container — tumbler, straw bottle or lid bottle — each in the
 // founder's colors, each taking the traveler's EARNED stickers (same inventory
@@ -37,6 +42,8 @@ import { gearGet, gearSet } from "@/lib/gear";
 import { luggageGet } from "@/lib/passport";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { buildStickers } from "@/components/passport/VirtualLuggage";
+// The laptop and the drinks (tumbler, straw bottle, water bottle) are off (founder, 2026-10-19).
+const SHOW_GEAR = false;
 import LuggageLabel from "@/components/passport/LuggageLabel";
 import { GEAR_SHAPES, GEAR_COLORS, DRINK_VARIANTS, GEAR_BOUNDS, colorOf } from "@/components/profile/gearShapes";
 import { PET_SHAPES, POSES } from "@/components/profile/petShapes";
@@ -595,7 +602,9 @@ export default function VirtualItems({
   };
 
   const first = String(ownerFirst ?? "").trim();
-  const tab = readOnly ? (first ? `${possessive(first)} kit` : "Their kit") : "My kit";
+  const tab = SHOW_GEAR
+    ? (readOnly ? (first ? `${possessive(first)} kit` : "Their kit") : "My kit")
+    : (readOnly ? (first ? `${possessive(first)} travel buddies` : "Travel buddies") : "My travel buddies");
   const art = tablet ? 120 : 80;
   const keyTap = (fn) => (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); } };
 
@@ -649,17 +658,21 @@ export default function VirtualItems({
 
   // While the owner's kit loads: the folder and its labels, quiet tiles, no guessed items.
   const loading = !readOnly && !state;
+  // Pets only: someone else's page with no travel buddies shows no kit at all.
+  if (!SHOW_GEAR && readOnly && !buddies.length) return null;
 
   return (
     <Folder stock="kit" size="profile" tab={tab} padding="16px" className={className} style={style}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, alignItems: "end" }}>
-        <h3 style={{ ...LABEL, gridColumn: "span 2 / span 2" }}>{readOnly ? "VIRTUAL ITEMS" : "MY VIRTUAL ITEMS"}</h3>
-        {buddyLabel ? <h3 style={LABEL}>{buddyLabel}</h3> : null}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginTop: 8 }}>
+      {SHOW_GEAR ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, alignItems: "end" }}>
+          <h3 style={{ ...LABEL, gridColumn: "span 2 / span 2" }}>{readOnly ? "VIRTUAL ITEMS" : "MY VIRTUAL ITEMS"}</h3>
+          {buddyLabel ? <h3 style={LABEL}>{buddyLabel}</h3> : null}
+        </div>
+      ) : null}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginTop: SHOW_GEAR ? 8 : 0 }}>
         {loading
           ? [0, 1, 2].map((i) => <div key={i} aria-hidden="true" className="animate-pulse motion-reduce:animate-none" style={{ ...TILE, cursor: "default", minHeight: art + 64, background: NEUTRAL.white }} />)
-          : <>{shelfOrder.map(itemTile)}{buddies.map(buddyTile)}{seat}</>}
+          : <>{SHOW_GEAR ? shelfOrder.map(itemTile) : null}{buddies.map(buddyTile)}{seat}</>}
       </div>
       {loading ? <span className="sr-only">Loading your kit</span> : null}
 
@@ -725,7 +738,7 @@ export default function VirtualItems({
           </div>
         );
       })())}
-      {open && !readOnly && onBody(
+      {SHOW_GEAR && open && !readOnly && onBody(
         <GearModal kind={open} item={itemOf(gear, open)}
           stamps={stamps} stickersBySid={bySid} usedElsewhere={usedFor(open)}
           onChange={(item) => setItem(open, item)} onClose={() => setOpen(null)} />
