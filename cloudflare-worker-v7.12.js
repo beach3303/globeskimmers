@@ -1879,6 +1879,32 @@ async function handleDeleteAccount(request, env) {
 const ADMIN_EMAILS_WORKER = [
   'maizasimeon@gmail.com', 'founder@globeskimmers.io',
 ];
+// The accounts Admin's people counts leave out (growth plan week 1, done 2026-10-20): the admins
+// and the App Review demo, which Claude's screenshot runs also sign in as. Resolved to account ids
+// once a day (KV); a device that ever signed in as one of them is left out too.
+const ANALYTICS_EXCLUDE_EMAILS = [...ADMIN_EMAILS_WORKER, 'appreview@globeskimmers.io'];
+async function gbTestAccountIds(env) {
+  const kv = env.GLOBESKIMMERS_KV;
+  const ck = 'an:excl:v1';
+  try { const c = kv ? await kv.get(ck) : null; if (c) return JSON.parse(c); } catch { /* resolve again */ }
+  const ids = [];
+  for (const email of ANALYTICS_EXCLUDE_EMAILS) {
+    try {
+      const r = await gbRest(env, 'rpc/user_id_by_email', { method: 'POST', body: JSON.stringify({ p_email: email }) });
+      if (!r.ok) continue;
+      const v = await r.json().catch(() => null);
+      const id = String((typeof v === 'string' ? v : Array.isArray(v) ? v[0] : v?.user_id) || '').toLowerCase();
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) ids.push(id);
+    } catch { /* that one stays counted */ }
+  }
+  if (kv && ids.length) await kv.put(ck, JSON.stringify(ids), { expirationTtl: 86400 }).catch(() => {});
+  return ids;
+}
+// The SQL that drops those accounts and their devices from an events query (ids are UUID-checked).
+const gbNotTestSql = (ids) => {
+  const list = (ids || []).filter((x) => /^[0-9a-f-]{36}$/.test(x)).map((x) => `'${x}'`).join(',');
+  return list ? ` AND COALESCE(user_id,'') NOT IN (${list}) AND (anon_id IS NULL OR anon_id NOT IN (SELECT DISTINCT anon_id FROM events WHERE anon_id IS NOT NULL AND user_id IN (${list})))` : '';
+};
 
 async function handleAdminUserStats(request, env) {
   try {
@@ -2206,7 +2232,7 @@ const ANALYTICS_QUERIES = {
   // EVER (the best episodic signal)? NOTE the CAST: in a CTE, MIN(ts) has no column
   // affinity, so an uncast TEXT strftime bound silently makes numeric<text false.
   retention_cohorts_90d: `
-    WITH fs AS (SELECT anon_id, MIN(ts) AS f FROM events WHERE anon_id IS NOT NULL GROUP BY anon_id)
+    WITH fs AS (SELECT anon_id, MIN(ts) AS f FROM events WHERE anon_id IS NOT NULL /*NOT_TEST*/ GROUP BY anon_id)
     SELECT
       COUNT(*) AS new_users,
       SUM(CASE WHEN EXISTS (SELECT 1 FROM events e WHERE e.anon_id=fs.anon_id AND e.ts>=fs.f+86400 AND e.ts<fs.f+2*86400) THEN 1 ELSE 0 END) AS d1,
@@ -2970,12 +2996,12 @@ const ANALYTICS_QUERIES = {
       COUNT(DISTINCT CASE WHEN ts >= strftime('%s','now','-30 days') THEN COALESCE(user_id, anon_id, session_id) END) AS mau,
       COUNT(DISTINCT CASE WHEN ts >= strftime('%s','now','-30 days') AND user_id IS NOT NULL THEN user_id END) AS mau_accounts
     FROM events
-    WHERE session_id <> 'server'
+    WHERE session_id <> 'server' /*NOT_TEST*/
   `,
   active_users_by_day_30d: `
     SELECT date(ts,'unixepoch') AS day, COUNT(DISTINCT COALESCE(user_id, anon_id, session_id)) AS active
     FROM events
-    WHERE ts >= strftime('%s','now','-30 days') AND session_id <> 'server'
+    WHERE ts >= strftime('%s','now','-30 days') AND session_id <> 'server' /*NOT_TEST*/
     GROUP BY day
     ORDER BY day
   `,
@@ -2987,6 +3013,7 @@ const ANALYTICS_QUERIES = {
     FROM (
       SELECT COALESCE(user_id, session_id) AS id, MIN(ts) AS first_seen, MAX(ts) AS last_seen
       FROM events
+      WHERE session_id <> 'server' /*NOT_TEST*/
       GROUP BY id
     )
     WHERE last_seen >= strftime('%s','now','-7 days')
@@ -3266,7 +3293,7 @@ async function handleAnalyticsQuery(request, env) {
     }
     // Optional ?param=... for a query with a LIKE ? filter. Wraps in % for LIKE matching.
     const param = url.searchParams.get('param');
-    const stmt = env.DB.prepare(sql);
+    const stmt = env.DB.prepare(sql.includes('/*NOT_TEST*/') ? sql.split('/*NOT_TEST*/').join(gbNotTestSql(await gbTestAccountIds(env))) : sql);
     const bound = param ? stmt.bind(`%${param}%`) : stmt;
     const { results } = await bound.all();
     return jsonResponse({ type, results: results || [] });
@@ -26869,17 +26896,20 @@ async function handleAdminActivityOverview(request, env) {
         gbRest(env, `postcards?select=sender_id&created_at=gte.${encodeURIComponent(d30)}&limit=5000`, {}),
         gbRest(env, 'profiles?select=heard_from&heard_from=not.is.null&limit=5000', pub),
       ]);
-      const accounts = (() => { const m = String(acq.headers.get('content-range') || '').match(/\/(\d+)$/); return m ? Number(m[1]) : null; })();
+      // The admins and the review demo are left out (growth plan week 1, 2026-10-20).
+      const test = new Set(await gbTestAccountIds(env));
+      const accountsAll = (() => { const m = String(acq.headers.get('content-range') || '').match(/\/(\d+)$/); return m ? Number(m[1]) : null; })();
+      const accounts = accountsAll == null ? null : Math.max(0, accountsAll - test.size);
       const firstStamp = {};
-      for (const r of st.rows) { const u = r.user_id; if (u && (!firstStamp[u] || r.created_at < firstStamp[u])) firstStamp[u] = r.created_at; }
-      const stamped30 = new Set(st.rows.filter((r) => r.user_id && r.created_at >= d30).map((r) => r.user_id)).size;
-      const newAcc = await j(aq);
+      for (const r of st.rows) { const u = r.user_id; if (u && !test.has(u) && (!firstStamp[u] || r.created_at < firstStamp[u])) firstStamp[u] = r.created_at; }
+      const stamped30 = new Set(st.rows.filter((r) => r.user_id && !test.has(r.user_id) && r.created_at >= d30).map((r) => r.user_id)).size;
+      const newAcc = (await j(aq)).filter((p) => !test.has(String(p.id)));
       const activated = newAcc.filter((p) => firstStamp[p.id] && (Date.parse(firstStamp[p.id]) - Date.parse(p.created_at)) <= 7 * 86400000).length;
       const bySource = {};
       for (const r of await j(hq)) { const k = String(r.heard_from || '').slice(0, 24); if (k) bySource[k] = (bySource[k] || 0) + 1; }
       return {
         accounts, ever_stamped: Object.keys(firstStamp).length, stamped_30d: stamped30,
-        sent_postcard_30d: new Set((await j(pq)).map((r) => r.sender_id)).size,
+        sent_postcard_30d: new Set((await j(pq)).map((r) => r.sender_id).filter((u) => !test.has(String(u)))).size,
         new_accounts_30d: newAcc.length, activated_7d: activated,
         by_source: Object.entries(bySource).sort((a, b) => b[1] - a[1]).map(([source, n]) => ({ source, n })),
       };
