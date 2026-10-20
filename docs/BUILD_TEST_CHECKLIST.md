@@ -2851,3 +2851,11 @@ collages with the state's name lettered in; Washington_DC → District of Columb
 - To replace a banner later: upload a new `header.png` to the same R2 path (the kit cache clears within an hour).
 - **Activate:** push (worker), then `npm run ota` (the app draws `banner`).
 
+## 2026-10-19 — Postcard composer: X to cancel, Change photo (COMMITTED, not pushed)
+
+Founder: "place an X if user wants to cancel composing a post card … change photo … they've already uploaded one".
+`PostcardCompose`: an X (top right) → `cancel()`: empty card closes; with a photo or words → "Discard this postcard?"
+(Keep writing / Discard; discard resets the card). Backdrop and back gesture go through `cancel` too. Under a photo:
+"Change photo" (file picker) beside "Edit · our looks". App only. eslint + no-undef; build; boot-check ✅; captured
+the X with a card started and the discard question. **Activate:** push, then `npm run ota`.
+
