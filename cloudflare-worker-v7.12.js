@@ -18336,7 +18336,7 @@ async function pcKit(env, board, origin) {
   if (!env.MEDIA) return null;
   const slug = pcKitSlug(board);
   const kv = env.GLOBESKIMMERS_KV;
-  const ck = `kit:v1:${slug}`;
+  const ck = `kit:v2:${slug}`;
   if (kv) { try { const c = await kv.get(ck); if (c) return c === 'none' ? null : JSON.parse(c); } catch { /* read it fresh */ } }
   let kit = null;
   try {
@@ -18346,7 +18346,12 @@ async function pcKit(env, board, origin) {
       let palette = null;
       try { const pal = await env.MEDIA.get(`kits/${slug}/palette.json`); if (pal) palette = await pal.json(); } catch { palette = null; }
       const n = Number.isInteger(m.icons) ? Math.max(0, Math.min(12, m.icons)) : 6;
-      kit = { slug, name: m.name || board.name, header: `${origin}/kit/${slug}/header.png`, icons: Array.from({ length: n }, (_, i) => `${origin}/kit/${slug}/icon-${i + 1}.png`), palette };
+      // A NAMED banner (founder, 2026-10-19: the US state banners, the state's name lettered in the
+      // picture) rides as `banner`, not `header`: an app that knows it shows it whole with the
+      // board's name below; an older app keeps its plain plate instead of cropping the lettering.
+      kit = m.named === true
+        ? { slug, name: m.name || board.name, header: null, banner: `${origin}/kit/${slug}/header.png`, icons: [], palette }
+        : { slug, name: m.name || board.name, header: `${origin}/kit/${slug}/header.png`, icons: Array.from({ length: n }, (_, i) => `${origin}/kit/${slug}/icon-${i + 1}.png`), palette };
     }
   } catch { kit = null; }
   if (kv) await kv.put(ck, kit ? JSON.stringify(kit) : 'none', { expirationTtl: 3600 }).catch(() => {});
@@ -20466,7 +20471,13 @@ async function handleCityBoard(request, env) {
       gbRest(env, `${cardsQ}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {}),
       board.kind === 'city' ? pcWasThere(env, user.id, key) : Promise.resolve(false),
       pcBoardPhotos(env, board, before, blocked, origin),
-      pcKit(env, board, origin),
+      // A US city board without its own kit wears its state's banner (founder, 2026-10-19).
+      pcKit(env, board, origin).then(async (k) => {
+        if (k || board.kind !== 'city' || !pcIsUSName(board.country) || !board.region) return k;
+        const st = pcBoardOf({ kind: 'state', region: board.region, country: 'United States' });
+        const sk = st ? await pcKit(env, st, origin) : null;
+        return sk && sk.banner ? { ...sk, from_state: st.name } : null;
+      }),
       gbRest(env, `${cardsQ}&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } }),
     ]);
     if (q.status === 400) return jsonResponse({ rows: [], unavailable: true });
