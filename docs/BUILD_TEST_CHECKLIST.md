@@ -2735,3 +2735,22 @@ that telegram messages preview cannot be opened on lock screen nor on banners, i
   stamps read the live server's old default).
 - **Activate:** push (worker + migration + site), then `npm run ota`.
 
+## 2026-10-19 — Telegrams to several people; periods stay periods (COMMITTED, not pushed)
+
+Founder: "allow for telegram to be sent to different people, same message, sent separately, or same message, sent
+in a group as long as both people have @handle"; "instead of using stop for period in telegram, use period instead".
+- **Periods:** `tgClean` / `telegramText` keep punctuation as typed (no STOP); punctuation counts as no word.
+- **Several people:** `/telegrams/send { to_handles[≤10], mode: each | group }`. Each recipient passes the rails on
+  their own; blocked pairs and minors are left out silently and never named; an unfinished passport comes back as
+  `not_ready` (@usernames the sender typed). Five a day to people who don't follow you counts per person. GROUP: one
+  `group_id`, each copy's `cc` = the others it reached; `reply_all` answers the sender + the rest (each reply passes
+  the replier's own rails). Feed rows carry `group: [@handles]` minus anyone the reader blocked. Alert: "Group
+  telegram from Mary" (still no words). Migration `20261019220000_telegram_groups.sql` (group_id, cc uuid[]).
+- **App:** pick circle chips and/or type + Add (≤10); with 2+: "Each their own" ("N private telegrams. Nobody sees who
+  else got one…") or "As a group" ("One telegram to all N…"); TO line "@A, @B +N"; received group: "ALSO TO …" and an
+  envelope reading GROUP TELEGRAM; reply: "Just Mary" / "Everyone on it (N)", title "A telegram back to everyone".
+- Privacy policy: a group telegram shows each recipient who else it went to.
+- Verified: worker + app give the same text and counts on 5 samples; eslint + no-undef; build; boot-check ✅;
+  captured the group writer, a sealed GROUP TELEGRAM, the opened one with ALSO TO, reply-all.
+- **Activate:** push (worker + migration + site), then `npm run ota`.
+
