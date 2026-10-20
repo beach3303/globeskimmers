@@ -21803,7 +21803,7 @@ async function handleSocialUnread(request, env) {
       gbRest(env, `user_follows?follower_id=eq.${me}&status=eq.accepted&select=followee_id&limit=200`, {}).then(j),
       gbRest(env, `postcards?to_user_id=eq.${me}&created_at=gte.${floor}&select=*&order=created_at.desc&limit=50`, {}).then(j).then((rows) => rows.filter((r) => !r.recipient_deleted_at)),
       // Telegrams to me (2026-10-19); none before the table exists.
-      gbRest(env, `telegrams?to_user_id=eq.${me}&recipient_deleted_at=is.null&created_at=gte.${floor}&select=id,sender_id,created_at&order=created_at.desc&limit=50`, {}).then(j).catch(() => []),
+      gbRest(env, `telegrams?to_user_id=eq.${me}&recipient_deleted_at=is.null&created_at=gte.${floor}&select=id,sender_id,created_at,received_at&order=created_at.desc&limit=50`, {}).then(j).catch(() => []),
       gbRest(env, `blotter_marks?owner_user_id=eq.${me}&user_id=neq.${me}&created_at=gte.${floor}&select=target,user_id,kind,created_at&order=created_at.desc&limit=150`, {}).then(j),
       gbRest(env, `blotter_entries?owner_user_id=eq.${me}&author_user_id=neq.${me}&created_at=gte.${floor}&select=id,target,author_user_id,body,doodle_key,created_at&order=created_at.desc&limit=50`, {}).then(j),
       gbRest(env, `passport_tags?to_user_id=eq.${me}&status=eq.pending&created_at=gte.${floor}&select=from_user_id,name,created_at&order=created_at.desc&limit=50`, {}).then(j),
@@ -21826,9 +21826,10 @@ async function handleSocialUnread(request, env) {
     const items = [];
     // A muted follow (see /social/follow) is never news to its target.
     for (const r of follows) if (r.status !== 'muted') items.push({ type: r.status === 'pending' ? 'follow_request' : 'follow', uid: r.follower_id, at: r.created_at });
-    for (const r of direct) items.push({ type: 'postcard', uid: r.sender_id, pc_id: r.id, place: r.place_name || null, at: r.created_at, to_me: true });
+    // `mail`: still unread — a postcard the Mailbox hasn't shown yet, a telegram still sealed (2026-10-19).
+    for (const r of direct) items.push({ type: 'postcard', uid: r.sender_id, pc_id: r.id, place: r.place_name || null, at: r.created_at, to_me: true, mail: !r.read_at });
     for (const r of broadcasts) items.push({ type: 'postcard', uid: r.sender_id, place: r.place_name || null, at: r.created_at });
-    for (const r of (Array.isArray(wires) ? wires : [])) items.push({ type: 'telegram', uid: r.sender_id, tg_id: r.id, at: r.created_at, to_me: true });
+    for (const r of (Array.isArray(wires) ? wires : [])) items.push({ type: 'telegram', uid: r.sender_id, tg_id: r.id, at: r.created_at, to_me: true, mail: !r.received_at });
     // One row per person per page, however many stamps they pressed.
     const grouped = new Map();
     for (const r of marks) {
@@ -21894,9 +21895,12 @@ async function handleSocialUnread(request, env) {
     const stampName = Object.fromEntries(st.map((r) => [r.id, r.name]));
     const dayAgo = Date.now() - 864e5;
 
-    const activity = items
+    const shown = items
       .filter((i) => i.type === 'board' || (checked.has(i.uid) && !young.has(i.uid)))
-      .filter((i) => !(who[i.uid]?.teen && Date.parse(i.at) > dayAgo))
+      .filter((i) => !(who[i.uid]?.teen && Date.parse(i.at) > dayAgo));
+    // The Mailbox badge (founder, 2026-10-19): unread postcards to me + sealed telegrams.
+    const mail = shown.filter((i) => i.mail).length;
+    const activity = shown
       .sort((a, c) => String(c.at).localeCompare(String(a.at)))
       .slice(0, 40)
       .map((i) => ({
@@ -21937,7 +21941,7 @@ async function handleSocialUnread(request, env) {
       if (sp) await gbRest(env, `social_profiles?user_id=eq.${me}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mailbox_seen_at: now }) });
       else await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: me, mailbox_seen_at: now }) });
     }
-    return jsonResponse({ total, activity: b.mark === true || b.activity === true ? activity : undefined });
+    return jsonResponse({ total, mail, activity: b.mark === true || b.activity === true ? activity : undefined });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
