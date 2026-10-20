@@ -1,10 +1,10 @@
 // telegram — words by wire, no photo (founder, 2026-10-19). The same rules as the worker's
-// tgClean / tgWordCount, so what the blank shows is what arrives: capitals, letters, digits and
+// tgClean / tgWordCount, so what the blank shows is what arrives: letters as typed, digits and
 // plain punctuation (kept as typed) and emoji; links don't go by wire. Four
 // words at most (founder, 2026-10-19: "spike curiosity"; three at first, then four); punctuation doesn't count, an emoji counts as
 // one word (3️⃣ is one), and a word past 15 letters counts as two, the old telegraph rule.
 //
-//   telegramText(raw)          the wire text, e.g. "Safe in Manila. Miss you!" → "SAFE IN MANILA. MISS YOU!"
+//   telegramText(raw)          the wire text: as typed, minus links and stray symbols
 //   telegramWords(text)        how many words count (punctuation doesn't)
 //   sendTelegram({ to_handles, mode, reply_to, reply_all, body }) → { data: { count, not_ready }, error }
 //                              mode 'each' (private copies) | 'group' (one telegram naming everyone)
@@ -25,8 +25,8 @@ const graphemes = (x) => (SEG ? [...SEG.segment(x)].map((g) => g.segment) : Arra
 export function telegramText(raw) {
   let t = String(raw == null ? '' : raw).normalize('NFC').replace(/https?:\S+/gi, ' ');
   t = t.replace(/[^\p{L}\p{N}\s.,!?'’&@#\-\p{Extended_Pictographic}\p{Regional_Indicator}\u200D\uFE0F\u20E3\u{1F3FB}-\u{1F3FF}\u{E0020}-\u{E007F}]/gu, ' ');
-  // Punctuation stays as typed (founder, 2026-10-19: "use period instead" of STOP).
-  t = t.replace(/\s+/g, ' ').trim().toUpperCase();
+  // As typed (founder, 2026-10-19): punctuation, capitals and small letters all stay.
+  t = t.replace(/\s+/g, ' ').trim();
   return Array.from(t).slice(0, MAX_CHARS).join('');
 }
 

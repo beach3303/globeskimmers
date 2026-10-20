@@ -20620,7 +20620,7 @@ async function handleCityBoards(request, env) {
 // (founder, 2026-10-19: "spike curiosity" — send as many as you like; four words each since the
 // founder's change the same day, the fifth would be the 4¢ "on the house" toll). Punctuation
 // stays as typed and doesn't count, an emoji counts as one word, and a word past
-// 15 letters counts as two, the old telegraph rule. Capitals, letters, digits, plain
+// 15 letters counts as two, the old telegraph rule. Letters (as typed), digits, plain
 // punctuation and emoji; links don't go by wire. Its alert names the sender and never shows
 // the words (founder: the point is to open it), one alert per telegram. It arrives SEALED in
 // an envelope; SENT is created_at, and RECEIVED (received_at) is stamped when the recipient
@@ -20642,8 +20642,9 @@ const tgGraphemes = (x) => (TG_SEG ? [...TG_SEG.segment(x)].map((g) => g.segment
 function tgClean(text) {
   let t = String(text == null ? '' : text).normalize('NFC').replace(/https?:\S+/gi, ' ');
   t = t.replace(/[^\p{L}\p{N}\s.,!?'’&@#\-\p{Extended_Pictographic}\p{Regional_Indicator}\u200D\uFE0F\u20E3\u{1F3FB}-\u{1F3FF}\u{E0020}-\u{E007F}]/gu, ' ');
-  // Punctuation stays as typed (founder, 2026-10-19: "use period instead" of STOP).
-  t = t.replace(/\s+/g, ' ').trim().toUpperCase();
+  // As typed (founder, 2026-10-19): punctuation stays ("use period instead" of STOP) and so do
+  // capitals and small letters ("Landed. Miss you!" arrives as "Landed. Miss you!").
+  t = t.replace(/\s+/g, ' ').trim();
   return Array.from(t).slice(0, TG_MAX_CHARS).join('');
 }
 // Words: each emoji is one; a run of letters is one (two past 15 letters); punctuation is none.

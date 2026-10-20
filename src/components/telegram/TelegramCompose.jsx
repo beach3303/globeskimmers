@@ -2,7 +2,7 @@
 // to one person by @username, or back to whoever sent you a telegram or a postcard. The sheet
 // is the telegraph office's counter (dark), the blank sits on it, and you type straight onto
 // the form; a meter of four boxes fills as words go on, and "On the wire" shows the words as
-// they'll arrive (capitals; punctuation as typed). The worker checks the words at send.
+// they'll arrive (as typed, minus links). The worker checks the words at send.
 // The chevron at the top right (or a tap above the sheet) collapses it without sending, and the
 // words wait: opening the same telegram again brings the draft back (founder, 2026-10-19).
 //
@@ -192,13 +192,13 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
           {/* the blank, typed on directly */}
           <TelegramPaper mode="blank" to={toLine} from={{ name: meName, handle: meHandle }} number="NEW" words={words} maxWords={TELEGRAM_WORDS} style={{ marginTop: 14 }}>
             <textarea value={raw} onChange={(e) => type(e.target.value)} rows={2} aria-label="Your telegram"
-              placeholder="TYPE YOUR TELEGRAM"
-              autoCapitalize="characters" spellCheck={false}
+              placeholder="Type your telegram"
+              autoCapitalize="sentences" spellCheck={false}
               className="resize-none placeholder:text-[color:var(--tg-ph)]"
               style={{
                 display: "block", width: "100%", minHeight: 56, padding: "2px 2px 0", border: 0, outline: "none",
                 background: `repeating-linear-gradient(transparent 0 25px, rgba(42,34,25,.28) 25px 26px)`,
-                fontFamily: TYPE, fontSize: fs(16), lineHeight: "26px", letterSpacing: ".06em", textTransform: "uppercase", color: TINK,
+                fontFamily: TYPE, fontSize: fs(16), lineHeight: "26px", letterSpacing: ".04em", color: TINK,
                 "--tg-ph": TINK3,
               }} />
           </TelegramPaper>
