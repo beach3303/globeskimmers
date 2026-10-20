@@ -870,6 +870,14 @@ the founder's phone had never registered (Apple accepts our key; checked with a 
 every alert in D1 (`push_outcome` / `push_held`) and Settings → Alerts → **Send a test** for every adult, which
 signs the phone up again first. After the push + OTA: tap Send a test on the founder's phone.
 
+**Previews — decided 2026-10-19:** no alert shows anyone's words (postcards, comments, telegrams), on the lock screen
+or in a banner. Founder: telegrams stay in-app only while we're new ("telegrams integrity and signature functioning
+style stays intact while we are just starting"); "in a few months when we get popularity" an opt-in telegram preview
+may be OK. Claude's take, same day: keep postcards and comments wordless too for now (delivery is the growth problem,
+not wording; an opt-in barely moves it; on-by-default breaks the "Sealed" promise); revisit with data — first a
+count of alert taps by kind (no content), then, if postcard alerts under-open, test an opt-in preview for postcards
+first, telegrams last if ever. **Reminder ~2027-01-15: look at the alert-tap numbers and re-decide.**
+
 Place-triggered nudges are a separate, later decision: they need "Always" location on iPhone and
 background location on Android (a Play declaration form + prominent disclosure), geofences for the
 20 nearest icons refreshed as the member moves, a privacy-policy line, and never for teens. Airport
@@ -1079,6 +1087,8 @@ Open ideas, not decided: a "Sent" list so the sender can see what they wired; te
   project after Nuitée answers. Nothing built yet.
 
 ## Dated reminders
+
+- **~2027-01-15** — alert previews: check the alert-tap counts by kind and re-decide postcard (then telegram) previews (decided 2026-10-19: none for now).
 
 - ~2026-12-09: regenerate the Sign in with Apple client secret (M3, 6-month limit).
 - ~2026-12-10: re-apply for Viator Full + Booking access (G34).
