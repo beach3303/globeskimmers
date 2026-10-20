@@ -2754,3 +2754,15 @@ in a group as long as both people have @handle"; "instead of using stop for peri
   captured the group writer, a sealed GROUP TELEGRAM, the opened one with ALSO TO, reply-all.
 - **Activate:** push (worker + migration + site), then `npm run ota`.
 
+## 2026-10-19 — Telegram words as typed; virtual items are pets only (COMMITTED, not pushed)
+
+- Founder: '"Landed. Miss you!" should arrive as "Landed. Miss you!"' → `tgClean` / `telegramText` keep capitals and
+  small letters; the writer no longer forces capitals ("Type your telegram", sentence case). Form labels and names stay
+  in typewriter capitals. (d0563c1)
+- Founder: "remove virtual items except virtual pets. remove virtual laptop and virtual drinking cup/virtual water
+  bottles" → `SHOW_GEAR = false` in `VirtualItems.jsx`: the folder is "My travel buddies" / "<First>'s travel
+  buddies" (none on a visit = no folder); no laptop / tumbler / straw bottle / water bottle tiles or editor. Gear rows
+  stay in `profile_gear` (reversible). Admin reports keep the history.
+- Verified: eslint + no-undef; build; boot-check ✅; captured the Profile folder with two buddies and the seat.
+- **Activate:** push (worker), then `npm run ota`.
+
