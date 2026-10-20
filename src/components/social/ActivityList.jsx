@@ -75,16 +75,16 @@ const destinationOf = (a) => {
 /**
  * @param {{ items?: any[], onOpen?: (to: string) => void, className?: string, style?: import('react').CSSProperties }} props
  */
-export default function ActivityList({ items = [], onOpen = undefined, onMore = undefined, className = undefined, style = undefined }) {
+export default function ActivityList({ items = [], onOpen = undefined, onMore = undefined, limit = SHOW_ROWS, heading = true, className = undefined, style = undefined }) {
   const [open, setOpen] = useState(false);
   const all = (Array.isArray(items) ? items : []).filter((a) => a && typeof a === "object" && activityLine(a).text).slice(0, MAX_ROWS);
-  const list = open ? all : all.slice(0, SHOW_ROWS);
+  const list = open ? all : all.slice(0, limit);
   const hidden = all.length - list.length;
   if (!all.length) return null;
   const fresh = all.filter((a) => a.unread).length;
   return (
     <section aria-label="On your passport" className={className} style={style}>
-      <h2 style={{ margin: 0, fontFamily: MONO, fontSize: fs(10), fontWeight: 500, letterSpacing: ".16em", lineHeight: 1.2, textTransform: "uppercase", color: NEUTRAL.airmailBlue }}>
+      <h2 className={heading ? undefined : "sr-only"} style={{ margin: 0, fontFamily: MONO, fontSize: fs(10), fontWeight: 500, letterSpacing: ".16em", lineHeight: 1.2, textTransform: "uppercase", color: NEUTRAL.airmailBlue }}>
         On your passport{fresh > 0 ? ` · ${fresh} new` : ""}
       </h2>
       <ul style={{ margin: "8px 0 0", padding: 0, listStyle: "none", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16, overflow: "hidden" }}>
@@ -128,7 +128,7 @@ export default function ActivityList({ items = [], onOpen = undefined, onMore = 
             </li>
           );
         })}
-        {open && all.length > SHOW_ROWS ? (
+        {open && all.length > limit ? (
           <li>
             <button type="button" onClick={() => setOpen(false)} style={{ display: "block", width: "100%", minHeight: 44, padding: "8px 14px", margin: 0, border: 0, borderTop: `1px solid ${NEUTRAL.airmailHair}`, background: "transparent", font: "inherit", fontSize: fs(13), fontWeight: 600, color: NEUTRAL.airmailBlue, textAlign: "left", cursor: "pointer" }}>
               Show fewer

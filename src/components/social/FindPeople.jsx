@@ -49,7 +49,7 @@ const RELATION = { requested: 'Requested', following: 'Following', friends: 'Fri
 // onPickEmail (the composer too): an email nobody uses yet offers "Send it anyway" — the
 // postcard waits for them — instead of the invite button.
 export default function FindPeople({ accent = undefined, cloth = undefined, onFollowed = undefined, onPick = undefined, onPickEmail = undefined,
-  label = 'Find people', placeholder = 'name, @username or email', style = undefined, className = undefined }) {
+  label = 'Find people', labelHidden = false, placeholder = 'name, @username or email', style = undefined, className = undefined }) {
   const circle = useCircle();
   const auto = useId();
   const inputId = `find-${auto.replace(/[^a-zA-Z0-9_-]/g, '')}`;
@@ -102,7 +102,7 @@ export default function FindPeople({ accent = undefined, cloth = undefined, onFo
 
   return (
     <div className={className} style={{ margin: 0, ...style }}>
-      <label htmlFor={inputId} style={{ display: 'block', fontFamily: MONO, fontSize: fs(10), lineHeight: 1.2, letterSpacing: '.16em', textTransform: 'uppercase', overflowWrap: 'anywhere', color }}>
+      <label htmlFor={inputId} className={labelHidden ? 'sr-only' : undefined} style={{ display: 'block', fontFamily: MONO, fontSize: fs(10), lineHeight: 1.2, letterSpacing: '.16em', textTransform: 'uppercase', overflowWrap: 'anywhere', color }}>
         {label}
       </label>
       <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, minHeight: 48, boxSizing: 'border-box', padding: '0 14px', background: NEUTRAL.white, border: `1px solid ${fieldLine}`, borderRadius: 14,

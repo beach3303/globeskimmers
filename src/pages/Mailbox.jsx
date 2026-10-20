@@ -16,8 +16,9 @@
 // block_v2 (go-live decision 6, 2026-10-13; Apple 1.2). A 'confirm' account (a birthday
 // still to complete) gets the note that lets it finish.
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronRight, Globe, Lock, Mail, Mailbox as MailboxIcon, Zap } from "lucide-react";
+import { ChevronRight, Globe, Lock, Mail, Mailbox as MailboxIcon, Search, X, Zap } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { cityBoardsUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
@@ -33,7 +34,8 @@ import { Face } from "@/components/social/SocialMarks";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import FindPeople from "@/components/social/FindPeople";
 import Requests from "@/components/social/Requests";
-import ActivityList from "@/components/social/ActivityList";
+import ActivityList, { activityLine } from "@/components/social/ActivityList";
+import { useDismissable } from "@/lib/dismissStack";
 import PostcardCard from "@/components/social/PostcardCard";
 import InviteButton from "@/components/passport/InviteButton";
 import PostcardCompose from "@/components/passport/PostcardCompose";
@@ -59,43 +61,87 @@ const whoOf = (by) => String(by?.name ?? "").trim() || (by?.handle ? `@${lc(by.h
 const KICKER = { margin: 0, fontFamily: MONO, fontSize: fs(10), fontWeight: 500, letterSpacing: ".16em", lineHeight: 1.2, textTransform: "uppercase", color: BLUE };
 
 // The masthead on the page, then the full-bleed chevron (Mailbox L28-41).
-function Masthead({ onPostcard = undefined, onTelegram = undefined, addressable = false }) {
+function Masthead({ onPostcard = undefined, onTelegram = undefined, onFind = undefined, addressable = false }) {
+  // Tighter (founder, 2026-10-19: "cleaner, more organized"): a 🔍 for Find people, one line for
+  // the seal, the two ways to write side by side.
+  const write = { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44, padding: "0 14px", borderRadius: 999, font: "inherit", fontSize: fs(13.5), fontWeight: 600, cursor: "pointer" };
   return (
     <>
-      <div aria-hidden="true" style={{ height: 12 }} />
-      <header className={COLUMN} style={{ paddingTop: 12, paddingBottom: 12 }}>
-        <div style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".2em", lineHeight: 1.2, textTransform: "uppercase", color: NEUTRAL.stamp }}>Globeskimmers · Mailbox</div>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 12, marginTop: 4 }}>
-          <h1 style={{ margin: 0, minWidth: 0, flex: "1 1 200px", fontFamily: SERIF, fontSize: fs(30), fontWeight: 400, lineHeight: 1.04, color: NEUTRAL.ink }}>
-            Where your <em style={{ fontStyle: "italic", color: BLUE }}>circle</em> has been
-          </h1>
-          {onPostcard ? (
-            <div style={{ flex: "none", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 6 }}>
-              <button type="button" onClick={onPostcard}
-                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44, padding: "0 16px", borderRadius: 999, border: addressable ? 0 : `1px solid ${BLUE}`, background: addressable ? NEUTRAL.stamp : "transparent", font: "inherit", fontSize: fs(13), fontWeight: 600, color: addressable ? NEUTRAL.white : BLUE, cursor: "pointer" }}>
-                <Mail size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
-                Postcard
-              </button>
-              {/* Telegrams (2026-10-19): four words by wire, no photo. */}
-              {onTelegram ? (
-                <button type="button" onClick={onTelegram}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44, padding: "0 16px", borderRadius: 999, border: "1px solid #2A2219", background: "#F2E4BC", font: "inherit", fontSize: fs(13), fontWeight: 600, color: "#2A2219", cursor: "pointer" }}>
-                  <Zap size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
-                  Telegram
-                </button>
-              ) : null}
-            </div>
+      <div aria-hidden="true" style={{ height: 8 }} />
+      <header className={COLUMN} style={{ paddingTop: 10, paddingBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <div style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".2em", lineHeight: 1.2, textTransform: "uppercase", color: NEUTRAL.stamp }}>Globeskimmers · Mailbox</div>
+          {onFind ? (
+            <button type="button" onClick={onFind} aria-label="Find people"
+              style={{ flex: "none", width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", margin: "-6px -8px -6px 0", padding: 0, border: 0, background: "transparent", cursor: "pointer" }}>
+              <span aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 999, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white }}>
+                <Search size={17} strokeWidth={2} color={BLUE} focusable="false" />
+              </span>
+            </button>
           ) : null}
         </div>
-        {/* The seal (founder, 2026-10-15): say out loud that a mailbox is private — people
-            worry that friends can see who writes to them. Nobody can; this line tells them. */}
-        <p style={{ display: "flex", alignItems: "flex-start", gap: 6, margin: "8px 0 0", fontSize: fs(12.5), fontWeight: 500, lineHeight: 1.45, color: BLUE }}>
-          <Lock size={13} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flex: "none", marginTop: 2 }} />
-          <span>Sealed — <b style={{ fontWeight: 750 }}>only you</b> can open and see your mailbox. Nobody else knows what lands here or who it&rsquo;s from, not even your inner circle.</span>
+        <h1 style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(30), fontWeight: 400, lineHeight: 1.04, color: NEUTRAL.ink }}>
+          Where your <em style={{ fontStyle: "italic", color: BLUE }}>circle</em> has been
+        </h1>
+        {/* The seal (founder, 2026-10-15): a mailbox is private — one line says so. */}
+        <p style={{ display: "flex", alignItems: "center", gap: 6, margin: "6px 0 0", fontSize: fs(12.5), fontWeight: 500, lineHeight: 1.4, color: BLUE }}>
+          <Lock size={13} strokeWidth={2} aria-hidden="true" focusable="false" style={{ flex: "none" }} />
+          <span>Sealed — <b style={{ fontWeight: 750 }}>only you</b> can see your mailbox.</span>
         </p>
+        {onPostcard ? (
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button type="button" onClick={onPostcard}
+              style={{ ...write, border: addressable ? 0 : `1px solid ${BLUE}`, background: addressable ? NEUTRAL.stamp : "transparent", color: addressable ? NEUTRAL.white : BLUE }}>
+              <Mail size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Postcard
+            </button>
+            {/* Telegrams (2026-10-19): four words by wire, no photo. */}
+            {onTelegram ? (
+              <button type="button" onClick={onTelegram} style={{ ...write, border: "1px solid #2A2219", background: "#F2E4BC", color: "#2A2219" }}>
+                <Zap size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Telegram
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </header>
       <AirmailChevron height={5} />
     </>
+  );
+}
+
+// A bottom sheet for what one line opens (2026-10-19): Find people, passport activity, requests.
+function Sheet({ title, onClose, children }) {
+  useDismissable(true, onClose);
+  return createPortal(
+    <div className="fixed inset-0 z-[10010] flex items-end justify-center" style={{ background: "rgba(22,17,13,.45)" }} onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label={title} className="w-full max-w-md max-h-[86vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}
+        style={{ background: NEUTRAL.ivory, borderRadius: "22px 22px 0 0" }}>
+        <AirmailChevron height={4} />
+        <div style={{ padding: "12px 16px calc(22px + env(safe-area-inset-bottom))" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <h2 style={{ margin: 0, fontFamily: SERIF, fontSize: fs(22), fontWeight: 400, color: NEUTRAL.ink }}>{title}</h2>
+            <button type="button" onClick={onClose} aria-label="Close" style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 -8px 0 0", padding: 0, border: 0, background: "transparent", cursor: "pointer" }}>
+              <X size={20} strokeWidth={2} color={NEUTRAL.ink2} aria-hidden="true" focusable="false" />
+            </button>
+          </div>
+          {children}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// One line that opens more (2026-10-19): a dot when something is new, the summary, a chevron.
+function LineRow({ dot = false, title, detail = null, onClick, style = undefined }) {
+  return (
+    <button type="button" onClick={onClick}
+      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", minHeight: 52, boxSizing: "border-box", padding: "8px 12px 8px 14px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 14, textAlign: "left", font: "inherit", cursor: "pointer", ...style }}>
+      <span aria-hidden="true" style={{ flex: "none", width: 8, height: 8, borderRadius: 999, background: dot ? "#E0533C" : "transparent" }} />
+      <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: fs(14), lineHeight: 1.35, color: NEUTRAL.ink2 }}>
+        <b style={{ fontWeight: 650, color: NEUTRAL.ink }}>{title}</b>{detail ? <> — {detail}</> : null}
+      </span>
+      <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
+    </button>
   );
 }
 
@@ -206,36 +252,22 @@ function CircleRow({ circle, style = undefined }) {
   );
 }
 
-// 'Your postcard box', above the feed: the feed shows only the newest cards, the box keeps
-// every one sent to you and each one you Keep from your circle (Postcards).
-function PostcardBoxRow({ style = undefined }) {
+// The two doors (2026-10-19), side by side: the postcard box (where read mail lives) and the boards.
+function DoorTiles({ style = undefined }) {
+  const tile = { flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 10, minHeight: 56, boxSizing: "border-box", padding: "8px 12px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 14, textDecoration: "none" };
+  const name = { display: "block", fontSize: fs(14), fontWeight: 650, lineHeight: 1.25, color: NEUTRAL.ink };
+  const sub = { display: "block", fontSize: fs(11.5), lineHeight: 1.3, color: NEUTRAL.ink3 };
   return (
-    <Link to={createPageUrl("Postcards")}
-      style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 56, boxSizing: "border-box", padding: "8px 12px 8px 16px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16, textDecoration: "none", ...style }}>
-      <Mail size={20} strokeWidth={1.8} color={NEUTRAL.stamp} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: "block", fontSize: fs(15), fontWeight: 600, lineHeight: 1.3, color: NEUTRAL.ink }}>Your postcard box</span>
-        <span style={{ display: "block", fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink3 }}>Postcards and telegrams you’ve read, and the ones you keep</span>
-      </span>
-      <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
-    </Link>
-  );
-}
-
-// 'Postcards and photos from cities & countries': the City Boards, busiest first (2026-10-14;
-// wording 2026-10-16). Shown with or
-// without a feed, so someone new finds the boards too.
-function CityBoardsRow({ style = undefined }) {
-  return (
-    <Link to={cityBoardsUrl()}
-      style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 56, boxSizing: "border-box", padding: "8px 12px 8px 16px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16, textDecoration: "none", ...style }}>
-      <Globe size={20} strokeWidth={1.8} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: "block", fontSize: fs(15), fontWeight: 600, lineHeight: 1.3, color: NEUTRAL.ink }}>Postcards and photos from cities &amp; countries</span>
-        <span style={{ display: "block", fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink3 }}>Boards from travelers who were really there</span>
-      </span>
-      <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
-    </Link>
+    <div style={{ display: "flex", gap: 8, ...style }}>
+      <Link to={createPageUrl("Postcards")} style={tile}>
+        <Mail size={19} strokeWidth={1.8} color={NEUTRAL.stamp} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
+        <span style={{ minWidth: 0 }}><span style={name}>Postcard box</span><span style={sub}>Read mail lives here</span></span>
+      </Link>
+      <Link to={cityBoardsUrl()} style={tile}>
+        <Globe size={19} strokeWidth={1.8} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
+        <span style={{ minWidth: 0 }}><span style={name}>City boards</span><span style={sub}>From real travelers</span></span>
+      </Link>
+    </div>
   );
 }
 
@@ -259,6 +291,7 @@ function MailboxBody() {
     return [...rest.slice(0, at), folded, ...rest.slice(at)];
   };
   const [compose, setCompose] = useState(false);
+  const [sheet, setSheet] = useState(null);   // 'find' | 'activity' | 'requests'
   // Reply and Delete on a postcard or telegram addressed to me (2026-10-19). A postcard's Reply
   // asks which way (ReplyWays: a postcard back or a telegram back) once telegrams are open; a
   // telegram's Reply is a telegram back.
@@ -347,8 +380,14 @@ function MailboxBody() {
     return res;
   };
 
-  // One row of the feed: a postcard, a telegram or a stamp. `fresh`: the "From someone new" shelf.
+  // One row of the feed: a postcard, a telegram or a stamp. `fresh`: from someone you don't follow.
   const isNew = (r) => (r.type === "postcard" || r.type === "telegram") && r.from_new;
+  // Mail to me (New for you) vs the circle's news; postcards and telegrams leave the passport's
+  // activity — the card is the notification, and the tab's badge counts it.
+  const mailRows = rows.filter((r) => r.type === "telegram" || (r.type === "postcard" && r.to_me));
+  const circleRows = rows.filter((r) => !(r.type === "telegram" || (r.type === "postcard" && r.to_me)));
+  const passportNews = (activity || []).filter((a) => a && a.type !== "postcard" && a.type !== "telegram");
+  const newsFresh = passportNews.filter((a) => a.unread).length;
   const meName = myName || profile?.first_name || null;
   const card = (r, i, fresh) => {
     if (r.type === "telegram") {
@@ -375,25 +414,15 @@ function MailboxBody() {
 
   return (
     <div>
-      <Masthead onPostcard={() => setCompose(true)} onTelegram={wires ? () => setWireTo({}) : undefined} addressable={addressable} />
+      <Masthead onPostcard={() => setCompose(true)} onTelegram={wires ? () => setWireTo({}) : undefined} onFind={() => setSheet("find")} addressable={addressable} />
       <div className={COLUMN}>
-        <FindPeople onFollowed={() => load()} style={{ marginTop: 16 }} />
-        {!emptyFeed ? <InviteButton style={{ marginTop: 8 }} /> : null}
-        {me.loaded && !me.handle ? <ClaimCard onClaimed={(h) => setMe({ loaded: true, handle: h })} style={{ marginTop: GAP }} /> : null}
-        {/* The doors first (founder, 2026-10-19: "quite a scroll"): the postcard box and the boards sit
-            above the activity, which collapses to a few rows. */}
-        {rows.length ? <PostcardBoxRow style={{ marginTop: GAP }} /> : null}
-        <CityBoardsRow style={{ marginTop: rows.length ? 8 : GAP }} />
-        <ActivityList items={activity} onOpen={openFrom} style={{ marginTop: GAP }}
-          onMore={(a) => openTraveler({ ...a.by, entry_id: a.entry_id || null }, { kind: ACTIVITY_KIND[a.type] || "profile", ...(a.postcard_id ? { ref: `pc:${a.postcard_id}` } : a.telegram_id ? { ref: `tg:${a.telegram_id}` } : {}), note: clip(`Mailbox, ${whenLabel(a.at)}: ${whoOf(a.by)} (${a.type})`, 480) },
-            a.type === "postcard" ? mine({ to_me: a.to_me, id: a.postcard_id, by: a.by }, true)
-              : a.type === "telegram" ? mine({ to_me: a.to_me, id: a.telegram_id, by: a.by }, true, "telegram") : null)} />
-        {circle.status === "ready" && circle.requests?.length ? (
-          <Requests rows={circle.requests} onAccept={answer("accept")} onDecline={answer("decline")} style={{ marginTop: GAP }}
-            onMore={(r) => openTraveler(r, { kind: "profile", note: "Asked to follow me" })} />
-        ) : null}
+        {me.loaded && !me.handle ? <ClaimCard onClaimed={(h) => setMe({ loaded: true, handle: h })} style={{ marginTop: 16 }} /> : null}
+        <DoorTiles style={{ marginTop: 16 }} />
 
-        <section aria-label="Where your circle has been" style={{ marginTop: GAP }}>
+        {/* Mail first (founder, 2026-10-19: "cleaner, more organized"): what was sent to you and isn't
+            filed yet — sealed telegrams, postcards you haven't seen — then one line each for the
+            passport's news and the follow requests, then the circle. */}
+        <section aria-label="New for you" style={{ marginTop: GAP }}>
           {!feed ? (
             <>
               <span className="sr-only" role="status">Loading your mailbox</span>
@@ -425,26 +454,72 @@ function MailboxBody() {
             </div>
           ) : (
             <>
-              {rows.some(isNew) ? (
+              <h2 style={KICKER}>New for you{mailRows.length ? ` · ${mailRows.length}` : ""}</h2>
+              {mailRows.length ? (
                 <>
-                  <h2 style={KICKER}>From someone new</h2>
-                  <p style={{ margin: "4px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink3 }}>Postcards and telegrams from people you don’t follow. The ••• reports or blocks the sender.</p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8, marginBottom: 20 }}>
-                    {rows.filter(isNew).map((r, i) => card(r, i, true))}
+                  {mailRows.some(isNew) ? (
+                    <p style={{ margin: "4px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink3 }}>Some are from people you don’t follow. The ••• reports or blocks the sender.</p>
+                  ) : null}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+                    {mailRows.map((r, i) => card(r, i, !!r.from_new))}
                   </div>
                 </>
-              ) : null}
-              <h2 style={KICKER}>{(() => { const n = rows.filter((r) => r.type === "telegram" && !r.received_at).length; return n ? `From your circle · ${n} sealed ${n === 1 ? "telegram" : "telegrams"}` : "From your circle · newest first"; })()}</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
-                {rows.filter((r) => !isNew(r)).map((r, i) => card(r, i, false))}
-              </div>
+              ) : (
+                <p style={{ margin: "6px 0 0", fontSize: fs(13), lineHeight: 1.5, color: NEUTRAL.ink2 }}>
+                  All caught up. Postcards and telegrams you’ve read move to your <Link to={createPageUrl("Postcards")} style={{ color: BLUE, fontWeight: 600 }}>postcard box</Link>.
+                </p>
+              )}
             </>
           )}
         </section>
 
+        {/* The passport's news and the follow requests: one line each; a tap opens the list. */}
+        {passportNews.length || (circle.status === "ready" && circle.requests?.length) ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: GAP }}>
+            {passportNews.length ? (
+              <LineRow dot={newsFresh > 0} onClick={() => setSheet("activity")}
+                title={newsFresh > 0 ? `${newsFresh} new on your passport` : "On your passport"}
+                detail={passportNews.slice(0, 2).map((a) => { const l = activityLine(a); return `${l.who} ${l.text}`; }).join(", ")} />
+            ) : null}
+            {circle.status === "ready" && circle.requests?.length ? (
+              <LineRow dot onClick={() => setSheet("requests")}
+                title={`${circle.requests.length} ${circle.requests.length === 1 ? "person asked" : "people asked"} to follow you`} detail="Review" />
+            ) : null}
+          </div>
+        ) : null}
+
+        {feed && !feed.error && !feed.held && circleRows.length ? (
+          <section aria-label="Where your circle has been" style={{ marginTop: GAP }}>
+            <h2 style={KICKER}>From your circle · newest first</h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+              {circleRows.map((r, i) => card(r, i, false))}
+            </div>
+          </section>
+        ) : null}
+
         <CircleRow circle={circle} style={{ marginTop: 16 }} />
       </div>
 
+      {sheet === "find" ? (
+        <Sheet title="Find people" onClose={() => setSheet(null)}>
+          <FindPeople onFollowed={() => load()} labelHidden style={{ marginTop: 6 }} />
+          <InviteButton style={{ marginTop: 12 }} />
+        </Sheet>
+      ) : null}
+      {sheet === "activity" ? (
+        <Sheet title="On your passport" onClose={() => setSheet(null)}>
+          <ActivityList items={passportNews} limit={Infinity} heading={false} onOpen={(to) => { setSheet(null); openFrom(to); }} style={{ marginTop: 4 }}
+            onMore={(a) => openTraveler({ ...a.by, entry_id: a.entry_id || null }, { kind: ACTIVITY_KIND[a.type] || "profile", note: clip(`Mailbox, ${whenLabel(a.at)}: ${whoOf(a.by)} (${a.type})`, 480) })} />
+        </Sheet>
+      ) : null}
+      {sheet === "requests" && circle.status === "ready" ? (
+        <Sheet title="Follow requests" onClose={() => setSheet(null)}>
+          {circle.requests?.length ? (
+            <Requests rows={circle.requests} onAccept={answer("accept")} onDecline={answer("decline")} style={{ marginTop: 4 }}
+              onMore={(r) => openTraveler(r, { kind: "profile", note: "Asked to follow me" })} />
+          ) : <p style={{ margin: "8px 0 0", fontSize: fs(13.5), color: NEUTRAL.ink2 }}>No requests waiting.</p>}
+        </Sheet>
+      ) : null}
       {traveler ? (
         <TravelerSheet person={traveler.person} report={traveler.report}
           postcard={traveler.pc ? { what: traveler.pc.kind, onReply: traveler.pc.reply ? () => (traveler.pc.kind === "telegram" ? wireBack(traveler.pc) : replyFor(traveler.pc)) : undefined, onDelete: () => removeCard(traveler.pc) } : null}

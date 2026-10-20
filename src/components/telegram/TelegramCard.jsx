@@ -52,9 +52,13 @@ export default function TelegramCard({ row, me = undefined, meName = null, onRep
             number={telegramNumber(row.id)} words={telegramWords(row.body)} />
         </div>
       ) : (
-        <TelegramEnvelope to={{ name: firstName, handle: myHandle }} from={row.by} group={Array.isArray(row.group) && row.group.length > 0} opening={state === "opening"} onOpen={open} />
+        <div style={{ position: "relative" }}>
+          <TelegramEnvelope to={{ name: firstName, handle: myHandle }} from={row.by} group={Array.isArray(row.group) && row.group.length > 0} opening={state === "opening"} onOpen={open} />
+          {/* Sealed, the ••• sits in the envelope's corner: no empty row under it. */}
+          <ReportControl row={row} me={me} onReport={onReport} style={{ position: "absolute", right: 2, bottom: 2, zIndex: 4 }} />
+        </div>
       )}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
+      {state === "open" ? <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
         {typeof onReply === "function" && row.id && state === "open" ? (
           <button type="button" onClick={() => onReply(row)} aria-label={`Reply to ${from}`}
             style={{ flex: 1, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, border: `1px solid ${NEUTRAL.airmailBlue}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(13.5), fontWeight: 600 }}>
@@ -62,7 +66,7 @@ export default function TelegramCard({ row, me = undefined, meName = null, onRep
           </button>
         ) : <span style={{ flex: 1 }} />}
         <ReportControl row={row} me={me} onReport={onReport} />
-      </div>
+      </div> : null}
     </article>
   );
 }
