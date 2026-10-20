@@ -1236,7 +1236,7 @@ export default function SettingsPage() {
             {/* Alerts outside the app (push, 2026-10-19). ON = you get that kind. Adults only;
                 8am–10pm in your home timezone; a few a week at most. */}
             <EdRow isTablet={isTablet} step={fontStep} icon={Bell} iconBg={CAT.weather.ink} title="Alerts on this phone"
-              desc={pushPerm === "granted" ? "On. They arrive between 8am and 10pm your time, and never more than a few a day."
+              desc={pushPerm === "granted" ? "On. Between 8am and 10pm your time. An alert says who sent what, never their words."
                 : pushPerm === "denied" ? "Off in your phone's settings — Settings → GlobeSkimmers → Notifications turns them on."
                 : pushPerm === "unavailable" || pushPerm === "unknown" ? "Alerts come with the app on your phone."
                 : "A knock when a postcard or a follow arrives. The Mailbox keeps the record either way."}
@@ -1252,10 +1252,8 @@ export default function SettingsPage() {
               ["alert_pages", "Your passport", "Reactions, signatures and tags on your pages"],
               ["alert_friend_stamps", "Inner circle stamps", "Once a day: new stamps from people you follow who follow you back"],
               ["alert_news", "News from GlobeSkimmers", "Seasonal editions and new things to collect"],
-              // Previews (founder, 2026-10-19): off by default. Telegram words never leave the app.
-              ["alert_previews", "Show previews", "Postcard words and comments show. Telegram words never do"],
             ].map(([key, title, desc]) => (
-              <EdRow key={key} isTablet={isTablet} step={fontStep} icon={Bell} iconBg={CAT.weather.ink} title={title} desc={key === "alert_previews" ? (dials[key] ? desc : "Off — alerts never show anyone’s words") : dials[key] ? desc : `Off — ${desc.charAt(0).toLowerCase()}${desc.slice(1)}`}
+              <EdRow key={key} isTablet={isTablet} step={fontStep} icon={Bell} iconBg={CAT.weather.ink} title={title} desc={dials[key] ? desc : `Off — ${desc.charAt(0).toLowerCase()}${desc.slice(1)}`}
                 control={{ node: <EdToggle on={!!dials[key]} label={title} onClick={() => saveDial(key, !dials[key], dials[key])} /> }} />
             ))}
           </EdGroup>

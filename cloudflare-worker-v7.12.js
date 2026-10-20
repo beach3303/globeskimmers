@@ -18818,7 +18818,7 @@ async function handlePostcardSend(request, env, ctx) {
       const place = row.place_name || row.city || null;
       ctx.waitUntil(pushNotify(env, toUser, 'postcards', (n) => (n > 1
         ? { title: `${n} new postcards`, body: `${senderName} and others sent you postcards`, route: '/Postcards' }
-        : { title: `${senderName} sent you a postcard${place ? ` from ${place}` : ''}`, body: 'Open it in your Mailbox', preview: msg ? `“${msg.slice(0, 90)}”` : null, route: madeId ? `/Postcards?pc=${madeId}` : '/Postcards' })));
+        : { title: `${senderName} sent you a postcard${place ? ` from ${place}` : ''}`, body: 'Open it in your Mailbox', route: madeId ? `/Postcards?pc=${madeId}` : '/Postcards' })));
     }
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: !!toUser, city: !!toCity, has_dish: !!(b.meta && b.meta.dish), anon: anonLabel || undefined }));
     // A new board card shows in the City Boards list at once, not after its five minutes.
@@ -19302,7 +19302,7 @@ async function handleBlotterSign(request, env, ctx) {
     // The knock (push, 2026-10-19): someone signed or doodled on my pages.
     if (ctx && share?.user_id && share.user_id !== user.id) {
       const who = await ppHolder(env, user.id);
-      ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your circle', route: '/Passport' } : { title: doodleKey && !text ? `${who} left a doodle on your passport` : `${who} signed your passport`, body: 'Open your passport to see it', preview: text ? `“${String(text).slice(0, 90)}”` : null, route: '/Passport' })));
+      ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your circle', route: '/Passport' } : { title: doodleKey && !text ? `${who} left a doodle on your passport` : `${who} signed your passport`, body: 'Open your passport to see it', route: '/Passport' })));
     }
     const origin = new URL(request.url).origin;
     return jsonResponse({ entry: { id: row.id, target: row.target, body: row.body, doodle: row.doodle_key ? `${origin}/bl-doodle/e/${row.id}` : null, created_at: row.created_at } });
@@ -19750,9 +19750,10 @@ async function pushNotify(env, uid, kind, make, opts = {}) {
     // opts.each: every one is its own alert (telegrams), never folded into "N new".
     if (kv && !opts.now && !opts.each) { const nk = `pushn:${uid}:${kind}`; n = (parseInt((await kv.get(nk).catch(() => null)) || '0', 10) || 0) + 1; await kv.put(nk, String(n), { expirationTtl: 6 * 3600 }).catch(() => {}); }
     const msg = { kind, ...(typeof make === 'function' ? make(n) : make) };
-    // Previews (founder, 2026-10-19): off unless the member turned them on. An alert may carry
-    // `preview` (someone's words); it replaces the plain body only then. Telegrams never carry one.
-    if ('preview' in msg) { if (msg.preview && sp?.alert_previews === true) msg.body = msg.preview; delete msg.preview; }
+    // No previews, ever (founder, 2026-10-19: "i dont want preview messages shown on notification,
+    // not on banner, not on lock screen"): an alert says who and what, never anyone's words — a
+    // postcard's, a comment's or a telegram's. A `preview` that slips in is dropped here.
+    delete msg.preview;
     if (!msg.title || !msg.body) return;
     if (!opts.now && kv && pushQuiet(pushLocalHour(await pushTimezone(env, uid)))) {
       // Held until 8 in the member's morning (pushHourly); one line per kind.
