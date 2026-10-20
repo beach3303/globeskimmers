@@ -2782,7 +2782,7 @@ from mailbox and keep message in postcard box unless they're deleted".
   captured the mixed box and the Mailbox door.
 - **Activate:** push (worker + migration), then `npm run ota`.
 
-## 2026-10-19 — Telegram ink: black, red, green (COMMITTED, not pushed)
+## 2026-10-19 — Telegram ink: black, red, green (PUSHED — main 2852321; worker live, /social/unread returns `mail`; OTA pending)
 
 Founder: "allow user to change color of telegram text from black, red, green but text should be visible".
 `telegrams.ink` (migration `20261019240000_telegram_ink.sql`, NULL = black, check red|green); `/telegrams/send`
@@ -2800,7 +2800,7 @@ fields removed; `pushNotify` drops any `preview`); telegram alerts never had wor
 `social_profiles.alert_previews` stays in the table, unused. Privacy policy updated (site).
 **Activate:** push (the alerts change at once for every phone), then `npm run ota` for the Settings row.
 
-## 2026-10-19 — The Mailbox badge: unread postcards + sealed telegrams (COMMITTED, not pushed)
+## 2026-10-19 — The Mailbox badge: unread postcards + sealed telegrams (PUSHED — main 2852321; worker live, /social/unread returns `mail`; OTA pending)
 
 Founder: "can the mailbox have a badge count of how many unread postcards and unread telegrams there are inside?"
 `/social/unread` → `mail` = postcards to me with `read_at` null + telegrams with `received_at` null (same rails as the
@@ -2810,7 +2810,7 @@ Mailbox heading: "From your circle · 1 sealed telegram". The phone's app-icon b
 builds. (An alert-tap count was offered; the founder doesn't need it.) Captured the 3 badge + heading.
 **Activate:** push, then `npm run ota`.
 
-## 2026-10-19 — A cleaner Mailbox (COMMITTED, not pushed)
+## 2026-10-19 — A cleaner Mailbox (PUSHED — main 2852321; worker live, /social/unread returns `mail`; OTA pending)
 
 Founder: "audit and assess how we can make mailbox cleaner and better. the 3 notification is just getting to me" →
 Claude's audit (duplicates: postcard rows in the activity AND the card; mail buried under Find people, Invite and two
@@ -2822,7 +2822,7 @@ FROM YOUR CIRCLE (stamps + broadcasts) → Your circle row. `ActivityList` gains
 gains `labelHidden`; a sealed telegram's ••• rides the envelope corner. App only. eslint + no-undef; build;
 boot-check ✅; captured the top, the lines, and the three sheets. **Activate:** push, then `npm run ota`.
 
-## 2026-10-19 — The Passport page stands alone (COMMITTED, not pushed)
+## 2026-10-19 — The Passport page stands alone (PUSHED — main 2852321; worker live, /social/unread returns `mail`; OTA pending)
 
 Founder: "the passport page should be a stand alone passport on the page while the albums should go under the profile"
 → Claude's take (agree; luggage too; a pointer after the actions; shared links unchanged) → "yes". Own Passport: book +
