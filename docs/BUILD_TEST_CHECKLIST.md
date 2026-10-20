@@ -2851,7 +2851,7 @@ collages with the state's name lettered in; Washington_DC → District of Columb
 - To replace a banner later: upload a new `header.png` to the same R2 path (the kit cache clears within an hour).
 - **Activate:** push (worker), then `npm run ota` (the app draws `banner`).
 
-## 2026-10-19 — Postcard composer: X to cancel, a Change tag on the photo (COMMITTED, not pushed)
+## 2026-10-19 — Postcard composer: X to cancel, a Change tag on the photo (PUSHED — main 1fe6cbe; LIVE on phones via OTA 1.0.2610200518)
 
 Founder: "place an X if user wants to cancel composing a post card … change photo … they've already uploaded one".
 `PostcardCompose`: an X (top right) → `cancel()`: empty card closes; with a photo or words → "Discard this postcard?"
@@ -2859,4 +2859,9 @@ Founder: "place an X if user wants to cancel composing a post card … change ph
 "Edit the photo — our looks"; the photo itself changes it, with a "↻ Change" tag in its corner (the separate
 "Change photo" button was dropped the same evening — founder: one place per action). App only. eslint + no-undef; build; boot-check ✅; captured
 the X with a card started and the discard question. **Activate:** push, then `npm run ota`.
+
+**OTA 1.0.2610200518 (2026-10-19 ~10:18 PM PT, run by Claude at the founder's request):** every app-side change of
+10-19 is on phones — telegrams, read mail → box, the cleaner Mailbox + badge, the standalone Passport, pets-only kit,
+the postcard X / Change tag / "Your message…" / "Where was this taken?", the one-time Allow prompt. Main 1fe6cbe
+matches what phones run. Still to do on a phone: Settings → Alerts & Notifications → Send a test.
 
