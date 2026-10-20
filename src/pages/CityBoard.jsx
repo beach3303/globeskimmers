@@ -97,9 +97,9 @@ function Billboard({ name, kind = "city", country = "", region = "", kit = null,
         </div>
         <div style={{ border: `3px solid ${accent}`, borderRadius: 10, padding: 8 }}>
           {kit?.banner ? (
-            // A named banner (founder, 2026-10-19: the US state banners): the whole picture — it
-            // carries the state's name in its lettering — then the board's name under it. A state
-            // board names only its country; a city board borrowing its state's banner names itself.
+            // A named banner (founder, 2026-10-19: the US state banners, state boards only — a city
+            // is its own board): the whole picture, which carries the state's name in its lettering,
+            // then the country under it.
             <>
               <div style={{ borderRadius: 6, overflow: "hidden", border: `1px solid ${accent}`, background: NEUTRAL.ivory, aspectRatio: "700 / 470" }}>
                 <img src={kit.banner} alt={`${kit.from_state || name} — then and now`} decoding="async" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}

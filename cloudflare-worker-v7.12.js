@@ -20471,13 +20471,9 @@ async function handleCityBoard(request, env) {
       gbRest(env, `${cardsQ}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {}),
       board.kind === 'city' ? pcWasThere(env, user.id, key) : Promise.resolve(false),
       pcBoardPhotos(env, board, before, blocked, origin),
-      // A US city board without its own kit wears its state's banner (founder, 2026-10-19).
-      pcKit(env, board, origin).then(async (k) => {
-        if (k || board.kind !== 'city' || !pcIsUSName(board.country) || !board.region) return k;
-        const st = pcBoardOf({ kind: 'state', region: board.region, country: 'United States' });
-        const sk = st ? await pcKit(env, st, origin) : null;
-        return sk && sk.banner ? { ...sk, from_state: st.name } : null;
-      }),
+      // A board wears only its own kit: a city is not its state (founder, 2026-10-19: "atlanta is
+      // separate from georgia … those state banners are just for state photos").
+      pcKit(env, board, origin),
       gbRest(env, `${cardsQ}&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } }),
     ]);
     if (q.status === 400) return jsonResponse({ rows: [], unavailable: true });
