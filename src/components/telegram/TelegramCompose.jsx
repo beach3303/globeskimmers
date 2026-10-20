@@ -6,7 +6,7 @@
 // The chevron at the top right (or a tap above the sheet) collapses it without sending, and the
 // words wait: opening the same telegram again brings the draft back (founder, 2026-10-19).
 //
-// Several people (2026-10-19): pick up to TG_MAX_TO, then EACH their own (private copies) or AS A
+// Several people (2026-10-19): pick up to TG_MAX_TO, then SEPARATELY (private copies) or AS A
 // GROUP (one telegram naming everyone); a reply to a group telegram can go to the sender or to all.
 //
 //   <TelegramCompose open onClose onSent following blocked replyTo toHandle meName meHandle />
@@ -175,7 +175,7 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
               {recipients.length > 1 ? (
                 <div style={{ marginTop: 10 }}>
                   <div role="group" aria-label="How it goes" style={{ display: "flex", flexWrap: "wrap", columnGap: 6 }}>
-                    <Chip on={mode === "each"} onClick={() => setMode("each")}>Each their own</Chip>
+                    <Chip on={mode === "each"} onClick={() => setMode("each")}>Separately</Chip>
                     <Chip on={mode === "group"} onClick={() => setMode("group")}>As a group</Chip>
                   </div>
                   <p style={{ margin: "6px 0 0", fontSize: fs(12), lineHeight: 1.45, color: "#CBB994" }}>
