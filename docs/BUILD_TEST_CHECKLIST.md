@@ -2791,3 +2791,12 @@ received tape use `inkColor` (#1E1913 / #9E2A1C / #1E5B32 — ≥7:1 on the tape
 the writer in red, received telegrams in red and green. eslint + no-undef; build; boot-check ✅.
 **Activate:** push, then `npm run ota`.
 
+## 2026-10-19 — No previews, ever (COMMITTED, not pushed)
+
+Founder: "i dont want preview messages shown on notification, not on banner, not on lock screen. i dont want telegram
+message ever previewed". Supersedes the Show previews switch: postcard and comment alerts carry no words (`preview`
+fields removed; `pushNotify` drops any `preview`); telegram alerts never had words. Settings: the switch is gone;
+"Alerts on this phone: On. Between 8am and 10pm your time. An alert says who sent what, never their words."
+`social_profiles.alert_previews` stays in the table, unused. Privacy policy updated (site).
+**Activate:** push (the alerts change at once for every phone), then `npm run ota` for the Settings row.
+
