@@ -2766,3 +2766,19 @@ in a group as long as both people have @handle"; "instead of using stop for peri
 - Verified: eslint + no-undef; build; boot-check ✅; captured the Profile folder with two buddies and the seat.
 - **Activate:** push (worker), then `npm run ota`.
 
+## 2026-10-19 — Read mail moves to the postcard box (COMMITTED, not pushed)
+
+Founder: "put both telegrams and postcards inside the postcard box, after reading, then remove post card and telegrams
+from mailbox and keep message in postcard box unless they're deleted".
+- **Read:** a postcard to me = the first time the Mailbox shows it (`postcards.read_at`, migration
+  `20261019230000_postcard_read_at.sql`); a telegram = its seal broken (`received_at`). **Moved:** the feed keeps either
+  only until `PC_READ_LINGER_MS` (30 min) after it was read, then it lives only in the box until deleted. Broadcast
+  cards (to everyone who follows the sender) stay circle news; Keep still files them.
+- **Box:** `/postcards/box` merges telegrams to me with the postcards, newest first on the same `before` cursor; group
+  telegrams show their others. The page: "Postcards & telegrams sent to you", "1 postcard · 2 telegrams", telegram cards
+  with Reply and ••• (Delete / Report / Block). The Mailbox door: "Postcards and telegrams you've read, and the ones you
+  keep". A tapped row or alert whose card has moved opens the box at it (`?pc=` / `?tg=`).
+- Verified: `node --check`; the `or=(…gt."<iso>")` filter parses on PostgREST; eslint + no-undef; build; boot-check ✅;
+  captured the mixed box and the Mailbox door.
+- **Activate:** push (worker + migration), then `npm run ota`.
+
