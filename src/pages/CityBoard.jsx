@@ -96,20 +96,40 @@ function Billboard({ name, kind = "city", country = "", region = "", kit = null,
           <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".24em", lineHeight: 1.2, textTransform: "uppercase", color: accent }}>Globeskimmers · {kindWord}</div>
         </div>
         <div style={{ border: `3px solid ${accent}`, borderRadius: 10, padding: 8 }}>
-          <div style={{ position: "relative", height: 170, borderRadius: 6, overflow: "hidden", border: `1px solid ${accent}`, background: `linear-gradient(180deg, ${fallback.sky}, ${plate})` }}>
-            {kit?.header ? (
-              <img src={kit.header} alt="" aria-hidden="true" decoding="async" onError={(e) => { e.currentTarget.style.display = "none"; }}
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-            ) : (
-              // The typographic header: deco rays, a sun, a horizon — the name does the talking.
-              <svg aria-hidden="true" viewBox="0 0 402 230" preserveAspectRatio="xMidYMid slice" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-                dangerouslySetInnerHTML={{ __html: `${RAYS}<circle cx="62" cy="58" r="22" fill="${accent}" opacity=".9"/><path d="M0 182 L402 182 L402 230 L0 230 Z" fill="#000000" opacity=".22"/><path d="M0 182 L402 182" stroke="${accent}" stroke-width="1.5" opacity=".6"/>` }} />
-            )}
-            <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "26px 12px 10px", background: "linear-gradient(180deg, rgba(8,16,32,0), rgba(8,16,32,.78))" }}>
-              <h1 style={{ margin: 0, fontFamily: SERIF, fontSize: fs(30), fontWeight: 400, lineHeight: 1.05, letterSpacing: ".03em", color: ink, overflowWrap: "anywhere" }}>{name}</h1>
-              {kind !== "country" && country ? <div style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".18em", textTransform: "uppercase", color: accent, marginTop: 2 }}>{kind === "city" && region ? `${region} · ${country}` : country}</div> : null}
+          {kit?.banner ? (
+            // A named banner (founder, 2026-10-19: the US state banners): the whole picture — it
+            // carries the state's name in its lettering — then the board's name under it. A state
+            // board names only its country; a city board borrowing its state's banner names itself.
+            <>
+              <div style={{ borderRadius: 6, overflow: "hidden", border: `1px solid ${accent}`, background: NEUTRAL.ivory, aspectRatio: "700 / 470" }}>
+                <img src={kit.banner} alt={`${kit.from_state || name} — then and now`} decoding="async" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
+                  style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+              </div>
+              {kind === "state" && !kit.from_state ? (
+                country ? <div style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".18em", textTransform: "uppercase", color: accent, marginTop: 8 }}>{country}</div> : null
+              ) : (
+                <div style={{ marginTop: 8 }}>
+                  <h1 style={{ margin: 0, fontFamily: SERIF, fontSize: fs(28), fontWeight: 400, lineHeight: 1.05, letterSpacing: ".03em", color: ink, overflowWrap: "anywhere" }}>{name}</h1>
+                  {kind !== "country" && country ? <div style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".18em", textTransform: "uppercase", color: accent, marginTop: 2 }}>{kind === "city" && region ? `${region} · ${country}` : country}</div> : null}
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ position: "relative", height: 170, borderRadius: 6, overflow: "hidden", border: `1px solid ${accent}`, background: `linear-gradient(180deg, ${fallback.sky}, ${plate})` }}>
+              {kit?.header ? (
+                <img src={kit.header} alt="" aria-hidden="true" decoding="async" onError={(e) => { e.currentTarget.style.display = "none"; }}
+                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              ) : (
+                // The typographic header: deco rays, a sun, a horizon — the name does the talking.
+                <svg aria-hidden="true" viewBox="0 0 402 230" preserveAspectRatio="xMidYMid slice" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+                  dangerouslySetInnerHTML={{ __html: `${RAYS}<circle cx="62" cy="58" r="22" fill="${accent}" opacity=".9"/><path d="M0 182 L402 182 L402 230 L0 230 Z" fill="#000000" opacity=".22"/><path d="M0 182 L402 182" stroke="${accent}" stroke-width="1.5" opacity=".6"/>` }} />
+              )}
+              <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "26px 12px 10px", background: "linear-gradient(180deg, rgba(8,16,32,0), rgba(8,16,32,.78))" }}>
+                <h1 style={{ margin: 0, fontFamily: SERIF, fontSize: fs(30), fontWeight: 400, lineHeight: 1.05, letterSpacing: ".03em", color: ink, overflowWrap: "anywhere" }}>{name}</h1>
+                {kind !== "country" && country ? <div style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".18em", textTransform: "uppercase", color: accent, marginTop: 2 }}>{kind === "city" && region ? `${region} · ${country}` : country}</div> : null}
+              </div>
             </div>
-          </div>
+          )}
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 8, color: accent }}>
             <span style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".14em", textTransform: "uppercase" }}>
               {counts ? `${counts.photos ?? 0} photo${counts.photos === 1 ? "" : "s"} · ${counts.cards ?? 0} card${counts.cards === 1 ? "" : "s"}` : "From travelers who were really there"}
