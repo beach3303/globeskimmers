@@ -2735,7 +2735,7 @@ that telegram messages preview cannot be opened on lock screen nor on banners, i
   stamps read the live server's old default).
 - **Activate:** push (worker + migration + site), then `npm run ota`.
 
-## 2026-10-19 — Telegrams to several people; periods stay periods (COMMITTED, not pushed)
+## 2026-10-19 — Telegrams to several people; periods stay periods (PUSHED — main ee79c18, deploys green; live: feed + box 200, group typo → 404 naming the @, 11 people → 400; OTA pending)
 
 Founder: "allow for telegram to be sent to different people, same message, sent separately, or same message, sent
 in a group as long as both people have @handle"; "instead of using stop for period in telegram, use period instead".
@@ -2754,7 +2754,7 @@ in a group as long as both people have @handle"; "instead of using stop for peri
   captured the group writer, a sealed GROUP TELEGRAM, the opened one with ALSO TO, reply-all.
 - **Activate:** push (worker + migration + site), then `npm run ota`.
 
-## 2026-10-19 — Telegram words as typed; virtual items are pets only (COMMITTED, not pushed)
+## 2026-10-19 — Telegram words as typed; virtual items are pets only (PUSHED — main ee79c18, deploys green; live: feed + box 200, group typo → 404 naming the @, 11 people → 400; OTA pending)
 
 - Founder: '"Landed. Miss you!" should arrive as "Landed. Miss you!"' → `tgClean` / `telegramText` keep capitals and
   small letters; the writer no longer forces capitals ("Type your telegram", sentence case). Form labels and names stay
@@ -2766,7 +2766,7 @@ in a group as long as both people have @handle"; "instead of using stop for peri
 - Verified: eslint + no-undef; build; boot-check ✅; captured the Profile folder with two buddies and the seat.
 - **Activate:** push (worker), then `npm run ota`.
 
-## 2026-10-19 — Read mail moves to the postcard box (COMMITTED, not pushed)
+## 2026-10-19 — Read mail moves to the postcard box (PUSHED — main ee79c18, deploys green; live: feed + box 200, group typo → 404 naming the @, 11 people → 400; OTA pending)
 
 Founder: "put both telegrams and postcards inside the postcard box, after reading, then remove post card and telegrams
 from mailbox and keep message in postcard box unless they're deleted".
@@ -2781,4 +2781,13 @@ from mailbox and keep message in postcard box unless they're deleted".
 - Verified: `node --check`; the `or=(…gt."<iso>")` filter parses on PostgREST; eslint + no-undef; build; boot-check ✅;
   captured the mixed box and the Mailbox door.
 - **Activate:** push (worker + migration), then `npm run ota`.
+
+## 2026-10-19 — Telegram ink: black, red, green (COMMITTED, not pushed)
+
+Founder: "allow user to change color of telegram text from black, red, green but text should be visible".
+`telegrams.ink` (migration `20261019240000_telegram_ink.sql`, NULL = black, check red|green); `/telegrams/send`
+takes `ink`; feed + box rows carry it. App: INK swatches under the blank (Black / Red / Green), the textarea and the
+received tape use `inkColor` (#1E1913 / #9E2A1C / #1E5B32 — ≥7:1 on the tape, ~6:1 on the buff blank). Captured:
+the writer in red, received telegrams in red and green. eslint + no-undef; build; boot-check ✅.
+**Activate:** push, then `npm run ota`.
 
