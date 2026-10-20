@@ -345,10 +345,16 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
             type="button"
             onClick={() => fileRef.current?.click()}
             aria-label={image ? "Change the photo" : "Choose the photo"}
-            style={{ display: "block", width: "100%", marginTop: 12, padding: 0, overflow: "hidden", borderRadius: 14, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, aspectRatio: "3 / 2", cursor: "pointer" }}
+            style={{ position: "relative", display: "block", width: "100%", marginTop: 12, padding: 0, overflow: "hidden", borderRadius: 14, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, aspectRatio: "3 / 2", cursor: "pointer" }}
           >
             {image ? (
-              <img src={image} alt="The postcard front" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              <>
+                <img src={image} alt="The postcard front" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                {/* The photo is the button (founder, 2026-10-19): a corner tag says so. */}
+                <span aria-hidden="true" style={{ position: "absolute", right: 8, bottom: 8, display: "inline-flex", alignItems: "center", gap: 5, height: 30, padding: "0 10px", borderRadius: 999, background: rgba(NEUTRAL.ink, 0.62), color: NEUTRAL.white, fontSize: fs(12), fontWeight: 600, backdropFilter: "blur(2px)" }}>
+                  <RefreshCw size={13} strokeWidth={2.2} focusable="false" /> Change
+                </span>
+              </>
             ) : (
               <span style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, height: "100%", color: NEUTRAL.ink3 }}>
                 <ImagePlus size={22} strokeWidth={2} aria-hidden="true" focusable="false" />
@@ -358,20 +364,11 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pick} />
           {image ? (
-            // Change it, or give it one of our looks (founder, 2026-10-19: "change photo … they've
-            // already uploaded one").
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button type="button" onClick={() => fileRef.current?.click()}
-                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 40, padding: "0 12px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.ink2, fontSize: fs(12.5), fontWeight: 600 }}>
-                <RefreshCw size={15} strokeWidth={2} aria-hidden="true" focusable="false" />
-                Change photo
-              </button>
-              <button type="button" onClick={() => setEditing(true)}
-                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 40, padding: "0 12px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(12.5), fontWeight: 600 }}>
-                <SlidersHorizontal size={15} strokeWidth={2} aria-hidden="true" focusable="false" />
-                Edit · our looks
-              </button>
-            </div>
+            <button type="button" onClick={() => setEditing(true)}
+              style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, minHeight: 40, padding: "0 12px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(12.5), fontWeight: 600 }}>
+              <SlidersHorizontal size={15} strokeWidth={2} aria-hidden="true" focusable="false" />
+              Edit the photo — our looks
+            </button>
           ) : null}
           <PhotoEditor open={editing} image={image} aspect="3:2" onDone={(u) => { setImage(u); setEditing(false); }} onClose={() => setEditing(false)} />
 
