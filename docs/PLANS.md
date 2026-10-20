@@ -854,6 +854,11 @@ Stars (HK); Ruins of St. Paul's, Senado Square (Macau); Jewel Changi, Chinatown,
 Museum, Chiang Kai-shek Memorial Hall, Shilin Night Market, Yehliu Geopark (TW); Dotonbori, Nara Park (JP);
 Myeongdong, Haeundae Beach (KR); Rizal Park, Magellan's Cross, Burnham Park (PH). No Disney/Universal marks.
 
+**2026-10-20, founder:** the Facebook Page is live ("GlobeSkimmers", first post pinned). **The Founding 100 is on hold**
+("i'm passing on Founding 100. but ill give it a shot later") — the plan's week-1–3 personal invites wait; growth runs on
+the Stamp Desk Reels (docs/growth/stamp-desk-wave-1.md) and the Page for now, measured by Admin's funnel and the
+src codes (fb, ig, tiktok). Revisit when the founder is ready; the invite message is drafted (src=friend).
+
 ## Alerts outside the app (push) — founder asks, 2026-10-19
 
 Asked while reviewing the Mailbox: a postcard's recipient gets a lock-screen / banner alert; the alert
