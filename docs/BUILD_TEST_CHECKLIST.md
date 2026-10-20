@@ -2833,3 +2833,19 @@ App only. eslint + no-undef; build; boot-check ✅; captured the Passport (order
 Profile (the demo account has no photos, so its albums section is empty and hidden).
 **Activate:** push, then `npm run ota`.
 
+## 2026-10-19 — US state banners on City Boards (R2 uploaded; code COMMITTED, not pushed)
+
+Founder: "go to my computer's download folder, then go to US_states_named_banners_png folder. use those banners and
+replace the app's state banners". Source: ~/Downloads/US_States_Named_Banners_PNG (51 PNGs, 700×470, then-and-now
+collages with the state's name lettered in; Washington_DC → District of Columbia).
+- **Uploaded (live now, by Claude):** R2 `globeskimmers-media/kits/state/<slug>--united-states/header.png` + `meta.json`
+  ({ name, kind: state, country, state, icons: 0, named: true }) for all 51 — 102 objects, 0 failures. Served by
+  the existing `/kit/state/<slug>/header.png` (checked: Georgia 200, 643 KB; DC 200).
+- **Worker:** a `named` kit returns `banner` instead of `header` (old apps keep the plain plate); a US city board with
+  no kit of its own borrows its state's banner (`from_state`); kit cache key `kit:v2:`.
+- **App:** `Billboard` draws a `banner` whole (700:470, contain) and prints the board's name below it (a city board:
+  "Atlanta / Georgia · United States"; a state board: the country only).
+- Captured: the Atlanta city board in Georgia's banner, the New York state board.
+- To replace a banner later: upload a new `header.png` to the same R2 path (the kit cache clears within an hour).
+- **Activate:** push (worker), then `npm run ota` (the app draws `banner`).
+
