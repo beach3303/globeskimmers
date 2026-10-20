@@ -386,7 +386,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
             <input
               value={place}
               onChange={(e) => setPlace(e.target.value.slice(0, 80))}
-              placeholder="Where (South City Kitchen)"
+              placeholder="Where was this taken?"
               aria-label="Where"
               className="placeholder:text-[color:var(--gs-ph)]"
               style={css({ ...FIELD, flex: "1 1 calc(150px * var(--fs, 1))", width: "auto", minWidth: 0, "--gs-ph": NEUTRAL.ink3 })}
