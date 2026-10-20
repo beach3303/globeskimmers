@@ -2791,7 +2791,7 @@ received tape use `inkColor` (#1E1913 / #9E2A1C / #1E5B32 — ≥7:1 on the tape
 the writer in red, received telegrams in red and green. eslint + no-undef; build; boot-check ✅.
 **Activate:** push, then `npm run ota`.
 
-## 2026-10-19 — No previews, ever (COMMITTED, not pushed)
+## 2026-10-19 — No previews, ever (PUSHED — main e27eef0, worker + site live)
 
 Founder: "i dont want preview messages shown on notification, not on banner, not on lock screen. i dont want telegram
 message ever previewed". Supersedes the Show previews switch: postcard and comment alerts carry no words (`preview`
@@ -2799,4 +2799,14 @@ fields removed; `pushNotify` drops any `preview`); telegram alerts never had wor
 "Alerts on this phone: On. Between 8am and 10pm your time. An alert says who sent what, never their words."
 `social_profiles.alert_previews` stays in the table, unused. Privacy policy updated (site).
 **Activate:** push (the alerts change at once for every phone), then `npm run ota` for the Settings row.
+
+## 2026-10-19 — The Mailbox badge: unread postcards + sealed telegrams (COMMITTED, not pushed)
+
+Founder: "can the mailbox have a badge count of how many unread postcards and unread telegrams there are inside?"
+`/social/unread` → `mail` = postcards to me with `read_at` null + telegrams with `received_at` null (same rails as the
+activity). `FloatingNav`: a red number on the Mailbox tab (shown on the Mailbox too, since a sealed telegram stays
+counted), the dot for other news; it asks again after the Mailbox marks seen and after a seal is broken (`gs:mail`).
+Mailbox heading: "From your circle · 1 sealed telegram". The phone's app-icon badge needs native code — next store
+builds. (An alert-tap count was offered; the founder doesn't need it.) Captured the 3 badge + heading.
+**Activate:** push, then `npm run ota`.
 

@@ -874,9 +874,9 @@ signs the phone up again first. After the push + OTA: tap Send a test on the fou
 or in a banner. Founder: telegrams stay in-app only while we're new ("telegrams integrity and signature functioning
 style stays intact while we are just starting"); "in a few months when we get popularity" an opt-in telegram preview
 may be OK. Claude's take, same day: keep postcards and comments wordless too for now (delivery is the growth problem,
-not wording; an opt-in barely moves it; on-by-default breaks the "Sealed" promise); revisit with data — first a
-count of alert taps by kind (no content), then, if postcard alerts under-open, test an opt-in preview for postcards
-first, telegrams last if ever. **Reminder ~2027-01-15: look at the alert-tap numbers and re-decide.**
+not wording; an opt-in barely moves it; on-by-default breaks the "Sealed" promise); revisit later — if postcard
+alerts seem to under-open, test an opt-in preview for postcards first, telegrams last if ever. (A count of alert
+taps was offered; the founder doesn't need it.) **Reminder ~2027-01-15: re-decide previews.**
 
 Place-triggered nudges are a separate, later decision: they need "Always" location on iPhone and
 background location on Android (a Play declaration form + prominent disclosure), geofences for the
@@ -1088,7 +1088,7 @@ Open ideas, not decided: a "Sent" list so the sender can see what they wired; te
 
 ## Dated reminders
 
-- **~2027-01-15** — alert previews: check the alert-tap counts by kind and re-decide postcard (then telegram) previews (decided 2026-10-19: none for now).
+- **~2027-01-15** — alert previews: re-decide postcard (then telegram) previews (decided 2026-10-19: none for now).
 
 - ~2026-12-09: regenerate the Sign in with Apple client secret (M3, 6-month limit).
 - ~2026-12-10: re-apply for Viator Full + Booking access (G34).
