@@ -2842,10 +2842,12 @@ collages with the state's name lettered in; Washington_DC → District of Columb
   ({ name, kind: state, country, state, icons: 0, named: true }) for all 51 — 102 objects, 0 failures. Served by
   the existing `/kit/state/<slug>/header.png` (checked: Georgia 200, 643 KB; DC 200).
 - **Worker:** a `named` kit returns `banner` instead of `header` (old apps keep the plain plate); a US city board with
-  no kit of its own borrows its state's banner (`from_state`); kit cache key `kit:v2:`.
+  no kit of its own ~~borrows its state's banner~~ — REMOVED the same evening (founder: "atlanta is separate from
+  georgia … those state banners are just for state photos"): a city board wears only its own kit; kit cache `kit:v2:`.
 - **App:** `Billboard` draws a `banner` whole (700:470, contain) and prints the board's name below it (a city board:
   "Atlanta / Georgia · United States"; a state board: the country only).
-- Captured: the Atlanta city board in Georgia's banner, the New York state board.
+- Captured: the New York state board in its banner; Atlanta keeps its own plate (no state banner). The big header
+  stays (founder OK'd it); a compact header was built and set aside (scratchpad patch), not shipped.
 - To replace a banner later: upload a new `header.png` to the same R2 path (the kit cache clears within an hour).
 - **Activate:** push (worker), then `npm run ota` (the app draws `banner`).
 
