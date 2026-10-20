@@ -279,12 +279,20 @@ export default function ProfilePage() {
             <CircleFolder owner={owner} cloth={cloth.key} style={{ marginTop: GAP }} />
             {stamps ? (
               <PassportFolder mode="own" cloth={cloth.key} stamps={stamps} onOpenDoor={() => navigate(createPageUrl("Passport"))} style={{ marginTop: GAP }} />
-            ) : (
+            ) : null}
+            {/* Your albums right under your passport (founder, 2026-10-19: the Passport page is the
+                book alone; the albums live here). */}
+            {stamps ? (
+              <div style={{ marginTop: GAP }}>
+                <PhotoPackets stamps={stamps} title="Photo albums" owner albums={albums} onChanged={reloadStamps} className="" />
+              </div>
+            ) : null}
+            {!stamps ? (
               <Folder stock="passport" size="profile" tab="My Virtual Passport" style={{ marginTop: GAP }}>
                 <div aria-hidden="true" className="animate-pulse motion-reduce:animate-none" style={{ height: 132, borderRadius: 12, background: rgba(ZONE.passport.tile, 0.12) }} />
                 <span className="sr-only">Loading your passport</span>
               </Folder>
-            )}
+            ) : null}
             <MapFolder favorites={shown.favorites} dreams={shown.dreams} cloth={cloth.key} style={{ marginTop: GAP }} />
             {SHOW_VIRTUAL_ITEMS && <VirtualItems stamps={stamps} luggage={luggage} style={{ marginTop: GAP }} />}
             <PrivacyCard cloth={cloth.key} share={share} onShare={setShare} style={{ marginTop: GAP }} />
@@ -293,8 +301,6 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* Your own packets take more prints, as on the Passport (founder, 2026-10-14). */}
-      {!edit && stamps ? <PhotoPackets stamps={stamps} title="Photo packets" owner albums={albums} onChanged={reloadStamps} className={`${COLUMN} mt-8`} /> : null}
     </div>
   );
 }

@@ -37,7 +37,6 @@ import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import NearbyStampPrompt, { NEARBY_KEY, nearbySensingOn } from "@/components/passport/NearbyStampPrompt";
 import StampActions from "@/components/passport/StampActions";
 import PhotoSorter from "@/components/passport/PhotoSorter";
-import Luggage from "@/components/passport/Luggage";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import HeldHandleClaim from "@/components/passport/HeldHandleClaim";
 import PhotoFooter from "@/components/passport/PhotoFooter";
@@ -1136,6 +1135,7 @@ function PassportInner() {
   // The page order (founder, 2026-10-15): newest / oldest-first / shuffle / the hand.
   const [arranging, setArranging] = useState(false);
   const [orderBusy, setOrderBusy] = useState(false);
+  const [arrangeOpen, setArrangeOpen] = useState(false);   // the "Arrange pages" control (2026-10-19)
   const applyOrder = async (body) => {
     if (orderBusy) return;
     setOrderBusy(true);
@@ -1601,8 +1601,18 @@ function PassportInner() {
         ) : (
           /* THE BOOK — tap the cover to open, then flip through the pages */
           <div className="mt-1 mb-2" ref={bookRef}>
+            {/* The book stands alone (founder, 2026-10-19): the page order folds into one small
+                "Page order" control above it. */}
             {!readOnly && !preview && stampsView.length > 1 && (
-              <div className="flex items-center gap-1.5 flex-wrap mb-2" role="radiogroup" aria-label="Page order">
+              <div className="flex justify-end mb-2">
+                <button type="button" onClick={() => setArrangeOpen((v) => !v)} aria-expanded={arrangeOpen}
+                  className="rounded-full px-3 py-1.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(11.5) }}>
+                  ↕ Page order · {({ newest: "Newest", chrono: "Oldest first", shuffle: "Shuffled", custom: "My order" })[booklet?.order || "newest"] || "Newest"}
+                </button>
+              </div>
+            )}
+            {!readOnly && !preview && stampsView.length > 1 && arrangeOpen && (
+              <div className="flex items-center justify-end gap-1.5 flex-wrap mb-2" role="radiogroup" aria-label="Page order">
                 {[["newest", "🕐 Newest"], ["chrono", "📖 Oldest first"]].map(([v, label]) => (
                   <button key={v} type="button" role="radio" aria-checked={(booklet?.order || "newest") === v} onClick={() => applyOrder({ booklet_order: v })} disabled={orderBusy}
                     className="rounded-full px-2.5 py-1.5 font-semibold"
@@ -1666,7 +1676,7 @@ function PassportInner() {
             {!readOnly && !preview && citySets.length > 0 && (
               <div className="max-w-md mx-auto px-4 mt-6">
                 <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: "#8A5410" }}>City sets</div>
-                <div className="flex gap-1.5 flex-wrap mt-2">
+                <div className="flex gap-1.5 mt-2 overflow-x-auto" style={{ flexWrap: "nowrap", scrollbarWidth: "none" }}>
                   {citySets.map((cs) => (
                     <span key={cs.city} className="rounded-full px-3 py-1.5" style={{ background: cs.have >= cs.total ? "#2E6B4E" : "#fff", color: cs.have >= cs.total ? "#fff" : INK2, border: `1px solid ${cs.have >= cs.total ? "#2E6B4E" : RULE}`, fontFamily: MONO, fontSize: fs(10.5), letterSpacing: ".05em" }}>
                       {cs.city.toUpperCase()} · {cs.have} OF {cs.total}{cs.have >= cs.total ? " ✓" : ""}
@@ -1681,10 +1691,15 @@ function PassportInner() {
                 stamps above; the photo-real skin auto-upgrades from R2. */}
             {/* Only on your own passport: a visitor meets the owner's trunk on their visit
                 page, and the preview mirrors what visitors see. */}
-            {!readOnly && !preview && <Luggage stamps={stampsView} readOnly={false} />}
-            {/* The photo packets — a friend's payload only carries reviewed
-                photos, so this shelf is safe on both views for free. */}
-            <PhotoPackets stamps={stampsView} title={readOnly ? "Their photo packets" : "Photo packets"} owner={!readOnly && !preview} albums={booklet?.albums || "passport"} onChanged={load} social={!preview && blSlug ? { slug: blSlug, blotter, onBlotterChanged: refreshBlotter } : null} />
+            {/* The book stands alone (founder, 2026-10-19): your luggage and your photo albums live on
+                your Profile. A passport someone shared with you (readOnly) — or the preview of what
+                visitors see — still carries its photo packets. */}
+            {!readOnly && !preview && isAuthenticated && stampsView.length > 0 && (
+              <p className="text-center mt-5" style={{ fontSize: fs(13), color: INK3 }}>
+                Your photo albums and luggage are on <button type="button" onClick={() => navigate(createPageUrl("Profile"))} style={{ background: "none", border: 0, padding: 0, color: TEAL_DEEP, fontWeight: 650, fontSize: "inherit", cursor: "pointer" }}>your Profile ›</button>
+              </p>
+            )}
+            {(readOnly || preview) && <PhotoPackets stamps={stampsView} title={readOnly ? "Their photo packets" : "Photo packets"} owner={!readOnly && !preview} albums={booklet?.albums || "passport"} onChanged={load} social={!preview && blSlug ? { slug: blSlug, blotter, onBlotterChanged: refreshBlotter } : null} />}
             {isDev && !readOnly && !preview && (
               <div className="text-center mt-3">
                 <button onClick={() => setPreview(true)} className="rounded-full px-4 py-2" style={{ background: "#fff", border: `1px solid ${RULE}`, color: INK2, fontSize: fs(12.5), fontWeight: 600 }}>👁 See a sample passport (admin)</button>
