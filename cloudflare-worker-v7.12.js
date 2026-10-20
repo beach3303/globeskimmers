@@ -20285,6 +20285,7 @@ async function handleSocialFeed(request, env) {
     const tgRows = tgs.map((t) => ({
       type: 'telegram', id: t.id, created_at: t.created_at, received_at: t.received_at || null, body: t.body, to_me: true, reply: !!t.reply_to,
       ...(Array.isArray(t.cc) && t.cc.length ? { group: t.cc.map((id) => ccHandle[id]).filter(Boolean) } : {}),
+      ...(t.ink === 'red' || t.ink === 'green' ? { ink: t.ink } : {}),
       from_new: !ids.includes(t.sender_id),
       by: { handle: share[t.sender_id]?.handle || null, name: nameOf(t.sender_id), ...(faces[t.sender_id] || {}) },
     }));
@@ -20411,6 +20412,7 @@ async function handlePostcardBox(request, env) {
     const tgRows = keptTg.map((t) => ({
       type: 'telegram', id: t.id, created_at: t.created_at, received_at: t.received_at || null, body: t.body, to_me: true, reply: !!t.reply_to,
       ...(Array.isArray(t.cc) && t.cc.length ? { group: t.cc.map((id) => ccHandle[id]).filter(Boolean) } : {}),
+      ...(t.ink === 'red' || t.ink === 'green' ? { ink: t.ink } : {}),
       by: { handle: share[t.sender_id]?.handle || null, name: nameOf(t.sender_id), ...(faces[t.sender_id] || {}) },
     }));
     const all = [...rows, ...tgRows].sort((a, c) => String(c.created_at).localeCompare(String(a.created_at)));
@@ -20775,10 +20777,12 @@ async function handleTelegramSend(request, env, ctx) {
     if (!deliver.length) return jsonResponse({ ok: true, count: targets.length, not_ready: notReadyHandles });
 
     const groupId = group && deliver.length > 1 ? crypto.randomUUID() : null;
-    const rows = deliver.map((id) => ({ sender_id: user.id, to_user_id: id, body, reply_to: replyTo, ...(groupId ? { group_id: groupId, cc: deliver.filter((x) => x !== id) } : {}) }));
+    // The ink (2026-10-19): black (stored as none), red or green.
+    const ink = b.ink === 'red' || b.ink === 'green' ? b.ink : null;
+    const rows = deliver.map((id) => ({ sender_id: user.id, to_user_id: id, body, reply_to: replyTo, ...(ink ? { ink } : {}), ...(groupId ? { group_id: groupId, cc: deliver.filter((x) => x !== id) } : {}) }));
     let w = await gbRest(env, 'telegrams', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(rows) });
-    // The seconds before the group columns exist: send each its own.
-    if (!w.ok && w.status === 400 && groupId) w = await gbRest(env, 'telegrams', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(rows.map(({ group_id: _g, cc: _c, ...r }) => r)) });
+    // The seconds before a newer column exists: send it plain (each its own, black ink).
+    if (!w.ok && w.status === 400 && (groupId || ink)) w = await gbRest(env, 'telegrams', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(rows.map(({ group_id: _g, cc: _c, ink: _i, ...r }) => r)) });
     if (!w.ok) return jsonResponse({ error: w.status === 404 ? 'Telegrams open with the next update' : 'Could not send' }, w.status === 404 ? 503 : 502);
     const made = await w.json().catch(() => []);
     if (ctx) {
