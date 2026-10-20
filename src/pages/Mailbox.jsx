@@ -8,7 +8,9 @@
 // 13-17 account; a skeleton while the feed loads, 'Try again' when it fails (never 'An
 // empty mailbox'); rows from people you blocked never show. The old one-tap unfollow chips
 // are gone: 'Your circle · n' opens the Circle screen, where unfollowing asks first. The
-// feed holds only the newest cards; 'Your postcard box' keeps every one sent to you.
+// feed holds only the newest cards; 'Your postcard box' keeps every one sent to you. Since
+// 2026-10-19 a postcard or telegram to me leaves the feed half an hour after it was read and
+// lives in the box until deleted.
 // Every person here (a postcard's sender, a stamp, an activity line, a request) has a
 // door to TravelerSheet: Report, Unfollow, and Block once the worker advertises
 // block_v2 (go-live decision 6, 2026-10-13; Apple 1.2). A 'confirm' account (a birthday
@@ -213,7 +215,7 @@ function PostcardBoxRow({ style = undefined }) {
       <Mail size={20} strokeWidth={1.8} color={NEUTRAL.stamp} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: "block", fontSize: fs(15), fontWeight: 600, lineHeight: 1.3, color: NEUTRAL.ink }}>Your postcard box</span>
-        <span style={{ display: "block", fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink3 }}>Every postcard sent to you, and the ones you keep</span>
+        <span style={{ display: "block", fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink3 }}>Postcards and telegrams you’ve read, and the ones you keep</span>
       </span>
       <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
     </Link>
@@ -292,7 +294,10 @@ function MailboxBody() {
     el.animate?.([{ boxShadow: `0 0 0 3px ${BLUE}` }, { boxShadow: "0 0 0 0 rgba(0,0,0,0)" }], { duration: 1800, easing: "ease-out" });
     return true;
   };
-  useEffect(() => { if (wanted && feed?.rows) setTimeout(() => bringIntoView("tg", wanted), 300); }, [wanted, feed]);
+  useEffect(() => {
+    if (!wanted || !feed?.rows) return;
+    setTimeout(() => { if (!bringIntoView("tg", wanted)) navigate(`${createPageUrl("Postcards")}?tg=${wanted}`, { replace: true }); }, 300);
+  }, [wanted, feed]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [myName, setMyName] = useState(null);   // for a postcard's address line
 
   useEffect(() => {
@@ -318,7 +323,8 @@ function MailboxBody() {
   const emptyFeed = !!feed && !feed.error && !feed.held && rows.length === 0;
   const openFrom = (to) => {
     const [k, id] = String(to).split(":");
-    if (k === "tg" || k === "pc") { if (!bringIntoView(k, id) && k === "pc") navigate(`${createPageUrl("Postcards")}?pc=${id}`); return; }
+    // Not in the Mailbox any more (read and filed, 2026-10-19): the postcard box opens at it.
+    if (k === "tg" || k === "pc") { if (!bringIntoView(k, id)) navigate(`${createPageUrl("Postcards")}?${k}=${id}`); return; }
     navigate(to === "passport" ? createPageUrl("Passport") : `${createPageUrl("Circle")}?tab=followers`);
   };
 
