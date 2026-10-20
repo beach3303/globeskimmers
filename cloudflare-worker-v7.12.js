@@ -20611,8 +20611,8 @@ async function handleCityBoards(request, env) {
 // ── Telegrams (founder, 2026-10-19) ─────────────────────────────────────────────────────────
 // Words by wire, no photo. A real telegram's base rate covered ten words; ours carries THREE
 // (founder, 2026-10-19: "spike curiosity" — send as many as you like; four words each since the
-// founder's change the same day, the fifth would be the 4¢ "on the house" toll). STOP
-// (what a full stop or ! becomes) doesn't count, an emoji counts as one word, and a word past
+// founder's change the same day, the fifth would be the 4¢ "on the house" toll). Punctuation
+// stays as typed and doesn't count, an emoji counts as one word, and a word past
 // 15 letters counts as two, the old telegraph rule. Capitals, letters, digits, plain
 // punctuation and emoji; links don't go by wire. Its alert names the sender and never shows
 // the words (founder: the point is to open it), one alert per telegram. It arrives SEALED in
@@ -20635,12 +20635,12 @@ const tgGraphemes = (x) => (TG_SEG ? [...TG_SEG.segment(x)].map((g) => g.segment
 function tgClean(text) {
   let t = String(text == null ? '' : text).normalize('NFC').replace(/https?:\S+/gi, ' ');
   t = t.replace(/[^\p{L}\p{N}\s.,!?'’&@#\-\p{Extended_Pictographic}\p{Regional_Indicator}\u200D\uFE0F\u20E3\u{1F3FB}-\u{1F3FF}\u{E0020}-\u{E007F}]/gu, ' ');
-  t = t.replace(/[.!]+(?=\s|$)/g, ' STOP ');
-  t = t.replace(/\s+/g, ' ').trim().toUpperCase().replace(/\bSTOP(\s+STOP\b)+/g, 'STOP').replace(/^STOP\b\s*/, '');
+  // Punctuation stays as typed (founder, 2026-10-19: "use period instead" of STOP).
+  t = t.replace(/\s+/g, ' ').trim().toUpperCase();
   return Array.from(t).slice(0, TG_MAX_CHARS).join('');
 }
-// Words: each emoji is one; a run of letters is one (two past 15 letters); STOP is none.
-const tgWordCount = (t) => String(t || '').split(' ').filter((w) => w && w !== 'STOP').reduce((n, w) => {
+// Words: each emoji is one; a run of letters is one (two past 15 letters); punctuation is none.
+const tgWordCount = (t) => String(t || '').split(' ').filter(Boolean).reduce((n, w) => {
   let emoji = 0;
   let rest = '';
   for (const g of tgGraphemes(w)) { if (TG_EMOJI.test(g)) emoji += 1; else rest += g; }
@@ -20683,7 +20683,7 @@ async function handleTelegramSend(request, env, ctx) {
     } else {
       return jsonResponse({ error: 'Who is it for? Pick a @username.' }, 400);
     }
-    if (toId === user.id) return jsonResponse({ error: 'A telegram to yourself? STOP 🙂' }, 400);
+    if (toId === user.id) return jsonResponse({ error: 'A telegram to yourself? 🙂' }, 400);
     if (!(await gbModerate(env, body)).allow) return jsonResponse({ error: 'Let’s keep it kind. Try different words.' }, 422);
 
     // The recipient's rails, after the words: a blocked pair or a minor gets nothing, answered

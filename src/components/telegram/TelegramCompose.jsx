@@ -2,7 +2,7 @@
 // to one person by @username, or back to whoever sent you a telegram or a postcard. The sheet
 // is the telegraph office's counter (dark), the blank sits on it, and you type straight onto
 // the form; a meter of four boxes fills as words go on, and "On the wire" shows the words as
-// they'll arrive (capitals, a full stop becomes STOP). The worker checks the words at send.
+// they'll arrive (capitals; punctuation as typed). The worker checks the words at send.
 // The chevron at the top right (or a tap above the sheet) collapses it without sending, and the
 // words wait: opening the same telegram again brings the draft back (founder, 2026-10-19).
 //
@@ -93,7 +93,7 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
     if (error === "age_required") { showToast("Set your birth year in Settings first (one time)", "error"); return; }
     if (error === "finish_passport") return;
     if (error) { showToast(workerMessage(error, "Couldn’t wire it. Try again."), "error"); return; }
-    showToast(`Telegram sent to ${reply ? reply.name || "them" : `@${address}`} STOP`, "success");
+    showToast(`Telegram sent to ${reply ? reply.name || "them" : `@${address}`}`, "success");
     setRaw("");
     DRAFTS.delete(key);
     askForAlerts();
