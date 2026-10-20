@@ -2810,3 +2810,15 @@ Mailbox heading: "From your circle · 1 sealed telegram". The phone's app-icon b
 builds. (An alert-tap count was offered; the founder doesn't need it.) Captured the 3 badge + heading.
 **Activate:** push, then `npm run ota`.
 
+## 2026-10-19 — A cleaner Mailbox (COMMITTED, not pushed)
+
+Founder: "audit and assess how we can make mailbox cleaner and better. the 3 notification is just getting to me" →
+Claude's audit (duplicates: postcard rows in the activity AND the card; mail buried under Find people, Invite and two
+doors; four jobs on one page) → "yes". New order: header (one-line seal, Postcard | Telegram, 🔍 → Find people sheet
+with Invite) → two door tiles (Postcard box · Read mail lives here / City boards · From real travelers) → NEW FOR YOU
+(mail to me not yet filed, strangers' included, or "All caught up …") → one line "N new on your passport — …" (sheet:
+the full ActivityList, no postcard/telegram rows) and "N people asked to follow you — Review" (sheet: Requests) →
+FROM YOUR CIRCLE (stamps + broadcasts) → Your circle row. `ActivityList` gains `limit` and `heading`; `FindPeople`
+gains `labelHidden`; a sealed telegram's ••• rides the envelope corner. App only. eslint + no-undef; build;
+boot-check ✅; captured the top, the lines, and the three sheets. **Activate:** push, then `npm run ota`.
+
