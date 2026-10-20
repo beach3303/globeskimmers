@@ -45,11 +45,11 @@ export default function TelegramCard({ row, me = undefined, meName = null, onRep
       {state === "open" ? (
         <div style={{ animation: row.received_at && receivedAt === row.received_at ? undefined : "gsTgReveal .45s ease-out both" }}>
           <style>{REVEAL}</style>
-          <TelegramPaper mode="received" body={row.body} to={{ name: firstName, handle: myHandle }} from={row.by} at={row.created_at} receivedAt={receivedAt}
+          <TelegramPaper mode="received" body={row.body} to={{ name: firstName, handle: myHandle }} also={row.group} from={row.by} at={row.created_at} receivedAt={receivedAt}
             number={telegramNumber(row.id)} words={telegramWords(row.body)} />
         </div>
       ) : (
-        <TelegramEnvelope to={{ name: firstName, handle: myHandle }} from={row.by} opening={state === "opening"} onOpen={open} />
+        <TelegramEnvelope to={{ name: firstName, handle: myHandle }} from={row.by} group={Array.isArray(row.group) && row.group.length > 0} opening={state === "opening"} onOpen={open} />
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
         {typeof onReply === "function" && row.id && state === "open" ? (

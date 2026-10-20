@@ -6,7 +6,8 @@
 //
 //   telegramText(raw)          the wire text, e.g. "Safe in Manila. Miss you!" → "SAFE IN MANILA. MISS YOU!"
 //   telegramWords(text)        how many words count (punctuation doesn't)
-//   sendTelegram({ to_handle, reply_to, body })   → { data, error }
+//   sendTelegram({ to_handles, mode, reply_to, reply_all, body }) → { data: { count, not_ready }, error }
+//                              mode 'each' (private copies) | 'group' (one telegram naming everyone)
 //   openTelegram(id)           the recipient breaks the seal; RECEIVED is stamped → { receivedAt, error }
 //   deleteTelegram(id)         the recipient takes it out of their Mailbox → { ok, error }
 //   telegramNumber(id)         a four-digit form number from the id, for the blank's NO. box
@@ -58,9 +59,10 @@ export function telegramNumber(id) {
   return String(1000 + (h % 9000));
 }
 
-export async function sendTelegram({ to_handle, reply_to, body }) {
+export async function sendTelegram({ to_handle, to_handles, mode, reply_to, reply_all, body }) {
   if (!(await requirePassport())) return { data: null, error: 'finish_passport' };
-  const { data, error } = await callWorker('telegrams/send', { body, ...(reply_to ? { reply_to } : { to_handle }) });
+  const to = Array.isArray(to_handles) ? to_handles : to_handle ? [to_handle] : [];
+  const { data, error } = await callWorker('telegrams/send', { body, ...(reply_to ? { reply_to, ...(reply_all ? { reply_all: true } : {}) } : { to_handles: to, mode: mode === 'group' ? 'group' : 'each' }) });
   return { data, error: error || data?.error || null };
 }
 

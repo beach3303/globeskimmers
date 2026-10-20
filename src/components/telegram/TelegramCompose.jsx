@@ -6,10 +6,13 @@
 // The chevron at the top right (or a tap above the sheet) collapses it without sending, and the
 // words wait: opening the same telegram again brings the draft back (founder, 2026-10-19).
 //
+// Several people (2026-10-19): pick up to TG_MAX_TO, then EACH their own (private copies) or AS A
+// GROUP (one telegram naming everyone); a reply to a group telegram can go to the sender or to all.
+//
 //   <TelegramCompose open onClose onSent following blocked replyTo toHandle meName meHandle />
 //   following  op:list `following` rows: accepted people you follow with a @username (12 at most)
 //   blocked    op:list `blocked` rows / ids / handles: never offered
-//   replyTo    { reply_to, name, handle } — a reply; the address is fixed
+//   replyTo    { reply_to, name, handle, group? } — a reply; group = the other @usernames on it
 //   toHandle   a fixed @username
 import React, { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown, Loader2, Zap } from "lucide-react";
@@ -27,6 +30,9 @@ const DESK = "#231C15";
 const BRASS = "#C9A35A";
 const lc = (v) => String(v ?? "").trim().replace(/^@+/, "").toLowerCase();
 const HANDLE = /^[a-z0-9._]{2,30}$/;
+const TG_MAX_TO = 10;
+// "@a, @b, @c" or "@a, @b +3" for the blank's TO line.
+const toLineOf = (handles) => (handles.length <= 3 ? handles.map((h) => `@${h}`).join(", ") : `${handles.slice(0, 2).map((h) => `@${h}`).join(", ")} +${handles.length - 2}`);
 // Drafts kept while the app is open, one per reply (or one for a new telegram).
 const DRAFTS = new Map();
 const draftKey = (replyTo, toHandle) => (replyTo && replyTo.reply_to ? `re:${replyTo.reply_to}` : toHandle ? `to:${lc(toHandle)}` : "new");
@@ -43,9 +49,12 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
   const fixedTo = lc(toHandle);
   const key = draftKey(replyTo, toHandle);
   const [raw, setRaw] = useState(() => DRAFTS.get(key)?.raw || "");
-  const [to, setTo] = useState(() => (fixedTo || DRAFTS.get(key)?.to || ""));
-  // "Someone else…": a typed @username — open again when a kept draft was addressed that way.
-  const [typing, setTyping] = useState(() => { const t = DRAFTS.get(key)?.to; return !fixedTo && !!t && !(Array.isArray(following) ? following : []).some((f) => lc(f?.handle) === t); });
+  // Who it's for: @usernames picked from the circle or typed (a kept draft keeps them).
+  const [list, setList] = useState(() => (fixedTo ? [fixedTo] : Array.isArray(DRAFTS.get(key)?.list) ? DRAFTS.get(key).list : []));
+  const [typed, setTyped] = useState("");
+  const [typing, setTyping] = useState(false);   // "Someone else…": the box for a typed @username
+  const [mode, setMode] = useState(() => DRAFTS.get(key)?.mode || "each");   // each | group
+  const [toAll, setToAll] = useState(false);     // a reply to a group telegram: everyone on it
   const [busy, setBusy] = useState(false);
   const [full, setFull] = useState(false);       // a fourth word was refused just now
   const type = (v) => {
@@ -55,11 +64,11 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
   };
   const close = () => {
     if (busy) return;
-    if (raw.trim() || (!fixedTo && to)) DRAFTS.set(key, { raw, to }); else DRAFTS.delete(key);
+    if (raw.trim() || (!fixedTo && list.length)) DRAFTS.set(key, { raw, list, mode }); else DRAFTS.delete(key);
     if (typeof onClose === "function") onClose();
   };
   useDismissable(open, close);
-  useEffect(() => { if (fixedTo) setTo(fixedTo); }, [fixedTo]);
+  useEffect(() => { if (fixedTo) setList([fixedTo]); }, [fixedTo]);
   useEffect(() => {
     if (!open) return undefined;
     const before = document.activeElement;
@@ -76,24 +85,35 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
   const wire = telegramText(raw);
   const words = telegramWords(wire);
   const over = words > TELEGRAM_WORDS;
-  const address = reply ? null : lc(to);
-  const addressed = !!reply || HANDLE.test(address || "");
+  const typedOk = HANDLE.test(lc(typed)) && !list.includes(lc(typed));
+  const recipients = reply ? [] : [...list, ...(typedOk ? [lc(typed)] : [])].slice(0, TG_MAX_TO);
+  const others = reply && Array.isArray(reply.group) ? reply.group.filter(Boolean) : [];
+  const addressed = !!reply || recipients.length > 0;
   const canSend = !busy && words > 0 && !over && addressed;
-  const toLine = reply ? { name: reply.name, handle: reply.handle } : address ? { handle: address } : null;
+  const toLine = reply
+    ? (toAll && others.length ? toLineOf([reply.handle, ...others].filter(Boolean)) : { name: reply.name, handle: reply.handle })
+    : recipients.length ? toLineOf(recipients) : null;
+  const toggle = (h) => setList((l) => (l.includes(h) ? l.filter((x) => x !== h) : l.length >= TG_MAX_TO ? l : [...l, h]));
+  const addTyped = () => { if (typedOk && list.length < TG_MAX_TO) { setList((l) => [...l, lc(typed)]); setTyped(""); } };
+  const typedOnly = list.filter((h) => !addresses.some((f) => lc(f.handle) === h));
 
   const send = async () => {
     if (!canSend) {
       if (!addressed) showToast("Who is it for? Pick a @username.", "error");
-      else if (over) showToast(`Ten words at most. Cut ${words - TELEGRAM_WORDS}.`, "error");
+      else if (over) showToast(`${TELEGRAM_WORDS} words max. Cut ${words - TELEGRAM_WORDS}.`, "error");
       return;
     }
     setBusy(true);
-    const { error } = await sendTelegram({ body: raw, ...(reply ? { reply_to: reply.reply_to } : { to_handle: address }) });
+    const group = !reply && recipients.length > 1 && mode === "group";
+    const { data, error } = await sendTelegram({ body: raw, ...(reply ? { reply_to: reply.reply_to, ...(toAll && others.length ? { reply_all: true } : {}) } : { to_handles: recipients, mode: group ? "group" : "each" }) });
     setBusy(false);
     if (error === "age_required") { showToast("Set your birth year in Settings first (one time)", "error"); return; }
     if (error === "finish_passport") return;
     if (error) { showToast(workerMessage(error, "Couldn’t wire it. Try again."), "error"); return; }
-    showToast(`Telegram sent to ${reply ? reply.name || "them" : `@${address}`}`, "success");
+    const many = reply ? (toAll && others.length ? others.length + 1 : 1) : recipients.length;
+    const who = reply ? (many > 1 ? `everyone on it` : reply.name || "them") : many > 1 ? `${many} people` : `@${recipients[0]}`;
+    const waiting = Array.isArray(data?.not_ready) && data.not_ready.length ? ` · ${data.not_ready.map((h) => `@${h}`).join(", ")} hasn’t finished their passport yet` : "";
+    showToast(`${group || (reply && many > 1) ? "Group telegram" : "Telegram"} sent to ${who}${waiting}`, "success");
     setRaw("");
     DRAFTS.delete(key);
     askForAlerts();
@@ -115,29 +135,59 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
         <div style={{ padding: "18px 18px calc(24px + env(safe-area-inset-bottom))" }}>
           <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".24em", lineHeight: 1.3, textTransform: "uppercase", color: BRASS, paddingRight: 44 }}>GlobeSkimmers telegraph office</div>
           <h3 id={titleId} style={{ margin: "3px 0 0", fontFamily: SERIF, fontSize: fs(24), fontWeight: 400, lineHeight: 1.1, color: "#FBF3E2" }}>
-            {reply ? <>A telegram back to <em style={{ fontStyle: "italic", color: BRASS }}>{reply.name || (reply.handle ? `@${reply.handle}` : "them")}</em></> : <>Send a <em style={{ fontStyle: "italic", color: BRASS }}>telegram</em></>}
+            {reply ? <>A telegram back to <em style={{ fontStyle: "italic", color: BRASS }}>{toAll && others.length ? "everyone" : reply.name || (reply.handle ? `@${reply.handle}` : "them")}</em></> : <>Send a <em style={{ fontStyle: "italic", color: BRASS }}>telegram</em></>}
           </h3>
           <p style={{ margin: "6px 0 0", fontFamily: MONO, fontSize: fs(13), fontWeight: 500, letterSpacing: ".08em", textTransform: "uppercase", color: BRASS }}>{TELEGRAM_WORDS} words max! Make it count.</p>
 
-          {/* the address */}
-          {reply ? null : fixedTo ? (
+          {/* the address: a reply is fixed (to the sender, or everyone on a group telegram) */}
+          {reply ? (others.length ? (
+            <div role="group" aria-label="Reply to" style={{ display: "flex", flexWrap: "wrap", columnGap: 6, marginTop: 6 }}>
+              <Chip on={!toAll} onClick={() => setToAll(false)}>Just {reply.name || (reply.handle ? `@${reply.handle}` : "them")}</Chip>
+              <Chip on={toAll} onClick={() => setToAll(true)}>Everyone on it ({others.length + 1})</Chip>
+            </div>
+          ) : null) : fixedTo ? (
             <div style={{ marginTop: 8 }}><Chip on fixed>@{fixedTo}</Chip></div>
           ) : (
-            <div role="group" aria-label="Who it’s for" style={{ display: "flex", flexWrap: "wrap", columnGap: 6, marginTop: 6 }}>
-              {addresses.map((f) => (
-                <Chip key={lc(f.handle)} on={!typing && address === lc(f.handle)} onClick={() => { setTo(lc(f.handle)); setTyping(false); }}>@{lc(f.handle)}</Chip>
-              ))}
-              <Chip on={typing} onClick={() => { setTyping(true); setTo(""); }}>Someone else…</Chip>
-            </div>
+            <>
+              <div role="group" aria-label="Who it’s for" style={{ display: "flex", flexWrap: "wrap", columnGap: 6, marginTop: 6 }}>
+                {addresses.map((f) => (
+                  <Chip key={lc(f.handle)} on={list.includes(lc(f.handle))} onClick={() => toggle(lc(f.handle))}>@{lc(f.handle)}</Chip>
+                ))}
+                {typedOnly.map((h) => (
+                  <Chip key={`t-${h}`} on onClick={() => toggle(h)}>@{h} ×</Chip>
+                ))}
+                <Chip on={typing} onClick={() => setTyping((v) => !v)}>Someone else…</Chip>
+              </div>
+              {typing ? (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <label style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6, minHeight: 44, padding: "0 12px", borderRadius: 12, border: "1px solid rgba(201,163,90,.45)", background: "rgba(0,0,0,.18)" }}>
+                    <span style={{ fontFamily: MONO, fontSize: fs(14), color: BRASS }}>@</span>
+                    <input value={typed} onChange={(e) => setTyped(lc(e.target.value).replace(/[^a-z0-9._]/g, "").slice(0, 30))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTyped(); } }}
+                      placeholder="their username" aria-label="Their @username" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                      style={{ flex: 1, minWidth: 0, background: "transparent", border: 0, outline: "none", fontFamily: MONO, fontSize: fs(14), color: "#FBF3E2" }} />
+                  </label>
+                  <button type="button" onClick={addTyped} disabled={!typedOk || list.length >= TG_MAX_TO}
+                    style={{ flex: "none", minHeight: 44, padding: "0 14px", borderRadius: 12, border: `1px solid ${BRASS}`, background: "transparent", color: BRASS, fontFamily: MONO, fontSize: fs(12.5), letterSpacing: ".06em", opacity: typedOk ? 1 : 0.45 }}>
+                    Add
+                  </button>
+                </div>
+              ) : null}
+              {recipients.length > 1 ? (
+                <div style={{ marginTop: 10 }}>
+                  <div role="group" aria-label="How it goes" style={{ display: "flex", flexWrap: "wrap", columnGap: 6 }}>
+                    <Chip on={mode === "each"} onClick={() => setMode("each")}>Each their own</Chip>
+                    <Chip on={mode === "group"} onClick={() => setMode("group")}>As a group</Chip>
+                  </div>
+                  <p style={{ margin: "6px 0 0", fontSize: fs(12), lineHeight: 1.45, color: "#CBB994" }}>
+                    {mode === "group"
+                      ? `One telegram to all ${recipients.length}. Everyone sees who it went to and can reply to you or to all.`
+                      : `${recipients.length} private telegrams. Nobody sees who else got one, and replies come only to you.`}
+                  </p>
+                </div>
+              ) : null}
+              {list.length >= TG_MAX_TO ? <p style={{ margin: "6px 0 0", fontSize: fs(12), color: "#CBB994" }}>{TG_MAX_TO} people at most on one telegram.</p> : null}
+            </>
           )}
-          {!reply && !fixedTo && typing ? (
-            <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, minHeight: 44, padding: "0 12px", borderRadius: 12, border: "1px solid rgba(201,163,90,.45)", background: "rgba(0,0,0,.18)" }}>
-              <span style={{ fontFamily: MONO, fontSize: fs(14), color: BRASS }}>@</span>
-              <input value={to} onChange={(e) => setTo(lc(e.target.value).replace(/[^a-z0-9._]/g, "").slice(0, 30))} placeholder="their username" aria-label="Their @username"
-                autoCapitalize="none" autoCorrect="off" spellCheck={false}
-                style={{ flex: 1, minWidth: 0, background: "transparent", border: 0, outline: "none", fontFamily: MONO, fontSize: fs(14), color: "#FBF3E2" }} />
-            </label>
-          ) : null}
 
           {/* the blank, typed on directly */}
           <TelegramPaper mode="blank" to={toLine} from={{ name: meName, handle: meHandle }} number="NEW" words={words} maxWords={TELEGRAM_WORDS} style={{ marginTop: 14 }}>

@@ -10,7 +10,8 @@
 //   <TelegramPaper mode body to from at number words maxWords>{children}</TelegramPaper>
 //   mode      'received' (tape + stamp) | 'blank' (children in the message area)
 //   body      the wire text (telegramText), for 'received'
-//   to, from  { name, handle } — either may be missing
+//   to, from  { name, handle } — either may be missing; `to` may be a line naming several
+//   also      the other @usernames on a group telegram ("ALSO TO …")
 //   at        ISO time it was sent (SENT; a blank shows NOW)
 //   receivedAt ISO time it first reached the recipient's Mailbox (the RECEIVED stamp; else at)
 //   number    the form's NO. (telegramNumber(id))
@@ -63,6 +64,7 @@ const NUDGE = [0, 3, -2, 4, 1, -3];
 
 const name = (p) => {
   if (!p) return "";
+  if (typeof p === "string") return p.toUpperCase();   // several people: "@a, @b +3"
   const n = String(p.name || "").trim().toUpperCase();
   const h = p.handle ? `@${String(p.handle).replace(/^@+/, "").toUpperCase()}` : "";
   return n && h ? `${n} · ${h}` : n || h;
@@ -134,7 +136,7 @@ function Box({ label, children, red = false, style = undefined }) {
   );
 }
 
-export default function TelegramPaper({ mode = "received", body = "", to = null, from = null, at = null, receivedAt = null, number = "0000", words = null, maxWords = 4, children = null, style = undefined }) {
+export default function TelegramPaper({ mode = "received", body = "", to = null, also = null, from = null, at = null, receivedAt = null, number = "0000", words = null, maxWords = 4, children = null, style = undefined }) {
   const received = mode === "received";
   const when = wireTime(at);
   const got = wireTime(receivedAt) || when;
@@ -179,6 +181,12 @@ export default function TelegramPaper({ mode = "received", body = "", to = null,
           <span style={{ fontFamily: MONO, fontSize: fs(8.5), fontWeight: 600, letterSpacing: ".16em", color: TINK3 }}>TO</span>
           <span style={{ flex: 1, minWidth: 0, borderBottom: `1px dotted rgba(42,34,25,.55)`, fontFamily: TYPE, fontSize: fs(14), lineHeight: 1.35, color: TINK, overflowWrap: "anywhere" }}>{name(to) || " "}</span>
         </div>
+        {Array.isArray(also) && also.length ? (
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
+            <span style={{ fontFamily: MONO, fontSize: fs(8.5), fontWeight: 600, letterSpacing: ".16em", color: TINK3, whiteSpace: "nowrap" }}>ALSO TO</span>
+            <span style={{ flex: 1, minWidth: 0, fontFamily: TYPE, fontSize: fs(12.5), lineHeight: 1.35, color: TINK, overflowWrap: "anywhere" }}>{also.map((h) => `@${String(h).toUpperCase()}`).join(", ")}</span>
+          </div>
+        ) : null}
 
         {/* the words */}
         <div style={{ position: "relative", minHeight: received ? 44 : 56, margin: "12px 0 8px" }}>

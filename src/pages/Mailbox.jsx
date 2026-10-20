@@ -266,7 +266,7 @@ function MailboxBody() {
   const [wireTo, setWireTo] = useState(null);       // the telegram composer: {} new, { reply_to, … } a reply
   const [replyPick, setReplyPick] = useState(null); // a postcard row: which way to answer it
   const replyFor = (row) => (wires ? setReplyPick(row) : setReplyTo({ postcard_id: row.id, name: nameFor(row.by) }));
-  const wireBack = (row) => setWireTo({ reply_to: row.id, name: row.by?.name || null, handle: row.by?.handle || null });
+  const wireBack = (row) => setWireTo({ reply_to: row.id, name: row.by?.name || null, handle: row.by?.handle || null, group: Array.isArray(row.group) ? row.group : null });
   const removeCard = async (row) => {
     const tg = row.kind === "telegram";
     const r = tg ? await deleteTelegram(row.id) : await deletePostcard(row.id);

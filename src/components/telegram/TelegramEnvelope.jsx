@@ -46,7 +46,7 @@ function WaxSeal({ breaking }) {
   );
 }
 
-export default function TelegramEnvelope({ to = null, from = null, opening = false, onOpen = undefined }) {
+export default function TelegramEnvelope({ to = null, from = null, group = false, opening = false, onOpen = undefined }) {
   return (
     <button type="button" onClick={onOpen} aria-label={`A sealed telegram from ${label(from) || "someone"}. Open it`}
       style={{ display: "block", width: "100%", padding: 0, border: 0, background: "transparent", cursor: "pointer", perspective: 900, textAlign: "center" }}>
@@ -69,7 +69,7 @@ export default function TelegramEnvelope({ to = null, from = null, opening = fal
         <WaxSeal breaking={opening} />
         {/* the address on the back */}
         <span style={{ position: "absolute", left: 12, right: 12, bottom: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-          <span style={{ fontFamily: HEAVY, fontWeight: 800, fontSize: fs(15), letterSpacing: ".14em", color: TINK }}>TELEGRAM</span>
+          <span style={{ fontFamily: HEAVY, fontWeight: 800, fontSize: fs(15), letterSpacing: ".14em", color: TINK }}>{group ? "GROUP TELEGRAM" : "TELEGRAM"}</span>
           <span style={{ fontFamily: TYPE, fontSize: fs(13.5), letterSpacing: ".05em", color: TINK, overflowWrap: "anywhere" }}>FOR {label(to) || "YOU"}</span>
           <span style={{ fontFamily: TYPE, fontSize: fs(11), letterSpacing: ".05em", color: TINK3, overflowWrap: "anywhere" }}>FROM {label(from) || "A TRAVELER"}</span>
           <span style={{ marginTop: 3, fontFamily: MONO, fontSize: fs(9.5), fontWeight: 600, letterSpacing: ".28em", color: TRED }} className="motion-safe:animate-pulse">TAP TO OPEN</span>
