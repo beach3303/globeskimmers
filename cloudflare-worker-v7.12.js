@@ -20268,8 +20268,15 @@ async function handleSocialFeed(request, env) {
     const nameOf = (id) => (gone.has(id) ? null : prof[id]?.display_name || null);
     // Faces (B2) for the people this feed names; none for a deleted traveler.
     const faces = await gbFaces(env, shownIds.filter((id) => !gone.has(id)), origin);
+    const ccIds = [...new Set(tgs.flatMap((t) => (Array.isArray(t.cc) ? t.cc : [])))].filter((id) => !blocked.has(id)).slice(0, 200);
+    const ccHandle = {};
+    if (ccIds.length) {
+      const cq = await gbRest(env, `passport_shares?user_id=in.(${ccIds.join(',')})&select=user_id,handle`, {});
+      for (const r of (cq.ok ? await cq.json() : [])) if (r.handle) ccHandle[r.user_id] = r.handle;
+    }
     const tgRows = tgs.map((t) => ({
       type: 'telegram', id: t.id, created_at: t.created_at, received_at: t.received_at || null, body: t.body, to_me: true, reply: !!t.reply_to,
+      ...(Array.isArray(t.cc) && t.cc.length ? { group: t.cc.map((id) => ccHandle[id]).filter(Boolean) } : {}),
       from_new: !ids.includes(t.sender_id),
       by: { handle: share[t.sender_id]?.handle || null, name: nameOf(t.sender_id), ...(faces[t.sender_id] || {}) },
     }));
@@ -20648,6 +20655,12 @@ const tgWordCount = (t) => String(t || '').split(' ').filter(Boolean).reduce((n,
   return n + emoji + (letters ? Math.ceil(letters / 15) : 0);
 }, 0);
 
+// Several people at once (founder, 2026-10-19): the same words to up to TG_MAX_TO @usernames,
+// either EACH their own (a private telegram each; nobody sees who else got one) or as a GROUP
+// (one telegram naming everyone it reached; each can reply to the sender or to all). Every
+// recipient passes the same rails on their own; a blocked pair or a minor is left out silently
+// and never named; a group names only the people it actually reached.
+const TG_MAX_TO = 10;
 async function handleTelegramSend(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -20663,40 +20676,57 @@ async function handleTelegramSend(request, env, ctx) {
     if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
     if (sp.social_tier === 'teen') return jsonResponse({ error: 'Telegrams open at age 18', code: 'teen_hold' }, 403);
 
-    // The address: a reply goes back to whoever sent me that telegram or postcard.
-    let toId = null;
+    // The addresses. A reply goes back to whoever sent me that telegram or postcard; reply_all
+    // also reaches the rest of that telegram's group.
+    let targets = [];
     let replyTo = null;
+    let group = false;
     const rid = String(b.reply_to || '').toLowerCase();
     if (BL_UUID.test(rid)) {
       const [tq, pq] = await Promise.all([
-        gbRest(env, `telegrams?id=eq.${rid}&to_user_id=eq.${user.id}&select=sender_id`, {}),
+        gbRest(env, `telegrams?id=eq.${rid}&to_user_id=eq.${user.id}&select=*`, {}),
         gbRest(env, `postcards?id=eq.${rid}&to_user_id=eq.${user.id}&select=sender_id`, {}),
       ]);
-      const orig = (tq.ok ? (await tq.json())[0] : null) || (pq.ok ? (await pq.json())[0] : null);
+      const tg = tq.ok ? (await tq.json())[0] : null;
+      const orig = tg || (pq.ok ? (await pq.json())[0] : null);
       if (!orig) return jsonResponse({ error: 'That message isn’t here any more' }, 404);
-      toId = orig.sender_id;
+      targets = [orig.sender_id];
+      if (b.reply_all === true && tg && Array.isArray(tg.cc) && tg.cc.length) { targets.push(...tg.cc); group = true; }
       replyTo = rid;
-    } else if (b.to_handle) {
-      const to = await gbHandleToUser(env, String(b.to_handle));
-      if (!to) return jsonResponse({ error: 'No traveler with that username' }, 404);
-      toId = to.user_id;
     } else {
-      return jsonResponse({ error: 'Who is it for? Pick a @username.' }, 400);
+      const raw = Array.isArray(b.to_handles) ? b.to_handles : b.to_handle ? [b.to_handle] : [];
+      const handles = [...new Set(raw.map((h) => String(h || '').trim().replace(/^@+/, '').toLowerCase()).filter(Boolean))];
+      if (!handles.length) return jsonResponse({ error: 'Who is it for? Pick a @username.' }, 400);
+      if (handles.length > TG_MAX_TO) return jsonResponse({ error: `${TG_MAX_TO} people at most on one telegram` }, 400);
+      const found = await Promise.all(handles.map((h) => gbHandleToUser(env, h)));
+      const missing = handles.find((h, i) => !found[i]);
+      if (missing) return jsonResponse({ error: handles.length > 1 ? `No traveler with @${missing}` : 'No traveler with that username' }, 404);
+      targets = found.map((t) => t.user_id);
+      group = b.mode === 'group';
     }
-    if (toId === user.id) return jsonResponse({ error: 'A telegram to yourself? 🙂' }, 400);
+    targets = [...new Set(targets.map((id) => String(id).toLowerCase()))].filter((id) => id !== user.id);
+    if (!targets.length) return jsonResponse({ error: 'A telegram to yourself? 🙂' }, 400);
     if (!(await gbModerate(env, body)).allow) return jsonResponse({ error: 'Let’s keep it kind. Try different words.' }, 422);
 
-    // The recipient's rails, after the words: a blocked pair or a minor gets nothing, answered
-    // exactly like a send.
-    if (await gbBlockedEither(env, user.id, toId)) return jsonResponse({ ok: true });
-    const rsp = await gbSocialProfile(env, toId).catch(() => undefined);
-    if (rsp === undefined) return jsonResponse({ error: 'Couldn’t send right now — try again' }, 503);
-    if (rsp === null) return jsonResponse({ error: 'They haven’t finished their passport yet, so telegrams can’t reach them' }, 409);
-    if (rsp.social_tier === 'blocked' || rsp.social_tier === 'teen' || gbAgeHeld(rsp)) return jsonResponse({ ok: true });
-    if (!replyTo) {
-      const fq = await gbRest(env, `user_follows?follower_id=eq.${toId}&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id&limit=1`, {});
-      const followsMe = fq.ok && (await fq.json()).length > 0;
-      if (!followsMe) {
+    // Each recipient's rails, after the words.
+    const deliver = [];
+    const notReady = [];
+    for (const id of targets) {
+      if (await gbBlockedEither(env, user.id, id)) continue;
+      const rsp = await gbSocialProfile(env, id).catch(() => undefined);
+      if (rsp === undefined) return jsonResponse({ error: 'Couldn’t send right now — try again' }, 503);
+      if (rsp === null) { notReady.push(id); continue; }
+      if (rsp.social_tier === 'blocked' || rsp.social_tier === 'teen' || gbAgeHeld(rsp)) continue;
+      deliver.push(id);
+    }
+    if (!deliver.length && notReady.length) {
+      return jsonResponse({ error: targets.length > 1 ? 'None of them has finished their passport yet, so telegrams can’t reach them' : 'They haven’t finished their passport yet, so telegrams can’t reach them' }, 409);
+    }
+    if (!replyTo && deliver.length) {
+      const fq = await gbRest(env, `user_follows?follower_id=in.(${deliver.join(',')})&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, {});
+      const followers = new Set(fq.ok ? (await fq.json()).map((r) => r.follower_id) : []);
+      for (const id of deliver) {
+        if (followers.has(id)) continue;
         const n = await gbDayCount(env, `tgs:${user.id}`);
         if (n != null && n > TG_STRANGER_DAILY) return jsonResponse({ error: 'That’s five telegrams today to people who don’t follow you. Try again tomorrow.' }, 429);
       }
@@ -20704,18 +20734,32 @@ async function handleTelegramSend(request, env, ctx) {
     const burst = await gbDayCount(env, `tgm:${user.id}:${Math.floor(Date.now() / 60000)}`);
     if (burst != null && burst > TG_PER_MINUTE) return jsonResponse({ error: 'The wire is busy. Try again in a minute.' }, 429);
 
-    const w = await gbRest(env, 'telegrams', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ sender_id: user.id, to_user_id: toId, body, reply_to: replyTo }) });
+    // The not-ready ones are named back to the sender by @username (they asked for them by name).
+    let notReadyHandles = [];
+    if (notReady.length) {
+      const hq = await gbRest(env, `passport_shares?user_id=in.(${notReady.join(',')})&select=handle`, {});
+      notReadyHandles = hq.ok ? (await hq.json()).map((r) => r.handle).filter(Boolean) : [];
+    }
+    if (!deliver.length) return jsonResponse({ ok: true, count: targets.length, not_ready: notReadyHandles });
+
+    const groupId = group && deliver.length > 1 ? crypto.randomUUID() : null;
+    const rows = deliver.map((id) => ({ sender_id: user.id, to_user_id: id, body, reply_to: replyTo, ...(groupId ? { group_id: groupId, cc: deliver.filter((x) => x !== id) } : {}) }));
+    let w = await gbRest(env, 'telegrams', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(rows) });
+    // The seconds before the group columns exist: send each its own.
+    if (!w.ok && w.status === 400 && groupId) w = await gbRest(env, 'telegrams', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(rows.map(({ group_id: _g, cc: _c, ...r }) => r)) });
     if (!w.ok) return jsonResponse({ error: w.status === 404 ? 'Telegrams open with the next update' : 'Could not send' }, w.status === 404 ? 503 : 502);
-    const made = await w.json().then((r) => (Array.isArray(r) ? r[0] : null)).catch(() => null);
+    const made = await w.json().catch(() => []);
     if (ctx) {
       const senderName = await ppHolder(env, user.id);
-      ctx.waitUntil(pushNotify(env, toId, 'telegrams', {
-        title: `Telegram from ${senderName}`, body: 'Open it in your Mailbox to read it',
-        route: made?.id ? `/Mailbox?tg=${made.id}` : '/Mailbox', collapse: made?.id ? `tg-${made.id}` : undefined,
-      }, { each: true }));
-      ctx.waitUntil(gbLogEvent(env, 'telegram_send', { reply: !!replyTo, words }));
+      for (const r of (Array.isArray(made) ? made : [])) {
+        ctx.waitUntil(pushNotify(env, r.to_user_id, 'telegrams', {
+          title: r.group_id ? `Group telegram from ${senderName}` : `Telegram from ${senderName}`, body: 'Open it in your Mailbox to read it',
+          route: `/Mailbox?tg=${r.id}`, collapse: `tg-${r.id}`,
+        }, { each: true }));
+      }
+      ctx.waitUntil(gbLogEvent(env, 'telegram_send', { reply: !!replyTo, words, to: deliver.length, group: !!groupId || undefined, reply_all: (replyTo && group) || undefined }));
     }
-    return jsonResponse({ ok: true, id: made?.id || null });
+    return jsonResponse({ ok: true, id: made?.[0]?.id || null, count: targets.length - notReady.length, not_ready: notReadyHandles });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
