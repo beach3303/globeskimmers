@@ -838,6 +838,22 @@ courting Filipino travelers, luggage partners, a city's own board, the Burgundy 
 Disneyland Resort pilot at ~25–100K → the park rate card's dream tiers at 100–250K+. New 90 days: 2026-10-19 to
 2027-01-17 (section 10).
 
+**Growth check-in, 2026-10-20 (founder: "continue our plans to reach our goal of 100,000 daily users"):** the plan's
+Claude-side items for weeks 1–3 are built and live (campaign token, heard-from, funnel, /p/ previews, stamp-earned
+share card, first-session passport gate) plus alerts, telegrams, the cleaner Mailbox. Measured blockers:
+(1) **alerts reach no phone** — D1 `push_outcome` shows every postcard/telegram/follow alert since the trace went in
+had `phones: 0`: nobody runs a native build with the push plugin yet → submit iOS 1.0.5 (15) and Play 1.0.9 (12) now;
+(2) the founder's own new-member alerts are dropped — ntfy 429 (rate limit) 47× and 522 9× in 7 days;
+(3) the founder's doors are not open yet (Facebook Page, Founding 100 list, wave 1 messages);
+(4) Claude's screenshot runs log page views from the @appreview demo through the live /log-event — check Admin
+leaves the demo, reviewer and admin accounts out (plan week 1).
+Stamp-art coverage for the beachhead (week 2 task): every destination has stampable places (Japan 2,800 rows · 434
+marquee; Philippines 1,984 · 93; Korea 1,977; Taiwan 934; Hong Kong 172; Singapore 162); illustrated art is thin where
+Filipinos go most — Hong Kong 2, Macau 0, Singapore 5, Taiwan 6. Gaps to draw: Victoria Peak, Star Ferry, Avenue of
+Stars (HK); Ruins of St. Paul's, Senado Square (Macau); Jewel Changi, Chinatown, Clarke Quay (SG); National Palace
+Museum, Chiang Kai-shek Memorial Hall, Shilin Night Market, Yehliu Geopark (TW); Dotonbori, Nara Park (JP);
+Myeongdong, Haeundae Beach (KR); Rizal Park, Magellan's Cross, Burnham Park (PH). No Disney/Universal marks.
+
 ## Alerts outside the app (push) — founder asks, 2026-10-19
 
 Asked while reviewing the Mailbox: a postcard's recipient gets a lock-screen / banner alert; the alert
