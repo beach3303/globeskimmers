@@ -22,7 +22,7 @@
 // Sending keeps today's call and errors; the toasts use the circle wording ('Postcard sent to
 // everyone who follows you').
 import React, { useEffect, useId, useRef, useState } from "react";
-import { ImagePlus, Info, Loader2, Send, SlidersHorizontal } from "lucide-react";
+import { ImagePlus, Info, Loader2, RefreshCw, Send, SlidersHorizontal, X } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { sendPostcard } from "@/lib/passport";
@@ -152,7 +152,13 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   const [pinOffer, setPinOffer] = useState(/** @type {any} */ (null));
   const [pinBusy, setPinBusy] = useState(false);
   const close = () => { if (typeof onClose === "function") onClose(); };
-  useDismissable(open, close);
+  // Cancel (founder, 2026-10-19: "place an X if user wants to cancel composing"): with nothing on
+  // the card it just closes; with a photo or words it asks once, so nothing is lost by a stray tap.
+  const [discarding, setDiscarding] = useState(false);
+  const started = (!!image && image !== (preset?.image || null)) || !!message.trim() || !!dish.trim();
+  const discard = () => { setDiscarding(false); setImage(preset?.image || null); setMessage(""); setDish(""); setPlace(preset?.place_name || ""); close(); };
+  const cancel = () => { if (pinOffer || !started) { setDiscarding(false); close(); } else setDiscarding(true); };
+  useDismissable(open, cancel);
 
   // A fixed address set, changed or cleared while the sheet is mounted is the address.
   useEffect(() => { setTo(fixedTo); }, [fixedTo]);
@@ -265,7 +271,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     <div
       className="fixed inset-0 z-[9998] flex items-end justify-center"
       style={{ background: rgba(NEUTRAL.ink, 0.5) }}
-      onClick={close}
+      onClick={cancel}
     >
       <div
         ref={sheetRef}
@@ -278,12 +284,28 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
         onClick={(e) => e.stopPropagation()}
       >
         <AirmailChevron height={4} />
+        <button type="button" onClick={cancel} aria-label={pinOffer ? "Close" : "Cancel this postcard"}
+          style={{ position: "absolute", top: 10, right: 8, zIndex: 3, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, border: 0, background: "transparent", cursor: "pointer" }}>
+          <span aria-hidden="true" style={{ width: 34, height: 34, borderRadius: 999, display: "flex", alignItems: "center", justifyContent: "center", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, color: NEUTRAL.ink2 }}>
+            <X size={18} strokeWidth={2} focusable="false" />
+          </span>
+        </button>
+        {discarding ? (
+          <div role="alertdialog" aria-label="Discard this postcard?" style={{ position: "sticky", top: 0, zIndex: 4, margin: "0 12px", padding: "12px 14px", borderRadius: 14, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, boxShadow: `0 10px 24px -12px ${rgba(NEUTRAL.ink, 0.4)}` }}>
+            <div style={{ fontFamily: SERIF, fontSize: fs(19), color: NEUTRAL.ink }}>Discard this postcard?</div>
+            <div style={{ fontSize: fs(12.5), lineHeight: 1.4, color: NEUTRAL.ink3, marginTop: 2 }}>The photo and the words you added go away.</div>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button type="button" onClick={() => setDiscarding(false)} style={{ flex: 1, minHeight: 44, borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.ink2, font: "inherit", fontSize: fs(14), fontWeight: 600 }}>Keep writing</button>
+              <button type="button" onClick={discard} style={{ flex: 1, minHeight: 44, borderRadius: 12, border: 0, background: NEUTRAL.stamp, color: NEUTRAL.white, font: "inherit", fontSize: fs(14), fontWeight: 600 }}>Discard</button>
+            </div>
+          </div>
+        ) : null}
         <div style={{ padding: "16px 20px calc(28px + env(safe-area-inset-bottom))" }}>
           {pinOffer ? (<>
           {/* The ask (founder, 2026-10-15): the mail is away; pinning a copy on the
               city's board is a separate, asked-first choice. Default is no. */}
           <div style={{ fontFamily: MONO, fontSize: fs(9.5), lineHeight: 1.3, letterSpacing: ".2em", textTransform: "uppercase", color: NEUTRAL.stamp }}>Sent to @{pinOffer.addr} ✓</div>
-          <h3 id={titleId} style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(22), fontWeight: 400, lineHeight: 1.1, color: NEUTRAL.ink }}>
+          <h3 id={titleId} style={{ margin: "2px 0 0", paddingRight: 40, fontFamily: SERIF, fontSize: fs(22), fontWeight: 400, lineHeight: 1.1, color: NEUTRAL.ink }}>
             Pin a copy on <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>{pinOffer.city}</em>&rsquo;s city board?
           </h3>
           <div style={{ marginTop: 12, borderRadius: 14, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, overflow: "hidden" }}>
@@ -312,7 +334,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
           </button>
           </>) : (<>
           <div style={{ fontFamily: MONO, fontSize: fs(9.5), lineHeight: 1.3, letterSpacing: ".2em", textTransform: "uppercase", color: NEUTRAL.stamp }}>Globeskimmers mail</div>
-          <h3 id={titleId} style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(22), fontWeight: 400, lineHeight: 1.1, color: NEUTRAL.ink }}>
+          <h3 id={titleId} style={{ margin: "2px 0 0", paddingRight: 40, fontFamily: SERIF, fontSize: fs(22), fontWeight: 400, lineHeight: 1.1, color: NEUTRAL.ink }}>
             {reply
               ? <>A postcard back to <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>{reply.name || "them"}</em></>
               : <>A postcard to {board ? <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>{board.city}</em> : <>your <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>circle</em></>}</>}
@@ -336,11 +358,20 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pick} />
           {image ? (
-            <button type="button" onClick={() => setEditing(true)}
-              style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, minHeight: 40, padding: "0 12px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(12.5), fontWeight: 600 }}>
-              <SlidersHorizontal size={15} strokeWidth={2} aria-hidden="true" focusable="false" />
-              Edit the photo — our looks
-            </button>
+            // Change it, or give it one of our looks (founder, 2026-10-19: "change photo … they've
+            // already uploaded one").
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button type="button" onClick={() => fileRef.current?.click()}
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 40, padding: "0 12px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.ink2, fontSize: fs(12.5), fontWeight: 600 }}>
+                <RefreshCw size={15} strokeWidth={2} aria-hidden="true" focusable="false" />
+                Change photo
+              </button>
+              <button type="button" onClick={() => setEditing(true)}
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 40, padding: "0 12px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(12.5), fontWeight: 600 }}>
+                <SlidersHorizontal size={15} strokeWidth={2} aria-hidden="true" focusable="false" />
+                Edit · our looks
+              </button>
+            </div>
           ) : null}
           <PhotoEditor open={editing} image={image} aspect="3:2" onDone={(u) => { setImage(u); setEditing(false); }} onClose={() => setEditing(false)} />
 
