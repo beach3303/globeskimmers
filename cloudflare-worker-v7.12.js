@@ -20224,11 +20224,17 @@ async function handleSocialFeed(request, env) {
     // are direct cards that predate the send-side rail.
     const teenMe = mySp?.social_tier === 'teen';
     const bcastFrom = (teenMe ? visible.filter((id) => mutual.has(id)) : visible).filter((id) => profOk && !minor(id));
+    // Read, then filed (founder, 2026-10-19): a postcard or telegram addressed to me stays in the
+    // Mailbox until half an hour after I read it — a postcard is read the first time the Mailbox
+    // shows it (read_at), a telegram when I break its seal (received_at) — then it lives only in
+    // the postcard box. Before read_at exists the old read answers (everything stays).
+    const readCut = encodeURIComponent(new Date(Date.now() - PC_READ_LINGER_MS).toISOString());
+    const pcToQ = await gbRest(env, `postcards?to_user_id=eq.${user.id}&or=(read_at.is.null,read_at.gt.%22${readCut}%22)&order=created_at.desc&limit=20&select=*`, {});
     const [pcTo, pcBroadcast, tgTo] = await Promise.all([
-      gbRest(env, `postcards?to_user_id=eq.${user.id}&order=created_at.desc&limit=20&select=*`, {}),
+      pcToQ.ok ? Promise.resolve(pcToQ) : gbRest(env, `postcards?to_user_id=eq.${user.id}&order=created_at.desc&limit=20&select=*`, {}),
       bcastFrom.length ? gbRest(env, `postcards?sender_id=in.(${bcastFrom.join(',')})&to_user_id=is.null&order=created_at.desc&limit=20&select=*`, {}) : Promise.resolve({ ok: false }),
       // Telegrams to me (2026-10-19); before the table exists there are none.
-      teenMe ? Promise.resolve({ ok: false }) : gbRest(env, `telegrams?to_user_id=eq.${user.id}&recipient_deleted_at=is.null&order=created_at.desc&limit=20&select=*`, {}).catch(() => ({ ok: false })),
+      teenMe ? Promise.resolve({ ok: false }) : gbRest(env, `telegrams?to_user_id=eq.${user.id}&recipient_deleted_at=is.null&or=(received_at.is.null,received_at.gt.%22${readCut}%22)&order=created_at.desc&limit=20&select=*`, {}).catch(() => ({ ok: false })),
     ]);
     let tgs = tgTo.ok ? await tgTo.json().catch(() => []) : [];
     let pcs = [...(pcTo.ok ? (await pcTo.json()).filter((p) => !p.recipient_deleted_at) : []), ...(pcBroadcast.ok ? await pcBroadcast.json() : [])];
@@ -20253,6 +20259,8 @@ async function handleSocialFeed(request, env) {
     // sender in followers' feeds would unmask it (founder, 2026-10-15).
     pcs = pcs.filter((p) => !p.meta?.anon && !blocked.has(p.sender_id) && (ids.includes(p.sender_id) ? profOk : pcProfOk) && !minor(p.sender_id));
     tgs = tgs.filter((t) => !blocked.has(t.sender_id) && (ids.includes(t.sender_id) ? profOk : pcProfOk) && !minor(t.sender_id));
+    const firstSeen = pcs.filter((p) => p.to_user_id === user.id && !p.read_at && 'read_at' in p).map((p) => p.id);
+    if (firstSeen.length) await gbRest(env, `postcards?id=in.(${firstSeen.join(',')})&to_user_id=eq.${user.id}&read_at=is.null`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ read_at: new Date().toISOString() }) }).catch(() => {});
     // Which cards sent to everyone I kept in my postcard box (2026-10-14). Unreadable keeps
     // (the table not there yet) leave `kept` off, and the app shows no Keep.
     const bIds = pcs.filter((p) => p.to_user_id === null).map((p) => p.id);
@@ -20325,6 +20333,8 @@ async function handleSocialFeed(request, env) {
 // keeps cards from mutual friends only; a deleted sender awaiting clean-up
 // isn't named. Reads only.
 const PC_BOX_PAGE = 24;
+// How long a read postcard or opened telegram stays in the Mailbox before it lives only in the box.
+const PC_READ_LINGER_MS = 30 * 60 * 1000;
 async function handlePostcardBox(request, env) {
   try {
     const user = await gbUser(request, env);
@@ -20344,10 +20354,17 @@ async function handlePostcardBox(request, env) {
     if (!q.ok) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
     // A card I deleted (2026-10-19) leaves my box; a kept broadcast is let go through /postcards/keep.
     const got = (await q.json()).filter((p) => !(p.to_user_id === user.id && p.recipient_deleted_at));
-    const page = got.slice(0, PC_BOX_PAGE);
-    const next = got.length > PC_BOX_PAGE ? page[page.length - 1].created_at : null;
+    // Telegrams live in the box too (founder, 2026-10-19), newest first with the postcards, a page
+    // at a time on the same `before`; none before their table exists.
+    const tq = await gbRest(env, `telegrams?to_user_id=eq.${user.id}&recipient_deleted_at=is.null${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {}).catch(() => null);
+    const tgot = tq && tq.ok ? await tq.json().catch(() => []) : [];
+    const mixed = [...got.map((r) => ({ k: 'pc', r })), ...tgot.map((r) => ({ k: 'tg', r }))].sort((a, c) => String(c.r.created_at).localeCompare(String(a.r.created_at)));
+    const slice = mixed.slice(0, PC_BOX_PAGE);
+    const next = mixed.length > PC_BOX_PAGE ? slice[slice.length - 1].r.created_at : null;
+    const page = slice.filter((x) => x.k === 'pc').map((x) => x.r);
+    const pageTg = slice.filter((x) => x.k === 'tg').map((x) => x.r);
     const teenMe = mySp?.social_tier === 'teen';
-    const senders = [...new Set(page.map((p) => p.sender_id))].filter((id) => !blocked.has(id));
+    const senders = [...new Set([...page.map((p) => p.sender_id), ...pageTg.map((t) => t.sender_id)])].filter((id) => !blocked.has(id));
     let share = {}, prof = {}, mutual = new Set();
     if (senders.length) {
       const inList = senders.join(',');
@@ -20383,7 +20400,21 @@ async function handlePostcardBox(request, env) {
       ...(p.to_user_id === null ? { kept: true } : {}),
       by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
     }));
-    return jsonResponse({ rows, next });
+    // The telegrams on this page: the feed's rails, and a group's others by @username.
+    const keptTg = pageTg.filter((t) => !blocked.has(t.sender_id) && !minor(t.sender_id) && !teenMe);
+    const ccIds = [...new Set(keptTg.flatMap((t) => (Array.isArray(t.cc) ? t.cc : [])))].filter((id) => !blocked.has(id)).slice(0, 200);
+    const ccHandle = {};
+    if (ccIds.length) {
+      const cq = await gbRest(env, `passport_shares?user_id=in.(${ccIds.join(',')})&select=user_id,handle`, {});
+      for (const r of (cq.ok ? await cq.json() : [])) if (r.handle) ccHandle[r.user_id] = r.handle;
+    }
+    const tgRows = keptTg.map((t) => ({
+      type: 'telegram', id: t.id, created_at: t.created_at, received_at: t.received_at || null, body: t.body, to_me: true, reply: !!t.reply_to,
+      ...(Array.isArray(t.cc) && t.cc.length ? { group: t.cc.map((id) => ccHandle[id]).filter(Boolean) } : {}),
+      by: { handle: share[t.sender_id]?.handle || null, name: nameOf(t.sender_id), ...(faces[t.sender_id] || {}) },
+    }));
+    const all = [...rows, ...tgRows].sort((a, c) => String(c.created_at).localeCompare(String(a.created_at)));
+    return jsonResponse({ rows: all, next });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
