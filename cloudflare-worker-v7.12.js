@@ -938,7 +938,53 @@ async function gbBellSend(env, text, tag, opts = {}) {
       body: new URLSearchParams({ To: env.FOUNDER_PHONE, From: env.TWILIO_FROM, Body: text }),
     })]);
   }
-  await Promise.all(sends.map(([via, go]) => gbBellTry(env, via, tag, go)));
+  const ok = await Promise.all(sends.map(([via, go]) => gbBellTry(env, via, tag, go)));
+  // Nothing is lost (2026-10-20: ntfy answered 429 to 47 alerts in a week — anonymous sends from
+  // Cloudflare's shared addresses share one allowance): a refused alert waits in KV and goes out
+  // in the hourly roundup (gbBellFlush), by ntfy if it answers, else by email to the founder.
+  if (ok.length && !ok.some(Boolean)) await gbBellQueue(env, text, tag);
+}
+const BELL_Q = 'bellq:v1';
+async function gbBellQueue(env, text, tag) {
+  const kv = env.GLOBESKIMMERS_KV;
+  if (!kv) return;
+  try {
+    let q = []; try { q = JSON.parse((await kv.get(BELL_Q)) || '[]'); } catch { q = []; }
+    q.push({ t: String(text || '').slice(0, 400), tag: String(tag || 'bell'), at: Date.now() });
+    await kv.put(BELL_Q, JSON.stringify(q.slice(-200)), { expirationTtl: 7 * 86400 });
+  } catch { /* the bell never breaks the app */ }
+}
+// The hourly roundup of alerts that couldn't go out: one ntfy message, else one email.
+async function gbBellFlush(env) {
+  const kv = env.GLOBESKIMMERS_KV;
+  if (!kv) return;
+  let q = []; try { q = JSON.parse((await kv.get(BELL_Q)) || '[]'); } catch { q = []; }
+  if (!q.length) return;
+  const fmt = (x) => `• ${new Date(x.at).toISOString().slice(11, 16)} UTC — ${x.t}`;
+  const lines = q.map(fmt);
+  const head = `${q.length} alert${q.length === 1 ? '' : 's'} waited while ntfy was busy:`;
+  let body = `${head}\n${lines.join('\n')}`;
+  if (body.length > 3800) body = `${head}\n${lines.slice(-40).join('\n')}\n…and ${Math.max(0, lines.length - 40)} earlier.`;
+  let sent = false;
+  if (env.NTFY_TOPIC) {
+    try {
+      const r = await fetch(`https://ntfy.sh/${env.NTFY_TOPIC}`, { method: 'POST', body, headers: { Title: 'GlobeSkimmers - alerts that waited', Tags: 'inbox_tray', Priority: '4', ...(env.NTFY_TOKEN ? { Authorization: `Bearer ${env.NTFY_TOKEN}` } : {}) } });
+      sent = r.ok;
+    } catch { sent = false; }
+  }
+  if (!sent && env.RESEND_API_KEY) {
+    try {
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: env.RESEND_FROM || 'GlobeSkimmers <hello@globeskimmers.io>', to: [env.FOUNDER_ALERT_EMAIL || 'founder@globeskimmers.io'], subject: `GlobeSkimmers: ${q.length} alert${q.length === 1 ? '' : 's'} that waited`, text: body }),
+        signal: AbortSignal.timeout(8000),
+      });
+      sent = r.ok;
+      if (sent) await gbLogEvent(env, 'bell_emailed', { n: q.length });
+    } catch { sent = false; }
+  }
+  if (sent) await kv.delete(BELL_Q).catch(() => {});
 }
 // One alert over one transport: true once it's accepted; else a retry, then a record.
 async function gbBellTry(env, via, tag, go) {
@@ -28014,6 +28060,8 @@ export default {
     // the member's morning, the inner circle's stamps at 9. Nothing else runs on it.
     if (event && event.cron === '0 * * * *') {
       try { await pushHourly(env); } catch (_e) { /* next hour tries again */ }
+      // The admin alerts ntfy refused this hour, in one roundup (2026-10-20).
+      try { await gbBellFlush(env); } catch (_e) { /* next hour tries again */ }
       return;
     }
     // The daily counters (gbDayCount) older than two days go.
