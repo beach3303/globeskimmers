@@ -2822,3 +2822,14 @@ FROM YOUR CIRCLE (stamps + broadcasts) → Your circle row. `ActivityList` gains
 gains `labelHidden`; a sealed telegram's ••• rides the envelope corner. App only. eslint + no-undef; build;
 boot-check ✅; captured the top, the lines, and the three sheets. **Activate:** push, then `npm run ota`.
 
+## 2026-10-19 — The Passport page stands alone (COMMITTED, not pushed)
+
+Founder: "the passport page should be a stand alone passport on the page while the albums should go under the profile"
+→ Claude's take (agree; luggage too; a pointer after the actions; shared links unchanged) → "yes". Own Passport: book +
+Upload photo / Stamp where I am / Nearby switch; no Luggage, no PhotoPackets (both on the Profile already); page order
+behind "↕ Page order · Newest"; city sets one scrolling line; "Your photo albums and luggage are on your Profile ›".
+Profile: `PhotoPackets` ("Photo albums") right under the PassportFolder. readOnly / preview Passport keep their packets.
+App only. eslint + no-undef; build; boot-check ✅; captured the Passport (order open, the actions + pointer) and the
+Profile (the demo account has no photos, so its albums section is empty and hidden).
+**Activate:** push, then `npm run ota`.
+
