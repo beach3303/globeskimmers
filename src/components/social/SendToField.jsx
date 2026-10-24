@@ -6,15 +6,15 @@
 // /social/find, the same search as Find people: a whole email finds the member who signed up with
 // it, unless they turned "find me by email" off; a name works too). A tap adds that person as a
 // chip inside the bar. × on a chip, or backspace on an empty bar, takes one off. Enter adds a
-// typed @username as it stands (the worker checks it at send) or, on a postcard, a typed email
-// address nobody shows up for (the card goes to that address: a member gets it in their Mailbox,
-// anyone else one email to join — the sender is told the same either way).
+// typed @username as it stands (the worker checks it at send) or a typed email address nobody
+// shows up for (it goes to that address: a member gets it in their Mailbox, anyone else one
+// invitation email to join — the sender is told the same either way).
 //
 //   <SendToField value onChange max dark allowEmail needHandle blocked label />
 //   value       [{ key, user_id?, handle?, name?, email? }] — who it's for, in order
 //   max         how many at most (the worker's cap)
 //   dark        the telegraph office's brass-on-dark; otherwise airmail on white
-//   allowEmail  an email address may be an address (postcards)
+//   allowEmail  an email address may be an address (postcards; telegrams since 2026-10-24)
 //   needHandle  only people with a @username can be added (telegrams go by @username)
 //   blocked     handles or user ids never offered
 import React, { useEffect, useId, useRef, useState } from "react";
@@ -149,7 +149,7 @@ export default function SendToField({ value = [], onChange, max = 10, dark = fal
               <button type="button" onClick={() => add({ email: typedEmail })}
                 style={{ display: "block", width: "100%", minHeight: 48, padding: "8px 14px", border: 0, background: "transparent", textAlign: "left", cursor: "pointer" }}>
                 <span style={{ display: "block", fontSize: fs(14), fontWeight: 600, color: look.name }}>Send to {typedEmail}</span>
-                <span style={{ display: "block", fontSize: fs(12), lineHeight: 1.4, color: look.sub }}>It goes to whoever logs in with that email. Not on GlobeSkimmers yet? They get one email, and the card opens when they join.</span>
+                <span style={{ display: "block", fontSize: fs(12), lineHeight: 1.4, color: look.sub }}>It goes to whoever logs in with that email. Not on GlobeSkimmers yet? They get one email inviting them, and it opens when they join.</span>
               </button>
             </li>
           ) : null}

@@ -33,7 +33,10 @@ const BRASS = "#C9A35A";
 const lc = (v) => String(v ?? "").trim().replace(/^@+/, "").toLowerCase();
 const TG_MAX_TO = 10;
 // "@a, @b, @c" or "@a, @b +3" for the blank's TO line.
-const toLineOf = (handles) => (handles.length <= 3 ? handles.map((h) => `@${h}`).join(", ") : `${handles.slice(0, 2).map((h) => `@${h}`).join(", ")} +${handles.length - 2}`);
+const toLineOf = (handles, emails = []) => {
+  const all = [...handles.map((h) => `@${h}`), ...emails];
+  return all.length <= 3 ? all.join(", ") : `${all.slice(0, 2).join(", ")} +${all.length - 2}`;
+};
 // Drafts kept while the app is open, one per reply (or one for a new telegram).
 const DRAFTS = new Map();
 const draftKey = (replyTo, toHandle) => (replyTo && replyTo.reply_to ? `re:${replyTo.reply_to}` : toHandle ? `to:${lc(toHandle)}` : "new");
@@ -81,28 +84,32 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
   const words = telegramWords(wire);
   const over = words > TELEGRAM_WORDS;
   const recipients = reply ? [] : fixedTo ? [fixedTo] : list.map((p) => lc(p.handle)).filter(Boolean).slice(0, TG_MAX_TO);
+  // A login email (2026-10-24): a member's reaches them; anyone else's waits, with one invitation email.
+  const emailsTo = reply || fixedTo ? [] : list.filter((p) => !p.handle && p.email).map((p) => p.email);
+  const total = recipients.length + emailsTo.length;
   const others = reply && Array.isArray(reply.group) ? reply.group.filter(Boolean) : [];
-  const addressed = !!reply || recipients.length > 0;
+  const addressed = !!reply || total > 0;
   const canSend = !busy && words > 0 && !over && addressed;
   const toLine = reply
     ? (toAll && others.length ? toLineOf([reply.handle, ...others].filter(Boolean)) : { name: reply.name, handle: reply.handle })
-    : recipients.length ? toLineOf(recipients) : null;
+    : total ? toLineOf(recipients, emailsTo) : null;
 
   const send = async () => {
     if (!canSend) {
-      if (!addressed) showToast("Who is it for? Add a @username in Send to.", "error");
+      if (!addressed) showToast("Who is it for? Add a @username or email in Send to.", "error");
       else if (over) showToast(`${TELEGRAM_WORDS} words max. Cut ${words - TELEGRAM_WORDS}.`, "error");
       return;
     }
     setBusy(true);
-    const group = !reply && recipients.length > 1 && mode === "group";
-    const { data, error } = await sendTelegram({ body: raw, ink, ...(reply ? { reply_to: reply.reply_to, ...(toAll && others.length ? { reply_all: true } : {}) } : { to_handles: recipients, mode: group ? "group" : "each" }) });
+    const group = !reply && total > 1 && mode === "group";
+    const { data, error } = await sendTelegram({ body: raw, ink, ...(reply ? { reply_to: reply.reply_to, ...(toAll && others.length ? { reply_all: true } : {}) } : { to_handles: recipients, to_emails: emailsTo, mode: group ? "group" : "each" }) });
     setBusy(false);
     if (error === "age_required") { showToast("Set your birth year in Settings first (one time)", "error"); return; }
     if (error === "finish_passport") return;
     if (error) { showToast(workerMessage(error, "Couldn’t wire it. Try again."), "error"); return; }
-    const many = reply ? (toAll && others.length ? others.length + 1 : 1) : recipients.length;
-    const who = reply ? (many > 1 ? `everyone on it` : reply.name || "them") : many > 1 ? `${many} people` : `@${recipients[0]}`;
+    const many = reply ? (toAll && others.length ? others.length + 1 : 1) : total;
+    // An email address reads the same whether or not a member logs in with it.
+    const who = reply ? (many > 1 ? `everyone on it` : reply.name || "them") : many > 1 ? `${many} people` : recipients[0] ? `@${recipients[0]}` : emailsTo[0];
     const waiting = Array.isArray(data?.not_ready) && data.not_ready.length ? ` · ${data.not_ready.map((h) => `@${h}`).join(", ")} hasn’t finished their passport yet` : "";
     showToast(`${group || (reply && many > 1) ? "Group telegram" : "Telegram"} sent to ${who}${waiting}`, "success");
     setRaw("");
@@ -140,8 +147,8 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
             <div style={{ marginTop: 8 }}><Chip on fixed>@{fixedTo}</Chip></div>
           ) : (
             <>
-              <SendToField value={list} onChange={setList} max={TG_MAX_TO} dark needHandle blocked={blocked} />
-              {recipients.length > 1 ? (
+              <SendToField value={list} onChange={setList} max={TG_MAX_TO} dark needHandle allowEmail blocked={blocked} />
+              {total > 1 ? (
                 <div style={{ marginTop: 10 }}>
                   <div role="group" aria-label="How it goes" style={{ display: "flex", flexWrap: "wrap", columnGap: 6 }}>
                     <Chip on={mode === "each"} onClick={() => setMode("each")}>Separately</Chip>
@@ -149,8 +156,8 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
                   </div>
                   <p style={{ margin: "6px 0 0", fontSize: fs(12), lineHeight: 1.45, color: "#CBB994" }}>
                     {mode === "group"
-                      ? `One telegram to all ${recipients.length}. Everyone sees who it went to and can reply to you or to all.`
-                      : `${recipients.length} private telegrams. Nobody sees who else got one, and replies come only to you.`}
+                      ? `One telegram to all ${total}. Everyone sees who it went to and can reply to you or to all.${emailsTo.length ? " Anyone added by email gets their own." : ""}`
+                      : `${total} private telegrams. Nobody sees who else got one, and replies come only to you.`}
                   </p>
                 </div>
               ) : null}
