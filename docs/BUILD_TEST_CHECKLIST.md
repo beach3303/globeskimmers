@@ -2893,3 +2893,18 @@ with two telegrams (demo account, mocked feed).
 **Push 2026-10-24 (founder: "push"):** main b7e9fc2 → 436ee80 carried the 10-20 growth-week commits too — Deploy
 Cloudflare Workers ✅ (admin-alert roundup, honest admin counts are live) and Deploy website ✅ (the /get preview image).
 **Activate:** `npm run ota` (the trays and the Seal desk move).
+
+## 2026-10-24 — Store submissions for alerts: Play 1.0.9 (12) and iOS 1.0.5 (16) IN REVIEW
+
+- **Android:** Claude built and signed `app-release.aab` (1.0.9, versionCode 12; `npm run build` + `npx cap sync` +
+  `./gradlew bundleRelease`, jarsigner verified) → Desktop/GlobeSkimmers-1.0.9-build12.aab. Founder uploaded it to
+  Production and submitted 2026-10-24 12:31 AM PT (Play submission 8, "In review"). Warning only: no native debug
+  symbols (crash-report detail; harmless).
+- **iOS:** build 15 was greyed out in Add Build; the founder archived again from Xcode, which uploaded as **build 16**
+  (Xcode raised the number at upload; the repo still says 15). Version 1.0.5 + build 16 submitted 2026-10-24 5:02 AM PT
+  ("1 Item Submitted", up to 48 h).
+- Already true before approval: the founder's own phone receives alerts (D1 `push_outcome` phones:1 sent:1 since
+  10-21). After approval, members update and tap Allow on the first open.
+- Next after approval: `npm run ota` for the telegram tray (436ee80) and anything since; bump the repo's
+  CURRENT_PROJECT_VERSION to 16 (or 17) before the next archive.
+
