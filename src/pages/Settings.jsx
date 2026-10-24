@@ -9,6 +9,7 @@ import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader
 import { callWorker } from "@/lib/callWorker";
 import { setAllStampsVisibility, getPrivacy, getShareLink } from "@/lib/passport";
 import { pushPermission, askForAlerts, testAlerts } from "@/lib/pushAlerts";
+import { alertsNeedStore, storeUpdate } from "@/lib/appUpdate";
 import { useHomeZoneStyle, setHomeZoneStyle } from "@/components/redesign/Zone";
 import ContactUsModal from "../components/ContactUsModal";
 import RefreshAccessModal from "../components/RefreshAccessModal";
@@ -600,6 +601,9 @@ export default function SettingsPage() {
   // Alerts on this phone (push, 2026-10-19): what the phone says, and the ask.
   const [pushPerm, setPushPerm] = useState("unknown");
   useEffect(() => { pushPermission().then(setPushPerm); }, []);
+  // A phone build without the alert plugin: alerts come with the store update (2026-10-24).
+  const [update, setUpdate] = useState(null);
+  useEffect(() => { if (alertsNeedStore()) storeUpdate().then(setUpdate); }, []);
   // "Send a test" (2026-10-19): this phone signs up again, then gets one knock.
   const [testing, setTesting] = useState(false);
   const sendTest = async () => {
@@ -1238,13 +1242,16 @@ export default function SettingsPage() {
             <EdRow isTablet={isTablet} step={fontStep} icon={Bell} iconBg={CAT.weather.ink} title="Alerts on this phone"
               desc={pushPerm === "granted" ? "On. Between 8am and 10pm your time. An alert says who sent what, never their words."
                 : pushPerm === "denied" ? "Off in your phone's settings — Settings → GlobeSkimmers → Notifications turns them on."
-                : pushPerm === "unavailable" || pushPerm === "unknown" ? "Alerts come with the app on your phone."
+                : pushPerm === "unavailable" || pushPerm === "unknown" ? (update ? `Update the app ${update.where} to turn them on.`
+                  : alertsNeedStore() ? "Alerts arrive with the next GlobeSkimmers update." : "Alerts come with the app on your phone.")
                 : "A knock when a postcard or a follow arrives. The Mailbox keeps the record either way."}
               control={{ node: (pushPerm === "prompt" || pushPerm === "prompt-with-rationale")
                 ? <button type="button" onClick={async () => setPushPerm(await askForAlerts())} className="h-10 px-4 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>Turn on</button>
                 : pushPerm === "granted"
                   ? <button type="button" onClick={sendTest} disabled={testing} aria-busy={testing || undefined} className="h-10 px-4 rounded-xl font-semibold disabled:opacity-60" style={{ background: "#fff", color: TEAL_DEEP, border: `1px solid ${TEAL_DEEP}`, fontSize: "calc(12.5px*var(--fs,1))" }}>{testing ? "Sending…" : "Send a test"}</button>
-                  : <span style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#736657", fontWeight: 600 }}>{pushPerm === "denied" ? "Off" : ""}</span> }}
+                  : update
+                    ? <a href={update.url} target="_blank" rel="noreferrer" className="h-10 px-4 rounded-xl font-semibold flex items-center" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))", textDecoration: "none" }}>Update</a>
+                    : <span style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#736657", fontWeight: 600 }}>{pushPerm === "denied" ? "Off" : ""}</span> }}
             />
             {dials && [
               ["alert_postcards", "Postcards and telegrams", "Someone sent you a postcard or a telegram"],

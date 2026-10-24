@@ -37,6 +37,7 @@ import HomeRows from "@/components/home/HomeRows";
 import SmartSearchBar from "@/components/search/SmartSearchBar";
 import SmartSearchOverlay from "@/components/search/SmartSearchOverlay";
 import DestinationStrip from "@/components/search/DestinationStrip";
+import UpdateCard from "@/components/home/UpdateCard";
 import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
 import CityBoardRow from "@/components/home/CityBoardRow";
 import { openAttraction } from "@/lib/openAttraction";
@@ -628,6 +629,8 @@ export default function HomePage() {
       {/* Nearby services right under the search (founder, 2026-10-17): Eat, Coffee, Things to do
           are the first thing a traveler reaches for, before the passport. */}
       <NearbyServices wide={isTablet} onAction={handleQuickAction} onAllServices={openAllServices} />
+      {/* Phones on an older store build: update to get alerts (2026-10-24). Nothing otherwise. */}
+      <UpdateCard />
 
       {/* THE ZONES — one fixed order, each zone its own <section data-zone>
           (bible.home.order; nearby services moved above them, 2026-10-17): passport, the boards row, stamps
