@@ -2881,3 +2881,15 @@ Founder: "all of them" (the four offers after the growth check-in).
   src links, order, what to measure).
 - **Activate:** push (worker), `npm run ota` (the Seal move).
 
+
+## 2026-10-23/24 — Telegrams: each one in its own tray (PUSHED — main 436ee80; OTA pending)
+
+Founder: "there should be divisions between top telegram versus the next telegram … i couldn't tell if the reply and
+delete is for the below telegram or the top". `TelegramCard`: a white tray around each telegram — a header
+("TELEGRAM FROM ERIKA · A REPLY", the date on the right), the blank, then "Reply to Erika" / ••• under a hairline,
+inside the tray. Replaces the loose "A reply by wire" label. App only. eslint + no-undef; build; captured the Mailbox
+with two telegrams (demo account, mocked feed).
+
+**Push 2026-10-24 (founder: "push"):** main b7e9fc2 → 436ee80 carried the 10-20 growth-week commits too — Deploy
+Cloudflare Workers ✅ (admin-alert roundup, honest admin counts are live) and Deploy website ✅ (the /get preview image).
+**Activate:** `npm run ota` (the trays and the Seal desk move).
