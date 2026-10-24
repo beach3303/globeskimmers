@@ -182,6 +182,15 @@ export const AuthProvider = ({ children }) => {
           } catch { /* ignore malformed deep link */ }
           return;
         }
+        // A texted postcard or telegram (2026-10-24): globeskimmers://message/claim?code=<8> from the
+        // globeskimmers.io/m/ page → the Mailbox, which claims it once the session is in.
+        if (url && url.includes('message/claim')) {
+          try {
+            const code = (url.split(/[?&]code=/)[1] || '').split(/[&#]/)[0].toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+            if (code.length === 8) setPendingRoute(`/Mailbox?claim=${code}`);
+          } catch { /* ignore malformed deep link */ }
+          return;
+        }
         // A shared passport: globeskimmers://passport/view?u=<slug> opens the
         // visit page. Pushed once the session is in (the effect below), the
         // same way as a team alert: a full reload would land on Home and

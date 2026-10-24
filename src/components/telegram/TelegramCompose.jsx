@@ -16,7 +16,7 @@
 //   replyTo    { reply_to, name, handle, group? } — a reply; group = the other @usernames on it
 //   toHandle   a fixed @username
 import React, { useEffect, useId, useRef, useState } from "react";
-import { ChevronDown, Loader2, Zap } from "lucide-react";
+import { ChevronDown, Loader2, MessageCircle, Zap } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { useDismissable } from "@/lib/dismissStack";
 import { askForAlerts } from "@/lib/pushAlerts";
@@ -25,6 +25,7 @@ import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
 import { TELEGRAM_INKS, TELEGRAM_WORDS, inkColor, sendTelegram, telegramFit, telegramText, telegramWords } from "@/lib/telegram";
 import TelegramPaper, { TINK3, TRED, TYPE } from "@/components/telegram/TelegramPaper";
 import SendToField from "@/components/social/SendToField";
+import { createLink, shareText } from "@/lib/messageLinks";
 
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
 const SERIF = "'Instrument Serif', Georgia, serif";
@@ -71,6 +72,11 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
     if (typeof onClose === "function") onClose();
   };
   useDismissable(open, close);
+  // Text or share it (founder, 2026-10-24): the telegram as a link the sender's own phone texts or
+  // shares; kept while the words and ink are unchanged, so a second tap shares the same link.
+  const [linking, setLinking] = useState(false);
+  const [made, setMade] = useState(/** @type {any} */ (null));
+  useEffect(() => { setMade(null); }, [raw, ink]);
   useEffect(() => {
     if (!open) return undefined;
     const before = document.activeElement;
@@ -115,6 +121,34 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
     setRaw("");
     DRAFTS.delete(key);
     askForAlerts();
+    if (typeof onSent === "function") onSent();
+    if (typeof onClose === "function") onClose();
+  };
+
+  const textIt = async () => {
+    if (linking || busy) return;
+    if (!words) { showToast("Write your telegram first", "error"); return; }
+    if (over) { showToast(`${TELEGRAM_WORDS} words max. Cut ${words - TELEGRAM_WORDS}.`, "error"); return; }
+    setLinking(true);
+    let link = made;
+    if (!link) {
+      const { data, error } = await createLink({ kind: "telegram", body: raw, ink });
+      if (error || !data?.text) {
+        setLinking(false);
+        if (error === "age_required") showToast("Set your birth year in Settings first (one time)", "error");
+        else if (error !== "finish_passport") showToast(workerMessage(error, "Couldn’t make the link. Try again."), "error");
+        return;
+      }
+      link = data;
+      setMade(data);
+    }
+    let how = "cancelled";
+    try { how = await shareText(link.text); } catch { showToast("Couldn’t open sharing. Try again.", "error"); }
+    setLinking(false);
+    if (how === "cancelled") return;
+    showToast(how === "copied" ? "Link copied — paste it in a text" : "Sent. Whoever you sent it to opens it in GlobeSkimmers.", "success");
+    setRaw("");
+    DRAFTS.delete(key);
     if (typeof onSent === "function") onSent();
     if (typeof onClose === "function") onClose();
   };
@@ -214,6 +248,18 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
             {busy ? <Loader2 size={17} strokeWidth={2} className="animate-spin motion-reduce:animate-none" aria-hidden="true" focusable="false" /> : <Zap size={17} strokeWidth={2} aria-hidden="true" focusable="false" />}
             {busy ? "Wiring…" : "Wire it"}
           </button>
+          {!reply && !fixedTo ? (
+            <>
+              <button type="button" onClick={textIt} aria-busy={linking || undefined}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", minHeight: 46, marginTop: 8, borderRadius: 14, border: `1px solid ${BRASS}`, background: "transparent", color: BRASS, fontFamily: MONO, fontSize: fs(12.5), fontWeight: 500, letterSpacing: ".1em", textTransform: "uppercase", cursor: "pointer" }}>
+                {linking ? <Loader2 size={16} strokeWidth={2} className="animate-spin motion-reduce:animate-none" aria-hidden="true" focusable="false" /> : <MessageCircle size={16} strokeWidth={2} aria-hidden="true" focusable="false" />}
+                Or text or share it
+              </button>
+              <p style={{ margin: "6px 2px 0", fontSize: fs(12), lineHeight: 1.45, color: "#A8977A", textAlign: "center" }}>
+                Friends not on GlobeSkimmers yet? Send a link from your phone — Messages, Messenger, WhatsApp. It opens in the app.
+              </p>
+            </>
+          ) : null}
           <p style={{ margin: "8px 0 0", fontFamily: MONO, fontSize: fs(9), letterSpacing: ".08em", lineHeight: 1.45, textAlign: "center", color: "#8E7E62", textTransform: "uppercase" }}>
             Send as many as you like · words are checked before they travel · links don’t go by wire
           </p>

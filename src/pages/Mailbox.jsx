@@ -32,6 +32,7 @@ import TravelerSheet from "@/components/social/TravelerSheet";
 import ConfirmBirthdayNote from "@/components/social/ConfirmBirthdayNote";
 import { Face } from "@/components/social/SocialMarks";
 import { workerMessage } from "@/components/social/FollowByHandle";
+import { claimLink, linkCodeOf } from "@/lib/messageLinks";
 import FindPeople from "@/components/social/FindPeople";
 import Requests from "@/components/social/Requests";
 import ActivityList, { activityLine } from "@/components/social/ActivityList";
@@ -61,7 +62,7 @@ const whoOf = (by) => String(by?.name ?? "").trim() || (by?.handle ? `@${lc(by.h
 const KICKER = { margin: 0, fontFamily: MONO, fontSize: fs(10), fontWeight: 500, letterSpacing: ".16em", lineHeight: 1.2, textTransform: "uppercase", color: BLUE };
 
 // The masthead on the page, then the full-bleed chevron (Mailbox L28-41).
-function Masthead({ onPostcard = undefined, onTelegram = undefined, onFind = undefined, addressable = false }) {
+function Masthead({ onPostcard = undefined, onTelegram = undefined, onFind = undefined, onCode = undefined, addressable = false }) {
   // Tighter (founder, 2026-10-19: "cleaner, more organized"): a 🔍 for Find people, one line for
   // the seal, the two ways to write side by side.
   const write = { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44, padding: "0 14px", borderRadius: 999, font: "inherit", fontSize: fs(13.5), fontWeight: 600, cursor: "pointer" };
@@ -101,6 +102,13 @@ function Masthead({ onPostcard = undefined, onTelegram = undefined, onFind = und
               </button>
             ) : null}
           </div>
+        ) : null}
+        {/* A friend texted a postcard or telegram (2026-10-24): the link's code opens it here. */}
+        {onCode ? (
+          <button type="button" onClick={onCode}
+            style={{ display: "block", marginTop: 6, minHeight: 36, padding: "0 2px", border: 0, background: "transparent", font: "inherit", fontSize: fs(12.5), fontWeight: 600, color: BLUE, textDecoration: "underline", textUnderlineOffset: 3, cursor: "pointer" }}>
+            Have a code from a text? Open it
+          </button>
         ) : null}
       </header>
       <AirmailChevron height={5} />
@@ -348,6 +356,32 @@ function MailboxBody() {
   };
   useEffect(() => { load(); }, []);
   const retry = () => { setFeed(null); load(); };
+  // A texted postcard or telegram (2026-10-24): /Mailbox?claim=<code> from the link's page (the
+  // globeskimmers:// link), or the code typed under "Have a code from a text?". The worker
+  // delivers the reader's own copy, and the feed reloads with it.
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [codeText, setCodeText] = useState("");
+  const [claiming, setClaiming] = useState(false);
+  const claim = async (raw) => {
+    const code = linkCodeOf(raw);
+    if (code.length !== 8) { showToast("That code doesn’t look right — it’s 8 letters and numbers", "error"); return; }
+    if (claiming) return;
+    setClaiming(true);
+    const { data, error } = await claimLink(code);
+    setClaiming(false);
+    if (error === "age_required") { showToast("Set your birth year in Settings first (one time)", "error"); return; }
+    if (error) { showToast(workerMessage(error, "Couldn’t open it. Try again."), "error"); return; }
+    setCodeOpen(false);
+    setCodeText("");
+    showToast(data?.already ? "You opened this one already — it’s in your Mailbox" : `Your ${data?.kind === "telegram" ? "telegram" : "postcard"} is here, under New for you`, "success");
+    load();
+  };
+  const claimParam = new URLSearchParams(useLocation().search).get("claim");
+  useEffect(() => {
+    if (!claimParam) return;
+    navigate(createPageUrl("Mailbox"), { replace: true });
+    claim(claimParam);
+  }, [claimParam]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const blocked = circle.blockedHandles || new Set();
   const rows = feed && !feed.error ? (feed.rows || []).filter((r) => !blocked.has(lc(r?.by?.handle))) : [];
@@ -414,9 +448,25 @@ function MailboxBody() {
 
   return (
     <div>
-      <Masthead onPostcard={() => setCompose(true)} onTelegram={wires ? () => setWireTo({}) : undefined} onFind={() => setSheet("find")} addressable={addressable} />
+      <Masthead onPostcard={() => setCompose(true)} onTelegram={wires ? () => setWireTo({}) : undefined} onFind={() => setSheet("find")} onCode={() => setCodeOpen((v) => !v)} addressable={addressable} />
       <div className={COLUMN}>
         {me.loaded && !me.handle ? <ClaimCard onClaimed={(h) => setMe({ loaded: true, handle: h })} style={{ marginTop: 16 }} /> : null}
+        {codeOpen ? (
+          <form onSubmit={(e) => { e.preventDefault(); claim(codeText); }}
+            style={{ marginTop: 12, padding: "12px 14px", borderRadius: 14, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}` }}>
+            <label htmlFor="gs-claim-code" style={{ display: "block", fontFamily: MONO, fontSize: fs(10), letterSpacing: ".16em", textTransform: "uppercase", color: BLUE }}>The link or code from the text</label>
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <input id="gs-claim-code" value={codeText} onChange={(e) => setCodeText(e.target.value.slice(0, 80))} placeholder="K7Q2 M9PA"
+                autoCapitalize="characters" autoCorrect="off" autoComplete="off" spellCheck={false} enterKeyHint="go"
+                style={{ flex: 1, minWidth: 0, minHeight: 44, padding: "0 12px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, fontFamily: MONO, fontSize: fs(16), letterSpacing: ".1em", color: NEUTRAL.ink }} />
+              <button type="submit" aria-busy={claiming || undefined}
+                style={{ flex: "none", minHeight: 44, padding: "0 18px", borderRadius: 12, border: 0, background: NEUTRAL.stamp, color: NEUTRAL.white, font: "inherit", fontSize: fs(14), fontWeight: 600 }}>
+                {claiming ? "Opening…" : "Open"}
+              </button>
+            </div>
+            <p style={{ margin: "6px 0 0", fontSize: fs(11.5), lineHeight: 1.4, color: NEUTRAL.ink3 }}>Paste the whole link, or type the 8 letters and numbers at its end (globeskimmers.io/m/K7Q2M9PA).</p>
+          </form>
+        ) : null}
         <DoorTiles style={{ marginTop: 16 }} />
 
         {/* Mail first (founder, 2026-10-19: "cleaner, more organized"): what was sent to you and isn't

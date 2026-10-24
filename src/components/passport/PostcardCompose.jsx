@@ -21,7 +21,7 @@
 //                  The sheet reads 'A postcard to *Lisbon*', the address is the board alone,
 //                  and a line says who can see it. The worker checks you were really there.
 import React, { useEffect, useId, useRef, useState } from "react";
-import { ImagePlus, Info, Loader2, RefreshCw, Send, SlidersHorizontal, X } from "lucide-react";
+import { ImagePlus, Info, Loader2, MessageCircle, RefreshCw, Send, SlidersHorizontal, X } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { sendPostcard } from "@/lib/passport";
@@ -32,6 +32,7 @@ import { workerMessage } from "@/components/social/FollowByHandle";
 import SendToField, { chipLabel } from "@/components/social/SendToField";
 import PhotoEditor from "@/components/passport/PhotoEditor";
 import { askForAlerts } from "@/lib/pushAlerts";
+import { createLink, shareText } from "@/lib/messageLinks";
 
 /** @typedef {import('react').CSSProperties} CSS */
 
@@ -158,6 +159,12 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   const discard = () => { setDiscarding(false); setImage(preset?.image || null); setMessage(""); setDish(""); setPlace(preset?.place_name || ""); close(); };
   const cancel = () => { if (pinOffer || !started) { setDiscarding(false); close(); } else setDiscarding(true); };
   useDismissable(open, cancel);
+  // Text or share it (founder, 2026-10-24): the card as a link the sender's own phone texts or
+  // shares. A link made for this card is kept while the card is unchanged, so closing the share
+  // sheet and tapping again shares the same link instead of making another.
+  const [linking, setLinking] = useState(false);
+  const [made, setMade] = useState(/** @type {any} */ (null));
+  useEffect(() => { setMade(null); }, [image, message, place, dish]);
 
   // Focus moves into the sheet when it opens and back to where it was when it closes;
   // Escape closes it.
@@ -265,6 +272,39 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     if (error) { showToast(workerMessage(error, "Couldn’t pin it — the postcard itself is already sent."), "error"); return; }
     showToast(anon ? `Pinned on ${pinOffer.city}’s city board as @${pinOffer.label}` : `Pinned on ${pinOffer.city}’s city board`, "success");
     setPinOffer(null);
+    close();
+  };
+
+  const textIt = async () => {
+    if (linking || busy) return;
+    if (!image) { showToast("A postcard needs its photo", "error"); return; }
+    setLinking(true);
+    let link = made;
+    if (!link) {
+      const { data, error } = await createLink({
+        kind: "postcard", image, message,
+        place_name: place || preset?.place_name, city: preset?.city, country: preset?.country, region: preset?.region || undefined,
+        meta: dish ? { dish } : undefined,
+      });
+      if (error || !data?.text) {
+        setLinking(false);
+        if (error === "age_required") showToast("Set your birth year in Settings first (one time)", "error");
+        else if (error !== "finish_passport") showToast(workerMessage(error, "Couldn’t make the link. Try again."), "error");
+        return;
+      }
+      link = data;
+      setMade(data);
+    }
+    let how = "cancelled";
+    try { how = await shareText(link.text); } catch { showToast("Couldn’t open sharing. Try again.", "error"); }
+    setLinking(false);
+    if (how === "cancelled") return;
+    showToast(how === "copied" ? "Link copied — paste it in a text" : "Sent. Whoever you sent it to opens it in GlobeSkimmers.", "success");
+    setImage(preset?.image || null);
+    setMessage("");
+    setDish("");
+    setList([]);
+    if (typeof onSent === "function") onSent();
     close();
   };
 
@@ -487,6 +527,20 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
               : <Send size={16} strokeWidth={2} aria-hidden="true" focusable="false" />}
             {busy ? "Sending…" : "Send it"}
           </button>
+          {!board && !reply && !fixedTo ? (
+            <>
+              <button type="button" onClick={textIt} aria-busy={linking || undefined}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", minHeight: 46, boxSizing: "border-box", marginTop: 8, padding: "8px 16px", borderRadius: 14, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailBlue}`, fontFamily: "inherit", fontSize: fs(14), fontWeight: 600, color: NEUTRAL.airmailBlue, cursor: "pointer" }}>
+                {linking
+                  ? <Loader2 size={16} strokeWidth={2} className="animate-spin motion-reduce:animate-none" aria-hidden="true" focusable="false" />
+                  : <MessageCircle size={16} strokeWidth={2} aria-hidden="true" focusable="false" />}
+                Or text or share it
+              </button>
+              <p style={{ margin: "6px 2px 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink3, textAlign: "center" }}>
+                Friends not on GlobeSkimmers yet? Send a link from your phone — Messages, Messenger, WhatsApp. It opens in the app.
+              </p>
+            </>
+          ) : null}
           <p style={{ margin: "8px 0 0", fontFamily: MONO, fontSize: fs(9.5), lineHeight: 1.4, letterSpacing: ".04em", textAlign: "center", color: NEUTRAL.ink3 }}>
             PHOTOS ARE REVIEWED BEFORE THEY TRAVEL · NO LOCATIONS RIDE ALONG
           </p>
