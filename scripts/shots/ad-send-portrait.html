@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset="utf-8">
+<!-- The texting ad (2026-10-24, founder: "give me that banner as a photo ad — so i can send it via text message"), 1080x1350. Render like og-send.html with --width 1080 --height 1350. -->
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500&family=Inter+Tight:wght@600;700&family=Special+Elite&family=Caveat:wght@600&display=block" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1350px;overflow:hidden}
+body{position:relative;background:radial-gradient(120% 80% at 50% 50%,#FBF6EC 0%,#F3EADB 70%,#EDE2CF 100%);font-family:'Inter Tight',sans-serif}
+.stripe{position:absolute;left:0;right:0;height:20px;background:repeating-linear-gradient(-45deg,#B8402F 0 30px,#FBF6EC 30px 42px,#2C4A8C 42px 72px,#FBF6EC 72px 84px)}
+.stripe.top{top:0}.stripe.bot{bottom:0}
+.head{position:absolute;left:60px;right:60px;top:96px;text-align:center}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:24px;letter-spacing:.34em;color:#B8402F}
+h1{margin-top:22px;font-family:'Instrument Serif',serif;font-weight:400;font-size:92px;line-height:1.0;color:#16110D;letter-spacing:-.01em}
+h1 em{color:#2C4A8C}
+.sub{margin-top:22px;font-size:34px;color:#2A2219}
+/* postcard back */
+.pc{position:absolute;left:46px;top:462px;width:560px;height:380px;background:#FFFDF8;border-radius:10px;box-shadow:0 26px 40px -18px rgba(22,17,13,.45),0 3px 6px rgba(22,17,13,.12);transform:rotate(-7deg)}
+.pc .div{position:absolute;left:300px;top:36px;bottom:36px;width:2px;background:#D9CFBF}
+.pc .msg{position:absolute;left:40px;top:80px;width:240px;font-family:'Caveat',cursive;font-size:42px;line-height:1.08;color:#2C4A8C}
+.pc .stamp{position:absolute;right:30px;top:28px;width:120px;height:120px;padding:6px;background:#fff;box-shadow:0 0 0 1px #E2D8C8;border-radius:3px;transform:rotate(4deg)}
+.pc .stamp img{width:100%;height:100%;display:block}
+.pc .ring{position:absolute;right:112px;top:96px;width:104px;height:104px;border:3px solid rgba(184,64,47,.55);border-radius:50%;font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:.12em;color:rgba(184,64,47,.8);display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.3;transform:rotate(-14deg)}
+.pc .addr{position:absolute;left:326px;right:30px;height:2px;background:#CFC4B2}
+.pc .to{position:absolute;left:330px;top:222px;font-family:'Caveat',cursive;font-size:38px;color:#16110D}
+.pc .h{position:absolute;left:330px;top:276px;font-family:'JetBrains Mono',monospace;font-size:19px;color:#6B5E50}
+.pc .tag{position:absolute;left:40px;bottom:26px;font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:.2em;color:#9A8C7A}
+/* telegram */
+.tg{position:absolute;right:40px;top:690px;width:540px;height:390px;background:#F2E4BC;transform:rotate(6deg);box-shadow:0 26px 40px -18px rgba(22,17,13,.45),0 3px 6px rgba(22,17,13,.12);
+  -webkit-mask:radial-gradient(circle 10px at 50% 0,transparent 98%,#000) top/28px 100% repeat-x}
+.tg .wire{position:absolute;left:32px;right:32px;top:30px;height:2px;background:#8E7E62}
+.tg .seal{position:absolute;left:34px;top:56px;width:70px;height:70px;border:3px solid #2A2219;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.tg .brand{position:absolute;left:122px;top:60px;font-family:'JetBrains Mono',monospace;font-size:15px;letter-spacing:.3em;color:#6B5E50}
+.tg .word{position:absolute;left:120px;top:78px;font-weight:700;font-size:50px;letter-spacing:.02em;color:#16110D}
+.tg .rule{position:absolute;left:34px;right:34px;top:150px;height:4px;background:#2A2219}
+.tg .lbl{position:absolute;left:36px;top:176px;font-family:'JetBrains Mono',monospace;font-size:16px;letter-spacing:.16em;color:#6B5E50}
+.tg .tape{position:absolute;left:34px;top:214px;padding:12px 18px;background:#FBF3DE;box-shadow:0 2px 3px rgba(22,17,13,.18);font-family:'Special Elite',monospace;font-size:42px;letter-spacing:.04em;color:#16110D;transform:rotate(-1.5deg)}
+.tg .from{position:absolute;left:36px;top:322px;font-family:'Special Elite',monospace;font-size:26px;color:#16110D}
+.tg .rcv{position:absolute;right:32px;top:300px;padding:6px 12px;border:3px solid #B8402F;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:15px;letter-spacing:.14em;color:#B8402F;transform:rotate(-8deg);line-height:1.25;text-align:center}
+.foot{position:absolute;left:60px;right:60px;bottom:66px;text-align:center}
+.pill{display:inline-block;padding:20px 40px;border-radius:999px;background:#0E7C73;color:#fff;font-weight:700;font-size:34px;letter-spacing:.01em}
+.url{margin-top:16px;font-family:'JetBrains Mono',monospace;font-size:26px;letter-spacing:.06em;color:#2A2219}
+</style></head><body>
+<div class="stripe top"></div><div class="stripe bot"></div>
+<div class="head">
+  <div class="eyebrow">GLOBESKIMMERS</div>
+  <h1>Send virtual postcards<br>&amp; four-word <em>telegrams</em></h1>
+  <div class="sub">to friends and family</div>
+</div>
+<div class="pc">
+  <div class="div"></div>
+  <div class="msg">Wish you were here! El Nido is magic.</div>
+  <div class="stamp"><img src="../../site/img/stamps/el-nido.jpg"></div>
+  <div class="ring">PALAWAN<br>OCT 24<br>2026</div>
+  <div class="addr" style="top:262px"></div><div class="addr" style="top:312px"></div>
+  <div class="to">Lola</div><div class="h">@lolacruz</div>
+  <div class="tag">GLOBESKIMMERS MAIL</div>
+</div>
+<div class="tg">
+  <div class="wire"></div>
+  <div class="seal"><svg width="36" height="36" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="#B8402F" stroke="#7E2A1F" stroke-width="1" stroke-linejoin="round"/></svg></div>
+  <div class="brand">GLOBESKIMMERS</div>
+  <div class="word">TELEGRAM</div>
+  <div class="rule"></div>
+  <div class="lbl">TO &nbsp;MOM &middot; @ROSA</div>
+  <div class="tape">Landed. Miss you!</div>
+  <div class="from">FROM &nbsp;@MIGUEL</div>
+  <div class="rcv">RECEIVED<br>OCT 24</div>
+</div>
+<div class="foot">
+  <div class="pill">Free on iPhone &amp; Android</div>
+  <div class="url">globeskimmers.io/get</div>
+</div>
+</body></html>
