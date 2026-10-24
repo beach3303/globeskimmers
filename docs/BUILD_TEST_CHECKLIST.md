@@ -2911,3 +2911,24 @@ Cloudflare Workers ✅ (admin-alert roundup, honest admin counts are live) and D
 
 **OTA 1.0.2610241201 (2026-10-24 ~5:01 AM PT, run by the founder):** the telegram trays and the Seal desk move are on
 phones (iOS + Android; `capgo channel list` → production 1.0.2610241201). Main 400864c matches what phones run.
+
+## 2026-10-24 — Update card for alerts; Send to bar; postcards to several people (COMMITTED, not pushed)
+
+- **Update card (a706c7c).** Founder: "only my phone has notification … can we spread the love to all iphones
+  and androids?" Alerts need the 1.0.5 / 1.0.9 store builds (the push plugin; an OTA can't add it). Home card
+  "Get alerts on this phone" (Update / Not now = a week's quiet) and Settings → Alerts "Update the app in the App
+  Store to turn them on." + Update, only on a phone whose store has a newer build. Live versions:
+  `site/app-version.json`, **null until approval**, so nothing shows yet. Captured both as an old iOS build.
+- **Send to bar (bec9862).** Founder: "remove pre placed names at send to:, just put a send to blank space bar. i
+  love @handle suggestions". `SendToField` in the postcard and telegram composers: blank bar, suggestions from
+  /social/find, chips; postcards also take an email; "or Everyone who follows me" kept as one choice (no longer
+  the default — nothing is chosen until the sender chooses). Captured telegram (suggestions; two chips +
+  Separately/As a group) and postcard (two chips, As a group).
+- **Postcards to several people (10b46c8, server + migration `20261024120000_postcard_groups.sql`).** Up to 10,
+  separately or as a group; group cards show "To you, @a, @b"; replies go to the sender only (founder: "post card
+  reply should be only to sender for now"). Each recipient's card has its own photo copy (account deletion takes
+  only that account's).
+- Gates: worker `node --check`; eslint + no-undef on every touched file; build; boot-check ✅.
+- **Activate:** push (worker + migration apply on their own), then `npm run ota`. When Apple approves 1.0.5 and
+  Google 1.0.9: set `site/app-version.json` to `{ "ios": "1.0.5", "android": "1.0.9" }` and push — the update
+  card appears on older phones.
