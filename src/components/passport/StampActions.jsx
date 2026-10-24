@@ -109,12 +109,10 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
     onChanged?.();
   };
   const [compose, setCompose] = useState(false);
-  const [following, setFollowing] = useState([]);
   const [blocked, setBlocked] = useState([]);
   const openCompose = async () => {
     const { data } = await socialFollow("list");
-    setFollowing(data?.following || []);
-    // Never offer someone you blocked as an address (PostcardCompose filters them out).
+    // Never suggest someone you blocked as an address (PostcardCompose's Send to filters them out).
     setBlocked(data?.blocked || []);
     setCompose(true);
   };
@@ -555,7 +553,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
             Close
           </button>
         </div>
-        <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={() => setCompose(false)} following={following} blocked={blocked}
+        <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={() => setCompose(false)} blocked={blocked}
         preset={{ image: null, place_name: stamp.name, city: stamp.city, country: stamp.country }} />
       <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPick} />
       <PhotoEditor open={!!edit} image={edit?.image || null}

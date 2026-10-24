@@ -31,8 +31,8 @@ import { askForAlerts } from '@/lib/pushAlerts';
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
-// What the field holds, and whether the worker would search it yet.
-const classify = (raw) => {
+// What the field holds, and whether the worker would search it yet (SendToField reads it too).
+export const classify = (raw) => {
   const q = raw.trim();
   if (!q) return { kind: 'empty', ready: false };
   if (EMAIL.test(q)) return { kind: 'email', ready: true };

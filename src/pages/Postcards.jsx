@@ -247,11 +247,11 @@ function PostcardBox({ onBack }) {
       ) : null}
       {replyTo ? (
         <PostcardCompose open replyTo={replyTo} onClose={() => setReplyTo(null)} onSent={() => setReplyTo(null)}
-          following={circle.acc || []} blocked={circle.blocked} />
+          blocked={circle.blocked} />
       ) : null}
       {wireTo ? (
         <TelegramCompose open replyTo={wireTo} onClose={() => setWireTo(null)} onSent={() => setWireTo(null)}
-          following={circle.acc || []} blocked={circle.blocked} meName={meName} meHandle={me.handle} />
+          blocked={circle.blocked} meName={meName} meHandle={me.handle} />
       ) : null}
       {traveler ? (
         <TravelerSheet person={traveler.person} report={traveler.report}

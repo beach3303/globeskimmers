@@ -52,6 +52,7 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
   // or "@traveler" is all it says — no handle, no face, Report still works.
   const from = row.anon ? (row.anon === "local" ? "@local" : "@traveler") : senderName(by, me);
   const toMe = row.to_me === true;
+  const also = toMe && Array.isArray(row.also_to) ? row.also_to.filter(Boolean) : [];
   const myHandle = handleOf(me);
   const place = String(row.place ?? "").trim();
   const message = String(row.message ?? "").trim();
@@ -115,7 +116,8 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 6, rowGap: 2, marginTop: 8, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", lineHeight: 1.2, textTransform: "uppercase", color: NEUTRAL.ink3 }}>
           <span>From {from}</span>
           {seal ? <OfficialSeal size={12} tier={seal} style={undefined} /> : null}
-          {toMe ? <span>· To you</span> : null}
+          {/* A group card (2026-10-24) names the others it went to; a reply still goes to the sender only. */}
+          {toMe ? <span>· To you{also.length ? `, ${also.length <= 3 ? also.map((h) => `@${h}`).join(", ") : `${also.slice(0, 2).map((h) => `@${h}`).join(", ")} +${also.length - 2}`}` : ""}</span> : null}
           {when ? <span style={{ marginLeft: "auto" }}>{when}</span> : null}
         </div>
         {toMe && row.id && typeof onReply === "function" ? (

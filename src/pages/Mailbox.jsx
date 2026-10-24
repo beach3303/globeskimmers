@@ -526,10 +526,10 @@ function MailboxBody() {
           onClose={() => setTraveler(null)} onChanged={() => { setTraveler(null); circle.retry(); load(); }} />
       ) : null}
       <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={load}
-        following={circle.acc || []} followerCount={counts.followYou ?? null} blocked={circle.blocked} />
+        followerCount={counts.followYou ?? null} blocked={circle.blocked} />
       {wireTo ? (
         <TelegramCompose open replyTo={wireTo.reply_to ? wireTo : null} onClose={() => setWireTo(null)} onSent={() => { setWireTo(null); load(); }}
-          following={circle.acc || []} blocked={circle.blocked} meName={meName} meHandle={me.handle} />
+          blocked={circle.blocked} meName={meName} meHandle={me.handle} />
       ) : null}
       {replyPick ? (
         <ReplyWays name={nameFor(replyPick.by)} onClose={() => setReplyPick(null)}
@@ -537,7 +537,7 @@ function MailboxBody() {
       ) : null}
       {replyTo ? (
         <PostcardCompose open replyTo={replyTo} onClose={() => setReplyTo(null)} onSent={() => { setReplyTo(null); load(); }}
-          following={circle.acc || []} blocked={circle.blocked} />
+          blocked={circle.blocked} />
       ) : null}
     </div>
   );

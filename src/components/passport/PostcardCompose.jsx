@@ -1,20 +1,21 @@
 // PostcardCompose — write and send a postcard (founder concept: sent, not posted). One
 // sheet: the photo (picked file, resized client-side), the message, the place line, optional
-// dish lines for food cards, and the address — someone you follow by @handle, or everyone who
-// follows you. The worker moderates the photo at send, fail-closed.
+// dish lines for food cards, and the address — a blank "Send to" bar with @username suggestions
+// (SendToField; founder, 2026-10-24: "remove pre placed names at send to: … i love @handle
+// suggestions"), up to PC_MAX_TO people sent SEPARATELY or AS A GROUP ("allow post card to be
+// sent to group or individually to multiple people"), or everyone who follows you. The worker
+// moderates the photo at send, fail-closed.
 //
 // The new look (bible.word.lines): 'A postcard to your *circle*', on ivory with an airmail
 // edge; the chosen address in airmail blue, Send in stamp red with a lucide Send. No emoji.
 //
-//   <PostcardCompose open onClose onSent following followerCount preset toHandle blocked toCity />
-//   following      op:list `following` rows (or useCircle().acc): accepted people you follow
-//                  who have a handle become addresses, 12 at most.
+//   <PostcardCompose open onClose onSent followerCount preset toHandle blocked toCity />
 //   followerCount  how many follow you; at 0 'Everyone who follows me' has nowhere to go.
 //   preset         { image, place_name, city, country } (a stamp's place).
 //   toHandle       a fixed address ('Send a postcard' on someone's page): the sheet shows
 //                  only that address.
 //   blocked        people you blocked (op:list `blocked` rows, user ids, handles, or a Set):
-//                  never offered as an address. A fixed address you blocked can't be sent to.
+//                  never suggested as an address. A fixed address you blocked can't be sent to.
 //   toCity         { city, country }: a postcard to that city's public board (City Board).
 //                  The sheet reads 'A postcard to *Lisbon*', the address is the board alone,
 //                  and a line says who can see it. The worker checks you were really there.
@@ -30,7 +31,7 @@ import { useDismissable } from "@/lib/dismissStack";
 import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
 import { AirmailChevron } from "@/components/redesign/ornaments";
 import { workerMessage } from "@/components/social/FollowByHandle";
-import FindPeople from "@/components/social/FindPeople";
+import SendToField, { chipLabel } from "@/components/social/SendToField";
 import PhotoEditor from "@/components/passport/PhotoEditor";
 import { askForAlerts } from "@/lib/pushAlerts";
 
@@ -47,6 +48,7 @@ const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const css = (o) => o;
 
 const lc = (h) => String(h ?? "").trim().replace(/^@+/, "").toLowerCase();
+const PC_MAX_TO = 10;
 
 /**
  * Who you blocked, as user ids and handles, from rows, strings or a Set.
@@ -123,13 +125,13 @@ function Address({ on, onClick = undefined, children, fixed = false }) {
 
 /**
  * @param {{
- *   open?: boolean, onClose?: () => void, onSent?: () => void, following?: any[], preset?: any,
+ *   open?: boolean, onClose?: () => void, onSent?: () => void, preset?: any,
  *   followerCount?: number|null, toHandle?: string|null, blocked?: any, toCity?: { city: string, country: string }|null,
  * }} props
  */
 // replyTo (2026-10-19): { postcard_id, name } — the address is the sender of that card, resolved by
 // the worker; the To row shows "Reply to Mary".
-export default function PostcardCompose({ open = false, onClose = undefined, onSent = undefined, following = [], preset = undefined, followerCount = null, toHandle = null, blocked = undefined, toCity = null, replyTo = null }) {
+export default function PostcardCompose({ open = false, onClose = undefined, onSent = undefined, preset = undefined, followerCount = null, toHandle = null, blocked = undefined, toCity = null, replyTo = null }) {
   const fileRef = useRef(/** @type {HTMLInputElement|null} */ (null));
   const sheetRef = useRef(/** @type {HTMLDivElement|null} */ (null));
   const titleId = `pc-title-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -138,10 +140,11 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   const [message, setMessage] = useState("");
   const [place, setPlace] = useState(preset?.place_name || "");
   const [dish, setDish] = useState("");
-  const [to, setTo] = useState(fixedTo);       // '' = everyone who follows me
-  // Someone outside the circle, chosen through Find people (2026-10-18): { user_id, handle, name }.
-  const [other, setOther] = useState(/** @type {any} */ (null));
-  const [picking, setPicking] = useState(false);
+  // Who it's for (2026-10-24): the people in the Send to bar — { user_id?, handle?, name?, email? } —
+  // or everyone who follows me. Nothing is chosen until the sender chooses.
+  const [list, setList] = useState(/** @type {any[]} */ ([]));
+  const [everyone, setEveryone] = useState(false);
+  const [mode, setMode] = useState("each");        // each | group, for two people or more
   const [editing, setEditing] = useState(false);   // our looks on the front (PhotoEditor, 2026-10-19)
   const [busy, setBusy] = useState(false);
   // Board cards sign with your name, or with none at all (founder, 2026-10-15):
@@ -159,9 +162,6 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   const discard = () => { setDiscarding(false); setImage(preset?.image || null); setMessage(""); setDish(""); setPlace(preset?.place_name || ""); close(); };
   const cancel = () => { if (pinOffer || !started) { setDiscarding(false); close(); } else setDiscarding(true); };
   useDismissable(open, cancel);
-
-  // A fixed address set, changed or cleared while the sheet is mounted is the address.
-  useEffect(() => { setTo(fixedTo); }, [fixedTo]);
 
   // Focus moves into the sheet when it opens and back to where it was when it closes;
   // Escape closes it.
@@ -181,16 +181,15 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   if (!open) return null;
 
   const block = blockedKeys(blocked);
-  const isBlocked = (r) => block.ids.has(String(r?.user_id ?? "")) || block.handles.has(lc(r?.handle));
-  const addresses = (Array.isArray(following) ? following : [])
-    .filter((f) => f && f.handle && f.status === "accepted" && !isBlocked(f))
-    .slice(0, 12);
   const board = toCity && String(toCity.city || "").trim() && String(toCity.country || "").trim()
     ? { city: String(toCity.city).trim(), country: String(toCity.country).trim(), region: toCity.region ? String(toCity.region).trim() : null } : null;
   const fixedBlocked = !board && !!fixedTo && block.handles.has(fixedTo);
   const reply = !board && replyTo && replyTo.postcard_id ? replyTo : null;
-  const nowhere = !board && !reply && !fixedTo && !other && to === "" && followerCount === 0;
-  const canSend = !busy && !!image && !nowhere && !fixedBlocked;
+  const picked = !board && !reply && !fixedTo ? list : [];
+  const nowhere = !board && !reply && !fixedTo && everyone && followerCount === 0;
+  const addressed = !!board || !!reply || !!fixedTo || everyone || picked.length > 0;
+  const canSend = !busy && !!image && addressed && !nowhere && !fixedBlocked;
+  const group = picked.length > 1 && mode === "group";
 
   const pick = async (e) => {
     const f = e.target.files?.[0];
@@ -202,18 +201,24 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   const send = async () => {
     if (busy) return;
     if (!image) { showToast("A postcard needs its photo", "error"); return; }
+    if (!addressed) { showToast("Who is it for? Add someone in Send to.", "error"); return; }
     if (nowhere || fixedBlocked) return;
     setBusy(true);
-    const address = board || reply ? "" : fixedTo || (other ? "" : to);
-    const toOther = !board && !reply && !fixedTo && other ? other : null;
+    const address = board || reply ? "" : fixedTo;
+    // The Send to bar: accounts by id (a name found by search), a typed @username, an email.
+    const byId = picked.filter((p) => p.user_id).map((p) => p.user_id);
+    const byHandle = picked.filter((p) => !p.user_id && p.handle).map((p) => lc(p.handle));
+    const byEmail = picked.filter((p) => !p.user_id && !p.handle && p.email).map((p) => p.email);
     const { data, error } = await sendPostcard({
       image, message,
       place_name: place || preset?.place_name, city: board?.city || preset?.city, country: board?.country || preset?.country,
       region: board?.region || preset?.region || undefined,
       meta: dish ? { dish } : undefined,
       to_handle: address || undefined,
-      to_user_id: toOther && !toOther.email ? toOther.user_id : undefined,
-      to_email: toOther && toOther.email ? toOther.email : undefined,
+      to_user_ids: byId.length ? byId : undefined,
+      to_handles: byHandle.length ? byHandle : undefined,
+      to_emails: byEmail.length ? byEmail : undefined,
+      mode: picked.length > 1 ? (group ? "group" : "each") : undefined,
       to_city: board || undefined,
       anon: board && sign === "anon" ? true : undefined,
       reply_to: reply ? reply.postcard_id : undefined,
@@ -222,23 +227,29 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     if (error === "age_required") { showToast("Set your birth year in Settings first (one time)", "error"); return; }
     if (error === "no_followers") { showToast("No one follows you yet. Address it to someone you follow, or invite someone to your circle first", "error"); return; }
     if (error) { showToast(workerMessage(error, "Couldn't send the postcard. Try again."), "error"); return; }
+    const one = picked.length === 1 ? picked[0] : null;
+    const waiting = Array.isArray(data?.not_ready) && data.not_ready.length ? ` · ${data.not_ready.map((h) => `@${h}`).join(", ")} hasn’t finished their passport yet` : "";
     showToast(board
       ? (sign === "anon" ? `Posted to ${board.city}’s city board, no name on it` : `Posted to ${board.city}’s city board`)
       : reply ? `Reply sent to ${reply.name || "them"}`
       : address ? `Postcard sent to @${address}`
-        : toOther && data?.waiting ? (data.emailed ? `Saved for ${toOther.email} — we emailed them a link to join` : `Saved for ${toOther.email} — it opens when they join`)
-          : toOther ? `Postcard sent to ${toOther.handle ? `@${toOther.handle}` : toOther.name}` : "Postcard sent to everyone who follows you", "success");
+        : one && one.email && data?.waiting ? (data.emailed ? `Saved for ${one.email} — we emailed them a link to join` : `Saved for ${one.email} — it opens when they join`)
+          : one ? `Postcard sent to ${chipLabel(one)}${waiting}`
+            : picked.length ? `${group ? "Group postcard" : "Postcard"} sent to ${picked.length} people${waiting}` : "Postcard sent to everyone who follows you", "success");
     // The pin ask (founder, 2026-10-15): a direct card from a city the sender
     // verifiably stamped may hang on that city's board too — their choice,
     // asked now, while the card is in hand. The mail itself is already away.
-    const offer = !board && (address || toOther) && data?.pin && data.pin.city
-      ? { city: String(data.pin.city), country: String(data.pin.country || ""), region: data.pin.region ? String(data.pin.region) : null, label: data.pin.label === "local" ? "local" : "traveler", image, message, place: place || preset?.place_name || "", dish, addr: address }
+    const offer = !board && (address || picked.length) && data?.pin && data.pin.city
+      ? { city: String(data.pin.city), country: String(data.pin.country || ""), region: data.pin.region ? String(data.pin.region) : null, label: data.pin.label === "local" ? "local" : "traveler", image, message, place: place || preset?.place_name || "", dish,
+        sentTo: address ? `@${address}` : one ? chipLabel(one) : `${picked.length} people` }
       : null;
     if (offer) setPinOffer(offer);
     // The next postcard starts blank.
     setImage(preset?.image || null);
     setMessage("");
     setDish("");
+    setList([]);
+    setEveryone(false);
     // The moment to ask for alerts (push, 2026-10-19): a card just went to someone.
     if (!board) askForAlerts();
     if (typeof onSent === "function") onSent();
@@ -304,7 +315,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
           {pinOffer ? (<>
           {/* The ask (founder, 2026-10-15): the mail is away; pinning a copy on the
               city's board is a separate, asked-first choice. Default is no. */}
-          <div style={{ fontFamily: MONO, fontSize: fs(9.5), lineHeight: 1.3, letterSpacing: ".2em", textTransform: "uppercase", color: NEUTRAL.stamp }}>Sent to @{pinOffer.addr} ✓</div>
+          <div style={{ fontFamily: MONO, fontSize: fs(9.5), lineHeight: 1.3, letterSpacing: ".2em", textTransform: "uppercase", color: NEUTRAL.stamp }}>Sent to {pinOffer.sentTo} ✓</div>
           <h3 id={titleId} style={{ margin: "2px 0 0", paddingRight: 40, fontFamily: SERIF, fontSize: fs(22), fontWeight: 400, lineHeight: 1.1, color: NEUTRAL.ink }}>
             Pin a copy on <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>{pinOffer.city}</em>&rsquo;s city board?
           </h3>
@@ -401,8 +412,8 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
             />
           </div>
 
-          {/* the address */}
-          <div id={`${titleId}-to`} style={{ ...kicker, marginTop: 16 }}>To</div>
+          {/* the address: fixed (a board, a reply, someone's page), or the blank Send to bar */}
+          {board || reply || fixedTo ? <div id={`${titleId}-to`} style={{ ...kicker, marginTop: 16 }}>To</div> : null}
           {board ? (
             <div style={{ marginTop: 2 }}>
               <Address on fixed>{board.city}’s city board</Address>
@@ -428,22 +439,27 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
               <Address on fixed>@{fixedTo}</Address>
             </div>
           ) : (
-            <div role="group" aria-labelledby={`${titleId}-to`} style={{ display: "flex", flexWrap: "wrap", columnGap: 6, marginTop: 2 }}>
-              <Address on={to === "" && !other} onClick={() => { setTo(""); setOther(null); setPicking(false); }}>Everyone who follows me</Address>
-              {addresses.map((f) => (
-                <Address key={String(f.user_id ?? f.handle)} on={!other && to === lc(f.handle)} onClick={() => { setTo(lc(f.handle)); setOther(null); setPicking(false); }}>
-                  @{lc(f.handle)}
-                </Address>
-              ))}
-              <Address on={!!other} onClick={() => setPicking((v) => !v)}>
-                {other ? (other.handle ? `@${other.handle}` : other.name) : "Someone else…"}
-              </Address>
+            <div style={{ marginTop: 16 }}>
+              <SendToField value={list} onChange={(v) => { setList(v); if (v.length) setEveryone(false); }} max={PC_MAX_TO} allowEmail blocked={blocked} />
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 6, marginTop: 2 }}>
+                <span style={{ fontSize: fs(12), color: NEUTRAL.ink3 }}>or</span>
+                <Address on={everyone} onClick={() => { setEveryone((v) => !v); setList([]); }}>Everyone who follows me</Address>
+              </div>
+              {picked.length > 1 ? (
+                <div style={{ marginTop: 4 }}>
+                  <div role="group" aria-label="How it goes" style={{ display: "flex", flexWrap: "wrap", columnGap: 6 }}>
+                    <Address on={mode === "each"} onClick={() => setMode("each")}>Separately</Address>
+                    <Address on={mode === "group"} onClick={() => setMode("group")}>As a group</Address>
+                  </div>
+                  <p style={{ margin: "2px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
+                    {mode === "group"
+                      ? `One card to all ${picked.length}. Everyone on it sees who else got it; replies come only to you.${picked.some((p) => p.email) ? " Anyone added by email gets their own card." : ""}`
+                      : `${picked.length} cards, one each. Nobody sees who else got one.`}
+                  </p>
+                </div>
+              ) : null}
             </div>
           )}
-          {!board && !reply && !fixedTo && picking ? (
-            <FindPeople label="Send to someone else" onPick={(p) => { setOther(p); setTo(""); setPicking(false); }}
-              onPickEmail={(email) => { setOther({ email, name: email, handle: null, user_id: null }); setTo(""); setPicking(false); }} style={{ marginTop: 10 }} />
-          ) : null}
 
           {nowhere || fixedBlocked ? (
             <p style={{ display: "flex", alignItems: "flex-start", gap: 6, margin: "8px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
@@ -451,7 +467,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
               <span>
                 {fixedBlocked
                   ? `You blocked @${fixedTo}, so this postcard can’t be sent to them.`
-                  : "No one follows you yet, so this postcard has nowhere to go. Pick someone above, or invite someone to your circle first."}
+                  : "No one follows you yet, so this postcard has nowhere to go. Add someone in Send to, or invite someone to your circle first."}
               </span>
             </p>
           ) : null}
