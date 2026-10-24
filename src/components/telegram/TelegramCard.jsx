@@ -9,7 +9,7 @@
 import React, { useState } from "react";
 import { CornerUpLeft } from "lucide-react";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
-import { ReportControl, senderName } from "@/components/social/Envelope";
+import { ReportControl, senderName, whenLabel } from "@/components/social/Envelope";
 import { openTelegram, telegramNumber, telegramWords } from "@/lib/telegram";
 import TelegramPaper, { TINK3 } from "@/components/telegram/TelegramPaper";
 import TelegramEnvelope from "@/components/telegram/TelegramEnvelope";
@@ -41,10 +41,17 @@ export default function TelegramCard({ row, me = undefined, meName = null, onRep
   const myHandle = String((me && typeof me === "object" ? me.handle : me) ?? "").replace(/^@+/, "") || null;
   const firstName = String(meName ?? "").trim().split(/\s+/)[0] || null;
   return (
-    <article aria-label={state === "open" ? `Telegram from ${from === "You" ? "you" : from}: ${row.body || ""}` : `A sealed telegram from ${from === "You" ? "you" : from}`} className={className} style={{ position: "relative", ...style }}>
-      {row.reply ? (
-        <div style={{ margin: "0 0 4px 2px", fontFamily: MONO, fontSize: fs(9), letterSpacing: ".18em", textTransform: "uppercase", color: TINK3 }}>A reply by wire</div>
-      ) : null}
+    // Each telegram sits in its own tray (founder, 2026-10-23: "there should be divisions between top
+    // telegram versus the next … i couldn't tell if the reply and delete is for the below telegram or
+    // the top"): a header naming the sender, the blank, and its own Reply row under a hairline.
+    <article aria-label={state === "open" ? `Telegram from ${from === "You" ? "you" : from}: ${row.body || ""}` : `A sealed telegram from ${from === "You" ? "you" : from}`} className={className}
+      style={{ position: "relative", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 18, padding: 10, boxShadow: "0 10px 22px -16px rgba(22,17,13,.4)", ...style }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, margin: "2px 4px 8px" }}>
+        <span style={{ minWidth: 0, fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".16em", textTransform: "uppercase", color: TINK3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          Telegram from <b style={{ fontWeight: 600, color: NEUTRAL.ink }}>{from}</b>{row.reply ? " · a reply" : ""}
+        </span>
+        {whenLabel(row.created_at) ? <span style={{ flex: "none", fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", textTransform: "uppercase", color: TINK3 }}>{whenLabel(row.created_at)}</span> : null}
+      </div>
       {state === "open" ? (
         <div style={{ animation: row.received_at && receivedAt === row.received_at ? undefined : "gsTgReveal .45s ease-out both" }}>
           <style>{REVEAL}</style>
@@ -58,11 +65,11 @@ export default function TelegramCard({ row, me = undefined, meName = null, onRep
           <ReportControl row={row} me={me} onReport={onReport} style={{ position: "absolute", right: 2, bottom: 2, zIndex: 4 }} />
         </div>
       )}
-      {state === "open" ? <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
+      {state === "open" ? <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${NEUTRAL.airmailHair}` }}>
         {typeof onReply === "function" && row.id && state === "open" ? (
           <button type="button" onClick={() => onReply(row)} aria-label={`Reply to ${from}`}
             style={{ flex: 1, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, border: `1px solid ${NEUTRAL.airmailBlue}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(13.5), fontWeight: 600 }}>
-            <CornerUpLeft size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Reply
+            <CornerUpLeft size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Reply to {from}
           </button>
         ) : <span style={{ flex: 1 }} />}
         <ReportControl row={row} me={me} onReport={onReport} />
