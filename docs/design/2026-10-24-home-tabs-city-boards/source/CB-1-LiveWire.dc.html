@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>City Boards, Live wire</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800;900&amp;family=Instrument+Serif:ital@0;1&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes gsFlicker{0%,100%{opacity:1}42%{opacity:1}44%{opacity:.35}46%{opacity:1}71%{opacity:.85}73%{opacity:1}}
+@keyframes gsPulse{0%,100%{box-shadow:0 0 0 0 rgba(94,234,255,.75)}60%{box-shadow:0 0 0 7px rgba(94,234,255,0)}}
+.gs-bolt{animation:gsFlicker 3.2s infinite}
+.gs-live{animation:gsPulse 1.8s infinite}
+@media (prefers-reduced-motion: reduce){.gs-bolt,.gs-live{animation:none}}
+</style>
+</helmet>
+<div style="width: 390px; height: 560px; box-sizing: border-box; background: #fffcf7; font-family: 'Inter Tight', sans-serif; color: #16110d; padding: 20px 16px; display: flex; flex-direction: column; gap: 18px; overflow: hidden">
+  <div style="display: flex; flex-direction: column">
+    <div style="align-self: flex-start; margin-left: 18px; padding: 6px 16px 5px; border-radius: 10px 10px 0 0; background: linear-gradient(180deg, #143e6c, #0c2b50); border: 1px solid rgba(214,166,74,.8); border-bottom: 0; font-family: 'Instrument Serif', serif; font-style: italic; font-size: 20px; color: #e2bd6b">My Virtual Passport</div>
+    <div style="background: #0c2b50; border-radius: 22px; padding: 6px">
+      <div style="border: 1px solid rgba(214,166,74,.35); border-radius: 17px; padding: 12px 16px; font-family: 'Instrument Serif', serif; font-size: 26px; color: #fbf6ec">6 stamps <em style="color: #d6a64a">collected</em></div>
+    </div>
+  </div>
+
+  <a href="#" style="position: relative; display: block; text-decoration: none; border-radius: 20px; overflow: hidden; background: radial-gradient(120% 140% at 85% 0%, #17305e 0%, #0b1226 55%, #070b18 100%); border: 1.5px solid #5eeaff; box-shadow: 0 0 0 1px rgba(94,234,255,.25), 0 0 26px rgba(94,234,255,.45), inset 0 0 22px rgba(94,234,255,.16); padding: 18px 18px 16px; color: #e8fbff">
+    <svg class="gs-bolt" aria-hidden="true" width="190" height="150" viewBox="0 0 190 150" style="position: absolute; right: -8px; top: -6px; filter: drop-shadow(0 0 6px rgba(94,234,255,.9)) drop-shadow(0 0 14px rgba(94,234,255,.6))">
+      <path d="M118 4 L84 64 L112 64 L70 146 L150 52 L118 52 L146 4 Z" fill="rgba(94,234,255,.10)" stroke="#9ff3ff" stroke-width="2.4" stroke-linejoin="round"></path>
+      <path d="M30 40 L52 52 L40 58 L64 72" fill="none" stroke="#5eeaff" stroke-width="1.6" stroke-linecap="round" opacity=".8"></path>
+      <path d="M160 96 L176 104 L166 110 L186 122" fill="none" stroke="#5eeaff" stroke-width="1.6" stroke-linecap="round" opacity=".8"></path>
+    </svg>
+    <div style="position: relative; display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: .22em; color: #5eeaff; text-shadow: 0 0 8px rgba(94,234,255,.8)">
+      <span class="gs-live" style="width: 8px; height: 8px; border-radius: 4px; background: #5eeaff; display: inline-block"></span>CITY BOARDS · LIVE
+    </div>
+    <div style="position: relative; margin-top: 10px; font-weight: 900; font-size: 30px; line-height: 1.02; letter-spacing: -.01em; color: #ffffff; text-shadow: 0 0 14px rgba(94,234,255,.55)">Feel the buzz<br>in Los Angeles</div>
+    <div style="position: relative; margin-top: 8px; font-size: 13.5px; line-height: 1.4; color: #bfefff; max-width: 220px">Photo posts from travelers who were really there.</div>
+    <div style="position: relative; margin-top: 14px; display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px; background: #5eeaff; color: #06142a; font-weight: 800; font-size: 14px; box-shadow: 0 0 18px rgba(94,234,255,.7)">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="#06142a"></path></svg>
+      Plug in
+    </div>
+  </a>
+
+  <div style="display: flex; flex-direction: column">
+    <div style="align-self: flex-start; margin-left: 18px; padding: 8px 16px 7px; border-radius: 10px 10px 0 0; background: linear-gradient(180deg, #143e6c, #0c2b50); border: 1px solid rgba(214,166,74,.8); border-bottom: 0; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 12px; letter-spacing: .2em; color: #e2bd6b">STAMPS NEAR YOU</div>
+    <div style="background: #fbf6ec; border: 1px solid #eadfc9; border-radius: 22px; padding: 16px; height: 120px; box-sizing: border-box">
+      <div style="font-family: 'Instrument Serif', serif; font-size: 26px">Be there, and it’s <em style="color: #b0472f">yours</em></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":560}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

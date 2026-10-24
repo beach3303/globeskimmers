@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>City Boards, Departures board</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&amp;family=Instrument+Serif:ital@0;1&amp;family=JetBrains+Mono:wght@500;700;800&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 560px; box-sizing: border-box; background: #fffcf7; font-family: 'Inter Tight', sans-serif; color: #16110d; padding: 20px 16px; display: flex; flex-direction: column; gap: 18px; overflow: hidden">
+  <div style="display: flex; flex-direction: column">
+    <div style="align-self: flex-start; margin-left: 18px; padding: 6px 16px 5px; border-radius: 10px 10px 0 0; background: linear-gradient(180deg, #143e6c, #0c2b50); border: 1px solid rgba(214,166,74,.8); border-bottom: 0; font-family: 'Instrument Serif', serif; font-style: italic; font-size: 20px; color: #e2bd6b">My Virtual Passport</div>
+    <div style="background: #0c2b50; border-radius: 22px; padding: 6px">
+      <div style="border: 1px solid rgba(214,166,74,.35); border-radius: 17px; padding: 12px 16px; font-family: 'Instrument Serif', serif; font-size: 26px; color: #fbf6ec">6 stamps <em style="color: #d6a64a">collected</em></div>
+    </div>
+  </div>
+
+  <a href="#" style="display: block; text-decoration: none; border-radius: 18px; background: #16181d; border: 1px solid #000; box-shadow: 0 14px 26px -16px rgba(22,17,13,.75), inset 0 1px 0 rgba(255,255,255,.06); padding: 14px 14px 12px; color: #f7c948">
+    <div style="display: flex; justify-content: space-between; align-items: baseline">
+      <div style="font-family: 'Instrument Serif', serif; font-size: 22px; color: #ffffff">City <em style="color: #f7c948">Boards</em></div>
+      <div style="font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 10.5px; letter-spacing: .2em; color: #9aa0a8">NOW SHOWING</div>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-top: 10px; padding: 0 2px 6px; border-bottom: 1px solid #2c2f36; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: .2em; color: #7d838c">
+      <span>CITY</span><span>STATUS</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
+        <span style="padding: 5px 6px; border-radius: 4px; background: linear-gradient(180deg, #2b2e35 0 49%, #111316 49% 51%, #25282e 51% 100%); font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 15px; letter-spacing: .14em; color: #f7c948">LOS ANGELES</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 11px; letter-spacing: .16em; color: #16181d; background: #f7c948; padding: 4px 8px; border-radius: 4px">YOU'RE HERE</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
+        <span style="padding: 5px 6px; border-radius: 4px; background: linear-gradient(180deg, #2b2e35 0 49%, #111316 49% 51%, #25282e 51% 100%); font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 15px; letter-spacing: .14em; color: #f7c948">MANILA</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 11px; letter-spacing: .16em; color: #6ee7a8">GATE OPEN</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
+        <span style="padding: 5px 6px; border-radius: 4px; background: linear-gradient(180deg, #2b2e35 0 49%, #111316 49% 51%, #25282e 51% 100%); font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 15px; letter-spacing: .14em; color: #f7c948">LISBON</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 11px; letter-spacing: .16em; color: #6ee7a8">GATE OPEN</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
+        <span style="padding: 5px 6px; border-radius: 4px; background: linear-gradient(180deg, #2b2e35 0 49%, #111316 49% 51%, #25282e 51% 100%); font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 15px; letter-spacing: .14em; color: #f7c948">TOKYO</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 11px; letter-spacing: .16em; color: #6ee7a8">GATE OPEN</span>
+      </div>
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px">
+      <div style="font-size: 12.5px; color: #c9ccd2">Photo posts from travelers who were really there</div>
+      <div style="flex: none; font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 11px; letter-spacing: .14em; color: #f7c948">ALL BOARDS →</div>
+    </div>
+  </a>
+
+  <div style="display: flex; flex-direction: column">
+    <div style="align-self: flex-start; margin-left: 18px; padding: 8px 16px 7px; border-radius: 10px 10px 0 0; background: linear-gradient(180deg, #143e6c, #0c2b50); border: 1px solid rgba(214,166,74,.8); border-bottom: 0; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 12px; letter-spacing: .2em; color: #e2bd6b">STAMPS NEAR YOU</div>
+    <div style="background: #fbf6ec; border: 1px solid #eadfc9; border-radius: 22px; padding: 16px; height: 120px; box-sizing: border-box">
+      <div style="font-family: 'Instrument Serif', serif; font-size: 26px">Be there, and it’s <em style="color: #b0472f">yours</em></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":560}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

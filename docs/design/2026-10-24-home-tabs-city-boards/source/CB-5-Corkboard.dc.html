@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>City Boards, Corkboard</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&amp;family=Instrument+Serif:ital@0;1&amp;family=JetBrains+Mono:wght@500;700&amp;family=Caveat:wght@600&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 560px; box-sizing: border-box; background: #fffcf7; font-family: 'Inter Tight', sans-serif; color: #16110d; padding: 20px 16px; display: flex; flex-direction: column; gap: 18px; overflow: hidden">
+  <div style="display: flex; flex-direction: column">
+    <div style="align-self: flex-start; margin-left: 18px; padding: 6px 16px 5px; border-radius: 10px 10px 0 0; background: linear-gradient(180deg, #143e6c, #0c2b50); border: 1px solid rgba(214,166,74,.8); border-bottom: 0; font-family: 'Instrument Serif', serif; font-style: italic; font-size: 20px; color: #e2bd6b">My Virtual Passport</div>
+    <div style="background: #0c2b50; border-radius: 22px; padding: 6px">
+      <div style="border: 1px solid rgba(214,166,74,.35); border-radius: 17px; padding: 12px 16px; font-family: 'Instrument Serif', serif; font-size: 26px; color: #fbf6ec">6 stamps <em style="color: #d6a64a">collected</em></div>
+    </div>
+  </div>
+
+  <a href="#" style="position: relative; display: block; text-decoration: none; height: 216px; border-radius: 18px; overflow: hidden; border: 6px solid #8a5a32; box-shadow: 0 14px 24px -16px rgba(58,40,20,.7); background-color: #c69a68; background-image: radial-gradient(rgba(90,58,30,.35) 1px, transparent 1.6px), radial-gradient(rgba(255,236,200,.25) 1px, transparent 1.4px); background-size: 9px 9px, 13px 13px; background-position: 0 0, 4px 6px">
+    <div style="position: absolute; left: 12px; top: 12px; padding: 8px 12px 9px; background: #fffcf7; transform: rotate(-2deg); box-shadow: 0 6px 10px -6px rgba(22,17,13,.55)">
+      <div style="font-family: 'Instrument Serif', serif; font-size: 22px; line-height: 1">City <em style="color: #2c4a8c">Boards</em></div>
+      <div style="margin-top: 3px; font-size: 11.5px; color: #3a3128; max-width: 150px; line-height: 1.3">Pinned by travelers who were really there</div>
+    </div>
+    <div style="position: absolute; left: 20px; top: 92px; width: 104px; padding: 6px 6px 4px; background: #ffffff; transform: rotate(-6deg); box-shadow: 0 8px 14px -8px rgba(22,17,13,.6)">
+      <div style="height: 70px; background: linear-gradient(180deg, #ffb46b 0%, #ff7e7e 55%, #6c4bc8 100%)"></div>
+      <div style="font-family: 'Caveat', cursive; font-size: 18px; line-height: 1.1; text-align: center; color: #16110d">Los Angeles</div>
+      <div style="position: absolute; left: 46px; top: -7px; width: 14px; height: 14px; border-radius: 7px; background: radial-gradient(circle at 35% 35%, #ff8a7a, #c8332a); box-shadow: 0 3px 4px rgba(22,17,13,.45)"></div>
+    </div>
+    <div style="position: absolute; left: 140px; top: 72px; width: 104px; padding: 6px 6px 4px; background: #ffffff; transform: rotate(4deg); box-shadow: 0 8px 14px -8px rgba(22,17,13,.6)">
+      <div style="height: 70px; background: linear-gradient(180deg, #8fd3e8 0%, #3fa3b7 55%, #f0a24e 100%)"></div>
+      <div style="font-family: 'Caveat', cursive; font-size: 18px; line-height: 1.1; text-align: center; color: #16110d">Manila</div>
+      <div style="position: absolute; left: 46px; top: -7px; width: 14px; height: 14px; border-radius: 7px; background: radial-gradient(circle at 35% 35%, #7fb2ff, #2c4a8c); box-shadow: 0 3px 4px rgba(22,17,13,.45)"></div>
+    </div>
+    <div style="position: absolute; left: 252px; top: 96px; width: 96px; padding: 6px 6px 4px; background: #ffffff; transform: rotate(-3deg); box-shadow: 0 8px 14px -8px rgba(22,17,13,.6)">
+      <div style="height: 64px; background: linear-gradient(180deg, #ffe08a 0%, #f2a65a 60%, #c4573a 100%)"></div>
+      <div style="font-family: 'Caveat', cursive; font-size: 18px; line-height: 1.1; text-align: center; color: #16110d">Lisbon</div>
+      <div style="position: absolute; left: 42px; top: -7px; width: 14px; height: 14px; border-radius: 7px; background: radial-gradient(circle at 35% 35%, #ffe27a, #d4a017); box-shadow: 0 3px 4px rgba(22,17,13,.45)"></div>
+    </div>
+    <div style="position: absolute; right: 10px; top: 14px; padding: 8px 14px; border-radius: 999px; background: #16110d; color: #fffcf7; font-weight: 800; font-size: 13px">Open the board</div>
+  </a>
+
+  <div style="display: flex; flex-direction: column">
+    <div style="align-self: flex-start; margin-left: 18px; padding: 8px 16px 7px; border-radius: 10px 10px 0 0; background: linear-gradient(180deg, #143e6c, #0c2b50); border: 1px solid rgba(214,166,74,.8); border-bottom: 0; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 12px; letter-spacing: .2em; color: #e2bd6b">STAMPS NEAR YOU</div>
+    <div style="background: #fbf6ec; border: 1px solid #eadfc9; border-radius: 22px; padding: 16px; height: 120px; box-sizing: border-box">
+      <div style="font-family: 'Instrument Serif', serif; font-size: 26px">Be there, and it’s <em style="color: #b0472f">yours</em></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":560}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

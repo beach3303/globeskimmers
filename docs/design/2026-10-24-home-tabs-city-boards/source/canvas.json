@@ -1,0 +1,36 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-10-24T19:05:00Z" },
+  "title": "Home tabs + City Boards",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": { "x": 0, "y": 0, "w": 390, "h": 780, "title": "Tabs · today (gold)" },
+    "Tabs-A.dc.html": { "x": 470, "y": 0, "w": 390, "h": 780, "title": "Tabs · A Airmail blue" },
+    "Tabs-B.dc.html": { "x": 940, "y": 0, "w": 390, "h": 780, "title": "Tabs · B Harbour slate" },
+    "Tabs-C.dc.html": { "x": 1410, "y": 0, "w": 390, "h": 780, "title": "Tabs · C Navy & gold leaf" },
+    "CB-1-LiveWire.dc.html": { "x": 0, "y": 1200, "w": 390, "h": 560, "title": "City Boards · 1 Live wire" },
+    "CB-2-Mural.dc.html": { "x": 470, "y": 1200, "w": 390, "h": 560, "title": "City Boards · 2 Mural" },
+    "CB-3-Billboard.dc.html": { "x": 940, "y": 1200, "w": 390, "h": 560, "title": "City Boards · 3 Billboard" },
+    "CB-4-Departures.dc.html": { "x": 1410, "y": 1200, "w": 390, "h": 560, "title": "City Boards · 4 Departures board" },
+    "CB-5-Corkboard.dc.html": { "x": 1880, "y": 1200, "w": 390, "h": 560, "title": "City Boards · 5 Corkboard" }
+  },
+  "order": [
+    "Main.dc.html",
+    "Tabs-A.dc.html",
+    "Tabs-B.dc.html",
+    "Tabs-C.dc.html",
+    "CB-1-LiveWire.dc.html",
+    "CB-2-Mural.dc.html",
+    "CB-3-Billboard.dc.html",
+    "CB-4-Departures.dc.html",
+    "CB-5-Corkboard.dc.html"
+  ],
+  "notes": {
+    "tabsTitle": { "x": 0, "y": -260, "text": "Home tab colours", "kind": "title1", "maxW": 1800 },
+    "cbTitle": { "x": 0, "y": 940, "text": "Explore City Boards: five looks", "kind": "title1", "maxW": 2270 }
+  },
+  "designSystems": [
+    { "title": "Globeskimmers", "namespace": "globeskimmers", "artifact": "https://claude.ai/artifact/WaS2xFbCiy2kAg3xHZqJix", "version": "1791797647-6aff", "copiedAt": "2026-10-24T19:05:00Z" }
+  ]
+}
