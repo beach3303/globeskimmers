@@ -1653,6 +1653,13 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
     await del('pending_postcards', `pending_postcards?sender_id=eq.${userId}`);
   }
   await del('pending_telegrams', `pending_telegrams?sender_id=eq.${userId}`);
+  // Links they made to text or share (2026-10-24), and each one's photo; claimed copies went with
+  // postcards_sent / telegrams above.
+  const lk = await rows('message_links', `message_links?sender_id=eq.${userId}&select=photo_key`);
+  if (lk && await r2('message_links_r2', lk.map((r) => r.photo_key))) {
+    await del('message_links', `message_links?sender_id=eq.${userId}`);
+  }
+  await del('message_link_claims', `message_link_claims?user_id=eq.${userId}`);
   // Telegrams they sent or received (2026-10-19); no media.
   await del('telegrams', `telegrams?or=(sender_id.eq.${userId},to_user_id.eq.${userId})`);
   await del('user_follows', `user_follows?or=(follower_id.eq.${userId},followee_id.eq.${userId})`);
@@ -18801,6 +18808,234 @@ async function tgPendingPrune(env) {
   await gbRest(env, `pending_telegrams?created_at=lt.${floor}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => {});
 }
 
+// ── Text or share it (founder, 2026-10-24: "can we do send invitation via text message") ───────
+// A postcard or telegram that travels as a link the sender texts or shares from their own phone
+// (Messages, Messenger, WhatsApp, Viber: person to person, so no carrier rules apply and no phone
+// number ever reaches us; Twilio's policy forbids texting people on a friend's say-so). The card is
+// stored once under a short code; globeskimmers.io/m/<code> (the site worker hands /m/ here) shows
+// who sent what — never the photo or the words — with Open in GlobeSkimmers / Get the app, and the
+// app claims it: the page's globeskimmers://message/claim?code= link, or the code typed in the
+// Mailbox. Up to LINK_MAX_CLAIMS people (each their own copy, so a group chat can share one link);
+// never the sender; a blocked pair or a minor gets nothing, answered like an unknown code. Ten
+// links a day per sender; gone after 90 days, or with the sender's account.
+const LINK_MAX_CLAIMS = 10;
+const LINK_DAILY = 10;
+const LINK_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 32 letters: no 0/O, 1/I
+const linkCode = () => [...crypto.getRandomValues(new Uint8Array(8))].map((x) => LINK_ALPHABET[x % 32]).join('');
+const linkCodeOf = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+const linkShown = (c) => `${c.slice(0, 4)} ${c.slice(4)}`;
+async function linkSender(env, senderId) {
+  const [first, hq] = await Promise.all([
+    ppHolder(env, senderId),
+    gbRest(env, `passport_shares?user_id=eq.${senderId}&select=handle`, {}).catch(() => null),
+  ]);
+  return { first, handle: hq && hq.ok ? ((await hq.json().catch(() => []))[0]?.handle || null) : null };
+}
+// A postcard's front photo from a request body: { bytes, mediaType, ext } or { error, status }.
+function pcPhotoOf(b) {
+  let data = String(b.image || ''); let mediaType = 'image/jpeg';
+  const m = data.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,(.*)$/i);
+  if (m) { mediaType = m[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : m[1].toLowerCase(); data = m[2]; }
+  else if (b.content_type && /^image\/(jpeg|png|webp)$/i.test(b.content_type)) { mediaType = String(b.content_type).toLowerCase(); }
+  if (!data) return { error: 'A postcard needs its photo', status: 400 };
+  let bytes;
+  try { bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0)); } catch { return { error: 'Bad image data', status: 400 }; }
+  if (bytes.length > 4 * 1024 * 1024) return { error: 'Photo too large', status: 400 };
+  if (bytes.length < 500) return { error: 'That image is too small', status: 400 };
+  return { bytes, mediaType, ext: mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg' };
+}
+
+// POST /links/create { kind: 'postcard', image, message?, place_name?, city?, country?, region?, meta? }
+//                  | { kind: 'telegram', body, ink? }  →  { ok, code, url, text }
+// text is the message the sender's phone pre-fills: who sent what, and the link.
+async function handleLinkCreate(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const kind = b.kind === 'telegram' ? 'telegram' : 'postcard';
+    const sp = await gbSocialProfile(env, user.id);
+    if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
+    if (sp.social_tier === 'blocked') return jsonResponse({ error: 'This isn’t available on this account' }, 403);
+    if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
+    if (sp.social_tier === 'teen') return jsonResponse({ error: kind === 'telegram' ? 'Telegrams open at age 18' : 'Postcards open at age 18', code: 'teen_hold' }, 403);
+    const clean = (v, n) => (v == null ? null : String(v).replace(/\s+/g, ' ').trim().slice(0, n) || null);
+    const row = { sender_id: user.id, kind, max_claims: LINK_MAX_CLAIMS };
+    let photo = null;
+    if (kind === 'telegram') {
+      const body = tgClean(b.body);
+      const words = tgWordCount(body);
+      if (!words) return jsonResponse({ error: 'Write your telegram first' }, 400);
+      if (words > TG_MAX_WORDS) return jsonResponse({ error: '4 words max! Make it count.' }, 400);
+      if (!(await gbModerate(env, body)).allow) return jsonResponse({ error: 'Let’s keep it kind. Try different words.' }, 422);
+      row.body = body;
+      if (b.ink === 'red' || b.ink === 'green') row.ink = b.ink;
+    } else {
+      photo = pcPhotoOf(b);
+      if (photo.error) return jsonResponse({ error: photo.error }, photo.status);
+      const verdict = await gbModeratePhoto(env, ppBytesToB64(photo.bytes), photo.mediaType, 'memory');
+      if (!verdict || !verdict.allow) {
+        if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_photo_refused', { reason: verdict?.reason || 'not_allowed', bytes: photo.bytes.length, link: true }));
+        return jsonResponse({ error: verdict?.reason ? "We couldn't check this photo right now — try again in a moment" : "This photo can't go on a postcard" }, 422);
+      }
+      row.message = b.message == null ? null : String(b.message).replace(/https?:\S+/gi, '').replace(/\s+/g, ' ').trim().slice(0, 240) || null;
+      row.place_name = clean(b.place_name, 80); row.city = clean(b.city, 60); row.country = clean(b.country, 60); row.region = clean(b.region, 60);
+      if (b.meta && typeof b.meta === 'object') row.meta = { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60) };
+    }
+    const n = await gbDayCount(env, `lnk:${user.id}`);
+    if (n != null && n > LINK_DAILY) return jsonResponse({ error: 'That’s ten links today. Try again tomorrow.' }, 429);
+    if (photo) {
+      row.photo_key = `pc/${crypto.randomUUID()}.${photo.ext}`;
+      await env.MEDIA.put(row.photo_key, photo.bytes, { httpMetadata: { contentType: photo.mediaType, cacheControl: 'public, max-age=31536000, immutable' } });
+    }
+    let code = null;
+    let status = 0;
+    for (let i = 0; i < 4 && !code; i++) {
+      const c = linkCode();
+      const w = await gbRest(env, 'message_links', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ...row, code: c }) });
+      if (w.ok) code = c; else { status = w.status; if (status !== 409) break; }
+    }
+    if (!code) {
+      if (row.photo_key && ctx) ctx.waitUntil(env.MEDIA.delete(row.photo_key).catch(() => {}));
+      return jsonResponse({ error: status === 404 ? 'Links open in a few minutes — try again shortly' : 'Couldn’t make the link — try again' }, status === 404 ? 503 : 502);
+    }
+    const { first, handle } = await linkSender(env, user.id);
+    const url = `https://globeskimmers.io/m/${code}`;
+    const text = `${handle ? `${first} (@${handle})` : first} sent you a ${kind} on GlobeSkimmers ✈️ Open it here: ${url}`;
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'link_create', { kind }));
+    return jsonResponse({ ok: true, code, url, text });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// GET /m/<code> — the page a texted link opens (on globeskimmers.io via the site worker). Who sent
+// what and from where, sealed; Open in GlobeSkimmers (the app claims it), Get the app, the code to
+// type in the Mailbox, and what the app is. An unknown or spent code reads as expired, never more.
+async function handleLinkLanding(request, env, ctx) {
+  const code = linkCodeOf(new URL(request.url).pathname.replace(/^\/m\/?/, ''));
+  let link = null;
+  try {
+    if (code.length === 8) {
+      const q = await gbRest(env, `message_links?code=eq.${code}&select=sender_id,kind,place_name,city,expires_at,claims,max_claims`, {});
+      link = q.ok ? (await q.json())[0] || null : null;
+    }
+  } catch { link = null; }
+  const live = !!link && Date.parse(link.expires_at) > Date.now() && link.claims < link.max_claims;
+  const who = live ? await linkSender(env, link.sender_id).catch(() => null) : null;
+  if (ctx) ctx.waitUntil(gbLogEvent(env, 'link_landing_view', { live, kind: link?.kind || null }));
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const wire = link?.kind === 'telegram';
+  const thing = wire ? 'telegram' : 'postcard';
+  const first = who?.first || 'A friend';
+  const where = !wire ? (link?.place_name || link?.city || null) : null;
+  const src = `link_${thing}`;
+  const ogTitle = who ? `${first} sent you a ${thing} · GlobeSkimmers` : 'GlobeSkimmers — collect the world, one stamp at a time';
+  const ogDesc = who ? `It’s sealed until you open it in GlobeSkimmers — free on iPhone and Android.` : 'Turn your trip photos into passport stamps. Free on iPhone and Android.';
+  const body = who ? `
+  <div class="eyebrow">GlobeSkimmers ${wire ? 'telegraph' : 'mail'}</div>
+  <h1>${esc(first)} sent you a <em>${thing}</em></h1>
+  <div class="card ${wire ? 'wire' : ''}">
+    <div class="k">From</div><div class="from">${esc(first)}${who.handle ? ` <span>@${esc(who.handle)}</span>` : ''}</div>
+    <div class="k">To</div><div class="to">You</div>
+    <div class="seal">${wire ? '&#9889; Four words by wire' : `&#9993;&#65039; A photo and a note${where ? ` from ${esc(where)}` : ''}`}, sealed until you open it in the app.</div>
+  </div>
+  <a class="btn primary" href="globeskimmers://message/claim?code=${code}">Open in GlobeSkimmers</a>
+  <a class="btn" href="/go/ios?src=${src}">Download for iPhone</a>
+  <a class="btn" href="/go/android?src=${src}">Download for Android</a>
+  <ol class="steps"><li>Get GlobeSkimmers — it’s free.</li><li>Sign up.</li><li>Come back to this message and tap <b>Open in GlobeSkimmers</b>, or type the code <b class="code">${linkShown(code)}</b> in Mailbox &rarr; Have a code from a text?</li></ol>` : `
+  <div class="eyebrow">GlobeSkimmers</div>
+  <h1>This link has <em>expired</em></h1>
+  <p class="muted">It may be older than 90 days, or everyone it was for has opened it. Ask your friend to send it again — or start your own passport.</p>
+  <a class="btn primary" href="/go/ios?src=link_expired">Download for iPhone</a>
+  <a class="btn" href="/go/android?src=link_expired">Download for Android</a>`;
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(ogTitle)}</title><meta name="robots" content="noindex">
+<meta property="og:title" content="${esc(ogTitle)}"><meta property="og:description" content="${esc(ogDesc)}">
+<meta property="og:image" content="https://globeskimmers.io/img/og-get.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta property="og:type" content="website"><meta name="twitter:card" content="summary_large_image"><link rel="icon" href="/img/icon-64.png">
+<style>
+body{margin:0;background:#FFFCF7;color:#16110D;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:440px;margin:0 auto;padding:max(40px,env(safe-area-inset-top)) 20px 44px}
+.eyebrow{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#C0392B}
+h1{font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:32px;line-height:1.12;margin:8px 0 16px}h1 em{color:#2C4A8C}
+.card{background:#fff;border:1px dashed #C9D6EA;border-radius:14px;padding:16px 18px}.card.wire{background:#F2E4BC;border:1px solid #2A2219}
+.k{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#736657;margin-top:10px}.k:first-child{margin-top:0}
+.from{font-size:18px;font-weight:700;margin-top:2px}.from span{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;font-weight:400;color:#2C4A8C}.to{font-size:16px;margin-top:2px}
+.seal{margin-top:12px;padding-top:10px;border-top:1px solid #E1E8F2;font-size:14px;line-height:1.45;color:#4A3F35}.wire .seal{border-top-color:rgba(42,34,25,.25)}
+.btn{display:block;text-align:center;text-decoration:none;margin-top:10px;padding:15px 18px;border-radius:13px;font-weight:700;font-size:16px;border:1px solid rgba(22,17,13,.14);color:#16110D;background:#fff}
+.btn.primary{background:#0E7C73;border-color:#0E7C73;color:#fff;margin-top:18px}
+.steps{margin:18px 0 0;padding-left:20px;font-size:14px;line-height:1.55;color:#4A3F35}.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;color:#16110D}
+.muted{font-size:15px;line-height:1.5;color:#736657}
+.about{margin-top:28px;border-top:1px solid #E6DDCF;padding-top:20px}.about img{display:block;width:100%;height:auto;border-radius:10px}
+.about h2{font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:22px;margin:16px 0 6px}.about li{font-size:15px;line-height:1.45;margin:6px 0}
+.foot{margin-top:22px;font-family:Georgia,serif;font-style:italic;font-size:14px;color:#736657;text-align:center}
+</style></head><body><main>${body}
+<div class="about"><img src="/img/og-get.jpg" alt="Turn your trip photos into passport stamps — free on iPhone and Android">
+<h2>What is GlobeSkimmers?</h2><ul><li>Your trip photos become <b>passport stamps</b> of the places you really go.</li><li>Send <b>virtual postcards</b> and four-word <b>telegrams</b> to friends and family.</li><li>Find food, coffee and things to do nearby, wherever you land.</li></ul></div>
+<div class="foot">Collect the world, one stamp at a time.</div>
+</main></body></html>`;
+  return new Response(html, { status: who ? 200 : 404, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex' } });
+}
+
+// POST /links/claim { code } → { ok, kind, id, already? }. The reader gets their own copy: a
+// postcard (its own photo copy) or a sealed telegram, from the sender, into their Mailbox.
+async function handleLinkClaim(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const code = linkCodeOf(b.code);
+    if (code.length !== 8) return jsonResponse({ error: 'That code doesn’t look right — it’s 8 letters and numbers' }, 400);
+    const tries = await gbDayCount(env, `lnkc:${user.id}:${Math.floor(Date.now() / 3600000)}`);
+    if (tries != null && tries > 30) return jsonResponse({ error: 'Too many tries. Wait an hour, then try again.' }, 429);
+    const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (sp === undefined) return jsonResponse({ error: 'Couldn’t check your account — try again' }, 503);
+    if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
+    if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
+    if (sp.social_tier === 'teen' || sp.social_tier === 'blocked') return jsonResponse({ error: 'Postcards and telegrams open at age 18', code: 'teen_hold' }, 403);
+    const gone = jsonResponse({ error: 'That link has expired or doesn’t exist' }, 404);
+    const q = await gbRest(env, `message_links?code=eq.${code}&select=*`, {});
+    const link = q.ok ? (await q.json())[0] || null : null;
+    if (!link || Date.parse(link.expires_at) <= Date.now()) return gone;
+    if (link.sender_id === user.id) return jsonResponse({ error: 'That one’s yours — send the link to someone else 🙂' }, 400);
+    const cq = await gbRest(env, `message_link_claims?link_id=eq.${link.id}&user_id=eq.${user.id}&select=link_id`, {});
+    if (cq.ok && (await cq.json()).length) return jsonResponse({ ok: true, kind: link.kind, already: true });
+    if (link.claims >= link.max_claims) return jsonResponse({ error: 'Everyone this link was for has opened it already' }, 410);
+    if (await gbBlockedEither(env, user.id, link.sender_id, { failClosed: true })) return gone;
+    const pq = await gbRest(env, `profiles?id=eq.${link.sender_id}&select=id`, { headers: { 'Accept-Profile': 'public' } });
+    if (!pq.ok || !(await pq.json()).length) return gone;
+    const mine = await gbRest(env, 'message_link_claims', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ link_id: link.id, user_id: user.id }) });
+    if (!mine.ok) return mine.status === 409 ? jsonResponse({ ok: true, kind: link.kind, already: true }) : jsonResponse({ error: 'That didn’t go through — try again' }, 503);
+    const undo = () => gbRest(env, `message_link_claims?link_id=eq.${link.id}&user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => {});
+    let made = null;
+    if (link.kind === 'telegram') {
+      const w = await gbRest(env, 'telegrams', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ sender_id: link.sender_id, to_user_id: user.id, body: link.body, created_at: link.created_at, ...(link.ink ? { ink: link.ink } : {}) }) });
+      made = w.ok ? (await w.json().catch(() => []))[0] || null : null;
+    } else {
+      const obj = link.photo_key ? await env.MEDIA.get(link.photo_key) : null;
+      if (!obj) { await undo(); return jsonResponse({ error: 'That postcard’s photo is gone' }, 410); }
+      const key = `pc/${crypto.randomUUID()}.${String(link.photo_key).split('.').pop() || 'jpg'}`;
+      await env.MEDIA.put(key, await obj.arrayBuffer(), { httpMetadata: obj.httpMetadata || { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' } });
+      const row = { sender_id: link.sender_id, to_user_id: user.id, photo_key: key, message: link.message, place_name: link.place_name, city: link.city, country: link.country, region: link.region, ...(link.meta ? { meta: link.meta } : {}) };
+      const w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
+      made = w.ok ? (await w.json().catch(() => []))[0] || null : null;
+      if (!made && ctx) ctx.waitUntil(env.MEDIA.delete(key).catch(() => {}));
+    }
+    if (!made) { await undo(); return jsonResponse({ error: 'Couldn’t open it right now — try again' }, 502); }
+    await gbRest(env, `message_links?id=eq.${link.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ claims: link.claims + 1 }) }).catch(() => {});
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'link_claim', { kind: link.kind }));
+    return jsonResponse({ ok: true, kind: link.kind, id: made.id || null });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+// The daily prune: expired links go, and a postcard link's photo with them (claimed copies have their own).
+async function linkPrune(env) {
+  const q = await gbRest(env, `message_links?expires_at=lt.${new Date().toISOString()}&select=id,photo_key&limit=200`, {});
+  if (!q.ok) return;
+  const rows = await q.json();
+  if (!rows.length) return;
+  if (env.MEDIA) for (const r of rows) if (r.photo_key) await env.MEDIA.delete(r.photo_key).catch(() => {});
+  await gbRest(env, `message_links?id=in.(${rows.map((r) => r.id).join(',')})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+}
+
 // Several people at once (founder, 2026-10-24: "allow post card to be sent to group or
 // individually to multiple people"): up to PC_MAX_TO addresses — @usernames (to_handles),
 // accounts Find people found (to_user_ids) and email addresses (to_emails) — either EACH their
@@ -28149,6 +28384,8 @@ export default {
       if (pathname === '/postcards/keep' && request.method === 'POST') return await handlePostcardKeep(request, env);
       if (pathname === '/postcards/delete' && request.method === 'POST') return await handlePostcardDelete(request, env);
       if (pathname === '/telegrams/send' && request.method === 'POST') return await handleTelegramSend(request, env, ctx);
+      if (pathname === '/links/create' && request.method === 'POST') return await handleLinkCreate(request, env, ctx);
+      if (pathname === '/links/claim' && request.method === 'POST') return await handleLinkClaim(request, env, ctx);
       if (pathname === '/telegrams/delete' && request.method === 'POST') return await handleTelegramDelete(request, env);
       if (pathname === '/telegrams/open' && request.method === 'POST') return await handleTelegramOpen(request, env);
       if (pathname === '/social/world' && request.method === 'POST') return await handleSocialWorld(request, env, ctx);
@@ -28185,6 +28422,7 @@ export default {
       if (pathname === '/passport/share' && request.method === 'POST') return await handlePassportShare(request, env);
       if (pathname === '/passport/public' && request.method === 'POST') return await handlePassportPublic(request, env, ctx);
       if (pathname.startsWith('/p/') && request.method === 'GET') return await handlePassportShareLanding(request, env, ctx);
+      if (pathname.startsWith('/m/') && request.method === 'GET') return await handleLinkLanding(request, env, ctx);
       if (pathname.startsWith('/go/') && request.method === 'GET') return handleStoreGo(request, env, ctx);
       if (pathname === '/cache/stats') return await handleCacheStats(request, env);
       if (pathname === '/places/restaurants' && request.method === 'POST') return await handleRestaurantSearch(request, env);
@@ -28280,6 +28518,7 @@ export default {
     // Postcards that waited 90 days for an email that never joined go, photos included.
     try { await pcPendingPrune(benv); } catch (_e) { /* tomorrow's cron tries again */ }
     try { await tgPendingPrune(benv); } catch (_e) { /* tomorrow's cron tries again */ }
+    try { await linkPrune(benv); } catch (_e) { /* tomorrow's cron tries again */ }
     // Under-age freeze: delete content of accounts frozen past the window.
     try { await freezeSweep(benv); } catch (_e) { /* tomorrow's cron tries again */ }
     // Deleted accounts whose clean-up had a failed step: finish it.
