@@ -526,7 +526,7 @@ function MailboxBody() {
           onClose={() => setTraveler(null)} onChanged={() => { setTraveler(null); circle.retry(); load(); }} />
       ) : null}
       <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={load}
-        followerCount={counts.followYou ?? null} blocked={circle.blocked} />
+        blocked={circle.blocked} />
       {wireTo ? (
         <TelegramCompose open replyTo={wireTo.reply_to ? wireTo : null} onClose={() => setWireTo(null)} onSent={() => { setWireTo(null); load(); }}
           blocked={circle.blocked} meName={meName} meHandle={me.handle} />

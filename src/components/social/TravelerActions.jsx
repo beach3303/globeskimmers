@@ -225,7 +225,7 @@ export default function TravelerActions({ person, relation = null, cloth = undef
       ) : null}
       {h ? (
         <PostcardCompose open={writing} onClose={() => setWriting(false)} onSent={() => setWriting(false)} toHandle={h}
-          following={circle.acc} followerCount={circle.counts?.followYou ?? null} blocked={circle.blocked} />
+          blocked={circle.blocked} />
       ) : null}
     </div>
   );

@@ -1,10 +1,14 @@
 // SendToField — the "Send to" bar of the postcard and telegram composers (founder, 2026-10-24:
 // "for telegram and post card, remove pre placed names at send to:, just put a send to blank space
-// bar. i love @handle suggestions"). One blank bar, nothing pre-filled: type a name or @username
-// and suggestions drop under it (the worker's /social/find, the same search as Find people); a
-// tap adds that person as a chip inside the bar. × on a chip, or backspace on an empty bar,
-// takes one off. Enter adds a typed @username as it stands (the worker checks it at send) or, on
-// a postcard, a typed email address (the card waits for them).
+// bar. i love @handle suggestions … username or registered email or like their login email is
+// what I meant would be a good way to send to"). One blank bar, nothing pre-filled: type a
+// @username or the email someone logs in with, and suggestions drop under it (the worker's
+// /social/find, the same search as Find people: a whole email finds the member who signed up with
+// it, unless they turned "find me by email" off; a name works too). A tap adds that person as a
+// chip inside the bar. × on a chip, or backspace on an empty bar, takes one off. Enter adds a
+// typed @username as it stands (the worker checks it at send) or, on a postcard, a typed email
+// address nobody shows up for (the card goes to that address: a member gets it in their Mailbox,
+// anyone else one email to join — the sender is told the same either way).
 //
 //   <SendToField value onChange max dark allowEmail needHandle blocked label />
 //   value       [{ key, user_id?, handle?, name?, email? }] — who it's for, in order
@@ -87,7 +91,8 @@ export default function SendToField({ value = [], onChange, max = 10, dark = fal
   };
 
   const hint = full ? `${max} people at most`
-    : what.kind === "email" && !what.ready ? (allowEmail ? "Type the whole email address" : "Telegrams go by @username")
+    : !q.trim() && !list.length ? "Their @username, or the email they log in with"
+    : what.kind === "email" && !what.ready ? "Type the whole email address"
       : what.kind === "name" && q.trim() && !what.ready ? "Type at least 3 letters"
         : what.kind === "handle" && !what.ready ? "Type at least 2 letters of their @username"
           : null;
@@ -108,7 +113,7 @@ export default function SendToField({ value = [], onChange, max = 10, dark = fal
           </span>
         ))}
         <input ref={inputRef} id={inputId} type="text" value={q} onChange={(e) => setQ(e.target.value.slice(0, 80))} onKeyDown={onKey} disabled={full}
-          placeholder={list.length ? (full ? "" : "Add someone else") : allowEmail ? "Name, @username or email" : "Name or @username"}
+          placeholder={list.length ? (full ? "" : "Add someone else") : "@username or email"}
           autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false} enterKeyHint="done"
           aria-describedby={`${inputId}-hint`} className="placeholder:text-[color:var(--st-ph)]"
           style={/** @type {any} */ ({ flex: "1 1 120px", minWidth: 120, minHeight: 36, padding: "0 4px", border: 0, outline: "none", background: "transparent", fontFamily: "inherit", fontSize: fs(15), color: look.text, "--st-ph": look.hint })} />
@@ -144,13 +149,13 @@ export default function SendToField({ value = [], onChange, max = 10, dark = fal
               <button type="button" onClick={() => add({ email: typedEmail })}
                 style={{ display: "block", width: "100%", minHeight: 48, padding: "8px 14px", border: 0, background: "transparent", textAlign: "left", cursor: "pointer" }}>
                 <span style={{ display: "block", fontSize: fs(14), fontWeight: 600, color: look.name }}>Send to {typedEmail}</span>
-                <span style={{ display: "block", fontSize: fs(12), lineHeight: 1.4, color: look.sub }}>Not a member yet: they get one email, and the card opens when they join.</span>
+                <span style={{ display: "block", fontSize: fs(12), lineHeight: 1.4, color: look.sub }}>It goes to whoever logs in with that email. Not on GlobeSkimmers yet? They get one email, and the card opens when they join.</span>
               </button>
             </li>
           ) : null}
           {!offer.length && !canTypeHandle && !canTypeEmail ? (
             <li style={{ padding: "12px 14px", fontSize: fs(13), lineHeight: 1.45, color: look.sub }}>
-              {needHandle ? "No one by that name. Try their @username." : "No one by that name. Try their @username or email."}
+              {what.kind === "email" ? "No member found with that email. They may have turned off “find me by email.”" : "No one by that @username. Try the email they log in with."}
             </li>
           ) : null}
         </ul>

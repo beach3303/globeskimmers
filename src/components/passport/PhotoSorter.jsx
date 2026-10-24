@@ -98,12 +98,12 @@ export async function sortPhotos(files, stamps = []) {
   return rows.sort((a, b) => rank[a.kind] - rank[b.kind]);
 }
 
-// The postcard sheet, with the circle it addresses (read only when a postcard is chosen).
+// The postcard sheet; the circle is read only for who you blocked (never suggested in Send to).
 function SharedPostcard({ image, onClose }) {
   const circle = useCircle();
   return (
     <PostcardCompose open preset={{ image }} onClose={onClose} onSent={onClose}
-      following={circle.acc || []} followerCount={circle.counts?.followYou ?? null} blocked={circle.blocked} />
+      blocked={circle.blocked} />
   );
 }
 
@@ -238,7 +238,7 @@ export default function PhotoSorter({ files, stamps = [], shared = false, onClos
               <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 12, background: IVORY_2, display: "grid", placeItems: "center", flexShrink: 0 }}><Mail size={19} color={STAMP} /></span>
               <span>
                 <span style={{ display: "block", fontSize: fs(15), fontWeight: 700, color: INK }}>Send as a postcard</span>
-                <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>A photo and a note to your circle.</span>
+                <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>A photo and a note to the people you choose.</span>
               </span>
             </button>
             <button onClick={onClose} className="w-full rounded-xl py-2.5 font-semibold mt-3" style={{ background: "transparent", color: INK3, fontSize: fs(14) }}>Not now</button>
