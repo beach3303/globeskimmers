@@ -2921,9 +2921,11 @@ phones (iOS + Android; `capgo channel list` → production 1.0.2610241201). Main
   `site/app-version.json`, **null until approval**, so nothing shows yet. Captured both as an old iOS build.
 - **Send to bar (bec9862).** Founder: "remove pre placed names at send to:, just put a send to blank space bar. i
   love @handle suggestions". `SendToField` in the postcard and telegram composers: blank bar, suggestions from
-  /social/find, chips; postcards also take an email; "or Everyone who follows me" kept as one choice (no longer
-  the default — nothing is chosen until the sender chooses). Captured telegram (suggestions; two chips +
-  Separately/As a group) and postcard (two chips, As a group).
+  /social/find, chips. Then (founder: "remove option to send to everyone that follows" · "username or …
+  login email is what I meant") the followers broadcast is gone from the postcard composer ('Send a postcard'),
+  and the bar asks for "@username or email" — a whole login email finds the member unless they turned off
+  find-me-by-email; a postcard to an email nobody shows up for still sends, same toast either way. Captured
+  telegram (suggestions; two chips + Separately/As a group; found by email) and postcard (empty bar; As a group).
 - **Postcards to several people (10b46c8, server + migration `20261024120000_postcard_groups.sql`).** Up to 10,
   separately or as a group; group cards show "To you, @a, @b"; replies go to the sender only (founder: "post card
   reply should be only to sender for now"). Each recipient's card has its own photo copy (account deletion takes
