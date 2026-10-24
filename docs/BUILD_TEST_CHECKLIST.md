@@ -2963,3 +2963,19 @@ site-worker.js), Apply Supabase Migrations ✅ (postcard_groups, pending_telegra
 globeskimmers.io/p/test123 → 200 from the API worker (was the site 404), /m/ABCD2345 → 404 expired page, /go/ios → 302
 to the App Store, /img/og-send.jpg and /app-version.json (1.0.5 / 1.0.9) served, / and /get/ unchanged.
 **Activate:** `npm run ota` (both platforms). Photo ad for texting: scripts/shots/ad-send-portrait.html (1080×1350).
+
+## 2026-10-24 — Airport country stamp, state and country flags, bold airport code + date (PUSHED — main f756564; OTA pending)
+
+- **International airports add the country's stamp (712ff95).** Founder chose "add a country stamp". After the airport
+  stamp, an international airport (name says International in our airport-name languages, a hub list, or the last live
+  fix was abroad) offers "Welcome to the Philippines! 🇵🇭 … Just the airport / Stamp Philippines": a country border
+  stamp with meta.mode 'air' (worker accepts 'air'), drawn by LandStamp via='air' — flight path + plane, IMMIGRATION ·
+  MNL, ★ ARRIVAL ★ / ★ DEPARTURE ★. Captured at MNL (mocked stamp save) and on a passport page.
+- **Flags (712ff95).** State-line stamps carry the state flag (51 PNGs in src/assets/state-flags, Wikimedia Commons,
+  public domain); England/Scotland/Wales emoji; country stamps their country's emoji flag. Long names step down.
+- **Bold code + date (f756564).** Founder: "make the date and the country code clear bold and not our signature faded".
+  Every airport template's IATA code and date print on an unfiltered layer with a thin stroke; the rest keeps the wear.
+- Deploy Cloudflare Workers ✅. Gates: worker check, eslint + no-undef, build, boot-check ✅; stamps rendered in a
+  throwaway Vite harness (removed).
+- Ads made from the captures: Claude outputs/GlobeSkimmers-airport-stamp-ad-{social,text}.jpg (1080×1080, 1080×1350).
+- **Activate:** `npm run ota`.
