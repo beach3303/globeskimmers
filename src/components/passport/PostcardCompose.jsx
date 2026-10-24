@@ -1,6 +1,6 @@
 // PostcardCompose — write and send a postcard (founder concept: sent, not posted). One
 // sheet: the photo (picked file, resized client-side), the message, the place line, optional
-// dish lines for food cards, and the address — a blank "Send to" bar with @username suggestions
+// dish-or-topic line (founder, 2026-10-24: "dish or topic optional"), and the address — a blank "Send to" bar with @username suggestions
 // (SendToField; founder, 2026-10-24: "remove pre placed names at send to: … i love @handle
 // suggestions"), up to PC_MAX_TO people sent SEPARATELY or AS A GROUP ("allow post card to be
 // sent to group or individually to multiple people"). No card goes to all your followers at once
@@ -398,8 +398,8 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
             <input
               value={dish}
               onChange={(e) => setDish(e.target.value.slice(0, 60))}
-              placeholder="Dish (optional)"
-              aria-label="Dish"
+              placeholder="Dish or topic (optional)"
+              aria-label="Dish or topic"
               className="placeholder:text-[color:var(--gs-ph)]"
               style={css({ ...FIELD, flex: "1 1 calc(150px * var(--fs, 1))", width: "auto", minWidth: 0, "--gs-ph": NEUTRAL.ink3 })}
             />
