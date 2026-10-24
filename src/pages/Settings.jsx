@@ -613,8 +613,8 @@ export default function SettingsPage() {
     setTesting(false);
     if (r.sent > 0) showToast("Sent. Look for it on your lock screen.", "success");
     else if (r.error && r.error !== "failed" && r.error !== "not_allowed") showToast(r.error, "error");
-    else if (!r.phones) showToast("This phone couldn’t sign up for alerts yet. Close the app, open it again, and try once more.", "error");
-    else showToast("Your phone is signed up, but the alert didn’t go through. We’ve noted it and will look into it.", "error");
+    else if (!r.phones) showToast("This phone couldn’t sign up for notifications yet. Close the app, open it again, and try once more.", "error");
+    else showToast("Your phone is signed up, but the test notification didn’t go through. We’ve noted it and will look into it.", "error");
   };
   // The bulk mover and the circle switch keep their own little confirms.
   const [bulkPick, setBulkPick] = useState(null);
@@ -1236,14 +1236,14 @@ export default function SettingsPage() {
           </EdGroup>
 
           {/* Currency & language group */}
-          <EdGroup kicker={"Alerts & Notifications"} isTablet={isTablet}>
+          <EdGroup kicker={"Notifications"} isTablet={isTablet}>
             {/* Alerts outside the app (push, 2026-10-19). ON = you get that kind. Adults only;
                 8am–10pm in your home timezone; a few a week at most. */}
-            <EdRow isTablet={isTablet} step={fontStep} icon={Bell} iconBg={CAT.weather.ink} title="Alerts on this phone"
-              desc={pushPerm === "granted" ? "On. Between 8am and 10pm your time. An alert says who sent what, never their words."
+            <EdRow isTablet={isTablet} step={fontStep} icon={Bell} iconBg={CAT.weather.ink} title="Notifications on this phone"
+              desc={pushPerm === "granted" ? "On. Between 8am and 10pm your time. A notification says who sent what, never their words."
                 : pushPerm === "denied" ? "Off in your phone's settings — Settings → GlobeSkimmers → Notifications turns them on."
                 : pushPerm === "unavailable" || pushPerm === "unknown" ? (update ? `Update the app ${update.where} to turn them on.`
-                  : alertsNeedStore() ? "Alerts arrive with the next GlobeSkimmers update." : "Alerts come with the app on your phone.")
+                  : alertsNeedStore() ? "Notifications arrive with the next GlobeSkimmers update." : "Notifications come with the app on your phone.")
                 : "A knock when a postcard or a follow arrives. The Mailbox keeps the record either way."}
               control={{ node: (pushPerm === "prompt" || pushPerm === "prompt-with-rationale")
                 ? <button type="button" onClick={async () => setPushPerm(await askForAlerts())} className="h-10 px-4 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>Turn on</button>

@@ -13,7 +13,7 @@
 //                                 default" — the phone still needs one Allow; it's asked up front)
 //   pushPermission()              'granted' | 'denied' | 'prompt' | 'prompt-with-rationale' | 'unavailable'
 //   unregisterPush()              on sign-out: this phone stops getting this account's alerts
-//   testAlerts()                  Settings → Alerts & Notifications "Send a test": re-registers, then knocks once
+//   testAlerts()                  Settings → Notifications "Send a test": re-registers, then knocks once
 //                                 → { sent, phones, error }
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
@@ -53,7 +53,7 @@ export function attachPushListeners(onRoute) {
     if (route && /^\/[A-Za-z0-9?=&_-]*$/.test(route) && typeof onRoute === 'function') onRoute(route);
   });
   if (Capacitor.getPlatform() === 'android') {
-    PushNotifications.createChannel({ id: 'alerts', name: 'Alerts', description: 'Postcards, follows and your passport', importance: 4, visibility: 1, vibration: true }).catch(() => {});
+    PushNotifications.createChannel({ id: 'alerts', name: 'Notifications', description: 'Postcards, follows and your passport', importance: 4, visibility: 1, vibration: true }).catch(() => {});
   }
 }
 
