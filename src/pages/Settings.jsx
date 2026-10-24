@@ -1215,10 +1215,10 @@ export default function SettingsPage() {
               />
             )}
             {dials && (
-              <EdRow isTablet={isTablet} step={fontStep} icon={PenLine} iconBg={CAT.transit.ink} title="Who can write on my passport"
+              <EdRow isTablet={isTablet} step={fontStep} icon={PenLine} iconBg={CAT.transit.ink} title="Who can comment on my passport"
                 desc="Comments and guestbook signatures on your pages and photos."
                 control={{ below: true, node: (
-                  <EdChoices label="Who can write on my passport" value={dials.comments_audience}
+                  <EdChoices label="Who can comment on my passport" value={dials.comments_audience}
                     options={[["inner", "Inner circle"], ["audience", "Anyone who sees it"], ["off", "No one"]]}
                     onPick={(v) => saveDial("comments_audience", v, dials.comments_audience)} />
                 ) }}
