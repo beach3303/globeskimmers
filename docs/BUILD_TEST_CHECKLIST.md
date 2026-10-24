@@ -2934,3 +2934,26 @@ phones (iOS + Android; `capgo channel list` → production 1.0.2610241201). Main
 - **Activate:** push (worker + migration apply on their own), then `npm run ota`. When Apple approves 1.0.5 and
   Google 1.0.9: set `site/app-version.json` to `{ "ios": "1.0.5", "android": "1.0.9" }` and push — the update
   card appears on older phones.
+
+## 2026-10-24 — Invitations by email and by text; store builds approved (COMMITTED, not pushed)
+
+- **Store builds approved (~9:28 AM PT):** App Store iOS 1.0.5 Ready for Distribution (auto-release); Play 1.0.9
+  (12) Production published. `site/app-version.json` = 1.0.5 / 1.0.9 (83279fb), so the update card shows on older
+  phones once the push + OTA land.
+- **Invitation email (d3a6868, 4573a1c).** A postcard or telegram to an email nobody uses waits, and the address
+  gets one designed email: "Erika (@erikakrista) sent you a postcard", sealed (no photo, no words), "Download
+  GlobeSkimmers to read Erika's postcard", the stamps banner + three lines on the app. Telegrams take emails now
+  (migration `20261024130000_pending_telegrams.sql`). Waiting postcards/telegrams are erased with the sender's
+  account. Rendered both emails.
+- **Text or share it (3b0636b, 3508bbc, 3619f95).** Twilio declined (policy: no texts on a friend's say-so; PH
+  $0.24/text). Instead the composers' "Or text or share it" makes a link (migration
+  `20261024140000_message_links.sql`) and opens the phone's share sheet; globeskimmers.io/m/<code> shows the
+  invite page with Open in GlobeSkimmers (globeskimmers://message/claim) + store buttons + the code; the Mailbox's
+  "Have a code from a text? Open it" takes the link or code. Up to 10 people per link, own copies, 90 days.
+- **Found + fixed:** globeskimmers.io/p/<slug> (the stamp share card's link) returned the site 404. `site-worker.js`
+  now hands /p/, /m/, /go/ to the API worker via a service binding (wrangler dry-run OK).
+- Gates: worker `node --check`; eslint + no-undef on touched files; build; boot-check ✅. Captured the Mailbox code
+  panel, the telegram's share button; rendered the /m/ page.
+- **Activate:** push (worker, site, 3 migrations apply on their own), then `npm run ota`. After the push, check
+  https://globeskimmers.io/p/<a real slug> and /m/XXXXXXXX (expired page) answer from the API worker. First live
+  test: send a postcard with "Or text or share it" to yourself on a second account.
