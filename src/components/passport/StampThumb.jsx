@@ -137,7 +137,8 @@ export default function StampThumb({
       ? <LandStamp template="state" name={stamp.region || stamp.name} date={date} direction={direction} width={w} />
       : (
         <LandStamp template="country" name={clean(stamp.name).split(' · ')[0]}
-          countryCode={String(stamp.entity_id || '').split(':')[0]} date={date} direction={direction} width={w} />
+          countryCode={String(stamp.entity_id || '').split(':')[0]} date={date} direction={direction}
+          via={stamp.meta?.mode === 'air' ? 'air' : null} code={clean(stamp.name).split(' · ')[1] || null} width={w} />
       );
   } else if (kind === 'art') {
     body = (

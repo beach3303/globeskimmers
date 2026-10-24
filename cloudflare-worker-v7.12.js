@@ -14814,7 +14814,8 @@ async function handlePassportStamp(request, env, ctx) {
     // train / ship for the checkpoint stamp's glyph.
     const mayDirect = kind === 'airport' || kind === 'state' || (kind === 'country' && b.entity_type === 'border');
     const direction = mayDirect && ['arrival', 'departure'].includes(b.direction) ? b.direction : null;
-    const mode = direction && ['car', 'train', 'ship'].includes(b.mode) ? b.mode : null;
+    // 'air' (2026-10-24): the country stamp an international airport gives beside its airport stamp.
+    const mode = direction && ['car', 'train', 'ship', 'air'].includes(b.mode) ? b.mode : null;
     if (direction && entityId) entityId = `${entityId.split(':')[0]}:${visitedOn || new Date().toISOString().slice(0, 10)}:${direction === 'departure' ? 'dep' : 'arr'}`;
     // A Local favorite (founder, 2026-10-10): an approved suggested place
     // stamps in its own style, never the icon art, and always carries how many
@@ -14927,7 +14928,7 @@ async function handlePassportStamp(request, env, ctx) {
     const alertable = stamperSp !== undefined && !['teen', 'blocked', 'confirm'].includes(stamperSp?.social_tier);
     if (ctx && result.created && !row.hidden && alertable) {
       const where = [row.city, row.country].filter(Boolean).join(', ');
-      const what = `${row.name}${where ? ` · ${where}` : ''} — ${kind} stamp${result.verified === 'gps' ? ' ✓' : ''}${result.verified === 'reported' ? ' (reported: "I’m here, but the app is saying I’m not")' : ''}${direction ? ` (${direction === 'departure' ? 'exit' : 'entry'})` : ''}`;
+      const what = `${row.name}${where ? ` · ${where}` : ''} — ${kind} stamp${result.verified === 'gps' ? ' ✓' : ''}${result.verified === 'reported' ? ' (reported: "I’m here, but the app is saying I’m not")' : ''}${direction ? ` (${kind === 'airport' || mode === 'air' ? direction : direction === 'departure' ? 'exit' : 'entry'})` : ''}`;
       const mine = ADMIN_EMAILS_WORKER.includes(String(user.email || '').trim().toLowerCase());
       ctx.waitUntil((async () => {
         const n = mine ? null : await gbMemberNumber(env, user.id);

@@ -73,6 +73,8 @@ async function placeAt(lat, lng) {
   return { cc, region: region.trim() };
 }
 const regionName = (cc) => { try { return new Intl.DisplayNames(["en"], { type: "region" }).of(cc) || cc; } catch { return cc; } };
+// "the Philippines", "the United States", "the Bahamas": the names English says with "the".
+const withThe = (name) => (/^(United |Czech Republic|Dominican Republic|Central African Republic)|Islands$|^(Philippines|Netherlands|Bahamas|Maldives|Gambia|Comoros|Seychelles)$/.test(String(name || "")) ? `the ${name}` : name);
 const flagFor = (cc) => (/^[a-z]{2}$/i.test(cc || "")
   ? String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65))
   : "🌍");
@@ -171,7 +173,7 @@ export default function BorderCrossingPrompt() {
     <div onClick={settle} style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "#f3eee1", borderRadius: 22, maxWidth: 380, width: "100%", padding: 20, textAlign: "center", boxShadow: "0 24px 60px -20px rgba(0,0,0,.45)" }}>
         <p style={{ fontFamily: '"Instrument Serif",Georgia,serif', fontSize: 23, color: "#16110D", margin: "0 0 2px" }}>
-          {isRegion ? `You crossed into ${pending.region}!` : `Welcome to ${pending.country}! ${flagFor(pending.cc)}`}
+          {isRegion ? `You crossed into ${pending.region}!` : `Welcome to ${withThe(pending.country)}! ${flagFor(pending.cc)}`}
         </p>
         <p style={{ color: "#3A3128", fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>
           {isRegion && pending.info.nickname ? `${pending.info.nickname} · ` : ""}Stamp the crossing? Entry or exit goes on the stamp.

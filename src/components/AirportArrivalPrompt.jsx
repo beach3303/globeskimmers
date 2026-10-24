@@ -6,6 +6,7 @@ import { showToast } from "@/components/Toast";
 import { airportAt, markAirportVisit } from "@/lib/airports";
 import { localISODate } from "@/lib/localDate";
 import AirportStamp from "@/components/passport/AirportStamp";
+import LandStamp from "@/components/passport/LandStamp";
 
 // ============================================================================
 // ✈️ Airport stamp — when a signed-in user opens the app while physically
@@ -26,6 +27,19 @@ const getSet = () => { try { return new Set(JSON.parse(localStorage.getItem(KEY)
 const saveSet = (s) => { try { localStorage.setItem(KEY, JSON.stringify([...s])); } catch { /* ignore */ } };
 // User can turn arrival suggestions off in Settings (default ON).
 const suggestOn = () => { try { return localStorage.getItem("pp_suggest_arrivals") !== "0"; } catch { return true; } };
+const flagFor = (cc) => (/^[a-z]{2}$/i.test(cc || "") ? String.fromCodePoint(...[...String(cc).toUpperCase()].map((c) => 0x1f1a5 + c.charCodeAt(0))) : "");
+
+// An international airport (founder, 2026-10-24: "for the international airports, also add entry or
+// exit, would love departure and arrival instead") also offers the COUNTRY stamp, like immigration's:
+// after the airport stamp, one more choice — the country's arrival or departure, or just the airport.
+// International = the name says so (in the languages our airport names come in), or a major hub
+// whose name doesn't, or the phone's last live fix was in another country (it just flew in).
+const INTL_NAME = /international|intercontinental|internacional|internationale|internazionale|internasional|国際|國際|国际|국제|intl/i;
+const INTL_HUBS = new Set(["LHR", "LGW", "STN", "MAN", "EDI", "CDG", "ORY", "NCE", "AMS", "FRA", "MUC", "ZRH", "GVA", "VIE", "BRU", "CPH", "ARN", "OSL", "HEL", "DUB", "MAD", "BCN", "LIS", "OPO", "FCO", "MXP", "VCE", "ATH", "IST", "SAW", "PRG", "WAW", "BUD", "SIN", "BKK", "DMK", "HKT", "SYD", "MEL", "BNE", "PER", "TLV", "CAI"]);
+// "the Philippines", "the United States", "the Bahamas": the names English says with "the".
+const withThe = (name) => (/^(United |Czech Republic|Dominican Republic|Central African Republic)|Islands$|^(Philippines|Netherlands|Bahamas|Maldives|Gambia|Comoros|Seychelles)$/.test(String(name || "")) ? `the ${name}` : name);
+const lastLiveCountry = () => { try { return JSON.parse(localStorage.getItem("pp_live_region_v2") || "null")?.cc || null; } catch { return null; } };
+const isIntl = (ap) => INTL_NAME.test(String(ap.name || "")) || INTL_HUBS.has(String(ap.iata || "").toUpperCase()) || (!!lastLiveCountry() && !!ap.cc && lastLiveCountry() !== ap.cc);
 
 export default function AirportArrivalPrompt() {
   const { currentGpsLocation } = useLocation();
@@ -51,7 +65,7 @@ export default function AirportArrivalPrompt() {
       if (cancelled || !ap || !ap.iata) return;
       markAirportVisit();   // a flight, for the border-crossing prompt
       if (getSet().has(dayKey(ap.iata))) return; // already asked here today
-      setPending({ iata: ap.iata, city: ap.city || ap.name, countryCode: ap.cc, lat: ap.lat, lng: ap.lng });
+      setPending({ iata: ap.iata, city: ap.city || ap.name, countryCode: ap.cc, lat: ap.lat, lng: ap.lng, intl: isIntl(ap) });
     })();
     return () => { cancelled = true; };
   }, [currentGpsLocation, isAuthenticated]);
@@ -73,6 +87,27 @@ export default function AirportArrivalPrompt() {
     showToast("Saved privately to your stamp 🔒", "success");
     setNoteFor(null); setNote("");
   };
+  // The country stamp, offered after an international airport's stamp: { direction, iata, city, cc, country, lat, lng, noteId }.
+  const [countryFor, setCountryFor] = useState(null);
+  const [countryBusy, setCountryBusy] = useState(false);
+  const stampCountry = async (yes) => {
+    const c = countryFor;
+    if (!c || countryBusy) return;
+    if (yes) {
+      setCountryBusy(true);
+      const { data, error } = await addStamp({
+        kind: "country", tier: "page", entity_type: "border", entity_id: c.cc,
+        name: `${c.country} · ${c.iata}`, city: c.city, country: c.country, cc: c.cc,
+        lat: c.lat, lng: c.lng, visited_on: localISODate(), verified: "gps",
+        local_hour: new Date().getHours(), direction: c.direction, mode: "air",
+      });
+      setCountryBusy(false);
+      if (error) showToast(error, "error");
+      else showToast(`${flagFor(c.cc)} ${c.country} ${c.direction} stamped 🛂${data?.verified === "gps" ? " ✓" : ""}`, "success");
+    }
+    setCountryFor(null);
+    if (c.noteId) setNoteFor({ id: c.noteId, city: c.city });
+  };
   const add = async (direction) => {
     if (!pending || busy) return;
     setBusy(direction);
@@ -89,9 +124,35 @@ export default function AirportArrivalPrompt() {
     if (error) { showToast(error, "error"); return; }
     // Reflect the server's verdict: show the ✓ only if the GPS claim was corroborated.
     showToast(`✈️ ${city} (${pending.iata}) ${direction} stamped 🛂${data?.verified === "gps" ? " ✓" : ""}`, "success");
+    // An international airport: the country's stamp next, then the trip note.
+    if (pending.intl && pending.countryCode) {
+      setCountryFor({ direction, iata: pending.iata, city, cc: pending.countryCode, country: regionName(pending.countryCode), lat: pending.lat, lng: pending.lng, noteId: data?.id || null });
+      return;
+    }
     if (data?.id) setNoteFor({ id: data.id, city });
   };
 
+  if (countryFor) {
+    const c = countryFor;
+    const arriving = c.direction !== "departure";
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ background: "#f3eee1", borderRadius: 22, maxWidth: 380, width: "100%", padding: 22, textAlign: "center", boxShadow: "0 24px 60px -20px rgba(0,0,0,.45)" }}>
+          <p style={{ fontFamily: '"Instrument Serif",Georgia,serif', fontSize: 24, color: "#16110D", margin: "0 0 2px" }}>{arriving ? `Welcome to ${withThe(c.country)}!` : `Leaving ${withThe(c.country)}?`} {flagFor(c.cc)}</p>
+          <p style={{ color: "#3A3128", fontSize: 14, lineHeight: 1.5, margin: 0 }}>
+            International flight? Add {withThe(c.country).startsWith("the ") ? "" : "the "}{withThe(c.country)} {arriving ? "arrival" : "departure"} stamp too, like the one at immigration.
+          </p>
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
+            <LandStamp template="country" via="air" name={c.country} countryCode={c.cc} code={c.iata} date={localISODate()} direction={c.direction} width={210} />
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            <button onClick={() => stampCountry(false)} disabled={countryBusy} style={{ flex: 1, borderRadius: 12, padding: "12px", fontWeight: 600, background: "#fff", color: "#3A3128", border: "1px solid rgba(22,17,13,.12)", fontSize: 14 }}>Just the airport</button>
+            <button onClick={() => stampCountry(true)} disabled={countryBusy} style={{ flex: 1, borderRadius: 12, padding: "12px", fontWeight: 700, background: "#B0472F", color: "#fff", border: "none", fontSize: 14 }}>{countryBusy ? "Stamping…" : `Stamp ${c.country}`}</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (noteFor) {
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}>
