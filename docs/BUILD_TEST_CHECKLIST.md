@@ -2908,3 +2908,6 @@ Cloudflare Workers ✅ (admin-alert roundup, honest admin counts are live) and D
 - Next after approval: `npm run ota` for the telegram tray (436ee80) and anything since; bump the repo's
   CURRENT_PROJECT_VERSION to 16 (or 17) before the next archive.
 
+
+**OTA 1.0.2610241201 (2026-10-24 ~5:01 AM PT, run by the founder):** the telegram trays and the Seal desk move are on
+phones (iOS + Android; `capgo channel list` → production 1.0.2610241201). Main 400864c matches what phones run.
