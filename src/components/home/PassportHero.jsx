@@ -42,8 +42,8 @@ function Tile({ children, night = false }) {
   );
 }
 
-// On the gold every Home tab shares (Zone's HOME_TAB), the passport's name is set in the serif,
-// italic and larger, with a light emboss: the one tab that reads as a title, not a label.
+// On the airmail blue every Home tab shares (Zone's HOME_TAB), the passport's name is set in the
+// serif, italic and larger, with a soft press: the one tab that reads as a title, not a label.
 const TAB_POP = {
   fontFamily: "'Instrument Serif', Georgia, serif",
   fontStyle: "italic",
@@ -53,7 +53,7 @@ const TAB_POP = {
   textTransform: "none",
   lineHeight: 1,
   padding: "6px 16px 6px 15px",
-  textShadow: "0 1px 0 rgba(255,244,214,.65)",
+  textShadow: "0 1px 0 rgba(12,24,52,.4)",
 };
 
 export default function PassportHero({ total, newest = null, nearest = null, unit = "mi", error = null, onOpen }) {

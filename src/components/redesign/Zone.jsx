@@ -37,7 +37,7 @@
 //        Boxes: px-4 and a max-w-md column (720px from md), 16px above each box, the tab as
 //          the h2, then the folder at size 'home' with ZONE.padBox. A zone whose box padding
 //          has no right side (services) gets a 16px fade in its fill on the right edge.
-//          Every tab is gold with navy caps (HOME_TAB, 2026-10-17). boxPadding replaces
+//          Every tab is airmail blue with cream caps (HOME_TAB, 2026-10-24; gold before). boxPadding replaces
 //          ZONE.padBox and tabStyle restyles one box's tab (the passport: shorter, its name in
 //          the serif).
 //        Bands: a full-bleed fill with ZONE.padBand around the same column, opened by a
@@ -389,14 +389,16 @@ function BandOrnament({ zone }) {
  */
 // Every Home tab in one gold with navy caps (founder, 2026-10-17: "for consistency let's make all
 // tab with same background color as my virtual passport"). A zone's tabStyle still goes on top.
+// Airmail blue with cream caps (founder, 2026-10-24: "A. Airmail blue"; gold with navy caps
+// 2026-10-17 → 10-24). The gold and the other options are kept in docs/design/2026-10-24-home-tabs-city-boards.
 export const HOME_TAB = {
-  background: 'linear-gradient(180deg, #F7D37C, #E3AE45)',
-  color: NEUTRAL.navy,
+  background: `linear-gradient(180deg, #3D62AD, ${NEUTRAL.airmailBlue})`,
+  color: '#FBF6EC',
   fontWeight: 700,
-  borderTop: '1px solid rgba(178,128,38,.55)',
-  borderLeft: '1px solid rgba(178,128,38,.55)',
-  borderRight: '1px solid rgba(178,128,38,.55)',
-  boxShadow: '0 2px 6px -2px rgba(227,174,69,.7)',
+  borderTop: '1px solid #22396D',
+  borderLeft: '1px solid #22396D',
+  borderRight: '1px solid #22396D',
+  boxShadow: 'inset 0 1px 0 rgba(255,255,255,.22), 0 2px 6px -2px rgba(43,76,140,.55)',
 };
 
 export function HomeZone({
