@@ -1,6 +1,6 @@
 # globeskimmers-site — the public website (globeskimmers.io), served as static
-# assets from a Worker. No script, no bindings: everything under site/ is
-# uploaded as-is. Deployed by .github/workflows/deploy-site.yml on every push to
+# assets from a Worker. Everything under site/ is uploaded as-is; a small script (site-worker.js)
+# passes the API worker's link paths through. Deployed by .github/workflows/deploy-site.yml on every push to
 # main that touches site/** or this file.
 #
 # Custom domains (globeskimmers.io, www.globeskimmers.io) are attached in the
@@ -17,7 +17,16 @@ compatibility_date = "2025-06-01"
 workers_dev = false
 preview_urls = false
 
+# site-worker.js (2026-10-24) runs only for paths that aren't files under site/: it hands /p/, /m/
+# and /go/ to the API worker (the service binding below) and gives everything else to the assets.
+main = "site-worker.js"
+
 [assets]
 directory = "./site"
+binding = "ASSETS"
 html_handling = "auto-trailing-slash"
 not_found_handling = "404-page"
+
+[[services]]
+binding = "API"
+service = "globeskimmers-api"

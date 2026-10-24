@@ -9,6 +9,7 @@ on:
       - main
     paths:
       - 'site/**'
+      - 'site-worker.js'
       - 'wrangler-site.toml'
       - '.github/workflows/deploy-site.yml'
   workflow_dispatch:
