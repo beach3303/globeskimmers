@@ -18658,7 +18658,8 @@ async function pcEmailHash(env, email) {
 // include value prop … sending virtual postcards and virtual telegram … the download link and then
 // call to action that says download in order to view … first name plus handle's message"). It
 // names the sender (first name and @username), says a postcard or telegram is waiting, and sells
-// the app in three lines under the banner. Still no photo and no words (someone else may read the
+// the app: the postcards-and-telegrams banner (site/img/og-send.jpg, 2026-10-24), three lines, the
+// stamps banner. Still no photo and no words (someone else may read the
 // inbox; the card opens in the app), and no copy kept. kind: 'postcard' | 'telegram'.
 function gbWaitingInvite({ kind = 'postcard', first, handle, where, link }) {
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -18715,7 +18716,7 @@ You’re getting this one email because ${first} typed your address. We keep onl
 </td></tr>
 <tr><td style="padding:22px 26px 0"><div style="border-top:1px solid #E6DDCF;font-size:0;line-height:0">&nbsp;</div></td></tr>
 <tr><td style="padding:20px 26px 0">
-<a href="${esc(link)}"><img src="https://globeskimmers.io/img/og-get.jpg" width="468" alt="Turn your trip photos into passport stamps — free on iPhone and Android" style="display:block;width:100%;max-width:468px;height:auto;border:0;border-radius:10px"></a>
+<a href="${esc(link)}"><img src="https://globeskimmers.io/img/og-send.jpg" width="468" alt="Send virtual postcards and four-word telegrams to friends and family — free on iPhone and Android" style="display:block;width:100%;max-width:468px;height:auto;border:0;border-radius:10px"></a>
 </td></tr>
 <tr><td style="padding:18px 26px 0">
 <div style="font-family:${SERIF};font-size:22px;line-height:1.2;color:#16110D">What is GlobeSkimmers?</div>
@@ -18724,6 +18725,9 @@ ${point('Your trip photos become <b>passport stamps</b> of the places you really
 ${point('Send <b>virtual postcards</b> and four-word <b>telegrams</b> to friends and family.')}
 ${point('Find food, coffee and things to do nearby, wherever you land.')}
 </table>
+</td></tr>
+<tr><td style="padding:16px 26px 0">
+<a href="${esc(link)}"><img src="https://globeskimmers.io/img/og-get.jpg" width="468" alt="Turn your trip photos into passport stamps — free on iPhone and Android" style="display:block;width:100%;max-width:468px;height:auto;border:0;border-radius:10px"></a>
 </td></tr>
 <tr><td style="padding:18px 26px 24px" align="center">
 <a href="${esc(link)}" style="display:inline-block;border:1px solid #0E7C73;color:#0E7C73;text-decoration:none;font-family:${SANS};font-size:15px;font-weight:600;padding:12px 22px;border-radius:12px">Get GlobeSkimmers — free</a>
@@ -18950,7 +18954,7 @@ async function handleLinkLanding(request, env, ctx) {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(ogTitle)}</title><meta name="robots" content="noindex">
 <meta property="og:title" content="${esc(ogTitle)}"><meta property="og:description" content="${esc(ogDesc)}">
-<meta property="og:image" content="https://globeskimmers.io/img/og-get.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta property="og:image" content="https://globeskimmers.io/img/og-send.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta property="og:type" content="website"><meta name="twitter:card" content="summary_large_image"><link rel="icon" href="/img/icon-64.png">
 <style>
 body{margin:0;background:#FFFCF7;color:#16110D;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif}
@@ -18969,8 +18973,9 @@ h1{font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:32px;li
 .about h2{font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:22px;margin:16px 0 6px}.about li{font-size:15px;line-height:1.45;margin:6px 0}
 .foot{margin-top:22px;font-family:Georgia,serif;font-style:italic;font-size:14px;color:#736657;text-align:center}
 </style></head><body><main>${body}
-<div class="about"><img src="/img/og-get.jpg" alt="Turn your trip photos into passport stamps — free on iPhone and Android">
-<h2>What is GlobeSkimmers?</h2><ul><li>Your trip photos become <b>passport stamps</b> of the places you really go.</li><li>Send <b>virtual postcards</b> and four-word <b>telegrams</b> to friends and family.</li><li>Find food, coffee and things to do nearby, wherever you land.</li></ul></div>
+<div class="about"><img src="/img/og-send.jpg" alt="Send virtual postcards and four-word telegrams to friends and family — free on iPhone and Android">
+<h2>What is GlobeSkimmers?</h2><ul><li>Your trip photos become <b>passport stamps</b> of the places you really go.</li><li>Send <b>virtual postcards</b> and four-word <b>telegrams</b> to friends and family.</li><li>Find food, coffee and things to do nearby, wherever you land.</li></ul>
+<img src="/img/og-get.jpg" alt="Turn your trip photos into passport stamps — free on iPhone and Android" style="margin-top:14px"></div>
 <div class="foot">Collect the world, one stamp at a time.</div>
 </main></body></html>`;
   return new Response(html, { status: who ? 200 : 404, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex' } });

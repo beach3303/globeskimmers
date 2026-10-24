@@ -1,0 +1,70 @@
+<!doctype html><html><head><meta charset="utf-8">
+<!-- site/img/og-send.jpg (2026-10-24, founder: "create a photo ad like that banner … send virtual postcards and 4 letter telegrams to friends and family"). Render: node scripts/shots/cdp-shot.mjs --url file://$PWD/scripts/shots/og-send.html --out og-send.png --width 1200 --height 630 --dsf 1, then sips -s format jpeg -s formatOptions 84. -->
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500&family=Inter+Tight:wght@600&family=Special+Elite&family=Caveat:wght@600&display=block" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1200px;height:630px;overflow:hidden}
+body{position:relative;background:radial-gradient(120% 90% at 50% 45%,#FBF6EC 0%,#F3EADB 70%,#EDE2CF 100%);font-family:'Inter Tight',sans-serif}
+.stripe{position:absolute;left:0;right:0;height:14px;background:repeating-linear-gradient(-45deg,#B8402F 0 22px,#FBF6EC 22px 30px,#2C4A8C 30px 52px,#FBF6EC 52px 60px)}
+.stripe.top{top:0}.stripe.bot{bottom:0}
+.center{position:absolute;left:300px;right:300px;top:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:17px;letter-spacing:.32em;color:#B8402F;margin-bottom:18px}
+h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:60px;line-height:1.02;color:#16110D;letter-spacing:-.01em}
+h1 em{color:#2C4A8C}
+.sub{margin-top:18px;font-size:22px;color:#2A2219}
+.free{margin-top:8px;font-size:17px;color:#6B5E50}
+/* the postcard (its back: words, a stamp, a postmark) */
+.pc{position:absolute;left:-26px;top:104px;width:330px;height:226px;background:#FFFDF8;border-radius:6px;box-shadow:0 18px 30px -14px rgba(22,17,13,.45),0 2px 4px rgba(22,17,13,.12);transform:rotate(-8deg);padding:20px 18px 16px 22px}
+.pc .div{position:absolute;left:182px;top:22px;bottom:22px;width:1px;background:#D9CFBF}
+.pc .msg{position:absolute;left:30px;top:44px;width:150px;font-family:'Caveat',cursive;font-size:25px;line-height:1.1;color:#2C4A8C}
+.pc .stamp{position:absolute;right:18px;top:16px;width:74px;height:74px;padding:4px;background:#fff;box-shadow:0 0 0 1px #E2D8C8;border-radius:2px;transform:rotate(4deg)}
+.pc .stamp img{width:100%;height:100%;display:block}
+.pc .ring{position:absolute;right:66px;top:58px;width:64px;height:64px;border:2px solid rgba(184,64,47,.55);border-radius:50%;font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.12em;color:rgba(184,64,47,.75);display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.3;transform:rotate(-14deg)}
+.pc .addr{position:absolute;left:198px;right:18px;height:1px;background:#CFC4B2}
+.pc .to{position:absolute;left:200px;top:134px;font-family:'Caveat',cursive;font-size:23px;color:#16110D}
+.pc .h{position:absolute;left:200px;top:166px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#6B5E50}
+.pc .tag{position:absolute;left:22px;bottom:14px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.18em;color:#9A8C7A}
+/* a second postcard peeking under it */
+.pc2{position:absolute;left:-40px;top:300px;width:300px;height:200px;border-radius:6px;transform:rotate(6deg);box-shadow:0 14px 24px -14px rgba(22,17,13,.4);background:url('../../site/img/stamps/chocolate-hills.jpg') center/cover;border:10px solid #FFFDF8}
+/* the telegram */
+.tg{position:absolute;right:-26px;top:158px;width:350px;height:300px;background:#F2E4BC;transform:rotate(7deg);box-shadow:0 18px 30px -14px rgba(22,17,13,.45),0 2px 4px rgba(22,17,13,.12);padding:26px 24px 18px 26px;
+  -webkit-mask:radial-gradient(circle 7px at 50% 0,transparent 98%,#000) top/20px 100% repeat-x}
+.tg .wire{position:absolute;left:22px;right:22px;top:20px;height:1px;background:#8E7E62}
+.tg .seal{position:absolute;left:24px;top:40px;width:48px;height:48px;border:2px solid #2A2219;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;color:#B8402F}
+.tg .brand{position:absolute;left:84px;top:42px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.3em;color:#6B5E50}
+.tg .word{position:absolute;left:82px;top:56px;font-family:'Inter Tight',sans-serif;font-weight:600;font-size:34px;letter-spacing:.02em;color:#16110D}
+.tg .rule{position:absolute;left:24px;right:24px;top:106px;height:3px;background:#2A2219}
+.tg .lbl{position:absolute;left:26px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;color:#6B5E50}
+.tg .tape{position:absolute;left:24px;top:152px;padding:8px 12px;background:#FBF3DE;box-shadow:0 1px 2px rgba(22,17,13,.18);font-family:'Special Elite',monospace;font-size:27px;letter-spacing:.04em;color:#16110D;transform:rotate(-1.5deg)}
+.tg .from{position:absolute;left:26px;top:226px;font-family:'Special Elite',monospace;font-size:17px;color:#16110D}
+.tg .rcv{position:absolute;right:22px;top:206px;padding:4px 8px;border:2px solid #B8402F;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#B8402F;transform:rotate(-8deg);line-height:1.25;text-align:center}
+</style></head><body>
+<div class="stripe top"></div><div class="stripe bot"></div>
+<div class="pc2"></div>
+<div class="pc">
+  <div class="div"></div>
+  <div class="msg">Wish you were here! El Nido is magic.</div>
+  <div class="stamp"><img src="../../site/img/stamps/el-nido.jpg"></div>
+  <div class="ring">PALAWAN<br>OCT 24<br>2026</div>
+  <div class="addr" style="top:156px"></div><div class="addr" style="top:188px"></div>
+  <div class="to">Lola</div><div class="h">@lolacruz</div>
+  <div class="tag">GLOBESKIMMERS MAIL</div>
+</div>
+<div class="tg">
+  <div class="wire"></div>
+  <div class="seal"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="#B8402F" stroke="#7E2A1F" stroke-width="1" stroke-linejoin="round"/></svg></div>
+  <div class="brand">GLOBESKIMMERS</div>
+  <div class="word">TELEGRAM</div>
+  <div class="rule"></div>
+  <div class="lbl" style="top:126px">TO &nbsp;MOM &middot; @ROSA</div>
+  <div class="tape">Landed. Miss you!</div>
+  <div class="from">FROM &nbsp;@MIGUEL</div>
+  <div class="rcv">RECEIVED<br>OCT 24</div>
+</div>
+<div class="center">
+  <div class="eyebrow">GLOBESKIMMERS</div>
+  <h1>Send virtual postcards<br>&amp; four-word <em>telegrams</em></h1>
+  <div class="sub">to friends and family</div>
+  <div class="free">Free on iPhone and Android</div>
+</div>
+</body></html>
