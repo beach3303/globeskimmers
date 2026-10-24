@@ -2979,3 +2979,7 @@ to the App Store, /img/og-send.jpg and /app-version.json (1.0.5 / 1.0.9) served,
   throwaway Vite harness (removed).
 - Ads made from the captures: Claude outputs/GlobeSkimmers-airport-stamp-ad-{social,text}.jpg (1080×1080, 1080×1350).
 - **Activate:** `npm run ota`.
+
+**OTA 1.0.2610241945 (2026-10-24 ~12:45 PM PT, run by the founder):** on phones (iOS + Android) — airport country stamp,
+state/country flags, bold airport code + date, "Notifications" wording, "Who can comment on my passport", airmail blue
+Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
