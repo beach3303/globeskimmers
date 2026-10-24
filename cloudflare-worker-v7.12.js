@@ -1646,6 +1646,13 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
   if (pcGot && await r2('postcards_received_r2', pcGot.map((r) => r.photo_key))) {
     await del('postcards_received', `postcards?to_user_id=eq.${userId}`);
   }
+  // Postcards and telegrams they sent that still wait for an email address (2026-10-18 /
+  // 2026-10-24). An undelivered card's photo is its own; a delivered one's went with postcards_sent.
+  const pcWait = await rows('pending_postcards', `pending_postcards?sender_id=eq.${userId}&delivered_at=is.null&select=photo_key`);
+  if (pcWait && await r2('pending_postcards_r2', pcWait.map((r) => r.photo_key))) {
+    await del('pending_postcards', `pending_postcards?sender_id=eq.${userId}`);
+  }
+  await del('pending_telegrams', `pending_telegrams?sender_id=eq.${userId}`);
   // Telegrams they sent or received (2026-10-19); no media.
   await del('telegrams', `telegrams?or=(sender_id.eq.${userId},to_user_id.eq.${userId})`);
   await del('user_follows', `user_follows?or=(follower_id.eq.${userId},followee_id.eq.${userId})`);
@@ -18640,26 +18647,100 @@ async function pcEmailHash(env, email) {
   const mac = new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(String(email).trim().toLowerCase())));
   return [...mac].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
-// The one email. No photo, no message (someone else may read the inbox), no copy kept.
-async function pcSendWaitingEmail(env, senderId, email, where) {
-  if (!env.RESEND_API_KEY) return false;
-  const first = await ppHolder(env, senderId);
-  const subject = `${first} sent you a postcard on GlobeSkimmers`;
+// The one email (redesigned 2026-10-24, founder: "put an ad … about what the app is all about and
+// include value prop … sending virtual postcards and virtual telegram … the download link and then
+// call to action that says download in order to view … first name plus handle's message"). It
+// names the sender (first name and @username), says a postcard or telegram is waiting, and sells
+// the app in three lines under the banner. Still no photo and no words (someone else may read the
+// inbox; the card opens in the app), and no copy kept. kind: 'postcard' | 'telegram'.
+function gbWaitingInvite({ kind = 'postcard', first, handle, where, link }) {
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const wire = kind === 'telegram';
+  const thing = wire ? 'telegram' : 'postcard';
+  const who = handle ? `${first} (@${handle})` : first;
+  const subject = `${who} sent you a ${thing} on GlobeSkimmers`;
+  const cta = `Download GlobeSkimmers to read ${first}’s ${thing}`;
+  const sealed = wire ? 'Four words by wire, sealed until you open it.' : `A photo and a note${where ? ` from ${where}` : ''}, sealed until you open it.`;
   const text = `Hello,
 
-${first} sent you a postcard${where ? ` from ${where}` : ''} on GlobeSkimmers, the virtual passport app. It’s waiting for you.
+${who} sent you a ${thing}${!wire && where ? ` from ${where}` : ''} on GlobeSkimmers. It’s waiting for you, sealed.
 
-Get the app and sign up with this email address to open it:
-https://globeskimmers.io/get?src=postcard
+${cta}:
+${link}
+
+Sign up with this email address and it opens by itself. Free on iPhone and Android.
+
+What is GlobeSkimmers?
+• Your trip photos become passport stamps of the places you really go.
+• Send virtual postcards and four-word telegrams to friends and family.
+• Find food, coffee and things to do nearby, wherever you land.
 
 — GlobeSkimmers
+Collect the world, one stamp at a time.
 
-You’re getting this one email because ${first} typed your address. We keep only a scrambled form of it, so the card can find you, and we won’t write again unless someone sends you another postcard.`;
+You’re getting this one email because ${first} typed your address. We keep only a scrambled form of it, so the ${thing} can find you, and we won’t write again unless someone sends you another.`;
+  const SERIF = "Georgia,'Times New Roman',serif";
+  const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
+  const MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace";
+  const point = (t) => `<tr><td style="padding:5px 0;vertical-align:top;width:22px;font-family:${SANS};font-size:15px;color:#0E7C73">&#10003;</td><td style="padding:5px 0;font-family:${SANS};font-size:15px;line-height:1.45;color:#16110D">${t}</td></tr>`;
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(subject)}</title></head>
+<body style="margin:0;padding:0;background:#F4EFE6">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(`${first}’s ${thing} is waiting. Free on iPhone and Android.`)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4EFE6"><tr><td align="center" style="padding:24px 12px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#FFFCF7;border-radius:16px;overflow:hidden;border:1px solid #E6DDCF">
+<tr><td style="height:6px;line-height:6px;font-size:0;background:#2C4A8C;border-bottom:3px solid #C0392B">&nbsp;</td></tr>
+<tr><td style="padding:26px 26px 8px">
+<div style="font-family:${MONO};font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#C0392B">GlobeSkimmers ${wire ? 'telegraph' : 'mail'}</div>
+<h1 style="margin:8px 0 0;font-family:${SERIF};font-weight:400;font-size:30px;line-height:1.15;color:#16110D">${esc(first)} sent you a <em style="color:#2C4A8C">${thing}</em></h1>
+</td></tr>
+<tr><td style="padding:14px 26px 4px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${wire ? '#F2E4BC' : '#FFFFFF'};border:1px ${wire ? 'solid #2A2219' : 'dashed #C9D6EA'};border-radius:12px"><tr><td style="padding:16px 18px">
+<div style="font-family:${MONO};font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#736657">From</div>
+<div style="margin-top:2px;font-family:${SANS};font-size:18px;font-weight:700;color:#16110D">${esc(first)}${handle ? ` <span style="font-family:${MONO};font-size:15px;font-weight:400;color:#2C4A8C">@${esc(handle)}</span>` : ''}</div>
+<div style="margin-top:10px;font-family:${MONO};font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#736657">To</div>
+<div style="margin-top:2px;font-family:${SANS};font-size:16px;color:#16110D">You</div>
+<div style="margin-top:12px;padding-top:10px;border-top:1px solid ${wire ? 'rgba(42,34,25,.25)' : '#E1E8F2'};font-family:${SANS};font-size:14px;line-height:1.45;color:#4A3F35">${wire ? '&#9889;' : '&#9993;&#65039;'} ${esc(sealed)}</div>
+</td></tr></table>
+</td></tr>
+<tr><td style="padding:18px 26px 4px" align="center">
+<a href="${esc(link)}" style="display:block;background:#0E7C73;color:#FFFFFF;text-decoration:none;font-family:${SANS};font-size:17px;font-weight:700;line-height:1.3;padding:16px 18px;border-radius:12px">${esc(cta)}</a>
+<div style="margin-top:10px;font-family:${SANS};font-size:13px;line-height:1.5;color:#736657">Free on iPhone and Android. Sign up with this email address and it opens by itself.</div>
+</td></tr>
+<tr><td style="padding:22px 26px 0"><div style="border-top:1px solid #E6DDCF;font-size:0;line-height:0">&nbsp;</div></td></tr>
+<tr><td style="padding:20px 26px 0">
+<a href="${esc(link)}"><img src="https://globeskimmers.io/img/og-get.jpg" width="468" alt="Turn your trip photos into passport stamps — free on iPhone and Android" style="display:block;width:100%;max-width:468px;height:auto;border:0;border-radius:10px"></a>
+</td></tr>
+<tr><td style="padding:18px 26px 0">
+<div style="font-family:${SERIF};font-size:22px;line-height:1.2;color:#16110D">What is GlobeSkimmers?</div>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:8px">
+${point('Your trip photos become <b>passport stamps</b> of the places you really go.')}
+${point('Send <b>virtual postcards</b> and four-word <b>telegrams</b> to friends and family.')}
+${point('Find food, coffee and things to do nearby, wherever you land.')}
+</table>
+</td></tr>
+<tr><td style="padding:18px 26px 24px" align="center">
+<a href="${esc(link)}" style="display:inline-block;border:1px solid #0E7C73;color:#0E7C73;text-decoration:none;font-family:${SANS};font-size:15px;font-weight:600;padding:12px 22px;border-radius:12px">Get GlobeSkimmers — free</a>
+<div style="margin-top:18px;font-family:${SERIF};font-style:italic;font-size:15px;color:#4A3F35">— GlobeSkimmers · Collect the world, one stamp at a time.</div>
+</td></tr>
+</table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px"><tr><td style="padding:14px 18px;font-family:${SANS};font-size:12px;line-height:1.5;color:#8A7D6E;text-align:center">You’re getting this one email because ${esc(first)} typed your address. We keep only a scrambled form of it, so the ${thing} can find you, and we won’t write again unless someone sends you another.</td></tr></table>
+</td></tr></table>
+</body></html>`;
+  return { subject, text, html };
+}
+async function pcSendWaitingEmail(env, senderId, email, where, kind = 'postcard') {
+  if (!env.RESEND_API_KEY) return false;
+  const [first, hq] = await Promise.all([
+    ppHolder(env, senderId),
+    gbRest(env, `passport_shares?user_id=eq.${senderId}&select=handle`, {}).catch(() => null),
+  ]);
+  const handle = hq && hq.ok ? ((await hq.json().catch(() => []))[0]?.handle || null) : null;
+  const { subject, text, html } = gbWaitingInvite({ kind, first, handle, where: kind === 'postcard' ? where : null, link: `https://globeskimmers.io/get?src=${kind === 'telegram' ? 'telegram_email' : 'postcard_email'}` });
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: env.RESEND_FROM || 'GlobeSkimmers <hello@globeskimmers.io>', reply_to: env.RESEND_REPLY_TO || 'founder@globeskimmers.io', to: [email], subject, text, tags: [{ name: 'kind', value: 'postcard_waiting' }] }),
+      body: JSON.stringify({ from: env.RESEND_FROM || 'GlobeSkimmers <hello@globeskimmers.io>', reply_to: env.RESEND_REPLY_TO || 'founder@globeskimmers.io', to: [email], subject, text, html, tags: [{ name: 'kind', value: `${kind}_waiting` }] }),
       signal: AbortSignal.timeout(8000),
     });
     return r.ok;
@@ -18689,6 +18770,19 @@ async function pcDeliverWaiting(env, user) {
     if (!w.ok) return;
     await done(r.id, user.id);
   }
+  // Telegrams that waited (2026-10-24), with the same rails; SENT stays the day they were wired.
+  // Before the table exists there are none.
+  const tq = await gbRest(env, `pending_telegrams?email_hash=eq.${hash}&delivered_at=is.null&select=id,sender_id,body,ink,created_at&order=created_at.asc&limit=20`, {}).catch(() => null);
+  const tgs = tq && tq.ok ? await tq.json().catch(() => []) : [];
+  const tgDone = (id, to) => gbRest(env, `pending_telegrams?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ delivered_at: new Date().toISOString(), delivered_to: to }) });
+  for (const r of tgs) {
+    const sq = await gbRest(env, `profiles?id=eq.${r.sender_id}&select=id`, { headers: { 'Accept-Profile': 'public' } });
+    const senderThere = sq.ok && (await sq.json()).length > 0;
+    if (!senderThere || r.sender_id === user.id || await gbBlockedEither(env, user.id, r.sender_id, { failClosed: true })) { await tgDone(r.id, null); continue; }
+    const w = await gbRest(env, 'telegrams', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ sender_id: r.sender_id, to_user_id: user.id, body: r.body, created_at: r.created_at, ...(r.ink ? { ink: r.ink } : {}) }) });
+    if (!w.ok) return;
+    await tgDone(r.id, user.id);
+  }
   if (kv) await kv.put(key, '1', { expirationTtl: 60 * 60 * 24 }).catch(() => {});
 }
 // The daily prune: rows older than 90 days go; an undelivered one takes its photo with it.
@@ -18700,6 +18794,11 @@ async function pcPendingPrune(env) {
   if (!rows.length) return;
   if (env.MEDIA) for (const r of rows) if (!r.delivered_at && r.photo_key) await env.MEDIA.delete(r.photo_key).catch(() => {});
   await gbRest(env, `pending_postcards?id=in.(${rows.map((r) => r.id).join(',')})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+}
+// Waiting telegrams (2026-10-24) older than 90 days go too; they carry no media.
+async function tgPendingPrune(env) {
+  const floor = new Date(Date.now() - 90 * 86400000).toISOString();
+  await gbRest(env, `pending_telegrams?created_at=lt.${floor}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => {});
 }
 
 // Several people at once (founder, 2026-10-24: "allow post card to be sent to group or
@@ -20839,6 +20938,7 @@ async function handleTelegramSend(request, env, ctx) {
     let targets = [];
     let replyTo = null;
     let group = false;
+    const waitingEmails = [];
     const rid = String(b.reply_to || '').toLowerCase();
     if (BL_UUID.test(rid)) {
       const [tq, pq] = await Promise.all([
@@ -20855,16 +20955,30 @@ async function handleTelegramSend(request, env, ctx) {
     } else {
       const raw = Array.isArray(b.to_handles) ? b.to_handles : b.to_handle ? [b.to_handle] : [];
       const handles = [...new Set(raw.map((h) => String(h || '').trim().replace(/^@+/, '').toLowerCase()).filter(Boolean))];
-      if (!handles.length) return jsonResponse({ error: 'Who is it for? Pick a @username.' }, 400);
-      if (handles.length > TG_MAX_TO) return jsonResponse({ error: `${TG_MAX_TO} people at most on one telegram` }, 400);
+      // By email too (2026-10-24): a member's login email delivers like their @username; anyone
+      // else's gets the telegram waiting and one invitation email — the sender is told the same.
+      const emails = [...new Set((Array.isArray(b.to_emails) ? b.to_emails : []).map((e) => String(e || '').trim().toLowerCase().slice(0, 254)).filter(Boolean))];
+      if (!handles.length && !emails.length) return jsonResponse({ error: 'Who is it for? Pick a @username.' }, 400);
+      if (handles.length + emails.length > TG_MAX_TO) return jsonResponse({ error: `${TG_MAX_TO} people at most on one telegram` }, 400);
       const found = await Promise.all(handles.map((h) => gbHandleToUser(env, h)));
       const missing = handles.find((h, i) => !found[i]);
-      if (missing) return jsonResponse({ error: handles.length > 1 ? `No traveler with @${missing}` : 'No traveler with that username' }, 404);
+      if (missing) return jsonResponse({ error: handles.length + emails.length > 1 ? `No traveler with @${missing}` : 'No traveler with that username' }, 404);
       targets = found.map((t) => t.user_id);
+      for (const email of emails) {
+        if (!nuiteeEmailAddressOk(email)) return jsonResponse({ error: `${email} doesn’t look like an email address` }, 400);
+        if (email === String(user.email || '').trim().toLowerCase()) continue;
+        let memberId = null;
+        try {
+          const r = await gbRest(env, 'rpc/user_id_by_email', { method: 'POST', body: JSON.stringify({ p_email: email }) });
+          if (r.ok) { const v = await r.json().catch(() => null); const id = String((typeof v === 'string' ? v : Array.isArray(v) ? v[0] : v?.user_id) || '').toLowerCase(); if (BL_UUID.test(id)) memberId = id; }
+        } catch { /* not a member, as far as we can tell */ }
+        if (memberId) targets.push(memberId);
+        else waitingEmails.push(email);
+      }
       group = b.mode === 'group';
     }
     targets = [...new Set(targets.map((id) => String(id).toLowerCase()))].filter((id) => id !== user.id);
-    if (!targets.length) return jsonResponse({ error: 'A telegram to yourself? 🙂' }, 400);
+    if (!targets.length && !waitingEmails.length) return jsonResponse({ error: 'A telegram to yourself? 🙂' }, 400);
     if (!(await gbModerate(env, body)).allow) return jsonResponse({ error: 'Let’s keep it kind. Try different words.' }, 422);
 
     // Each recipient's rails, after the words.
@@ -20878,8 +20992,12 @@ async function handleTelegramSend(request, env, ctx) {
       if (rsp.social_tier === 'blocked' || rsp.social_tier === 'teen' || gbAgeHeld(rsp)) continue;
       deliver.push(id);
     }
-    if (!deliver.length && notReady.length) {
+    if (!deliver.length && notReady.length && !waitingEmails.length) {
       return jsonResponse({ error: targets.length > 1 ? 'None of them has finished their passport yet, so telegrams can’t reach them' : 'They haven’t finished their passport yet, so telegrams can’t reach them' }, 409);
+    }
+    for (let i = 0; i < waitingEmails.length; i++) {
+      const n = await gbDayCount(env, `pce:${user.id}`);
+      if (n != null && n > PC_EMAIL_DAILY) return jsonResponse({ error: 'That’s five messages to email addresses today. Try again tomorrow.' }, 429);
     }
     if (!replyTo && deliver.length) {
       const fq = await gbRest(env, `user_follows?follower_id=in.(${deliver.join(',')})&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, {});
@@ -20899,11 +21017,30 @@ async function handleTelegramSend(request, env, ctx) {
       const hq = await gbRest(env, `passport_shares?user_id=in.(${notReady.join(',')})&select=handle`, {});
       notReadyHandles = hq.ok ? (await hq.json()).map((r) => r.handle).filter(Boolean) : [];
     }
-    if (!deliver.length) return jsonResponse({ ok: true, count: targets.length, not_ready: notReadyHandles });
-
-    const groupId = group && deliver.length > 1 ? crypto.randomUUID() : null;
     // The ink (2026-10-19): black (stored as none), red or green.
     const ink = b.ink === 'red' || b.ink === 'green' ? b.ink : null;
+    // The telegrams that wait (2026-10-24): stored under a keyed hash of the address, one
+    // invitation email per sender and address per 30 days (shared with waiting postcards).
+    let waited = 0;
+    for (const email of waitingEmails) {
+      const hash = await pcEmailHash(env, email);
+      const pw = await gbRest(env, 'pending_telegrams', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ sender_id: user.id, email_hash: hash, body, ...(ink ? { ink } : {}) }) });
+      if (!pw.ok) continue;
+      waited += 1;
+      const kv = env.GLOBESKIMMERS_KV;
+      const onceKey = `pceonce:${user.id}:${hash}`;
+      if (!(kv && await kv.get(onceKey).catch(() => null))) {
+        const sent = await pcSendWaitingEmail(env, user.id, email, null, 'telegram');
+        if (sent && kv) await kv.put(onceKey, '1', { expirationTtl: 60 * 60 * 24 * 30 }).catch(() => {});
+      }
+    }
+    if (waitingEmails.length && !waited && !deliver.length) return jsonResponse({ error: 'Telegrams to email addresses open in a few minutes — try again shortly' }, 503);
+    if (!deliver.length) {
+      if (ctx && waited) ctx.waitUntil(gbLogEvent(env, 'telegram_send', { reply: false, words, to: waited, waiting: true }));
+      return jsonResponse({ ok: true, count: targets.length - notReady.length + waited, not_ready: notReadyHandles });
+    }
+
+    const groupId = group && deliver.length > 1 ? crypto.randomUUID() : null;
     const rows = deliver.map((id) => ({ sender_id: user.id, to_user_id: id, body, reply_to: replyTo, ...(ink ? { ink } : {}), ...(groupId ? { group_id: groupId, cc: deliver.filter((x) => x !== id) } : {}) }));
     let w = await gbRest(env, 'telegrams', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(rows) });
     // The seconds before a newer column exists: send it plain (each its own, black ink).
@@ -20918,9 +21055,9 @@ async function handleTelegramSend(request, env, ctx) {
           route: `/Mailbox?tg=${r.id}`, collapse: `tg-${r.id}`,
         }, { each: true }));
       }
-      ctx.waitUntil(gbLogEvent(env, 'telegram_send', { reply: !!replyTo, words, to: deliver.length, group: !!groupId || undefined, reply_all: (replyTo && group) || undefined }));
+      ctx.waitUntil(gbLogEvent(env, 'telegram_send', { reply: !!replyTo, words, to: deliver.length + waited, group: !!groupId || undefined, reply_all: (replyTo && group) || undefined, waiting: waited || undefined }));
     }
-    return jsonResponse({ ok: true, id: made?.[0]?.id || null, count: targets.length - notReady.length, not_ready: notReadyHandles });
+    return jsonResponse({ ok: true, id: made?.[0]?.id || null, count: targets.length - notReady.length + waited, not_ready: notReadyHandles });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -28142,6 +28279,7 @@ export default {
     try { await gbDayCountsPrune(benv); } catch (_e) { /* tomorrow's cron tries again */ }
     // Postcards that waited 90 days for an email that never joined go, photos included.
     try { await pcPendingPrune(benv); } catch (_e) { /* tomorrow's cron tries again */ }
+    try { await tgPendingPrune(benv); } catch (_e) { /* tomorrow's cron tries again */ }
     // Under-age freeze: delete content of accounts frozen past the window.
     try { await freezeSweep(benv); } catch (_e) { /* tomorrow's cron tries again */ }
     // Deleted accounts whose clean-up had a failed step: finish it.
