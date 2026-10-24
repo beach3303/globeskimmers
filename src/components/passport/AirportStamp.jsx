@@ -7,10 +7,11 @@ import { airportStampConfig, fmtStampDate } from "@/lib/airportStamp";
  * ("vary by country"), so a passport of arrivals looks authentically varied.
  *
  * Ink doctrine (founder, 2026-10-01): the CITY, COUNTRY and DATE print at FULL
- * ink — crisp, fully readable — while the frame, plane, decorative words and
- * the big IATA acronym keep the faded old-fashioned wear. Two filters do it:
- * `worn` erodes (shapes + acronym), `press` only wobbles edges (the full-ink
- * text still looks hand-stamped, never faded).
+ * ink — crisp, fully readable — while the frame, plane and decorative words keep
+ * the faded old-fashioned wear. Two filters do it: `worn` erodes the shapes,
+ * `press` only wobbles edges (the full-ink text still looks hand-stamped, never
+ * faded). Since 2026-10-24 (founder: "make the date and the country code clear
+ * bold") the big IATA code and the date print solid and bold, with no filter.
  *
  * Direction (founder, 2026-10-05): 'arrival' | 'departure' prints on the stamp —
  * the word, the plane turned to land or take off over a runway line, and a
@@ -54,8 +55,11 @@ export default function AirportStamp({ iata, city, country, countryCode, date, w
   // Departures print the thin inner border dotted.
   const dot = direction && dep ? { strokeWidth: 2.2, strokeDasharray: "0.1 4.6", strokeLinecap: "round" } : {};
 
-  // Each template: { frame, text }. `frame` wears the erosion; `text` is the
-  // full-ink layer (city / country / date) with edge-wobble only.
+  // Each template: { frame, text, crisp }. `frame` wears the erosion; `text` is the
+  // full-ink layer (city / country) with edge-wobble only; `crisp` is the airport code and the
+  // date, solid and bold with no wear at all (founder, 2026-10-24: "make the date and the country
+  // code clear bold and not our signature faded").
+  const BOLD = { fill: "currentColor", stroke: "currentColor", strokeWidth: 0.7, paintOrder: "stroke" };
   const body = {
     schengen: {
       frame: (
@@ -75,11 +79,15 @@ export default function AirportStamp({ iata, city, country, countryCode, date, w
       text: (
         <>
           <text x="170" y="62" textAnchor="middle" fontFamily={serif} fontSize="14" fontWeight="700" letterSpacing="4" fill="currentColor">{CTRY}</text>
-          <text x="74" y="104" textAnchor="middle" fontFamily={serif} fontSize="22" fontWeight="700" fill="currentColor">{dd}</text>
-          <text x="74" y="124" textAnchor="middle" fontFamily={serif} fontSize="13" fontWeight="700" letterSpacing="1" fill="currentColor">{mon}</text>
-          <text x="74" y="142" textAnchor="middle" fontFamily={serif} fontSize="12" fontWeight="700" fill="currentColor">{yyyy}</text>
           {direction && <text x="268" y="148" textAnchor="middle" fontFamily={serif} fontSize="9.5" fontWeight="700" letterSpacing="1.5" fill="currentColor">{WORD}</text>}
           <text x="170" y="176" textAnchor="middle" fontFamily={serif} fontSize="10.5" fontWeight="700" letterSpacing="1" fill="currentColor">{CITY} — {CODE}</text>
+        </>
+      ),
+      crisp: (
+        <>
+          <text x="74" y="104" textAnchor="middle" fontFamily={serif} fontSize="22" fontWeight="700" {...BOLD}>{dd}</text>
+          <text x="74" y="124" textAnchor="middle" fontFamily={serif} fontSize="13" fontWeight="700" letterSpacing="1" {...BOLD}>{mon}</text>
+          <text x="74" y="142" textAnchor="middle" fontFamily={serif} fontSize="12" fontWeight="700" {...BOLD}>{yyyy}</text>
         </>
       ),
     },
@@ -89,15 +97,19 @@ export default function AirportStamp({ iata, city, country, countryCode, date, w
           <circle cx="170" cy="112" r="98" fill="none" stroke="currentColor" strokeWidth="4" />
           <circle cx="170" cy="112" r="86" fill="none" stroke="currentColor" strokeWidth="1.3" {...dot} />
           {dirPlane(160, 62, 20)}
-          <text x="170" y="118" textAnchor="middle" fontFamily={serif} fontSize="30" fontWeight="700" letterSpacing="2" fill="currentColor">{CODE}</text>
-          <rect x="124" y="126" width="92" height="19" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+          <rect x="114" y="126" width="112" height="19" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
         </>
       ),
       text: (
         <>
           <text fontFamily={serif} fontSize="12" fontWeight="700" letterSpacing="2.5" fill="currentColor"><textPath href={`#${arcT}`} startOffset="50%" textAnchor="middle">IMMIGRATION · {CITY}</textPath></text>
           <text fontFamily={serif} fontSize="11" fontWeight="700" letterSpacing="3" fill="currentColor"><textPath href={`#${arcB}`} startOffset="50%" textAnchor="middle">★ {CTRY} · {WORD} ★</textPath></text>
-          <text x="170" y="139" textAnchor="middle" fontFamily={serif} fontSize="11.5" fontWeight="700" letterSpacing="1.5" fill="currentColor">{dateStr}</text>
+        </>
+      ),
+      crisp: (
+        <>
+          <text x="170" y="118" textAnchor="middle" fontFamily={serif} fontSize="30" fontWeight="700" letterSpacing="2" {...BOLD}>{CODE}</text>
+          <text x="170" y="139" textAnchor="middle" fontFamily={serif} fontSize="11.5" fontWeight="700" letterSpacing="1.5" {...BOLD}>{dateStr}</text>
         </>
       ),
     },
@@ -108,14 +120,18 @@ export default function AirportStamp({ iata, city, country, countryCode, date, w
           <ellipse cx="170" cy="112" rx="138" ry="82" fill="none" stroke="currentColor" strokeWidth="1.3" {...dot} />
           <text fontFamily={serif} fontSize="11.5" fontWeight="700" letterSpacing="4" fill="currentColor"><textPath href={`#${arcB}`} startOffset="50%" textAnchor="middle">★ {WORD} ★</textPath></text>
           {dirPlane(160, 60, 21)}
-          <text x="170" y="118" textAnchor="middle" fontFamily={serif} fontSize="30" fontWeight="700" letterSpacing="2" fill="currentColor">{CODE}</text>
-          <rect x="124" y="126" width="92" height="19" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+          <rect x="114" y="126" width="112" height="19" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
         </>
       ),
       text: (
         <>
           <text fontFamily={serif} fontSize="12.5" fontWeight="700" letterSpacing="3" fill="currentColor"><textPath href={`#${arcT}`} startOffset="50%" textAnchor="middle">{CITY} · {CTRY}</textPath></text>
-          <text x="170" y="139" textAnchor="middle" fontFamily={serif} fontSize="11.5" fontWeight="700" letterSpacing="1.5" fill="currentColor">{dateStr}</text>
+        </>
+      ),
+      crisp: (
+        <>
+          <text x="170" y="118" textAnchor="middle" fontFamily={serif} fontSize="30" fontWeight="700" letterSpacing="2" {...BOLD}>{CODE}</text>
+          <text x="170" y="139" textAnchor="middle" fontFamily={serif} fontSize="11.5" fontWeight="700" letterSpacing="1.5" {...BOLD}>{dateStr}</text>
         </>
       ),
     },
@@ -131,15 +147,19 @@ export default function AirportStamp({ iata, city, country, countryCode, date, w
             ? <><line x1="51" y1="122" x2="51" y2="146" stroke="currentColor" strokeWidth="3" /><path d="M57,124 L75,134 L57,144 Z" fill="currentColor" /></>
             : <><path d="M56,124 L74,134 L56,144 Z" fill="currentColor" /><line x1="79" y1="122" x2="79" y2="146" stroke="currentColor" strokeWidth="3" /></>)}
           <text x="66" y="170" textAnchor="middle" fontFamily={serif} fontSize="10" fontWeight="700" letterSpacing="1" fill="currentColor">{direction && dep ? "EXIT" : "ENTRY"}</text>
-          <text x="228" y="128" textAnchor="middle" fontFamily={serif} fontSize="28" fontWeight="700" letterSpacing="2" fill="currentColor">{CODE}</text>
-          <rect x="182" y="138" width="92" height="19" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+          <rect x="172" y="138" width="112" height="19" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
         </>
       ),
       text: (
         <>
           <text x="170" y="60" textAnchor="middle" fontFamily={serif} fontSize="13" fontWeight="700" letterSpacing="4" fill="currentColor">{CTRY}</text>
           <text x="228" y="94" textAnchor="middle" fontFamily={serif} fontSize="13" fontWeight="700" letterSpacing="2" fill="currentColor">{CITY}</text>
-          <text x="228" y="151" textAnchor="middle" fontFamily={serif} fontSize="11" fontWeight="700" letterSpacing="1" fill="currentColor">{dateStr}</text>
+        </>
+      ),
+      crisp: (
+        <>
+          <text x="228" y="128" textAnchor="middle" fontFamily={serif} fontSize="28" fontWeight="700" letterSpacing="2" {...BOLD}>{CODE}</text>
+          <text x="228" y="151" textAnchor="middle" fontFamily={serif} fontSize="11" fontWeight="700" letterSpacing="1" {...BOLD}>{dateStr}</text>
         </>
       ),
     },
@@ -150,16 +170,20 @@ export default function AirportStamp({ iata, city, country, countryCode, date, w
           <circle cx="170" cy="112" r="90" fill="none" stroke="currentColor" strokeWidth="1.3" {...dot} />
           <circle cx="170" cy="112" r="86" fill="none" stroke="currentColor" strokeWidth="1.3" />
           {dirPlane(160, 62, 20)}
-          <text x="170" y="118" textAnchor="middle" fontFamily={serif} fontSize="30" fontWeight="700" letterSpacing="2" fill="currentColor">{CODE}</text>
-          <rect x="124" y="126" width="92" height="19" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+          <rect x="114" y="126" width="112" height="19" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
         </>
       ),
       text: (
         <>
           <text fontFamily={serif} fontSize="11.5" fontWeight="700" letterSpacing="2" fill="currentColor"><textPath href={`#${arcT}`} startOffset="50%" textAnchor="middle">{CITY}</textPath></text>
           <text fontFamily={serif} fontSize="11" fontWeight="700" letterSpacing="3" fill="currentColor"><textPath href={`#${arcB}`} startOffset="50%" textAnchor="middle">★ {CTRY} ★</textPath></text>
-          <text x="170" y="139" textAnchor="middle" fontFamily={serif} fontSize="11.5" fontWeight="700" letterSpacing="1.5" fill="currentColor">{dateStr}</text>
           {direction && <text x="170" y="166" textAnchor="middle" fontFamily={serif} fontSize="10" fontWeight="700" letterSpacing="2.5" fill="currentColor">{WORD}</text>}
+        </>
+      ),
+      crisp: (
+        <>
+          <text x="170" y="118" textAnchor="middle" fontFamily={serif} fontSize="30" fontWeight="700" letterSpacing="2" {...BOLD}>{CODE}</text>
+          <text x="170" y="139" textAnchor="middle" fontFamily={serif} fontSize="11.5" fontWeight="700" letterSpacing="1.5" {...BOLD}>{dateStr}</text>
         </>
       ),
     },
@@ -169,16 +193,20 @@ export default function AirportStamp({ iata, city, country, countryCode, date, w
           <polygon points="60,112 118,34 222,34 280,112 222,190 118,190" fill="none" stroke="currentColor" strokeWidth="4" />
           <polygon points="60,112 118,34 222,34 280,112 222,190 118,190" fill="none" stroke="currentColor" strokeWidth="1.3" transform="translate(170 112) scale(0.9) translate(-170 -112)" {...dot} />
           {dirPlane(160, 66, 19)}
-          <text x="170" y="120" textAnchor="middle" fontFamily={serif} fontSize="28" fontWeight="700" letterSpacing="2" fill="currentColor">{CODE}</text>
-          <rect x="124" y="128" width="92" height="18" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+          <rect x="114" y="128" width="112" height="18" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
         </>
       ),
       text: (
         <>
           <text x="170" y="58" textAnchor="middle" fontFamily={serif} fontSize="12" fontWeight="700" letterSpacing="2.5" fill="currentColor">{CITY}</text>
-          <text x="170" y="141" textAnchor="middle" fontFamily={serif} fontSize="11" fontWeight="700" letterSpacing="1" fill="currentColor">{dateStr}</text>
           {direction && <text x="170" y="158" textAnchor="middle" fontFamily={serif} fontSize="9.5" fontWeight="700" letterSpacing="2" fill="currentColor">{WORD}</text>}
           <text x="170" y={direction ? 174 : 170} textAnchor="middle" fontFamily={serif} fontSize="11" fontWeight="700" letterSpacing="3" fill="currentColor">★ {CTRY} ★</text>
+        </>
+      ),
+      crisp: (
+        <>
+          <text x="170" y="120" textAnchor="middle" fontFamily={serif} fontSize="28" fontWeight="700" letterSpacing="2" {...BOLD}>{CODE}</text>
+          <text x="170" y="141" textAnchor="middle" fontFamily={serif} fontSize="11" fontWeight="700" letterSpacing="1" {...BOLD}>{dateStr}</text>
         </>
       ),
     },
@@ -212,6 +240,7 @@ export default function AirportStamp({ iata, city, country, countryCode, date, w
       </defs>
       <g filter={`url(#${worn})`}>{body[template].frame}</g>
       <g filter={`url(#${press})`}>{body[template].text}</g>
+      <g>{body[template].crisp}</g>
     </svg>
   );
 }
