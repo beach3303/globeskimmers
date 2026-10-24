@@ -18702,6 +18702,18 @@ async function pcPendingPrune(env) {
   await gbRest(env, `pending_postcards?id=in.(${rows.map((r) => r.id).join(',')})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
 }
 
+// Several people at once (founder, 2026-10-24: "allow post card to be sent to group or
+// individually to multiple people"): up to PC_MAX_TO addresses — @usernames (to_handles),
+// accounts Find people found (to_user_ids) and email addresses (to_emails) — either EACH their
+// own card (mode 'each': nobody sees who else got one) or as a GROUP (mode 'group': one card
+// naming every member it reached; a reply still goes to the sender only — founder, 2026-10-24:
+// "post card reply should be only to sender for now"). Every address passes the same rails on its
+// own; a blocked pair or a minor is left out silently and never named, and a group names only the
+// members it reached. An email address
+// that isn't a member always gets its own card that waits. Each recipient's card holds its own
+// copy of the photo, so one account's deletion (which takes that account's photos) never takes
+// anyone else's. The single to_handle / to_user_id / to_email fields still work.
+const PC_MAX_TO = 10;
 async function handlePostcardSend(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -18715,39 +18727,58 @@ async function handlePostcardSend(request, env, ctx) {
     if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
     if (sp.social_tier === 'teen') return jsonResponse({ error: 'Postcards open at age 18', code: 'teen_hold' }, 403);
 
-    // Address it. An @handle's owner passes the recipient's rails only
-    // after the photo is checked (below).
-    let toUser = null;
-    let to = null;
+    // Address it. The members' rails run only after the photo is checked (below).
+    let members = [];        // [{ user_id, handle }]
     let toCity = null;
     let boardCity = null;
     let boardCountry = null;
     let boardRegion = null;
-    let toTeen = false;
     let anonLabel = null;
-    let toEmail = null;
+    const waitingEmails = [];
+    let groupAsked = b.mode === 'group';
+    const list = (v) => (Array.isArray(v) ? v : []);
     // A reply (2026-10-19): to the sender of a card addressed to me, looked up here so no account id
-    // is handed to the app. Then the same rails as any direct card.
-    if (!b.to_handle && !b.to_user_id && BL_UUID.test(String(b.reply_to || ''))) {
+    // is handed to the app. Only ever to the sender, a group card too (founder, 2026-10-24: "post
+    // card reply should be only to sender for now").
+    const directAsked = list(b.to_handles).length || list(b.to_user_ids).length || list(b.to_emails).length || b.to_handle || b.to_user_id || b.to_email;
+    if (!directAsked && BL_UUID.test(String(b.reply_to || ''))) {
       const rq = await gbRest(env, `postcards?id=eq.${String(b.reply_to).toLowerCase()}&to_user_id=eq.${user.id}&select=sender_id`, {});
       const orig = rq.ok ? (await rq.json())[0] : null;
       if (!orig) return jsonResponse({ error: 'That postcard isn’t here any more' }, 404);
-      b.to_user_id = orig.sender_id;
+      b.to_user_ids = [orig.sender_id];
+      groupAsked = false;
     }
-    if (b.to_handle || BL_UUID.test(String(b.to_user_id || ''))) {
-      // By @username, or by account id — someone Find people found, perhaps with no @username
-      // yet (founder, 2026-10-18: "send postcards to people who we are not friends with").
-      to = b.to_handle ? await gbHandleToUser(env, b.to_handle) : { user_id: String(b.to_user_id).toLowerCase(), handle: null };
-      if (!to) return jsonResponse({ error: 'No traveler with that username' }, 404);
-      if (to.user_id === user.id) return jsonResponse({ error: 'A postcard to yourself? Frame it instead 🙂' }, 400);
-      if (sp.social_tier === 'teen') {
-        const [a, bq] = await Promise.all([
-          gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${to.user_id}&status=eq.accepted&select=follower_id`, {}),
-          gbRest(env, `user_follows?follower_id=eq.${to.user_id}&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, {}),
-        ]);
-        const mutual = a.ok && bq.ok && (await a.json()).length && (await bq.json()).length;
-        if (!mutual) return jsonResponse({ error: 'You can send postcards to friends you follow each other with' }, 403);
+    const handles = [...new Set([...list(b.to_handles), ...(b.to_handle ? [b.to_handle] : [])].map((h) => String(h || '').trim().replace(/^@+/, '').toLowerCase()).filter(Boolean))];
+    const ids = [...new Set([...list(b.to_user_ids), ...(b.to_user_id ? [b.to_user_id] : [])].map((v) => String(v || '').toLowerCase()).filter((v) => BL_UUID.test(v)))];
+    const emails = [...new Set([...list(b.to_emails), ...(typeof b.to_email === 'string' ? [b.to_email] : [])].map((e) => String(e || '').trim().toLowerCase().slice(0, 254)).filter(Boolean))];
+    const asked = handles.length + ids.length + emails.length;
+    if (asked > PC_MAX_TO) return jsonResponse({ error: `${PC_MAX_TO} people at most on one postcard` }, 400);
+    if (asked) {
+      // By @username, by account id — someone Find people found, perhaps with no @username yet
+      // (founder, 2026-10-18: "send postcards to people who we are not friends with") — or by email.
+      const found = await Promise.all(handles.map((h) => gbHandleToUser(env, h)));
+      const missing = handles.find((h, i) => !found[i]);
+      if (missing) return jsonResponse({ error: asked > 1 ? `No traveler with @${missing}` : 'No traveler with that username' }, 404);
+      members = [...found.map((t, i) => ({ user_id: String(t.user_id).toLowerCase(), handle: t.handle || handles[i] })), ...ids.map((id) => ({ user_id: id, handle: null }))];
+      // An email address (Step B, 2026-10-18). A member's email delivers like any direct card,
+      // whether or not they let Find people show them — the sender learns nothing either way.
+      // Anyone else's: the card waits for them (pcDeliverWaiting), and they get one email.
+      for (const email of emails) {
+        if (!nuiteeEmailAddressOk(email)) return jsonResponse({ error: asked > 1 ? `${email} doesn’t look like an email address` : 'That doesn’t look like an email address' }, 400);
+        if (email === String(user.email || '').trim().toLowerCase()) { if (asked === 1) return jsonResponse({ error: 'A postcard to yourself? Frame it instead 🙂' }, 400); continue; }
+        let memberId = null;
+        try {
+          const r = await gbRest(env, 'rpc/user_id_by_email', { method: 'POST', body: JSON.stringify({ p_email: email }) });
+          if (r.ok) { const v = await r.json().catch(() => null); const id = String((typeof v === 'string' ? v : Array.isArray(v) ? v[0] : v?.user_id) || '').toLowerCase(); if (BL_UUID.test(id)) memberId = id; }
+        } catch { /* not a member, as far as we can tell */ }
+        if (memberId) members.push({ user_id: memberId, handle: null });
+        else waitingEmails.push(email);
       }
+      const seen = new Set();
+      members = members.filter((m) => !seen.has(m.user_id) && seen.add(m.user_id));
+      const others = members.filter((m) => m.user_id !== user.id);
+      if (!others.length && !waitingEmails.length) return jsonResponse({ error: 'A postcard to yourself? Frame it instead 🙂' }, 400);
+      members = others;
     } else if (b.to_city && typeof b.to_city === 'object') {
       // A city's board (City Board, 2026-10-14): public, so never from a teen, and
       // only from someone who was really there: a verified stamp of theirs in that
@@ -18771,28 +18802,12 @@ async function handlePostcardSend(request, env, ctx) {
       // No name on the board (founder, 2026-10-15): the card signs "a local"
       // or "a traveler" instead — which one is decided here, never client-side.
       if (b.anon === true) anonLabel = await pcAnonLabel(env, user.id, boardCity);
-    } else if (typeof b.to_email === 'string' && b.to_email.trim()) {
-      // An email address (Step B, 2026-10-18). A member's email delivers like any direct card,
-      // whether or not they let Find people show them — the sender learns nothing either way.
-      // Anyone else's: the card waits for them (pcDeliverWaiting), and they get one email.
-      const email = String(b.to_email).trim().toLowerCase().slice(0, 254);
-      if (!nuiteeEmailAddressOk(email)) return jsonResponse({ error: 'That doesn’t look like an email address' }, 400);
-      if (email === String(user.email || '').trim().toLowerCase()) return jsonResponse({ error: 'A postcard to yourself? Frame it instead 🙂' }, 400);
-      let memberId = null;
-      try {
-        const r = await gbRest(env, 'rpc/user_id_by_email', { method: 'POST', body: JSON.stringify({ p_email: email }) });
-        if (r.ok) { const v = await r.json().catch(() => null); const id = String((typeof v === 'string' ? v : Array.isArray(v) ? v[0] : v?.user_id) || '').toLowerCase(); if (BL_UUID.test(id)) memberId = id; }
-      } catch { /* not a member, as far as we can tell */ }
-      if (memberId === user.id) return jsonResponse({ error: 'A postcard to yourself? Frame it instead 🙂' }, 400);
-      if (memberId) to = { user_id: memberId, handle: null };
-      else toEmail = email;
-    } else if (sp.social_tier === 'teen') {
-      return jsonResponse({ error: 'Address your postcard to a friend — broadcast opens at age 18' }, 403);
     } else {
       const fq = await gbRest(env, `user_follows?followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, { headers: { Prefer: 'count=exact', Range: '0-0' } });
       const followers = parseInt((fq.headers.get('content-range') || '').split('/')[1] || '0', 10);
       if (!followers) return jsonResponse({ error: 'no_followers' }, 409);
     }
+    const direct = asked > 0;
 
     // The front photo.
     let data = String(b.image || ''); let mediaType = 'image/jpeg';
@@ -18810,110 +18825,133 @@ async function handlePostcardSend(request, env, ctx) {
       return jsonResponse({ error: verdict?.reason ? "We couldn't check this photo right now — try again in a moment" : "This photo can't go on a postcard" }, 422);
     }
 
-    // The recipient's rails, AFTER the photo (go-live round 3: answered
-    // first, a card with no photo was a free test of an @handle — "needs its
-    // photo" for an adult, ok + muted for a minor). A blocked pair passes
-    // nothing, and a frozen account or one whose birth year could still be
-    // 12 or a held teen receives nothing (teens plan, 2026-10-10): such a
-    // card is stored nowhere and answered exactly like one that was sent.
-    // A teen whose social features are open receives postcards only from
-    // mutual friends, whoever the sender is (the audit found an adult could
-    // postcard a teen without a follow-back).
-    if (to) {
-      if (await gbBlockedEither(env, user.id, to.user_id)) return jsonResponse({ ok: true });
-      const rsp = await gbSocialProfile(env, to.user_id).catch(() => undefined);
+    // Each member's rails, AFTER the photo (go-live round 3: answered first, a card with no
+    // photo was a free test of an @handle). A blocked pair passes nothing, and a frozen account,
+    // one whose birth year could still be 12, or a minor receives nothing (founder, 2026-10-16):
+    // such a card is stored nowhere and answered exactly like one that was sent.
+    const deliver = [];
+    const notReady = [];
+    for (const mb of members) {
+      if (await gbBlockedEither(env, user.id, mb.user_id)) continue;
+      const rsp = await gbSocialProfile(env, mb.user_id).catch(() => undefined);
       if (rsp === undefined) return jsonResponse({ error: 'Couldn’t send right now — try again' }, 503);
       // No social profile = an account that never finished its passport: no known age, no mail.
-      if (rsp === null) return jsonResponse({ error: 'They haven’t finished their passport yet, so postcards can’t reach them' }, 409);
-      // A minor receives no postcards (founder, 2026-10-16): stored nowhere, answered like any send.
-      if (rsp?.social_tier === 'blocked' || rsp?.social_tier === 'teen' || gbAgeHeld(rsp)) return jsonResponse({ ok: true });
-      if (rsp?.social_tier === 'teen' && !(await gbMutualFriends(env, user.id, to.user_id))) {
-        return jsonResponse({ error: 'You two need to follow each other to exchange postcards' }, 403);
-      }
-      toTeen = rsp?.social_tier === 'teen';
-      toUser = to.user_id;
+      if (rsp === null) { notReady.push(mb); continue; }
+      if (rsp.social_tier === 'blocked' || rsp.social_tier === 'teen' || gbAgeHeld(rsp)) continue;
+      deliver.push(mb);
+    }
+    if (direct && !deliver.length && !waitingEmails.length) {
+      if (notReady.length) return jsonResponse({ error: members.length > 1 ? 'None of them has finished their passport yet, so postcards can’t reach them' : 'They haven’t finished their passport yet, so postcards can’t reach them' }, 409);
+      return jsonResponse({ ok: true });
     }
     // A card to someone who doesn't follow the sender lands under "From someone new" in their
     // Mailbox (2026-10-18); a sender gets five such cards a day, so nobody can paper strangers.
-    if (toUser) {
-      const fq2 = await gbRest(env, `user_follows?follower_id=eq.${toUser}&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id&limit=1`, {});
-      const followsMe = fq2.ok && (await fq2.json()).length > 0;
-      if (!followsMe) {
+    if (deliver.length) {
+      const fq2 = await gbRest(env, `user_follows?follower_id=in.(${deliver.map((x) => x.user_id).join(',')})&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, {});
+      const followsMe = new Set(fq2.ok ? (await fq2.json()).map((r) => r.follower_id) : []);
+      for (const mb of deliver) {
+        if (followsMe.has(mb.user_id)) continue;
         const n = await gbDayCount(env, `pcs:${user.id}`);
         if (n != null && n > PC_STRANGER_DAILY) return jsonResponse({ error: 'That’s five postcards today to people who don’t follow you. Try again tomorrow.' }, 429);
       }
     }
-    if (toEmail) {
+    for (let i = 0; i < waitingEmails.length; i++) {
       const n = await gbDayCount(env, `pce:${user.id}`);
       if (n != null && n > PC_EMAIL_DAILY) return jsonResponse({ error: 'That’s five postcards to email addresses today. Try again tomorrow.' }, 429);
     }
     const cardRegion = !toCity && pcIsUSName(b.country) && b.city ? (pcUSCity(b.city, b.region).state || await pcStampState(env, user.id, b.city, b.country)) : null;
     const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
-    const key = `pc/${crypto.randomUUID()}.${ext}`;
-    await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: mediaType, cacheControl: 'public, max-age=31536000, immutable' } });
+    // One copy of the photo per card (see above).
+    const put = async () => { const k = `pc/${crypto.randomUUID()}.${ext}`; await env.MEDIA.put(k, bytes, { httpMetadata: { contentType: mediaType, cacheControl: 'public, max-age=31536000, immutable' } }); return k; };
+    const drop = (keys) => { if (ctx && keys.length) ctx.waitUntil(Promise.all(keys.map((k) => env.MEDIA.delete(k).catch(() => {})))); };
+    const cardMeta = b.meta && typeof b.meta === 'object' ? { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60) } : null;
+    const base = {
+      sender_id: user.id, message: msg,
+      place_name: clean(b.place_name, 80), city: clean(b.city, 60), country: clean(b.country, 60), region: cardRegion || clean(b.region, 60),
+    };
 
-    // The card that waits (Step B): stored apart, one email, answered like any send.
-    if (toEmail) {
+    // The cards that wait (Step B): stored apart, one email each, answered like any send.
+    let emailed = false;
+    for (const toEmail of waitingEmails) {
       const hash = await pcEmailHash(env, toEmail);
-      const prow = {
-        sender_id: user.id, email_hash: hash, photo_key: key, message: msg,
-        place_name: clean(b.place_name, 80), city: clean(b.city, 60), country: clean(b.country, 60), region: cardRegion || clean(b.region, 60),
-        ...(b.meta && typeof b.meta === 'object' ? { meta: { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60) } } : {}),
-      };
+      const key = await put();
+      const prow = { ...base, email_hash: hash, photo_key: key, ...(cardMeta ? { meta: cardMeta } : {}) };
       const pw = await gbRest(env, 'pending_postcards', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(prow) });
-      if (!pw.ok) { if (ctx) ctx.waitUntil(env.MEDIA.delete(key).catch(() => {})); return jsonResponse({ error: 'Could not send' }, 502); }
+      if (!pw.ok) { drop([key]); if (!deliver.length && waitingEmails.length === 1) return jsonResponse({ error: 'Could not send' }, 502); continue; }
       const kv = env.GLOBESKIMMERS_KV;
       const onceKey = `pceonce:${user.id}:${hash}`;
       const already = kv ? await kv.get(onceKey).catch(() => null) : null;
-      let emailed = false;
       if (!already) {
-        emailed = await pcSendWaitingEmail(env, user.id, toEmail, prow.place_name || prow.city || null);
-        if (emailed && kv) await kv.put(onceKey, '1', { expirationTtl: 60 * 60 * 24 * 30 }).catch(() => {});
+        const sent = await pcSendWaitingEmail(env, user.id, toEmail, prow.place_name || prow.city || null);
+        if (sent && kv) await kv.put(onceKey, '1', { expirationTtl: 60 * 60 * 24 * 30 }).catch(() => {});
+        emailed = emailed || sent;
       }
-      if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: false, waiting: true, emailed }));
+    }
+    if (direct && !deliver.length) {
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: false, waiting: true, emailed, to: waitingEmails.length }));
       return jsonResponse({ ok: true, waiting: true, emailed });
     }
 
-    const row = {
-      sender_id: user.id, to_user_id: toUser, photo_key: key, message: msg,
-      place_name: clean(b.place_name, 80), city: clean(b.city, 60), country: clean(b.country, 60), region: cardRegion || clean(b.region, 60),
-      ...((b.meta && typeof b.meta === 'object') || anonLabel ? { meta: {
-        ...(b.meta && typeof b.meta === 'object' ? { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60) } : {}),
-        ...(anonLabel ? { anon: anonLabel } : {}),
-      } } : {}),
-      // A board card carries the board's city and country.
-      ...(toCity ? { to_city: toCity, city: boardCity, country: boardCountry, region: boardRegion } : {}),
-    };
-    let w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
-    // The seconds before postcards.region exists (2026-10-16): send without it.
-    if (!w.ok && w.status === 400) { const { region: _r, ...rest } = row; w = await gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(rest) }); }
-    if (!w.ok) { if (ctx) ctx.waitUntil(env.MEDIA.delete(key).catch(() => {})); return jsonResponse({ error: 'Could not send' }, 502); }
-    const madeId = await w.json().then((rows) => (Array.isArray(rows) && rows[0] && rows[0].id) || null).catch(() => null);
-    // The knock on the recipient's phone (push, 2026-10-19): the sender's first name, the place
-    // and a line of the words; several within six hours fold into one. Never for a board card.
-    if (toUser && ctx) {
-      const senderName = await ppHolder(env, user.id);
-      const place = row.place_name || row.city || null;
-      ctx.waitUntil(pushNotify(env, toUser, 'postcards', (n) => (n > 1
-        ? { title: `${n} new postcards`, body: `${senderName} and others sent you postcards`, route: '/Postcards' }
-        : { title: `${senderName} sent you a postcard${place ? ` from ${place}` : ''}`, body: 'Open it in your Mailbox', route: madeId ? `/Postcards?pc=${madeId}` : '/Postcards' })));
+    // The cards themselves: one per member (or one broadcast / board card).
+    const groupId = direct && groupAsked && deliver.length > 1 ? crypto.randomUUID() : null;
+    const meta = cardMeta || anonLabel ? { meta: { ...(cardMeta || {}), ...(anonLabel ? { anon: anonLabel } : {}) } } : {};
+    const targets = direct ? deliver : [null];
+    const rows = [];
+    for (const mb of targets) {
+      rows.push({
+        ...base, to_user_id: mb ? mb.user_id : null, photo_key: await put(), ...meta,
+        // A board card carries the board's city and country.
+        ...(toCity ? { to_city: toCity, city: boardCity, country: boardCountry, region: boardRegion } : {}),
+        ...(groupId ? { group_id: groupId, cc: deliver.filter((x) => x !== mb).map((x) => x.user_id) } : {}),
+      });
     }
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: !!toUser, city: !!toCity, has_dish: !!(b.meta && b.meta.dish), anon: anonLabel || undefined }));
+    const insert = (rs) => gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(rs) });
+    let w = await insert(rows);
+    // The seconds before a newer column exists (region 2026-10-16, group_id/cc 2026-10-24): send without it.
+    if (!w.ok && w.status === 400) w = await insert(rows.map(({ group_id: _g, cc: _c, ...r }) => r));
+    if (!w.ok && w.status === 400) w = await insert(rows.map(({ group_id: _g, cc: _c, region: _r, ...r }) => r));
+    if (!w.ok) { drop(rows.map((r) => r.photo_key)); return jsonResponse({ error: 'Could not send' }, 502); }
+    const made = await w.json().catch(() => []);
+    // The knock on each recipient's phone (push, 2026-10-19): the sender's first name and the
+    // place; several within six hours fold into one. Never for a board card.
+    if (direct && ctx) {
+      const senderName = await ppHolder(env, user.id);
+      const place = base.place_name || base.city || null;
+      for (const r of (Array.isArray(made) ? made : [])) {
+        if (!r || !r.to_user_id) continue;
+        ctx.waitUntil(pushNotify(env, r.to_user_id, 'postcards', (n) => (n > 1
+          ? { title: `${n} new postcards`, body: `${senderName} and others sent you postcards`, route: '/Postcards' }
+          : { title: `${senderName} sent you ${r.group_id ? 'a group postcard' : 'a postcard'}${place ? ` from ${place}` : ''}`, body: 'Open it in your Mailbox', route: r.id ? `/Postcards?pc=${r.id}` : '/Postcards' })));
+      }
+    }
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct, city: !!toCity, has_dish: !!cardMeta?.dish, anon: anonLabel || undefined, to: direct ? deliver.length + waitingEmails.length : undefined, group: !!groupId || undefined }));
     // A new board card shows in the City Boards list at once, not after its five minutes.
     if (toCity && env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.delete('cityboards:v1').catch(() => {});
     // The pin ask (founder, 2026-10-15): a direct card from a city the sender
     // verifiably stamped may be copied onto that city's board — the sender's
-    // choice, asked after the send. No offer from a teen, for a teen's mail,
-    // or without the proof. The offer's absence never says which gate failed.
-    // The pin itself is an ordinary board post and passes every gate again.
+    // choice, asked after the send. No offer without the proof. The offer's
+    // absence never says which gate failed. The pin itself is an ordinary
+    // board post and passes every gate again.
     let pin = null;
-    if (toUser && !toTeen && sp.social_tier !== 'teen' && row.city && row.country) {
+    if (direct && base.city && base.country) {
       try {
-        const k = pcCityKey(row.city, row.country, row.region);
-        if (k && await pcWasThere(env, user.id, k)) pin = { city: row.city, country: row.country, region: row.region || null, label: await pcAnonLabel(env, user.id, row.city) };
+        const k = pcCityKey(base.city, base.country, base.region);
+        if (k && await pcWasThere(env, user.id, k)) pin = { city: base.city, country: base.country, region: base.region || null, label: await pcAnonLabel(env, user.id, base.city) };
       } catch { /* no offer; the card is already on its way */ }
     }
-    return jsonResponse({ ok: true, ...(toCity ? { board: toCity } : {}), ...(pin ? { pin } : {}) });
+    // The members who haven't finished their passport, named back by @username (asked for by name).
+    let notReadyHandles = notReady.map((x) => x.handle).filter(Boolean);
+    const unnamed = notReady.filter((x) => !x.handle).map((x) => x.user_id);
+    if (unnamed.length) {
+      const hq = await gbRest(env, `passport_shares?user_id=in.(${unnamed.join(',')})&select=handle`, {});
+      notReadyHandles = [...notReadyHandles, ...(hq.ok ? (await hq.json()).map((r) => r.handle).filter(Boolean) : [])];
+    }
+    return jsonResponse({
+      ok: true, ...(toCity ? { board: toCity } : {}), ...(pin ? { pin } : {}),
+      ...(direct ? { count: deliver.length + waitingEmails.length, group: !!groupId } : {}),
+      ...(waitingEmails.length ? { waiting: true, emailed } : {}),
+      ...(notReadyHandles.length ? { not_ready: notReadyHandles } : {}),
+    });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -20355,7 +20393,7 @@ async function handleSocialFeed(request, env) {
     const nameOf = (id) => (gone.has(id) ? null : prof[id]?.display_name || null);
     // Faces (B2) for the people this feed names; none for a deleted traveler.
     const faces = await gbFaces(env, shownIds.filter((id) => !gone.has(id)), origin);
-    const ccIds = [...new Set(tgs.flatMap((t) => (Array.isArray(t.cc) ? t.cc : [])))].filter((id) => !blocked.has(id)).slice(0, 200);
+    const ccIds = [...new Set([...tgs, ...pcs].flatMap((t) => (Array.isArray(t.cc) ? t.cc : [])))].filter((id) => !blocked.has(id)).slice(0, 200);
     const ccHandle = {};
     if (ccIds.length) {
       const cq = await gbRest(env, `passport_shares?user_id=in.(${ccIds.join(',')})&select=user_id,handle`, {});
@@ -20374,6 +20412,9 @@ async function handleSocialFeed(request, env) {
       message: p.message, place: p.place_name, city: p.city, region: p.region || null, country: p.country,
       dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
       to_me: p.to_user_id === user.id,
+      // A group card (2026-10-24): the others it reached, by @username — shown, never replied to
+      // (a postcard's reply goes to its sender only).
+      ...(p.to_user_id === user.id && Array.isArray(p.cc) && p.cc.length ? { also_to: p.cc.map((id) => ccHandle[id]).filter(Boolean) } : {}),
       // From someone I don't follow (Step A, 2026-10-18): the Mailbox shelves it apart.
       from_new: p.to_user_id === user.id && !ids.includes(p.sender_id),
       ...(p.to_user_id === null && keptSet ? { kept: keptSet.has(p.id) } : {}),
@@ -20471,23 +20512,25 @@ async function handlePostcardBox(request, env) {
     const origin = new URL(request.url).origin;
     // Faces (B2) for the senders it names; none for a deleted traveler.
     const faces = await gbFaces(env, senders.filter((id) => !gone.has(id) && !minor(id)), origin);
+    // The telegrams on this page: the feed's rails. A group telegram's or group postcard's
+    // (2026-10-24) others by @username.
+    const keptTg = pageTg.filter((t) => !blocked.has(t.sender_id) && !minor(t.sender_id) && !teenMe);
+    const ccIds = [...new Set([...keptTg, ...kept].flatMap((t) => (Array.isArray(t.cc) ? t.cc : [])))].filter((id) => !blocked.has(id)).slice(0, 200);
+    const ccHandle = {};
+    if (ccIds.length) {
+      const cq = await gbRest(env, `passport_shares?user_id=in.(${ccIds.join(',')})&select=user_id,handle`, {});
+      for (const r of (cq.ok ? await cq.json() : [])) if (r.handle) ccHandle[r.user_id] = r.handle;
+    }
     const rows = kept.map((p) => ({
       type: 'postcard', id: p.id, created_at: p.created_at,
       photo: `${origin}/pc-photo/${p.photo_key}`,
       message: p.message, place: p.place_name, city: p.city, region: p.region || null, country: p.country,
       dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
       to_me: p.to_user_id === user.id,
+      ...(p.to_user_id === user.id && Array.isArray(p.cc) && p.cc.length ? { also_to: p.cc.map((id) => ccHandle[id]).filter(Boolean) } : {}),
       ...(p.to_user_id === null ? { kept: true } : {}),
       by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
     }));
-    // The telegrams on this page: the feed's rails, and a group's others by @username.
-    const keptTg = pageTg.filter((t) => !blocked.has(t.sender_id) && !minor(t.sender_id) && !teenMe);
-    const ccIds = [...new Set(keptTg.flatMap((t) => (Array.isArray(t.cc) ? t.cc : [])))].filter((id) => !blocked.has(id)).slice(0, 200);
-    const ccHandle = {};
-    if (ccIds.length) {
-      const cq = await gbRest(env, `passport_shares?user_id=in.(${ccIds.join(',')})&select=user_id,handle`, {});
-      for (const r of (cq.ok ? await cq.json() : [])) if (r.handle) ccHandle[r.user_id] = r.handle;
-    }
     const tgRows = keptTg.map((t) => ({
       type: 'telegram', id: t.id, created_at: t.created_at, received_at: t.received_at || null, body: t.body, to_me: true, reply: !!t.reply_to,
       ...(Array.isArray(t.cc) && t.cc.length ? { group: t.cc.map((id) => ccHandle[id]).filter(Boolean) } : {}),
@@ -20806,6 +20849,7 @@ async function handleTelegramSend(request, env, ctx) {
       const orig = tg || (pq.ok ? (await pq.json())[0] : null);
       if (!orig) return jsonResponse({ error: 'That message isn’t here any more' }, 404);
       targets = [orig.sender_id];
+      // Reply to all is a group telegram's; a postcard's reply goes to its sender only (2026-10-24).
       if (b.reply_all === true && tg && Array.isArray(tg.cc) && tg.cc.length) { targets.push(...tg.cc); group = true; }
       replyTo = rid;
     } else {
