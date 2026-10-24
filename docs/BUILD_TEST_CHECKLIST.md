@@ -2957,3 +2957,9 @@ phones (iOS + Android; `capgo channel list` → production 1.0.2610241201). Main
 - **Activate:** push (worker, site, 3 migrations apply on their own), then `npm run ota`. After the push, check
   https://globeskimmers.io/p/<a real slug> and /m/XXXXXXXX (expired page) answer from the API worker. First live
   test: send a postcard with "Or text or share it" to yourself on a second account.
+
+**PUSHED 2026-10-24 ~10:45 AM PT (main d26ba73):** Deploy Cloudflare Workers ✅, Deploy website ✅ (first deploy with
+site-worker.js), Apply Supabase Migrations ✅ (postcard_groups, pending_telegrams, message_links). Probed live:
+globeskimmers.io/p/test123 → 200 from the API worker (was the site 404), /m/ABCD2345 → 404 expired page, /go/ios → 302
+to the App Store, /img/og-send.jpg and /app-version.json (1.0.5 / 1.0.9) served, / and /get/ unchanged.
+**Activate:** `npm run ota` (both platforms). Photo ad for texting: scripts/shots/ad-send-portrait.html (1080×1350).
