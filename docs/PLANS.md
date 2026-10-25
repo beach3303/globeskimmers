@@ -925,6 +925,9 @@ Decided by the founder:
   **six tabs in two rows — Nearby · Stamps · Virtual Passport / My Circle · City Board · My Profile**
   ("My Circle", "City Board" are the founder's names; a tab just for the Virtual Passport; My Profile =
   today's Profile whole). Home reopens on the page used last.
+- The **Virtual Passport tab holds the full-size book** ("I wanted to have presence"): the cover fills the
+  tab, tap opens it in place. Closed book: a swipe changes tabs. Open book: a swipe turns pages (as today),
+  a right swipe on page 1 closes it; tabs stay tappable throughout.
 - City Board page keeps the **billboard** for the current city (founder: "sad that we lost" it) and a
   clear separation from **the rest of the world** (navy band below).
 - The location pill with **Change** (current location / navigate elsewhere) is never lost: pinned on every page.
