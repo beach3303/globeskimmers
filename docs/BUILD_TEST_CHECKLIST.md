@@ -3192,7 +3192,7 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
 - Gates: worker check, eslint + no-undef, build, boot-check ✅. Captured: a postcard's Delete confirm, Sent's Delete all.
 - **Activate:** push (worker), then `npm run ota`.
 
-## 2026-10-25 — Update to get notifications: the card above the Home tabs, a once-a-day sheet (COMMITTED on stamping-v2; not pushed)
+## 2026-10-25 — Update to get notifications: the card above the Home tabs, a rare sheet (PUSHED — app only; OTA pending)
 
 - Founder: "users have to go to settings and then click the 'update' in order to get notifications. can we make it
   simpler by auto updating?" A store build can't update itself and an OTA can't add the push plugin; most phones
