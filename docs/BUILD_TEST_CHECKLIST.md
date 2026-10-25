@@ -2983,3 +2983,16 @@ to the App Store, /img/og-send.jpg and /app-version.json (1.0.5 / 1.0.9) served,
 **OTA 1.0.2610241945 (2026-10-24 ~12:45 PM PT, run by the founder):** on phones (iOS + Android) — airport country stamp,
 state/country flags, bold airport code + date, "Notifications" wording, "Who can comment on my passport", airmail blue
 Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
+
+## 2026-10-25 — A friend's passport says whose it is (COMMITTED on stamping-v2; not pushed, OTA pending)
+
+- Founder: "when i check out my circle's virtual passport, their passport looks like mine". The cover art itself
+  reads "My Virtual Passport", so someone else's showed it too. `PassportBook` takes `visiting` (Passport.jsx passes
+  `readOnly`): the cover's printed words are covered by a feathered band of the same cover from lower down (no new
+  art), and "MARY’S / Virtual Passport" is set in Cormorant Garamond (added to index.html's font link) in the art's
+  gold. Every stamp and blank page carries a faint "MARY’S VIRTUAL PASSPORT" line across the top; page 0 already
+  names them. The banner reads "You’re viewing Mary’s Virtual Passport."; the loader says "this", not "your".
+  Your own passport is unchanged. Screen readers hear "Open Mary’s Virtual Passport" and "… page 2 of 10".
+- Gates: eslint + no-undef, build, boot-check ✅. Captured as the demo account with a mocked public passport
+  (cover, banner, page 2).
+- **Activate:** push, then `npm run ota` (src only; no worker change).

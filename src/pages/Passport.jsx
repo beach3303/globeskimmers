@@ -1408,7 +1408,7 @@ function PassportInner() {
         </div>
         {readOnly && (
           <div className="mb-4 rounded-[16px] px-3.5 py-2.5 flex items-center justify-between gap-2" style={{ background: "#F3E2C7", border: "1px solid #E5CA98" }}>
-            <span style={{ color: "#7E601F", fontSize: fs(12.5), lineHeight: 1.4 }}>👀 You&rsquo;re viewing a shared passport.</span>
+            <span style={{ color: "#7E601F", fontSize: fs(12.5), lineHeight: 1.4 }}>👀 You&rsquo;re viewing {viewHolder && viewHolder !== "A traveler" ? `${viewHolder}’s Virtual Passport` : "a shared passport"}.</span>
             <button onClick={exitView} className="shrink-0 rounded-lg px-3 py-1.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12) }}>My passport</button>
           </div>
         )}
@@ -1572,7 +1572,7 @@ function PassportInner() {
         {loading && stampsView.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-10 h-10 animate-spin mb-3" style={{ color: STAMP }} />
-            <p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(11), letterSpacing: ".1em" }}>Opening your Virtual Passport…</p>
+            <p className="uppercase" style={{ color: INK3, fontFamily: MONO, fontSize: fs(11), letterSpacing: ".1em" }}>{readOnly ? "Opening this Virtual Passport…" : "Opening your Virtual Passport…"}</p>
           </div>
         ) : stampsView.length === 0 && (readOnly || !isAuthenticated) ? (
           <div className="bg-white rounded-[22px] p-6 text-center mt-2" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
@@ -1629,6 +1629,7 @@ function PassportInner() {
             <PassportBook
               stamps={bookStamps}
               showTiers={!readOnly && !preview}
+              visiting={readOnly}
               holder={holder}
               homeCountry={readOnly ? null : (profile?.home_country || null)}
               countries={statsView.countries || 0}

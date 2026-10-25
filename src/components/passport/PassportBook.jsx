@@ -470,9 +470,30 @@ function PhotoFirstToken({ stamp, onOpen, pageW }) {
   );
 }
 
+// Someone else's cover: the art's own "My Virtual Passport" (56–69% down the 1:1.6 cover) is
+// covered by a blank band of the same cover from lower down, feathered top and bottom so the
+// grain runs on, and their name is set in its place in the art's gold. Only the default
+// cover's words sit there, so only it gets the band.
+const COVER_GOLD = "#D9B26A";
+const COVER_SERIF = '"Cormorant Garamond", "Instrument Serif", Georgia, serif'; // the art's own lettering
+function CoverName({ url, owner }) {
+  const fade = "linear-gradient(180deg, transparent, #000 22%, #000 78%, transparent)";
+  return (
+    <>
+      <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: "56%", height: "13%", backgroundImage: `url(${url})`, backgroundSize: "100% 769.2%", backgroundPosition: "0 85%", WebkitMaskImage: fade, maskImage: fade, pointerEvents: "none" }} />
+      <div aria-hidden style={{ position: "absolute", left: "9%", right: "9%", top: "57.5%", textAlign: "center", fontFamily: COVER_SERIF, fontWeight: 500, color: COVER_GOLD, textShadow: "0 1px 0 rgba(0,0,0,.4)", pointerEvents: "none" }}>
+        <div style={{ fontSize: "calc(min(94vw, 440px) * 0.042)", letterSpacing: ".24em", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{owner}’s</div>
+        <div style={{ fontSize: "calc(min(94vw, 440px) * 0.1)", lineHeight: 1.02, marginTop: "0.12em" }}>Virtual Passport</div>
+      </div>
+    </>
+  );
+}
+
 // Ivory paper wrapper shared by every interior page. Carries a faint alternating
-// ✈️/🌍 watermark and a page number in the lower outer (right) corner.
-function Paper({ children, coverH, pageNo, watermark, grow = false }) {
+// ✈️/🌍 watermark and a page number in the lower outer (right) corner. running: someone
+// else's passport names its owner in a faint line across the top of every page
+// (founder, 2026-10-25: "so we don't get confused that it isn't ours").
+function Paper({ children, coverH, pageNo, watermark, grow = false, running = null }) {
   return (
     <div style={{
       background: PAPER, border: `1px solid ${PAPER_EDGE}`, borderRadius: 16,
@@ -482,6 +503,9 @@ function Paper({ children, coverH, pageNo, watermark, grow = false }) {
     }}>
       {watermark && (
         <div aria-hidden style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: 0.06, fontSize: 180, pointerEvents: "none" }}>{watermark}</div>
+      )}
+      {running && (
+        <div aria-hidden style={{ position: "absolute", top: 5, left: 16, right: 16, textAlign: "center", fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".2em", textTransform: "uppercase", color: INK3, opacity: 0.7, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none" }}>{running}</div>
       )}
       <div style={{ position: "relative", height: grow ? "auto" : "100%", overflow: grow ? "visible" : "hidden" }}>{children}</div>
       {pageNo != null && (
@@ -534,10 +558,10 @@ function OwnershipPage({ holder, homeCountry, countries, totalStamps, coverH, pa
 // share size, centred, the way pages were shared before (it may grow taller than
 // a page; the share frame scales it to fit).
 const SPOT = ["flex-start", "center", "flex-end"];
-function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW, share = false, tiers = false }) {
+function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW, share = false, tiers = false, running = null }) {
   if (pg.stamps.length === 1 && isPhotoFirst(pg.stamps[0])) {
     return (
-      <Paper coverH={coverH} pageNo={pageNo} watermark={watermark}>
+      <Paper coverH={coverH} pageNo={pageNo} watermark={watermark} running={running}>
         <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 18 }}>
           <PhotoFirstToken stamp={pg.stamps[0]} onOpen={() => onOpenStamp(pg.stamps[0].id)} pageW={pageW} />
         </div>
@@ -564,7 +588,7 @@ function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW, share = 
     : hashStr(lone.id || lone.name) % 2 ? [null, lone] : [lone, null];
   const rows = halves.length === 1 ? "1fr" : !lone ? `${Math.round(need(halves[0]))}fr ${Math.round(need(halves[1]))}fr` : "1fr 1fr";
   return (
-    <Paper coverH={coverH} pageNo={pageNo} watermark={watermark}>
+    <Paper coverH={coverH} pageNo={pageNo} watermark={watermark} running={running}>
       <div style={{ position: "relative", height: "100%", display: "grid", gridTemplateRows: rows, gap: HALF_PAD.gap, paddingTop: HALF_PAD.top, paddingBottom: HALF_PAD.bottom }}>
         {halves.map((s, j) => (
           <div key={s ? s.id : `empty-${j}`} style={{ display: "flex", minHeight: 0, padding: "2px 4px", ...(s ? spot(s) : {}), ...(pg.full ? { justifyContent: "center", alignItems: "center" } : {}) }}>
@@ -608,9 +632,9 @@ const shareMeta = (p) => ({
 const revokeSlides = (slides) => (slides || []).forEach((x) => { try { if (x?.url) URL.revokeObjectURL(x.url); } catch { /* ignore */ } });
 
 // Blank ivory page — trailing fresh pages waiting for stamps.
-function EmptyCollectionPage({ coverH, pageNo, watermark, first = false }) {
+function EmptyCollectionPage({ coverH, pageNo, watermark, first = false, running = null }) {
   return (
-    <Paper coverH={coverH} pageNo={pageNo} watermark={watermark}>
+    <Paper coverH={coverH} pageNo={pageNo} watermark={watermark} running={running}>
       {first && (
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-8" style={{ pointerEvents: "none" }}>
           <p style={{ fontFamily: SERIF, fontSize: fs(20), color: INK, lineHeight: 1.25 }}>Your first stamp lands here.</p>
@@ -626,7 +650,12 @@ export default function PassportBook({
   coverUrl = PASSPORT_COVER_URL,
   renderUnderPage = null, // (pageStamps) => node — the Blotter strip under an open page
   showTiers = false,      // the owner's view: corner marks + tier-aware picture shares
+  visiting = false,       // someone else's passport: their name on the cover and atop each page
 }) {
+  // The cover art reads "My Virtual Passport" (founder, 2026-10-25: a friend's "looks like mine"),
+  // so someone else's names them: "Mary’s Virtual Passport" on the cover and every page.
+  const owner = visiting && holder ? String(holder).trim() : "";
+  const bookName = owner ? `${owner}’s Virtual Passport` : "My Virtual Passport";
   const reduce = useReducedMotion();
   const [open, setOpen] = useState(false);
   const [[page, dir], setPage] = useState([0, 0]); // 0 = ownership, 1..N = stamp pages
@@ -721,11 +750,12 @@ export default function PassportBook({
     const watermark = idx % 2 === 0 ? "🌍" : "✈️"; // alternate earth / airplane
     if (idx === 0) return <OwnershipPage holder={holder} homeCountry={homeCountry} countries={countries} totalStamps={totalStamps} coverH={coverH} pageNo={pageNo} watermark={watermark} />;
     const ci = idx - 1; // 0-based index into the collection (stamp pages, then blanks)
-    if (ci < stampCount) return <StampPage pg={bookPages[ci]} onOpenStamp={onOpenStamp} coverH={coverH} pageNo={pageNo} watermark={watermark} pageW={pageW} tiers={showTiers} />;
-    return <EmptyCollectionPage coverH={coverH} pageNo={pageNo} watermark={watermark} first={ci === stampCount && stampCount === 0} />;
+    const running = owner ? bookName : null;
+    if (ci < stampCount) return <StampPage pg={bookPages[ci]} onOpenStamp={onOpenStamp} coverH={coverH} pageNo={pageNo} watermark={watermark} pageW={pageW} tiers={showTiers} running={running} />;
+    return <EmptyCollectionPage coverH={coverH} pageNo={pageNo} watermark={watermark} first={ci === stampCount && stampCount === 0} running={running} />;
   };
 
-  const pageLabel = `Page ${page + 1} of ${total}`;
+  const pageLabel = owner ? `${bookName}, page ${page + 1} of ${total}` : `Page ${page + 1} of ${total}`;
 
   // Share the current page as a branded image. Two taps on purpose: the first
   // renders (html2canvas takes a moment, and WebKit only lets navigator.share
@@ -1032,7 +1062,7 @@ export default function PassportBook({
             <motion.button
               key="cover"
               onClick={openBook}
-              aria-label="Open My Virtual Passport"
+              aria-label={`Open ${bookName}`}
               initial={firstRender.current ? { rotateY: 0 } : { rotateY: -158, opacity: 0 }}
               animate={{ rotateY: 0, opacity: 1 }}
               exit={{ rotateY: reduce ? 0 : -158, opacity: reduce ? 0 : 1 }}
@@ -1045,7 +1075,8 @@ export default function PassportBook({
                 boxShadow: "0 20px 44px -16px rgba(0,0,0,.55)",
               }}
             >
-              <img src={coverUrl} alt="Globeskimmers · My Virtual Passport" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }} />
+              <img src={coverUrl} alt={`Globeskimmers · ${bookName}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }} />
+              {owner && coverUrl === PASSPORT_COVER_URL ? <CoverName url={coverUrl} owner={owner} /> : null}
             </motion.button>
           )}
         </AnimatePresence>
