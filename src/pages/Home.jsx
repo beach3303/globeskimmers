@@ -18,7 +18,6 @@ import SuggestPlaceSection from "../components/home/SuggestPlaceSection";
 // iPad gets the HomeRows folder ("Around you") in the same zone stack.
 import AllServicesSheet from "../components/home/AllServicesSheet";
 import NearbyServices from "../components/home/NearbyServices";
-import PassportHero from "../components/home/PassportHero";
 import { getTravelMode } from "@/lib/homeContext";
 import { IVORY, NEUTRAL, fs } from "../components/redesign/constants";
 import { useAuth } from "@/lib/AuthContext";
@@ -40,6 +39,10 @@ import DestinationStrip from "@/components/search/DestinationStrip";
 import UpdateCard from "@/components/home/UpdateCard";
 import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
 import CityBoardRow from "@/components/home/CityBoardRow";
+import HomePager, { initialHomePage, rememberHomePage } from "@/components/home/HomePager";
+import ArrivalsPage from "@/components/home/ArrivalsPage";
+import PassportPage from "@/pages/Passport";
+import ProfilePage from "@/pages/Profile";
 import { openAttraction } from "@/lib/openAttraction";
 
 // Translation mapping for greetings — shown next to the mono "Hello" kicker
@@ -592,6 +595,69 @@ export default function HomePage() {
     setShowAllServices(true);
   };
 
+  // ── The six pages ──────────────────────────────────────────────────────────
+  const [homePage, setHomePage] = useState(() => initialHomePage(new URLSearchParams(routerLocation.search).get('page')));
+  const openHomePage = (id) => {
+    setHomePage(id);
+    rememberHomePage(id);
+    // Which pages people open tells us who uses Home for what (founder, 2026-10-25).
+    trackEvent('home_page', { page: id });
+  };
+  const renderHomePage = (id) => {
+    if (id === 'nearby') {
+      return (
+        <div style={{ paddingTop: 12 }}>
+          {/* SMART-SEARCH SPINE — one search that routes into the right world. */}
+          <SmartSearchBar onOpen={() => setShowSearch(true)} />
+          {destSearch && !destDismissed && (
+            <DestinationStrip place={destSearch} onAction={handleQuickAction} onDismiss={() => setDestDismissed(true)} />
+          )}
+          {/* Every finder as a tile, phone too: the Nearby page has the room (2026-10-25). */}
+          <NearbyServices wide={isTablet} compact={!isTablet} onAction={handleQuickAction} onAllServices={openAllServices} />
+          {/* Phones on an older store build: update to get notifications (2026-10-24). Nothing otherwise. */}
+          <UpdateCard />
+          {isTablet && <HomeRows unit={unit} onAction={handleQuickAction} />}
+        </div>
+      );
+    }
+    if (id === 'stamps') {
+      return (
+        <div style={{ paddingTop: 12 }}>
+          {/* The passport, as one slim line that opens its page (founder, 2026-10-25: the big banner
+              gave way so the stamps themselves lead). */}
+          <PassportLine total={passport.total} nearest={nearestStamp} unit={unit} onOpen={() => openHomePage('passport')} />
+          <StampsNearYou unit={unit} onAction={handleQuickAction} onNearest={setNearestStamp} />
+          {isDreamStack && (
+            <DreamShelf
+              latitude={activeLocation?.coordinates?.latitude}
+              longitude={activeLocation?.coordinates?.longitude}
+              cityName={cityName}
+              cityTempF={weatherInfo?.fahrenheit ?? null}
+              cityTempC={weatherInfo?.celsius ?? null}
+              tempUnit={tempUnit}
+              earnedIds={passport.earnedIds}
+              earnedError={!!passport.error}
+              onOpenActivity={openDreamActivity}
+            />
+          )}
+          <SuggestPlaceSection wide={isTablet} />
+          <WanderlustLine />
+        </div>
+      );
+    }
+    if (id === 'passport') return <PassportPage embedded />;
+    if (id === 'arrivals') return <ArrivalsPage wide={isTablet} />;
+    if (id === 'cityboard') {
+      return (
+        <div style={{ paddingTop: 12 }}>
+          <CityBoardRow city={activeLocation?.address?.city} country={activeLocation?.address?.country} region={activeLocation?.address?.state} />
+        </div>
+      );
+    }
+    if (id === 'profile') return <ProfilePage embedded />;
+    return null;
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen font-sans" style={{ background: IVORY }}>
@@ -617,56 +683,13 @@ export default function HomePage() {
         showTime={isTablet}
       />
 
-      {/* SMART-SEARCH SPINE — one search that routes into the right world.
-          Briefly removed 2026-10-06, restored 2026-10-07 once the audit's four
-          fixes landed (typed city wins, best/top-rated sort, authentic tiers,
-          whole-word keywords). Sits ABOVE the first zone kicker, with the
-          DestinationStrip glued directly underneath it. */}
-      <SmartSearchBar onOpen={() => setShowSearch(true)} />
-      {destSearch && !destDismissed && (
-        <DestinationStrip place={destSearch} onAction={handleQuickAction} onDismiss={() => setDestDismissed(true)} />
-      )}
-      {/* Nearby services right under the search (founder, 2026-10-17): Eat, Coffee, Things to do
-          are the first thing a traveler reaches for, before the passport. */}
-      <NearbyServices wide={isTablet} onAction={handleQuickAction} onAllServices={openAllServices} />
-      {/* Phones on an older store build: update to get alerts (2026-10-24). Nothing otherwise. */}
-      <UpdateCard />
-
-      {/* THE ZONES — one fixed order, each zone its own <section data-zone>
-          (bible.home.order; nearby services moved above them, 2026-10-17): passport, the boards row, stamps
-          near you, the stamp shelf (dream stack only), local favorites, then
-          the closing quote. Your circle's activity lives in the Mailbox only
-          (founder, 2026-10-16: "remove your circle activity post from Home page"). Each zone renders nothing when it has nothing
-          honest to show, so the stack self-compacts. Layout reserves the
-          bottom space for the floating nav. */}
-      <PassportHero
-        total={passport.total}
-        newest={passport.newest}
-        error={passport.error}
-        nearest={nearestStamp}
-        unit={unit}
-        onOpen={() => { trackEvent('feature_used', { feature_name: 'passport_hero' }); navigate(createPageUrl('Passport')); }}
-      />
-      {/* City Board: 'Postcards from Lisbon', only when that board has something to show. */}
-      <CityBoardRow city={activeLocation?.address?.city} country={activeLocation?.address?.country} region={activeLocation?.address?.state} />
-      {isTablet && rowsFirst && <HomeRows unit={unit} onAction={handleQuickAction} />}
-      <StampsNearYou unit={unit} onAction={handleQuickAction} onNearest={setNearestStamp} />
-      {isTablet && !rowsFirst && <HomeRows unit={unit} onAction={handleQuickAction} />}
-      {isDreamStack && (
-        <DreamShelf
-          latitude={activeLocation?.coordinates?.latitude}
-          longitude={activeLocation?.coordinates?.longitude}
-          cityName={cityName}
-          cityTempF={weatherInfo?.fahrenheit ?? null}
-          cityTempC={weatherInfo?.celsius ?? null}
-          tempUnit={tempUnit}
-          earnedIds={passport.earnedIds}
-          earnedError={!!passport.error}
-          onOpenActivity={openDreamActivity}
-        />
-      )}
-      <SuggestPlaceSection wide={isTablet} />
-      <WanderlustLine />
+      {/* SIX PAGES (founder's decision sheet, 2026-10-25: "Six pages, two rows of tabs"; tabs tap,
+          pages swipe): Nearby · Stamps · Virtual Passport / Arrivals · City Board · My Profile. The
+          lobby stays above them; HomePager keeps the tabs stuck under the banner and, once the lobby
+          has scrolled away, a slim location line with Change. A new member opens on Stamps; after
+          that Home reopens on the page used last. */}
+      <HomePager page={homePage} onPage={openHomePage} render={renderHomePage}
+        location={{ label: placeText, onChange: () => setShowLocationPicker(true) }} />
 
       <SmartSearchOverlay isOpen={showSearch} onClose={() => setShowSearch(false)} />
 
@@ -686,6 +709,34 @@ export default function HomePage() {
       {/* Arrival stamps — airport (domestic + international) + land/boat border crossings */}
       {profile?.onboarding_completed && !showWelcome && <AirportArrivalPrompt />}
       {profile?.onboarding_completed && !showWelcome && <BorderCrossingPrompt />}
+    </div>
+  );
+}
+
+// ── PassportLine — the passport on the Stamps page ───────────────────────────
+// One slim navy line (founder, 2026-10-25: the big banner gave way so the stamps lead): how many
+// stamps (only once known — never a fake 0), the nearest one still to collect, and Open, which goes
+// to the Virtual Passport page.
+const KM_PER_MI = 1.609344;
+function PassportLine({ total, nearest = null, unit = 'mi', onOpen }) {
+  let km = null;
+  if (nearest && Number.isFinite(nearest.km)) km = nearest.km;
+  else if (nearest && Number.isFinite(nearest.miles)) km = nearest.miles * KM_PER_MI;
+  const d = km == null ? null : unit === 'km' ? km : km / KM_PER_MI;
+  const dist = d == null ? '' : `${d < 10 ? d.toFixed(1) : Math.round(d)} ${unit === 'km' ? 'KM' : 'MI'}`;
+  const next = nearest && nearest.name ? `NEXT STAMP · ${String(nearest.name).toUpperCase()}${dist ? ` · ${dist}` : ''}` : null;
+  return (
+    <div className="max-w-md md:max-w-2xl mx-auto" style={{ padding: '0 16px', marginBottom: 6 }}>
+      <button type="button" onClick={onOpen} aria-label="Open your Virtual Passport"
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, minHeight: 54, padding: '8px 14px', borderRadius: 16, border: 0, background: NEUTRAL.navy, color: '#FBF6EC', textAlign: 'left', font: 'inherit', cursor: 'pointer' }}>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'block', fontFamily: "'Instrument Serif', Georgia, serif", fontSize: fs(19), lineHeight: 1.1 }}>
+            {total == null ? <>My Virtual <em style={{ fontStyle: 'italic', color: NEUTRAL.gold }}>Passport</em></> : <>{total} {total === 1 ? 'stamp' : 'stamps'} <em style={{ fontStyle: 'italic', color: NEUTRAL.gold }}>collected</em></>}
+          </span>
+          {next ? <span style={{ display: 'block', marginTop: 3, fontFamily: "'JetBrains Mono', ui-monospace, Menlo, monospace", fontSize: fs(9), letterSpacing: '.14em', color: '#CFE0F5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{next}</span> : null}
+        </span>
+        <span style={{ flex: 'none', fontFamily: "'JetBrains Mono', ui-monospace, Menlo, monospace", fontSize: fs(9.5), letterSpacing: '.14em', color: NEUTRAL.gold }}>OPEN →</span>
+      </button>
     </div>
   );
 }

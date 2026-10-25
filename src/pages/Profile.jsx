@@ -70,13 +70,14 @@ function Field({ label, children }) {
   );
 }
 
-export default function ProfilePage() {
+// embedded (2026-10-25): inside Home's My Profile tab — it paints its own paper instead of the page's.
+export default function ProfilePage({ embedded = false } = {}) {
   const navigate = useNavigate();
   const { profile, socialTier, socialTierReady } = useAuth();
   const mine = useMyCloth();
   const [previewCloth, setPreviewCloth] = useState(null); // the cloth on show while editing
   const cloth = previewCloth ? clothOf(previewCloth) : mine;
-  usePageGround(cloth.paper);
+  usePageGround(embedded ? null : cloth.paper);
   const teen = socialTier === "teen";
 
   const [stamps, setStamps] = useState(null);     // null until listPassport lands
@@ -203,7 +204,7 @@ export default function ProfilePage() {
   const fieldStyle = { display: "block", width: "100%", boxSizing: "border-box", marginTop: 6, padding: "0 12px", minHeight: 44, borderRadius: 12, background: NEUTRAL.white, border: `1px solid ${cloth.fieldLine}`, fontSize: fs(15), color: NEUTRAL.ink, outline: "none" };
 
   return (
-    <div style={{ "--gs-focus": cloth.cloth }}>
+    <div style={{ "--gs-focus": cloth.cloth, ...(embedded ? { background: cloth.paper, paddingBottom: 24 } : {}) }}>
       {/* The 12px mat in the owner's paper, then the cover. */}
       <div aria-hidden="true" style={{ height: 12 }} />
       <CoverBand cloth={cloth.key} kicker="My world" leading="edit" onLeading={edit ? cancelEdit : startEdit}

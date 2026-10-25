@@ -3040,7 +3040,7 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
 - Gates: worker check, eslint + no-undef, build, boot-check ✅. Captured with a mocked /mail/sent (six kinds).
 - **Activate:** push (worker + migration apply on their own), then `npm run ota`.
 
-## 2026-10-25 — Mailbox tabs: Postcards · Telegrams · Sent · News (COMMITTED on stamping-v2; not pushed)
+## 2026-10-25 — Mailbox tabs: Postcards · Telegrams · Sent · News (PUSHED — main 22689f0; OTA pending)
 
 - Founder's decision sheet, answer 7. **Mailbox** is now: the masthead ("Mail from your *circle*", the seal, Postcard ·
   Telegram · **+ Add friends** — the labeled door replaces the bare magnifier), then four folder tabs in the Home
@@ -3059,4 +3059,28 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   that card). The postcard box's own list and the door tiles are gone.
 - Gates: eslint + no-undef, build, boot-check ✅. Captured with mocked feed/box/activity: each tab, a /Postcards?pc=
   link opening a read group card, the tab bar.
+- **Activate:** push (app only), then `npm run ota`.
+
+## 2026-10-25 — Home as six pages, step 1 (COMMITTED on stamping-v2; not pushed)
+
+- Founder's decision sheet, answers 1–5: six pages, two rows of folder tabs, Arrivals, new members on Stamps, bottom
+  bar unchanged; "tabs should be tappable and pages should be swipeable".
+- **HomePager** (src/components/home/HomePager.jsx): Nearby · Stamps · Virtual Passport / Arrivals · City Board ·
+  My Profile in two rows of HOME_TAB folder tabs, stuck under the banner (top: 50px + safe area). A tap opens a page;
+  a sideways swipe (raw touch, the iOS-WebView-safe way) slides to the neighbor with a little give at the ends. A
+  swipe that starts on something that scrolls sideways (stamp rows) or carries data-swipe-own (an open passport
+  book) is left alone. At rest only the page on show is laid out, untransformed, so sheets inside pages (fixed)
+  sit right; transforms only during the slide. Pages mount on first open and stay mounted. Once the lobby scrolls
+  away, a slim "📍 <place> Change" line joins the stuck tabs. The page used last is kept (gs_home_page_v1); a new
+  member opens on Stamps; ?page= opens one. Each page open logs `home_page {page}`.
+- **Pages:** Nearby = Smart Search, the destination strip, **every finder as a compact 3-across tile grid**
+  (NearbyServices `compact`), UpdateCard. Stamps = a slim navy PassportLine (stamps collected · next stamp · OPEN →
+  Virtual Passport; the big PassportHero banner is gone), Stamps near you, the Stamp shelf, Local favorites, the
+  quote. Virtual Passport = the Passport page `embedded` (no Back; the closed cover opens on a tap, PassportBook
+  `swipeToOpen={false}`). Arrivals = ArrivalsPage (I follow / Follow me tiles → Circle, FriendsTravels, Add
+  friends). City Board = the billboard (CityBoardRow). My Profile = the Profile page `embedded` (paints its own
+  paper; doesn't set the page ground).
+- Gates: eslint + no-undef, build, boot-check ✅. Captured all six pages as the demo account; a synthetic swipe on
+  Stamps slid to Virtual Passport (its stampable-places sheet opened correctly placed).
+- Next (step 2): City Board photos + "the rest of the world" band; New arrivals and Events come with their builds.
 - **Activate:** push (app only), then `npm run ota`.

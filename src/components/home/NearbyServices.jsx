@@ -6,6 +6,9 @@
 // last chip clear the fade. iPad: all eleven finders as an inline ServiceTile grid in
 // FINDER_ORDER, so nothing hides behind a sheet on the big screen.
 //
+// compact (2026-10-25): the Nearby page on a phone — every finder, three small tiles to a row,
+// since the page has the room the old one-row strip didn't.
+//
 // Navigation and analytics stay with Home: onAction(label) is Home's
 // handleQuickAction (it logs feature_used and routes), onAllServices opens the sheet
 // (Home logs all_services_sheet).
@@ -17,13 +20,13 @@ import { FINDER_ORDER, WORLD } from "@/components/redesign/constants";
 
 const LEAD = ["eat", "coffee", "todo", "restroom"];
 
-export default function NearbyServices({ onAction, onAllServices, wide = false }) {
-  if (wide) {
+export default function NearbyServices({ onAction, onAllServices, wide = false, compact = false }) {
+  if (wide || compact) {
     return (
       <HomeZone zone="services" label="Nearby services" wide>
-        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 112px), 1fr))", gap: 10, paddingRight: 16 }}>
+        <div className="grid" style={{ gridTemplateColumns: compact ? "repeat(3, minmax(0, 1fr))" : "repeat(auto-fill, minmax(min(100%, 112px), 1fr))", gap: compact ? 8 : 10, paddingRight: 16 }}>
           {FINDER_ORDER.map((k) => (
-            <ServiceTile key={k} world={k} onClick={() => onAction(WORLD[k].action)} />
+            <ServiceTile key={k} world={k} onClick={() => onAction(WORLD[k].action)} style={compact ? { minHeight: 78, gap: 5, padding: "8px 4px" } : undefined} />
           ))}
         </div>
       </HomeZone>

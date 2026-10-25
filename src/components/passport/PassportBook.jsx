@@ -651,6 +651,7 @@ export default function PassportBook({
   renderUnderPage = null, // (pageStamps) => node — the Blotter strip under an open page
   showTiers = false,      // the owner's view: corner marks + tier-aware picture shares
   visiting = false,       // someone else's passport: their name on the cover and atop each page
+  swipeToOpen = true,     // false inside Home's Virtual Passport tab: a swipe on the closed cover changes tabs
 }) {
   // The cover art reads "My Virtual Passport" (founder, 2026-10-25: a friend's "looks like mine"),
   // so someone else's names them: "Mary’s Virtual Passport" on the cover and every page.
@@ -718,11 +719,11 @@ export default function PassportBook({
     const dy = t.clientY - touch.current.y;
     touch.current = null;
     if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.2) return; // not a horizontal swipe
-    if (!open) { if (dx < 0) openBook(); return; }                      // swipe left on cover → open
+    if (!open) { if (dx < 0 && swipeToOpen) openBook(); return; }       // swipe left on cover → open
     if (dx < 0) go(1);                                                  // swipe left → next page
     else if (page === 0) closeBook();                                   // swipe right on page 1 → back to cover
     else go(-1);                                                        // swipe right → previous page
-  }, [open, openBook, go, page, closeBook]);
+  }, [open, openBook, go, page, closeBook, swipeToOpen]);
 
   // Keyboard: Enter/Space open · ← → turn · Esc close.
   const onKey = useCallback((e) => {
@@ -1003,7 +1004,8 @@ export default function PassportBook({
       onKeyDown={onKey}
     >
       {/* Book stage */}
-      <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} style={{ perspective: 2000, width: coverW, height: coverH, position: "relative" }}>
+      {/* data-swipe-own: an open book keeps its swipes (pages turn) — Home's tabs don't move under it. */}
+      <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} data-swipe-own={open ? "" : undefined} style={{ perspective: 2000, width: coverW, height: coverH, position: "relative" }}>
         {/* contact shadow */}
         <div aria-hidden style={{ position: "absolute", left: "8%", right: "8%", bottom: -10, height: 24, background: "radial-gradient(ellipse at center, rgba(0,0,0,.34), rgba(0,0,0,0) 70%)", filter: "blur(3px)", zIndex: 0 }} />
 

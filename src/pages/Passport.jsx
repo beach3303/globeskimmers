@@ -1007,9 +1007,11 @@ class PassportBoundary extends React.Component {
   }
 }
 
-export default function PassportPage() { return <PassportBoundary><PassportInner /></PassportBoundary>; }
+// embedded (2026-10-25): inside Home's Virtual Passport tab — no Back button, and the closed cover
+// opens on a tap (a swipe there changes Home's tabs).
+export default function PassportPage({ embedded = false } = {}) { return <PassportBoundary><PassportInner embedded={embedded} /></PassportBoundary>; }
 
-function PassportInner() {
+function PassportInner({ embedded = false }) {
   const navigate = useNavigate();
   const isTablet = useIsTablet();
   const colWrap = isTablet ? "max-w-[820px]" : "max-w-md";
@@ -1373,9 +1375,11 @@ function PassportInner() {
       {/* HEADER */}
       <div className="px-4 pt-2 pb-3">
         <div className={`${colWrap} mx-auto flex items-center justify-between`}>
-          <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-black/5" style={{ background: "#fff", border: `1px solid ${RULE}` }} aria-label="Back">
-            <ChevronLeft size={18} color={INK} strokeWidth={2.2} />
-          </button>
+          {embedded ? <span /> : (
+            <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-black/5" style={{ background: "#fff", border: `1px solid ${RULE}` }} aria-label="Back">
+              <ChevronLeft size={18} color={INK} strokeWidth={2.2} />
+            </button>
+          )}
           <button onClick={load} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-black/5" style={{ background: "#fff", border: `1px solid ${RULE}` }} title="Refresh">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} color={INK} strokeWidth={2} />
           </button>
@@ -1616,6 +1620,7 @@ function PassportInner() {
               stamps={bookStamps}
               showTiers={!readOnly && !preview}
               visiting={readOnly}
+              swipeToOpen={!embedded}
               holder={holder}
               homeCountry={readOnly ? null : (profile?.home_country || null)}
               countries={statsView.countries || 0}
