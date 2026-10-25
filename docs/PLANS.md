@@ -963,6 +963,25 @@ T1/T2/T3 · D8 Just joined rules · D9 event ticket links · D2 Mailbox tabs Pos
 D3 senders see "Opened"? · D4 group by default · D5 Add friends fixes.
 Proposed build order: group default → friend's cover → Sent → Mailbox tabs → swipeable Home → events → Just joined.
 
+### ANSWERED 2026-10-25 (founder, decision sheet) — build in this order
+
+1. **Group messages:** with 2+ names "One group" is picked first (everyone sees the names); private copies one tap
+   away. **Reply to sender OR reply to all** on group telegrams AND group postcards (changes the 10-24 "postcard
+   replies go to the sender only" rule for group postcards).
+2. **Sent folder.** Senders see **"Opened" on telegrams only**; postcards say Delivered.
+3. **Mailbox tabs: Postcards · Telegrams · Sent · News**; the Postcard box page retires; sealed telegrams still tap open.
+4. **Home: six pages, two rows of folder tabs** — Nearby · Stamps · Virtual Passport / **Arrivals** · City Board ·
+   My Profile (the circle tab is named **Arrivals**; Just joined becomes "New arrivals"). New members open on
+   **Stamps**. **Bottom bar stays as it is** (Passport/Profile open the same tabs; Settings unchanged).
+5. **Adding friends:** labeled "+ Add friends", Follow on mail from someone new, people listed when Find people
+   opens; the sheet also shows **Invite by text** and **Invite by email** plainly (both already exist since 10-24).
+6. **Events & festivals:** nine kinds as mocked (Games = NFL/NBA/MLB/MLS/NHL/college from Ticketmaster); taps:
+   official page + "Tickets on Ticketmaster". **Track every Tickets tap** (event, kind, city, state, country) with
+   an admin view per day / week / month, per state and per country.
+7. **Just joined (New arrivals):** as suggested — 14 days, home city else the joined-from city, on by default with
+   a Settings switch, adults only (never minors), never blocked people. **Founder: remove the feed for everybody
+   once there are many members.**
+
 ## Website (globeskimmers.io)
 
 - Deployed 2026-09-14 (48e1c81, 1d1e3b0, a3cdab8) to the globeskimmers-site Worker. **Live on https://globeskimmers.io since 2026-09-21**: the founder attached globeskimmers.io and www in Cloudflare; pages, redirects, app-ads.txt and security headers verified on the real domain. Test addresses switched off (9d766af). www serves the same site; the platform rejects host redirects in _redirects, so a www→plain 301 would be a Cloudflare Redirect Rule if ever wanted.
