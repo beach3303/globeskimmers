@@ -3177,7 +3177,7 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   Replayed 11 live shapes: all land right. App: Stage gets a Shows chip.
 - **Activate:** push (worker), then `npm run ota`.
 
-## 2026-10-25 — Delete in the inbox and Sent, Delete all, no Unfollow on a message's ••• (COMMITTED on stamping-v2; not pushed)
+## 2026-10-25 — Delete in the inbox and Sent, Delete all, no Unfollow on a message's ••• (PUSHED — main 494d7f2; worker ✅; OTA pending)
 
 - Founder: "allow users to delete post cards and telegrams in inboxes and sent message. allow user to delete all sent
   messages at once. remove unfollow inside when 3 dots are clicked when deleting postcard or telegram."
