@@ -916,7 +916,9 @@ Open ideas, not decided: a "Sent" list so the sender can see what they wired; te
 
 ## Home, Mailbox, circle and events — founder, 2026-10-25 (DIRECTION AGREED, decisions open)
 
-Audit + mockups: https://claude.ai/artifact/4kVDaRG9iqapxwWMtJDsH4 (decision ids D1–D9 there).
+Audit + mockups: https://claude.ai/artifact/4kVDaRG9iqapxwWMtJDsH4. **Decision sheet (12 questions, tap to
+answer; answers save in its db, collection `answers`, one doc per question id — read them with ArtifactData):
+https://claude.ai/artifact/8ZfCYT9GturRuTk2b3J8rM** — it supersedes the D-ids on the audit page.
 Why: two audiences. Travelers love stamping; friends at home don't travel much, so they come for
 City Boards, to see where people are going, and for postcards and telegrams.
 
