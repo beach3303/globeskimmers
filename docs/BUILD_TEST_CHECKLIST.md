@@ -3115,7 +3115,7 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   and the sheet listing both.
 - **Activate:** push (app only), then `npm run ota`.
 
-## 2026-10-25 — Events & festivals (COMMITTED on stamping-v2; not pushed)
+## 2026-10-25 — Events & festivals (PUSHED — main 92096f2; worker ✅; live: LA 111 events, Manila holidays + markets; OTA pending)
 
 - Founder: events in Nearby services — shows, games, festivals, choirs, orchestras, plays, kids' shows, free things,
   seasonal/holiday, farmers markets, fairs — "as organized and harmonious as page D"; decision sheet: official
@@ -3147,7 +3147,7 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   queries. Captured with a mocked /events/whats-on: the overview, Music, an event sheet, Home's Nearby row.
 - **Activate:** push (deploys the worker), then probe /events/whats-on live (LA, Manila); `npm run ota`.
 
-## 2026-10-25 — New arrivals on Home's Arrivals page (COMMITTED on stamping-v2; not pushed)
+## 2026-10-25 — New arrivals on Home's Arrivals page (PUSHED — main 92096f2; migration ✅; live: 10 members; OTA pending)
 
 - Founder's decision sheet, answer 6: as suggested — 14 days, home city else the joined-from place, on by default
   with an off switch, adults only ("Do not show minors"), never blocked people; "eventually when we have a lot of
@@ -3165,3 +3165,14 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
 - Gates: worker check, eslint + no-undef, build, boot-check ✅. Captured with a mocked /social/new-arrivals (three
   members) and the Settings switch.
 - **Activate:** push (worker + migration apply on their own), then `npm run ota`.
+
+## 2026-10-25 — Events: sorting fixed on live data (COMMITTED on stamping-v2; not pushed)
+
+- First live read (Los Angeles, Oct 31–Nov 1: 111 events) showed Ticketmaster's odd filing: a pumpkin fest under
+  horse racing, a college soccer game with no segment, stadium tours under Miscellaneous, a vendor market under Music,
+  a drag brunch tagged Play. evKinds now reads the title too: " vs. " → Games; Fest / Festival / Fiesta → Festivals;
+  pumpkin, trunk-or-treat, kids, family, Disney… → Kids & families; market / bazaar / swap meet / flea → Markets
+  (not Music); stage tags Play only for Theatre, else Musical / Comedy / Dance / Show; anything unplaced stays out of
+  the kind sections (a name search still finds it). Markets drop shops that call themselves one. KV key → v2.
+  Replayed 11 live shapes: all land right. App: Stage gets a Shows chip.
+- **Activate:** push (worker), then `npm run ota`.

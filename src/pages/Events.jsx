@@ -33,9 +33,9 @@ const COLUMN = "max-w-md md:max-w-2xl mx-auto px-4";
 const ICON = { festivals: PartyPopper, fairs: FerrisWheel, kids: Baby, music: Music, stage: Drama, games: Trophy, free: Gift, markets: Carrot, holidays: CalendarHeart };
 const SUBS = {
   music: ["Orchestra", "Choir", "Concert", "Jazz", "Opera"],
-  stage: ["Play", "Musical", "Comedy", "Dance"],
+  stage: ["Play", "Musical", "Comedy", "Dance", "Show"],
 };
-const SUB_LABEL = { Choir: "Choirs", Concert: "Concerts", Play: "Plays", Musical: "Musicals" };
+const SUB_LABEL = { Choir: "Choirs", Concert: "Concerts", Play: "Plays", Musical: "Musicals", Show: "Shows" };
 const WD = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const MON = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const dayOf = (s) => { const [y, m, d] = String(s).split("-").map(Number); return new Date(y, m - 1, d); };

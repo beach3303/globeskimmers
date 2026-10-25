@@ -23536,20 +23536,33 @@ function evKm(a1, o1, a2, o2) {
   const h = Math.sin(dLa / 2) ** 2 + Math.cos(a1 * r) * Math.cos(a2 * r) * Math.sin(dLo / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(h));
 }
-// Ticketmaster's classification → our kinds and tags.
+// Ticketmaster's classification → our kinds and tags, corrected by the title where Ticketmaster files
+// things oddly (2026-10-25, first live read in Los Angeles: a pumpkin fest under horse racing, a college
+// soccer game under no segment, stadium tours under "Miscellaneous").
 function evKinds(e) {
   const c = (e.classifications && e.classifications[0]) || {};
-  const seg = (c.segment && c.segment.name) || '';
-  const genre = (c.genre && c.genre.name) || '';
-  const sub = (c.subGenre && c.subGenre.name) || '';
-  const words = `${e.name || ''} ${genre} ${sub}`;
+  const real = (v) => (v && !/^undefined$/i.test(v) ? v : '');
+  const seg = real(c.segment && c.segment.name);
+  const genre = real(c.genre && c.genre.name);
+  const sub = real(c.subGenre && c.subGenre.name);
+  const name = e.name || '';
+  const words = `${name} ${genre} ${sub}`;
   const kinds = new Set();
   const tags = new Set();
   const classical = /classical|symphon|orchestra|philharmon/i.test(words);
-  const choir = /\bchoir|chorale|chorus|choral\b/i.test(words);
+  const choir = /\b(choirs?|chorales?|chorus|choral)\b/i.test(words);
   const opera = /\bopera\b/i.test(words);
-  if (seg === 'Sports') { kinds.add('games'); if (sub && !/^undefined$/i.test(sub)) tags.add(sub); else if (genre && !/^undefined$/i.test(genre)) tags.add(genre); }
-  if (seg === 'Music' || classical || choir || opera) {
+  const fest = /festival|\bfest\b|fiesta/i.test(name);
+  const fair = /\bfairs?\b/i.test(name);
+  const market = /\b(market|bazaar|swap meet|flea|makers'? mart)\b/i.test(name);
+  const kidsy = c.family === true || seg === 'Family' || /\b(family|kids|children)\b/i.test(`${genre} ${sub}`)
+    || /trunk.or.treat|pumpkin|\bkids?\b|\bfamily\b|children|story ?time|disney|sesame|paw patrol|bluey|cocomelon|magic show/i.test(name);
+  const versus = /\s(vs\.?|v\.?)\s/i.test(name);
+  if (versus || (seg === 'Sports' && !fest && !fair && !market && !kidsy)) {
+    kinds.add('games');
+    if (sub) tags.add(sub); else if (genre) tags.add(genre);
+  }
+  if ((seg === 'Music' && !market) || classical || choir || opera) {
     kinds.add('music');
     if (classical) tags.add('Orchestra');
     if (choir) tags.add('Choir');
@@ -23557,19 +23570,22 @@ function evKinds(e) {
     if (/\bjazz\b/i.test(words)) tags.add('Jazz');
     if (!tags.size) tags.add('Concert');
   }
-  if (seg === 'Arts & Theatre' && !classical && !choir && !opera) {
+  if (seg === 'Arts & Theatre' && !classical && !choir && !opera && !market) {
     kinds.add('stage');
     if (/musical/i.test(words)) tags.add('Musical');
-    else if (/comedy/i.test(words)) tags.add('Comedy');
+    else if (/comedy|stand.?up/i.test(words)) tags.add('Comedy');
     else if (/dance|ballet/i.test(words)) tags.add('Dance');
-    else tags.add('Play');
+    else if (/^theatre$/i.test(genre) || /\bplay\b/i.test(sub)) tags.add('Play');
+    else tags.add('Show');
   }
-  if (c.family === true || seg === 'Family' || /\b(family|kids|children)\b/i.test(`${genre} ${sub}`)) { kinds.add('kids'); tags.add('All ages'); }
-  if (/festival/i.test(words)) kinds.add('festivals');
-  if (/\bfairs?\b/i.test(words)) kinds.add('fairs');
+  if (kidsy) { kinds.add('kids'); tags.add('All ages'); }
+  if (fest) kinds.add('festivals');
+  if (fair) kinds.add('fairs');
+  if (market) kinds.add('markets');
   const pr = (e.priceRanges || [])[0];
   if (pr && Number(pr.min) === 0) { kinds.add('free'); tags.add('Free'); }
-  if (!kinds.size) kinds.add(seg === 'Miscellaneous' ? 'festivals' : 'stage');
+  // Anything still unplaced (stadium tours, parking passes, add-ons) stays out of the kinds: a name
+  // search still finds it.
   return { kinds: [...kinds], tags: [...tags].slice(0, 3) };
 }
 async function evTicketmaster(env, lat, lng, from, to, q) {
@@ -23739,7 +23755,7 @@ async function handleWhatsOn(request, env) {
     if ((evDay(to) - evDay(from)) / 864e5 > 35) to = evIso(new Date(evDay(from).getTime() + 35 * 864e5));
     const q = String(b.q || '').replace(/\s+/g, ' ').trim().slice(0, 80);
     const cc = String(b.cc || '').trim().toUpperCase().slice(0, 2);
-    const ck = `ev:whatson:v1:${lat.toFixed(1)},${lng.toFixed(1)}:${from}:${to}:${q.toLowerCase()}:${cc}`;
+    const ck = `ev:whatson:v2:${lat.toFixed(1)},${lng.toFixed(1)}:${from}:${to}:${q.toLowerCase()}:${cc}`;
     const kv = env.GLOBESKIMMERS_KV;
     const cached = kv ? await kv.get(ck, { type: 'json' }).catch(() => null) : null;
     if (cached) return jsonResponse({ ...cached, cached: true });
@@ -23762,7 +23778,8 @@ async function handleWhatsOn(request, env) {
     });
     const payload = {
       from, to, q: q || null, events, festivals, holidays,
-      markets: markets.filter((m) => /market/i.test(m.name)).slice(0, 8),
+      // A market by name, not a shop that calls itself one ("… Meat Shop - Farmers Market").
+      markets: markets.filter((m) => /market/i.test(m.name) && !/\b(shop|store|supermarket|grocery|mart)\b/i.test(m.name)).slice(0, 8),
       family: family.filter((p) => (p.reviews || 0) >= 50).sort((a, z) => (z.reviews || 0) - (a.reviews || 0)).slice(0, 4),
     };
     if (kv) await kv.put(ck, JSON.stringify(payload), { expirationTtl: 3 * 3600 }).catch(() => {});
