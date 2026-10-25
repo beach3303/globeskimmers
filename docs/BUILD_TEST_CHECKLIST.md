@@ -3021,7 +3021,7 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   the Mailbox (group telegram + group card), a postcard Reply to all, a new telegram to two people.
 - **Activate:** push (deploys the worker), then `npm run ota`.
 
-## 2026-10-25 — The Sent folder (COMMITTED on stamping-v2; not pushed)
+## 2026-10-25 — The Sent folder (PUSHED — main 5a8d0fa; worker + migration ✅; live route answers; OTA pending)
 
 - Founder: "users ask me where their sent messages went"; decision sheet: "Opened" on telegrams only.
 - **Worker:** `POST /mail/sent {before?}` → everything I sent, newest first, 30 a page: postcards and telegrams to
@@ -3039,3 +3039,24 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   City boards (icon over name). Sent moves into the Mailbox tabs next.
 - Gates: worker check, eslint + no-undef, build, boot-check ✅. Captured with a mocked /mail/sent (six kinds).
 - **Activate:** push (worker + migration apply on their own), then `npm run ota`.
+
+## 2026-10-25 — Mailbox tabs: Postcards · Telegrams · Sent · News (COMMITTED on stamping-v2; not pushed)
+
+- Founder's decision sheet, answer 7. **Mailbox** is now: the masthead ("Mail from your *circle*", the seal, Postcard ·
+  Telegram · **+ Add friends** — the labeled door replaces the bare magnifier), then four folder tabs in the Home
+  tabs' airmail blue (HOME_TAB), sized to their labels, with counts (new postcards, sealed telegrams) and a dot on News.
+  - **Postcards / Telegrams:** NEW (the feed's mail to me, in full; sealed telegrams still tap open), then READ /
+    OPENED (everything else in /postcards/box) as one-line rows — front, sender, the start, when, "group, N people",
+    kept, sealed — that open into the full card ("Fold it away" closes). Show older pages; per-tab empty states
+    with Send a postcard / Send a telegram.
+  - **Sent:** SentList.
+  - **News:** follow requests (inline), On your passport (ActivityList), Where your circle has been (stamps),
+    Your circle row, a City boards row.
+  - The tab comes from ?tab=, a notification's ?tg= / ?pc= (that tab, that message opened and brought into view), else
+    the last one used (localStorage gs_mailbox_tab_v1); with nothing asked, new telegrams and no new postcards open
+    Telegrams. "Have a code from a text? Open it" sits under the mail tabs. The Find people sheet is titled Add friends.
+- **/Postcards** and **/Sent** now forward to their tab (old notification links keep working: /Postcards?pc= opens
+  that card). The postcard box's own list and the door tiles are gone.
+- Gates: eslint + no-undef, build, boot-check ✅. Captured with mocked feed/box/activity: each tab, a /Postcards?pc=
+  link opening a read group card, the tab bar.
+- **Activate:** push (app only), then `npm run ota`.
