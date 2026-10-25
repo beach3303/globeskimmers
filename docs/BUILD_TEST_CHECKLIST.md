@@ -3085,7 +3085,7 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
 - Next (step 2): City Board photos + "the rest of the world" band; New arrivals and Events come with their builds.
 - **Activate:** push (app only), then `npm run ota`.
 
-## 2026-10-25 — Home step 2: the City Board page (COMMITTED on stamping-v2; not pushed)
+## 2026-10-25 — Home step 2: the City Board page (PUSHED with the friends build; OTA pending)
 
 - Founder: "i love separation between current city versus the rest of the world"; "boards should just be about
   photos"; keep the billboard. **CityBoardPage** (src/components/home/CityBoardPage.jsx): your city's billboard
@@ -3098,7 +3098,7 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   five boards elsewhere with real covers).
 - **Activate:** push (app only), then `npm run ota`.
 
-## 2026-10-25 — Adding friends: one Add friends sheet, Follow on mail from someone new (COMMITTED on stamping-v2; not pushed)
+## 2026-10-25 — Adding friends: one Add friends sheet, Follow on mail from someone new (PUSHED; OTA pending)
 
 - Founder's decision sheet, answer 10 (all three) and its note: "where is the invite people by text? … do we have
   invite by email?"
