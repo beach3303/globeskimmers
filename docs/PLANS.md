@@ -921,8 +921,12 @@ Why: two audiences. Travelers love stamping; friends at home don't travel much, 
 City Boards, to see where people are going, and for postcards and telegrams.
 
 Decided by the founder:
-- Home becomes swipeable pages: **tabs are tappable AND pages swipe left/right**. Leaning
-  Nearby · Stamps · Circle · Boards. Home reopens on the page used last.
+- Home becomes swipeable pages: **tabs are tappable AND pages swipe left/right**. Round 3 (evening):
+  **six tabs in two rows — Nearby · Stamps · Virtual Passport / My Circle · City Board · My Profile**
+  ("My Circle", "City Board" are the founder's names; a tab just for the Virtual Passport; My Profile =
+  today's Profile whole). Home reopens on the page used last.
+- City Board page keeps the **billboard** for the current city (founder: "sad that we lost" it) and a
+  clear separation from **the rest of the world** (navy band below).
 - The location pill with **Change** (current location / navigate elsewhere) is never lost: pinned on every page.
 - **Events & festivals** join Nearby services for the location you're looking at (reverses the
   2026-09-29 removal, read-only; nothing sold in the app). Worker still has the Ticketmaster code
@@ -932,7 +936,7 @@ Decided by the founder:
   Games · Kids · Free · Markets · Holidays), one blue-tab section each. Sources: Ticketmaster (thin in
   PH), Google Places for markets, a public-holiday calendar, our own festival calendar per city.
 - The Virtual Passport stays its own thing (bottom tab); Home only links to it.
-- Boards page = photos only. "Where your circle is" goes on its own page, not under Boards.
+- City Board = photos only. "Where my circle is" + following/followers + Just joined live on My Circle.
 - **Just joined:** only the @username and the city they joined from, then Add to circle; nothing else of theirs.
 - A friend's passport cover reads "<First name>’s Virtual Passport" (today the cover image itself
   says "My Virtual Passport"; fix = patch the words with a blank piece of the same cover + live text).
@@ -942,7 +946,7 @@ Found 2026-10-25: there is no Sent view anywhere (rows keep sender_id; recipient
 history exists). Group messages looked one-to-one because the composer defaults to "Separately"
 (4 of 5 multi-recipient telegrams).
 
-Open (D-ids in the artifact): D1 four pages yes/no · D6 first page for new members · D7 tab style
+Open (D-ids in the artifact): D1 six pages yes/no · D11 bottom bar keep or slim · D6 first page for new members · D7 tab style
 T1/T2/T3 · D8 Just joined rules · D9 event ticket links · D2 Mailbox tabs Postcards/Telegrams/Sent/News ·
 D3 senders see "Opened"? · D4 group by default · D5 Add friends fixes.
 Proposed build order: group default → friend's cover → Sent → Mailbox tabs → swipeable Home → events → Just joined.
