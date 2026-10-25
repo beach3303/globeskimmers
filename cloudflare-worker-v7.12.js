@@ -20808,7 +20808,7 @@ const PC_READ_LINGER_MS = 30 * 60 * 1000;
 // only). Nothing the recipient did is shown beyond that — not their delete, not their read time.
 // "Remove from Sent" hides an entry for me alone (sender_hidden_at); the recipient keeps theirs.
 //   POST /mail/sent {before?} → { items: [...], next: <iso>|null }
-//   POST /mail/sent/hide {items: [{kind, ids, from}]} → { ok }
+//   POST /mail/sent/hide {items: [{kind, ids, from}]} | {all: true} → { ok }   (all: "Delete all", 2026-10-25)
 const SENT_PAGE = 30;
 const SENT_SCAN = 200;
 async function mailSentRows(env, table, query) {
@@ -20905,9 +20905,19 @@ async function handleMailSentHide(request, env) {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
+    const at = new Date().toISOString();
+    // Delete all (founder, 2026-10-25: "allow user to delete all sent messages at once"): every entry
+    // still in my Sent, in every table. Recipients keep theirs.
+    if (b.all === true) {
+      for (const table of SENT_TABLES) {
+        let r = await gbRest(env, `${table}?sender_id=eq.${user.id}&sender_hidden_at=is.null`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ sender_hidden_at: at }) });
+        if (!r.ok && r.status === 400) r = { ok: true };   // a table without the column yet holds nothing hideable
+        if (!r.ok) return jsonResponse({ error: 'Couldn’t delete them all — try again' }, 502);
+      }
+      return jsonResponse({ ok: true });
+    }
     const list = (Array.isArray(b.items) ? b.items : []).slice(0, 20);
     if (!list.length) return jsonResponse({ error: 'Nothing to remove' }, 400);
-    const at = new Date().toISOString();
     for (const it of list) {
       const table = String(it?.from || '');
       const ids = (Array.isArray(it?.ids) ? it.ids : []).map((v) => String(v || '').toLowerCase()).filter((v) => BL_UUID.test(v)).slice(0, 20);

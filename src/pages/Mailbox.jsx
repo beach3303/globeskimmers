@@ -524,7 +524,7 @@ function MailboxBody() {
     if (r.type === "telegram") {
       return (
         <div key={`tg-${r.id}`} data-tg={r.id} style={{ borderRadius: 4 }}>
-          <TelegramCard row={r} me={me.handle} meName={meName} onReply={wireBack} onFollow={followSender}
+          <TelegramCard row={r} me={me.handle} meName={meName} onReply={wireBack} onFollow={followSender} onDelete={(row) => removeCard({ id: row.id, by: row.by, kind: "telegram" })}
             onReport={(row) => openTraveler(row.by, { kind: "telegram", ref: `tg:${row.id}`, note: clip(`Telegram${fromNew ? " from someone new" : ""}, ${whenLabel(row.created_at)}: "${row.body || ""}"`, 480) }, mine(row, false, "telegram"))} />
         </div>
       );
@@ -532,7 +532,7 @@ function MailboxBody() {
     if (r.type === "postcard" || r.photo) {
       return (
         <div key={`pc-${r.id || r.created_at}-${i}`} data-pc={r.id || undefined} style={{ borderRadius: 14 }}>
-          <PostcardCard row={r} onReply={replyFor} me={me.handle} meName={meName} onKeep={keep} onFollow={followSender}
+          <PostcardCard row={r} onReply={replyFor} me={me.handle} meName={meName} onKeep={keep} onFollow={followSender} onDelete={(row) => removeCard({ id: row.id, by: row.by, kind: "postcard" })}
             onReport={(row) => openTraveler({ ...row.by, postcard_id: row.id || null }, { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(fromNew ? `Postcard from someone new${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}` : `Postcard${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.message ? `: "${row.message}"` : ""}`, 480) }, mine(row))} />
         </div>
       );

@@ -9,11 +9,17 @@
 //            status delivered | opened | waiting | link | expired
 //     next   the cursor for older entries, or null
 //   hideSent(item) → { ok, error }
+//   hideAllSent() → { ok, error }   "Delete all" (2026-10-25)
 import { callWorker } from "@/lib/callWorker";
 
 export async function sentMail(before = null) {
   const { data, error } = await callWorker("mail/sent", before ? { before } : {});
   return { items: Array.isArray(data?.items) ? data.items : [], next: data?.next || null, error: error || data?.error || null };
+}
+
+export async function hideAllSent() {
+  const { data, error } = await callWorker("mail/sent/hide", { all: true });
+  return { ok: !error && data?.ok === true, error: error || data?.error || null };
 }
 
 export async function hideSent(item) {

@@ -14,6 +14,7 @@ import { openTelegram, telegramNumber, telegramWords } from "@/lib/telegram";
 import TelegramPaper, { TINK3 } from "@/components/telegram/TelegramPaper";
 import TelegramEnvelope from "@/components/telegram/TelegramEnvelope";
 import FollowSender from "@/components/social/FollowSender";
+import DeleteConfirm, { TrashButton } from "@/components/social/DeleteConfirm";
 
 const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
 // The reveal: the telegram rises out of the envelope.
@@ -22,7 +23,9 @@ const REVEAL = "@keyframes gsTgReveal{from{opacity:0;transform:translateY(18px) 
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
 
 // onFollow (2026-10-25): an opened telegram from someone you don't follow gets "+ Follow" (FollowSender).
-export default function TelegramCard({ row, me = undefined, meName = null, onReply = undefined, onReport = undefined, onFollow = undefined, className = undefined, style = undefined }) {
+// onDelete (2026-10-25): an opened telegram gets a trash button beside Reply (DeleteConfirm asks once).
+export default function TelegramCard({ row, me = undefined, meName = null, onReply = undefined, onReport = undefined, onFollow = undefined, onDelete = undefined, className = undefined, style = undefined }) {
+  const [deleting, setDeleting] = useState(false);
   // sealed → opening (the flap lifts) → open. An opened one stays open.
   const [state, setState] = useState(() => (row?.received_at ? "open" : "sealed"));
   const [receivedAt, setReceivedAt] = useState(row?.received_at || null);
@@ -87,8 +90,10 @@ export default function TelegramCard({ row, me = undefined, meName = null, onRep
             ) : null}
           </>
         ) : <span style={{ flex: 1 }} />}
+        {typeof onDelete === "function" && row.id ? <TrashButton onClick={() => setDeleting((v) => !v)} label="Delete this telegram" /> : null}
         <ReportControl row={row} me={me} onReport={onReport} />
       </div> : null}
+      {state === "open" && deleting ? <DeleteConfirm what="telegram" name={from} onDelete={() => onDelete(row)} onCancel={() => setDeleting(false)} style={{ marginTop: 8 }} /> : null}
     </article>
   );
 }

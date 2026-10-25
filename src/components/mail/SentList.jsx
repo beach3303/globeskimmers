@@ -5,8 +5,8 @@
 // when, and where it stands — a telegram says who opened it (founder's decision: "Opened" on
 // telegrams only), a postcard only that it was delivered; mail to an email address waits for them
 // to join; a text link says so. A tap opens the entry: the photo or the words in full and everyone
-// it went to (with Opened per person on a telegram). The ••• removes it from your Sent only, after
-// one confirm; the recipient keeps theirs.
+// it went to (with Opened per person on a telegram). The ••• deletes it from your Sent only, after one
+// confirm, and "Delete all" clears the whole list at once (founder, 2026-10-25); recipients keep theirs.
 //
 //   <SentList style />
 import React, { useEffect, useRef, useState } from "react";
@@ -17,7 +17,7 @@ import { showToast } from "@/components/Toast";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import { TINK, TINK3, TYPE } from "@/components/telegram/TelegramPaper";
 import { inkColor } from "@/lib/telegram";
-import { hideSent, sentMail } from "@/lib/sentMail";
+import { hideAllSent, hideSent, sentMail } from "@/lib/sentMail";
 
 const SERIF = "'Instrument Serif', Georgia, serif";
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
@@ -94,8 +94,8 @@ function SentItem({ it, onRemoved }) {
     setBusy(true);
     const r = await hideSent(it);
     setBusy(false);
-    if (!r.ok) { showToast(workerMessage(r.error, "Couldn’t remove it. Try again."), "error"); return; }
-    showToast("Removed from your Sent", "success");
+    if (!r.ok) { showToast(workerMessage(r.error, "Couldn’t delete it. Try again."), "error"); return; }
+    showToast("Deleted from your Sent", "success");
     onRemoved(it);
   };
   const Icon = st.icon;
@@ -134,11 +134,11 @@ function SentItem({ it, onRemoved }) {
       </div>
 
       {asking ? (
-        <div role="group" aria-label="Remove from Sent" style={{ marginTop: 10, padding: 10, borderRadius: 12, background: NEUTRAL.airmail, border: `1px solid ${NEUTRAL.airmailLine}` }}>
-          <p style={{ margin: 0, fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}>Remove it from your Sent? {it.mode === "board" ? "It stays on the City Board." : it.mode === "link" ? "The link still works." : "They keep theirs."}</p>
+        <div role="group" aria-label="Delete from Sent" style={{ marginTop: 10, padding: 10, borderRadius: 12, background: NEUTRAL.airmail, border: `1px solid ${NEUTRAL.airmailLine}` }}>
+          <p style={{ margin: 0, fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}><b style={{ color: NEUTRAL.ink }}>Delete it from your Sent?</b> {it.mode === "board" ? "It stays on the City Board." : it.mode === "link" ? "The link still works." : "They keep theirs."}</p>
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <button type="button" onClick={remove} aria-busy={busy || undefined}
-              style={{ minHeight: 40, padding: "0 16px", borderRadius: 12, border: 0, background: NEUTRAL.stamp, color: NEUTRAL.white, font: "inherit", fontSize: fs(13.5), fontWeight: 600, cursor: "pointer" }}>{busy ? "Removing…" : "Remove"}</button>
+              style={{ minHeight: 40, padding: "0 16px", borderRadius: 12, border: 0, background: NEUTRAL.stamp, color: NEUTRAL.white, font: "inherit", fontSize: fs(13.5), fontWeight: 600, cursor: "pointer" }}>{busy ? "Deleting…" : "Delete"}</button>
             <button type="button" onClick={() => setAsking(false)}
               style={{ minHeight: 40, padding: "0 16px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.ink2, font: "inherit", fontSize: fs(13.5), fontWeight: 600, cursor: "pointer" }}>Keep it</button>
           </div>
@@ -199,6 +199,16 @@ export default function SentList({ style = undefined }) {
     });
   };
   const removed = (it) => setState((s) => ({ ...s, items: (s.items || []).filter((x) => x !== it) }));
+  const [clearing, setClearing] = useState(null);   // null | 'ask' | 'busy'
+  const deleteAll = async () => {
+    if (clearing === "busy") return;
+    setClearing("busy");
+    const r = await hideAllSent();
+    if (!r.ok) { setClearing("ask"); showToast(workerMessage(r.error, "Couldn’t delete them. Try again."), "error"); return; }
+    setClearing(null);
+    setState({ items: [], next: null, error: null });
+    showToast("Your Sent is empty", "success");
+  };
 
   if (!state) {
     return (
@@ -230,6 +240,21 @@ export default function SentList({ style = undefined }) {
   }
   return (
     <div style={style}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <button type="button" onClick={() => setClearing((c) => (c ? null : "ask"))} aria-expanded={!!clearing}
+          style={{ minHeight: 36, padding: "0 4px", border: 0, background: "transparent", font: "inherit", fontSize: fs(13), fontWeight: 650, color: NEUTRAL.stamp, cursor: "pointer" }}>Delete all</button>
+      </div>
+      {clearing ? (
+        <div role="group" aria-label="Delete all sent" style={{ marginBottom: 10, padding: 12, borderRadius: 14, background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}` }}>
+          <p style={{ margin: 0, fontSize: fs(13.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}><b style={{ color: NEUTRAL.ink }}>Delete everything in your Sent?</b> This only clears your list. Everyone you wrote to keeps what you sent, and links you shared still work.</p>
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button type="button" onClick={deleteAll} aria-busy={clearing === "busy" || undefined}
+              style={{ minHeight: 40, padding: "0 16px", borderRadius: 12, border: 0, background: NEUTRAL.stamp, color: NEUTRAL.white, font: "inherit", fontSize: fs(13.5), fontWeight: 600, cursor: "pointer" }}>{clearing === "busy" ? "Deleting…" : "Delete all"}</button>
+            <button type="button" onClick={() => setClearing(null)}
+              style={{ minHeight: 40, padding: "0 16px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.ink2, font: "inherit", fontSize: fs(13.5), fontWeight: 600, cursor: "pointer" }}>Keep them</button>
+          </div>
+        </div>
+      ) : null}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {state.items.map((it) => <SentItem key={`${it.from}:${it.ids[0]}`} it={it} onRemoved={removed} />)}
       </div>

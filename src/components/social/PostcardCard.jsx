@@ -19,7 +19,7 @@
 //            into the postcard box or lets it go. Cards addressed to you are always kept.
 // The postmark opens that city's board (City Boards, 2026-10-14): a 44px link wherever the
 // card names a city and a country, except on the board itself and for a held account.
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Bookmark, BookmarkCheck, CornerUpLeft } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
@@ -31,6 +31,7 @@ import StampThumb, { stampThumbKind } from "@/components/passport/StampThumb";
 import OfficialSeal from "@/components/passport/OfficialSeal";
 import { feedStamp } from "@/lib/stampKind";
 import FollowSender from "@/components/social/FollowSender";
+import DeleteConfirm, { TrashButton } from "@/components/social/DeleteConfirm";
 
 const SERIF = "'Instrument Serif', Georgia, serif";
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
@@ -46,7 +47,9 @@ const handleOf = (v) => String((v && typeof v === "object" ? v.handle : v) ?? ""
 // onReply (2026-10-19): a card addressed to me gets one Reply button under it. Delete lives in
 // its ••• (the caller's TravelerSheet), so each action has one place on the card.
 // onFollow (2026-10-25): mail from someone you don't follow gets "+ Follow" (FollowSender).
-export default function PostcardCard({ row, me = undefined, meName = null, onReport = undefined, onKeep = undefined, onReply = undefined, onFollow = undefined, className = undefined, style = undefined }) {
+// onDelete (2026-10-25): a card addressed to me gets a trash button beside Reply (DeleteConfirm asks once).
+export default function PostcardCard({ row, me = undefined, meName = null, onReport = undefined, onKeep = undefined, onReply = undefined, onFollow = undefined, onDelete = undefined, className = undefined, style = undefined }) {
+  const [deleting, setDeleting] = useState(false);
   const { socialTier } = useAuth();
   if (!row || typeof row !== "object") return null;
   const by = row.by || {};
@@ -144,7 +147,9 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
                   <CornerUpLeft size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Reply to all {also.length + 1}
                 </button>
               ) : null}
+              {typeof onDelete === "function" ? <TrashButton onClick={() => setDeleting((v) => !v)} label="Delete this postcard" /> : null}
             </div>
+            {deleting ? <DeleteConfirm what="postcard" name={from} onDelete={() => onDelete(row)} onCancel={() => setDeleting(false)} style={{ marginTop: 8 }} /> : null}
           </div>
         ) : null}
       </div>

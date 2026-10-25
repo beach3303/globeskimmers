@@ -161,7 +161,9 @@ export default function TravelerSheet({ person, list: listProp = null, report = 
                   Delete this {what}
                 </button>
               )}
-              {rel.following && !rel.blocked && (who.user_id || who.handle) && (
+              {/* Opened from a postcard or telegram, the sheet is about the message (founder, 2026-10-25:
+                  "remove unfollow inside when 3 dots are clicked when deleting postcard or telegram"). */}
+              {!postcard && rel.following && !rel.blocked && (who.user_id || who.handle) && (
                 <button type="button" onClick={doUnfollow} disabled={busy} className={row} style={rowStyle}>
                   {rel.pending ? "Cancel follow request" : "Unfollow"}
                 </button>

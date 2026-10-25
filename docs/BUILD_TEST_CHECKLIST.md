@@ -3176,3 +3176,18 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   the kind sections (a name search still finds it). Markets drop shops that call themselves one. KV key → v2.
   Replayed 11 live shapes: all land right. App: Stage gets a Shows chip.
 - **Activate:** push (worker), then `npm run ota`.
+
+## 2026-10-25 — Delete in the inbox and Sent, Delete all, no Unfollow on a message's ••• (COMMITTED on stamping-v2; not pushed)
+
+- Founder: "allow users to delete post cards and telegrams in inboxes and sent message. allow user to delete all sent
+  messages at once. remove unfollow inside when 3 dots are clicked when deleting postcard or telegram."
+- **Inbox:** PostcardCard (to me) and an opened TelegramCard get a trash button beside Reply; **DeleteConfirm**
+  (src/components/social/DeleteConfirm.jsx) asks once — "Delete this postcard? It leaves your Mailbox. Ana isn't
+  told." / telegram: "It's erased for good." — Delete / Keep it, then the Mailbox's removeCard (the same soft
+  recipient delete as before). Works on new and read mail (a read row opens into the card).
+- **TravelerSheet:** opened from a postcard or telegram, no Unfollow (Report, Block, Delete stay).
+- **Sent:** the ••• confirm now says Delete; **Delete all** at the top → "Delete everything in your Sent? This only
+  clears your list…" → worker `/mail/sent/hide {all: true}` sets sender_hidden_at on every row still in my Sent across
+  postcards, telegrams, pending_*, message_links.
+- Gates: worker check, eslint + no-undef, build, boot-check ✅. Captured: a postcard's Delete confirm, Sent's Delete all.
+- **Activate:** push (worker), then `npm run ota`.
