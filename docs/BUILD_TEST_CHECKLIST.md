@@ -3061,7 +3061,7 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   link opening a read group card, the tab bar.
 - **Activate:** push (app only), then `npm run ota`.
 
-## 2026-10-25 — Home as six pages, step 1 (COMMITTED on stamping-v2; not pushed)
+## 2026-10-25 — Home as six pages, step 1 (PUSHED — main 4784c5d; OTA pending)
 
 - Founder's decision sheet, answers 1–5: six pages, two rows of folder tabs, Arrivals, new members on Stamps, bottom
   bar unchanged; "tabs should be tappable and pages should be swipeable".
@@ -3083,4 +3083,17 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
 - Gates: eslint + no-undef, build, boot-check ✅. Captured all six pages as the demo account; a synthetic swipe on
   Stamps slid to Virtual Passport (its stampable-places sheet opened correctly placed).
 - Next (step 2): City Board photos + "the rest of the world" band; New arrivals and Events come with their builds.
+- **Activate:** push (app only), then `npm run ota`.
+
+## 2026-10-25 — Home step 2: the City Board page (COMMITTED on stamping-v2; not pushed)
+
+- Founder: "i love separation between current city versus the rest of the world"; "boards should just be about
+  photos"; keep the billboard. **CityBoardPage** (src/components/home/CityBoardPage.jsx): your city's billboard
+  (CityBoardRow's Billboard, now exported), "Photos from <city>" — its newest six photos as a 2-across grid, each
+  opening the board (or "You were here. Post the first photo…" / "No photos from <city> yet…") — then a full-bleed
+  navy band under an airmail edge: THE REST OF THE WORLD · "Boards around the globe", up to six other boards (new
+  this week first, then newest), by cover photo, name and NEW THIS WEEK or their state/country; All City Boards.
+  Counts stay quiet. Same /city/board + /city/boards reads as before.
+- Gates: eslint + no-undef, build, boot-check ✅. Captured against live data as the demo account (Los Angeles board,
+  five boards elsewhere with real covers).
 - **Activate:** push (app only), then `npm run ota`.

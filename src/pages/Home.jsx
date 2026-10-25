@@ -38,7 +38,7 @@ import SmartSearchOverlay from "@/components/search/SmartSearchOverlay";
 import DestinationStrip from "@/components/search/DestinationStrip";
 import UpdateCard from "@/components/home/UpdateCard";
 import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
-import CityBoardRow from "@/components/home/CityBoardRow";
+import CityBoardPage from "@/components/home/CityBoardPage";
 import HomePager, { initialHomePage, rememberHomePage } from "@/components/home/HomePager";
 import ArrivalsPage from "@/components/home/ArrivalsPage";
 import PassportPage from "@/pages/Passport";
@@ -647,13 +647,7 @@ export default function HomePage() {
     }
     if (id === 'passport') return <PassportPage embedded />;
     if (id === 'arrivals') return <ArrivalsPage wide={isTablet} />;
-    if (id === 'cityboard') {
-      return (
-        <div style={{ paddingTop: 12 }}>
-          <CityBoardRow city={activeLocation?.address?.city} country={activeLocation?.address?.country} region={activeLocation?.address?.state} />
-        </div>
-      );
-    }
+    if (id === 'cityboard') return <CityBoardPage city={activeLocation?.address?.city} country={activeLocation?.address?.country} region={activeLocation?.address?.state} />;
     if (id === 'profile') return <ProfilePage embedded />;
     return null;
   };

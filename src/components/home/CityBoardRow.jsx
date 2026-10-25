@@ -43,7 +43,7 @@ function Lamp({ left }) {
   );
 }
 
-function Billboard({ to, title, accent = null, line, cta, label }) {
+export function Billboard({ to, title, accent = null, line, cta, label }) {
   return (
     <Link to={to} aria-label={label} style={{ position: "relative", display: "block", paddingTop: 24, paddingBottom: 54, textDecoration: "none" }}>
       <Lamp left="18%" />
