@@ -3226,3 +3226,10 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
 - The intended recipients of the leaked cards were never stored, so those senders need to send them again.
 - Gates: worker check, eslint + no-undef, build, boot-check ✅.
 - **Activate:** push NOW (worker), then `npm run ota` (the send fix needs the app).
+
+**OTA 1.0.2610252354 (2026-10-25 ~4:54 PM PT, run by the founder; `capgo channel list` → production 1.0.2610252354):**
+on phones (iOS + Android) — the postcard send fix (Send-to list forwarded; postcards reach only who was picked),
+group messages + Reply to all, Sent (+ Delete / Delete all), Mailbox tabs, the six-page Home (City Board page, New
+arrivals on Arrivals), Add friends + Follow on mail from someone new, Events & festivals, a friend's passport cover with
+their name, no numbers card above the passport, the update card above the tabs + the rare update sheet.
+Main 962643f matches what phones run.
