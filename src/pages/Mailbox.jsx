@@ -15,9 +15,8 @@
 // line, a request) has a door to TravelerSheet: Report, Unfollow, Block. A 'confirm' account
 // (a birthday still to complete) gets the note that lets it finish.
 import React, { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, Globe, Lock, Mail, Mailbox as MailboxIcon, UserPlus, X, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, Globe, Lock, Mail, Mailbox as MailboxIcon, UserPlus, Zap } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { cityBoardsUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
@@ -33,10 +32,9 @@ import ConfirmBirthdayNote from "@/components/social/ConfirmBirthdayNote";
 import { Face } from "@/components/social/SocialMarks";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import { claimLink, linkCodeOf } from "@/lib/messageLinks";
-import FindPeople from "@/components/social/FindPeople";
+import AddFriendsSheet from "@/components/social/AddFriendsSheet";
 import Requests from "@/components/social/Requests";
 import ActivityList from "@/components/social/ActivityList";
-import { useDismissable } from "@/lib/dismissStack";
 import PostcardCard from "@/components/social/PostcardCard";
 import InviteButton from "@/components/passport/InviteButton";
 import PostcardCompose from "@/components/passport/PostcardCompose";
@@ -178,29 +176,6 @@ function ReadRow({ r, open, onToggle, children }) {
         </button>
       )}
     </div>
-  );
-}
-
-// A bottom sheet for what one line opens (2026-10-19): Find people, passport activity, requests.
-function Sheet({ title, onClose, children }) {
-  useDismissable(true, onClose);
-  return createPortal(
-    <div className="fixed inset-0 z-[10010] flex items-end justify-center" style={{ background: "rgba(22,17,13,.45)" }} onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={title} className="w-full max-w-md max-h-[86vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}
-        style={{ background: NEUTRAL.ivory, borderRadius: "22px 22px 0 0" }}>
-        <AirmailChevron height={4} />
-        <div style={{ padding: "12px 16px calc(22px + env(safe-area-inset-bottom))" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <h2 style={{ margin: 0, fontFamily: SERIF, fontSize: fs(22), fontWeight: 400, color: NEUTRAL.ink }}>{title}</h2>
-            <button type="button" onClick={onClose} aria-label="Close" style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 -8px 0 0", padding: 0, border: 0, background: "transparent", cursor: "pointer" }}>
-              <X size={20} strokeWidth={2} color={NEUTRAL.ink2} aria-hidden="true" focusable="false" />
-            </button>
-          </div>
-          {children}
-        </div>
-      </div>
-    </div>,
-    document.body,
   );
 }
 
@@ -508,6 +483,17 @@ function MailboxBody() {
     if (want) loadBox();
   };
 
+  // "+ Follow" on mail from someone new (2026-10-25): FollowSender shows the outcome on the card.
+  const followSender = async (row) => {
+    const h = lc(row?.by?.handle);
+    if (!h) return { ok: false };
+    const res = await circle.follow({ user_id: row.by.user_id, handle: h });
+    if (!res.ok) { showToast(workerMessage(res.error, "Couldn’t follow them. Try again."), "error"); return { ok: false }; }
+    const pending = res.data?.status === "pending";
+    showToast(pending ? `Asked to follow @${h} — they approve first` : `Following @${h}`, "success");
+    return { ok: true, status: pending ? "pending" : "accepted" };
+  };
+
   const answer = (op) => async (row) => {
     const res = op === "accept" ? await circle.accept(row) : await circle.decline(row);
     if (!res.ok) showToast(workerMessage(res.error, "That didn’t go through. Try again."), "error");
@@ -538,7 +524,7 @@ function MailboxBody() {
     if (r.type === "telegram") {
       return (
         <div key={`tg-${r.id}`} data-tg={r.id} style={{ borderRadius: 4 }}>
-          <TelegramCard row={r} me={me.handle} meName={meName} onReply={wireBack}
+          <TelegramCard row={r} me={me.handle} meName={meName} onReply={wireBack} onFollow={followSender}
             onReport={(row) => openTraveler(row.by, { kind: "telegram", ref: `tg:${row.id}`, note: clip(`Telegram${fromNew ? " from someone new" : ""}, ${whenLabel(row.created_at)}: "${row.body || ""}"`, 480) }, mine(row, false, "telegram"))} />
         </div>
       );
@@ -546,7 +532,7 @@ function MailboxBody() {
     if (r.type === "postcard" || r.photo) {
       return (
         <div key={`pc-${r.id || r.created_at}-${i}`} data-pc={r.id || undefined} style={{ borderRadius: 14 }}>
-          <PostcardCard row={r} onReply={replyFor} me={me.handle} meName={meName} onKeep={keep}
+          <PostcardCard row={r} onReply={replyFor} me={me.handle} meName={meName} onKeep={keep} onFollow={followSender}
             onReport={(row) => openTraveler({ ...row.by, postcard_id: row.id || null }, { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(fromNew ? `Postcard from someone new${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}` : `Postcard${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.message ? `: "${row.message}"` : ""}`, 480) }, mine(row))} />
         </div>
       );
@@ -717,10 +703,8 @@ function MailboxBody() {
       </div>
 
       {sheet === "find" ? (
-        <Sheet title="Add friends" onClose={() => setSheet(null)}>
-          <FindPeople onFollowed={() => load()} labelHidden style={{ marginTop: 6 }} />
-          <InviteButton style={{ marginTop: 12 }} />
-        </Sheet>
+        <AddFriendsSheet onClose={() => setSheet(null)} writers={[...mailRows, ...boxRows].map((r) => r.by).filter(Boolean)} onFollowed={() => load()}
+          onPostcard={() => { setSheet(null); setCompose(true); }} onTelegram={wires ? () => { setSheet(null); setWireTo({}); } : undefined} />
       ) : null}
       {traveler ? (
         <TravelerSheet person={traveler.person} report={traveler.report}

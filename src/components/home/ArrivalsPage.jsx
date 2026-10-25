@@ -6,7 +6,7 @@
 //
 // Nothing social shows until the age tier is known, and nothing for a held account; counts only once
 // they've loaded (never a fake 0).
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, UserPlus } from "lucide-react";
 import { createPageUrl } from "@/utils";
@@ -16,6 +16,7 @@ import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { Face } from "@/components/social/SocialMarks";
 import FriendsTravels from "@/components/home/FriendsTravels";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
+import AddFriendsSheet from "@/components/social/AddFriendsSheet";
 
 const SERIF = "'Instrument Serif', Georgia, serif";
 const BLUE = NEUTRAL.airmailBlue;
@@ -43,6 +44,7 @@ export default function ArrivalsPage({ wide = false }) {
   const held = socialTierReady && HELD.has(String(socialTier || ""));
   const counts = circle.counts || {};
   const ready = socialTierReady && circle.status === "ready" && counts.youFollow != null;
+  const [adding, setAdding] = useState(false);
   return (
     <div className="max-w-md md:max-w-2xl mx-auto" style={{ padding: "16px 16px 0" }}>
       <h2 style={{ margin: 0, fontFamily: SERIF, fontSize: fs(28), fontWeight: 400, lineHeight: 1.05, color: NEUTRAL.ink }}>
@@ -58,10 +60,11 @@ export default function ArrivalsPage({ wide = false }) {
             </div>
           ) : null}
           <div style={{ marginTop: 6 }}><FriendsTravels wide={wide} /></div>
-          <button type="button" onClick={() => navigate(createPageUrl("Circle"))}
+          <button type="button" onClick={() => setAdding(true)}
             style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", minHeight: 48, marginTop: 14, borderRadius: 999, border: 0, background: BLUE, color: NEUTRAL.white, font: "inherit", fontSize: fs(14.5), fontWeight: 650, cursor: "pointer" }}>
             <UserPlus size={17} strokeWidth={2} aria-hidden="true" focusable="false" /> Add friends
           </button>
+          {adding ? <AddFriendsSheet onClose={() => setAdding(false)} /> : null}
         </>
       )}
     </div>

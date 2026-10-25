@@ -3097,3 +3097,20 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
 - Gates: eslint + no-undef, build, boot-check ✅. Captured against live data as the demo account (Los Angeles board,
   five boards elsewhere with real covers).
 - **Activate:** push (app only), then `npm run ota`.
+
+## 2026-10-25 — Adding friends: one Add friends sheet, Follow on mail from someone new (COMMITTED on stamping-v2; not pushed)
+
+- Founder's decision sheet, answer 10 (all three) and its note: "where is the invite people by text? … do we have
+  invite by email?"
+- **AddFriendsSheet** (src/components/social/AddFriendsSheet.jsx), opened by "+ Add friends" in the Mailbox and on
+  Home's Arrivals page: Find people (name, @username, signup email); before anyone types, **People who wrote to you**
+  (mail senders with a @username you don't follow or asked to follow, five at most) and **They follow you**
+  (circle.followersOnly), each with Follow / Follow back showing Following / Requested after; **Not on GlobeSkimmers
+  yet?** — Invite by text (InviteButton's share sheet) and **Invite by email** (mailto: with the same note and the
+  /p/ link), a line on sending a postcard or telegram to their email, and Send a postcard / Send a telegram from
+  the Mailbox. Replaces the Mailbox's Find people sheet (its local Sheet is gone).
+- **FollowSender** on PostcardCard and an opened TelegramCard when the mail is `from_new` and the sender has a
+  @username: "Joy isn't in your circle yet. + Follow" → "You follow Joy now." / "You asked to follow Joy."
+- Gates: eslint + no-undef, build, boot-check ✅. Captured with mail from two new senders: the card's Follow strip
+  and the sheet listing both.
+- **Activate:** push (app only), then `npm run ota`.

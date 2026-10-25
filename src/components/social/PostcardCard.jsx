@@ -30,6 +30,7 @@ import { PostmarkRing, ReportControl, canReport, senderName, whenLabel } from "@
 import StampThumb, { stampThumbKind } from "@/components/passport/StampThumb";
 import OfficialSeal from "@/components/passport/OfficialSeal";
 import { feedStamp } from "@/lib/stampKind";
+import FollowSender from "@/components/social/FollowSender";
 
 const SERIF = "'Instrument Serif', Georgia, serif";
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
@@ -44,7 +45,8 @@ const handleOf = (v) => String((v && typeof v === "object" ? v.handle : v) ?? ""
  */
 // onReply (2026-10-19): a card addressed to me gets one Reply button under it. Delete lives in
 // its ••• (the caller's TravelerSheet), so each action has one place on the card.
-export default function PostcardCard({ row, me = undefined, meName = null, onReport = undefined, onKeep = undefined, onReply = undefined, className = undefined, style = undefined }) {
+// onFollow (2026-10-25): mail from someone you don't follow gets "+ Follow" (FollowSender).
+export default function PostcardCard({ row, me = undefined, meName = null, onReport = undefined, onKeep = undefined, onReply = undefined, onFollow = undefined, className = undefined, style = undefined }) {
   const { socialTier } = useAuth();
   if (!row || typeof row !== "object") return null;
   const by = row.by || {};
@@ -125,6 +127,9 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
           {toMe ? <span>{also.length ? `· Group card · ${also.length + 1} people` : "· To you"}</span> : null}
           {when ? <span style={{ marginLeft: "auto" }}>{when}</span> : null}
         </div>
+        {toMe && row.from_new && by.handle && typeof onFollow === "function" ? (
+          <FollowSender name={by.name || `@${by.handle}`} onFollow={() => onFollow(row)} style={{ marginTop: 10 }} />
+        ) : null}
         {toMe && row.id && typeof onReply === "function" ? (
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${DIVIDE}` }}>
             <div style={{ display: "flex", gap: 6 }}>
