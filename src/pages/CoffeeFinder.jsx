@@ -23,10 +23,12 @@ import { useIsTablet } from "@/lib/useIsTablet";
 import FinderHeader from "@/components/finder/FinderHeader";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import FilterSheet, { FilterGroupLabel } from "@/components/finder/FilterSheet";
-import { WorldSearch, WorldChip, ChipRow, ResultLine } from "@/components/finder/FinderControls";
+import { WorldSearch, WorldChip, ChipRow, ResultLine, WorldNote } from "@/components/finder/FinderControls";
 import { WorldCard, worldGrid, NumberMark, FactsLine, RatingFact, CardKicker, CardName, QuietRows, ActionRow, WorldSkeleton } from "@/components/finder/FinderCard";
 import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
-import { pinInstitutions } from "@/lib/searchRank";
+import { pinInstitutions, keepCountry, nearFirst as nearFirstList } from "@/lib/searchRank";
+import { planFinderSearch, moveToPlace, finderRecents, saveFinderRecent } from "@/lib/finderSearch";
+import { placePhrase } from "@/lib/placeContext";
 
 // The Coffee world (espresso plate, ember accents, copper icons): every colour on the
 // page comes from it.
@@ -437,6 +439,11 @@ export default function CoffeeFinderPage() {
   // brew, caramel macchiato). Owned-first (client filter over `shops`) merged
   // with a live Google café search (searchShops).
   const [q,setQ]                                 = useState("");
+  const [planning,setPlanning]                   = useState(false);
+  const [otherFinder,setOtherFinder]             = useState(null);   // { page, label, query }
+  const [recents,setRecents]                     = useState(()=>finderRecents("coffee"));
+  const [nearFirstC,setNearFirstC]               = useState(false);  // a named smaller place: nearby leads
+  const [countryLock,setCountryLock]             = useState(null);   // a named place keeps its country
   const [submitted,setSubmitted]                 = useState("");
   const [searchShops,setSearchShops]             = useState([]);
   const [searchBusy,setSearchBusy]               = useState(false);
@@ -452,7 +459,8 @@ export default function CoffeeFinderPage() {
   const [selectedMapIndex, setSelectedMapIndex] = useState(null);
   const cardRefs = useRef({}); const mapRef = useRef(null); const mapInstanceRef = useRef(null);
 
-  const { activeLocation, locationMode } = useLocation();
+  const locationCtx = useLocation();
+  const { activeLocation, locationMode } = locationCtx;
   // "Local" = browsing the city the device is physically in, so the device clock
   // is the place clock. Gates every Open/Closed derivation on this page (T1.5).
   const isLocal = locationMode === 'current';
@@ -576,10 +584,14 @@ export default function CoffeeFinderPage() {
       const sb=(b.rating||0)*Math.log10(Math.max(b.userRatingCount||1,1));
       return sb-sa;
     });
+    // A named place (2026-10-25, from Home or this box): its own country only ("in Tijuana" is
+    // Mexico), and for a smaller place the cafés within 5 miles lead.
+    r=keepCountry(r,countryLock);
+    if(nearFirstC) r=nearFirstList(r);
     if(submitted) r=pinInstitutions(r);
     r=r.filter(s=>!ownedEnrich[s.id||s.placeId]?.closed); // Google says it closed for good
     return r;
-  },[ownedEnrich,shopsWithHours,searchMerged,submitted,radius,filterSpecialty,sortBy,filterOpenNow,hoursKnown,filterWifi,filterShopType,filterWork,filterOutlets,filterQuiet,filterAC,workProfiles]);
+  },[ownedEnrich,shopsWithHours,searchMerged,submitted,radius,filterSpecialty,sortBy,filterOpenNow,hoursKnown,filterWifi,filterShopType,filterWork,filterOutlets,filterQuiet,filterAC,workProfiles,countryLock,nearFirstC]);
 
   // ── T1.15: BATCH ENRICH VISIBLE OWNED CAFÉS ──────────────────────────────
   // Was: every owned card fired its own /places/enrich-owned on mount (one call
@@ -618,7 +630,44 @@ export default function CoffeeFinderPage() {
     }catch{ setSearchShops([]); }
     setSearchBusy(false);
   };
-  const clearSearch=()=>{setQ("");setSubmitted("");setSearchShops([]);};
+  const clearSearch=()=>{setQ("");setSubmitted("");setSearchShops([]);setOtherFinder(null);};
+  // The box understands what Home's search does (2026-10-25): "best coffee in DTLA" moves the page
+  // to Downtown LA and sorts by rating; "matcha near Shibuya" searches matcha there; "ATM" offers
+  // ATMs. A search after a move waits for the page's new coordinates.
+  const runSearchRef=useRef(null);
+  runSearchRef.current=runSearch;
+  const pendingRef=useRef(null);
+  useEffect(()=>{
+    const p=pendingRef.current;
+    if(p==null||!Number.isFinite(lat)||!Number.isFinite(lng)) return;
+    pendingRef.current=null;
+    if(p) runSearchRef.current(p); else {setSubmitted("");setSearchShops([]);}
+  },[lat,lng]);
+  const runTypedSearch=async(raw)=>{
+    const text=String(raw||"").trim();
+    setOtherFinder(null);
+    if(!text){clearSearch();return;}
+    setPlanning(true);
+    try{
+      const plan=await planFinderSearch(text,{world:"coffee",activePhrase:placePhrase(activeLocation)||""});
+      saveFinderRecent("coffee",text); setRecents(finderRecents("coffee"));
+      if(plan.sort==="rating") setSortBy("rating");
+      if(plan.other) setOtherFinder({...plan.other,query:plan.query});
+      if(plan.place){
+        pendingRef.current=plan.query;
+        const {moved,country}=await moveToPlace(plan,locationCtx);
+        if(moved){
+          setNearFirstC(plan.nearFirst); setCountryLock(country);
+          // The same spot again moves nothing: run it anyway once the page has settled.
+          setTimeout(()=>{const p=pendingRef.current;if(p!=null){pendingRef.current=null;if(p) runSearchRef.current(p);}},1500);
+          setPlanning(false); return;
+        }
+        pendingRef.current=null;
+      }
+      if(plan.query) await runSearch(plan.query); else {setSubmitted("");setSearchShops([]);}
+    }catch{ await runSearch(text); }
+    setPlanning(false);
+  };
 
   // Smart-Search spine / cross-finder handoff: a query passed via router state
   // (navigate("CoffeeFinder",{state:{presetQuery}})) prefills the box and
@@ -629,6 +678,10 @@ export default function CoffeeFinderPage() {
     if(presetRanRef.current||!pq||!String(pq).trim()) return;
     if(!Number.isFinite(lat)||!Number.isFinite(lng)) return;
     presetRanRef.current=true;
+    const st=routerLocation.state||{};
+    if(st.presetSort==="rating") setSortBy("rating");
+    if(st.presetNearFirst===true) setNearFirstC(true);
+    if(st.presetCountry) setCountryLock(st.presetCountry);
     setQ(String(pq).trim());
     runSearch(String(pq).trim());
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -713,16 +766,21 @@ export default function CoffeeFinderPage() {
         unit={{ value: unit, onChange: setUnit }}
         isCity={isCity}
         cityName={activeLocation?.address?.city || activeLocation?.placeName}
+        hint={otherFinder ? (
+          <WorldNote world="coffee" title={`Looking for ${otherFinder.label}?`} action={{ label: `Open ${otherFinder.label}`, onClick: () => navigate(createPageUrl(otherFinder.page), { state: ["PlacesToEat", "ThingsToDo"].includes(otherFinder.page) && otherFinder.query ? { presetQuery: otherFinder.query } : {} }) }} />
+        ) : null}
       >
         <WorldSearch
           world="coffee"
           value={q}
           onChange={setQ}
-          onSubmit={(text)=>runSearch(text)}
+          onSubmit={runTypedSearch}
           onClear={clearSearch}
           placeholder="Search a café or a drink…"
-          label="Search a café or a drink, like latte, matcha or cold brew"
-          busy={searchBusy}
+          label="Search a café or a drink, like latte, matcha or cold brew, here or in any city"
+          busy={planning||searchBusy}
+          recents={recents}
+          onPickRecent={(t)=>{setQ(t);runTypedSearch(t);}}
           inputProps={{ autoCapitalize: "none" }}
         />
         <ChipRow label="Quick filters" style={{marginTop:10}}>

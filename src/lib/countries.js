@@ -240,6 +240,15 @@ const EXTRA_SPELLINGS = {
   "saint vincent and grenadines": "VC", "lao pdr": "LA",
   "puerto rico": "PR", "hong kong": "HK", "taiwan": "TW", "macau": "MO", "macao": "MO",
   "palestine": "PS", "kosovo": "XK",
+  // Island territories travelers search by name (2026-10-25: "snorkel with whales in french
+  // polynesia" wasn't recognized as a place at all).
+  "french polynesia": "PF", "tahiti": "PF", "guam": "GU", "aruba": "AW", "new caledonia": "NC",
+  "cook islands": "CK", "bermuda": "BM", "cayman islands": "KY", "us virgin islands": "VI",
+  "u s virgin islands": "VI", "british virgin islands": "VG", "martinique": "MQ", "guadeloupe": "GP",
+  "reunion": "RE", "curacao": "CW", "sint maarten": "SX", "turks and caicos": "TC",
+  "turks and caicos islands": "TC", "northern mariana islands": "MP", "saipan": "MP",
+  "american samoa": "AS", "bonaire": "BQ", "anguilla": "AI", "isle of man": "IM",
+  "faroe islands": "FO", "gibraltar": "GI", "french guiana": "GF", "greenland": "GL",
 };
 
 const LOOSE_TO_CODE = (() => {

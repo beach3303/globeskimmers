@@ -16,6 +16,8 @@ import { useNavigate, useLocation as useRouterLocation } from "react-router-dom"
 import { sortByRating as rankByRating, keepCountry, nearFirst as nearFirstSplit, pinInstitutions } from "@/lib/searchRank";
 import { createPageUrl } from "@/utils";
 import { useLocation } from "@/components/location/LocationContext";
+import { planFinderSearch, moveToPlace, finderRecents, saveFinderRecent } from "@/lib/finderSearch";
+import { placePhrase } from "@/lib/placeContext";
 import { getLocationLabel, isCityLocation } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import LocationModePicker from "@/components/location/LocationModePicker";
@@ -824,11 +826,14 @@ export default function PlacesToEat() {
   // A NAMED smaller place (Redondo Beach, not "LA") from Search: places within
   // 5 miles of it lead, the wider 25-mile net follows (founder, 2026-10-07 —
   // "best crabs in Redondo Beach area" ranked central-LA spots above the pier).
-  const nearFirst = routerLocation.state?.presetNearFirst === true;
+  // In-box searches set these too (2026-10-25): "pasta in Positano" typed right here.
+  const [nearFirst, setNearFirst] = useState(routerLocation.state?.presetNearFirst === true);
+  useEffect(() => { setNearFirst(routerLocation.state?.presetNearFirst === true); }, [routerLocation.state?.presetNearFirst]);
   // "best tacos in Tijuana" means MEXICO (founder, 2026-10-07): the 25-mile net
   // crossed the border and San Diego/Chula Vista spots outranked Tijuana. A
   // named place keeps results in its own country; addresses end with it.
-  const presetCountry = routerLocation.state?.presetCountry || null;
+  const [presetCountry, setPresetCountry] = useState(routerLocation.state?.presetCountry || null);
+  useEffect(() => { setPresetCountry(routerLocation.state?.presetCountry || null); }, [routerLocation.state?.presetCountry]);
   // "open late" from Search → the strict Late-night chip (real hours, past 10 PM).
   useEffect(() => {
     if (routerLocation.state?.presetLateNight === true) setSelectedCuisines(new Set(["latenight"]));
@@ -884,7 +889,8 @@ export default function PlacesToEat() {
   const mapInstanceRef = useRef(null);
   const cuisineScrollRef = useRef(null);
 
-  const { activeLocation, locationMode } = useLocation();
+  const locationCtx = useLocation();
+  const { activeLocation, locationMode } = locationCtx;
   // Device clock == place clock only when the user is physically at the active
   // location. Drives which clock Open/Closed may trust (see computeOpenStatus).
   const isLocal = locationMode === 'current' || activeLocation?.placeType === 'current_location';
@@ -1220,6 +1226,34 @@ export default function PlacesToEat() {
   };
 
   const handleSearch = () => setSearchText(searchInput.trim());
+  // The box understands what Home's search does (2026-10-25): "best pasta in Positano" moves the
+  // page to Positano, sorts by rating and searches "pasta"; "cheap", "open late" and "bars" set
+  // their filters; "ATM" offers ATMs. The dish engine still runs the search.
+  const [planning, setPlanning] = useState(false);
+  const [otherFinder, setOtherFinder] = useState(null);   // { page, label, query } when the words belong elsewhere
+  const [recents, setRecents] = useState(() => finderRecents("eat"));
+  const runTypedSearch = async (raw) => {
+    const text = String(raw || "").trim();
+    setOtherFinder(null);
+    if (!text) { setSearchText(""); return; }
+    setPlanning(true);
+    try {
+      const plan = await planFinderSearch(text, { world: "eat", activePhrase: placePhrase(activeLocation) || "" });
+      saveFinderRecent("eat", text);
+      setRecents(finderRecents("eat"));
+      if (plan.sort === "rating") setSortByRating(true);
+      if (plan.maxPrice === 1 || plan.maxPrice === 2) setFilterMaxPrice(plan.maxPrice);
+      if (plan.lateNight) setSelectedCuisines(new Set(["latenight"]));
+      if (plan.bars) setFilterBars(true);
+      if (plan.place) {
+        const { moved, country } = await moveToPlace(plan, locationCtx);
+        if (moved) { setNearFirst(plan.nearFirst); setPresetCountry(country); }
+      }
+      if (plan.other) setOtherFinder({ ...plan.other, query: plan.query });
+      setSearchText(plan.query);
+    } catch { setSearchText(text); }
+    setPlanning(false);
+  };
 
   // ── LAZY PHOTO LABELING ON LOAD MORE ────────────────────────────────────
   // Backend eager-labels the top 20 cards. When the user taps "Load More"
@@ -1360,7 +1394,9 @@ export default function PlacesToEat() {
         note={fallbackNoteKind(fallbackInfo, fallbackBanner) ? (
           <FallbackDisclaimer world="eat" fallbackInfo={fallbackInfo} banner={fallbackBanner} onSearchElsewhere={() => setShowLocPicker(true)} formatDistance={formatDistance} />
         ) : null}
-        hint={coffeeHint ? (
+        hint={otherFinder ? (
+          <WorldNote world="eat" title={`Looking for ${otherFinder.label}?`} action={{ label: `Open ${otherFinder.label}`, onClick: () => navigate(createPageUrl(otherFinder.page), { state: ["CoffeeFinder", "ThingsToDo"].includes(otherFinder.page) && otherFinder.query ? { presetQuery: otherFinder.query } : { from: "PlacesToEat" } }) }} />
+        ) : coffeeHint ? (
           <WorldNote world="eat" icon={Coffee} title="Looking for coffee?" action={{ label: "See more cafés in Coffee", onClick: () => navigate(createPageUrl("CoffeeFinder"), { state: { from: "PlacesToEat" } }) }} />
         ) : null}
       >
@@ -1368,10 +1404,12 @@ export default function PlacesToEat() {
           world="eat"
           value={searchInput}
           onChange={setSearchInput}
-          onSubmit={(text) => setSearchText(String(text || "").trim())}
-          onClear={() => { setSearchInput(""); setSearchText(""); }}
-          placeholder="Search a dish or a restaurant…"
-          busy={loading && !!searchText}
+          onSubmit={runTypedSearch}
+          onClear={() => { setSearchInput(""); setSearchText(""); setOtherFinder(null); }}
+          placeholder="Search a dish, a restaurant, or “pasta in Positano”…"
+          busy={planning || (loading && !!searchText)}
+          recents={recents}
+          onPickRecent={(t) => { setSearchInput(t); runTypedSearch(t); }}
         />
         <ChipRow label="Quick filters" style={{ marginTop: 10 }}>
           <WorldChip world="eat" icon={Clock} label="Open now" active={filterOpenNow} onClick={() => setFilterOpenNow(!filterOpenNow)} />

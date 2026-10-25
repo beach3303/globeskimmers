@@ -249,6 +249,8 @@ export function WorldSearch({
   id = undefined,
   inputRef = undefined,
   inputProps = {},
+  recents = undefined,
+  onPickRecent = undefined,
   className = undefined,
   style = undefined,
 }) {
@@ -275,8 +277,14 @@ export function WorldSearch({
     if (!busy && onSubmit) onSubmit(text);
   };
 
+  // Recent searches (2026-10-25): shown under the box while it is focused and empty; a tap runs one.
+  // onMouseDown keeps the focus, so the row doesn't vanish before the tap lands.
+  const recentList = Array.isArray(recents) ? recents.filter(Boolean).slice(0, 5) : [];
+  const showRecents = focused && !text && recentList.length > 0 && typeof onPickRecent === 'function';
+
   return (
-    <form role="search" onSubmit={submit} className={className} style={{ display: 'flex', gap: 8, margin: 0, ...style }}>
+    <form role="search" onSubmit={submit} className={className} style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: 0, ...style }}>
+     <div style={{ display: 'flex', gap: 8 }}>
       <div
         style={{
           flex: 1,
@@ -386,6 +394,18 @@ export function WorldSearch({
           <SubmitIcon size={20} color={w.ctaInk} strokeWidth={2} aria-hidden="true" focusable="false" />
         )}
       </button>
+     </div>
+      {showRecents ? (
+        <div role="group" aria-label="Recent searches" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: fs(10), letterSpacing: '.14em', textTransform: 'uppercase', color: NEUTRAL.ink3, marginRight: 2 }}>Recent</span>
+          {recentList.map((t) => (
+            <button key={t} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onPickRecent(t)}
+              style={{ minHeight: 36, padding: '0 12px', borderRadius: 999, border: `1px solid ${w.line}`, background: NEUTRAL.white, color: NEUTRAL.ink2, fontFamily: 'inherit', fontSize: fs(13), fontWeight: 600, cursor: 'pointer', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {t}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </form>
   );
 }

@@ -122,7 +122,7 @@ export async function runSmartSearch(parsed, { navigate, location }) {
       const q = finderQuery(parsed); // shared with the test suite (searchPlan.js)
       // presetSort 'rating' = "best / top rated" was typed — the finder orders
       // by review-weighted rating instead of distance.
-      opts = { state: { ...(q ? { presetQuery: q } : {}), ...(sort ? { presetSort: sort } : {}), ...(nearFirst ? { presetNearFirst: true } : {}), ...(placeCountry ? { presetCountry: placeCountry } : {}), ...(maxPrice ? { presetMaxPrice: maxPrice } : {}), ...(lateNight ? { presetLateNight: true } : {}), ...(bars && category === "eat" ? { presetBars: true } : {}) } };
+      opts = { state: { ...(q ? { presetQuery: q } : {}), ...(sort ? { presetSort: sort } : {}), ...(nearFirst ? { presetNearFirst: true } : {}), ...(placeCountry ? { presetCountry: placeCountry } : {}), ...(maxPrice ? { presetMaxPrice: maxPrice } : {}), ...(lateNight ? { presetLateNight: true } : {}), ...(bars && category === "eat" ? { presetBars: true } : {}), ...(parsed.region && place ? { presetRegion: parsed.region, presetPlace: place } : {}) } };
     }
     navigate(createPageUrl(cat.page), opts);
     return { routed: cat.page, recentered, needsStay };

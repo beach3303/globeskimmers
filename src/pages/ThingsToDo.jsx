@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useLocation as useRouterLocation } from "react-router-dom";
+import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import { useLocation, isLiveFix } from "@/components/location/LocationContext";
 import { getLocationLabel, isCityLocation } from "@/components/location/locationLabel";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
@@ -37,6 +38,9 @@ import { useIsTablet } from "@/lib/useIsTablet";
 import PersonaChooser from "@/components/PersonaChooser";
 import { usePersona, personaRank } from "@/lib/persona";
 import { expandActivityQuery, fameFirstThings } from "@/lib/searchPlan";
+import { planFinderSearch, moveToPlace, finderRecents, saveFinderRecent, regionFallback } from "@/lib/finderSearch";
+import { showToast } from "@/components/Toast";
+import { placePhrase } from "@/lib/placeContext";
 import { sortByRating as rankByRating } from "@/lib/searchRank";
 
 // The page's world (the new look's lapis, ThingsToDo.dc.html).
@@ -672,6 +676,9 @@ export default function ThingsToDoFinder() {
   // `filtered` useMemo below reads `submitted` — declaring it after `filtered`
   // hit the temporal dead zone and crashed the whole page on render.
   const [q,setQ]=useState("");
+  const [planning,setPlanning]=useState(false);
+  const [otherFinder,setOtherFinder]=useState(null);   // { page, label, query } when the words belong elsewhere
+  const [recents,setRecents]=useState(()=>finderRecents("things"));
   const [submitted,setSubmitted]=useState("");
   const [tourBusy,setTourBusy]=useState(false);    // the activity search is running
   // A stamp tapped anywhere in the app opens HERE (founder, 2026-10-03): that
@@ -684,7 +691,9 @@ export default function ThingsToDoFinder() {
   const [searchError,setSearchError]=useState(null); // callWorker envelope error for the last search — distinct from "no results"
   const cardRefs=useRef({});
   const mapRef=useRef(null); const mapInst=useRef(null); const markers=useRef([]);
-  const {activeLocation,currentGpsLocation,locationMode}=useLocation();
+  const navigate=useNavigate();
+  const locationCtx=useLocation();
+  const {activeLocation,currentGpsLocation,locationMode}=locationCtx;
   const routerLocation=useRouterLocation();
   // "You're here" needs a reading from this app run — never a restored old fix.
   const liveGps=isLiveFix(currentGpsLocation,60*60*1000)?currentGpsLocation:null;
@@ -928,7 +937,61 @@ export default function ThingsToDoFinder() {
     }catch(e){ setSearchPlaces([]); setSearchError(e?.message||"Network error"); }
     setTourBusy(false);
   };
-  const clearSearch=()=>{setQ("");setSubmitted("");setSearchPlaces([]);setSearchError(null);setFameFirst(false);};
+  const clearSearch=()=>{setQ("");setSubmitted("");setSearchPlaces([]);setSearchError(null);setFameFirst(false);setOtherFinder(null);};
+  // The box understands what Home's search does (2026-10-25): "ziplining in Honolulu" moves the page
+  // to Honolulu and searches ziplining; "best museums" ranks the famous ones first, as it does from
+  // Home; "pasta" offers Places to Eat. A search after a move waits for the new coordinates.
+  const runActivityRef=useRef(null);
+  runActivityRef.current=runActivitySearch;
+  const pendingRef=useRef(null);
+  useEffect(()=>{
+    const p=pendingRef.current;
+    if(p==null||!Number.isFinite(lat)||!Number.isFinite(lng)) return;
+    pendingRef.current=null;
+    if(p) runActivityRef.current(p); else {setSubmitted("");setSearchPlaces([]);setSearchError(null);}
+  },[lat,lng]);
+  // One more try when a narrowed country came back empty (2026-10-25: "snorkel with whales in
+  // French Polynesia" → Rangiroa found nothing; Papeete finds the whale swims). Once per search.
+  const regionPlanRef=useRef(null);
+  useEffect(()=>{
+    if(tourBusy||!submitted||searchError||searchPlaces.length) return;
+    const plan=regionPlanRef.current;
+    if(!plan) return;
+    regionPlanRef.current=null;
+    (async()=>{
+      const next=await regionFallback(plan);
+      if(!next) return;
+      pendingRef.current=submitted;
+      const {moved}=await moveToPlace(next,locationCtx);
+      if(!moved){pendingRef.current=null;return;}
+      showToast(`Nothing for “${submitted}” in ${plan.place}. Showing ${String(next.place).split(",")[0]}.`,"success");
+      setTimeout(()=>{const p=pendingRef.current;if(p!=null){pendingRef.current=null;if(p) runActivityRef.current(p);}},1500);
+    })();
+  },[tourBusy,submitted,searchError,searchPlaces]); // eslint-disable-line react-hooks/exhaustive-deps
+  const runTypedSearch=async(raw)=>{
+    const text=String(raw||"").trim();
+    setOtherFinder(null);
+    if(!text){clearSearch();return;}
+    setPlanning(true);
+    try{
+      const plan=await planFinderSearch(text,{world:"things",activePhrase:placePhrase(activeLocation)||""});
+      saveFinderRecent("things",text); setRecents(finderRecents("things"));
+      setFameFirst(fameFirstThings({query:plan.query||text,sort:plan.sort,named:!!plan.place,nearFirst:plan.nearFirst}));
+      if(plan.other) setOtherFinder({...plan.other,query:plan.query});
+      regionPlanRef.current=plan.region&&plan.place&&plan.query?plan:null;
+      if(plan.place){
+        pendingRef.current=plan.query;
+        const {moved}=await moveToPlace(plan,locationCtx);
+        if(moved){
+          setTimeout(()=>{const p=pendingRef.current;if(p!=null){pendingRef.current=null;if(p) runActivityRef.current(p);}},1500);
+          setPlanning(false); return;
+        }
+        pendingRef.current=null;
+      }
+      if(plan.query) await runActivitySearch(plan.query); else {setSubmitted("");setSearchPlaces([]);setSearchError(null);}
+    }catch{ await runActivitySearch(text); }
+    setPlanning(false);
+  };
   // Smart-Search spine / cross-finder handoff: a query passed via router state
   // prefills the box and auto-runs the activity search once coords are ready.
   const presetRanRef=useRef(false);
@@ -939,6 +1002,7 @@ export default function ThingsToDoFinder() {
     presetRanRef.current=true;
     const st=routerLocation.state||{};
     setFameFirst(fameFirstThings({query:String(pq),sort:st.presetSort||null,named:!!st.presetCountry,nearFirst:!!st.presetNearFirst}));
+    regionPlanRef.current=st.presetRegion&&st.presetPlace?{place:st.presetPlace,region:st.presetRegion}:null;
     setQ(String(pq).trim());
     runActivitySearch(String(pq).trim());
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -979,16 +1043,21 @@ export default function ThingsToDoFinder() {
         unit={{value:unit,onChange:setUnit}}
         isCity={isCity}
         cityName={activeLocation?.address?.city||activeLocation?.placeName}
+        hint={otherFinder?(
+          <WorldNote world="todo" title={`Looking for ${otherFinder.label}?`} action={{label:`Open ${otherFinder.label}`,onClick:()=>navigate(createPageUrl(otherFinder.page),{state:["PlacesToEat","CoffeeFinder"].includes(otherFinder.page)&&otherFinder.query?{presetQuery:otherFinder.query}:{}})}}/>
+        ):null}
       >
         <WorldSearch
           world="todo"
           value={q}
           onChange={setQ}
-          onSubmit={(text)=>runActivitySearch(String(text||""))}
+          onSubmit={runTypedSearch}
           onClear={clearSearch}
           placeholder="Search anything to do: zip lining, snorkeling…"
-          label="Search things to do"
-          busy={tourBusy}
+          label="Search things to do, here or in any city"
+          busy={planning||tourBusy}
+          recents={recents}
+          onPickRecent={(t)=>{setQ(t);runTypedSearch(t);}}
         />
         {/* Row 1 scrolls on its own, so List|Map stays in reach at any text size; a
             chip that runs under it fades out rather than being cut. */}
