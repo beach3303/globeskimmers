@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-10-19 (push build 1.0.6 added; telegrams; the alert trace)
+Last updated: 2026-10-25 (Home as swipeable pages, Mailbox Sent, group mail, events: decided directions + open decisions)
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -913,6 +913,39 @@ stamp, TOLLS: extra words 4¢, ON THE HOUSE — nobody is ever charged). A postc
 follow you, twenty a minute. Details: docs/BUILD_TEST_CHECKLIST.md, 2026-10-19 "Telegrams".
 Open ideas, not decided: a "Sent" list so the sender can see what they wired; telegrams on someone's page
 ("Send a telegram" beside "Send a postcard").
+
+## Home, Mailbox, circle and events — founder, 2026-10-25 (DIRECTION AGREED, decisions open)
+
+Audit + mockups: https://claude.ai/artifact/4kVDaRG9iqapxwWMtJDsH4 (decision ids D1–D9 there).
+Why: two audiences. Travelers love stamping; friends at home don't travel much, so they come for
+City Boards, to see where people are going, and for postcards and telegrams.
+
+Decided by the founder:
+- Home becomes swipeable pages: **tabs are tappable AND pages swipe left/right**. Leaning
+  Nearby · Stamps · Circle · Boards. Home reopens on the page used last.
+- The location pill with **Change** (current location / navigate elsewhere) is never lost: pinned on every page.
+- **Events & festivals** join Nearby services for the location you're looking at (reverses the
+  2026-09-29 removal, read-only; nothing sold in the app). Worker still has the Ticketmaster code
+  (`/events/search` stubbed); festivals need a per-city calendar. Founder's list (same day): shows,
+  games, festivals, choirs, orchestras, plays, kids' shows, free things, seasonal/holiday, farmers
+  markets — "as organized and harmonious as page D". Mocked as eight kinds (Festivals · Music · Stage ·
+  Games · Kids · Free · Markets · Holidays), one blue-tab section each. Sources: Ticketmaster (thin in
+  PH), Google Places for markets, a public-holiday calendar, our own festival calendar per city.
+- The Virtual Passport stays its own thing (bottom tab); Home only links to it.
+- Boards page = photos only. "Where your circle is" goes on its own page, not under Boards.
+- **Just joined:** only the @username and the city they joined from, then Add to circle; nothing else of theirs.
+- A friend's passport cover reads "<First name>’s Virtual Passport" (today the cover image itself
+  says "My Virtual Passport"; fix = patch the words with a blank piece of the same cover + live text).
+- Keep the sealed-telegram tap-to-open feeling. Keep the round-1 Sent folder and group-message designs.
+
+Found 2026-10-25: there is no Sent view anywhere (rows keep sender_id; recipient deletes are soft, so
+history exists). Group messages looked one-to-one because the composer defaults to "Separately"
+(4 of 5 multi-recipient telegrams).
+
+Open (D-ids in the artifact): D1 four pages yes/no · D6 first page for new members · D7 tab style
+T1/T2/T3 · D8 Just joined rules · D9 event ticket links · D2 Mailbox tabs Postcards/Telegrams/Sent/News ·
+D3 senders see "Opened"? · D4 group by default · D5 Add friends fixes.
+Proposed build order: group default → friend's cover → Sent → Mailbox tabs → swipeable Home → events → Just joined.
 
 ## Website (globeskimmers.io)
 
