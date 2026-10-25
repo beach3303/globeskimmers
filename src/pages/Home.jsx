@@ -37,6 +37,7 @@ import SmartSearchBar from "@/components/search/SmartSearchBar";
 import SmartSearchOverlay from "@/components/search/SmartSearchOverlay";
 import DestinationStrip from "@/components/search/DestinationStrip";
 import UpdateCard from "@/components/home/UpdateCard";
+import UpdateSheet from "@/components/home/UpdateSheet";
 import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
 import CityBoardPage from "@/components/home/CityBoardPage";
 import HomePager, { initialHomePage, rememberHomePage } from "@/components/home/HomePager";
@@ -626,8 +627,6 @@ export default function HomePage() {
           </div>
           {/* Every finder as a tile, phone too: the Nearby page has the room (2026-10-25). */}
           <NearbyServices wide={isTablet} compact={!isTablet} onAction={handleQuickAction} onAllServices={openAllServices} />
-          {/* Phones on an older store build: update to get notifications (2026-10-24). Nothing otherwise. */}
-          <UpdateCard />
           {isTablet && <HomeRows unit={unit} onAction={handleQuickAction} />}
         </div>
       );
@@ -694,6 +693,9 @@ export default function HomePage() {
           lobby stays above them; HomePager keeps the tabs stuck under the banner and, once the lobby
           has scrolled away, a slim location line with Change. A new member opens on Stamps; after
           that Home reopens on the page used last. */}
+      {/* Phones on an older store build: update to get notifications (2026-10-24). Above the tabs since
+          2026-10-25, so every page shows it, not just Nearby. Nothing otherwise. */}
+      <UpdateCard />
       <HomePager page={homePage} onPage={openHomePage} render={renderHomePage}
         location={{ label: placeText, onChange: () => setShowLocationPicker(true) }} />
 
@@ -714,6 +716,8 @@ export default function HomePage() {
 
       {/* Arrival stamps — airport (domestic + international) + land/boat border crossings */}
       {profile?.onboarding_completed && !showWelcome && <AirportArrivalPrompt />}
+      {/* Once a day, a phone on an older store build is asked to update (2026-10-25). */}
+      {profile?.onboarding_completed && !showWelcome && !showLocationPicker && <UpdateSheet />}
       {profile?.onboarding_completed && !showWelcome && <BorderCrossingPrompt />}
     </div>
   );

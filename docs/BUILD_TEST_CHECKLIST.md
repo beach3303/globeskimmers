@@ -3191,3 +3191,17 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   postcards, telegrams, pending_*, message_links.
 - Gates: worker check, eslint + no-undef, build, boot-check ✅. Captured: a postcard's Delete confirm, Sent's Delete all.
 - **Activate:** push (worker), then `npm run ota`.
+
+## 2026-10-25 — Update to get notifications: the card above the Home tabs, a once-a-day sheet (COMMITTED on stamping-v2; not pushed)
+
+- Founder: "users have to go to settings and then click the 'update' in order to get notifications. can we make it
+  simpler by auto updating?" A store build can't update itself and an OTA can't add the push plugin; most phones
+  auto-update from the stores anyway. Found: since the six-page Home, UpdateCard sat on the Nearby page only.
+- **UpdateCard** now sits between the lobby and the Home tabs, on every page. **UpdateSheet** (new): on a phone whose
+  store has a newer build (storeUpdate), one bottom sheet ~2 s after Home opens, at most once a day
+  (gs_update_sheet_day_v1), never over another dialog, after the welcome and the location chooser: "Get notifications
+  on this phone · Update GlobeSkimmers in the App Store. It takes a minute…" → Update (the store page) / Later.
+- Next store builds (not done): Google Play in-app updates (one tap installs inside the app) via an app-update plugin.
+- Gates: eslint + no-undef, build, boot-check ✅. Captured as a faked iOS 1.0.4 (store 1.0.5): the card above the tabs,
+  the sheet.
+- **Activate:** push (app only), then `npm run ota`.
