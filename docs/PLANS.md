@@ -935,8 +935,9 @@ Decided by the founder:
   2026-09-29 removal, read-only; nothing sold in the app). Worker still has the Ticketmaster code
   (`/events/search` stubbed); festivals need a per-city calendar. Founder's list (same day): shows,
   games, festivals, choirs, orchestras, plays, kids' shows, free things, seasonal/holiday, farmers
-  markets — "as organized and harmonious as page D". Mocked as eight kinds (Festivals · Music · Stage ·
-  Games · Kids · Free · Markets · Holidays), one blue-tab section each. Sources: Ticketmaster (thin in
+  markets — "as organized and harmonious as page D". Mocked as nine kinds (Festivals · Fairs · Kids & families ·
+  Music · Stage · Games · Free · Markets · Holidays), one blue-tab section each; Kids & families mixes dated
+  activities with always-open family places (zoo, aquarium, children's museum) from our places DB. Sources: Ticketmaster (thin in
   PH), Google Places for markets, a public-holiday calendar, our own festival calendar per city.
 - The Virtual Passport stays its own thing (bottom tab); Home only links to it.
 - City Board = photos only. "Where my circle is" + following/followers + Just joined live on My Circle.
