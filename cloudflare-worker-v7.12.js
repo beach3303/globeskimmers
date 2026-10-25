@@ -18039,11 +18039,11 @@ async function handleSocialProfile(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const mine = await gbSocialProfile(env, user.id);
     const origin = new URL(request.url).origin;
-    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, website: p.website || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null, approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || 'passport', comments_audience: p.comments_audience || 'inner', default_stamp_tier: PP_TIERS.includes(p.default_stamp_tier) ? p.default_stamp_tier : 'inner', circle_public: p.circle_public === true, booklet_order: p.booklet_order || 'newest', shuffle_seed: p.shuffle_seed ?? null, custom_order: Array.isArray(p.custom_order) ? p.custom_order : null, privacy_checked: !!p.privacy_checkup_at, find_by_name: p.find_by_name !== false, find_by_email: p.find_by_email !== false, alert_postcards: p.alert_postcards !== false, alert_follows: p.alert_follows !== false, alert_pages: p.alert_pages !== false, alert_friend_stamps: p.alert_friend_stamps !== false, alert_news: p.alert_news === true, alert_previews: p.alert_previews === true };
+    const pick = (p) => p && { display_name: p.display_name || null, bio: p.bio || null, website: p.website || null, favorites: p.favorites || null, dreams: p.dreams || null, tier: p.social_tier || null, birth_year_set: !!p.birth_year, avatar: p.avatar_key ? `${origin}/av-photo/${p.avatar_key}` : null, approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || 'passport', comments_audience: p.comments_audience || 'inner', default_stamp_tier: PP_TIERS.includes(p.default_stamp_tier) ? p.default_stamp_tier : 'inner', circle_public: p.circle_public === true, booklet_order: p.booklet_order || 'newest', shuffle_seed: p.shuffle_seed ?? null, custom_order: Array.isArray(p.custom_order) ? p.custom_order : null, privacy_checked: !!p.privacy_checkup_at, find_by_name: p.find_by_name !== false, find_by_email: p.find_by_email !== false, in_arrivals: p.in_arrivals !== false, alert_postcards: p.alert_postcards !== false, alert_follows: p.alert_follows !== false, alert_pages: p.alert_pages !== false, alert_friend_stamps: p.alert_friend_stamps !== false, alert_news: p.alert_news === true, alert_previews: p.alert_previews === true };
     // A patch with only a website saves it (B5: it used to read as a read).
     if (b.display_name === undefined && b.bio === undefined && b.favorites === undefined && b.dreams === undefined && b.website === undefined
       && b.approve_followers === undefined && b.albums_audience === undefined && b.comments_audience === undefined
-      && b.default_stamp_tier === undefined && b.circle_public === undefined && b.booklet_order === undefined && b.reshuffle === undefined && b.custom_order === undefined && b.privacy_checked === undefined && b.find_by_name === undefined && b.find_by_email === undefined && b.alert_postcards === undefined && b.alert_follows === undefined && b.alert_pages === undefined && b.alert_friend_stamps === undefined && b.alert_news === undefined && b.alert_previews === undefined) {
+      && b.default_stamp_tier === undefined && b.circle_public === undefined && b.booklet_order === undefined && b.reshuffle === undefined && b.custom_order === undefined && b.privacy_checked === undefined && b.find_by_name === undefined && b.find_by_email === undefined && b.in_arrivals === undefined && b.alert_postcards === undefined && b.alert_follows === undefined && b.alert_pages === undefined && b.alert_friend_stamps === undefined && b.alert_news === undefined && b.alert_previews === undefined) {
       // { privacy: true } adds the truth Settings and the check-up show (founder, 2026-10-18):
       // the passport's public switch and how many stamps sit at each tier.
       if (b.privacy === true) return jsonResponse({ profile: pick(mine) || null, privacy: await ppPrivacySummary(env, user.id) });
@@ -18067,6 +18067,7 @@ async function handleSocialProfile(request, env, ctx) {
     if (b.privacy_checked === true) patch.privacy_checkup_at = new Date().toISOString();
     // Find people (founder, 2026-10-18): a name or an email finds you unless you say no.
     if (b.find_by_name !== undefined) patch.find_by_name = b.find_by_name === true;
+    if (b.in_arrivals !== undefined) patch.in_arrivals = b.in_arrivals === true;
     if (b.find_by_email !== undefined) patch.find_by_email = b.find_by_email === true;
     // The alert switches (push, 2026-10-19).
     for (const k of ['alert_postcards', 'alert_follows', 'alert_pages', 'alert_friend_stamps', 'alert_news', 'alert_previews']) if (b[k] !== undefined) patch[k] = b[k] === true;
@@ -23666,6 +23667,66 @@ async function evPlaces(env, textQuery, lat, lng) {
     return list;
   } catch { return []; }
 }
+// New arrivals (founder's decision sheet, 2026-10-25: "who just joined and from what city so we can
+// determine if we want to add them? nothing else abt their stuff should be seen just handle and from
+// where joined"; "Do not show minors"; "eventually when we have a lot of users, we're gonna remove just
+// joined feeds for everybody" — NEW_ARRIVALS_ON). Members who joined in the last 14 days, newest first:
+// their @username, where they joined from (their home city if they set one, else the country they
+// signed up in — never more exact than a city) and how long ago. Adults only, both ways; never anyone
+// in a block with me; never someone I follow or asked to follow; never anyone who turned "Show me in
+// New arrivals" off (social_profiles.in_arrivals = false).
+//   POST /social/new-arrivals → { rows: [{ user_id, handle, from, days }], off? , held? }
+const NEW_ARRIVALS_ON = true;
+const NEW_ARRIVALS_DAYS = 14;
+async function handleNewArrivals(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    if (!NEW_ARRIVALS_ON) return jsonResponse({ rows: [], off: true });
+    const mySp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (mySp === undefined) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
+    if (!mySp || gbUnderAge(mySp) || gbAgeHeld(mySp) || mySp.social_tier !== 'adult') return jsonResponse({ rows: [], held: true });
+    const since = new Date(Date.now() - NEW_ARRIVALS_DAYS * 864e5).toISOString();
+    let q = await gbRest(env, `social_profiles?created_at=gte.${encodeURIComponent(since)}&social_tier=eq.adult&select=user_id,created_at,in_arrivals,${GB_TIER_COLS}&order=created_at.desc&limit=80`, {});
+    // The seconds before in_arrivals exists (migration 2026-10-25): everyone counts as on.
+    if (!q.ok && q.status === 400) q = await gbRest(env, `social_profiles?created_at=gte.${encodeURIComponent(since)}&social_tier=eq.adult&select=user_id,created_at,${GB_TIER_COLS}&order=created_at.desc&limit=80`, {});
+    if (!q.ok) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
+    let list = (await q.json().catch(() => [])).filter((r) => r && r.user_id !== user.id && r.in_arrivals !== false && !gbUnderAge(r) && !gbAgeHeld(r));
+    if (!list.length) return jsonResponse({ rows: [] });
+    const blocked = await gbBlockSet(env, user.id);
+    if (!blocked) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
+    const ids = list.map((r) => r.user_id).filter((id) => !blocked.has(id));
+    if (!ids.length) return jsonResponse({ rows: [] });
+    const [hq, fq, pq] = await Promise.all([
+      gbRest(env, `passport_shares?user_id=in.(${ids.join(',')})&select=user_id,handle`, {}),
+      gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=in.(${ids.join(',')})&select=followee_id`, {}),
+      gbRest(env, `profiles?id=in.(${ids.join(',')})&select=id,home_city,home_country`, { headers: { 'Accept-Profile': 'public' } }),
+    ]);
+    const handle = {};
+    for (const r of (hq.ok ? await hq.json() : [])) if (r.handle) handle[r.user_id] = r.handle;
+    const mine = new Set((fq.ok ? await fq.json() : []).map((r) => r.followee_id));
+    const home = {};
+    for (const r of (pq.ok ? await pq.json() : [])) home[r.id] = r;
+    const gone = await gbPurgeQueued(env, ids);
+    let names = null;
+    try { names = new Intl.DisplayNames(['en'], { type: 'region' }); } catch { /* no Intl region names */ }
+    const countryOf = (cc) => { const c = String(cc || '').trim().toUpperCase(); if (!/^[A-Z]{2}$/.test(c)) return null; try { return names ? names.of(c) : null; } catch { return null; } };
+    const rows = list
+      .filter((r) => ids.includes(r.user_id) && handle[r.user_id] && !mine.has(r.user_id) && !gone.has(r.user_id))
+      .slice(0, 10)
+      .map((r) => {
+        const h = home[r.user_id] || {};
+        const city = String(h.home_city || '').split(',')[0].trim().slice(0, 60);
+        return {
+          user_id: r.user_id, handle: handle[r.user_id],
+          from: city || String(h.home_country || '').trim().slice(0, 60) || countryOf(r.country_at_gate) || null,
+          days: Math.max(0, Math.floor((Date.now() - Date.parse(r.created_at)) / 864e5)),
+        };
+      });
+    return jsonResponse({ rows });
+  } catch (e) { return jsonResponse({ rows: [], error: e.message }, 500); }
+}
+
 async function handleWhatsOn(request, env) {
   try {
     const b = await request.json().catch(() => ({}));
@@ -28685,6 +28746,7 @@ export default {
       if (pathname === '/activities/search' && request.method === 'POST') return await handleActivitySearch(request, env, ctx);
       if (pathname === '/events/search' && request.method === 'POST') return jsonResponse({ events: [], experiences: [], rows: [] });
       if (pathname === '/events/whats-on' && request.method === 'POST') return await handleWhatsOn(request, env);
+      if (pathname === '/social/new-arrivals' && request.method === 'POST') return await handleNewArrivals(request, env);
       // Deal Radar (airline promos — every claim evidence-gated to the airline's own page)
       // POST included: callWorker (the app's only transport) can ONLY POST — a
       // GET-only route here is a dead route for every client.

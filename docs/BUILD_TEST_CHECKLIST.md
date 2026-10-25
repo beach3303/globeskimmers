@@ -3146,3 +3146,22 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
 - Gates: worker check, eslint + no-undef, build, boot-check ✅; date rules checked in node; intents checked for 16
   queries. Captured with a mocked /events/whats-on: the overview, Music, an event sheet, Home's Nearby row.
 - **Activate:** push (deploys the worker), then probe /events/whats-on live (LA, Manila); `npm run ota`.
+
+## 2026-10-25 — New arrivals on Home's Arrivals page (COMMITTED on stamping-v2; not pushed)
+
+- Founder's decision sheet, answer 6: as suggested — 14 days, home city else the joined-from place, on by default
+  with an off switch, adults only ("Do not show minors"), never blocked people; "eventually when we have a lot of
+  users, we're gonna remove just joined feeds for everybody" → `NEW_ARRIVALS_ON` in the worker.
+- **Worker** `POST /social/new-arrivals` (adult viewers only): social_profiles created in the last 14 days, adult tier,
+  not age-held, in_arrivals not false, with a @username; minus me, anyone in a block with me, anyone I follow or
+  asked to follow, and anyone being deleted; newest first, ten. Each row: user_id, handle, `from` (profiles.home_city's
+  city part, else home_country, else the country_at_gate's English name via Intl.DisplayNames) and days.
+  `social/profile` reads and writes `in_arrivals`.
+- **Migration 20261025140000_new_arrivals.sql:** `social_profiles.in_arrivals boolean` (null = on). The route reads
+  without it until it exists.
+- **App:** ArrivalsPage's NEW ARRIVALS section (blue tab, cream card): "@" disc, @handle, "joined from Cebu · 2 days
+  ago" (the Philippines with "the"), Add to circle → Following / Requested; the note "Only the @username and the city.
+  Adults only. Anyone can turn this off in Settings." Settings → Who can find me: **Hide me from New arrivals**.
+- Gates: worker check, eslint + no-undef, build, boot-check ✅. Captured with a mocked /social/new-arrivals (three
+  members) and the Settings switch.
+- **Activate:** push (worker + migration apply on their own), then `npm run ota`.

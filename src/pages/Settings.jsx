@@ -594,7 +594,7 @@ export default function SettingsPage() {
   // stamps sit at each tier — { is_public, counts: { me, inner, followers, public } }.
   const [priv, setPriv] = useState(null);
   const loadPrivacy = () => getPrivacy().then(({ profile: p, privacy }) => {
-    if (p) setDials({ approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || "passport", comments_audience: p.comments_audience || "inner", default_stamp_tier: p.default_stamp_tier || "inner", circle_public: p.circle_public === true, find_by_name: p.find_by_name !== false, find_by_email: p.find_by_email !== false, alert_postcards: p.alert_postcards !== false, alert_follows: p.alert_follows !== false, alert_pages: p.alert_pages !== false, alert_friend_stamps: p.alert_friend_stamps !== false, alert_news: p.alert_news === true, alert_previews: p.alert_previews === true });
+    if (p) setDials({ approve_followers: p.approve_followers !== false, albums_audience: p.albums_audience || "passport", comments_audience: p.comments_audience || "inner", default_stamp_tier: p.default_stamp_tier || "inner", circle_public: p.circle_public === true, find_by_name: p.find_by_name !== false, find_by_email: p.find_by_email !== false, in_arrivals: p.in_arrivals !== false, alert_postcards: p.alert_postcards !== false, alert_follows: p.alert_follows !== false, alert_pages: p.alert_pages !== false, alert_friend_stamps: p.alert_friend_stamps !== false, alert_news: p.alert_news === true, alert_previews: p.alert_previews === true });
     if (privacy) setPriv(privacy);
   });
   useEffect(() => { loadPrivacy(); }, []);
@@ -1118,7 +1118,9 @@ export default function SettingsPage() {
                 control={{ below: true, node: (
                   <div>
                     {[["find_by_name", "Hide my name from search", "no one finds you by your name", "anyone can find you by your name"],
-                      ["find_by_email", "Hide my email from search", "no one finds you by your email", "someone who knows your email can find you"]].map(([key, title, priv, open], i) => (
+                      ["find_by_email", "Hide my email from search", "no one finds you by your email", "someone who knows your email can find you"],
+                      // New arrivals (founder's decision sheet, 2026-10-25): on by default, adults only.
+                      ["in_arrivals", "Hide me from New arrivals", "new members don’t see you", "for your first 14 days, members see your @username and city under New arrivals"]].map(([key, title, priv, open], i) => (
                       <div key={key} className="flex items-center justify-between gap-3" style={{ paddingTop: i ? 10 : 0, marginTop: i ? 10 : 0, borderTop: i ? "1px dashed rgba(22,17,13,.12)" : 0 }}>
                         <div className="min-w-0">
                           <div style={{ fontSize: "calc(13px*var(--fs,1))", color: "#16110D", fontWeight: 600 }}>{title}</div>
