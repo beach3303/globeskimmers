@@ -142,7 +142,9 @@ function PostcardBox({ onBack }) {
   const [replyPick, setReplyPick] = useState(null);
   const [wireTo, setWireTo] = useState(null);
   const nameFor = (by) => by?.name || (by?.handle ? `@${by.handle}` : null);
-  const replyFor = (row) => setReplyPick(row);
+  // all (2026-10-25): "Reply to all" on a group card or telegram; the others ride along.
+  const othersOf = (row) => (Array.isArray(row?.group) ? row.group : Array.isArray(row?.also_to) ? row.also_to : []).filter(Boolean);
+  const replyFor = (row, all = false) => setReplyPick({ ...row, all: !!all });
   const removeCard = async (row) => {
     const tg = row.kind === "telegram";
     const r = tg ? await deleteTelegram(row.id) : await deletePostcard(row.id);
@@ -151,7 +153,7 @@ function PostcardBox({ onBack }) {
     showToast(tg ? "Telegram deleted" : "Postcard deleted", "success");
     return true;
   };
-  const wireBack = (row) => setWireTo({ reply_to: row.id, name: row.by?.name || null, handle: row.by?.handle || null, group: Array.isArray(row.group) ? row.group : null });
+  const wireBack = (row, all = false) => setWireTo({ reply_to: row.id, name: row.by?.name || null, handle: row.by?.handle || null, group: othersOf(row), all: !!all });
   const blocked = circle.blockedHandles || new Set();
   const rows = box && !box.error && !box.held ? (box.rows || []).filter((r) => !blocked.has(lc(r?.by?.handle))) : [];
   const meName = me.name || profile?.first_name || null;
@@ -242,8 +244,8 @@ function PostcardBox({ onBack }) {
       </div>
       {replyPick ? (
         <ReplyWays name={nameFor(replyPick.by)} onClose={() => setReplyPick(null)}
-          onPostcard={() => setReplyTo({ postcard_id: replyPick.id, name: nameFor(replyPick.by) })}
-          onTelegram={() => setWireTo({ reply_to: replyPick.id, name: replyPick.by?.name || null, handle: replyPick.by?.handle || null })} />
+          onPostcard={() => setReplyTo({ postcard_id: replyPick.id, name: nameFor(replyPick.by), group: othersOf(replyPick), all: !!replyPick.all })}
+          onTelegram={() => wireBack(replyPick, !!replyPick.all)} />
       ) : null}
       {replyTo ? (
         <PostcardCompose open replyTo={replyTo} onClose={() => setReplyTo(null)} onSent={() => setReplyTo(null)}

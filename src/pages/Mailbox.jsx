@@ -308,8 +308,11 @@ function MailboxBody() {
   const [replyTo, setReplyTo] = useState(null);     // the postcard composer, as a reply
   const [wireTo, setWireTo] = useState(null);       // the telegram composer: {} new, { reply_to, … } a reply
   const [replyPick, setReplyPick] = useState(null); // a postcard row: which way to answer it
-  const replyFor = (row) => (wires ? setReplyPick(row) : setReplyTo({ postcard_id: row.id, name: nameFor(row.by) }));
-  const wireBack = (row) => setWireTo({ reply_to: row.id, name: row.by?.name || null, handle: row.by?.handle || null, group: Array.isArray(row.group) ? row.group : null });
+  // all (2026-10-25): a group telegram's or group postcard's "Reply to all"; the others ride along so
+  // the composer can offer either way.
+  const othersOf = (row) => (Array.isArray(row?.group) ? row.group : Array.isArray(row?.also_to) ? row.also_to : []).filter(Boolean);
+  const replyFor = (row, all = false) => (wires ? setReplyPick({ ...row, all: !!all }) : setReplyTo({ postcard_id: row.id, name: nameFor(row.by), group: othersOf(row), all: !!all }));
+  const wireBack = (row, all = false) => setWireTo({ reply_to: row.id, name: row.by?.name || null, handle: row.by?.handle || null, group: othersOf(row), all: !!all });
   const removeCard = async (row) => {
     const tg = row.kind === "telegram";
     const r = tg ? await deleteTelegram(row.id) : await deletePostcard(row.id);
@@ -583,7 +586,7 @@ function MailboxBody() {
       ) : null}
       {replyPick ? (
         <ReplyWays name={nameFor(replyPick.by)} onClose={() => setReplyPick(null)}
-          onPostcard={() => setReplyTo({ postcard_id: replyPick.id, name: nameFor(replyPick.by) })} onTelegram={() => wireBack(replyPick)} />
+          onPostcard={() => setReplyTo({ postcard_id: replyPick.id, name: nameFor(replyPick.by), group: othersOf(replyPick), all: !!replyPick.all })} onTelegram={() => wireBack(replyPick, !!replyPick.all)} />
       ) : null}
       {replyTo ? (
         <PostcardCompose open replyTo={replyTo} onClose={() => setReplyTo(null)} onSent={() => { setReplyTo(null); load(); }}

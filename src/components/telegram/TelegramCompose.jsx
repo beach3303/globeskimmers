@@ -6,14 +6,16 @@
 // The chevron at the top right (or a tap above the sheet) collapses it without sending, and the
 // words wait: opening the same telegram again brings the draft back (founder, 2026-10-19).
 //
-// Several people (2026-10-19): pick up to TG_MAX_TO, then SEPARATELY (private copies) or AS A
-// GROUP (one telegram naming everyone); a reply to a group telegram can go to the sender or to all.
+// Several people (2026-10-19): pick up to TG_MAX_TO, then ONE GROUP TELEGRAM (naming everyone;
+// picked first since 2026-10-25, founder: "One group (everyone sees the names)") or PRIVATE COPIES;
+// a reply to a group telegram or group postcard goes to the sender or to all.
 // Who it's for is one blank "Send to" bar with @username suggestions (SendToField; founder,
 // 2026-10-24: "remove pre placed names at send to: … i love @handle suggestions").
 //
 //   <TelegramCompose open onClose onSent blocked replyTo toHandle meName meHandle />
 //   blocked    op:list `blocked` rows / ids / handles: never suggested
-//   replyTo    { reply_to, name, handle, group? } — a reply; group = the other @usernames on it
+//   replyTo    { reply_to, name, handle, group?, all? } — a reply; group = the other @usernames on it,
+//              all = start on "Reply to all"
 //   toHandle   a fixed @username
 import React, { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown, Loader2, MessageCircle, Zap } from "lucide-react";
@@ -48,6 +50,22 @@ function Chip({ on = false, fixed = false, onClick = undefined, children }) {
   return <button type="button" onClick={onClick} aria-pressed={on} style={{ ...style, cursor: "pointer" }}>{children}</button>;
 }
 
+// One way to send to several people: a radio row with its title, what it means, and how the TO
+// line will read.
+function Way({ on, onClick, title, line, preview }) {
+  return (
+    <button type="button" role="radio" aria-checked={on} onClick={onClick}
+      style={{ display: "flex", alignItems: "flex-start", gap: 10, width: "100%", minHeight: 44, padding: "10px 12px", borderRadius: 14, textAlign: "left", border: `1.5px solid ${on ? BRASS : "rgba(201,163,90,.35)"}`, background: on ? "rgba(201,163,90,.14)" : "transparent", cursor: "pointer" }}>
+      <span aria-hidden="true" style={{ flex: "none", width: 18, height: 18, marginTop: 1, borderRadius: 999, border: on ? `5px solid ${BRASS}` : "1.5px solid #A8977A", boxSizing: "border-box" }} />
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: fs(14), fontWeight: 700, color: "#FBF3E2" }}>{title}</span>
+        <span style={{ display: "block", marginTop: 2, fontSize: fs(12), lineHeight: 1.4, color: "#CBB994" }}>{line}</span>
+        {preview ? <span style={{ display: "inline-block", marginTop: 6, padding: "3px 7px", background: "#F2E4BC", color: "#2A2219", fontFamily: TYPE, fontSize: fs(11), letterSpacing: ".04em", overflowWrap: "anywhere" }}>{preview}</span> : null}
+      </span>
+    </button>
+  );
+}
+
 export default function TelegramCompose({ open = false, onClose = undefined, onSent = undefined, blocked = undefined, replyTo = null, toHandle = null, meName = null, meHandle = null }) {
   const sheetRef = useRef(/** @type {HTMLDivElement|null} */ (null));
   const titleId = `tg-title-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -56,8 +74,8 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
   const [raw, setRaw] = useState(() => DRAFTS.get(key)?.raw || "");
   // Who it's for: the people added in the Send to bar (a kept draft keeps them).
   const [list, setList] = useState(() => (Array.isArray(DRAFTS.get(key)?.list) ? DRAFTS.get(key).list : []));
-  const [mode, setMode] = useState(() => DRAFTS.get(key)?.mode || "each");   // each | group
-  const [toAll, setToAll] = useState(false);     // a reply to a group telegram: everyone on it
+  const [mode, setMode] = useState(() => DRAFTS.get(key)?.mode || "group");   // group | each
+  const [toAll, setToAll] = useState(() => !!replyTo?.all);   // a reply to a group message: everyone on it
   const [ink, setInk] = useState(() => DRAFTS.get(key)?.ink || "black");   // black | red | green
   const [busy, setBusy] = useState(false);
   const [full, setFull] = useState(false);       // a fourth word was refused just now
@@ -174,8 +192,8 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
           {/* the address: a reply is fixed (to the sender, or everyone on a group telegram) */}
           {reply ? (others.length ? (
             <div role="group" aria-label="Reply to" style={{ display: "flex", flexWrap: "wrap", columnGap: 6, marginTop: 6 }}>
-              <Chip on={!toAll} onClick={() => setToAll(false)}>Just {reply.name || (reply.handle ? `@${reply.handle}` : "them")}</Chip>
-              <Chip on={toAll} onClick={() => setToAll(true)}>Everyone on it ({others.length + 1})</Chip>
+              <Chip on={!toAll} onClick={() => setToAll(false)}>Reply to {reply.name || (reply.handle ? `@${reply.handle}` : "them")}</Chip>
+              <Chip on={toAll} onClick={() => setToAll(true)}>Reply to all {others.length + 1}</Chip>
             </div>
           ) : null) : fixedTo ? (
             <div style={{ marginTop: 8 }}><Chip on fixed>@{fixedTo}</Chip></div>
@@ -183,16 +201,13 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
             <>
               <SendToField value={list} onChange={setList} max={TG_MAX_TO} dark needHandle allowEmail blocked={blocked} />
               {total > 1 ? (
-                <div style={{ marginTop: 10 }}>
-                  <div role="group" aria-label="How it goes" style={{ display: "flex", flexWrap: "wrap", columnGap: 6 }}>
-                    <Chip on={mode === "each"} onClick={() => setMode("each")}>Separately</Chip>
-                    <Chip on={mode === "group"} onClick={() => setMode("group")}>As a group</Chip>
-                  </div>
-                  <p style={{ margin: "6px 0 0", fontSize: fs(12), lineHeight: 1.45, color: "#CBB994" }}>
-                    {mode === "group"
-                      ? `One telegram to all ${total}. Everyone sees who it went to and can reply to you or to all.${emailsTo.length ? " Anyone added by email gets their own." : ""}`
-                      : `${total} private telegrams. Nobody sees who else got one, and replies come only to you.`}
-                  </p>
+                <div role="radiogroup" aria-label="How it goes" style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
+                  <Way on={mode === "group"} onClick={() => setMode("group")} title="One group telegram"
+                    line={`Everyone sees who it went to, and can reply to you or to all.${emailsTo.length ? " Anyone added by email gets their own." : ""}`}
+                    preview={`TO: ${[...recipients.map((h) => `@${h}`), ...emailsTo].join(", ").toUpperCase()}`} />
+                  <Way on={mode === "each"} onClick={() => setMode("each")} title="Private copies"
+                    line="Each person sees only their own name. Replies come only to you."
+                    preview={[...recipients.map((h) => `TO: @${h}`), ...emailsTo.map((e) => `TO: ${e}`)].slice(0, 3).join("  ·  ").toUpperCase()} />
                 </div>
               ) : null}
             </>

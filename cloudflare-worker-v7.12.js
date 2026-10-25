@@ -19078,15 +19078,17 @@ async function handlePostcardSend(request, env, ctx) {
     let groupAsked = b.mode === 'group';
     const list = (v) => (Array.isArray(v) ? v : []);
     // A reply (2026-10-19): to the sender of a card addressed to me, looked up here so no account id
-    // is handed to the app. Only ever to the sender, a group card too (founder, 2026-10-24: "post
-    // card reply should be only to sender for now").
+    // is handed to the app. A group card's reply goes to its sender, or with reply_all to the sender
+    // and everyone else on it, as one group card (founder, 2026-10-25: "allow user to reply to all
+    // (group), or reply to sender"; until then group-card replies went to the sender only).
     const directAsked = list(b.to_handles).length || list(b.to_user_ids).length || list(b.to_emails).length || b.to_handle || b.to_user_id || b.to_email;
     if (!directAsked && BL_UUID.test(String(b.reply_to || ''))) {
-      const rq = await gbRest(env, `postcards?id=eq.${String(b.reply_to).toLowerCase()}&to_user_id=eq.${user.id}&select=sender_id`, {});
+      const rq = await gbRest(env, `postcards?id=eq.${String(b.reply_to).toLowerCase()}&to_user_id=eq.${user.id}&select=sender_id,cc`, {});
       const orig = rq.ok ? (await rq.json())[0] : null;
       if (!orig) return jsonResponse({ error: 'That postcard isn’t here any more' }, 404);
-      b.to_user_ids = [orig.sender_id];
-      groupAsked = false;
+      const cc = b.reply_all === true && Array.isArray(orig.cc) ? orig.cc.map((v) => String(v || '').toLowerCase()).filter((v) => BL_UUID.test(v) && v !== user.id) : [];
+      b.to_user_ids = [orig.sender_id, ...cc];
+      groupAsked = cc.length > 0;
     }
     const handles = [...new Set([...list(b.to_handles), ...(b.to_handle ? [b.to_handle] : [])].map((h) => String(h || '').trim().replace(/^@+/, '').toLowerCase()).filter(Boolean))];
     const ids = [...new Set([...list(b.to_user_ids), ...(b.to_user_id ? [b.to_user_id] : [])].map((v) => String(v || '').toLowerCase()).filter((v) => BL_UUID.test(v)))];
@@ -20752,8 +20754,8 @@ async function handleSocialFeed(request, env) {
       message: p.message, place: p.place_name, city: p.city, region: p.region || null, country: p.country,
       dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
       to_me: p.to_user_id === user.id,
-      // A group card (2026-10-24): the others it reached, by @username — shown, never replied to
-      // (a postcard's reply goes to its sender only).
+      // A group card (2026-10-24): the others it reached, by @username — shown on the card, and
+      // "Reply to all" reaches them too (2026-10-25).
       ...(p.to_user_id === user.id && Array.isArray(p.cc) && p.cc.length ? { also_to: p.cc.map((id) => ccHandle[id]).filter(Boolean) } : {}),
       // From someone I don't follow (Step A, 2026-10-18): the Mailbox shelves it apart.
       from_new: p.to_user_id === user.id && !ids.includes(p.sender_id),
@@ -21184,14 +21186,15 @@ async function handleTelegramSend(request, env, ctx) {
     if (BL_UUID.test(rid)) {
       const [tq, pq] = await Promise.all([
         gbRest(env, `telegrams?id=eq.${rid}&to_user_id=eq.${user.id}&select=*`, {}),
-        gbRest(env, `postcards?id=eq.${rid}&to_user_id=eq.${user.id}&select=sender_id`, {}),
+        gbRest(env, `postcards?id=eq.${rid}&to_user_id=eq.${user.id}&select=sender_id,cc`, {}),
       ]);
       const tg = tq.ok ? (await tq.json())[0] : null;
       const orig = tg || (pq.ok ? (await pq.json())[0] : null);
       if (!orig) return jsonResponse({ error: 'That message isn’t here any more' }, 404);
       targets = [orig.sender_id];
-      // Reply to all is a group telegram's; a postcard's reply goes to its sender only (2026-10-24).
-      if (b.reply_all === true && tg && Array.isArray(tg.cc) && tg.cc.length) { targets.push(...tg.cc); group = true; }
+      // Reply to all: everyone else on a group telegram or, since 2026-10-25, a group postcard.
+      const cc = Array.isArray(orig.cc) ? orig.cc.map((v) => String(v || '').toLowerCase()).filter((v) => BL_UUID.test(v) && v !== user.id) : [];
+      if (b.reply_all === true && cc.length) { targets.push(...cc); group = true; }
       replyTo = rid;
     } else {
       const raw = Array.isArray(b.to_handles) ? b.to_handles : b.to_handle ? [b.to_handle] : [];

@@ -40,6 +40,7 @@ export default function TelegramCard({ row, me = undefined, meName = null, onRep
   const from = senderName(row.by || {}, me);
   const myHandle = String((me && typeof me === "object" ? me.handle : me) ?? "").replace(/^@+/, "") || null;
   const firstName = String(meName ?? "").trim().split(/\s+/)[0] || null;
+  const groupSize = Array.isArray(row.group) ? row.group.filter(Boolean).length + 1 : 1;
   return (
     // Each telegram sits in its own tray (founder, 2026-10-23: "there should be divisions between top
     // telegram versus the next … i couldn't tell if the reply and delete is for the below telegram or
@@ -67,10 +68,19 @@ export default function TelegramCard({ row, me = undefined, meName = null, onRep
       )}
       {state === "open" ? <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${NEUTRAL.airmailHair}` }}>
         {typeof onReply === "function" && row.id && state === "open" ? (
-          <button type="button" onClick={() => onReply(row)} aria-label={`Reply to ${from}`}
-            style={{ flex: 1, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, border: `1px solid ${NEUTRAL.airmailBlue}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(13.5), fontWeight: 600 }}>
-            <CornerUpLeft size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Reply to {from}
-          </button>
+          <>
+            <button type="button" onClick={() => onReply(row, false)} aria-label={`Reply to ${from}`}
+              style={{ flex: 1, minWidth: 0, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, border: `1px solid ${NEUTRAL.airmailBlue}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(13.5), fontWeight: 600 }}>
+              <CornerUpLeft size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Reply to {from}
+            </button>
+            {/* A group telegram (2026-10-25): reply to the sender or to everyone on it. */}
+            {groupSize > 1 ? (
+              <button type="button" onClick={() => onReply(row, true)} aria-label={`Reply to all ${groupSize} on it`}
+                style={{ flex: 1, minWidth: 0, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, border: `1px solid ${NEUTRAL.airmailBlue}`, background: NEUTRAL.airmailBlue, color: NEUTRAL.white, fontSize: fs(13.5), fontWeight: 600 }}>
+                <CornerUpLeft size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Reply to all {groupSize}
+              </button>
+            ) : null}
+          </>
         ) : <span style={{ flex: 1 }} />}
         <ReportControl row={row} me={me} onReport={onReport} />
       </div> : null}

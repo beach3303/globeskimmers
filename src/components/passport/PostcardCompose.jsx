@@ -2,8 +2,8 @@
 // sheet: the photo (picked file, resized client-side), the message, the place line, optional
 // dish-or-topic line (founder, 2026-10-24: "dish or topic optional"), and the address — a blank "Send to" bar with @username suggestions
 // (SendToField; founder, 2026-10-24: "remove pre placed names at send to: … i love @handle
-// suggestions"), up to PC_MAX_TO people sent SEPARATELY or AS A GROUP ("allow post card to be
-// sent to group or individually to multiple people"). No card goes to all your followers at once
+// suggestions"), up to PC_MAX_TO people as ONE GROUP CARD (picked first since 2026-10-25) or PRIVATE
+// COPIES ("allow post card to be sent to group or individually to multiple people"). No card goes to all your followers at once
 // from here any more (founder, 2026-10-24: "remove the one that says everyone that follows"). The
 // worker moderates the photo at send, fail-closed.
 //
@@ -87,6 +87,22 @@ const FIELD = {
  * One address: a 44px button around a 32px chip, pressed in airmail blue when chosen.
  * @param {{ on: boolean, onClick?: () => void, children: import('react').ReactNode, fixed?: boolean }} props
  */
+// One way to send to several people (2026-10-25): a radio row with its title, what it means, and
+// how the address will read.
+function Way({ on, onClick, title, line, preview }) {
+  return (
+    <button type="button" role="radio" aria-checked={on} onClick={onClick}
+      style={{ display: "flex", alignItems: "flex-start", gap: 10, width: "100%", minHeight: 44, padding: "10px 12px", borderRadius: 14, textAlign: "left", border: `1.5px solid ${on ? NEUTRAL.airmailBlue : NEUTRAL.airmailLine}`, background: on ? NEUTRAL.airmail : NEUTRAL.white, cursor: "pointer" }}>
+      <span aria-hidden="true" style={{ flex: "none", width: 18, height: 18, marginTop: 1, borderRadius: 999, border: on ? `5px solid ${NEUTRAL.airmailBlue}` : `1.5px solid ${NEUTRAL.ink3}`, boxSizing: "border-box" }} />
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: fs(14), fontWeight: 700, color: NEUTRAL.ink }}>{title}</span>
+        <span style={{ display: "block", marginTop: 2, fontSize: fs(12), lineHeight: 1.4, color: NEUTRAL.ink2 }}>{line}</span>
+        {preview ? <span style={{ display: "inline-block", marginTop: 6, fontFamily: SERIF, fontStyle: "italic", fontSize: fs(13), color: NEUTRAL.airmailBlue, overflowWrap: "anywhere" }}>{preview}</span> : null}
+      </span>
+    </button>
+  );
+}
+
 function Address({ on, onClick = undefined, children, fixed = false }) {
   const chip = (
     <span
@@ -128,8 +144,9 @@ function Address({ on, onClick = undefined, children, fixed = false }) {
  *   toHandle?: string|null, blocked?: any, toCity?: { city: string, country: string }|null,
  * }} props
  */
-// replyTo (2026-10-19): { postcard_id, name } — the address is the sender of that card, resolved by
-// the worker; the To row shows "Reply to Mary".
+// replyTo (2026-10-19): { postcard_id, name, group?, all? } — the address is the sender of that card,
+// resolved by the worker; the To row shows "Reply to Mary". A group card (group = the other
+// @usernames on it) also offers "Reply to all" (founder, 2026-10-25); all = start there.
 export default function PostcardCompose({ open = false, onClose = undefined, onSent = undefined, preset = undefined, toHandle = null, blocked = undefined, toCity = null, replyTo = null }) {
   const fileRef = useRef(/** @type {HTMLInputElement|null} */ (null));
   const sheetRef = useRef(/** @type {HTMLDivElement|null} */ (null));
@@ -141,7 +158,8 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   const [dish, setDish] = useState("");
   // Who it's for (2026-10-24): the people in the Send to bar — { user_id?, handle?, name?, email? }.
   const [list, setList] = useState(/** @type {any[]} */ ([]));
-  const [mode, setMode] = useState("each");        // each | group, for two people or more
+  const [mode, setMode] = useState("group");       // group | each, for two people or more
+  const [replyAll, setReplyAll] = useState(() => !!replyTo?.all);   // a reply to a group card: everyone on it
   const [editing, setEditing] = useState(false);   // our looks on the front (PhotoEditor, 2026-10-19)
   const [busy, setBusy] = useState(false);
   // Board cards sign with your name, or with none at all (founder, 2026-10-15):
@@ -188,6 +206,8 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     ? { city: String(toCity.city).trim(), country: String(toCity.country).trim(), region: toCity.region ? String(toCity.region).trim() : null } : null;
   const fixedBlocked = !board && !!fixedTo && block.handles.has(fixedTo);
   const reply = !board && replyTo && replyTo.postcard_id ? replyTo : null;
+  const replyOthers = reply && Array.isArray(reply.group) ? reply.group.filter(Boolean) : [];
+  const toAllOnIt = !!reply && replyAll && replyOthers.length > 0;
   const picked = !board && !reply && !fixedTo ? list : [];
   const addressed = !!board || !!reply || !!fixedTo || picked.length > 0;
   const canSend = !busy && !!image && addressed && !fixedBlocked;
@@ -224,6 +244,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
       to_city: board || undefined,
       anon: board && sign === "anon" ? true : undefined,
       reply_to: reply ? reply.postcard_id : undefined,
+      reply_all: toAllOnIt ? true : undefined,
     });
     setBusy(false);
     if (error === "age_required") { showToast("Set your birth year in Settings first (one time)", "error"); return; }
@@ -232,7 +253,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     const waiting = Array.isArray(data?.not_ready) && data.not_ready.length ? ` · ${data.not_ready.map((h) => `@${h}`).join(", ")} hasn’t finished their passport yet` : "";
     showToast(board
       ? (sign === "anon" ? `Posted to ${board.city}’s city board, no name on it` : `Posted to ${board.city}’s city board`)
-      : reply ? `Reply sent to ${reply.name || "them"}`
+      : reply ? (toAllOnIt ? `Reply sent to all ${replyOthers.length + 1} on it` : `Reply sent to ${reply.name || "them"}`)
       : address ? `Postcard sent to @${address}`
         // An email address reads the same whether or not a member logs in with it.
         : one ? `Postcard sent to ${chipLabel(one)}${waiting}`
@@ -380,7 +401,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
           <div style={{ fontFamily: MONO, fontSize: fs(9.5), lineHeight: 1.3, letterSpacing: ".2em", textTransform: "uppercase", color: NEUTRAL.stamp }}>Globeskimmers mail</div>
           <h3 id={titleId} style={{ margin: "2px 0 0", paddingRight: 40, fontFamily: SERIF, fontSize: fs(22), fontWeight: 400, lineHeight: 1.1, color: NEUTRAL.ink }}>
             {reply
-              ? <>A postcard back to <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>{reply.name || "them"}</em></>
+              ? <>A postcard back to <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>{toAllOnIt ? "everyone" : reply.name || "them"}</em></>
               : board ? <>A postcard to <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>{board.city}</em></> : <>Send a <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>postcard</em></>}
           </h3>
 
@@ -464,9 +485,23 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
               </p>
             </div>
           ) : reply ? (
-            <div style={{ marginTop: 2 }}>
-              <Address on fixed>Reply to {reply.name || "them"}</Address>
-            </div>
+            replyOthers.length ? (
+              <div style={{ marginTop: 2 }}>
+                <div role="group" aria-label="Reply to" style={{ display: "flex", flexWrap: "wrap", columnGap: 6 }}>
+                  <Address on={!replyAll} onClick={() => setReplyAll(false)}>Reply to {reply.name || "them"}</Address>
+                  <Address on={replyAll} onClick={() => setReplyAll(true)}>Reply to all {replyOthers.length + 1}</Address>
+                </div>
+                <p style={{ margin: "2px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
+                  {replyAll
+                    ? `One group card to ${reply.name || "them"} and ${replyOthers.map((h) => `@${h}`).join(", ")}. Everyone sees the names.`
+                    : `Only ${reply.name || "they"} will see it.`}
+                </p>
+              </div>
+            ) : (
+              <div style={{ marginTop: 2 }}>
+                <Address on fixed>Reply to {reply.name || "them"}</Address>
+              </div>
+            )
           ) : fixedTo ? (
             <div style={{ marginTop: 2 }}>
               <Address on fixed>@{fixedTo}</Address>
@@ -475,16 +510,13 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
             <div style={{ marginTop: 16 }}>
               <SendToField value={list} onChange={setList} max={PC_MAX_TO} allowEmail blocked={blocked} />
               {picked.length > 1 ? (
-                <div style={{ marginTop: 8 }}>
-                  <div role="group" aria-label="How it goes" style={{ display: "flex", flexWrap: "wrap", columnGap: 6 }}>
-                    <Address on={mode === "each"} onClick={() => setMode("each")}>Separately</Address>
-                    <Address on={mode === "group"} onClick={() => setMode("group")}>As a group</Address>
-                  </div>
-                  <p style={{ margin: "2px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
-                    {mode === "group"
-                      ? `One card to all ${picked.length}. Everyone on it sees who else got it; replies come only to you.${picked.some((p) => p.email) ? " Anyone added by email gets their own card." : ""}`
-                      : `${picked.length} cards, one each. Nobody sees who else got one.`}
-                  </p>
+                <div role="radiogroup" aria-label="How it goes" style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
+                  <Way on={mode === "group"} onClick={() => setMode("group")} title="One group card"
+                    line={`Everyone sees who it went to, and can reply to you or to all.${picked.some((p) => p.email) ? " Anyone added by email gets their own card." : ""}`}
+                    preview={`To ${picked.map(chipLabel).join(", ")}`} />
+                  <Way on={mode === "each"} onClick={() => setMode("each")} title="Private copies"
+                    line="Each person sees only their own name. Replies come only to you."
+                    preview={picked.slice(0, 3).map((p) => `To ${chipLabel(p)}`).join("  ·  ")} />
                 </div>
               ) : null}
             </div>

@@ -3004,3 +3004,19 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   lists countries explored and stamps collected.
 - Gates: eslint + no-undef, build, boot-check ✅.
 - **Activate:** push, then `npm run ota`.
+
+## 2026-10-25 — Group messages: "One group" first, everyone named, Reply to all (COMMITTED on stamping-v2; not pushed)
+
+- Founder's decision sheet, answer 9: "One group (everyone sees the names) — allow user to reply to all (group), or
+  reply to sender". Found the same day: 4 of 5 multi-recipient telegrams went "Separately" because it was the default.
+- **Sending:** with 2+ names, both composers start on **One group** (telegram / card) and show two radio rows,
+  each with what it means and how the TO line will read ("TO: @NINA, @MARCO" vs "TO: @NINA · TO: @MARCO").
+- **Receiving:** a group telegram names everyone on its TO line ("MARGARET · @APPREVIEW, @MARCO, @ANA") with
+  "GROUP TELEGRAM · 3 PEOPLE" under it; a group postcard lists the others in its address lines and says
+  "GROUP CARD · 3 PEOPLE". Both get **Reply to <sender>** and **Reply to all N** buttons.
+- **Reply to all on postcards (worker):** /postcards/send with reply_to + reply_all → the original sender plus the
+  card's cc (minus me) as one group card. /telegrams/send reply_all now also reaches a group postcard's cc. This
+  replaces the 2026-10-24 "group-card replies go to the sender only" rule.
+- Gates: worker check, eslint + no-undef, build, boot-check ✅. Captured as the demo account with a mocked feed:
+  the Mailbox (group telegram + group card), a postcard Reply to all, a new telegram to two people.
+- **Activate:** push (deploys the worker), then `npm run ota`.

@@ -109,6 +109,12 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
               <div style={{ marginTop: 8 }}>
                 {firstName ? <div style={{ borderBottom: `1px solid ${ADDRESS_RULE}`, fontFamily: SERIF, fontSize: fs(17), lineHeight: 22 / 17, color: NEUTRAL.ink, overflowWrap: "anywhere" }}>{firstName}</div> : null}
                 {myHandle ? <div style={{ marginTop: 4, borderBottom: `1px solid ${ADDRESS_RULE}`, fontFamily: MONO, fontSize: fs(10), lineHeight: 1.6, color: NEUTRAL.ink3, overflowWrap: "anywhere" }}>@{myHandle}</div> : null}
+                {/* A group card names everyone it went to in its address lines, the way a real card
+                    would (founder, 2026-10-25: "user wants to see who else received" it). */}
+                {also.slice(0, also.length > 4 ? 3 : 4).map((h) => (
+                  <div key={h} style={{ marginTop: 4, borderBottom: `1px solid ${ADDRESS_RULE}`, fontFamily: MONO, fontSize: fs(10), lineHeight: 1.6, color: NEUTRAL.ink, overflowWrap: "anywhere" }}>@{h}</div>
+                ))}
+                {also.length > 4 ? <div style={{ marginTop: 4, fontFamily: MONO, fontSize: fs(10), lineHeight: 1.6, color: NEUTRAL.ink3 }}>+{also.length - 3} more</div> : null}
               </div>
             ) : null}
           </div>
@@ -116,16 +122,24 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 6, rowGap: 2, marginTop: 8, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", lineHeight: 1.2, textTransform: "uppercase", color: NEUTRAL.ink3 }}>
           <span>From {from}</span>
           {seal ? <OfficialSeal size={12} tier={seal} style={undefined} /> : null}
-          {/* A group card (2026-10-24) names the others it went to; a reply still goes to the sender only. */}
-          {toMe ? <span>· To you{also.length ? `, ${also.length <= 3 ? also.map((h) => `@${h}`).join(", ") : `${also.slice(0, 2).map((h) => `@${h}`).join(", ")} +${also.length - 2}`}` : ""}</span> : null}
+          {toMe ? <span>{also.length ? `· Group card · ${also.length + 1} people` : "· To you"}</span> : null}
           {when ? <span style={{ marginLeft: "auto" }}>{when}</span> : null}
         </div>
         {toMe && row.id && typeof onReply === "function" ? (
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${DIVIDE}` }}>
-            <button type="button" onClick={() => onReply(row)} aria-label={`Reply to ${from}`}
-              style={{ width: "100%", minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, border: `1px solid ${NEUTRAL.airmailBlue}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(13.5), fontWeight: 600 }}>
-              <CornerUpLeft size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Reply
-            </button>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button type="button" onClick={() => onReply(row, false)} aria-label={`Reply to ${from}`}
+                style={{ flex: 1, minWidth: 0, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, border: `1px solid ${NEUTRAL.airmailBlue}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(13.5), fontWeight: 600 }}>
+                <CornerUpLeft size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> {also.length ? `Reply to ${from}` : "Reply"}
+              </button>
+              {/* A group card (2026-10-25): reply to the sender or to everyone on it. */}
+              {also.length ? (
+                <button type="button" onClick={() => onReply(row, true)} aria-label={`Reply to all ${also.length + 1} on it`}
+                  style={{ flex: 1, minWidth: 0, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, border: `1px solid ${NEUTRAL.airmailBlue}`, background: NEUTRAL.airmailBlue, color: NEUTRAL.white, fontSize: fs(13.5), fontWeight: 600 }}>
+                  <CornerUpLeft size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Reply to all {also.length + 1}
+                </button>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </div>

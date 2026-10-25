@@ -177,16 +177,16 @@ export default function TelegramPaper({ mode = "received", body = "", to = null,
           <Box label="SENT">{when ? when.line : "NOW"}</Box>
         </div>
 
-        {/* to */}
+        {/* to: a group telegram names everyone on the TO line itself (founder, 2026-10-25: a group
+            telegram "is only addressed to one person … user wants to see who else received" it) */}
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 10 }}>
           <span style={{ fontFamily: MONO, fontSize: fs(8.5), fontWeight: 600, letterSpacing: ".16em", color: TINK3 }}>TO</span>
-          <span style={{ flex: 1, minWidth: 0, borderBottom: `1px dotted rgba(42,34,25,.55)`, fontFamily: TYPE, fontSize: fs(14), lineHeight: 1.35, color: TINK, overflowWrap: "anywhere" }}>{name(to) || " "}</span>
+          <span style={{ flex: 1, minWidth: 0, borderBottom: `1px dotted rgba(42,34,25,.55)`, fontFamily: TYPE, fontSize: fs(14), lineHeight: 1.35, color: TINK, overflowWrap: "anywhere" }}>
+            {Array.isArray(also) && also.length ? [name(to) || "YOU", ...also.map((h) => `@${String(h).toUpperCase()}`)].join(", ") : (name(to) || "\u00a0")}
+          </span>
         </div>
         {Array.isArray(also) && also.length ? (
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
-            <span style={{ fontFamily: MONO, fontSize: fs(8.5), fontWeight: 600, letterSpacing: ".16em", color: TINK3, whiteSpace: "nowrap" }}>ALSO TO</span>
-            <span style={{ flex: 1, minWidth: 0, fontFamily: TYPE, fontSize: fs(12.5), lineHeight: 1.35, color: TINK, overflowWrap: "anywhere" }}>{also.map((h) => `@${String(h).toUpperCase()}`).join(", ")}</span>
-          </div>
+          <div style={{ marginTop: 4, fontFamily: MONO, fontSize: fs(8.5), fontWeight: 600, letterSpacing: ".16em", color: TINK3 }}>GROUP TELEGRAM · {also.length + 1} PEOPLE</div>
         ) : null}
 
         {/* the words */}
