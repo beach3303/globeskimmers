@@ -3208,7 +3208,7 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   the sheet.
 - **Activate:** push (app only), then `npm run ota`.
 
-## 2026-10-25 — PRIVACY FIX: postcards went to every follower since 2026-10-24 (COMMITTED on stamping-v2; not pushed)
+## 2026-10-25 — PRIVACY FIX: postcards went to every follower since 2026-10-24 (PUSHED — main 6bcbfd9; worker ✅; live: unaddressed send refused, feed shows no broadcasts; OTA needed for the app's send fix)
 
 - Founder: "all the postcards sent to others are being seen by inner circle members" (screenshot: Arrivals' "Where your
   circle has been" showing a card meant for one person); "all telegrams and postcards should only be seen by the person
