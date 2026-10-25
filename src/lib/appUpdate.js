@@ -7,8 +7,8 @@
 // set by hand the day Apple / Google release a build; null = nothing to offer. So no card ever
 // points at a store page that has no update yet. Web: never.
 //
-//   storeUpdate()     → { url, where, alerts } when this phone's build is older than its store's,
-//                       else null. where: 'in the App Store' / 'on Google Play'.
+//   storeUpdate()     → { url, where, alerts, version } when this phone's build is older than its store's,
+//                       else null. where: 'in the App Store' / 'on Google Play'; version: the store's.
 //                       alerts: this build has no alert plugin, so the update brings them.
 //   alertsNeedStore() → true on a phone build without the alert plugin
 import { Capacitor } from '@capacitor/core';
@@ -44,7 +44,7 @@ export function storeUpdate() {
       const [info, res] = await Promise.all([App.getInfo(), fetch(VERSIONS, { signal: ctl.signal, cache: 'no-store' })]);
       const live = res.ok ? (await res.json())?.[platform] : null;
       if (!live || !info?.version || !newer(live, info.version)) return null;
-      return { ...STORES[platform], alerts: alertsNeedStore() };
+      return { ...STORES[platform], alerts: alertsNeedStore(), version: String(live) };
     } catch { return null; } finally { clearTimeout(t); }
   })();
   return once;

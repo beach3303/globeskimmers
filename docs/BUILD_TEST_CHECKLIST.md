@@ -3198,8 +3198,10 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   simpler by auto updating?" A store build can't update itself and an OTA can't add the push plugin; most phones
   auto-update from the stores anyway. Found: since the six-page Home, UpdateCard sat on the Nearby page only.
 - **UpdateCard** now sits between the lobby and the Home tabs, on every page. **UpdateSheet** (new): on a phone whose
-  store has a newer build (storeUpdate), one bottom sheet ~2 s after Home opens, at most once a day
-  (gs_update_sheet_day_v1), never over another dialog, after the welcome and the location chooser: "Get notifications
+  store has a newer build (storeUpdate), one bottom sheet ~2 s after Home opens — **once per new store version, plus
+  one reminder a week later, then never again for that version** (founder: "i dont want to annoy people";
+  gs_update_sheet_v2 = { version, shown[] }; replayed: day 0 show, day 7 show, never after; a new version shows again)
+  — never over another dialog, after the welcome and the location chooser: "Get notifications
   on this phone · Update GlobeSkimmers in the App Store. It takes a minute…" → Update (the store page) / Later.
 - Next store builds (not done): Google Play in-app updates (one tap installs inside the app) via an app-update plugin.
 - Gates: eslint + no-undef, build, boot-check ✅. Captured as a faked iOS 1.0.4 (store 1.0.5): the card above the tabs,

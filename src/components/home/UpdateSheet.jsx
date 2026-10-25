@@ -1,9 +1,11 @@
-// UpdateSheet — the once-a-day nudge to update from the store (founder, 2026-10-25: "users have to go to
-// settings and then click the 'update' in order to get notifications … can we make it simpler"). A
-// store build can't update itself and an OTA can't bring notifications, so a phone on an older build
-// gets one gentle sheet when the app opens, at most once a day: what the update brings, Update (straight
-// to the App Store / Google Play page) and Later (tomorrow). It never opens over another sheet, and not
-// before the welcome and the location chooser are done (the caller mounts it after them).
+// UpdateSheet — the rare nudge to update from the store (founder, 2026-10-25: "users have to go to
+// settings and then click the 'update' in order to get notifications … can we make it simpler", then "i
+// dont want to annoy people"). A store build can't update itself and an OTA can't bring notifications,
+// so a phone on an older build gets one gentle sheet when the app opens — once for each new store
+// version, and one reminder a week later if it still hasn't updated; never again for that version. The
+// card above Home's tabs stays as the quiet, always-there way. Update goes straight to the App Store /
+// Google Play page. It never opens over another sheet, and not before the welcome and the location
+// chooser are done (the caller mounts it after them).
 //
 //   <UpdateSheet />
 import React, { useEffect, useState } from "react";
@@ -14,14 +16,28 @@ import { useDismissable } from "@/lib/dismissStack";
 import { AirmailChevron } from "@/components/redesign/ornaments";
 import { NEUTRAL, TEAL_DEEP, fs } from "@/components/redesign/constants";
 
-const DAY_KEY = "gs_update_sheet_day_v1";
-const today = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
-const shownToday = () => { try { return localStorage.getItem(DAY_KEY) === today(); } catch { return true; } };
-const markToday = () => { try { localStorage.setItem(DAY_KEY, today()); } catch { /* storage off */ } };
+// { version, shown: [ms, …] } — when the sheet showed for the store's newest version.
+const KEY = "gs_update_sheet_v2";
+const WEEK = 7 * 24 * 3600 * 1000;
+const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch { return { version: null, shown: [0, 0] }; } };
+// Due: never shown for this version, or shown once at least a week ago. Twice is the most.
+const due = (version) => {
+  const r = read();
+  if (!r || r.version !== version) return true;
+  const shown = Array.isArray(r.shown) ? r.shown : [];
+  return shown.length === 1 && Date.now() - Number(shown[0] || 0) >= WEEK;
+};
+const mark = (version) => {
+  try {
+    const r = read();
+    const shown = r && r.version === version && Array.isArray(r.shown) ? [...r.shown, Date.now()] : [Date.now()];
+    localStorage.setItem(KEY, JSON.stringify({ version, shown }));
+  } catch { /* storage off */ }
+};
 
 function Sheet({ update, alerts, onClose }) {
   useDismissable(true, onClose);
-  const go = () => { markToday(); try { window.open(update.url, "_blank", "noopener"); } catch { window.location.href = update.url; } onClose(); };
+  const go = () => { try { window.open(update.url, "_blank", "noopener"); } catch { window.location.href = update.url; } onClose(); };
   return (
     <div className="fixed inset-0 z-[10020] flex items-end justify-center" style={{ background: "rgba(22,17,13,.45)" }} onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby="gs-update-h" className="w-full max-w-md" onClick={(e) => e.stopPropagation()}
@@ -63,15 +79,14 @@ export default function UpdateSheet() {
   const [update, setUpdate] = useState(null);
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    if (shownToday()) return undefined;
     let gone = false;
     storeUpdate().then((u) => {
-      if (gone || !u) return;
+      if (gone || !u || !due(u.version)) return;
       setUpdate(u);
       // A breath after the app opens, and never over another sheet.
       setTimeout(() => {
-        if (gone || shownToday() || document.querySelector('[role="dialog"]')) return;
-        markToday();
+        if (gone || !due(u.version) || document.querySelector('[role="dialog"]')) return;
+        mark(u.version);
         setOpen(true);
       }, 2200);
     });
