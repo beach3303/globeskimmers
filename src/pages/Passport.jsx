@@ -93,15 +93,6 @@ function LocalFavoriteChip({ stamp }) {
   return <Chip bg="#E8F4F2" color="#0A5F58">Local favorite · {line.charAt(0).toLowerCase() + line.slice(1)}</Chip>;
 }
 
-function Stat({ n, label }) {
-  return (
-    <div className="text-center">
-      <div style={{ fontFamily: SERIF, fontSize: fs(26), color: STAMP, lineHeight: 1 }}>{n}</div>
-      <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".08em", color: INK3, marginTop: 2 }}>{label}</div>
-    </div>
-  );
-}
-
 // Trip note — private unless the owner shared it; visitors only ever receive shared ones.
 function TripNote({ stamp, readOnly }) {
   if (!stamp.note) return null;
@@ -1454,13 +1445,8 @@ function PassportInner() {
             </div>
           </div>
         )}
-        {stampsView.length > 0 && (
-          <div className="bg-white rounded-[18px] p-3 mb-4 flex items-center justify-around" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
-            <Stat n={statsView.countries || 0} label="Countries" />
-            <Stat n={stampsView.length} label="Stamps" />
-            <Stat n={statsView.verified || 0} label="Verified" />
-          </div>
-        )}
+        {/* No countries / stamps / verified card above the book (founder, 2026-10-25: "take that banner
+            out"); the book's first page already lists countries explored and stamps collected. */}
 
         {/* Share my passport — the ask-first sheet (founder, 2026-10-15): every link says
             what it may show and how long it works; 🔒 Only me is in no link, ever. */}

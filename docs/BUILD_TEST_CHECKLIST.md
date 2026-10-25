@@ -2996,3 +2996,11 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
 - Gates: eslint + no-undef, build, boot-check ✅. Captured as the demo account with a mocked public passport
   (cover, banner, page 2).
 - **Activate:** push, then `npm run ota` (src only; no worker change).
+
+## 2026-10-25 — No numbers card above the passport (COMMITTED on stamping-v2; not pushed, OTA pending)
+
+- Founder: "we dont need to put the label 4 countries, 4 stamps. take that banner out". The white Countries · Stamps ·
+  Verified card above the book on the Passport screen is gone (your own and a friend's). The book's first page still
+  lists countries explored and stamps collected.
+- Gates: eslint + no-undef, build, boot-check ✅.
+- **Activate:** push, then `npm run ota`.
