@@ -67,6 +67,7 @@ import MoneyExchange from './pages/MoneyExchange';
 import Onboarding from './pages/Onboarding';
 import Passport from './pages/Passport';
 import Postcards from './pages/Postcards';
+import Sent from './pages/Sent';
 import Profile from './pages/Profile';
 import PerfectDay from './pages/PerfectDay';
 import PlacesToEat from './pages/PlacesToEat';
@@ -101,6 +102,7 @@ export const PAGES = {
     "Onboarding": Onboarding,
     "Passport": Passport,
     "Postcards": Postcards,
+    "Sent": Sent,
     "Profile": Profile,
     "PerfectDay": PerfectDay,
     "PlacesToEat": PlacesToEat,

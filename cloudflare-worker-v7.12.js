@@ -20798,6 +20798,125 @@ async function handleSocialFeed(request, env) {
 const PC_BOX_PAGE = 24;
 // How long a read postcard or opened telegram stays in the Mailbox before it lives only in the box.
 const PC_READ_LINGER_MS = 30 * 60 * 1000;
+// The Sent folder (founder, 2026-10-25: "users ask me where their sent messages went … sent
+// messages"). Everything I sent, newest first: postcards and telegrams to members (the copies one
+// send made fold into one entry, naming everyone), cards to a city's board, mail still waiting for
+// an email address to join, and messages shared as a text link. A telegram says who opened it
+// (received_at); a postcard only that it was delivered (founder's decision: "Opened" on telegrams
+// only). Nothing the recipient did is shown beyond that — not their delete, not their read time.
+// "Remove from Sent" hides an entry for me alone (sender_hidden_at); the recipient keeps theirs.
+//   POST /mail/sent {before?} → { items: [...], next: <iso>|null }
+//   POST /mail/sent/hide {items: [{kind, ids, from}]} → { ok }
+const SENT_PAGE = 30;
+const SENT_SCAN = 200;
+async function mailSentRows(env, table, query) {
+  // The seconds before sender_hidden_at exists (migration 2026-10-25): read without the filter.
+  let r = await gbRest(env, `${table}?${query}&sender_hidden_at=is.null`, {});
+  if (!r.ok && r.status === 400) r = await gbRest(env, `${table}?${query}`, {});
+  return r.ok ? (await r.json().catch(() => [])) : null;
+}
+async function handleMailSent(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const origin = new URL(request.url).origin;
+    const before = typeof b.before === 'string' && !Number.isNaN(Date.parse(b.before)) ? new Date(b.before).toISOString() : null;
+    const win = `sender_id=eq.${user.id}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${SENT_SCAN}`;
+    const [pcs, tgs, ppc, ptg, links] = await Promise.all([
+      mailSentRows(env, 'postcards', `${win}&select=id,to_user_id,to_city,group_id,cc,photo_key,message,place_name,city,country,meta,created_at`),
+      mailSentRows(env, 'telegrams', `${win}&select=id,to_user_id,group_id,cc,body,ink,reply_to,created_at,received_at`),
+      mailSentRows(env, 'pending_postcards', `${win}&delivered_at=is.null&select=id,photo_key,message,place_name,city,created_at`),
+      mailSentRows(env, 'pending_telegrams', `${win}&delivered_at=is.null&select=id,body,ink,created_at`),
+      mailSentRows(env, 'message_links', `${win}&select=id,kind,photo_key,message,place_name,body,ink,claims,created_at,expires_at`),
+    ]);
+    if (!pcs || !tgs) return jsonResponse({ items: [], error: 'Couldn’t load your sent mail — try again' }, 503);
+
+    // Who it went to: their @username, else their name.
+    const people = [...new Set([...pcs, ...tgs].flatMap((r) => [r.to_user_id, ...(Array.isArray(r.cc) ? r.cc : [])]).filter(Boolean))].slice(0, 400);
+    const handle = {};
+    const named = {};
+    if (people.length) {
+      const [hq, nq] = await Promise.all([
+        gbRest(env, `passport_shares?user_id=in.(${people.join(',')})&select=user_id,handle`, {}),
+        gbRest(env, `social_profiles?user_id=in.(${people.join(',')})&select=user_id,display_name`, {}),
+      ]);
+      for (const r of (hq.ok ? await hq.json() : [])) if (r.handle) handle[r.user_id] = r.handle;
+      for (const r of (nq.ok ? await nq.json() : [])) if (r.display_name) named[r.user_id] = String(r.display_name).trim().split(/\s+/)[0];
+    }
+    const gone = await gbPurgeQueued(env, people.filter((id) => !handle[id]));
+    const who = (id) => (gone.has(id) ? { handle: null, name: null } : { handle: handle[id] || null, name: named[id] || null });
+    const photo = (key) => (key ? `${origin}/pc-photo/${key}` : null);
+
+    // One send made one row per person: rows of a group share group_id; private copies share their
+    // timestamp and words (one insert), so they fold the same way.
+    const fold = (rows, keyOf) => {
+      const m = new Map();
+      for (const r of rows) { const k = keyOf(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }
+      return [...m.values()];
+    };
+    const items = [];
+    for (const g of fold(pcs, (r) => (r.group_id ? `g:${r.group_id}` : r.to_city || !r.to_user_id ? `o:${r.id}` : `e:${r.created_at}|${r.message || ''}|${r.place_name || ''}`))) {
+      const r = g[0];
+      const board = !!r.to_city;
+      items.push({
+        kind: 'postcard', from: 'postcards', ids: g.map((x) => x.id), at: r.created_at,
+        photo: photo(r.photo_key), message: r.message || null, place: r.place_name || r.city || null, dish: r.meta?.dish || null,
+        mode: board ? 'board' : !r.to_user_id ? 'followers' : r.group_id ? 'group' : g.length > 1 ? 'each' : 'one',
+        ...(board ? { board: { city: r.city || null, country: r.country || null, anon: !!r.meta?.anon } } : {}),
+        to: board || !r.to_user_id ? [] : g.map((x) => who(x.to_user_id)),
+        status: 'delivered',
+      });
+    }
+    for (const g of fold(tgs, (r) => (r.group_id ? `g:${r.group_id}` : `e:${r.created_at}|${r.body}`))) {
+      const r = g[0];
+      const to = g.map((x) => ({ ...who(x.to_user_id), opened: !!x.received_at }));
+      items.push({
+        kind: 'telegram', from: 'telegrams', ids: g.map((x) => x.id), at: r.created_at,
+        body: r.body, ink: r.ink || null, reply: !!r.reply_to,
+        mode: r.group_id ? 'group' : g.length > 1 ? 'each' : 'one',
+        to, opened: to.filter((x) => x.opened).length,
+        status: to.some((x) => x.opened) ? 'opened' : 'delivered',
+      });
+    }
+    for (const r of (ppc || [])) items.push({ kind: 'postcard', from: 'pending_postcards', ids: [r.id], at: r.created_at, photo: photo(r.photo_key), message: r.message || null, place: r.place_name || r.city || null, mode: 'email', to: [], status: 'waiting' });
+    for (const r of (ptg || [])) items.push({ kind: 'telegram', from: 'pending_telegrams', ids: [r.id], at: r.created_at, body: r.body, ink: r.ink || null, mode: 'email', to: [], status: 'waiting' });
+    for (const r of (links || [])) {
+      const expired = Date.parse(r.expires_at) < Date.now();
+      items.push({
+        kind: r.kind === 'telegram' ? 'telegram' : 'postcard', from: 'message_links', ids: [r.id], at: r.created_at, mode: 'link',
+        ...(r.kind === 'telegram' ? { body: r.body, ink: r.ink || null, opened: r.claims || 0 } : { photo: expired ? null : photo(r.photo_key), message: r.message || null, place: r.place_name || null }),
+        to: [], status: expired ? 'expired' : r.kind === 'telegram' && r.claims > 0 ? 'opened' : 'link',
+      });
+    }
+    items.sort((a, z) => Date.parse(z.at) - Date.parse(a.at));
+    // A full scan in any source means older entries may sit past it: page by the last shown time.
+    const full = [pcs, tgs, ppc, ptg, links].some((rs) => Array.isArray(rs) && rs.length >= SENT_SCAN);
+    const page = items.slice(0, SENT_PAGE);
+    const next = (items.length > SENT_PAGE || full) && page.length ? page[page.length - 1].at : null;
+    return jsonResponse({ items: page, next });
+  } catch (e) { return jsonResponse({ error: e.message, items: [] }, 500); }
+}
+const SENT_TABLES = new Set(['postcards', 'telegrams', 'pending_postcards', 'pending_telegrams', 'message_links']);
+async function handleMailSentHide(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const list = (Array.isArray(b.items) ? b.items : []).slice(0, 20);
+    if (!list.length) return jsonResponse({ error: 'Nothing to remove' }, 400);
+    const at = new Date().toISOString();
+    for (const it of list) {
+      const table = String(it?.from || '');
+      const ids = (Array.isArray(it?.ids) ? it.ids : []).map((v) => String(v || '').toLowerCase()).filter((v) => BL_UUID.test(v)).slice(0, 20);
+      if (!SENT_TABLES.has(table) || !ids.length) continue;
+      const r = await gbRest(env, `${table}?id=in.(${ids.join(',')})&sender_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ sender_hidden_at: at }) });
+      if (!r.ok) return jsonResponse({ error: 'Couldn’t remove it — try again' }, 502);
+    }
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handlePostcardBox(request, env) {
   try {
     const user = await gbUser(request, env);
@@ -28390,6 +28509,8 @@ export default {
       if (pathname === '/social/feed' && request.method === 'POST') return await handleSocialFeed(request, env);
       if (pathname === '/postcards/send' && request.method === 'POST') return await handlePostcardSend(request, env, ctx);
       if (pathname === '/postcards/box' && request.method === 'POST') return await handlePostcardBox(request, env);
+      if (pathname === '/mail/sent' && request.method === 'POST') return await handleMailSent(request, env);
+      if (pathname === '/mail/sent/hide' && request.method === 'POST') return await handleMailSentHide(request, env);
       if (pathname === '/postcards/keep' && request.method === 'POST') return await handlePostcardKeep(request, env);
       if (pathname === '/postcards/delete' && request.method === 'POST') return await handlePostcardDelete(request, env);
       if (pathname === '/telegrams/send' && request.method === 'POST') return await handleTelegramSend(request, env, ctx);

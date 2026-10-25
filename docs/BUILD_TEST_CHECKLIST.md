@@ -2984,7 +2984,7 @@ to the App Store, /img/og-send.jpg and /app-version.json (1.0.5 / 1.0.9) served,
 state/country flags, bold airport code + date, "Notifications" wording, "Who can comment on my passport", airmail blue
 Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
 
-## 2026-10-25 — A friend's passport says whose it is (COMMITTED on stamping-v2; not pushed, OTA pending)
+## 2026-10-25 — A friend's passport says whose it is (PUSHED — main f141e4d; OTA pending)
 
 - Founder: "when i check out my circle's virtual passport, their passport looks like mine". The cover art itself
   reads "My Virtual Passport", so someone else's showed it too. `PassportBook` takes `visiting` (Passport.jsx passes
@@ -2997,7 +2997,7 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   (cover, banner, page 2).
 - **Activate:** push, then `npm run ota` (src only; no worker change).
 
-## 2026-10-25 — No numbers card above the passport (COMMITTED on stamping-v2; not pushed, OTA pending)
+## 2026-10-25 — No numbers card above the passport (PUSHED — main f141e4d; OTA pending)
 
 - Founder: "we dont need to put the label 4 countries, 4 stamps. take that banner out". The white Countries · Stamps ·
   Verified card above the book on the Passport screen is gone (your own and a friend's). The book's first page still
@@ -3005,7 +3005,7 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
 - Gates: eslint + no-undef, build, boot-check ✅.
 - **Activate:** push, then `npm run ota`.
 
-## 2026-10-25 — Group messages: "One group" first, everyone named, Reply to all (COMMITTED on stamping-v2; not pushed)
+## 2026-10-25 — Group messages: "One group" first, everyone named, Reply to all (PUSHED — main 39184fc; worker deployed ✅; OTA pending)
 
 - Founder's decision sheet, answer 9: "One group (everyone sees the names) — allow user to reply to all (group), or
   reply to sender". Found the same day: 4 of 5 multi-recipient telegrams went "Separately" because it was the default.
@@ -3020,3 +3020,22 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
 - Gates: worker check, eslint + no-undef, build, boot-check ✅. Captured as the demo account with a mocked feed:
   the Mailbox (group telegram + group card), a postcard Reply to all, a new telegram to two people.
 - **Activate:** push (deploys the worker), then `npm run ota`.
+
+## 2026-10-25 — The Sent folder (COMMITTED on stamping-v2; not pushed)
+
+- Founder: "users ask me where their sent messages went"; decision sheet: "Opened" on telegrams only.
+- **Worker:** `POST /mail/sent {before?}` → everything I sent, newest first, 30 a page: postcards and telegrams to
+  members (one send's copies fold into one entry — a group by group_id, private copies by their shared timestamp
+  and words), City Board cards, mail waiting for an email address (pending_*), text links (message_links).
+  Telegrams carry Opened per person (received_at); postcards only Delivered. `POST /mail/sent/hide {items}` sets
+  `sender_hidden_at` on my rows only — the recipient's copy is untouched.
+- **Migration 20261025120000_sender_hidden.sql:** `sender_hidden_at` on postcards, telegrams, pending_postcards,
+  pending_telegrams, message_links. The worker reads without the filter until the column exists.
+- **App:** `src/lib/sentMail.js`, `src/components/mail/SentList.jsx`, page `Sent` (registered by hand in
+  pages.config; lights the Mailbox tab). Each entry: a small front (photo or telegram slip), kind · how it went,
+  the words, "To @a, @b", when, and a status chip (Opened by 2 of 3 / Delivered / Waiting for them to join /
+  Shared as a link / On Lisbon's City Board). A tap opens it: the front in full and everyone, with Opened per
+  person on telegrams. ••• → "Remove it from your Sent? They keep theirs." Mailbox doors: Postcard box · Sent ·
+  City boards (icon over name). Sent moves into the Mailbox tabs next.
+- Gates: worker check, eslint + no-undef, build, boot-check ✅. Captured with a mocked /mail/sent (six kinds).
+- **Activate:** push (worker + migration apply on their own), then `npm run ota`.

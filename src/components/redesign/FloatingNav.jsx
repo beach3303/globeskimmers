@@ -74,6 +74,7 @@ export default function FloatingNav({ active, dark = false }) {
     if (path.includes('profile')) return 'profile';
     if (path.includes('mailbox')) return 'mailbox';
     if (path.includes('postcards')) return 'mailbox';  // the postcard box opens from Mailbox
+    if (path === '/sent') return 'mailbox';             // so does Sent (2026-10-25)
     if (path.includes('settings')) return 'settings';
     if (path === '/' || path.includes('home')) return 'home';
     if (path.includes('circle')) return 'profile';  // your circle opens from Profile

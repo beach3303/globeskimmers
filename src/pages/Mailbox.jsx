@@ -18,7 +18,7 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronRight, Globe, Lock, Mail, Mailbox as MailboxIcon, Search, X, Zap } from "lucide-react";
+import { ChevronRight, Globe, Lock, Mail, Mailbox as MailboxIcon, Search, X, Zap, Send } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { cityBoardsUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
@@ -260,20 +260,24 @@ function CircleRow({ circle, style = undefined }) {
   );
 }
 
-// The two doors (2026-10-19), side by side: the postcard box (where read mail lives) and the boards.
+// The doors (2026-10-19), side by side: the postcard box (where read mail lives), Sent (2026-10-25:
+// "users ask me where their sent messages went"), and the boards.
 function DoorTiles({ style = undefined }) {
-  const tile = { flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 10, minHeight: 56, boxSizing: "border-box", padding: "8px 12px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 14, textDecoration: "none" };
-  const name = { display: "block", fontSize: fs(14), fontWeight: 650, lineHeight: 1.25, color: NEUTRAL.ink };
-  const sub = { display: "block", fontSize: fs(11.5), lineHeight: 1.3, color: NEUTRAL.ink3 };
+  const tile = { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, minHeight: 64, boxSizing: "border-box", padding: "8px 6px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 14, textDecoration: "none", textAlign: "center" };
+  const name = { display: "block", fontSize: fs(13.5), fontWeight: 650, lineHeight: 1.2, color: NEUTRAL.ink };
   return (
     <div style={{ display: "flex", gap: 8, ...style }}>
       <Link to={createPageUrl("Postcards")} style={tile}>
-        <Mail size={19} strokeWidth={1.8} color={NEUTRAL.stamp} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
-        <span style={{ minWidth: 0 }}><span style={name}>Postcard box</span><span style={sub}>Read mail lives here</span></span>
+        <Mail size={19} strokeWidth={1.8} color={NEUTRAL.stamp} aria-hidden="true" focusable="false" />
+        <span style={name}>Postcard box</span>
+      </Link>
+      <Link to={createPageUrl("Sent")} style={tile}>
+        <Send size={18} strokeWidth={1.8} color={BLUE} aria-hidden="true" focusable="false" />
+        <span style={name}>Sent</span>
       </Link>
       <Link to={cityBoardsUrl()} style={tile}>
-        <Globe size={19} strokeWidth={1.8} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
-        <span style={{ minWidth: 0 }}><span style={name}>City boards</span><span style={sub}>From real travelers</span></span>
+        <Globe size={19} strokeWidth={1.8} color={BLUE} aria-hidden="true" focusable="false" />
+        <span style={name}>City boards</span>
       </Link>
     </div>
   );
