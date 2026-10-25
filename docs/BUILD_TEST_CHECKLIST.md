@@ -3166,7 +3166,7 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
   members) and the Settings switch.
 - **Activate:** push (worker + migration apply on their own), then `npm run ota`.
 
-## 2026-10-25 — Events: sorting fixed on live data (COMMITTED on stamping-v2; not pushed)
+## 2026-10-25 — Events: sorting fixed on live data (PUSHED — main eca9251; worker ✅; OTA pending)
 
 - First live read (Los Angeles, Oct 31–Nov 1: 111 events) showed Ticketmaster's odd filing: a pumpkin fest under
   horse racing, a college soccer game with no segment, stadium tours under Miscellaneous, a vendor market under Music,
