@@ -937,7 +937,13 @@ Decided by the founder:
   games, festivals, choirs, orchestras, plays, kids' shows, free things, seasonal/holiday, farmers
   markets — "as organized and harmonious as page D". Mocked as nine kinds (Festivals · Fairs · Kids & families ·
   Music · Stage · Games · Free · Markets · Holidays), one blue-tab section each; Kids & families mixes dated
-  activities with always-open family places (zoo, aquarium, children's museum) from our places DB. Sources: Ticketmaster (thin in
+  activities with always-open family places (zoo, aquarium, children's museum) from our places DB.
+  **Search is part of the events build** (founder asked 2026-10-25): an "events" intent in the rules + AI
+  parser (concert, festival, fair, choir, orchestra, play, game, "what's on", "happening"), time words
+  (today / tonight / this weekend / a date), names via Ticketmaster keyword + our festival calendar (a bare
+  name checks events and places together), free + kids/family handling, "what's happening today in town"
+  → Events at Today; the same in the Things to Do / Events boxes; founder's queries added to search-eval.
+  Today none of this exists (no events category in searchPlan.js or PARSE_SEARCH_CATEGORIES). Sources: Ticketmaster (thin in
   PH), Google Places for markets, a public-holiday calendar, our own festival calendar per city.
 - The Virtual Passport stays its own thing (bottom tab); Home only links to it.
 - City Board = photos only. "Where my circle is" + following/followers + Just joined live on My Circle.
