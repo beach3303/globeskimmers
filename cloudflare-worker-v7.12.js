@@ -5631,14 +5631,14 @@ async function handleParseIntent(request, env) {
 // ============================================================================
 const PARSE_SEARCH_TTL_SECONDS = 24 * 60 * 60;
 const PARSE_SEARCH_PROMPT_VERSION = 'v7';  // v7: drinks are eat; keep the place as specific as typed; v6: water bodies → waterfront district; v5: country/state/region → best city + region (founder 2026-10-07); v4: a place typed in the query beats the tapped scope (founder 2026-10-07); v3: no hotel / ride categories
-const PARSE_SEARCH_CATEGORIES = new Set(['eat', 'coffee', 'things', 'shopping', 'atm', 'money', 'convenience', 'restroom', 'weather', 'none']);
+const PARSE_SEARCH_CATEGORIES = new Set(['eat', 'coffee', 'things', 'events', 'shopping', 'atm', 'money', 'convenience', 'restroom', 'weather', 'none']);
 const PARSE_SEARCH_SCOPES = new Set(['near_me', 'at_stay', 'named_place', 'unknown']);
 
 const PARSE_SEARCH_SYSTEM_PROMPT = `You parse a traveler's free-text search for Globeskimmers into STRICT JSON so the app can route them to the right finder, scoped to the right place.
 
 OUTPUT SCHEMA (return EXACTLY this shape — no extra keys, no markdown):
 {
-  "category": "eat" | "coffee" | "things" | "shopping" | "atm" | "money" | "convenience" | "restroom" | "weather" | "none",
+  "category": "eat" | "coffee" | "things" | "events" | "shopping" | "atm" | "money" | "convenience" | "restroom" | "weather" | "none",
   "scope": "near_me" | "at_stay" | "named_place" | "unknown",
   "place": "<city/place name if scope is named_place, else empty string>",
   "query": "<the core thing to search, cleaned of scope words, e.g. ramen, viral desserts>",
@@ -5651,6 +5651,7 @@ CATEGORY = which finder fits:
 - eat = any food / restaurant / dish / bakery / dessert — AND drinking out: beer, breweries, pubs, bars, wine, cocktails
 - coffee = coffee, café, tea, boba (never beer, wine or bars)
 - things = things to do, attractions, museums, tours, hikes, sightseeing
+- events = dated happenings: concerts, shows, plays, musicals, games (NBA, NFL…), festivals, fairs, choirs, orchestras, "what's on" / "what's happening today", things for kids this weekend, free events — and a named show, team, artist or choir
 - shopping = shops, malls, souvenirs
 - atm = cash / ATM ; money = currency exchange
 - convenience = convenience store ; restroom = toilet ; weather = forecast
@@ -23461,6 +23462,278 @@ function gaMapSearchPlace(p, userLat, userLng) {
 // TM listings power the Demand Radar; TM revenue is via the Impact affiliate
 // later (deep-link until then). Graceful: each source independently returns []
 // if its key is missing. KV-cached 6h.
+// ── What's on (founder, 2026-10-25: Events & festivals in Nearby services — "what shows are happening,
+// what games … festivals, what chorales, what orchestra, what plays … shows where kids can go … free
+// things … local seasonal holiday farmers market … as organized and harmonious as page D"). Read-only:
+// nothing is sold; a ticket tap goes out to Ticketmaster and is counted by the app (event_ticket_click).
+//   POST /events/whats-on { lat, lng, city, country, cc, from, to, q? }  (from/to: the viewer's local
+//   days, YYYY-MM-DD, at most 35 days apart; q: a name — an artist, team, show, choir)
+//   → { from, to, events, festivals, holidays, markets, family }
+// Every row carries kinds (festivals · fairs · kids · music · stage · games · free · markets · holidays)
+// and tags (orchestra, choir, jazz, opera, musical, play, comedy, NFL …). Sources, each optional:
+//   events     Ticketmaster Discovery (env.TICKETMASTER_API_KEY), 50 miles round the point;
+//   festivals  EV_FESTIVALS, the calendar we keep (yearly festivals by date rule, near the point or
+//              country-wide), so the Philippines has something even where Ticketmaster has little;
+//   holidays   date.nager.at public holidays for the country (free, no key);
+//   markets    Google Places "farmers market" near the point, with the days each one opens;
+//   family     Google Places zoos, aquariums and children's museums — "always open" for Kids & families.
+// KV: the whole answer 3 h per area + window + name; holidays 30 days per country-year; places 7 days.
+const EV_KM = 60;
+// The calendar we keep (2026-10-25 starter set; add rows as cities grow). A rule is
+//   { m, d, days }            a fixed date (days long, default 1)
+//   { m, nth, wd, days }      the nth weekday of month m (wd 0 = Sunday; nth -1 = the last)
+//   { month: m }              all of month m
+// lat/lng + km for a city's festival; cc alone for one held across a country.
+const EV_FESTIVALS = [
+  { slug: 'sinulog', name: 'Sinulog Festival', city: 'Cebu City', cc: 'PH', lat: 10.2950, lng: 123.9020, rule: { m: 1, nth: 3, wd: 0 }, note: 'Street dancing and the grand parade for the Santo Niño' },
+  { slug: 'ati-atihan', name: 'Ati-Atihan Festival', city: 'Kalibo, Aklan', cc: 'PH', lat: 11.7069, lng: 122.3646, rule: { m: 1, nth: 3, wd: 0 }, note: 'Painted faces, drums and street dancing' },
+  { slug: 'dinagyang', name: 'Dinagyang Festival', city: 'Iloilo City', cc: 'PH', lat: 10.7202, lng: 122.5621, rule: { m: 1, nth: 4, wd: 0 }, note: 'Warrior-tribe dance competition' },
+  { slug: 'panagbenga', name: 'Panagbenga Flower Festival', city: 'Baguio', cc: 'PH', lat: 16.4023, lng: 120.5960, rule: { month: 2 }, note: 'A month of flower floats and street dancing' },
+  { slug: 'pahiyas', name: 'Pahiyas Festival', city: 'Lucban, Quezon', cc: 'PH', lat: 14.1132, lng: 121.5560, rule: { m: 5, d: 15 }, note: 'Houses dressed in rice wafers and harvest colors' },
+  { slug: 'kadayawan', name: 'Kadayawan Festival', city: 'Davao City', cc: 'PH', lat: 7.0731, lng: 125.6128, rule: { m: 8, nth: 3, wd: 0 }, note: 'Harvest thanksgiving, floral floats and street dancing (third week of August)' },
+  { slug: 'masskara', name: 'MassKara Festival', city: 'Bacolod', cc: 'PH', lat: 10.6765, lng: 122.9509, rule: { month: 10 }, note: 'A month of smiling masks and street parties' },
+  { slug: 'simbang-gabi', name: 'Simbang Gabi', cc: 'PH', rule: { m: 12, d: 16, days: 9 }, note: 'Nine dawn masses before Christmas, with bibingka and puto bumbong outside' },
+  { slug: 'dia-de-muertos-la', name: 'Día de los Muertos', city: 'Los Angeles', cc: 'US', lat: 34.0522, lng: -118.2437, rule: { m: 11, d: 1, days: 2 }, note: 'Altars, marigolds and processions' },
+  { slug: 'dia-de-muertos-sa', name: 'Día de los Muertos', city: 'San Antonio', cc: 'US', lat: 29.4241, lng: -98.4936, rule: { m: 11, d: 1, days: 2 }, note: 'Altars, marigolds and processions' },
+  { slug: 'halloween-us', name: 'Halloween', cc: 'US', rule: { m: 10, d: 31 }, note: 'Trick-or-treating and costume parades' },
+  { slug: 'rose-parade', name: 'Rose Parade', city: 'Pasadena', cc: 'US', lat: 34.1478, lng: -118.1445, rule: { m: 1, d: 1 }, note: 'Flower floats on Colorado Boulevard (held January 2 when New Year’s Day is a Sunday)' },
+  { slug: 'macys-parade', name: 'Macy’s Thanksgiving Day Parade', city: 'New York', cc: 'US', lat: 40.7128, lng: -74.0060, rule: { m: 11, nth: 4, wd: 4 }, note: 'Giant balloons down Central Park West and Sixth Avenue' },
+  { slug: 'balloon-fiesta', name: 'Albuquerque International Balloon Fiesta', city: 'Albuquerque', cc: 'US', lat: 35.0844, lng: -106.6504, rule: { m: 10, nth: 1, wd: 6, days: 9 }, note: 'Hundreds of hot-air balloons at dawn' },
+];
+const evIso = (dt) => dt.toISOString().slice(0, 10);
+const evDay = (s) => new Date(`${s}T00:00:00Z`);
+function evOccurrences(rule, from, to) {
+  const out = [];
+  const fy = evDay(from).getUTCFullYear(), ty = evDay(to).getUTCFullYear();
+  for (let y = fy - 1; y <= ty; y++) {
+    let start, end;
+    if (rule.month) {
+      start = new Date(Date.UTC(y, rule.month - 1, 1));
+      end = new Date(Date.UTC(y, rule.month, 0));
+    } else if (rule.nth) {
+      if (rule.nth > 0) {
+        const first = new Date(Date.UTC(y, rule.m - 1, 1));
+        const off = (rule.wd - first.getUTCDay() + 7) % 7;
+        start = new Date(Date.UTC(y, rule.m - 1, 1 + off + (rule.nth - 1) * 7));
+      } else {
+        const last = new Date(Date.UTC(y, rule.m, 0));
+        const off = (last.getUTCDay() - rule.wd + 7) % 7;
+        start = new Date(Date.UTC(y, rule.m - 1, last.getUTCDate() - off));
+      }
+      end = new Date(start.getTime() + ((rule.days || 1) - 1) * 864e5);
+    } else {
+      start = new Date(Date.UTC(y, rule.m - 1, rule.d));
+      end = new Date(start.getTime() + ((rule.days || 1) - 1) * 864e5);
+    }
+    if (evIso(end) >= from && evIso(start) <= to) out.push({ start: evIso(start), end: evIso(end) });
+  }
+  return out;
+}
+function evKm(a1, o1, a2, o2) {
+  const R = 6371, r = Math.PI / 180;
+  const dLa = (a2 - a1) * r, dLo = (o2 - o1) * r;
+  const h = Math.sin(dLa / 2) ** 2 + Math.cos(a1 * r) * Math.cos(a2 * r) * Math.sin(dLo / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+// Ticketmaster's classification → our kinds and tags.
+function evKinds(e) {
+  const c = (e.classifications && e.classifications[0]) || {};
+  const seg = (c.segment && c.segment.name) || '';
+  const genre = (c.genre && c.genre.name) || '';
+  const sub = (c.subGenre && c.subGenre.name) || '';
+  const words = `${e.name || ''} ${genre} ${sub}`;
+  const kinds = new Set();
+  const tags = new Set();
+  const classical = /classical|symphon|orchestra|philharmon/i.test(words);
+  const choir = /\bchoir|chorale|chorus|choral\b/i.test(words);
+  const opera = /\bopera\b/i.test(words);
+  if (seg === 'Sports') { kinds.add('games'); if (sub && !/^undefined$/i.test(sub)) tags.add(sub); else if (genre && !/^undefined$/i.test(genre)) tags.add(genre); }
+  if (seg === 'Music' || classical || choir || opera) {
+    kinds.add('music');
+    if (classical) tags.add('Orchestra');
+    if (choir) tags.add('Choir');
+    if (opera) tags.add('Opera');
+    if (/\bjazz\b/i.test(words)) tags.add('Jazz');
+    if (!tags.size) tags.add('Concert');
+  }
+  if (seg === 'Arts & Theatre' && !classical && !choir && !opera) {
+    kinds.add('stage');
+    if (/musical/i.test(words)) tags.add('Musical');
+    else if (/comedy/i.test(words)) tags.add('Comedy');
+    else if (/dance|ballet/i.test(words)) tags.add('Dance');
+    else tags.add('Play');
+  }
+  if (c.family === true || seg === 'Family' || /\b(family|kids|children)\b/i.test(`${genre} ${sub}`)) { kinds.add('kids'); tags.add('All ages'); }
+  if (/festival/i.test(words)) kinds.add('festivals');
+  if (/\bfairs?\b/i.test(words)) kinds.add('fairs');
+  const pr = (e.priceRanges || [])[0];
+  if (pr && Number(pr.min) === 0) { kinds.add('free'); tags.add('Free'); }
+  if (!kinds.size) kinds.add(seg === 'Miscellaneous' ? 'festivals' : 'stage');
+  return { kinds: [...kinds], tags: [...tags].slice(0, 3) };
+}
+async function evTicketmaster(env, lat, lng, from, to, q) {
+  const key = env.TICKETMASTER_API_KEY;
+  if (!key) return [];
+  const p = new URLSearchParams({ apikey: key, size: '200', sort: 'date,asc', latlong: `${lat},${lng}`, radius: '50', unit: 'miles' });
+  // A day either side in UTC, then each event's own local day decides.
+  p.set('startDateTime', `${evIso(new Date(evDay(from).getTime() - 864e5))}T12:00:00Z`);
+  p.set('endDateTime', `${evIso(new Date(evDay(to).getTime() + 864e5))}T12:00:00Z`);
+  if (q) p.set('keyword', q);
+  try {
+    const r = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${p.toString()}`);
+    if (!r.ok) return [];
+    const j = await r.json();
+    const raw = (j && j._embedded && j._embedded.events) || [];
+    const seen = new Set();
+    const out = [];
+    for (const e of raw) {
+      const start = (e.dates && e.dates.start) || {};
+      const day = start.localDate || null;
+      if (!e.name || !e.url || !day || day < from || day > to) continue;
+      // One show on several dates: keep the soonest of each name and day.
+      const k = `${e.name.toLowerCase()}|${day}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const venue = e._embedded && e._embedded.venues && e._embedded.venues[0];
+      const img = (e.images || []).slice().sort((a, b) => (b.width || 0) - (a.width || 0)).find((i) => (i.width || 0) >= 500 && (i.width || 0) <= 1200) || (e.images || [])[0];
+      const pr = (e.priceRanges || [])[0];
+      const attr = e._embedded && e._embedded.attractions && e._embedded.attractions[0];
+      const home = attr && attr.externalLinks && attr.externalLinks.homepage && attr.externalLinks.homepage[0] && attr.externalLinks.homepage[0].url;
+      const { kinds, tags } = evKinds(e);
+      out.push({
+        id: `tm:${e.id}`, kinds, tags, name: e.name, date: day,
+        time: start.timeTBA || start.noSpecificTime ? null : (start.localTime || null),
+        venue: (venue && venue.name) || '', city: (venue && venue.city && venue.city.name) || '',
+        state: (venue && venue.state && venue.state.stateCode) || null,
+        country: (venue && venue.country && venue.country.countryCode) || '',
+        image: (img && img.url) || null, tickets: e.url, official: /^https?:\/\//i.test(home || '') ? home : null,
+        from_price: pr && Number.isFinite(Number(pr.min)) ? Number(pr.min) : null, currency: pr ? pr.currency : null,
+        source: 'ticketmaster',
+      });
+    }
+    return out;
+  } catch { return []; }
+}
+async function evHolidays(env, cc, from, to) {
+  if (!/^[A-Z]{2}$/.test(cc || '')) return [];
+  const years = [...new Set([evDay(from).getUTCFullYear(), evDay(to).getUTCFullYear()])];
+  const kv = env.GLOBESKIMMERS_KV;
+  const all = [];
+  for (const y of years) {
+    const ck = `ev:hol:v1:${cc}:${y}`;
+    let list = kv ? await kv.get(ck, { type: 'json' }).catch(() => null) : null;
+    if (!list) {
+      try {
+        const r = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${y}/${cc}`);
+        list = r.ok ? await r.json().catch(() => []) : [];
+      } catch { list = []; }
+      if (kv && Array.isArray(list) && list.length) await kv.put(ck, JSON.stringify(list), { expirationTtl: 30 * 86400 }).catch(() => {});
+    }
+    if (Array.isArray(list)) all.push(...list);
+  }
+  const seen = new Set();
+  return all.filter((h) => h && h.date >= from && h.date <= to && h.global !== false).filter((h) => (seen.has(h.date + h.name) ? false : seen.add(h.date + h.name))).map((h) => ({
+    id: `hol:${cc}:${h.date}:${String(h.name).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, kinds: ['holidays'], tags: ['Holiday'],
+    name: h.name, local_name: h.localName && h.localName !== h.name ? h.localName : null, date: h.date,
+    note: Array.isArray(h.types) && h.types.includes('Bank') ? 'Bank holiday · banks closed' : 'Public holiday · banks and many offices closed', source: 'holidays',
+  }));
+}
+async function evPlaces(env, textQuery, lat, lng) {
+  const ck = `ev:places:v1:${textQuery}:${lat.toFixed(1)},${lng.toFixed(1)}`;
+  const kv = env.GLOBESKIMMERS_KV;
+  const hit = kv ? await kv.get(ck, { type: 'json' }).catch(() => null) : null;
+  if (hit) return hit;
+  if (!env.GOOGLE_API_KEY) return [];
+  try {
+    const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': env.GOOGLE_API_KEY, 'X-Goog-FieldMask': 'places.id,places.displayName,places.shortFormattedAddress,places.formattedAddress,places.regularOpeningHours,places.googleMapsUri,places.rating,places.userRatingCount,places.businessStatus' },
+      body: JSON.stringify({ textQuery, languageCode: 'en', maxResultCount: 10, locationBias: { circle: { center: { latitude: lat, longitude: lng }, radius: 25000 } } }),
+    });
+    if (!r.ok) return [];
+    const j = await r.json().catch(() => ({}));
+    const list = (j.places || []).filter((p) => p.businessStatus !== 'CLOSED_PERMANENTLY').map((p) => {
+      const periods = (p.regularOpeningHours && p.regularOpeningHours.periods) || [];
+      const desc = (p.regularOpeningHours && p.regularOpeningHours.weekdayDescriptions) || [];
+      return {
+        id: p.id, name: (p.displayName && p.displayName.text) || '', address: p.shortFormattedAddress || p.formattedAddress || '',
+        maps: p.googleMapsUri || null, rating: p.rating || null, reviews: p.userRatingCount || 0,
+        open_days: [...new Set(periods.map((x) => x && x.open && x.open.day).filter((d) => Number.isInteger(d)))],
+        hours: desc,
+      };
+    }).filter((p) => p.name);
+    if (kv) await kv.put(ck, JSON.stringify(list), { expirationTtl: 7 * 86400 }).catch(() => {});
+    return list;
+  } catch { return []; }
+}
+async function handleWhatsOn(request, env) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const lat = parseFloat(b.lat ?? b.latitude), lng = parseFloat(b.lng ?? b.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return jsonResponse({ error: 'Where? Pick a place first.' }, 400);
+    const ok = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+    let from = ok(b.from) ? b.from : evIso(new Date());
+    let to = ok(b.to) ? b.to : from;
+    if (to < from) [from, to] = [to, from];
+    if ((evDay(to) - evDay(from)) / 864e5 > 35) to = evIso(new Date(evDay(from).getTime() + 35 * 864e5));
+    const q = String(b.q || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    const cc = String(b.cc || '').trim().toUpperCase().slice(0, 2);
+    const ck = `ev:whatson:v1:${lat.toFixed(1)},${lng.toFixed(1)}:${from}:${to}:${q.toLowerCase()}:${cc}`;
+    const kv = env.GLOBESKIMMERS_KV;
+    const cached = kv ? await kv.get(ck, { type: 'json' }).catch(() => null) : null;
+    if (cached) return jsonResponse({ ...cached, cached: true });
+    // A name search reads events only; the full page reads every source.
+    const [events, holidays, markets, family] = await Promise.all([
+      evTicketmaster(env, lat, lng, from, to, q),
+      q ? [] : evHolidays(env, cc, from, to),
+      q ? [] : evPlaces(env, 'farmers market', lat, lng),
+      q ? [] : evPlaces(env, 'zoo aquarium children\'s museum', lat, lng),
+    ]);
+    const festivals = q ? [] : EV_FESTIVALS.flatMap((f) => {
+      const near = Number.isFinite(f.lat) ? evKm(lat, lng, f.lat, f.lng) <= (f.km || EV_KM) : (!!cc && f.cc === cc);
+      if (!near) return [];
+      return evOccurrences(f.rule, from, to).map((o) => ({
+        id: `fest:${f.slug}:${o.start}`, kinds: ['festivals'], tags: [f.rule.month ? 'All month' : 'Yearly festival'],
+        name: f.name, date: o.start < from ? from : o.start, starts: o.start, end_date: o.end !== o.start ? o.end : null,
+        city: f.city || null, note: f.note, source: 'calendar',
+        search: `https://www.google.com/search?q=${encodeURIComponent(`${f.name} ${f.city || ''} ${o.start.slice(0, 4)}`.trim())}`,
+      }));
+    });
+    const payload = {
+      from, to, q: q || null, events, festivals, holidays,
+      markets: markets.filter((m) => /market/i.test(m.name)).slice(0, 8),
+      family: family.filter((p) => (p.reviews || 0) >= 50).sort((a, z) => (z.reviews || 0) - (a.reviews || 0)).slice(0, 4),
+    };
+    if (kv) await kv.put(ck, JSON.stringify(payload), { expirationTtl: 3 * 3600 }).catch(() => {});
+    return jsonResponse(payload);
+  } catch (e) { return jsonResponse({ events: [], festivals: [], holidays: [], markets: [], family: [], error: e.message }, 500); }
+}
+// Ticket taps (founder, 2026-10-25: "I need to capture how many clicks are going to tickets and what
+// people are clicking … per day, per week, per month, per state, per country"). The app logs each tap
+// as event_ticket_click { event_id, name, kind, link, source, city, state, country }; this reads them
+// back for the Admin portal.
+async function handleAdminEventClicks(request, env) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+  try {
+    if (!env.DB) return jsonResponse({ error: 'No events database' }, 503);
+    const where = "event_type = 'event_ticket_click'";
+    const q = (sql) => env.DB.prepare(sql).all().then((r) => r.results || []).catch(() => []);
+    const [total, byDay, byWeek, byMonth, byState, byCountry, byKind, byLink, top] = await Promise.all([
+      q(`select count(*) n, count(distinct user_id) people from events where ${where}`),
+      q(`select date(ts, 'unixepoch') k, count(*) n from events where ${where} and ts > strftime('%s','now','-30 days') group by k order by k desc`),
+      q(`select strftime('%Y-W%W', ts, 'unixepoch') k, count(*) n from events where ${where} and ts > strftime('%s','now','-84 days') group by k order by k desc`),
+      q(`select strftime('%Y-%m', ts, 'unixepoch') k, count(*) n from events where ${where} group by k order by k desc limit 12`),
+      q(`select coalesce(json_extract(payload,'$.state'),'—') k, coalesce(json_extract(payload,'$.country'),'—') c, count(*) n from events where ${where} group by k, c order by n desc limit 40`),
+      q(`select coalesce(json_extract(payload,'$.country'),'—') k, count(*) n from events where ${where} group by k order by n desc limit 40`),
+      q(`select coalesce(json_extract(payload,'$.kind'),'—') k, count(*) n from events where ${where} group by k order by n desc`),
+      q(`select coalesce(json_extract(payload,'$.link'),'—') k, count(*) n from events where ${where} group by k order by n desc`),
+      q(`select json_extract(payload,'$.name') k, json_extract(payload,'$.city') c, count(*) n from events where ${where} group by k, c order by n desc limit 25`),
+    ]);
+    return jsonResponse({ total: total[0] || { n: 0, people: 0 }, byDay, byWeek, byMonth, byState, byCountry, byKind, byLink, top });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleEventsSearch(request, env) {
   try {
     const b = await request.json().catch(() => ({}));
@@ -28411,6 +28684,7 @@ export default {
       if (pathname === '/viator/availability' && request.method === 'POST') return jsonResponse({ available: null });
       if (pathname === '/activities/search' && request.method === 'POST') return await handleActivitySearch(request, env, ctx);
       if (pathname === '/events/search' && request.method === 'POST') return jsonResponse({ events: [], experiences: [], rows: [] });
+      if (pathname === '/events/whats-on' && request.method === 'POST') return await handleWhatsOn(request, env);
       // Deal Radar (airline promos — every claim evidence-gated to the airline's own page)
       // POST included: callWorker (the app's only transport) can ONLY POST — a
       // GET-only route here is a dead route for every client.
@@ -28494,6 +28768,7 @@ export default {
       if (pathname === '/admin/members' && request.method === 'POST') return await handleAdminMembers(request, env);
       if (pathname === '/admin/activity-overview' && request.method === 'POST') return await handleAdminActivityOverview(request, env);
       if (pathname === '/admin/gear-report' && request.method === 'POST') return await handleAdminGearReport(request, env);
+      if (pathname === '/admin/event-clicks' && request.method === 'POST') return await handleAdminEventClicks(request, env);
       if (pathname === '/passport/sets' && request.method === 'POST') return await handlePassportSets(request, env);
       if (pathname === '/social/block' && request.method === 'POST') return await handleSocialBlock(request, env, ctx);
       if (pathname === '/social/age' && request.method === 'POST') return await handleSocialAge(request, env, ctx);

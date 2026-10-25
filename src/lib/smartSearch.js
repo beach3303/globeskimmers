@@ -17,7 +17,7 @@ import { ROUTE } from "@/lib/workerRoutes";
 import { createPageUrl } from "@/utils";
 import { logSearch } from "@/lib/logSearch";
 import { getPrimaryStay } from "@/lib/savedLocations";
-import { ruleParse, shoppingCategoryFor, finderQuery } from "@/lib/searchPlan";
+import { ruleParse, shoppingCategoryFor, finderQuery, eventIntent } from "@/lib/searchPlan";
 // The pure planning code lives in searchPlan.js (shared with the test suite);
 // re-exported so existing imports keep working.
 export { ruleParse, ratingIntent, priceIntent, tidyQuery, lateNightIntent, barsIntent, finderQuery, HAS_IN_CLAUSE, KEYWORD_MAP, shoppingCategoryFor, planSearch, GENERIC_QUERY } from "@/lib/searchPlan";
@@ -28,6 +28,7 @@ export const SEARCH_CATEGORIES = {
   eat:        { page: "PlacesToEat",      log: "eat",          acceptsQuery: true },
   coffee:     { page: "CoffeeFinder",     log: "coffee",       acceptsQuery: true },
   things:     { page: "ThingsToDo",       log: "things_to_do", acceptsQuery: true },
+  events:     { page: "Events",           log: "events",       acceptsQuery: false },
   shopping:   { page: "Shopping",         log: "shopping",     acceptsQuery: false },
   atm:        { page: "ATMFinder",        log: "atm",          acceptsQuery: false },
   money:      { page: "MoneyExchange",    log: "transport",    acceptsQuery: false },
@@ -61,12 +62,13 @@ export async function aiParse(raw, scopeChip, activePhrase) {
 // short-circuits place extraction; `activePhrase` gives the AI current-city
 // context. Rule-first; AI only when the rule pass is unsure.
 export async function parseSmartSearch(raw, { scopeChip, explicitPlace, activePhrase } = {}) {
-  const ruled = ruleParse(raw, scopeChip);
+  // raw rides along (2026-10-25): an events search reads its time and kind from the words typed.
+  const ruled = { ...ruleParse(raw, scopeChip), raw };
   if (explicitPlace) { ruled.scope = "named_place"; ruled.place = String(explicitPlace).trim(); }
   if (ruled.confidence >= 0.85 || explicitPlace) return ruled;
   try {
     const ai = await aiParse(raw, scopeChip, activePhrase);
-    if (ai) return ai;
+    if (ai) return { ...ai, raw };
   } catch { /* fall back to the rule result */ }
   return ruled;
 }
@@ -109,7 +111,11 @@ export async function runSmartSearch(parsed, { navigate, location }) {
   // 3. Route.
   if (cat) {
     let opts;
-    if (category === "restroom" && venue) {
+    if (category === "events") {
+      // Events (2026-10-25): the time, the kind and any name typed ("LA Phil", "Master Chorale").
+      const typed = eventIntent(parsed.raw || query || "");
+      opts = { state: { when: typed.when, kind: typed.kind, q: eventIntent(query || "").q } };
+    } else if (category === "restroom" && venue) {
       opts = { state: { presetVenueType: venue } }; // Public / Transit / Parks filter
     } else if (category === "shopping") {
       // Shopping takes a category chip, not free text — map the query to one.

@@ -205,6 +205,53 @@ function ActivityOverview() {
   );
 }
 
+// Ticket taps (founder, 2026-10-25: "I need to capture how many clicks are going to tickets and what
+// are people clicking … per day per week per month per state, per country"). Every tap on an event's
+// way out (Tickets on Ticketmaster, Official page, Look it up, Open in Maps) from /admin/event-clicks.
+function TicketTapsReport() {
+  const [rep, setRep] = React.useState(null);
+  const [gran, setGran] = React.useState('day');
+  React.useEffect(() => {
+    (async () => {
+      const { data, error } = await callWorker('admin/event-clicks', {});
+      setRep(error || data?.error ? { error: error || data.error } : data);
+    })();
+  }, []);
+  const title = '🎟️ Ticket taps — Events & festivals';
+  if (!rep) return <Section title={title} icon={DollarSign}><div style={{ color: COLORS.gray, fontSize: 13 }}>Counting…</div></Section>;
+  if (rep.error) return <Section title={title} icon={DollarSign}><div style={{ color: '#B0472F', fontSize: 13 }}>{rep.error}</div></Section>;
+  const rows = gran === 'day' ? rep.byDay : gran === 'week' ? rep.byWeek : rep.byMonth;
+  const max = Math.max(1, ...(rows || []).map((r) => r.n));
+  const list = (items, label, sub) => (
+    <div style={{ minWidth: 170, flex: '1 1 170px' }}>
+      <div style={{ fontWeight: 700, fontSize: 11, letterSpacing: '.05em', textTransform: 'uppercase', color: COLORS.gray, marginBottom: 4 }}>{label}</div>
+      {(items || []).length ? (items || []).slice(0, 12).map((r, i) => (
+        <div key={`${r.k}-${r.c || ''}-${i}`} style={{ fontSize: 12.5, display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.k || '—'}{sub && r.c ? <span style={{ color: COLORS.gray }}> · {r.c}</span> : null}</span><b>{r.n}</b>
+        </div>
+      )) : <div style={{ fontSize: 12.5, color: COLORS.gray }}>None yet</div>}
+    </div>
+  );
+  return (
+    <Section title={title} icon={DollarSign}>
+      <div style={{ fontSize: 13, marginBottom: 8 }}><b>{rep.total?.n ?? 0}</b> taps by <b>{rep.total?.people ?? 0}</b> people, all time</div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+        {['day', 'week', 'month'].map((g) => (
+          <button key={g} type="button" onClick={() => setGran(g)} style={{ borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600, border: `1px solid ${COLORS.border || '#ddd'}`, background: gran === g ? COLORS.dark : '#fff', color: gran === g ? '#fff' : COLORS.dark }}>{g === 'day' ? 'Per day' : g === 'week' ? 'Per week' : 'Per month'}</button>
+        ))}
+      </div>
+      {(rows || []).length ? (rows || []).map((r) => <BarRow key={r.k} label={r.k} count={r.n} max={max} />) : <div style={{ fontSize: 12.5, color: COLORS.gray, marginBottom: 8 }}>No taps yet.</div>}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginTop: 12 }}>
+        {list(rep.byState, 'By state', true)}
+        {list(rep.byCountry, 'By country')}
+        {list(rep.byKind, 'By kind')}
+        {list(rep.byLink, 'What they tapped')}
+        {list(rep.top, 'Most tapped events', true)}
+      </div>
+    </Section>
+  );
+}
+
 // Virtual items report (founder, 2026-10-05): what travelers pick — laptops,
 // tumblers, bottles, buddies — current totals from profile_gear plus the pick
 // stream per day / week / month and per city / country, all CSV-exportable.
@@ -1590,6 +1637,7 @@ export default function AdminAnalytics() {
             <ActivityOverview />
 
             <VirtualItemsReport />
+            <TicketTapsReport />
 
             <TravelerPull />
 

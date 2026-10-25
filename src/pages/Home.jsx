@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { MapPin } from "lucide-react";
+import { ChevronRight, MapPin, PartyPopper } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -612,6 +612,18 @@ export default function HomePage() {
           {destSearch && !destDismissed && (
             <DestinationStrip place={destSearch} onAction={handleQuickAction} onDismiss={() => setDestDismissed(true)} />
           )}
+          {/* What's on (founder, 2026-10-25: Events & festivals in Nearby services). */}
+          <div className="max-w-md md:max-w-[720px] mx-auto" style={{ padding: '0 16px', marginTop: 14 }}>
+            <button type="button" onClick={() => { trackEvent('feature_used', { feature_name: 'events' }); navigate(createPageUrl('Events')); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', minHeight: 60, padding: '10px 14px', borderRadius: 16, border: `1px solid ${NEUTRAL.rule}`, background: NEUTRAL.white, textAlign: 'left', font: 'inherit', cursor: 'pointer' }}>
+              <span aria-hidden="true" style={{ flex: 'none', width: 38, height: 38, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: NEUTRAL.airmailBlue, color: '#FBF6EC' }}><PartyPopper size={19} strokeWidth={2} /></span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: fs(15), fontWeight: 700, color: NEUTRAL.ink }}>Events & festivals</span>
+                <span style={{ display: 'block', fontSize: fs(12.5), color: NEUTRAL.ink2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Shows, games, festivals, markets and free things near {cityName || 'you'}</span>
+              </span>
+              <ChevronRight size={18} strokeWidth={2} color={NEUTRAL.airmailBlue} aria-hidden="true" focusable="false" />
+            </button>
+          </div>
           {/* Every finder as a tile, phone too: the Nearby page has the room (2026-10-25). */}
           <NearbyServices wide={isTablet} compact={!isTablet} onAction={handleQuickAction} onAllServices={openAllServices} />
           {/* Phones on an older store build: update to get notifications (2026-10-24). Nothing otherwise. */}

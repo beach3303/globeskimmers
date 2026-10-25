@@ -11,6 +11,8 @@ import { stateInfo } from "./stateNicknames.js";
 // Most-specific categories first; `eat` is the food catch-all and stays last.
 export const KEYWORD_MAP = [
   { cat: "coffee",      words: ["coffee", "café", "cafe", "espresso", "latte", "cappuccino", "cold brew", "macchiato", "matcha", "boba", "bubble tea"] },
+  // Events (2026-10-25): dated happenings, ahead of things — "music festival" is an event.
+  { cat: "events",      words: ["concert", "gig", "festival", "fair", "events", "event", "what's on", "whats on", "what is on", "happening", "choir", "chorale", "chorus", "orchestra", "symphony", "philharmonic", "opera", "musical", "broadway", "theater show", "theatre show", "comedy show", "stand-up", "standup", "parade", "story time", "storytime", "pumpkin patch", "nba game", "nfl game", "mlb game", "nhl game", "mls game", "basketball game", "football game", "baseball game", "soccer game", "hockey game", "ballgame", "tickets", "free things", "free events", "things for kids", "things to do with kids", "kids activities", "family activities", "with kids"] },
   { cat: "things",      words: ["things to do", "things to see", "attraction", "museum", "sightsee", "landmark", "hike", "hiking", "viewpoint", "day trip", "tourist", "what to do", "food market", "farmers market", "farmer's market", "mercado", "market hall", "club", "nightclub", "night club", "dance club", "dancing"] },
   { cat: "shopping",    words: ["shopping", "souvenir", "mall", "boutique", "outlet", "shop for", "where to shop", "night market", "flea market", "bazaar", "supermarket", "grocery", "groceries"] },
   { cat: "atm",         words: ["atm", "cash machine", "cash point", "withdraw cash"] },
@@ -331,4 +333,37 @@ const SIGHT_ASK = /\b(landmarks?|sights?|sightseeing|monuments?|museums?|galler(
 export function fameFirstThings({ query = "", sort = null, named = false, nearFirst = false } = {}) {
   if (HIDDEN_ASK.test(query)) return false;
   return sort === "rating" || (named && !nearFirst && SIGHT_ASK.test(query));
+}
+
+
+// What an events search asks for (2026-10-25, founder: "if users search the name of the events … or a
+// type of activity or free activities … What if user say what is happening today in town?"):
+//   { when: today|weekend|week|month, kind: one of the nine or null, q: a name to look up or "" }.
+// The name is what's left once time, scope and generic event words go — kept only when it reads as a
+// name (a capital letter): "LA Phil concert" → q "LA Phil"; "concerts this weekend" → no q.
+const EV_TIME = [
+  [/\b(today|tonight|this evening)\b/i, "today"],
+  [/\b(this\s+)?weekend\b/i, "weekend"],
+  [/\b(tomorrow|this week|next few days|next week)\b/i, "week"],
+  [/\b(this month|next month|coming up|upcoming)\b/i, "month"],
+];
+const EV_KIND = [
+  [/\bfree\b/i, "free"],
+  [/\b(kids?|children|family|families|toddlers?|story ?time|pumpkin patch)\b/i, "kids"],
+  [/\bfestivals?\b/i, "festivals"],
+  [/\bfairs?\b/i, "fairs"],
+  [/\b(choirs?|chorales?|chorus|orchestras?|symphony|philharmonic|opera|concerts?|gigs?|jazz)\b/i, "music"],
+  [/\b(musicals?|theat(?:er|re)|broadway|plays?|comedy|stand-?up|ballet)\b/i, "stage"],
+  [/\b(games?|match(?:es)?|nba|nfl|mlb|nhl|mls|basketball|football|baseball|soccer|hockey)\b/i, "games"],
+  [/\bmarkets?\b/i, "markets"],
+  [/\bholidays?\b/i, "holidays"],
+];
+const EV_GENERIC = /\b(events?|what'?s|what\s+is|on|happening|in\s+town|around\s+town|near\s*me|nearby|around\s*here|tickets?|shows?|things?|to\s+do|for|with|the|a|an|any|some|best|good|great|local|today|tonight|this|evening|weekend|tomorrow|week|next|few|days|month|coming|up|upcoming|free|kids?|children|family|families|concerts?|gigs?|festivals?|fairs?|games?|matches?|plays?|musicals?)\b/gi;
+export function eventIntent(text) {
+  const t = String(text || "").trim();
+  const when = (EV_TIME.find(([re]) => re.test(t)) || [null, "weekend"])[1];
+  const kind = (EV_KIND.find(([re]) => re.test(t)) || [null, null])[1];
+  const rest = t.replace(/[?!.]+$/, "").replace(EV_GENERIC, " ").replace(/\s+/g, " ").trim();
+  const q = /[A-Z]/.test(rest) && rest.replace(/[^\p{L}\p{N}]/gu, "").length >= 2 ? rest : "";
+  return { when, kind, q };
 }

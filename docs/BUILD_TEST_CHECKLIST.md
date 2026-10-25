@@ -3114,3 +3114,35 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
 - Gates: eslint + no-undef, build, boot-check ✅. Captured with mail from two new senders: the card's Follow strip
   and the sheet listing both.
 - **Activate:** push (app only), then `npm run ota`.
+
+## 2026-10-25 — Events & festivals (COMMITTED on stamping-v2; not pushed)
+
+- Founder: events in Nearby services — shows, games, festivals, choirs, orchestras, plays, kids' shows, free things,
+  seasonal/holiday, farmers markets, fairs — "as organized and harmonious as page D"; decision sheet: official
+  page + "Tickets on Ticketmaster", the nine kinds, and count every ticket tap (day / week / month, state, country).
+- **Worker** `POST /events/whats-on {lat,lng,city,country,cc,from,to,q?}` (public read; nothing sold):
+  Ticketmaster Discovery 50 mi (one row per name+day, kinds + tags from its classification — Orchestra, Choir,
+  Opera, Jazz, Musical, Play, Comedy, NFL…; free when the lowest price is 0; family → Kids & families);
+  **EV_FESTIVALS**, the calendar we keep (date rules: fixed, nth weekday, whole month; checked: Sinulog 2027-01-17,
+  Thanksgiving 2026-11-26, Balloon Fiesta 10-03..11) — Sinulog, Ati-Atihan, Dinagyang, Panagbenga, Pahiyas,
+  Kadayawan, MassKara, Simbang Gabi (PH-wide), Día de los Muertos (LA, San Antonio), Halloween (US-wide), Rose
+  Parade, Macy's parade, Balloon Fiesta; **holidays** from date.nager.at (KV 30 d per country-year); **markets**
+  (Google "farmers market", open days from regularOpeningHours) and **family** places (zoo/aquarium/children's
+  museum, ≥50 reviews) — KV 7 d per area; the whole answer KV 3 h. `/events/search` stays stubbed.
+  `POST /admin/event-clicks` (admin): event_ticket_click totals, per day (30 d) / week / month, by state, country,
+  kind, link, top events.
+- **App:** page **Events** (registered by hand): place + Change (LocationModePicker), a name search ("A show, a
+  team, a choir…"), Today · This weekend · This week · This month, the nine kinds as tiles with counts, a blue-tab
+  section per kind (next two + See all); a kind opens by day with sub-kinds (Music: Orchestra · Choirs · Concerts ·
+  Jazz · Opera; Stage: Plays · Musicals · Comedy · Dance); Kids & families adds ALWAYS OPEN FOR FAMILIES. A row's
+  sheet: when, where, note, tags, price for planning, **Tickets on Ticketmaster** · Official page · Look it up
+  (festivals) · Open in Maps (markets); every tap → `event_ticket_click`. Home's Nearby page: an **Events &
+  festivals** row under search. Admin portal: **🎟️ Ticket taps** section.
+- **Search:** an `events` category (rules ahead of things — concert, festival, fair, choir, orchestra, opera,
+  musical, broadway, parade, story time, "what's on", "happening", tickets, free things, things for kids… — and
+  the AI parser's prompt + PARSE_SEARCH_CATEGORIES). `eventIntent(text)` → { when, kind, q } (q only when a name
+  is left: "LA Phil concert" → "LA Phil", "Sinulog festival" → "Sinulog"); Smart Search opens Events with it
+  (time/kind from the typed words, the name from the place-free query). Finder boxes offer "Events & festivals".
+- Gates: worker check, eslint + no-undef, build, boot-check ✅; date rules checked in node; intents checked for 16
+  queries. Captured with a mocked /events/whats-on: the overview, Music, an event sheet, Home's Nearby row.
+- **Activate:** push (deploys the worker), then probe /events/whats-on live (LA, Manila); `npm run ota`.

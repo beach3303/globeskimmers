@@ -27,6 +27,7 @@ const FINDERS = {
   eat: { page: "PlacesToEat", label: "Places to Eat" },
   coffee: { page: "CoffeeFinder", label: "Coffee" },
   things: { page: "ThingsToDo", label: "Things to Do" },
+  events: { page: "Events", label: "Events & festivals" },
   shopping: { page: "Shopping", label: "Shopping" },
   atm: { page: "ATMFinder", label: "ATMs" },
   money: { page: "MoneyExchange", label: "Money Exchange" },
