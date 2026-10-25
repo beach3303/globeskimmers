@@ -14,14 +14,19 @@
 // Writes scripts/search-eval/last-run.json; prints a summary. Cases marked
 // `gap` are known missing capabilities (reported, never counted as failures).
 import { writeFileSync } from "node:fs";
-import { planSearch, finderQuery, shoppingCategoryFor, expandActivityQuery, fameFirstThings } from "../../src/lib/searchPlan.js";
+import { planSearch, finderQuery, shoppingCategoryFor, expandActivityQuery, fameFirstThings, HAS_IN_CLAUSE, tidyQuery } from "../../src/lib/searchPlan.js";
 import { sortByRating, keepCountry, nearFirst, pinInstitutions } from "../../src/lib/searchRank.js";
 import { matchesQuery } from "../../src/lib/searchText.js";
+import { cityForArea } from "../../src/lib/areaCities.js";
 // EVAL_CASES: another case file; EVAL_HOME: "lat,lng,City,Country,Phrase…";
 // EVAL_MODE=page: send each case's text raw to its `page`'s own search bar, as
 // the finder pages do today (no planning, the traveler's location).
 const { CASES } = await import(process.env.EVAL_CASES ? new URL(process.env.EVAL_CASES, import.meta.url) : "./cases.mjs");
 const PAGE_MODE = process.env.EVAL_MODE === "page";
+// EVAL_MODE=box (2026-10-25): as typed into the case's `page` search bar since finderSearch.js —
+// the same planning as Home, the page stays the finder, the AI only for a place clause, and a
+// place after "at" / "inside" stays part of the name.
+const BOX_MODE = process.env.EVAL_MODE === "box";
 
 const API = "https://globeskimmers-api.maizasimeon.workers.dev";
 const HOME = process.env.EVAL_HOME
@@ -80,7 +85,16 @@ async function runCase(c) {
   const e = c.expect || {};
 
   if (PAGE_MODE) return runPageCase(c, out);
-  const { parsed: p, destination } = await planSearch(c.q, { scope: "near_me", activePhrase: HOME.phrase, parseAI });
+  const planned = await planSearch(c.q, { scope: "near_me", activePhrase: HOME.phrase, parseAI: BOX_MODE ? (HAS_IN_CLAUSE.test(c.q) ? parseAI : null) : parseAI });
+  const p = planned.parsed;
+  let destination = planned.destination;
+  if (BOX_MODE) {
+    destination = null;
+    const esc = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (p.place && new RegExp(`\\b(?:at|inside)\\s+${esc(p.place)}\\s*$`, "i").test(c.q.trim())) { p.place = null; p.scope = "near_me"; p.query = tidyQuery(c.q); p.nearFirst = false; }
+    if (!(p.scope === "named_place" && p.place)) { p.place = null; p.nearFirst = false; }
+    p.category = c.page;
+  }
   out.plan = { category: p.category || null, place: p.place || null, region: p.region || null, query: p.query || "", sort: p.sort || null, maxPrice: p.maxPrice || 0, lateNight: !!p.lateNight, bars: !!p.bars, venue: p.venue || null, nearFirst: !!p.nearFirst, dream: destination?.name || null };
 
   // ── route ──
@@ -109,7 +123,8 @@ async function runCase(c) {
     at = { lat: g.coordinates.latitude, lng: g.coordinates.longitude, city: g.address?.city || g.placeName, country: g.address?.country || "", region: g.address?.state || "" };
     out.at = g.placeName + (g.touristCenter ? ` (landmark center: ${g.touristCenter.landmarks.slice(0, 3).join(", ")})` : "");
   }
-  const q = finderQuery(p); // the same call the app makes
+  let q = finderQuery(p); // the same call the app makes
+  if (BOX_MODE && !q && p.category === "coffee" && p.sort === "rating") q = "best coffee"; // finderSearch.js
 
   // ── results, as the finder would fetch them ──
   let list = [];
@@ -124,7 +139,14 @@ async function runCase(c) {
     if (p.nearFirst) list = nearFirst(list);
     list = pinInstitutions(list, p.nearFirst ? 5 : Infinity);
   } else if (cat === "coffee") {
-    list = pinInstitutions((await post("coffee/search", { query: q || "coffee", ...geo, radiusMiles: 25, namedPlace: !!p.place })).places || []);
+    list = (await post("coffee/search", { query: q || "coffee", ...geo, radiusMiles: 25, namedPlace: !!p.place })).places || [];
+    if (BOX_MODE) {
+      // As CoffeeFinder.jsx orders it since 2026-10-25: country lock, its log-weighted rating sort, near-first.
+      if (p.place) list = keepCountry(list, at.country);
+      if (p.sort === "rating") list.sort((a, b) => (b.rating || 0) * Math.log10(Math.max(b.userRatingCount || 1, 1)) - (a.rating || 0) * Math.log10(Math.max(a.userRatingCount || 1, 1)));
+      if (p.nearFirst) list = nearFirst(list);
+    }
+    list = pinInstitutions(list);
   } else if (cat === "things") {
     // As ThingsToDo.jsx does it: the page's own landmark data (getActivities)
     // is the first layer; a typed query adds the live Google search on top.
@@ -142,6 +164,17 @@ async function runCase(c) {
       const owned = pool.filter((a) => matchesQuery(`${nameOf(a)} ${(a.types || []).join(" ")} ${a.category || ""} ${a.activityLabel || ""} ${a.editorialSummary?.text || a.editorialSummary || ""}`, q));
       const live = (await post("activities/search", { query: expandActivityQuery(q), city: at.city, country: at.country, ...geo, radiusMiles: 25 })).places || [];
       list = dedupe([...owned, ...live]).sort(byDist);
+      // As ThingsToDo.jsx since 2026-10-25: a narrowed country that found nothing gets one more
+      // try at the area's main city (regionFallback in finderSearch.js).
+      const city = !list.length && p.region && p.place ? cityForArea(p.region) : null;
+      if (city && city.toLowerCase() !== p.place.toLowerCase()) {
+        const g2 = (await post("search-location", { query: city.includes(",") ? city : `${city}, ${p.region}`, touristCenter: true }))?.results?.[0];
+        if (g2) {
+          const geo2 = { latitude: g2.coordinates.latitude, longitude: g2.coordinates.longitude };
+          list = ((await post("activities/search", { query: expandActivityQuery(q), city: g2.address?.city || city, country: g2.address?.country || "", ...geo2, radiusMiles: 25 })).places || []).sort(byDist);
+          out.at = `${out.at} → nothing there, retried at ${g2.placeName}`;
+        }
+      }
       if (fameFirstThings({ query: q, sort: p.sort, named: !!p.place, nearFirst: !!p.nearFirst })) list = sortByRating(list, { named: true });
     }
   } else if (cat === "shopping") {
