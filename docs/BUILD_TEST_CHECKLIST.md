@@ -3207,3 +3207,22 @@ Home tabs, the City Boards billboard. Main 159aba9 matches what phones run.
 - Gates: eslint + no-undef, build, boot-check ✅. Captured as a faked iOS 1.0.4 (store 1.0.5): the card above the tabs,
   the sheet.
 - **Activate:** push (app only), then `npm run ota`.
+
+## 2026-10-25 — PRIVACY FIX: postcards went to every follower since 2026-10-24 (COMMITTED on stamping-v2; not pushed)
+
+- Founder: "all the postcards sent to others are being seen by inner circle members" (screenshot: Arrivals' "Where your
+  circle has been" showing a card meant for one person); "all telegrams and postcards should only be seen by the person
+  or persons it was addressed to"; "if my passport was public, only the stamps should be public".
+- **Cause:** `sendPostcard` (src/lib/passport.js) forwarded only the old single-address fields. The Send-to bar
+  (2026-10-24) sends to_user_ids / to_handles / to_emails / mode — dropped — so the worker saw no address and took its
+  old "everyone who follows me" branch: a broadcast every follower's feed showed. D1 postcard_send: direct:false on 10 of
+  the 12 sends since 2026-10-24 22:23 (all direct before). Telegrams were never affected (sendTelegram forwards them).
+- **Fix, app:** sendPostcard forwards to_user_ids, to_handles, to_emails, mode and reply_all.
+- **Fix, worker:** a postcard with no address is refused ("Who is it for?"), never broadcast. `pcBroadcast` — no card
+  sent to everyone (to_user_id null, not a City Board card) is shown to anyone but its sender, old ones included: the
+  feed reads none, activity drops them, Keep refuses them, the postcard box drops them. City Board cards (public posts
+  by design) stay. Sent marks a leaked card (after 2026-10-24) "Didn't reach who you picked · please send it again".
+  Public passport / world reads were checked: they read no postcards or telegrams.
+- The intended recipients of the leaked cards were never stored, so those senders need to send them again.
+- Gates: worker check, eslint + no-undef, build, boot-check ✅.
+- **Activate:** push NOW (worker), then `npm run ota` (the send fix needs the app).

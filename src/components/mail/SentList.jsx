@@ -37,12 +37,14 @@ const timeOf = (iso) => {
   return `${day.charAt(0).toUpperCase()}${day.slice(1)} · ${clock}`;
 };
 // How it went, in a few words, for the kicker.
-const MODE = { one: "", each: "Private copies", group: "Group", board: "City Board", followers: "Everyone who followed you", email: "By email", link: "Text link" };
+const MODE = { one: "", each: "Private copies", group: "Group", board: "City Board", followers: "Everyone who followed you", lost: "", email: "By email", link: "Text link" };
 
 // Where it stands: one short line and its tone.
 function statusOf(it) {
   const tg = it.kind === "telegram";
   if (it.status === "waiting") return { tone: "wait", icon: Clock, text: "Waiting for them to join · invite emailed" };
+  // The 2026-10-24 leak: the card never reached who was picked (and no longer shows to anyone).
+  if (it.status === "undelivered") return { tone: "wait", icon: Clock, text: "Didn’t reach who you picked · please send it again" };
   if (it.status === "expired") return { tone: "plain", icon: Link2, text: "Link expired" };
   if (it.mode === "link") {
     if (tg && it.opened > 0) return { tone: "ok", icon: Check, text: `Opened in the app by ${it.opened}` };
@@ -88,7 +90,7 @@ function SentItem({ it, onRemoved }) {
   const tg = it.kind === "telegram";
   const mode = MODE[it.mode] || "";
   const words = tg ? it.body : it.message;
-  const to = it.mode === "email" ? "an email address" : it.mode === "link" ? "whoever you sent the link to" : it.mode === "board" ? null : it.mode === "followers" ? "everyone who followed you" : toLine(it.to);
+  const to = it.mode === "email" ? "an email address" : it.mode === "link" ? "whoever you sent the link to" : it.mode === "board" || it.mode === "lost" ? null : it.mode === "followers" ? "everyone who followed you" : toLine(it.to);
   const remove = async () => {
     if (busy) return;
     setBusy(true);

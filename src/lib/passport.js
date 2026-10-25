@@ -426,9 +426,22 @@ export async function getAgeInfo() {
 // Send a postcard: image (data URL from resizePhoto), message, the place
 // line, optional dish meta, and either to_handle, to_city ({ city, country }:
 // that city's board, City Board) or nothing (= followers).
-export async function sendPostcard({ image, message, place_name, city, country, region, meta, to_handle, to_user_id, to_email, to_city, anon, reply_to }) {
+// The Send-to list (2026-10-24) — to_user_ids, to_handles, to_emails, mode — and reply_all (2026-10-25)
+// travel too. Until 2026-10-25 they were dropped here, so the worker saw no address and sent the card to
+// every follower (the 2026-10-24 leak); the worker now refuses a card with no address.
+export async function sendPostcard({ image, message, place_name, city, country, region, meta, to_handle, to_user_id, to_email, to_user_ids, to_handles, to_emails, mode, to_city, anon, reply_to, reply_all }) {
   if (!(await requirePassport())) return { data: null, error: 'finish_passport' };
-  const { data, error } = await callWorker('postcards/send', { image, message, place_name, city, country, ...(region ? { region } : {}), meta, to_handle, ...(to_user_id ? { to_user_id } : {}), ...(to_email ? { to_email } : {}), ...(reply_to ? { reply_to } : {}), to_city, ...(anon ? { anon: true } : {}) });
+  const list = (v) => (Array.isArray(v) ? v.filter(Boolean) : []);
+  const { data, error } = await callWorker('postcards/send', {
+    image, message, place_name, city, country, ...(region ? { region } : {}), meta, to_handle,
+    ...(to_user_id ? { to_user_id } : {}), ...(to_email ? { to_email } : {}),
+    ...(list(to_user_ids).length ? { to_user_ids: list(to_user_ids) } : {}),
+    ...(list(to_handles).length ? { to_handles: list(to_handles) } : {}),
+    ...(list(to_emails).length ? { to_emails: list(to_emails) } : {}),
+    ...(mode === 'group' || mode === 'each' ? { mode } : {}),
+    ...(reply_to ? { reply_to, ...(reply_all ? { reply_all: true } : {}) } : {}),
+    to_city, ...(anon ? { anon: true } : {}),
+  });
   return { data, error: error || data?.error || null };
 }
 // A city's board (City Board, 2026-10-14): postcards from travelers who were really

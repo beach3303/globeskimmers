@@ -19056,6 +19056,17 @@ async function linkPrune(env) {
 // copy of the photo, so one account's deletion (which takes that account's photos) never takes
 // anyone else's. The single to_handle / to_user_id / to_email fields still work.
 const PC_MAX_TO = 10;
+// The 2026-10-24 leak (found 2026-10-25): "Everyone who follows me" left the app on 2026-10-24, and the
+// same day the app's send dropped the new Send-to list (to_user_ids / to_handles / to_emails), so cards
+// meant for chosen people arrived here with no address and went out as broadcasts to every follower.
+// A card with no address is refused instead of broadcast. And the founder's rule since 2026-10-25: "all
+// telegrams and postcards should only be seen by the person or persons it was addressed to" — whatever
+// anyone's privacy setting — so NO card sent to everyone is shown to anyone but its sender, old ones too
+// (feed, activity, keep, box). A City Board card (to_city) is a public post by design and stays.
+const PC_BROADCAST_END = '2026-10-24T00:00:00Z';
+const pcBroadcast = (p) => !!p && p.to_user_id == null && !p.to_city;
+// Caught by the leak (after the option left the app): the sender's Sent says it didn't reach who was picked.
+const pcLeaked = (p) => pcBroadcast(p) && String(p.created_at || '') >= PC_BROADCAST_END;
 async function handlePostcardSend(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -19147,9 +19158,8 @@ async function handlePostcardSend(request, env, ctx) {
       // or "a traveler" instead — which one is decided here, never client-side.
       if (b.anon === true) anonLabel = await pcAnonLabel(env, user.id, boardCity);
     } else {
-      const fq = await gbRest(env, `user_follows?followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, { headers: { Prefer: 'count=exact', Range: '0-0' } });
-      const followers = parseInt((fq.headers.get('content-range') || '').split('/')[1] || '0', 10);
-      if (!followers) return jsonResponse({ error: 'no_followers' }, 409);
+      // No address at all: refused, never sent to everyone who follows you (the 2026-10-24 leak).
+      return jsonResponse({ error: 'Who is it for? Add someone in Send to.' }, 400);
     }
     const direct = asked > 0;
 
@@ -20693,7 +20703,8 @@ async function handleSocialFeed(request, env) {
     const pcToQ = await gbRest(env, `postcards?to_user_id=eq.${user.id}&or=(read_at.is.null,read_at.gt.%22${readCut}%22)&order=created_at.desc&limit=20&select=*`, {});
     const [pcTo, pcBroadcast, tgTo] = await Promise.all([
       pcToQ.ok ? Promise.resolve(pcToQ) : gbRest(env, `postcards?to_user_id=eq.${user.id}&order=created_at.desc&limit=20&select=*`, {}),
-      bcastFrom.length ? gbRest(env, `postcards?sender_id=in.(${bcastFrom.join(',')})&to_user_id=is.null&order=created_at.desc&limit=20&select=*`, {}) : Promise.resolve({ ok: false }),
+      // Cards to everyone are never shown to followers any more (the 2026-10-25 rule above pcBroadcast).
+      Promise.resolve({ ok: false }),
       // Telegrams to me (2026-10-19); before the table exists there are none.
       teenMe ? Promise.resolve({ ok: false }) : gbRest(env, `telegrams?to_user_id=eq.${user.id}&recipient_deleted_at=is.null&or=(received_at.is.null,received_at.gt.%22${readCut}%22)&order=created_at.desc&limit=20&select=*`, {}).catch(() => ({ ok: false })),
     ]);
@@ -20864,10 +20875,11 @@ async function handleMailSent(request, env) {
       items.push({
         kind: 'postcard', from: 'postcards', ids: g.map((x) => x.id), at: r.created_at,
         photo: photo(r.photo_key), message: r.message || null, place: r.place_name || r.city || null, dish: r.meta?.dish || null,
-        mode: board ? 'board' : !r.to_user_id ? 'followers' : r.group_id ? 'group' : g.length > 1 ? 'each' : 'one',
+        mode: board ? 'board' : !r.to_user_id ? (pcLeaked(r) ? 'lost' : 'followers') : r.group_id ? 'group' : g.length > 1 ? 'each' : 'one',
         ...(board ? { board: { city: r.city || null, country: r.country || null, anon: !!r.meta?.anon } } : {}),
         to: board || !r.to_user_id ? [] : g.map((x) => who(x.to_user_id)),
-        status: 'delivered',
+        // A card caught by the 2026-10-24 leak never reached who was picked: say so, and to send it again.
+        status: pcLeaked(r) ? 'undelivered' : 'delivered',
       });
     }
     for (const g of fold(tgs, (r) => (r.group_id ? `g:${r.group_id}` : `e:${r.created_at}|${r.body}`))) {
@@ -20947,7 +20959,7 @@ async function handlePostcardBox(request, env) {
     if (q.status === 404) q = await gbRest(env, `postcards?to_user_id=eq.${user.id}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {});
     if (!q.ok) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
     // A card I deleted (2026-10-19) leaves my box; a kept broadcast is let go through /postcards/keep.
-    const got = (await q.json()).filter((p) => !(p.to_user_id === user.id && p.recipient_deleted_at));
+    const got = (await q.json()).filter((p) => !(p.to_user_id === user.id && p.recipient_deleted_at) && !pcBroadcast(p));
     // Telegrams live in the box too (founder, 2026-10-19), newest first with the postcards, a page
     // at a time on the same `before`; none before their table exists.
     const tq = await gbRest(env, `telegrams?to_user_id=eq.${user.id}&recipient_deleted_at=is.null${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {}).catch(() => null);
@@ -21506,10 +21518,10 @@ async function handlePostcardKeep(request, env) {
       if (d.status === 404) return unavailable();
       return d.ok ? jsonResponse({ ok: true, kept: false }) : retry();
     }
-    const cq = await gbRest(env, `postcards?id=eq.${pid}&select=id,sender_id,to_user_id`, {});
+    const cq = await gbRest(env, `postcards?id=eq.${pid}&select=id,sender_id,to_user_id,to_city,created_at`, {});
     if (!cq.ok) return retry();
     const card = (await cq.json())[0];
-    if (!card) return gone();
+    if (!card || pcBroadcast(card)) return gone();
     if (card.to_user_id === user.id) return jsonResponse({ ok: true, kept: true, to_me: true });
     if (card.to_user_id !== null || card.sender_id === user.id) return gone();
     const sid = card.sender_id;
@@ -22456,7 +22468,7 @@ async function handleSocialUnread(request, env) {
     const fIds = following.map((r) => r.followee_id).filter((id) => id && !blocked.has(id));
     const broadcasts = fIds.length
       // select=* so a board card (to_city, City Board) can be left out without naming the column.
-      ? (await gbRest(env, `postcards?to_user_id=is.null&sender_id=in.(${fIds.join(',')})&created_at=gte.${floor}&select=*&order=created_at.desc&limit=50`, {}).then(j)).filter((r) => !r.to_city)
+      ? (await gbRest(env, `postcards?to_user_id=is.null&sender_id=in.(${fIds.join(',')})&created_at=gte.${floor}&select=*&order=created_at.desc&limit=50`, {}).then(j)).filter((r) => !r.to_city && !pcBroadcast(r))
       : [];
 
     const items = [];
