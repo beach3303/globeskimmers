@@ -963,7 +963,7 @@ T1/T2/T3 · D8 Just joined rules · D9 event ticket links · D2 Mailbox tabs Pos
 D3 senders see "Opened"? · D4 group by default · D5 Add friends fixes.
 Proposed build order: group default → friend's cover → Sent → Mailbox tabs → swipeable Home → events → Just joined.
 
-### ANSWERED 2026-10-25 (founder, decision sheet) — build in this order
+### ANSWERED 2026-10-25 (founder, decision sheet) — ALL SEVEN BUILT AND PUSHED the same day (main 92096f2 + the events sorting fix); phones get them with the next `npm run ota`
 
 1. **Group messages:** with 2+ names "One group" is picked first (everyone sees the names); private copies one tap
    away. **Reply to sender OR reply to all** on group telegrams AND group postcards (changes the 10-24 "postcard
