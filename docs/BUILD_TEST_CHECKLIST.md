@@ -3288,3 +3288,20 @@ phones (iOS + Android) — the privacy ceiling screens (passport chip + sheet, s
 "Who can see it" after stamping, Settings → Privacy), "Friends" / "Friends & followers" instead of "circle". Main d2525d5
 matches what phones run.
 
+## 2026-10-26 — Honest "New download" alerts + ntfy (PUSHED — main 49d62f6; worker ✅ after one re-run)
+
+- Founder compared the stores (App Store: 16 first-time downloads; Play: ~0 new users) with the ntfy "🎉 New download"
+  alerts, which ran far higher. Cause: the iPhone app's user agent has no "Safari" (ua_summary 'other'), so real iPhones
+  rang as "First open on other", while Claude's capture runs (fresh headless Chrome as the demo account, iPhone-Safari
+  UA) rang as "First open on iPhone" — D1 shows ≈270 demo-account "devices" 10-17→10-26 vs ≈12 real.
+- Fix: only an app first open rings (body.platform from Capacitor since this build; older builds: 'other' = iPhone app,
+  'android-chrome' = Android); browsers never; a device signed in as an admin or appreview@ never (gbTestAccountIds).
+  Morning digest: two empty Apple report days read "0 App Store" instead of silence. Claude's capture injects now stub
+  /log-event (memory: capture-rig-recipe).
+- ntfy: the free ntfy.sh account is still limited per IP ("Usage stats and limits for this account are based on your IP
+  address"), so a free token would not stop the 429s. Founder is subscribing to Supporter ($5/mo annual, $6 monthly),
+  then `npx wrangler secret put NTFY_TOKEN`.
+- CI note: the first deploy of 49d62f6 failed installing `sharp` (prebuilt binary fell back to a source build); the
+  re-run passed. If it recurs, make the deploy job skip install scripts.
+- **Activate:** `npm run ota` (the app's platform field); NTFY_TOKEN after the Supporter upgrade.
+
