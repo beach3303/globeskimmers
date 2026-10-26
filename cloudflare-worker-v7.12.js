@@ -21378,14 +21378,13 @@ async function handleCityBoards(request, env) {
 // an envelope; SENT is created_at, and RECEIVED (received_at) is stamped when the recipient
 // opens it (/telegrams/open). One person by @username, or a reply to a telegram or postcard sent to you.
 // Adults only, both ways; the words are checked; blocks and a minor recipient are answered
-// like a send and stored nowhere. No daily limit, except five a day to people who don't follow
-// you (a reply is never capped that way) and twenty a minute against bots. The recipient can
+// like a send and stored nowhere. No daily limit (the five-a-day cap to people who don't follow you
+// was lifted 2026-10-26), only twenty a minute against bots. The recipient can
 // delete one from their Mailbox, which erases it. Private to the two of them: every read is
 // scoped to the recipient, the words never ride in an alert, a log or a queue, and deleting
 // either account erases their telegrams both ways.
 const TG_MAX_WORDS = 4;
 const TG_MAX_CHARS = 120;
-const TG_STRANGER_DAILY = 5;
 const TG_PER_MINUTE = 20;
 // Emoji go by wire too (founder, 2026-10-19), and each one counts as a word: 3️⃣ is one word.
 const TG_EMOJI = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u;
@@ -21496,15 +21495,8 @@ async function handleTelegramSend(request, env, ctx) {
       const n = await gbDayCount(env, `pce:${user.id}`);
       if (n != null && n > PC_EMAIL_DAILY) return jsonResponse({ error: 'That’s five messages to email addresses today. Try again tomorrow.' }, 429);
     }
-    if (!replyTo && deliver.length) {
-      const fq = await gbRest(env, `user_follows?follower_id=in.(${deliver.join(',')})&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, {});
-      const followers = new Set(fq.ok ? (await fq.json()).map((r) => r.follower_id) : []);
-      for (const id of deliver) {
-        if (followers.has(id)) continue;
-        const n = await gbDayCount(env, `tgs:${user.id}`);
-        if (n != null && n > TG_STRANGER_DAILY) return jsonResponse({ error: 'That’s five telegrams today to people who don’t follow you. Try again tomorrow.' }, 429);
-      }
-    }
+    // No daily cap to people who don't follow you (founder, 2026-10-26: "remove telegram limit from non follower");
+    // was five a day. Blocks, reports, the kindness check and the per-minute guard below still stand.
     const burst = await gbDayCount(env, `tgm:${user.id}:${Math.floor(Date.now() / 60000)}`);
     if (burst != null && burst > TG_PER_MINUTE) return jsonResponse({ error: 'The wire is busy. Try again in a minute.' }, 429);
 

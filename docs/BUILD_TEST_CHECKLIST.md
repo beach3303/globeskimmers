@@ -3322,3 +3322,11 @@ matches what phones run.
 - Gates: worker check ✅.
 - **Activate:** push (worker only).
 
+## 2026-10-26 — Telegrams: no daily cap to people who don't follow you (COMMITTED, not pushed)
+
+- Founder: "remove telegram limit from non follower". TG_STRANGER_DAILY (5/day, `tgs:` day count) removed; replies were
+  never capped. Still in place: 20 telegrams a minute (bot guard), 10 people per telegram, 4 words / 120 characters,
+  the kindness check, blocks and reports, adults only, 5 a day to email addresses (shared with postcards), 10 text/share
+  links a day.
+- **Activate:** push (worker only).
+
