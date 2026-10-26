@@ -1289,7 +1289,9 @@ async function morningDigest(env) {
     let a = await appleDownloads(env, day(1));
     let aDay = day(1);
     if (a && a.empty) { a = await appleDownloads(env, day(2)); aDay = day(2); }
+    // Apple publishes no report for a day with no sales: two empty days in a row read 0, not silence.
     if (a && a.units != null) parts.push(`${a.units} App Store (${aDay.slice(5)})`);
+    else if (a && a.empty) parts.push(`0 App Store (${aDay.slice(5)})`);
   } catch { /* apple skipped */ }
   try {
     let g = await googleDownloads(env, day(2));   // Play lags a day more
@@ -1350,17 +1352,23 @@ async function handleLogEvent(request, env) {
     // founderAlert caps the rest): only a one-way hash of the address and the
     // day is counted, and the count is deleted after two days. A phone past
     // that limit is simply not remembered yet; it rings on a later open.
+    // Only the app's first open on a phone is a download (2026-10-26: the alerts outran the stores — a
+    // browser, Claude's screenshot runs and the demo account all rang as "new downloads"). The app says
+    // where it runs (body.platform, since 1.0.2610261…); older builds are told by their user agent: the
+    // iPhone app's has no "Safari" (ua_summary 'other'), Android's reads 'android-chrome'. A browser of
+    // any kind, or a phone signed in as an admin or the App Review account, never rings.
+    const plat = ['ios', 'android', 'web'].includes(body.platform) ? body.platform
+      : body.ua_summary === 'other' ? 'ios' : body.ua_summary === 'android-chrome' ? 'android' : 'web';
     try {
       const anon = String(body.anon_id || '').slice(0, 64);
-      if (anon && env.GLOBESKIMMERS_KV && (env.NTFY_TOPIC || env.TWILIO_SID)) {
+      if (anon && plat !== 'web' && env.GLOBESKIMMERS_KV && (env.NTFY_TOPIC || env.TWILIO_SID)) {
         const seen = await env.GLOBESKIMMERS_KV.get(`bell:dev:${anon}`);
+        const tester = !seen && body.user_id ? (await gbTestAccountIds(env)).includes(String(body.user_id).toLowerCase()) : false;
         const ip = request.headers.get('cf-connecting-ip') || '';
-        const fromIp = !seen && ip ? await gbDayCount(env, `dl:${(await sha256Hex(`gs-dl:${new Date().toISOString().slice(0, 10)}:${ip}`)).slice(0, 32)}`) : null;
-        if (!seen && (fromIp == null || fromIp <= 3)) {
+        const fromIp = !seen && !tester && ip ? await gbDayCount(env, `dl:${(await sha256Hex(`gs-dl:${new Date().toISOString().slice(0, 10)}:${ip}`)).slice(0, 32)}`) : null;
+        if (!seen && !tester && (fromIp == null || fromIp <= 3)) {
           await env.GLOBESKIMMERS_KV.put(`bell:dev:${anon}`, '1', { expirationTtl: 400 * 86400 });
-          const ua = String(body.ua_summary || '').slice(0, 60);
-          const os = /iphone|ios|ipad/i.test(ua) ? 'iPhone' : /android/i.test(ua) ? 'Android' : (ua || 'unknown device');
-          await founderAlert(env, `🎉 New download! First open on ${os}`, 'new');
+          await founderAlert(env, `🎉 New download! First open on ${plat === 'ios' ? 'iPhone' : 'Android'}`, 'new');
         }
       }
     } catch { /* never blocks logging */ }

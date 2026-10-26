@@ -32,6 +32,7 @@
  */
 
 import { supabase } from '@/lib/supabaseClient';
+import { Capacitor } from '@capacitor/core';
 
 const WORKER_URL = 'https://globeskimmers-api.maizasimeon.workers.dev';
 const ENDPOINT = `${WORKER_URL}/log-event`;
@@ -81,6 +82,10 @@ function getSessionId() {
   } catch {
     return 'anon';
   }
+}
+
+function appPlatform() {
+  try { return Capacitor.getPlatform(); } catch { return null; }
 }
 
 function classifyUserAgent() {
@@ -141,6 +146,9 @@ export function logEvent(eventType, payload = {}, page = null) {
       user_id: currentUserId,   // real Supabase user id (null if signed out)
       anon_id: getAnonId(),     // durable per-device id for retention cohorts
       ua_summary: classifyUserAgent(),
+      // 'ios' | 'android' | 'web' (2026-10-26): the app inside a phone, told apart from a browser, so
+      // only a real app's first open rings the founder's "New download" alert.
+      platform: appPlatform(),
     });
 
     if (batchTimer) clearTimeout(batchTimer);
