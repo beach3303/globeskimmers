@@ -982,6 +982,20 @@ Proposed build order: group default → friend's cover → Sent → Mailbox tabs
    a Settings switch, adults only (never minors), never blocked people. **Founder: remove the feed for everybody
    once there are many members.**
 
+## Privacy made simple — founder, 2026-10-26 (PLAN, waiting on answers)
+
+After the 10-24 postcard leak (fixed 6bcbfd9) the founder found privacy confusing: a "private" passport still showed
+stamps marked "Everyone"; the stamp sheet promised City Board photos a private passport never sends; three names for
+people (inner circle / followers / your circle); five places to change things. Asked for two easy locations — Settings
+and the passport/album/stamping pages — and "Friends and Followers".
+Plan + mockups + 7 tap-to-answer choices (db collection `answers`, doc ids names, ceiling, levels, migrate, defaults,
+places, confirm): https://claude.ai/artifact/UCfN3PpPuWSsx4h5EJBVsn
+Proposal: four words everywhere (🔒 Only me · 🤝 Friends = mutual follow · 👥 Followers · 🌍 Everyone); the passport is
+the ceiling (stamps and albums the same or more private); Settings → Privacy holds everything; quick switches on the
+passport page, each stamp, each album, right after stamping; postcards and telegrams always private (no setting).
+"Friends" is a generic word — fine to use; avoid Instagram's exact "Close Friends".
+Done already (2026-10-26, 80b3a64): in Home's Virtual Passport tab a swipe inside the book is the book's.
+
 ## Website (globeskimmers.io)
 
 - Deployed 2026-09-14 (48e1c81, 1d1e3b0, a3cdab8) to the globeskimmers-site Worker. **Live on https://globeskimmers.io since 2026-09-21**: the founder attached globeskimmers.io and www in Cloudflare; pages, redirects, app-ads.txt and security headers verified on the real domain. Test addresses switched off (9d766af). www serves the same site; the platform rejects host redirects in _redirects, so a www→plain 301 would be a Cloudflare Redirect Rule if ever wanted.
