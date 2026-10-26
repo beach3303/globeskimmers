@@ -1200,6 +1200,16 @@ app, then `npm run ota`.
   hotel; (3) only if the founder wants to be merchant of record for hotels, plan that as its own
   project after Nuitée answers. Nothing built yet.
 
+## Pink's Hot Dogs — first Founding Partner (founder, 2026-10-26, letter ready to send)
+
+The founder picked Pink's (original La Brea stand, since 1939) as the first iconic LA restaurant to stamp. Letter + PDF:
+https://claude.ai/artifact/SQwDHdXgx6mRLnVqkwvv37 (`Claude outputs/GlobeSkimmers-letter-to-Pinks.pdf`). Offer: official
+stamp only at the original stand, burgundy Official Seal, monthly totals report, free through 2027-12-31 then half the
+standard price, not exclusive, their approval of the art, a free sticker/poster at the stand. Mock-up art is the
+founder's, unofficial. If they say yes: add Pink's (original stand) as a stampable place, hold their @username with the
+Burgundy Seal, final art from their approval (Hollywood Sign in the art needs the Chamber's license or comes out),
+monthly report by hand until it's built.
+
 ## Dated reminders
 
 - **2026-10-26 morning** — ntfy token (founder: "we can do ntfy tomorrow in the morning"). Founder alerts mostly fail
