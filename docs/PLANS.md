@@ -1200,7 +1200,11 @@ app, then `npm run ota`.
   hotel; (3) only if the founder wants to be merchant of record for hotels, plan that as its own
   project after Nuitée answers. Nothing built yet.
 
-## Pink's Hot Dogs — first Founding Partner (founder, 2026-10-26, letter ready to send)
+## Pink's Hot Dogs — first Founding Partner (founder, 2026-10-26: ON HOLD — not sent)
+
+**On hold (founder, same day):** "hold off attempt partnership with pink's incase i get accepted and my partners want to
+solidify a better more credible process". Don't contact Pink's or build the Pink's stamp until the founder says so
+(after YC / a16z Speedrun decisions). The letter and files stay ready.
 
 The founder picked Pink's (original La Brea stand, since 1939) as the first iconic LA restaurant to stamp. Letter + PDF:
 https://claude.ai/artifact/SQwDHdXgx6mRLnVqkwvv37 (`Claude outputs/GlobeSkimmers-letter-to-Pinks.pdf`). Offer: official
