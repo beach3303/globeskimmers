@@ -3305,3 +3305,20 @@ matches what phones run.
   re-run passed. If it recurs, make the deploy job skip install scripts.
 - **Activate:** `npm run ota` (the app's platform field); NTFY_TOKEN after the Supporter upgrade.
 
+## 2026-10-26 — More founder alerts: usernames, postcards, telegrams, every report, private stamps (COMMITTED, not pushed)
+
+- Founder: "i want to get a notification when stamp was made in passport, when the app was downloaded, when a @handle
+  is created, when postcard or when telegram is sent" + "when a place suggestion was reported, when any report is
+  selected/submitted".
+- New (worker only, gbActivityBell): 🆔 "Member #N is now @handle" / "changed @a to @b" (a minor: "A member under 18
+  picked a username", no number, no name); 💌 "Member #N sent a postcard / a group postcard to K people", "…by email",
+  "posted a postcard on the <City> City Board"; ⚡ "Member #N sent / replied with a telegram to K people", "…by email";
+  "made a postcard/telegram to send by text or share". Never a message's words, photo, place or recipients. New tag
+  'mail' (own daily cap 300, ntfy tag envelope).
+- Reports: a place suggestion now rings on EVERY report (was first + hidden only); a Things-to-Do guestbook note rings
+  on every report (was an email at 3 only) — place + count, never the note or a free-text reason. Safety reports
+  (/social/report) already rang every time.
+- Stamps: an Only-me stamp now rings "Member #N stamped a place kept private (Only me)" — no place named.
+- Gates: worker check ✅.
+- **Activate:** push (worker only).
+

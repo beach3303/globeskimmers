@@ -880,7 +880,7 @@ async function handleRestaurantSearch(request, env, ctx) {
 // secret: never write it into this (public) repo. NTFY_TOKEN, when set, is an
 // ntfy.sh access token for a reserved topic that denies anonymous access; the
 // alert then carries it, and knowing the topic name is no longer enough.
-const BELL_CAPS = { urgent: 50, report: 200, ops: 20, new: 100, bell: 400 };
+const BELL_CAPS = { urgent: 50, report: 200, ops: 20, new: 100, bell: 400, mail: 300 };
 const BELL_PER_REPORTER_MAX = 10;
 const BELL_URGENT_PER_REPORTER_MAX = 3;
 const BELL_PAUSED = {
@@ -889,6 +889,7 @@ const BELL_PAUSED = {
   ops: 'Clean-up alerts paused for today after 20.',
   new: 'New download and new member alerts paused for today after 100.',
   bell: 'Stamp alerts paused for today after 400.',
+  mail: 'Postcard and telegram alerts paused for today after 300.',
 };
 async function founderAlert(env, text, tag = 'bell', opts = {}) {
   try {
@@ -910,6 +911,18 @@ async function founderAlert(env, text, tag = 'bell', opts = {}) {
     await gbBellSend(env, text, tag, opts);
   } catch { /* the bell never breaks the app */ }
 }
+// The founder's activity bell for usernames and mail (founder, 2026-10-26: "i want to get a notification when a
+// @handle is created, when postcard or when telegram is sent"). Who (a member number — "You" for an admin), and what
+// kind and how many; never a message's words, photo or place, nor who it went to: mail stays between its sender and
+// its recipients. A tap opens the member in Admin. line(who) → the alert's text.
+async function gbActivityBell(env, user, tag, line) {
+  try {
+    const mine = ADMIN_EMAILS_WORKER.includes(String(user?.email || '').trim().toLowerCase());
+    const n = mine ? null : await gbMemberNumber(env, user.id);
+    await founderAlert(env, line(mine ? 'You' : n ? `Member #${n}` : 'A member'), tag, n ? { click: gbMemberLink(n) } : {});
+  } catch { /* the bell never breaks the app */ }
+}
+const gbPeople = (k) => `${k} ${k === 1 ? 'person' : 'people'}`;
 // The transport: ntfy and/or Twilio, whichever are configured. Each send gets one retry (after
 // a network error, a 5xx or a 429), and one that still fails is recorded as 'bell_failed' in
 // the events DB: the transport, the alert's kind and the status, never the text or the topic
@@ -925,7 +938,7 @@ async function gbBellSend(env, text, tag, opts = {}) {
         // Every alert is high priority (4: time-sensitive on an iPhone, so it shows through
         // a Focus; stamp alerts too since 2026-10-14, when one at 3 went unseen); 'urgent'
         // (a child-safety report, 24h triage) is 5. The tag tells them apart.
-        Title: 'GlobeSkimmers', Tags: tag === 'new' ? 'tada' : tag === 'urgent' ? 'rotating_light' : tag === 'report' ? 'triangular_flag_on_post' : tag === 'ops' ? 'warning' : 'round_pushpin', Priority: tag === 'urgent' ? '5' : '4',
+        Title: 'GlobeSkimmers', Tags: tag === 'new' ? 'tada' : tag === 'urgent' ? 'rotating_light' : tag === 'report' ? 'triangular_flag_on_post' : tag === 'ops' ? 'warning' : tag === 'mail' ? 'envelope' : 'round_pushpin', Priority: tag === 'urgent' ? '5' : '4',
         ...(click ? { Click: click } : {}),
         ...(env.NTFY_TOKEN ? { Authorization: `Bearer ${env.NTFY_TOKEN}` } : {}),
       },
@@ -14935,6 +14948,15 @@ async function handlePassportStamp(request, env, ctx) {
     // Who stamped (founder, 2026-10-13): a member number, never a name, and a
     // tap opens that member in Admin; an admin's own stamp reads "You stamped".
     const alertable = stamperSp !== undefined && !['teen', 'blocked', 'confirm'].includes(stamperSp?.social_tier);
+    // An Only-me stamp rings too (founder, 2026-10-26: "a notification when stamp was made in passport") — but
+    // never says where: it stays private, and a sensitive place starts that way.
+    if (ctx && result.created && row.hidden && alertable) {
+      const mineP = ADMIN_EMAILS_WORKER.includes(String(user.email || '').trim().toLowerCase());
+      ctx.waitUntil((async () => {
+        const n = mineP ? null : await gbMemberNumber(env, user.id);
+        await founderAlert(env, `📍 ${mineP ? 'You' : n ? `Member #${n}` : 'A member'} stamped a place kept private (Only me)`, 'bell', n ? { click: gbMemberLink(n) } : {});
+      })().catch(() => {}));
+    }
     if (ctx && result.created && !row.hidden && alertable) {
       const where = [row.city, row.country].filter(Boolean).join(', ');
       const what = `${row.name}${where ? ` · ${where}` : ''} — ${kind} stamp${result.verified === 'gps' ? ' ✓' : ''}${result.verified === 'reported' ? ' (reported: "I’m here, but the app is saying I’m not")' : ''}${direction ? ` (${kind === 'airport' || mode === 'air' ? direction : direction === 'departure' ? 'exit' : 'entry'})` : ''}`;
@@ -16725,8 +16747,10 @@ async function handlePlaceReport(request, env, ctx) {
         const up = await env.DB.prepare("UPDATE ps_places SET status = 'held', updated_at = ? WHERE id = ? AND status = 'open'").bind(now, id).run();
         hidden = Number(up?.meta?.changes) > 0;
       }
-      if (ctx && (n === 1 || hidden)) {
-        ctx.waitUntil(founderAlert(env, `🚩 A place suggestion was reported${hidden ? ` ${n} times — hidden until you decide` : ''}: "${p.name}" (${reason}). Admin → Place suggestions → Reported.`, 'report', { by: user.id }));
+      // Every report rings (founder, 2026-10-26: "when any report is selected/submitted"), within one reporter's
+      // daily allowance (founderAlert's `by`).
+      if (ctx) {
+        ctx.waitUntil(founderAlert(env, `🚩 A place suggestion was reported${hidden ? ` ${n} times — hidden until you decide` : n > 1 ? ` (${n} open reports)` : ''}: "${p.name}" (${reason}). Admin → Place suggestions → Reported.`, 'report', { by: user.id }));
       }
       if (ctx) ctx.waitUntil(gbLogEvent(env, 'place_report', { place_id: id, reason, n, hidden }));
     }
@@ -18979,6 +19003,7 @@ async function handleLinkCreate(request, env, ctx) {
     const url = `https://globeskimmers.io/m/${code}`;
     const text = `${handle ? `${first} (@${handle})` : first} sent you a ${kind} on GlobeSkimmers ✈️ Open it here: ${url}`;
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'link_create', { kind }));
+    if (ctx) ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => `${kind === 'telegram' ? '⚡' : '💌'} ${who} made a ${kind} to send by text or share`));
     return jsonResponse({ ok: true, code, url, text });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -19312,6 +19337,7 @@ async function handlePostcardSend(request, env, ctx) {
     }
     if (direct && !deliver.length) {
       if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: false, waiting: true, emailed, to: waitingEmails.length }));
+      if (ctx) ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => `💌 ${who} sent a postcard to ${gbPeople(waitingEmails.length)} by email`));
       return jsonResponse({ ok: true, waiting: true, emailed });
     }
 
@@ -19346,6 +19372,13 @@ async function handlePostcardSend(request, env, ctx) {
           ? { title: `${n} new postcards`, body: `${senderName} and others sent you postcards`, route: '/Postcards' }
           : { title: `${senderName} sent you ${r.group_id ? 'a group postcard' : 'a postcard'}${place ? ` from ${place}` : ''}`, body: 'Open it in your Mailbox', route: r.id ? `/Postcards?pc=${r.id}` : '/Postcards' })));
       }
+    }
+    if (ctx) {
+      // A City Board card is a public post, so its board is named; a card to people names no one.
+      const boardCity = toCity ? String(toCity).split('|')[0].replace(/\b\w/g, (c) => c.toUpperCase()) : null;
+      const k = direct ? deliver.length + waitingEmails.length : 0;
+      ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => (boardCity ? `💌 ${who} posted a postcard on the ${boardCity} City Board`
+        : `💌 ${who} sent ${groupId ? 'a group postcard' : 'a postcard'} to ${gbPeople(k)}`)));
     }
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct, city: !!toCity, has_dish: !!cardMeta?.dish, anon: anonLabel || undefined, to: direct ? deliver.length + waitingEmails.length : undefined, group: !!groupId || undefined }));
     // A new board card shows in the City Boards list at once, not after its five minutes.
@@ -21501,6 +21534,7 @@ async function handleTelegramSend(request, env, ctx) {
     if (waitingEmails.length && !waited && !deliver.length) return jsonResponse({ error: 'Telegrams to email addresses open in a few minutes — try again shortly' }, 503);
     if (!deliver.length) {
       if (ctx && waited) ctx.waitUntil(gbLogEvent(env, 'telegram_send', { reply: false, words, to: waited, waiting: true }));
+      if (ctx && waited) ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => `⚡ ${who} sent a telegram to ${gbPeople(waited)} by email`));
       return jsonResponse({ ok: true, count: targets.length - notReady.length + waited, not_ready: notReadyHandles });
     }
 
@@ -21519,6 +21553,7 @@ async function handleTelegramSend(request, env, ctx) {
           route: `/Mailbox?tg=${r.id}`, collapse: `tg-${r.id}`,
         }, { each: true }));
       }
+      ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => `⚡ ${who} ${replyTo ? 'replied with' : 'sent'} ${groupId ? 'a group telegram' : 'a telegram'} to ${gbPeople(deliver.length + waited)}`));
       ctx.waitUntil(gbLogEvent(env, 'telegram_send', { reply: !!replyTo, words, to: deliver.length + waited, group: !!groupId || undefined, reply_all: (replyTo && group) || undefined, waiting: waited || undefined }));
     }
     return jsonResponse({ ok: true, id: made?.[0]?.id || null, count: targets.length - notReady.length + waited, not_ready: notReadyHandles });
@@ -22358,6 +22393,11 @@ async function handleSocialHandle(request, env, ctx) {
       await gbRest(env, `held_handles?handle=eq.${encodeURIComponent(want)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ claimed_at: new Date().toISOString(), claimed_by: user.id }) });
     }
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_handle_set', held && !held.claimed_at ? { held: 1 } : {}));
+    // A username is public by design, so it is named — except a minor's (founder's rule for every alert: a 13–17
+    // member is never named or numbered to the bell).
+    if (ctx) ctx.waitUntil(sp.social_tier === 'teen' || gbNeedsConfirm(sp)
+      ? founderAlert(env, `🆔 A member under 18 ${mine?.handle ? 'changed their username' : 'picked a username'}`, 'new')
+      : gbActivityBell(env, user, 'new', (who) => (mine?.handle ? `🆔 ${who} changed @${mine.handle} to @${want}` : `🆔 ${who} is now @${want}${held && !held.claimed_at ? ' (a held name)' : ''}`)));
     return jsonResponse({ handle: want, ...(held && !held.claimed_at ? { held_claim: true, held_name: held.display_name || null } : {}) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -27792,6 +27832,9 @@ async function handleGuestbookReport(request, env, ctx) {
       }
       const q = await gbRest(env, `guestbook_entries?id=eq.${id}&select=entity_name,body,hidden,flag_count`);
       const e = q.ok ? (await q.json())[0] : null;
+      // Every report rings (founder, 2026-10-26) — the place and the count; never the note's words nor the
+      // reporter's free-text reason (the alert topic is only as private as its name).
+      if (e && ctx) ctx.waitUntil(founderAlert(env, `🚩 A guestbook note was reported${e.hidden && e.flag_count >= 3 ? ` ${e.flag_count} times — hidden until you look` : e.flag_count > 1 ? ` (${e.flag_count} reports)` : ''}: ${e.entity_name || 'a place'}. Admin → Guestbook review.`, 'report', { by: user.id }));
       if (e && e.hidden && e.flag_count === 3 && ctx) ctx.waitUntil(gbNotifyFounder(env, `Guestbook note hidden after 3 reports — ${e.entity_name || 'a place'}`,
         `Three travelers reported a note on ${e.entity_name || 'a place'}, so it is hidden until you look (Admin Portal → Guestbook review).\n\n"${e.body || '(doodle)'}"`));
     }
