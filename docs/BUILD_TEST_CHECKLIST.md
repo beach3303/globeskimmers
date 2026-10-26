@@ -3234,7 +3234,7 @@ arrivals on Arrivals), Add friends + Follow on mail from someone new, Events & f
 their name, no numbers card above the passport, the update card above the tabs + the rare update sheet.
 Main 962643f matches what phones run.
 
-## 2026-10-26 — Privacy made simple: the passport is the ceiling (COMMITTED on stamping-v2, not pushed)
+## 2026-10-26 — Privacy made simple: the passport is the ceiling (PUSHED — migration 60d8f6c applied, then main 89a0d29; worker ✅; OTA needed)
 
 - Founder's answers to the privacy plan (https://claude.ai/artifact/UCfN3PpPuWSsx4h5EJBVsn): Friends and Followers; the
   passport is the ceiling; four levels Only me · Friends · Followers · Everyone; today's private passports → Friends;
@@ -3263,4 +3263,12 @@ Main 962643f matches what phones run.
   sheet + opening confirm, Settings → Privacy, album chips + album sheet, stamp sheet greyed above Friends.
 - **Activate:** push the migration commit FIRST and wait ~30 s for it to apply (the worker reads photos_tier); then push
   the rest (worker deploys); then `npm run ota`.
+- **Pushed 2026-10-26:** the migration alone first (60d8f6c, applied ✅; the new album column answers 401 to the anon key
+  while a made-up column answers 400, so it exists), then main 89a0d29 (worker deploy ✅). Live, read-only, as the demo
+  account: /passport/share → audience 'inner'; /passport/list → booklet.audience + photos_tier on stamps; privacy
+  summary → audience + counts; /passport/album/privacy → 401 signed out; /passport/public unknown slug → private.
+- City Boards read empty after the deploy. KV `photoboards:v2` was re-cached with empty buckets, which happens only
+  after the photos_tier-filtered stamp query returns rows — so the filter works, and the photos drop at the owner
+  check (pcBoardOwners: passport public, adult, albums open). The board photos seen 10-25 (Peach Springs, Liberty,
+  Grand Canyon Village, Stone Mountain, Atlanta) belong to passports that are no longer 🌍 Everyone.
 
