@@ -1007,8 +1007,8 @@ class PassportBoundary extends React.Component {
   }
 }
 
-// embedded (2026-10-25): inside Home's Virtual Passport tab — no Back button, and the closed cover
-// opens on a tap (a swipe there changes Home's tabs).
+// embedded (2026-10-25): inside Home's Virtual Passport tab — no Back button. A swipe inside the book is
+// the book's (2026-10-26); outside it, Home's tabs change.
 export default function PassportPage({ embedded = false } = {}) { return <PassportBoundary><PassportInner embedded={embedded} /></PassportBoundary>; }
 
 function PassportInner({ embedded = false }) {
@@ -1620,7 +1620,6 @@ function PassportInner({ embedded = false }) {
               stamps={bookStamps}
               showTiers={!readOnly && !preview}
               visiting={readOnly}
-              swipeToOpen={!embedded}
               holder={holder}
               homeCountry={readOnly ? null : (profile?.home_country || null)}
               countries={statsView.countries || 0}

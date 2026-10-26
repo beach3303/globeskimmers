@@ -1004,8 +1004,9 @@ export default function PassportBook({
       onKeyDown={onKey}
     >
       {/* Book stage */}
-      {/* data-swipe-own: an open book keeps its swipes (pages turn) — Home's tabs don't move under it. */}
-      <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} data-swipe-own={open ? "" : undefined} style={{ perspective: 2000, width: coverW, height: coverH, position: "relative" }}>
+      {/* data-swipe-own (founder, 2026-10-26): a swipe inside the book's edges is the book's — the cover
+          opens, pages turn — open or closed; outside the book, Home's tabs change. */}
+      <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} data-swipe-own="" style={{ perspective: 2000, width: coverW, height: coverH, position: "relative" }}>
         {/* contact shadow */}
         <div aria-hidden style={{ position: "absolute", left: "8%", right: "8%", bottom: -10, height: 24, background: "radial-gradient(ellipse at center, rgba(0,0,0,.34), rgba(0,0,0,0) 70%)", filter: "blur(3px)", zIndex: 0 }} />
 
