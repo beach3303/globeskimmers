@@ -37,7 +37,7 @@ const WORDS = {
   },
   block: {
     title: (who) => `Block ${who}?`,
-    body: "You stop following each other, and they can’t open your page or send you postcards. You can unblock them from Your circle.",
+    body: "You stop following each other, and they can’t open your page or send you postcards. You can unblock them in Settings → Privacy.",
     action: "Block",
   },
 };

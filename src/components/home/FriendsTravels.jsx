@@ -80,7 +80,7 @@ export default function FriendsTravels({ wide = false }) {
       try { localStorage.setItem(DISMISS_KEY, "1"); } catch { /* fine */ }
     };
     return (
-      <HomeZone zone="circle" label="Your circle" wide={wide}>
+      <HomeZone zone="circle" label="Friends" wide={wide}>
         <div style={{ position: "relative" }}>
           <button
             type="button"
@@ -92,7 +92,7 @@ export default function FriendsTravels({ wide = false }) {
             <X size={18} strokeWidth={2} aria-hidden="true" />
           </button>
           <h3 className="font-serif m-0" style={{ paddingRight: 36, fontWeight: 400, fontSize: fs(22), lineHeight: 1.15, color: NEUTRAL.ink }}>
-            Travel is better with your <em style={{ color: BLUE }}>circle</em>
+            Travel is better with <em style={{ color: BLUE }}>friends</em>
           </h3>
           <p style={{ margin: "6px 0 0", fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}>
             Follow the ones you travel with, and their real stamps and postcards land here: where they went, and whether they were really there. Your feed is yours alone — nobody else can see it.
@@ -103,7 +103,7 @@ export default function FriendsTravels({ wide = false }) {
             className="inline-flex items-center rounded-full"
             style={{ marginTop: 12, minHeight: 44, gap: 8, padding: "0 18px", background: BLUE, border: 0, color: NEUTRAL.white, fontSize: fs(14), fontWeight: 600, cursor: "pointer" }}
           >
-            Start your circle
+            Add friends
             <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
           </button>
         </div>
@@ -112,10 +112,10 @@ export default function FriendsTravels({ wide = false }) {
   }
 
   return (
-    <HomeZone zone="circle" label="Your circle" wide={wide}>
+    <HomeZone zone="circle" label="Friends" wide={wide}>
       <div className="flex items-center justify-between" style={{ gap: 12, minHeight: 24 }}>
         <h3 className="font-serif m-0 min-w-0" style={{ fontWeight: 400, fontSize: fs(22), lineHeight: 1.1, color: NEUTRAL.ink }}>
-          Where your <em style={{ color: BLUE }}>circle</em> has been
+          Where your <em style={{ color: BLUE }}>friends</em> have been
         </h3>
         <button
           type="button"

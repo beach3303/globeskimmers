@@ -419,7 +419,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
         <div className="mt-2 rounded-xl p-3" style={{ background: IVORY_2, border: `1px solid ${RULE}` }}>
           {friends === null ? (
             <div className="flex items-center gap-2" style={{ color: INK2, fontSize: fs(12.5) }}>
-              <Loader2 size={14} className="animate-spin" /> Loading your circle…
+              <Loader2 size={14} className="animate-spin" /> Loading your friends…
             </div>
           ) : (<>
             {friends.length > 0 ? (
@@ -433,7 +433,7 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
                 ))}
               </div>
             ) : (
-              <p style={{ color: INK2, fontSize: fs(12.5), margin: 0 }}>No one in your circle has a @username yet — share an invite link instead.</p>
+              <p style={{ color: INK2, fontSize: fs(12.5), margin: 0 }}>None of your friends has a @username yet — share an invite link instead.</p>
             )}
             <button onClick={shareInvite} disabled={tagBusy} className="mt-2 w-full rounded-lg py-2"
               style={{ background: "#fff", color: INK2, border: `1px dashed ${RULE}`, fontSize: fs(12.5), fontWeight: 600 }}>

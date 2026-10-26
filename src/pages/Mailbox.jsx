@@ -71,7 +71,7 @@ function Masthead({ onPostcard = undefined, onTelegram = undefined, onFind = und
       <header className={COLUMN} style={{ paddingTop: 10, paddingBottom: 12 }}>
         <div style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".2em", lineHeight: 1.2, textTransform: "uppercase", color: NEUTRAL.stamp }}>Globeskimmers · Mailbox</div>
         <h1 style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(30), fontWeight: 400, lineHeight: 1.04, color: NEUTRAL.ink }}>
-          Mail from your <em style={{ fontStyle: "italic", color: BLUE }}>circle</em>
+          Mail from your <em style={{ fontStyle: "italic", color: BLUE }}>friends</em>
         </h1>
         {/* The seal (founder, 2026-10-15): a mailbox is private — one line says so. */}
         <p style={{ display: "flex", alignItems: "center", gap: 6, margin: "6px 0 0", fontSize: fs(12.5), fontWeight: 500, lineHeight: 1.4, color: BLUE }}>
@@ -210,7 +210,7 @@ function ClaimCard({ onClaimed, style = undefined }) {
     setSugs(error ? (suggestions || []) : []);
     if (error) { showToast(workerMessage(error, "That username didn’t work. Try another."), "error"); return; }
     setDraft("");
-    showToast(`You’re @${h} — your circle can find you now`, "success");
+    showToast(`You’re @${h} — friends can find you now`, "success");
     onClaimed(h);
   };
 
@@ -219,7 +219,7 @@ function ClaimCard({ onClaimed, style = undefined }) {
   return (
     <section aria-label="Claim your @username" style={{ padding: 16, background: NEUTRAL.cream, border: `1px solid ${NEUTRAL.creamRule}`, borderRadius: 16, ...style }}>
       <h2 style={{ margin: 0, fontSize: fs(14), fontWeight: 700, lineHeight: 1.3, color: NEUTRAL.ink }}>Claim your @username</h2>
-      <p style={{ margin: "2px 0 0", fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}>It’s how your circle finds you, follows you, and sends you postcards.</p>
+      <p style={{ margin: "2px 0 0", fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}>It’s how friends find you, follow you, and send you postcards.</p>
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <label style={field}>
           <span aria-hidden="true" style={{ fontWeight: 700, color: NEUTRAL.ink3 }}>@</span>
@@ -274,7 +274,7 @@ function CircleRow({ circle, style = undefined }) {
     <Link to={createPageUrl("Circle")}
       style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 56, boxSizing: "border-box", padding: "0 12px 0 16px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16, textDecoration: "none", ...style }}>
       <span style={{ flex: 1, minWidth: 0, fontSize: fs(15), fontWeight: 600, lineHeight: 1.3, color: NEUTRAL.ink }}>
-        Your circle{counts.youFollow ? <span style={{ fontFamily: MONO, fontSize: fs(11), fontWeight: 500, letterSpacing: ".06em", color: NEUTRAL.ink3 }}> · {counts.youFollow}</span> : null}
+        Friends & followers{counts.youFollow ? <span style={{ fontFamily: MONO, fontSize: fs(11), fontWeight: 500, letterSpacing: ".06em", color: NEUTRAL.ink3 }}> · {counts.youFollow}</span> : null}
       </span>
       <span aria-hidden="true" style={{ flex: "none", display: "flex", alignItems: "center" }}>
         {faces.map((p, i) => (
@@ -648,14 +648,14 @@ function MailboxBody() {
           </section>
         ) : null}
         {feed.error ? <div style={{ marginTop: requests.length || passportNews.length ? GAP : 0 }}>{failed}</div> : circleRows.length ? (
-          <section aria-label="Where your circle has been" style={{ marginTop: requests.length || passportNews.length ? GAP : 0 }}>
-            <h2 style={KICKER}>Where your circle has been · newest first</h2>
+          <section aria-label="Where your friends have been" style={{ marginTop: requests.length || passportNews.length ? GAP : 0 }}>
+            <h2 style={KICKER}>Where your friends have been · newest first</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
               {circleRows.map((r, i) => card(r, i, false))}
             </div>
           </section>
         ) : null}
-        {nothing && !feed.error ? empty(<>Nothing new, <em style={{ fontStyle: "italic", color: BLUE }}>for now</em></>, "Follow requests, news about your passport, and your circle’s new stamps land here.", <InviteButton style={{ marginTop: 16 }} />) : null}
+        {nothing && !feed.error ? empty(<>Nothing new, <em style={{ fontStyle: "italic", color: BLUE }}>for now</em></>, "Follow requests, news about your passport, and your friends’ new stamps land here.", <InviteButton style={{ marginTop: 16 }} />) : null}
         <CircleRow circle={circle} style={{ marginTop: 16 }} />
         <Link to={cityBoardsUrl()} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 52, marginTop: 8, padding: "0 12px 0 14px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 14, textDecoration: "none" }}>
           <Globe size={18} strokeWidth={1.8} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />

@@ -19724,7 +19724,7 @@ async function handleBlotterMark(request, env, ctx) {
       if (ctx && share?.user_id && share.user_id !== user.id) {
         const who = await ppHolder(env, user.id);
         const label = BL_PUSH_LABEL[kind] || String(kind).toUpperCase();
-        ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your circle', route: '/Passport' } : { title: `${who} stamped ${label} on your passport`, body: 'Open your passport to see where', route: '/Passport' })));
+        ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your friends', route: '/Passport' } : { title: `${who} stamped ${label} on your passport`, body: 'Open your passport to see where', route: '/Passport' })));
       }
       if (kind === 'wannago' && ctx) ctx.waitUntil(blAddHorizon(env, user.id, st || tgt.place || { city: tgt.pc?.city, name: tgt.pc?.city }));
     } else {
@@ -19798,7 +19798,7 @@ async function handleBlotterSign(request, env, ctx) {
       const oq = await gbRest(env, `social_profiles?user_id=eq.${share.user_id}&select=*`, {});
       const osp = (oq.ok ? await oq.json() : [])[0] || null;
       if (!(await blCanComment(env, osp, share.user_id, user.id))) {
-        return jsonResponse({ error: (osp?.comments_audience || 'inner') === 'off' ? 'Comments are switched off on this passport' : 'Only their inner circle can write here' }, 403);
+        return jsonResponse({ error: (osp?.comments_audience || 'inner') === 'off' ? 'Comments are switched off on this passport' : 'Only their friends can write here' }, 403);
       }
     }
 
@@ -19834,7 +19834,7 @@ async function handleBlotterSign(request, env, ctx) {
     // The knock (push, 2026-10-19): someone signed or doodled on my pages.
     if (ctx && share?.user_id && share.user_id !== user.id) {
       const who = await ppHolder(env, user.id);
-      ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your circle', route: '/Passport' } : { title: doodleKey && !text ? `${who} left a doodle on your passport` : `${who} signed your passport`, body: 'Open your passport to see it', route: '/Passport' })));
+      ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your friends', route: '/Passport' } : { title: doodleKey && !text ? `${who} left a doodle on your passport` : `${who} signed your passport`, body: 'Open your passport to see it', route: '/Passport' })));
     }
     const origin = new URL(request.url).origin;
     return jsonResponse({ entry: { id: row.id, target: row.target, body: row.body, doodle: row.doodle_key ? `${origin}/bl-doodle/e/${row.id}` : null, created_at: row.created_at } });
@@ -19859,7 +19859,7 @@ async function handleBlotterCosign(request, env, ctx) {
     if (user.id !== e0.author_user_id && await gbBlockedEither(env, user.id, e0.author_user_id)) return jsonResponse({ error: 'Not found' }, 404);
     if (b.op !== 'lift' && !String(e0.target || '').startsWith('pc:')) {
       const oq = await gbRest(env, `social_profiles?user_id=eq.${e0.owner_user_id}&select=*`, {});
-      if (!(await blCanComment(env, (oq.ok ? await oq.json() : [])[0] || null, e0.owner_user_id, user.id))) return jsonResponse({ error: 'Only their inner circle can write here' }, 403);
+      if (!(await blCanComment(env, (oq.ok ? await oq.json() : [])[0] || null, e0.owner_user_id, user.id))) return jsonResponse({ error: 'Only their friends can write here' }, 403);
     }
     if (b.op === 'lift') {
       await gbRest(env, `blotter_cosigns?entry_id=eq.${id}&user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
@@ -20669,8 +20669,8 @@ async function handleSocialFollow(request, env, ctx) {
       if (!muted && ctx) {
         const who = await ppHolder(env, user.id);
         ctx.waitUntil(pushNotify(env, target.user_id, 'follows', (n) => (status === 'pending'
-          ? (n > 1 ? { title: `${n} people asked to follow you`, body: 'Allow them in your circle', route: '/Circle?tab=followers' } : { title: `${who} asked to follow you`, body: 'Allow or not — it’s your circle', route: '/Circle?tab=followers' })
-          : (n > 1 ? { title: `${n} new followers`, body: 'See them in your circle', route: '/Circle?tab=followers' } : { title: `${who} followed you`, body: 'Their postcards can reach you now', route: '/Circle?tab=followers' }))));
+          ? (n > 1 ? { title: `${n} people asked to follow you`, body: 'Allow them under Friends & followers', route: '/Circle?tab=followers' } : { title: `${who} asked to follow you`, body: 'Allow or not — it’s up to you', route: '/Circle?tab=followers' })
+          : (n > 1 ? { title: `${n} new followers`, body: 'See them under Friends & followers', route: '/Circle?tab=followers' } : { title: `${who} followed you`, body: 'Their postcards can reach you now', route: '/Circle?tab=followers' }))));
       }
       if (ctx) ctx.waitUntil(gbLogEvent(env, 'social_follow', { status: muted ? 'muted' : status }));
       // With approval the default, 'pending' is the ordinary answer — so a muted follow

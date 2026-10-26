@@ -99,7 +99,7 @@ function UsernameStepRequired({ firstName, stepLabel, onDone, onSignOut }) {
           Pick your <em style={{ color: NEUTRAL.brandTeal }}>@username</em>
         </h1>
         <p style={{ margin: "10px 0 18px", fontSize: fs(15), lineHeight: 1.5, color: NEUTRAL.ink2 }}>
-          {`One more thing${firstName ? `, ${firstName}` : ""}: everyone on GlobeSkimmers has a @username — it’s how your circle finds you, follows you and sends you postcards. Pick yours and you’re all set.`}
+          {`One more thing${firstName ? `, ${firstName}` : ""}: everyone on GlobeSkimmers has a @username — it’s how friends find you, follow you and send you postcards. Pick yours and you’re all set.`}
         </p>
         <UsernameFields claim={claim} idPrefix="gs-finish" />
         <button type="button" onClick={submit} disabled={checking || !ready || busy}

@@ -66,9 +66,9 @@ function CircleBody({ owner, cloth, className, style }) {
   ];
 
   return (
-    <Folder stock="circle" size="profile" tab="Your circle" className={className} style={style}>
+    <Folder stock="circle" size="profile" tab="Friends & followers" className={className} style={style}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", columnGap: 8, minHeight: 28 }}>
-        {empty ? <Title pre="Your circle starts with " italic="one" /> : <Title pre="Your " italic="circle" />}
+        {empty ? <Title pre="Friends start with " italic="one" /> : <Title pre="Friends & " italic="followers" />}
         {ready && !empty ? (
           <button type="button" onClick={openCircle(null)}
             style={{ display: "inline-flex", alignItems: "center", gap: 2, minHeight: 44, margin: "-8px -6px -8px 0", padding: "0 6px", background: "transparent", border: 0, fontFamily: "inherit", fontSize: fs(13), fontWeight: 600, color: BLUE, cursor: "pointer" }}>
@@ -80,7 +80,7 @@ function CircleBody({ owner, cloth, className, style }) {
 
       {circle.status === "error" ? (
         <div style={{ marginTop: 12 }}>
-          <p style={{ margin: 0, fontSize: fs(14), lineHeight: 20 / 14, color: NEUTRAL.ink2 }}>Couldn’t load your circle.</p>
+          <p style={{ margin: 0, fontSize: fs(14), lineHeight: 20 / 14, color: NEUTRAL.ink2 }}>Couldn’t load your friends and followers.</p>
           <button type="button" onClick={() => circle.retry()}
             style={{ marginTop: 10, minHeight: 44, padding: "0 16px", borderRadius: 14, background: "transparent", border: `1px solid ${BLUE}`, fontFamily: "inherit", fontSize: fs(14), fontWeight: 600, color: BLUE, cursor: "pointer" }}>
             Try again
@@ -99,7 +99,7 @@ function CircleBody({ owner, cloth, className, style }) {
             style={{ flex: "none" }}
           />
           {!empty ? <CircleLegend rows={rows} interactive={ready} cloth={cloth} style={{ flex: "1 1 140px" }} /> : null}
-          {!ready ? <span className="sr-only" role="status">Loading your circle</span> : null}
+          {!ready ? <span className="sr-only" role="status">Loading your friends and followers</span> : null}
         </div>
       )}
 

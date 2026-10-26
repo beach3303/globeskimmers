@@ -82,10 +82,10 @@ function TheirCircle({ world, first, cloth, inner, style }) {
   ];
   const known = c.known_count || 0;
   return (
-    <Folder stock="circle" size="profile" tab={first ? `${first}’s circle` : "Their circle"} style={style}>
+    <Folder stock="circle" size="profile" tab={first ? `${first}’s friends` : "Their friends"} style={style}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", columnGap: 8, minHeight: 28 }}>
         <h3 style={{ margin: 0, fontFamily: SERIF, fontSize: fs(22), lineHeight: 28 / 22, fontWeight: 400, color: NEUTRAL.ink }}>
-          {first ? `${first}’s ` : "Their "}<em style={{ fontStyle: "italic", color: BLUE }}>circle</em>
+          {first ? `${first}’s ` : "Their "}<em style={{ fontStyle: "italic", color: BLUE }}>friends &amp; followers</em>
         </h3>
         {inner ? (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: MONO, fontSize: fs(10), lineHeight: 1.2, fontWeight: 500, letterSpacing: ".14em", color: BLUE }}>
@@ -100,7 +100,7 @@ function TheirCircle({ world, first, cloth, inner, style }) {
       </div>
       {known > 0 ? (
         <p style={{ margin: "12px 0 0", fontSize: fs(13), lineHeight: 16 / 13, color: NEUTRAL.ink2 }}>
-          {known} in your circle know {first || "them"}
+          {known === 1 ? "1 person you know knows" : `${known} people you know know`} {first || "them"}
         </p>
       ) : null}
     </Folder>

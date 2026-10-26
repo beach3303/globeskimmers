@@ -24,7 +24,7 @@ export default function UsernameStep({ onNext, onBack }) {
   );
 
   if (mine) {
-    return <OnboardingStepLayout icon={icon} title={`You’re @${mine}`} subtitle="That’s how your circle finds you, follows you and sends you postcards." onBack={onBack} footer={goOn} />;
+    return <OnboardingStepLayout icon={icon} title={`You’re @${mine}`} subtitle="That’s how friends find you, follow you and send you postcards." onBack={onBack} footer={goOn} />;
   }
   if (minor) {
     return <OnboardingStepLayout icon={icon} title="Usernames open at 18" subtitle="Until then, your passport stays yours and private." onBack={onBack} footer={goOn} />;
@@ -34,7 +34,7 @@ export default function UsernameStep({ onNext, onBack }) {
     <OnboardingStepLayout
       icon={icon}
       title="Pick your @username"
-      subtitle="It’s how your circle finds you, follows you and sends you postcards."
+      subtitle="It’s how friends find you, follow you and send you postcards."
       onBack={onBack}
       footer={
         <Button onClick={submit} disabled={!ready || busy || checking} className={continueCls}>

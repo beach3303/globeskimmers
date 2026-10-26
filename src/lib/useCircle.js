@@ -45,7 +45,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { blockUser, socialFollow, unblockUser } from '@/lib/passport';
 
 const TTL_MS = 30 * 1000;
-const FAILED = 'Couldn’t load your circle';
+const FAILED = 'Couldn’t load your friends and followers';
 
 // ── The shared read (one signed-in user at a time) ─────────────────────
 

@@ -56,7 +56,7 @@ export function inviteText(handle, url) {
  * }} props
  */
 export default function InviteButton({
-  label = "Invite someone to your circle",
+  label = "Invite a friend",
   color = undefined,
   size = "md",
   variant = "outline",

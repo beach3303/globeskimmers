@@ -71,7 +71,7 @@ export default function FollowByHandle({
   cloth = undefined,
   line = undefined,
   onFollowed = undefined,
-  label = 'Add someone to your circle',
+  label = 'Follow someone',
   placeholder = 'follow a friend by @username',
   id = undefined,
   className = undefined,

@@ -20,7 +20,7 @@ export default function FollowSender({ name, onFollow, style = undefined }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 6px 6px 12px", borderRadius: 12, background: NEUTRAL.airmail, border: `1px solid ${NEUTRAL.airmailHair}`, ...style }}>
       <span style={{ flex: 1, minWidth: 0, fontSize: fs(12.5), lineHeight: 1.35, color: NEUTRAL.ink2 }}>
-        {state === "Following" || state === "Requested" ? (state === "Following" ? `You follow ${name} now.` : `You asked to follow ${name}.`) : `${name} isn’t in your circle yet.`}
+        {state === "Following" || state === "Requested" ? (state === "Following" ? `You follow ${name} now.` : `You asked to follow ${name}.`) : `You don’t follow ${name} yet.`}
       </span>
       {state === "Following" || state === "Requested" ? (
         <span style={{ flex: "none", minHeight: 34, display: "inline-flex", alignItems: "center", padding: "0 12px", borderRadius: 999, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.ink2, fontSize: fs(12.5), fontWeight: 600 }}>{state}</span>

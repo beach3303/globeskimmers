@@ -405,7 +405,7 @@ export function orbitSummary({ mode = 'own', owner = undefined, totals = undefin
   const loading = inner === null && following === null && followers === null;
   if (mode === 'visit') {
     const who = firstOf(owner) || (handleOf(owner) ? `@${handleOf(owner)}` : 'This traveler');
-    if (loading) return `${who}’s circle, loading`;
+    if (loading) return `${who}’s friends and followers, loading`;
     const shown = (ring) => (layout ? layout.items.filter((it) => it.kind === 'face' && it.ring === ring).map((it) => (it.me ? 'you' : firstOf(it.person) || personName(it.person))) : []);
     const including = (ring) => {
       const ns = shown(ring);
@@ -415,16 +415,16 @@ export function orbitSummary({ mode = 'own', owner = undefined, totals = undefin
     if (inner) parts.push(`${inner} ${inner === 1 ? 'friend' : 'friends'} of ${who}${including(0)}`);
     if (following) parts.push(`${who} follows ${following}${including(1)}`);
     if (followers) parts.push(`${followers} follow ${who}${including(2)}`);
-    return parts.length ? `${who}’s circle drawn as orbits: ${parts.join('; ')}` : `${who}’s circle drawn as orbits: no one yet`;
+    return parts.length ? `${who}’s friends and followers, drawn as orbits: ${parts.join('; ')}` : `${who}’s friends and followers, drawn as orbits: no one yet`;
   }
-  if (loading) return 'Your circle, loading';
+  if (loading) return 'Your friends and followers, loading';
   const req = Array.isArray(G.requests) ? G.requests.length : 0;
   const parts = [];
   if (inner) parts.push(`${inner} ${inner === 1 ? 'friend' : 'friends'}`);
   if (following) parts.push(`${following} you follow`);
   if (followers) parts.push(`${followers} follow you`);
   if (req) parts.push(req === 1 ? 'one request waiting' : `${req} requests waiting`);
-  return parts.length ? `Your circle drawn as orbits: ${joinAnd(parts)}` : 'Your circle drawn as orbits: no one yet';
+  return parts.length ? `Your friends and followers, drawn as orbits: ${joinAnd(parts)}` : 'Your friends and followers, drawn as orbits: no one yet';
 }
 
 // ── The orbit ────────────────────────────────────────────────────────────

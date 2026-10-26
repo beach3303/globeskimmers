@@ -48,7 +48,7 @@ function Cover({ cloth, onBack }) {
   return (
     <>
       <div aria-hidden="true" style={{ height: 12 }} />
-      <CoverBand height={112} cloth={cloth} kicker="Your circle" title="Your *circle*" leading="back" onLeading={onBack} contentMaxWidth={672} />
+      <CoverBand height={112} cloth={cloth} kicker="Who you travel with" title="Friends & *followers*" leading="back" onLeading={onBack} contentMaxWidth={672} />
     </>
   );
 }
@@ -183,7 +183,7 @@ function CircleScreen({ mine, onBack }) {
 
         {circle.status === "error" ? (
           <div style={{ marginTop: 16, padding: 16, background: NEUTRAL.white, border: `1px solid ${mine.line}`, borderRadius: 16 }}>
-            <p style={{ margin: 0, fontSize: fs(14), lineHeight: 1.4, color: NEUTRAL.ink2 }}>Couldn’t load your circle.</p>
+            <p style={{ margin: 0, fontSize: fs(14), lineHeight: 1.4, color: NEUTRAL.ink2 }}>Couldn’t load your friends and followers.</p>
             <button type="button" onClick={() => circle.retry()}
               style={{ marginTop: 10, minHeight: 44, padding: "0 16px", borderRadius: 14, background: "transparent", border: `1px solid ${mine.cloth}`, font: "inherit", fontSize: fs(14), fontWeight: 600, color: mine.cloth, cursor: "pointer" }}>
               Try again
@@ -191,7 +191,7 @@ function CircleScreen({ mine, onBack }) {
           </div>
         ) : (
           <>
-            <div role="tablist" aria-label="Your circle" onKeyDown={onTabKey}
+            <div role="tablist" aria-label="Friends and followers" onKeyDown={onTabKey}
               style={{ display: "flex", marginTop: 16, minHeight: 44, background: NEUTRAL.white, border: `1px solid ${mine.cloth}`, borderRadius: 14, overflow: "hidden" }}>
               {TABS.map((t) => {
                 const on = t.key === tab;
@@ -207,11 +207,11 @@ function CircleScreen({ mine, onBack }) {
               })}
             </div>
 
-            <label htmlFor={`${ids}-find`} className="sr-only">Find someone in your circle</label>
+            <label htmlFor={`${ids}-find`} className="sr-only">Find a friend or follower</label>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, minHeight: 48, padding: "0 14px", background: NEUTRAL.white, border: `1px solid ${fieldLine}`, borderRadius: 14 }}>
               <Search size={18} strokeWidth={2} color={mine.cloth} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
               <input id={`${ids}-find`} type="text" inputMode="search" value={q} onChange={(e) => setQ(e.target.value.slice(0, 40))}
-                placeholder="Find someone in your circle" autoComplete="off" autoCapitalize="none" spellCheck={false}
+                placeholder="Find a friend or follower" autoComplete="off" autoCapitalize="none" spellCheck={false}
                 style={{ flex: 1, minWidth: 0, height: 44, padding: 0, border: 0, background: "transparent", outline: "none", font: "inherit", fontSize: fs(14), color: NEUTRAL.ink }} />
             </div>
 
@@ -228,7 +228,7 @@ function CircleScreen({ mine, onBack }) {
                 <div aria-hidden="true" className="animate-pulse motion-reduce:animate-none"
                   style={{ height: 220, borderRadius: 16, background: NEUTRAL.white, border: `1px solid ${mine.line}` }} />
               )}
-              {!ready ? <span className="sr-only" role="status">Loading your circle</span> : null}
+              {!ready ? <span className="sr-only" role="status">Loading your friends and followers</span> : null}
             </div>
           </>
         )}

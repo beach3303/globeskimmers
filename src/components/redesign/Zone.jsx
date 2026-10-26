@@ -167,7 +167,7 @@ export function useZone() {
 // The tab and kicker words when the caller gives none.
 const ZONE_LABEL = {
   passport: 'My Virtual Passport',
-  circle: 'Your circle',
+  circle: 'Friends & followers',
   services: 'Nearby services',
   stamps: 'Stamps near you',
   shelf: 'Stamp shelf',

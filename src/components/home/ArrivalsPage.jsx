@@ -64,7 +64,7 @@ export default function ArrivalsPage({ wide = false }) {
     if (added[p.user_id]) return;
     setAdded((a) => ({ ...a, [p.user_id]: "busy" }));
     const res = await circle.follow({ user_id: p.user_id, handle: p.handle });
-    if (!res.ok) { setAdded((a) => ({ ...a, [p.user_id]: undefined })); showToast(workerMessage(res.error, "Couldn’t add them. Try again."), "error"); return; }
+    if (!res.ok) { setAdded((a) => ({ ...a, [p.user_id]: undefined })); showToast(workerMessage(res.error, "Couldn’t follow them. Try again."), "error"); return; }
     const pending = res.data?.status === "pending";
     setAdded((a) => ({ ...a, [p.user_id]: pending ? "Requested" : "Following" }));
     askForAlerts();
@@ -74,7 +74,7 @@ export default function ArrivalsPage({ wide = false }) {
   return (
     <div className="max-w-md md:max-w-2xl mx-auto" style={{ padding: "16px 16px 0" }}>
       <h2 style={{ margin: 0, fontFamily: SERIF, fontSize: fs(28), fontWeight: 400, lineHeight: 1.05, color: NEUTRAL.ink }}>
-        Arrivals <em style={{ fontStyle: "italic", color: BLUE }}>from your circle</em>
+        Arrivals <em style={{ fontStyle: "italic", color: BLUE }}>from your friends</em>
       </h2>
       <p style={{ margin: "4px 0 0", fontSize: fs(13), lineHeight: 1.45, color: NEUTRAL.ink2 }}>Where your people have been, and who you travel with.</p>
       {held ? <div style={{ marginTop: 16 }}><TeenHoldNote /></div> : (
@@ -105,8 +105,8 @@ export default function ArrivalsPage({ wide = false }) {
                         {state === "Following" || state === "Requested" ? (
                           <span style={{ flex: "none", minHeight: 34, display: "inline-flex", alignItems: "center", padding: "0 12px", borderRadius: 999, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.ink2, fontSize: fs(12.5), fontWeight: 600 }}>{state}</span>
                         ) : (
-                          <button type="button" onClick={() => addToCircle(p)} aria-busy={state === "busy" || undefined} aria-label={`Add @${p.handle} to your circle`}
-                            style={{ flex: "none", minHeight: 34, padding: "0 12px", borderRadius: 999, border: 0, background: BLUE, color: NEUTRAL.white, font: "inherit", fontSize: fs(12.5), fontWeight: 650, cursor: "pointer" }}>{state === "busy" ? "…" : "Add to circle"}</button>
+                          <button type="button" onClick={() => addToCircle(p)} aria-busy={state === "busy" || undefined} aria-label={`Follow @${p.handle}`}
+                            style={{ flex: "none", minHeight: 34, padding: "0 12px", borderRadius: 999, border: 0, background: BLUE, color: NEUTRAL.white, font: "inherit", fontSize: fs(12.5), fontWeight: 650, cursor: "pointer" }}>{state === "busy" ? "…" : "Follow"}</button>
                         )}
                       </li>
                     );
