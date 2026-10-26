@@ -57,7 +57,7 @@ p { font-size: 15.5px; line-height: 1.5; color: var(--ink-3); margin: 0 0 8px; }
   var src = m ? m[1] : "";
   // The medium Play Console files the install under: print for the card, social for the
   // platforms, referral for everything else (2026-10-19).
-  var medium = src === "card" ? "print" : /^(fb|ig|tiktok|yt|pinterest|threads)/.test(src) ? "social" : "referral";
+  var medium = src === "card" ? "print" : /^(fb|ig|tiktok|yt|pinterest|threads|linkedin)|^(x|li)([_-]|$)/.test(src) ? "social" : "referral";
   // App Store campaign link: paste the provider token (pt) from App Store
   // Connect → App Analytics → Campaigns to see downloads per source.
   var APPLE_PT = "121139771";   // App Store Connect campaign provider token (2026-10-18)
