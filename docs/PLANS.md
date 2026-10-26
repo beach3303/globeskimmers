@@ -1202,6 +1202,13 @@ app, then `npm run ota`.
 
 ## Dated reminders
 
+- **2026-10-26 morning** — ntfy token (founder: "we can do ntfy tomorrow in the morning"). Founder alerts mostly fail
+  (10-24: 13 of ~21 refused — 7× 429, 6× 522; 10-25: 8 of ~11) because they go out anonymously from Cloudflare's shared
+  addresses: NTFY_TOPIC is set, **NTFY_TOKEN is on no worker** (checked 10-25). Steps: ntfy.sh/app → Account → Access
+  tokens → create (starts tk_) → `npx wrangler secret put NTFY_TOKEN`. Then Claude confirms the name in
+  `npx wrangler secret list` and watches D1 `bell_failed`. Also ask: the API worker has a secret NAMED
+  `4faab4c13339b216d82d032b37fbc09c` (a value pasted as a name?) — delete only if the founder confirms.
+
 - **~2027-01-15** — alert previews: re-decide postcard (then telegram) previews (decided 2026-10-19: none for now).
 
 - ~2026-12-09: regenerate the Sign in with Apple client secret (M3, 6-month limit).
