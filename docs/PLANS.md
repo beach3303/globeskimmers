@@ -982,7 +982,7 @@ Proposed build order: group default → friend's cover → Sent → Mailbox tabs
    a Settings switch, adults only (never minors), never blocked people. **Founder: remove the feed for everybody
    once there are many members.**
 
-## Privacy made simple — founder, 2026-10-26 (PLAN, waiting on answers)
+## Privacy made simple — founder, 2026-10-26 (ANSWERED + BUILT, commits on stamping-v2, not pushed)
 
 After the 10-24 postcard leak (fixed 6bcbfd9) the founder found privacy confusing: a "private" passport still showed
 stamps marked "Everyone"; the stamp sheet promised City Board photos a private passport never sends; three names for
@@ -995,6 +995,17 @@ the ceiling (stamps and albums the same or more private); Settings → Privacy h
 passport page, each stamp, each album, right after stamping; postcards and telegrams always private (no setting).
 "Friends" is a generic word — fine to use; avoid Instagram's exact "Close Friends".
 Done already (2026-10-26, 80b3a64): in Home's Virtual Passport tab a swipe inside the book is the book's.
+**Founder's answers (2026-10-26):** 1 Friends and Followers · 2 yes, the passport is the ceiling · 3 four levels: Only
+me · Friends · Followers · Everyone · 4 today's private passports become 🤝 Friends · 5 new members start at 🤝 Friends ·
+6 switches in Settings, on the passport page, each stamp, each album, after stamping · 7 opening asks once, closing
+works at once. Clarified: a follower who isn't a friend, on a Friends passport, sees only the card (name, photo,
+@username) and can still send postcards and telegrams — no stamps, photos, map or luggage.
+**Built:** worker ceiling (passport_shares.visibility = the audience, is_public kept = Everyone; every stamp/photo read
+for others capped; albums via passport_stamps.photos_tier 'inner'|'me', off City Boards); app: one AudienceSheet,
+chip on the passport page, greyed options + "Change your passport ›" on each stamp, "Its photos" per stamp, a chip
+under every album envelope, "Who can see it · Change" after stamping, Settings → Privacy regrouped, "Inner circle" →
+"Friends" everywhere visible. Push order: the migration first (20261026090000_privacy_ceiling.sql), then the worker +
+app, then `npm run ota`.
 
 ## Website (globeskimmers.io)
 

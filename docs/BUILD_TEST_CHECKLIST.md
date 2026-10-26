@@ -3233,3 +3233,34 @@ group messages + Reply to all, Sent (+ Delete / Delete all), Mailbox tabs, the s
 arrivals on Arrivals), Add friends + Follow on mail from someone new, Events & festivals, a friend's passport cover with
 their name, no numbers card above the passport, the update card above the tabs + the rare update sheet.
 Main 962643f matches what phones run.
+
+## 2026-10-26 — Privacy made simple: the passport is the ceiling (COMMITTED on stamping-v2, not pushed)
+
+- Founder's answers to the privacy plan (https://claude.ai/artifact/UCfN3PpPuWSsx4h5EJBVsn): Friends and Followers; the
+  passport is the ceiling; four levels Only me · Friends · Followers · Everyone; today's private passports → Friends;
+  new members start at Friends; switches in Settings, passport page, each stamp, each album, after stamping; opening
+  asks once, closing works at once.
+- **Migration 20261026090000_privacy_ceiling.sql:** passport_shares.visibility normalized to 'public' (is_public) or
+  'inner' (everything else that wasn't 'me'/'followers'), default 'inner'; passport_stamps.photos_tier (null | 'inner' |
+  'me', checked).
+- **Worker:** ppAud / ppUnder / ppPhotosVisible. Capped everywhere another person reads stamps or photos:
+  /passport/public, /social/world (a viewer below the audience gets the card only, plus `audience`), signed photo links
+  (ppPhotoOpenable), the share landing page, guestbooks (blGate, blStamp, blTarget, blotter read), the Mailbox feed's
+  stamps, the friends'-stamps notification ("Your friends stamped…"). City Board photo reads require photos_tier null.
+  /passport/share takes { audience } (old builds' { is_public } = Everyone / Friends; Followers refused for minors,
+  Everyone keeps the age gate) and returns audience; /passport/list booklet.audience; privacy summary audience.
+  New POST /passport/album/privacy { stamp_ids, photos: 'same'|'inner'|'me' }.
+- **App:** src/lib/audience.js (the four words, usePassportAudience, savePassportAudience + a window event so every
+  screen updates); src/components/privacy/AudienceSheet.jsx + PassportPrivacy.jsx (chip, sheet, "opening" confirm with
+  stamp counts). Passport page chip (and in the share sheet; link text says when a link shows nothing); StampActions:
+  options above the passport greyed + "Change your passport ›", "Its photos" switch; StampEarnedSheet: "Who can see it ·
+  Change"; PhotoPackets: a chip under each envelope → "Who sees this album"; Profile's PrivacyCard: "Your passport: 🤝
+  Friends · Change"; Settings → Privacy regrouped (Your Virtual Passport, New stamps start at, Photo albums, Postcards &
+  telegrams, Set all, comments, friends & followers list, approve followers, find me, home city, blocked, promise);
+  PrivacyCheckup switches the passport to Friends; Traveler's closed-passport line names who it's for; "Inner circle" →
+  "Friends" and "✓" → "👥" in every visible label.
+- Gates: worker check, eslint + no-undef, build, boot-check ✅. Captured (demo account, mocked routes): passport chip,
+  sheet + opening confirm, Settings → Privacy, album chips + album sheet, stamp sheet greyed above Friends.
+- **Activate:** push the migration commit FIRST and wait ~30 s for it to apply (the worker reads photos_tier); then push
+  the rest (worker deploys); then `npm run ota`.
+
