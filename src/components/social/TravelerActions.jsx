@@ -188,7 +188,7 @@ export default function TravelerActions({ person, relation = null, cloth = undef
           <MoreMenu label={moreLabel} items={items}
             triggerStyle={{ ...outline, flex: h ? "0 0 auto" : "1 1 auto", gap: 6, padding: "4px 14px", fontSize: fs(14) }}>
             <TwoRingMark color={c.cloth} strokeWidth={1.5} />
-            <span>Inner circle</span>
+            <span>Friends</span>
             <ChevronDown size={14} strokeWidth={2} aria-hidden="true" focusable="false" />
             <span className="sr-only">, more options for {who}</span>
           </MoreMenu>

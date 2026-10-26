@@ -1,14 +1,16 @@
 // PrivacyCheckup — the one-time privacy check-up (founder, 2026-10-18: "ok i agree"). The
 // 2026-10-15 tiers move set every stamp of a public passport to 🌍 Everyone, so a member who
 // thought of their stamps as their circle's could find their photos on a City Board. Asked
-// once, kindly, never a silent change: keep it public, or switch to the inner circle (every
-// stamp → Inner circle, new stamps start there, the passport turns private — which also takes
-// its photos off City Boards). Shown only to an adult whose passport is public with at least
-// one 🌍 Everyone stamp, and only until they answer; "Decide later" waits for the next open.
+// once, kindly, never a silent change: keep it 🌍 Everyone, or switch to 🤝 Friends (the passport
+// becomes Friends — the ceiling over every stamp since 2026-10-26, which also takes its photos off
+// City Boards — and new stamps start there; each stamp keeps its own setting for later). Shown
+// only to an adult whose passport is Everyone with at least one 🌍 Everyone stamp, and only until
+// they answer; "Decide later" waits for the next open.
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { showToast } from "@/components/Toast";
-import { getPrivacy, setSocialProfile, setAllStampsVisibility, getShareLink } from "@/lib/passport";
+import { getPrivacy, setSocialProfile } from "@/lib/passport";
+import { savePassportAudience } from "@/lib/audience";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
@@ -46,20 +48,19 @@ export default function PrivacyCheckup({ enabled }) {
     setBusy(null);
     if (error) { showToast("Couldn’t save — try again", "error"); return; }
     setAsk(null);
-    showToast("Kept public — change it anytime in Settings → Privacy", "success");
+    showToast("Kept 🌍 Everyone — change it anytime in Settings → Privacy", "success");
   };
-  // Private first: the moment the passport turns private, strangers and City Boards lose it,
-  // even if a later step needs a retry.
+  // The passport first: the moment it is Friends, strangers and City Boards lose it, even if
+  // the second step needs a retry.
   const toInner = async () => {
     if (busy) return;
     setBusy("inner");
-    const sh = await getShareLink(false);
-    const all = sh.error ? null : await setAllStampsVisibility("inner");
-    const pr = all?.ok ? await setSocialProfile({ default_stamp_tier: "inner", privacy_checked: true }) : null;
+    const sh = await savePassportAudience("inner");
+    const pr = sh.error ? null : await setSocialProfile({ default_stamp_tier: "inner", privacy_checked: true });
     setBusy(null);
-    if (sh.error || !all?.ok || pr?.error) { showToast("Couldn’t finish — try again", "error"); return; }
+    if (sh.error || !pr || pr.error) { showToast("Couldn’t finish — try again", "error"); return; }
     setAsk(null);
-    showToast("Done — your stamps and photos are your inner circle’s 🤝", "success");
+    showToast("Done — your stamps and photos are your friends’ 🤝", "success");
   };
   const later = () => {
     try { sessionStorage.setItem(LATER, "1"); } catch { /* fine: it just asks again */ }
@@ -81,25 +82,25 @@ export default function PrivacyCheckup({ enabled }) {
         </h2>
         <p id="gs-privacy-d" style={{ fontSize: fs(14.5), lineHeight: 1.5, color: INK2, marginTop: 10 }}>
           {ask.boards
-            ? `${lead} and their photos are visible to everyone, and photos hang on City Boards. Keep it public, or switch to Inner circle?`
-            : `${lead} are visible to everyone. Keep it public, or switch to Inner circle?`}
+            ? `${lead} and their photos are visible to everyone, and photos hang on City Boards. Keep it 🌍 Everyone, or switch to 🤝 Friends?`
+            : `${lead} are visible to everyone. Keep it 🌍 Everyone, or switch to 🤝 Friends?`}
         </p>
         <div className="flex flex-col gap-2 mt-5">
           <button type="button" onClick={keep} disabled={!!busy} className={btn}
             style={{ minHeight: 56, padding: "8px 12px", background: "#fff", color: INK, border: `1.5px solid ${RULE}` }}>
-            <span style={{ fontSize: fs(15) }}>{busy === "keep" ? "Saving…" : "🌍 Keep it public"}</span>
+            <span style={{ fontSize: fs(15) }}>{busy === "keep" ? "Saving…" : "🌍 Keep it Everyone"}</span>
             <span style={{ fontSize: fs(11.5), fontWeight: 500, color: INK3, marginTop: 2 }}>Nothing changes</span>
           </button>
           <button type="button" onClick={toInner} disabled={!!busy} className={btn}
             style={{ minHeight: 56, padding: "8px 12px", background: "#fff", color: INK, border: `1.5px solid ${RULE}` }}>
-            <span style={{ fontSize: fs(15) }}>{busy === "inner" ? "Switching…" : "🤝 Switch to Inner circle"}</span>
+            <span style={{ fontSize: fs(15) }}>{busy === "inner" ? "Switching…" : "🤝 Switch to Friends"}</span>
             <span style={{ fontSize: fs(11.5), fontWeight: 500, color: INK3, marginTop: 2, lineHeight: 1.35 }}>
               Only people you follow who follow you back · off City Boards
             </span>
           </button>
         </div>
         <p style={{ fontSize: fs(12.5), lineHeight: 1.45, color: INK3, marginTop: 12 }}>
-          You can change any stamp, or all of them at once, anytime in Settings → Privacy.
+          You can change your passport, any stamp or any album anytime in Settings → Privacy.
         </p>
         <button type="button" onClick={later} disabled={!!busy} className="mt-1 w-full flex items-center justify-center"
           style={{ minHeight: 44, fontSize: fs(13), color: NEUTRAL.brandTeal, background: "transparent", border: 0 }}>

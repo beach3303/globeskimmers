@@ -35,7 +35,7 @@ import TeenHoldNote from "@/components/social/TeenHoldNote";
 
 const COLUMN = "max-w-md md:max-w-2xl mx-auto px-4";
 const TABS = [
-  { key: "inner", label: "Inner circle" },
+  { key: "inner", label: "Friends" },
   { key: "following", label: "You follow" },
   { key: "followers", label: "Follow you" },
 ];

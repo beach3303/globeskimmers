@@ -27,7 +27,7 @@ const WORDS = {
   },
   inner: {
     title: (who) => `Unfollow ${who}?`,
-    body: "You leave each other’s inner circle, so their private passport closes to you. You can follow them again any time.",
+    body: "You stop being friends, so what they share with friends closes to you. You can follow them again any time.",
     action: "Unfollow",
   },
   cancel: {

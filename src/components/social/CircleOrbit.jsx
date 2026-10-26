@@ -52,7 +52,7 @@ const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
 
 const RING_KEYS = /** @type {const} */ (['inner', 'following', 'followers']);
 const RING_OPACITY = [0.55, 0.35, 0.2];
-const DEFAULT_LABELS = ['INNER CIRCLE', 'YOU FOLLOW', 'FOLLOW YOU'];
+const DEFAULT_LABELS = ['FRIENDS', 'YOU FOLLOW', 'FOLLOW YOU'];
 
 // The two orbits on the boards. pillFont is the largest the pill's text grows to with --fs,
 // so the layout leaves room for it.
@@ -412,7 +412,7 @@ export function orbitSummary({ mode = 'own', owner = undefined, totals = undefin
       return ns.length ? `, including ${joinAnd(ns, false)}` : '';
     };
     const parts = [];
-    if (inner) parts.push(`${inner} in ${who}’s inner circle${including(0)}`);
+    if (inner) parts.push(`${inner} ${inner === 1 ? 'friend' : 'friends'} of ${who}${including(0)}`);
     if (following) parts.push(`${who} follows ${following}${including(1)}`);
     if (followers) parts.push(`${followers} follow ${who}${including(2)}`);
     return parts.length ? `${who}’s circle drawn as orbits: ${parts.join('; ')}` : `${who}’s circle drawn as orbits: no one yet`;
@@ -420,7 +420,7 @@ export function orbitSummary({ mode = 'own', owner = undefined, totals = undefin
   if (loading) return 'Your circle, loading';
   const req = Array.isArray(G.requests) ? G.requests.length : 0;
   const parts = [];
-  if (inner) parts.push(`${inner} in your inner circle`);
+  if (inner) parts.push(`${inner} ${inner === 1 ? 'friend' : 'friends'}`);
   if (following) parts.push(`${following} you follow`);
   if (followers) parts.push(`${followers} follow you`);
   if (req) parts.push(req === 1 ? 'one request waiting' : `${req} requests waiting`);

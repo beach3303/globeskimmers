@@ -189,7 +189,7 @@ export default function CircleList({ rows = [], circle, latest = null, cloth = u
                         {p.verified && p.seal ? <OfficialSeal size={14} tier={p.seal} style={undefined} /> : null}
                         {inner ? (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: MONO, fontSize: fs(9), lineHeight: 12 / 9, letterSpacing: ".06em", color: c.cloth, whiteSpace: "nowrap" }}>
-                            <TwoRingMark color={c.cloth} strokeWidth={1.2} />INNER CIRCLE
+                            <TwoRingMark color={c.cloth} strokeWidth={1.2} />FRIENDS
                           </span>
                         ) : null}
                       </div>

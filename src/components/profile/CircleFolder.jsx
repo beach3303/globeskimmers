@@ -57,7 +57,7 @@ function CircleBody({ owner, cloth, className, style }) {
     : undefined;
 
   const rows = [
-    { key: "inner", label: "INNER CIRCLE", value: ready ? counts.inner ?? null : null, onClick: openCircle("inner") },
+    { key: "inner", label: "FRIENDS", value: ready ? counts.inner ?? null : null, onClick: openCircle("inner") },
     { key: "following", label: "YOU FOLLOW", value: ready ? counts.youFollow ?? null : null, onClick: openCircle("following") },
     // Nobody accepted yet but someone is asking: the outer ring's row says so.
     ready && !anyone && requests.length

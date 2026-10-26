@@ -44,8 +44,8 @@ const INK = "#243447", INK3 = "#66717D", STAMP = "#B0472F";
 // means "not ours to police here".
 const PP_TIER_RANK = { public: 0, followers: 1, inner: 2, me: 3 };
 const ppTierOf = (st) => st.visibility || (st.hidden ? "me" : null);
-const PP_TIER_MARK = { me: "🔒", inner: "🤝", followers: "✓", public: "🌍" };
-const PP_TIER_WORD = { me: "Only me", inner: "Inner circle", followers: "Followers", public: "Everyone" };
+const PP_TIER_MARK = { me: "🔒", inner: "🤝", followers: "👥", public: "🌍" };
+const PP_TIER_WORD = { me: "Only me", inner: "Friends", followers: "Followers", public: "Everyone" };
 
 const CITY_INKS = ["#1F6E6A", "#2B4A7E", "#3E5AA8", "#0E7C86", "#2E6B4E", "#5B4B8A", "#6D3A6E", "#2C6E9B", "#3A7D5B", "#4453A6"];
 // Inks for the iconic-place PLACEHOLDER stamp (used until bespoke art is uploaded
@@ -1173,12 +1173,12 @@ export default function PassportBook({
                 </button>
                 {preview.counts.followers > 0 && (
                   <button type="button" onClick={() => proceedShare("followers")} className="rounded-xl py-2.5 px-3 font-semibold text-left" style={{ background: "#fff", border: `1px solid ${PAPER_EDGE}`, color: INK, fontSize: fs(13.5) }}>
-                    ✓ Include follower stamps too (+{preview.counts.followers})
+                    👥 Include follower stamps too (+{preview.counts.followers})
                   </button>
                 )}
                 {preview.counts.inner > 0 && (
                   <button type="button" onClick={() => proceedShare("inner")} className="rounded-xl py-2.5 px-3 font-semibold text-left" style={{ background: "#fff", border: `1px solid ${PAPER_EDGE}`, color: INK, fontSize: fs(13.5) }}>
-                    🤝 Include inner-circle stamps too (+{preview.counts.inner + preview.counts.followers})
+                    🤝 Include friends-only stamps too (+{preview.counts.inner + preview.counts.followers})
                   </button>
                 )}
               </div>

@@ -241,6 +241,12 @@ export async function setStampVisibility(stamp_id, visibility) {
   const { data, error } = await callWorker('passport/stamp/visibility', body);
   return { visibility: data?.visibility || null, hidden: data?.hidden === true, error: error || data?.error || null };
 }
+// Who sees an album's photos (founder, 2026-10-26): 'same' (each follows its stamp), 'inner'
+// (friends only) or 'me' — for every stamp the album holds. Albums only ever narrow.
+export async function setAlbumPrivacy(stamp_ids, photos) {
+  const { data, error } = await callWorker('passport/album/privacy', { stamp_ids, photos });
+  return { ok: data?.ok === true, error: error || data?.error || null };
+}
 // One tap moves every stamp to one level.
 export async function setAllStampsVisibility(visibility) {
   const { data, error } = await callWorker('passport/stamp/visibility', { all: true, visibility });

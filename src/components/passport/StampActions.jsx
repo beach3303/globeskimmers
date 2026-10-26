@@ -27,7 +27,10 @@ import { useDismissable } from "@/lib/dismissStack";
 import PostcardCompose from "@/components/passport/PostcardCompose";
 import PhotoEditor from "@/components/passport/PhotoEditor";
 import { isLocalFavorite, localFavoriteLine } from "@/components/passport/LocalFavoriteStamp";
-import { socialFollow, setStampNote, setStampVisibility, setStampArt } from "@/lib/passport";
+import { socialFollow, setStampNote, setStampVisibility, setStampArt, setAlbumPrivacy } from "@/lib/passport";
+import { usePassportAudience, aboveCeiling, capTo, audWord, AUD, ALBUM_OPTS, albumWord } from "@/lib/audience";
+import AudienceSheet from "@/components/privacy/AudienceSheet";
+import { PassportAudienceSheet } from "@/components/privacy/PassportPrivacy";
 import { respectPlaceFor } from "@/lib/respectPlaces";
 import { useAuth } from "@/lib/AuthContext";
 import { cityBoardUrl, hasBoard } from "@/lib/boardLinks";
@@ -61,7 +64,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   const { socialTier, socialTierReady } = useAuth();
   const boardCity = String(stamp?.city || (stamp?.kind === "city" ? stamp?.name : "") || "").trim();
   const showBoard = socialTierReady && String(socialTier || "") !== "blocked" && hasBoard(boardCity, stamp?.country);   // minors read boards (2026-10-16)
-  // A minor: no postcards, and stamps stay Only me or Inner circle (founder, 2026-10-16).
+  // A minor: no postcards, and stamps stay Only me or Friends (founder, 2026-10-16).
   const minor = ["teen", "confirm"].includes(String(socialTier || ""));
   const navigate = useNavigate();
   // An attraction stamp opens its place's Things to Do card (prices, guestbook…).
@@ -79,11 +82,27 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   // Who sees the stamp itself: only me, or my shared passport (+ friends' feeds).
   const [tier, setTier] = useState(stamp.visibility || (stamp.hidden === true ? "me" : "inner"));
   const [visBusy, setVisBusy] = useState(false);
+  // The passport is the ceiling (founder, 2026-10-26): wider choices are greyed out, with the way
+  // to change the passport one tap away; a stamp set wider than it shows at the passport's level.
+  const [ceiling] = usePassportAudience(!readOnly);
+  const [passportSheet, setPassportSheet] = useState(false);
+  const shown = capTo(tier, ceiling);
+  // Its photos (an album of one stamp): the same as the stamp, friends only, or only me.
+  const [photosTier, setPhotosTier] = useState(stamp.photos_tier || "same");
+  const [photosSheet, setPhotosSheet] = useState(false);
+  const savePhotos = async (v) => {
+    const r = await setAlbumPrivacy([stamp.id], v);
+    if (r.error) { showToast(r.error, "error"); return false; }
+    setPhotosTier(v);
+    showToast(v === "same" ? "Its photos follow the stamp" : v === "inner" ? "Its photos: friends only" : "Its photos: only you", "success");
+    onChanged?.();
+    return true;
+  };
   const TIER_TOAST = {
     me: "Only you can see this stamp — and its photos",
-    inner: "Shared with your inner circle",
-    followers: "Shared with your followers and inner circle",
-    public: "On your public pages — anyone with your link can see it",
+    inner: "Shared with your friends",
+    followers: "Shared with your followers and friends",
+    public: "Shared with everyone — and its photos can hang on the city board",
   };
   const setVisibility = async (next) => {
     if (visBusy || next === tier) return;
@@ -337,17 +356,35 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
           <div className="mt-3 rounded-[14px] px-3.5 py-3" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
             <span className="block uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".14em", color: INK3 }}>Who can see this stamp</span>
             <div className="grid grid-cols-2 gap-2 mt-2">
-              {[["me", "🔒 Only me"], ["inner", "🤝 Inner circle"], ...(minor ? [] : [["followers", "✓ Followers"], ["public", "🌍 Everyone"]])].map(([v, label]) => (
-                <button key={v} type="button" onClick={() => setVisibility(v)} disabled={visBusy} aria-pressed={tier === v}
-                  className="rounded-full py-2 font-semibold disabled:opacity-60"
-                  style={{ background: tier === v ? INK : "#fff", color: tier === v ? "#fff" : INK, border: `1px solid ${RULE}`, fontSize: fs(12.5) }}>{label}</button>
-              ))}
+              {(minor ? ["me", "inner"] : ["me", "inner", "followers", "public"]).map((v) => {
+                const off = aboveCeiling(v, ceiling);
+                return (
+                  <button key={v} type="button" onClick={() => { if (!off) setVisibility(v); }} disabled={visBusy} aria-pressed={shown === v} aria-disabled={off || undefined}
+                    className="rounded-full py-2 font-semibold disabled:opacity-60"
+                    style={{ background: shown === v ? INK : "#fff", color: shown === v ? "#fff" : INK, border: `1px solid ${RULE}`, fontSize: fs(12.5), opacity: off ? 0.4 : 1 }}>{audWord(v)}</button>
+                );
+              })}
             </div>
-            <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.45, marginTop: 7 }}>
+            {ceiling && ceiling !== "public" && !minor ? (
+              <p style={{ color: INK2, fontSize: fs(11.5), lineHeight: 1.45, marginTop: 7 }}>
+                {aboveCeiling(tier, ceiling) ? `Set to ${audWord(tier)} — it shows as ${audWord(ceiling)} while your passport is ${AUD[ceiling].label}. ` : `Your passport is ${audWord(ceiling)}, so this stamp can’t reach more than ${ceiling === "me" ? "you" : ceiling === "inner" ? "your friends" : "your followers"}. `}
+                <button type="button" onClick={() => setPassportSheet(true)} style={{ padding: 0, border: 0, background: "transparent", color: "#2B4A7E", font: "inherit", fontWeight: 650 }}>Change your passport ›</button>
+              </p>
+            ) : null}
+            <button type="button" onClick={() => setPhotosSheet(true)} className="w-full flex items-center gap-2 mt-2.5 pt-2.5 text-left" style={{ borderTop: `1px dashed ${RULE}`, minHeight: 40 }}>
+              <span className="flex-1 min-w-0" style={{ fontSize: fs(12.5), color: INK2 }}>Its photos: <b style={{ color: INK }}>{photosTier === "same" ? "📎 Same as this stamp" : albumWord(photosTier)}</b></span>
+              <span style={{ fontSize: fs(12.5), fontWeight: 650, color: "#2B4A7E" }}>Change ›</span>
+            </button>
+            <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.45, marginTop: 4 }}>
               {minor
                 ? "The stamp's photos follow it, and stay private. Followers and Everyone open at age 18."
-                : "The stamp's photos follow it. 🌍 Everyone also hangs them on the city board, signed @username — any photo can be taken off the board from your album. 🔒 Only me can never be shared — in a link or a picture — until you change this."}
+                : "🌍 Everyone also hangs its photos on the city board, signed @username — any photo can be taken off the board from your album. 🔒 Only me is never shared, in a link or a picture."}
             </p>
+            {passportSheet && <PassportAudienceSheet onClose={() => setPassportSheet(false)} />}
+            {photosSheet && (
+              <AudienceSheet title="Who sees its photos" kicker={stamp.name} value={photosTier} options={ALBUM_OPTS.map((o) => (o.key === "same" ? { ...o, label: "Same as this stamp", line: "The photos follow the stamp." } : o))}
+                onPick={savePhotos} onClose={() => setPhotosSheet(false)} />
+            )}
           </div>
         )}
 

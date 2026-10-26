@@ -76,7 +76,7 @@ function TheirCircle({ world, first, cloth, inner, style }) {
   const groups = groupsFromKnown(c.known);
   const totals = { inner: c.inner, following: c.following, followers: c.followers };
   const rows = [
-    { key: "inner", label: "INNER CIRCLE", value: c.inner },
+    { key: "inner", label: "FRIENDS", value: c.inner },
     { key: "following", label: FIRST ? `${FIRST} FOLLOWS` : "THEY FOLLOW", value: c.following },
     { key: "followers", label: FIRST ? `FOLLOW ${FIRST}` : "FOLLOW THEM", value: c.followers },
   ];
@@ -89,7 +89,7 @@ function TheirCircle({ world, first, cloth, inner, style }) {
         </h3>
         {inner ? (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: MONO, fontSize: fs(10), lineHeight: 1.2, fontWeight: 500, letterSpacing: ".14em", color: BLUE }}>
-            <TwoRingMark color={BLUE} strokeWidth={1.5} />IN YOUR INNER CIRCLE
+            <TwoRingMark color={BLUE} strokeWidth={1.5} />FRIENDS
           </span>
         ) : null}
       </div>
@@ -270,7 +270,11 @@ function TravelerWorld() {
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: GAP, padding: 16, background: NEUTRAL.white, border: `1px solid ${cloth.line}`, borderRadius: 16 }}>
             <Lock size={16} strokeWidth={2} color={cloth.cloth} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 2 }} />
             <p style={{ margin: 0, fontSize: fs(14), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
-              This passport is private: just {first ? `${first}’s` : "their"} inner circle.
+              {world.audience === "me"
+                ? `${first ? `${first}’s` : "This"} passport is private for now.`
+                : world.audience === "followers"
+                ? `${first ? `${first}’s` : "This"} passport is for followers. Follow ${first || "them"} to see it.`
+                : `${first ? `${first}’s` : "This"} passport is for friends — people ${first || "they"} follow${first ? "s" : ""} back. You can still send a postcard or a telegram.`}
             </p>
           </div>
         ) : null}

@@ -7,6 +7,8 @@ import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
 import { cityBoardUrl, hasBoard } from "@/lib/boardLinks";
 import { showToast } from "@/components/Toast";
+import { PassportPrivacyChip, PassportAudienceSheet } from "@/components/privacy/PassportPrivacy";
+import { usePassportAudience, audWord } from "@/lib/audience";
 import { addStamp, metersBetween, proofToast, listPassport, STAMP_EARLIEST, photoOptions, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead, socialFollow, photoPlace, sortStamps, mintShareLink, listShareLinks, revokeShareLink, setBookletOrder } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
@@ -1081,16 +1083,10 @@ function PassportInner({ embedded = false }) {
   const [shareBusy, setShareBusy] = useState(false);
   const [explainArrivals, setExplainArrivals] = useState(() => { try { return !localStorage.getItem("pp_arrival_explained"); } catch { return false; } });
   const openShare = async () => { setShareOpen(true); if (!share) { const { data } = await getShareLink(); if (data) setShare(data); } };
-  const setPublic = async (pub) => { setShareBusy(true); const { data, error } = await getShareLink(pub); setShareBusy(false); if (error) showToast(error, "error"); else setShare(data); };
-  // The badge says who can actually see the booklet (founder, 2026-10-18): strangers only ever
-  // see 🌍 Everyone stamps, and only while the passport is public; the circle sees what each
-  // stamp is set to. Rows from before the tiers read as the booklet showed them.
-  const everyoneCount = stamps.filter((st) => (st.visibility || (st.hidden ? "me" : share?.is_public ? "public" : "inner")) === "public").length;
-  const passportPill = !share?.is_public
-    ? "🔒 Private — only your circle sees the stamps you share with them"
-    : everyoneCount
-      ? `🌍 Public — anyone can see your ${everyoneCount} 🌍 Everyone ${everyoneCount === 1 ? "stamp" : "stamps"}`
-      : "🌍 Public — but no stamps are set to 🌍 Everyone yet";
+  // Who can see the passport, changed right here (founder, 2026-10-26): one chip, one sheet — the
+  // same four words as Settings → Privacy. The passport's setting is the ceiling over every stamp.
+  const [audOpen, setAudOpen] = useState(false);
+  const [audience] = usePassportAudience(!readOnly);
   // Read share state on mount so the privacy badge reflects the real status (default private).
   useEffect(() => { if (readOnly) return; (async () => { const { data } = await getShareLink(); if (data) setShare(data); })(); }, [readOnly]);
 
@@ -1395,11 +1391,8 @@ function PassportInner({ embedded = false }) {
         )}
         {/* Holder + stats */}
         <div className="text-center pt-1 pb-3">
-          {!readOnly && (
-            <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full" style={{ background: share?.is_public ? "#F3E2C7" : IVORY_2, color: share?.is_public ? "#7E601F" : INK3, fontSize: fs(11.5), fontWeight: 600 }}>
-              {passportPill}
-            </div>
-          )}
+          {!readOnly && !preview && <PassportPrivacyChip onOpen={() => setAudOpen(true)} style={{ marginTop: 8 }} />}
+          {audOpen && <PassportAudienceSheet onClose={() => setAudOpen(false)} />}
         </div>
         {readOnly && (
           <div className="mb-4 rounded-[16px] px-3.5 py-2.5 flex items-center justify-between gap-2" style={{ background: "#F3E2C7", border: "1px solid #E5CA98" }}>
@@ -1410,7 +1403,7 @@ function PassportInner({ embedded = false }) {
         {!readOnly && explainArrivals && (
           <div className="mb-4 rounded-[16px] p-3.5" style={{ background: "#FFFBF0", border: `1px solid #EAD9AE` }}>
             <p style={{ color: INK2, fontSize: fs(13), lineHeight: 1.5 }}>
-              ✈️ You&rsquo;ll get an arrival stamp when you land at an airport in a new country, and you can stamp iconic attractions you visit — you always tap to confirm, we never stamp automatically. You choose who sees each stamp — 🔒 Only me, 🤝 Inner circle, ✓ Followers or 🌍 Everyone. You can turn suggestions off anytime in Settings.
+              ✈️ You&rsquo;ll get an arrival stamp when you land at an airport in a new country, and you can stamp iconic attractions you visit — you always tap to confirm, we never stamp automatically. You choose who sees each stamp — 🔒 Only me, 🤝 Friends, 👥 Followers or 🌍 Everyone. You can turn suggestions off anytime in Settings.
             </p>
             <button onClick={() => { try { localStorage.setItem("pp_arrival_explained", "1"); } catch { /* ignore */ } setExplainArrivals(false); }} className="mt-2 rounded-lg px-3 py-1.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12) }}>Got it</button>
           </div>
@@ -1464,14 +1457,18 @@ function PassportInner({ embedded = false }) {
 
                 <p className="mt-2.5" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", textTransform: "uppercase", color: INK3 }}>What do you allow this link to show?</p>
                 <div className="flex gap-2 mt-1.5">
-                  {[["public", "🌍 My public pages"], ["inner", "🤝 My inner-circle view"]].map(([v, label]) => (
+                  {[["public", "🌍 My public pages"], ["inner", "🤝 What my friends see"]].map(([v, label]) => (
                     <button key={v} onClick={() => setLinkLevel(v)} aria-pressed={linkLevel === v} className="flex-1 rounded-lg py-2 font-semibold"
                       style={{ background: linkLevel === v ? "rgba(14,124,115,.08)" : "#fff", color: linkLevel === v ? TEAL_DEEP : INK2, border: `1.5px solid ${linkLevel === v ? TEAL_DEEP : RULE}`, fontSize: fs(12) }}>{label}</button>
                   ))}
                 </div>
                 <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.45, marginTop: 5 }}>
-                  {linkLevel === "inner"
-                    ? "Anyone who gets this link sees your inner-circle pages and their albums — no account needed. Only send it to people you trust."
+                  {audience === "me"
+                    ? "Your passport is 🔒 Only me, so a link shows nothing until you change who can see it."
+                    : linkLevel === "inner"
+                    ? "Anyone who gets this link sees what your friends see, and their albums — no account needed. Only send it to people you trust."
+                    : audience && audience !== "public"
+                    ? `Your passport is ${audWord(audience)}, so this link shows nothing until you open it to 🌍 Everyone.`
                     : "Only the stamps you set to 🌍 Everyone, plus the album photos connected to them. Nothing else."}
                 </p>
 
@@ -1484,7 +1481,7 @@ function PassportInner({ embedded = false }) {
                 </div>
 
                 <p className="mt-2.5 rounded-lg px-2.5 py-2" style={{ background: "#F5E9E4", border: "1px solid #E0C3B5", color: "#6E3326", fontSize: fs(10.5), lineHeight: 1.45 }}>
-                  🔒 Only-me stamps — and the albums linked to them — appear in no link, ever. Not to friends, not to followers, not to your inner circle.
+                  🔒 Only-me stamps — and the albums linked to them — appear in no link, ever. Not to friends, not to followers.
                 </p>
 
                 <button onClick={shareNow} disabled={shareBusy} className="w-full rounded-lg py-2.5 font-semibold mt-2.5 disabled:opacity-60" style={{ background: STAMP, color: "#fff", fontSize: fs(13.5) }}>
@@ -1496,7 +1493,7 @@ function PassportInner({ embedded = false }) {
                     <p style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", textTransform: "uppercase", color: INK3 }}>Links I’ve shared</p>
                     {myLinks.map((l) => (
                       <div key={l.token} className="flex items-center gap-2 mt-1.5">
-                        <span style={{ fontSize: fs(12), color: INK2 }}>{l.level === "inner" ? "🤝 Inner view" : "🌍 Public pages"}</span>
+                        <span style={{ fontSize: fs(12), color: INK2 }}>{l.level === "inner" ? "🤝 Friends’ view" : "🌍 Public pages"}</span>
                         <span className="flex-1" style={{ fontFamily: MONO, fontSize: fs(9.5), color: INK3 }}>
                           {l.expires_at ? `ends ${new Date(l.expires_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : "until turned off"}
                         </span>
@@ -1506,11 +1503,9 @@ function PassportInner({ embedded = false }) {
                   </div>
                 )}
 
-                <div className="flex items-center gap-2 mt-3 pt-2.5" style={{ borderTop: `1px dashed ${RULE}` }}>
-                  <span className="flex-1" style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.4 }}>Can strangers open my booklet by @handle? {share?.is_public ? "Yes — my 🌍 Everyone stamps, and their photos on City Boards." : "No — it reads private, and my photos stay off City Boards."}</span>
-                  <button onClick={() => setPublic(!share?.is_public)} disabled={shareBusy} className="rounded-lg px-3 py-1.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(11.5) }}>
-                    {share?.is_public ? "Make private" : "Make public"}
-                  </button>
+                <div className="mt-3 pt-2.5" style={{ borderTop: `1px dashed ${RULE}` }}>
+                  <PassportPrivacyChip onOpen={() => setAudOpen(true)} />
+                  <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.4, marginTop: 6 }}>Strangers open your passport by @username only when it’s 🌍 Everyone.</p>
                 </div>
                 <button onClick={() => setShareOpen(false)} style={{ color: INK3, fontSize: fs(11.5), marginTop: 8 }}>Close</button>
               </div>
@@ -1746,7 +1741,7 @@ function PassportInner({ embedded = false }) {
           queue={stampQueue.items.length > 1 ? { at: stampQueue.i + 1, of: stampQueue.items.length } : null} onSkip={nextInQueue}
           onClose={() => setStampQueue(null)} onDone={(d) => { const last = !stampQueue || stampQueue.i + 1 >= stampQueue.items.length; load(); nextInQueue(); if (last) offerShare(d); }} />
       )}
-      <StampEarnedSheet stamp={earned} slug={share?.slug || null} onClose={() => setEarned(null)} />
+      <StampEarnedSheet stamp={earned} slug={share?.slug || null} onClose={() => setEarned(null)} onChanged={load} />
 
       {/* Friend view: the quiet report door (and the sheet of reasons), and Block */}
       {readOnly && (

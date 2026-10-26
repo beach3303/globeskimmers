@@ -5,9 +5,13 @@
 // the link instead. Shown by the Passport for adults only, for verified stamps only, never for
 // a place of respect or a sensitive place (the caller decides). Done just closes it.
 //
-//   <StampEarnedSheet stamp slug onClose />
-//   stamp   the worker's stamp row ({ id, name, city, country, visited_on, verified, entity_id, meta })
+// Under it, who can see the new stamp and a Change (founder, 2026-10-26: privacy "after stamping"),
+// greyed above the passport's own setting like every other picker.
+//
+//   <StampEarnedSheet stamp slug onClose onChanged />
+//   stamp   the worker's stamp row ({ id, name, city, country, visited_on, verified, entity_id, meta, visibility })
 //   slug    the member's passport slug for the link (null = no link on the card)
+//   onChanged  called after its audience changes (the caller reloads the booklet)
 import React, { useEffect, useState } from "react";
 import { Loader2, Share2 } from "lucide-react";
 import { showToast } from "@/components/Toast";
@@ -18,16 +22,32 @@ import { stampCard } from "@/lib/shareCanvas";
 import { stampArtUrl } from "@/lib/stampArt";
 import { logEvent } from "@/lib/analytics";
 import StampThumb from "@/components/passport/StampThumb";
+import { setStampVisibility } from "@/lib/passport";
+import { usePassportAudience, capTo, audWord, stampTier } from "@/lib/audience";
+import AudienceSheet from "@/components/privacy/AudienceSheet";
+import { PassportAudienceSheet } from "@/components/privacy/PassportPrivacy";
 
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
 const SERIF = "'Instrument Serif', Georgia, serif";
 const VERIFIED = new Set(["gps", "photo_loc", "photo_ai"]);
 
-export default function StampEarnedSheet({ stamp = null, slug = null, onClose = undefined }) {
+export default function StampEarnedSheet({ stamp = null, slug = null, onClose = undefined, onChanged = undefined }) {
   const [busy, setBusy] = useState(false);
   const open = !!stamp;
-  const close = () => { if (!busy && typeof onClose === "function") onClose(); };
+  const [ceiling] = usePassportAudience(open);
+  const [tier, setTier] = useState(null);
+  const [picking, setPicking] = useState(false);
+  const [passportSheet, setPassportSheet] = useState(false);
+  useEffect(() => { setTier(stamp ? stampTier(stamp) : null); }, [stamp]);
+  const close = () => { if (!busy && !picking && !passportSheet && typeof onClose === "function") onClose(); };
   useDismissable(open, close);
+  const pickTier = async (v) => {
+    const r = await setStampVisibility(stamp.id, v);
+    if (r.error) { showToast(r.error, "error"); return false; }
+    setTier(r.visibility || v);
+    if (typeof onChanged === "function") onChanged();
+    return true;
+  };
   useEffect(() => { if (open) logEvent("stamp_earned_sheet", { verified: stamp?.verified || null }, "Passport"); }, [open, stamp?.verified]);
   if (!open) return null;
 
@@ -80,6 +100,19 @@ export default function StampEarnedSheet({ stamp = null, slug = null, onClose = 
             Share this stamp
           </button>
           <p style={{ margin: "8px 0 0", fontSize: fs(11.5), lineHeight: 1.4, color: NEUTRAL.ink3 }}>A story-sized card for Instagram, Facebook or Messages. {link ? `It carries your passport link, ${link}.` : ""}</p>
+          {tier ? (
+            <button type="button" onClick={() => setPicking(true)}
+              style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 48, marginTop: 12, padding: "0 14px", borderRadius: 14, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, textAlign: "left", cursor: "pointer" }}>
+              <span style={{ flex: 1, minWidth: 0, fontSize: fs(13.5), color: NEUTRAL.ink2 }}>Who can see it: <b style={{ color: NEUTRAL.ink }}>{audWord(capTo(tier, ceiling))}</b></span>
+              <span style={{ fontSize: fs(13.5), fontWeight: 650, color: NEUTRAL.airmailBlue }}>Change</span>
+            </button>
+          ) : null}
+          {picking && (
+            <AudienceSheet title="Who can see this stamp" kicker={stamp.name} value={capTo(tier, ceiling)} ceiling={ceiling}
+              onPick={pickTier} onClose={() => setPicking(false)} onChangePassport={() => { setPicking(false); setPassportSheet(true); }}
+              note="Your new stamps start where Settings → Privacy says. You can change any stamp later from its page." />
+          )}
+          {passportSheet && <PassportAudienceSheet onClose={() => setPassportSheet(false)} />}
           <button type="button" onClick={close} style={{ width: "100%", minHeight: 44, marginTop: 6, background: "transparent", border: 0, color: NEUTRAL.ink2, fontSize: fs(14), fontWeight: 600 }}>Done</button>
         </div>
       </div>

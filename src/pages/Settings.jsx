@@ -7,7 +7,9 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { X, User, Mail, Check, Globe, DollarSign, Languages, Thermometer, Loader2, MessageCircle, MapPin, AtSign, ChevronRight, ChevronDown, Search, BarChart3, RefreshCw, CreditCard, LogOut, Trash2, UserX, LayoutGrid, UserCheck, Images, PenLine, Lock, Bell } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
-import { setAllStampsVisibility, getPrivacy, getShareLink } from "@/lib/passport";
+import { setAllStampsVisibility, getPrivacy } from "@/lib/passport";
+import { AUDIENCES, AUD, RANK, aboveCeiling, audWord, savePassportAudience } from "@/lib/audience";
+import { confirmOpening } from "@/components/privacy/PassportPrivacy";
 import { pushPermission, askForAlerts, testAlerts } from "@/lib/pushAlerts";
 import { alertsNeedStore, storeUpdate } from "@/lib/appUpdate";
 import { useHomeZoneStyle, setHomeZoneStyle } from "@/components/redesign/Zone";
@@ -133,9 +135,9 @@ function EdRow({ icon: Icon, iconBg, title, desc, control, last, isTablet, step 
 }
 
 // Three chips, one chosen — the audience dials (founder, 2026-10-15).
-function EdChoices({ value, options, onPick, label }) {
+function EdChoices({ value, options, onPick, label, grid = false }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex gap-2">
+    <div role="radiogroup" aria-label={label} className={grid ? "grid grid-cols-2 gap-2" : "flex gap-2"}>
       {options.map(([v, text]) => (
         <button key={v} type="button" role="radio" aria-checked={value === v} onClick={() => onPick(v)}
           className="flex-1 h-11 rounded-xl font-semibold"
@@ -620,10 +622,12 @@ export default function SettingsPage() {
   const [bulkPick, setBulkPick] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [circleAsk, setCircleAsk] = useState(false);
-  const [publicAsk, setPublicAsk] = useState(false);
+  const [passAsk, setPassAsk] = useState(null);   // a wider passport setting waiting for its yes
   const [passBusy, setPassBusy] = useState(false);
   const [moveAsk, setMoveAsk] = useState(null);   // the tier "New stamps start at" just moved to
-  const TIER_OPTS = [["me", "🔒 Only me"], ["inner", "🤝 Inner circle"], ["followers", "✓ Followers"], ["public", "🌍 Everyone"]];
+  // The four words (founder, 2026-10-26), the same as the passport, each stamp and each album.
+  const TIER_OPTS = AUDIENCES.map((a) => [a.key, `${a.icon} ${a.label}`]);
+  const AUD_OPTS = TIER_OPTS;
   const tierName = Object.fromEntries(TIER_OPTS);
   const tierCounts = priv?.counts || null;
   const stampTotal = tierCounts ? TIER_OPTS.reduce((n, [k]) => n + (tierCounts[k] || 0), 0) : 0;
@@ -642,18 +646,31 @@ export default function SettingsPage() {
     loadPrivacy();
   };
   const applyBulk = () => moveAll(bulkPick);
-  // The passport's public switch (ON = private, like every privacy switch). Private takes the
-  // booklet from strangers and its photos off City Boards (founder, 2026-10-18).
-  const setPassportPublic = async (pub) => {
+  // Who can see the passport: the ceiling over every stamp and album (founder, 2026-10-26).
+  // Opening asks once (how many stamps it opens); closing works at once.
+  const passAud = priv?.audience || (priv?.is_public ? "public" : "inner");
+  const savePassport = async (v) => {
     if (passBusy) return;
     setPassBusy(true);
-    const { data, error } = await getShareLink(pub);
+    const { audience, error } = await savePassportAudience(v);
     setPassBusy(false);
-    setPublicAsk(false);
-    if (error || !data) { showToast(error || "Couldn't save — try again", "error"); return; }
-    setPriv((v) => ({ ...(v || {}), is_public: data.is_public === true }));
-    showToast(data.is_public ? "Your passport is public" : "Your passport is private 🔒", "success");
+    setPassAsk(null);
+    if (error === "age_required") { showToast("One thing first — add your birthday above", "error"); return; }
+    if (error) { if (error !== "finish_passport") showToast(error, "error"); return; }
+    setPriv((p) => ({ ...(p || {}), audience, is_public: audience === "public" }));
+    showToast(`Your passport: ${audWord(audience)}`, "success");
   };
+  const pickPassport = (v) => {
+    if (v === passAud) return;
+    if ((RANK[v] ?? 0) > (RANK[passAud] ?? 0)) setPassAsk(v);
+    else savePassport(v);
+  };
+  // Another screen (the passport's own chip) changed it: show that here too.
+  useEffect(() => {
+    const on = (e) => setPriv((p) => (p ? { ...p, audience: e.detail, is_public: e.detail === "public" } : p));
+    window.addEventListener("gs:passport-audience", on);
+    return () => window.removeEventListener("gs:passport-audience", on);
+  }, []);
   const saveDial = async (field, value, prev) => {
     setDials((d) => ({ ...d, [field]: value }));
     const { data, error } = await callWorker("social/profile", { [field]: value });
@@ -1062,52 +1079,121 @@ export default function SettingsPage() {
 
           {/* Privacy — the promise, in the app where it belongs */}
           <EdGroup kicker="Privacy" isTablet={isTablet}>
-            {blockReady(social) && (
-              <EdRow isTablet={isTablet} step={fontStep} icon={UserX} iconBg={CAT.food.ink} title="Blocked travelers"
-                desc="In the app they can't follow you, see your passport or send you postcards. They aren't told."
-                control={{ below: true, node: <BlockedTravelers blocked={social.blocked} onChanged={() => setSocialTick((t) => t + 1)} /> }}
-                last={false}
-              />
-            )}
-            {/* Where you live, for visitors (founder, 2026-10-14: "A plus a switch to turn on city"):
-                your country always, your city only when this is on. Shown once the column exists. */}
-            {profile && "show_home_city" in profile && (
-              // Every privacy switch reads the same way (founder, 2026-10-16): ON = private,
-              // and an OFF switch says "Not private" in words.
-              <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Keep my home city private"
-                desc={!showHomeCity
-                  ? `Private — visitors see ${homeCountry || "your country"} only`
-                  : homeCity ? `Not private — visitors see ${[homeCity, homeCountry].filter(Boolean).join(" · ")}` : "Not private — set your home city above to show it"}
-                control={{ node: <EdToggle on={!showHomeCity} onClick={() => { const next = !showHomeCity; setShowHomeCity(next); persist({ show_home_city: next }); }} label="Keep my home city private" /> }}
-              />
-            )}
             {priv && (
-              <EdRow isTablet={isTablet} step={fontStep} icon={Lock} iconBg={CAT.food.ink} title="Keep my passport private"
-                desc={priv.is_public
-                  ? "Not private — strangers see your 🌍 Everyone stamps and City Board photos"
-                  : "Private — strangers see nothing, and your photos stay off City Boards"}
+              // The passport is the ceiling (founder, 2026-10-26): four words, the most anyone can see.
+              // Opening asks once, with how many stamps it opens; closing works at once.
+              <EdRow isTablet={isTablet} step={fontStep} icon={Lock} iconBg={CAT.food.ink} title="Your Virtual Passport"
+                desc="The most anyone can see. Stamps and albums can be the same or more private."
                 control={{ below: true, node: (
                   <div>
-                    <div className="flex items-center justify-between">
-                      <span style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#3A3128" }}>{priv.is_public ? "Not private" : "Private"}</span>
-                      <EdToggle on={!priv.is_public} label="Keep my passport private"
-                        onClick={() => { if (passBusy) return; if (priv.is_public) setPassportPublic(false); else setPublicAsk(true); }} />
-                    </div>
-                    {publicAsk && !priv.is_public && (
+                    <EdChoices grid label="Who can see your passport" value={passAud} options={AUD_OPTS} onPick={pickPassport} />
+                    {passAsk && (
                       <div className="mt-2 rounded-xl px-3 py-2.5" style={{ background: "#FBF3E2", border: "1px solid #E5CA98" }}>
-                        <p style={{ fontSize: "calc(13px*var(--fs,1))", color: "#16110D", lineHeight: 1.45 }}>
-                          {tierCounts?.public
-                            ? `Strangers will see your ${tierCounts.public} 🌍 Everyone ${tierCounts.public === 1 ? "stamp" : "stamps"} and their photos, and those photos can hang on City Boards. Continue?`
-                            : "Strangers will be able to open your passport. Only stamps set to 🌍 Everyone show — you have none yet. Continue?"}
-                        </p>
+                        <p style={{ fontSize: "calc(13px*var(--fs,1))", color: "#16110D", lineHeight: 1.45 }}>{confirmOpening(passAsk, tierCounts)}</p>
                         <div className="flex gap-2 mt-2">
-                          <button type="button" onClick={() => setPassportPublic(true)} disabled={passBusy} className="flex-1 h-10 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>{passBusy ? "Saving…" : "Continue"}</button>
-                          <button type="button" onClick={() => setPublicAsk(false)} className="flex-1 h-10 rounded-xl font-semibold" style={{ border: "1.5px solid rgba(22,17,13,.16)", background: "#fff", color: "#3A3128", fontSize: "calc(12.5px*var(--fs,1))" }}>Keep private</button>
+                          <button type="button" onClick={() => savePassport(passAsk)} disabled={passBusy} className="flex-1 h-10 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>{passBusy ? "Saving…" : `Open to ${AUD[passAsk].label}`}</button>
+                          <button type="button" onClick={() => setPassAsk(null)} className="flex-1 h-10 rounded-xl font-semibold" style={{ border: "1.5px solid rgba(22,17,13,.16)", background: "#fff", color: "#3A3128", fontSize: "calc(12.5px*var(--fs,1))" }}>Not now</button>
                         </div>
                       </div>
                     )}
                   </div>
                 ) }}
+              />
+            )}
+            {dials && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={LayoutGrid} iconBg={CAT.weather.ink} title="New stamps start at"
+                desc={aboveCeiling(dials.default_stamp_tier, passAud) ? `Your passport is ${audWord(passAud)}, so new stamps reach ${passAud === "me" ? "only you" : passAud === "inner" ? "your friends" : "your followers"} at most until you open it.` : "Where each new stamp begins. You can change any stamp later."}
+                control={{ below: true, node: (
+                  <div>
+                    <EdChoices grid label="New stamps start at" value={dials.default_stamp_tier}
+                      options={TIER_OPTS}
+                      onPick={pickDefaultTier} />
+                    {moveAsk && moveAsk === dials.default_stamp_tier && (
+                      <div className="mt-2 rounded-xl px-3 py-2.5" style={{ background: "#FBF3E2", border: "1px solid #E5CA98" }}>
+                        <p style={{ fontSize: "calc(13px*var(--fs,1))", color: "#16110D", lineHeight: 1.45 }}>
+                          {`New stamps will start at ${tierName[moveAsk]}. Also move your ${stampTotal - (tierCounts?.[moveAsk] || 0)} existing ${stampTotal - (tierCounts?.[moveAsk] || 0) === 1 ? "stamp" : "stamps"} there?`}
+                        </p>
+                        <div className="flex gap-2 mt-2">
+                          <button type="button" onClick={() => moveAll(moveAsk)} disabled={bulkBusy} className="flex-1 h-10 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>{bulkBusy ? "Moving…" : "Move them too"}</button>
+                          <button type="button" onClick={() => setMoveAsk(null)} className="flex-1 h-10 rounded-xl font-semibold" style={{ border: "1.5px solid rgba(22,17,13,.16)", background: "#fff", color: "#3A3128", fontSize: "calc(12.5px*var(--fs,1))" }}>Just new ones</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) }}
+              />
+            )}
+            {dials && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={Images} iconBg={CAT.shopping.ink} title="Photo albums"
+                desc={dials.albums_audience === "passport"
+                  ? "Photos follow each stamp. Each album can also be set on its own."
+                  : dials.albums_audience === "inner"
+                  ? "Friends only — never strangers, never City Boards."
+                  : "Only you — never anyone else, never City Boards"}
+                control={{ below: true, node: (
+                  <EdChoices label="Who sees my photo albums" value={dials.albums_audience}
+                    options={[["passport", "Same as each stamp"], ["inner", "🤝 Friends"], ["me", "🔒 Only me"]]}
+                    onPick={(v) => saveDial("albums_audience", v, dials.albums_audience)} />
+                ) }}
+              />
+            )}
+            {/* Messages are never covered by a setting (founder, 2026-10-25): said once, here. */}
+            <EdRow isTablet={isTablet} step={fontStep} icon={Mail} iconBg={CAT.coffee.ink} title="Postcards & telegrams"
+              desc="Always private — only you and the people you send them to." />
+            {dials && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={LayoutGrid} iconBg={CAT.atm.ink} title="Set all my stamps to one level"
+                desc={countsLine ? `Right now: ${countsLine}` : "One tap moves every stamp — the way to go fully private, or fully public, at once."}
+                control={{ below: true, node: (
+                  <div>
+                    <EdChoices grid label="Set all my stamps to one level" value={bulkPick} options={TIER_OPTS} onPick={setBulkPick} />
+                    {bulkPick && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="flex-1" style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#3A3128" }}>Move every stamp to {tierName[bulkPick]}?</span>
+                        <button type="button" onClick={applyBulk} disabled={bulkBusy} className="h-10 px-4 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>{bulkBusy ? "Moving…" : "Move them"}</button>
+                        <button type="button" onClick={() => setBulkPick(null)} className="h-10 px-3 rounded-xl" style={{ color: "#736657", fontSize: "calc(12px*var(--fs,1))" }}>Cancel</button>
+                      </div>
+                    )}
+                  </div>
+                ) }}
+              />
+            )}
+            {dials && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={PenLine} iconBg={CAT.transit.ink} title="Who can comment on my passport"
+                desc="Comments and guestbook signatures on your pages and photos."
+                control={{ below: true, node: (
+                  <EdChoices label="Who can comment on my passport" value={dials.comments_audience}
+                    options={[["inner", "🤝 Friends"], ["audience", "Anyone who sees it"], ["off", "No one"]]}
+                    onPick={(v) => saveDial("comments_audience", v, dials.comments_audience)} />
+                ) }}
+              />
+            )}
+            {dials && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={UserCheck} iconBg={CAT.todo.ink} title="Keep my friends & followers private"
+                desc={dials.circle_public ? "Not private — visitors can see who your friends and followers are" : "Private — visitors see counts only, never names"}
+                control={{ below: true, node: (
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#3A3128" }}>{dials.circle_public ? "Not private" : "Private (default)"}</span>
+                      <EdToggle on={!dials.circle_public} label="Keep my friends and followers private"
+                        onClick={() => { if (dials.circle_public) saveDial("circle_public", false, true); else setCircleAsk(true); }} />
+                    </div>
+                    {circleAsk && !dials.circle_public && (
+                      <div className="mt-2 rounded-xl px-3 py-2.5" style={{ background: "#FBF3E2", border: "1px solid #E5CA98" }}>
+                        <p style={{ fontSize: "calc(13px*var(--fs,1))", color: "#16110D", lineHeight: 1.45 }}>Visitors will see who your friends and followers are. Continue?</p>
+                        <div className="flex gap-2 mt-2">
+                          <button type="button" onClick={() => { setCircleAsk(false); saveDial("circle_public", true, false); }} className="flex-1 h-10 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>Continue</button>
+                          <button type="button" onClick={() => setCircleAsk(false)} className="flex-1 h-10 rounded-xl font-semibold" style={{ border: "1.5px solid rgba(22,17,13,.16)", background: "#fff", color: "#3A3128", fontSize: "calc(12.5px*var(--fs,1))" }}>Keep private</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) }}
+              />
+            )}
+            {dials && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={UserCheck} iconBg={CAT.coffee.ink} title="Approve my followers"
+                desc={dials.approve_followers ? "New followers wait for your yes — approve them in your circle" : "Anyone can follow you without asking"}
+                control={{ node: <EdToggle on={dials.approve_followers} onClick={() => saveDial("approve_followers", !dials.approve_followers, dials.approve_followers)} label="Approve my followers" /> }}
               />
             )}
             {dials && (
@@ -1133,97 +1219,23 @@ export default function SettingsPage() {
                 ) }}
               />
             )}
-            {dials && (
-              <EdRow isTablet={isTablet} step={fontStep} icon={UserCheck} iconBg={CAT.coffee.ink} title="Approve my followers"
-                desc={dials.approve_followers ? "New followers wait for your yes — approve them in your circle" : "Anyone can follow you without asking"}
-                control={{ node: <EdToggle on={dials.approve_followers} onClick={() => saveDial("approve_followers", !dials.approve_followers, dials.approve_followers)} label="Approve my followers" /> }}
+            {/* Where you live, for visitors (founder, 2026-10-14: "A plus a switch to turn on city"):
+                your country always, your city only when this is on. Shown once the column exists. */}
+            {profile && "show_home_city" in profile && (
+              // Every privacy switch reads the same way (founder, 2026-10-16): ON = private,
+              // and an OFF switch says "Not private" in words.
+              <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Keep my home city private"
+                desc={!showHomeCity
+                  ? `Private — visitors see ${homeCountry || "your country"} only`
+                  : homeCity ? `Not private — visitors see ${[homeCity, homeCountry].filter(Boolean).join(" · ")}` : "Not private — set your home city above to show it"}
+                control={{ node: <EdToggle on={!showHomeCity} onClick={() => { const next = !showHomeCity; setShowHomeCity(next); persist({ show_home_city: next }); }} label="Keep my home city private" /> }}
               />
             )}
-            {dials && (
-              <EdRow isTablet={isTablet} step={fontStep} icon={Images} iconBg={CAT.shopping.ink} title="Who sees my photo albums"
-                desc={dials.albums_audience === "passport"
-                  ? "Photos follow each stamp — 🌍 Everyone photos can hang on City Boards"
-                  : dials.albums_audience === "inner"
-                  ? "Only your inner circle — never strangers, never City Boards"
-                  : "Only you — never anyone else, never City Boards"}
-                control={{ below: true, node: (
-                  <EdChoices label="Who sees my photo albums" value={dials.albums_audience}
-                    options={[["passport", "Same as each stamp"], ["inner", "Inner circle only"], ["me", "Only me"]]}
-                    onPick={(v) => saveDial("albums_audience", v, dials.albums_audience)} />
-                ) }}
-              />
-            )}
-            {dials && (
-              <EdRow isTablet={isTablet} step={fontStep} icon={LayoutGrid} iconBg={CAT.weather.ink} title="New stamps start at"
-                desc="Where each new stamp begins. You can change any stamp later."
-                control={{ below: true, node: (
-                  <div>
-                    <EdChoices label="New stamps start at" value={dials.default_stamp_tier}
-                      options={TIER_OPTS}
-                      onPick={pickDefaultTier} />
-                    {moveAsk && moveAsk === dials.default_stamp_tier && (
-                      <div className="mt-2 rounded-xl px-3 py-2.5" style={{ background: "#FBF3E2", border: "1px solid #E5CA98" }}>
-                        <p style={{ fontSize: "calc(13px*var(--fs,1))", color: "#16110D", lineHeight: 1.45 }}>
-                          {`New stamps will start at ${tierName[moveAsk]}. Also move your ${stampTotal - (tierCounts?.[moveAsk] || 0)} existing ${stampTotal - (tierCounts?.[moveAsk] || 0) === 1 ? "stamp" : "stamps"} there?`}
-                        </p>
-                        <div className="flex gap-2 mt-2">
-                          <button type="button" onClick={() => moveAll(moveAsk)} disabled={bulkBusy} className="flex-1 h-10 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>{bulkBusy ? "Moving…" : "Move them too"}</button>
-                          <button type="button" onClick={() => setMoveAsk(null)} className="flex-1 h-10 rounded-xl font-semibold" style={{ border: "1.5px solid rgba(22,17,13,.16)", background: "#fff", color: "#3A3128", fontSize: "calc(12.5px*var(--fs,1))" }}>Just new ones</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) }}
-              />
-            )}
-            {dials && (
-              <EdRow isTablet={isTablet} step={fontStep} icon={LayoutGrid} iconBg={CAT.atm.ink} title="Set all my stamps to one level"
-                desc={countsLine ? `Right now: ${countsLine}` : "One tap moves every stamp — the way to go fully private, or fully public, at once."}
-                control={{ below: true, node: (
-                  <div>
-                    <EdChoices label="Set all my stamps to one level" value={bulkPick} options={TIER_OPTS} onPick={setBulkPick} />
-                    {bulkPick && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="flex-1" style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#3A3128" }}>Move every stamp to {tierName[bulkPick]}?</span>
-                        <button type="button" onClick={applyBulk} disabled={bulkBusy} className="h-10 px-4 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>{bulkBusy ? "Moving…" : "Move them"}</button>
-                        <button type="button" onClick={() => setBulkPick(null)} className="h-10 px-3 rounded-xl" style={{ color: "#736657", fontSize: "calc(12px*var(--fs,1))" }}>Cancel</button>
-                      </div>
-                    )}
-                  </div>
-                ) }}
-              />
-            )}
-            {dials && (
-              <EdRow isTablet={isTablet} step={fontStep} icon={UserCheck} iconBg={CAT.todo.ink} title="Keep my circle private"
-                desc={dials.circle_public ? "Not private — visitors can see who's in your circle" : "Private — visitors see counts only, never names"}
-                control={{ below: true, node: (
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span style={{ fontSize: "calc(12.5px*var(--fs,1))", color: "#3A3128" }}>{dials.circle_public ? "Not private" : "Private (default)"}</span>
-                      <EdToggle on={!dials.circle_public} label="Keep my circle private"
-                        onClick={() => { if (dials.circle_public) saveDial("circle_public", false, true); else setCircleAsk(true); }} />
-                    </div>
-                    {circleAsk && !dials.circle_public && (
-                      <div className="mt-2 rounded-xl px-3 py-2.5" style={{ background: "#FBF3E2", border: "1px solid #E5CA98" }}>
-                        <p style={{ fontSize: "calc(13px*var(--fs,1))", color: "#16110D", lineHeight: 1.45 }}>Your followers and inner circle will be public. Continue?</p>
-                        <div className="flex gap-2 mt-2">
-                          <button type="button" onClick={() => { setCircleAsk(false); saveDial("circle_public", true, false); }} className="flex-1 h-10 rounded-xl font-semibold" style={{ background: TEAL_DEEP, color: "#fff", fontSize: "calc(12.5px*var(--fs,1))" }}>Continue</button>
-                          <button type="button" onClick={() => setCircleAsk(false)} className="flex-1 h-10 rounded-xl font-semibold" style={{ border: "1.5px solid rgba(22,17,13,.16)", background: "#fff", color: "#3A3128", fontSize: "calc(12.5px*var(--fs,1))" }}>Keep private</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) }}
-              />
-            )}
-            {dials && (
-              <EdRow isTablet={isTablet} step={fontStep} icon={PenLine} iconBg={CAT.transit.ink} title="Who can comment on my passport"
-                desc="Comments and guestbook signatures on your pages and photos."
-                control={{ below: true, node: (
-                  <EdChoices label="Who can comment on my passport" value={dials.comments_audience}
-                    options={[["inner", "Inner circle"], ["audience", "Anyone who sees it"], ["off", "No one"]]}
-                    onPick={(v) => saveDial("comments_audience", v, dials.comments_audience)} />
-                ) }}
+            {blockReady(social) && (
+              <EdRow isTablet={isTablet} step={fontStep} icon={UserX} iconBg={CAT.food.ink} title="Blocked travelers"
+                desc="In the app they can't follow you, see your passport or send you postcards. They aren't told."
+                control={{ below: true, node: <BlockedTravelers blocked={social.blocked} onChanged={() => setSocialTick((t) => t + 1)} /> }}
+                last={false}
               />
             )}
             <EdRow isTablet={isTablet} step={fontStep} icon={Globe} iconBg={CAT.culture.ink} title="Our promise" desc="Your stamps and photos are yours. We never sell your photos or your location history, and we never show ads to kids. Shared passports never reveal exact locations, and photos only appear to others after review."
@@ -1259,7 +1271,7 @@ export default function SettingsPage() {
               ["alert_postcards", "Postcards and telegrams", "Someone sent you a postcard or a telegram"],
               ["alert_follows", "Follows", "A follow request, a new follower, a follow allowed"],
               ["alert_pages", "Your passport", "Reactions, signatures and tags on your pages"],
-              ["alert_friend_stamps", "Inner circle stamps", "Once a day: new stamps from people you follow who follow you back"],
+              ["alert_friend_stamps", "Friends’ stamps", "Once a day: new stamps from people you follow who follow you back"],
               ["alert_news", "News from GlobeSkimmers", "Seasonal editions and new things to collect"],
             ].map(([key, title, desc]) => (
               <EdRow key={key} isTablet={isTablet} step={fontStep} icon={Bell} iconBg={CAT.weather.ink} title={title} desc={dials[key] ? desc : `Off — ${desc.charAt(0).toLowerCase()}${desc.slice(1)}`}

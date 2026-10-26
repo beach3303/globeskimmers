@@ -14,6 +14,9 @@ import { readPhotoExif } from "@/lib/photoExif";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { showToast } from "@/components/Toast";
 import PhotoFooter from "@/components/passport/PhotoFooter";
+import AudienceSheet from "@/components/privacy/AudienceSheet";
+import { setAlbumPrivacy } from "@/lib/passport";
+import { ALBUM_OPTS, albumWord } from "@/lib/audience";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -22,7 +25,7 @@ const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 
 // The stamp's mark, as the passport wears it (founder, 2026-10-16: label albums "not so subtle
 // that it destroys the creativity"): one small glyph per audience the envelope holds.
-const MARK = { me: "🔒", inner: "🤝", followers: "✓", public: "🌍" };
+const MARK = { me: "🔒", inner: "🤝", followers: "👥", public: "🌍" };
 const marksOf = (tiers) => (tiers || []).map((t) => MARK[t]).filter(Boolean).join(" ");
 
 function Envelope({ packet, onOpen }) {
@@ -67,6 +70,16 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
   // className: the column (the profile passes its own, which widens on iPad).
   const packets = useMemo(() => derivePackets(stamps), [stamps]);
   const [open, setOpen] = useState(null); // { photos, index, city }
+  // Who sees each album, one tap from its envelope (founder, 2026-10-26: "albums should have a
+  // quick way to change privacy per album"). An album can only narrow its photos.
+  const [albumFor, setAlbumFor] = useState(null);   // the packet whose privacy sheet is open
+  const saveAlbum = async (v) => {
+    const r = await setAlbumPrivacy(albumFor.stampIds, v);
+    if (r.error) { showToast(r.error, "error"); return false; }
+    showToast(v === "same" ? `${albumFor.city}: each photo follows its stamp` : `${albumFor.city}: ${v === "inner" ? "friends only" : "only you"}`, "success");
+    onChanged?.();
+    return true;
+  };
   // Add prints straight from a packet (founder, 2026-10-05): they land on the
   // destination's newest stamp and go through the same photo review.
   const fileRef = useRef(null);
@@ -105,7 +118,7 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
       {owner ? (
         <p style={{ margin: "4px 0 0", fontFamily: MONO, fontSize: fs(9), letterSpacing: ".06em", lineHeight: 1.5, color: INK3 }}>
           {/* Short (founder, 2026-10-17), but 🌍 prints showing on the city board is never left out. */}
-          Each album is as private as its stamp. 🌍 prints also hang on the city board.
+          Each album follows its stamps unless you make it more private. 🌍 prints also hang on the city board.
         </p>
       ) : null}
       <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPick} />
@@ -122,6 +135,13 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
             {list.map((p) => (
               <div key={p.key} style={{ position: "relative", width: "100%", maxWidth: 190 }}>
                 <Envelope packet={p} onOpen={() => setOpen({ photos: p.photos, index: 0, city: p.city, range: p.range, packet: p })} />
+                {owner && p.stampIds?.length ? (
+                  <button type="button" onClick={() => setAlbumFor(p)} aria-label={`Who sees the ${p.city} album: ${p.albumTiers.length === 1 ? albumWord(p.albumTiers[0]) : "mixed"}. Change`}
+                    className="w-full flex items-center justify-center gap-1" style={{ minHeight: 34, marginTop: 4, background: "transparent", border: 0, fontSize: fs(11.5), color: "#5A4A33" }}>
+                    <span className="truncate">{p.albumTiers.length === 1 ? (p.albumTiers[0] === "same" ? "📎 Same as stamps" : albumWord(p.albumTiers[0])) : "Mixed"}</span>
+                    <span style={{ color: "#2B4A7E", fontWeight: 650 }}>· Change</span>
+                  </button>
+                ) : null}
                 {owner && p.stampId && (
                   // A 44px target around the 28px badge on the envelope's corner.
                   <button type="button" onClick={() => pickFor(p)} disabled={!!busyKey} aria-label={`Add prints to ${p.city}`}
@@ -139,6 +159,12 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
       <p style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, letterSpacing: ".03em", marginTop: 10 }}>
         {owner ? "Tap + to add prints." : "Every destination gathers their memory photos, a year at a time."}
       </p>
+      {albumFor && (
+        <AudienceSheet title="Who sees this album" kicker={`${albumFor.city}${albumFor.year && albumFor.year !== "Undated" ? ` · ${albumFor.year}` : ""} · ${albumFor.photos.length} print${albumFor.photos.length === 1 ? "" : "s"}`}
+          value={albumFor.albumTiers.length === 1 ? albumFor.albumTiers[0] : null} options={ALBUM_OPTS}
+          onPick={saveAlbum} onClose={() => setAlbumFor(null)}
+          note="An album can only make its photos more private — never more public than their stamps or your passport." />
+      )}
       {open && (
         <PhotoLightbox
           photos={open.photos}

@@ -116,6 +116,8 @@ export async function getWorld({ handle = null, slug = null } = {}) {
     state: 'world',
     fallback: false,
     private: data.private === true,
+    // Who the passport is for when it's closed to this viewer (2026-10-26): 'me' | 'inner' | 'followers'.
+    audience: data.private === true && ['me', 'inner', 'followers'].includes(data.audience) ? data.audience : null,
     slug: cleanSlug(data.slug) || s || null,
     person,
     relation: relationOf(data.relation),

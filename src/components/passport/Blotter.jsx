@@ -272,7 +272,7 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
 
         {!canWrite ? (
           <p className="mt-3" style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: fs(14), color: INK3 }}>
-            {heldNote || (commentsOff ? "Comments are switched off on this passport." : "Only their inner circle can write here — reactions are open to everyone who can see the page.")}
+            {heldNote || (commentsOff ? "Comments are switched off on this passport." : "Only their friends can write here — reactions are open to everyone who can see the page.")}
           </p>
         ) : (
         <>
