@@ -18741,10 +18741,11 @@ async function handlePassportPhotoBoard(request, env) {
 // address gets ONE email with a link to join (per sender, per 30 days), and the card is
 // delivered into postcards the first time an account with that email reads its Mailbox.
 // No per-sender daily cap since 2026-10-26. Undelivered cards and their photos go after 90 days.
-// The invitation emails share Resend with sign-up codes (free plan: 100 a day), so the whole app sends at
-// most INVITE_EMAILS_DAILY of them a day; past that the card still waits and arrives when they join, and
-// the founder hears once that invitations paused — sign-up codes always keep their room.
-const INVITE_EMAILS_DAILY = 60;
+// The invitation emails share Resend with sign-up codes, so the whole app sends at most INVITE_EMAILS_DAILY
+// of them a day; past that the card still waits and arrives when they join, and the founder hears once that
+// invitations paused — sign-up codes always keep their room. Resend Pro since 2026-10-26 (50,000 a month, no
+// daily cap; was the free plan's 100 a day, ceiling 60): 1,000 a day still leaves most of the month to codes.
+const INVITE_EMAILS_DAILY = 1000;
 async function pcEmailHash(env, email) {
   const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(`pc-email:${GB_KEY(env)}`), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const mac = new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(String(email).trim().toLowerCase())));
@@ -18839,7 +18840,7 @@ async function pcSendWaitingEmail(env, senderId, email, where, kind = 'postcard'
   if (!env.RESEND_API_KEY) return false;
   const sentToday = await gbDayCount(env, 'invite:emails');
   if (sentToday != null && sentToday > INVITE_EMAILS_DAILY) {
-    if (sentToday === INVITE_EMAILS_DAILY + 1) await founderAlert(env, `⚠️ Invitation emails paused for today after ${INVITE_EMAILS_DAILY} — the cards still wait for them. Resend's free plan (100 a day) also carries sign-up codes; upgrade Resend to raise this.`, 'ops');
+    if (sentToday === INVITE_EMAILS_DAILY + 1) await founderAlert(env, `⚠️ Invitation emails paused for today after ${INVITE_EMAILS_DAILY} — the cards still wait for them. The same Resend plan (50,000 a month) carries sign-up codes; raise INVITE_EMAILS_DAILY only with a bigger plan.`, 'ops');
     return false;
   }
   const [first, hq] = await Promise.all([
