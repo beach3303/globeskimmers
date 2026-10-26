@@ -18391,9 +18391,6 @@ const pcCityKey = (city, country, region = null) => {
   const st = us ? uc.state : null;
   return `${c}${st ? `, ${pcFold(st)}` : ''}|${k}`.slice(0, 140);
 };
-const PC_CITY_DAILY = 5;
-// Postcards a day to people who don't follow the sender (Step A, 2026-10-18).
-const PC_STRANGER_DAILY = 5;
 // Was this traveler really in that city? A verified stamp of theirs there; false
 // when the stamps can't be read, so a board fails closed.
 async function pcWasThere(env, userId, key) {
@@ -18743,8 +18740,11 @@ async function handlePassportPhotoBoard(request, env) {
 // pending_postcards under a keyed hash of the address (never the address itself), the
 // address gets ONE email with a link to join (per sender, per 30 days), and the card is
 // delivered into postcards the first time an account with that email reads its Mailbox.
-// Five such cards a day per sender. Undelivered cards and their photos go after 90 days.
-const PC_EMAIL_DAILY = 5;
+// No per-sender daily cap since 2026-10-26. Undelivered cards and their photos go after 90 days.
+// The invitation emails share Resend with sign-up codes (free plan: 100 a day), so the whole app sends at
+// most INVITE_EMAILS_DAILY of them a day; past that the card still waits and arrives when they join, and
+// the founder hears once that invitations paused — sign-up codes always keep their room.
+const INVITE_EMAILS_DAILY = 60;
 async function pcEmailHash(env, email) {
   const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(`pc-email:${GB_KEY(env)}`), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const mac = new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(String(email).trim().toLowerCase())));
@@ -18837,6 +18837,11 @@ ${point('Find food, coffee and things to do nearby, wherever you land.')}
 }
 async function pcSendWaitingEmail(env, senderId, email, where, kind = 'postcard') {
   if (!env.RESEND_API_KEY) return false;
+  const sentToday = await gbDayCount(env, 'invite:emails');
+  if (sentToday != null && sentToday > INVITE_EMAILS_DAILY) {
+    if (sentToday === INVITE_EMAILS_DAILY + 1) await founderAlert(env, `⚠️ Invitation emails paused for today after ${INVITE_EMAILS_DAILY} — the cards still wait for them. Resend's free plan (100 a day) also carries sign-up codes; upgrade Resend to raise this.`, 'ops');
+    return false;
+  }
   const [first, hq] = await Promise.all([
     ppHolder(env, senderId),
     gbRest(env, `passport_shares?user_id=eq.${senderId}&select=handle`, {}).catch(() => null),
@@ -18916,10 +18921,9 @@ async function tgPendingPrune(env) {
 // who sent what — never the photo or the words — with Open in GlobeSkimmers / Get the app, and the
 // app claims it: the page's globeskimmers://message/claim?code= link, or the code typed in the
 // Mailbox. Up to LINK_MAX_CLAIMS people (each their own copy, so a group chat can share one link);
-// never the sender; a blocked pair or a minor gets nothing, answered like an unknown code. Ten
-// links a day per sender; gone after 90 days, or with the sender's account.
+// never the sender; a blocked pair or a minor gets nothing, answered like an unknown code. No daily
+// cap per sender (lifted 2026-10-26); gone after 90 days, or with the sender's account.
 const LINK_MAX_CLAIMS = 10;
-const LINK_DAILY = 10;
 const LINK_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 32 letters: no 0/O, 1/I
 const linkCode = () => [...crypto.getRandomValues(new Uint8Array(8))].map((x) => LINK_ALPHABET[x % 32]).join('');
 const linkCodeOf = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
@@ -18982,8 +18986,6 @@ async function handleLinkCreate(request, env, ctx) {
       row.place_name = clean(b.place_name, 80); row.city = clean(b.city, 60); row.country = clean(b.country, 60); row.region = clean(b.region, 60);
       if (b.meta && typeof b.meta === 'object') row.meta = { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60) };
     }
-    const n = await gbDayCount(env, `lnk:${user.id}`);
-    if (n != null && n > LINK_DAILY) return jsonResponse({ error: 'That’s ten links today. Try again tomorrow.' }, 429);
     if (photo) {
       row.photo_key = `pc/${crypto.randomUUID()}.${photo.ext}`;
       await env.MEDIA.put(row.photo_key, photo.bytes, { httpMetadata: { contentType: photo.mediaType, cacheControl: 'public, max-age=31536000, immutable' } });
@@ -19246,8 +19248,6 @@ async function handlePostcardSend(request, env, ctx) {
       if (!toCity) return jsonResponse({ error: 'Which city?' }, 400);
       if (!(await pcWasThere(env, user.id, toCity))) return jsonResponse({ error: 'Only travelers who were really there can post here. Stamp it first, verified.', code: 'not_there' }, 403);
       if (msg && !(await gbModerate(env, msg)).allow) return jsonResponse({ error: 'Let’s keep the board kind. Try different words.' }, 422);
-      const n = await gbDayCount(env, `pcb:${user.id}`);
-      if (n != null && n > PC_CITY_DAILY) return jsonResponse({ error: 'That’s five postcards to city boards today. Try again tomorrow.' }, 429);
       // No name on the board (founder, 2026-10-15): the card signs "a local"
       // or "a traveler" instead — which one is decided here, never client-side.
       if (b.anon === true) anonLabel = await pcAnonLabel(env, user.id, boardCity);
@@ -19292,21 +19292,9 @@ async function handlePostcardSend(request, env, ctx) {
       if (notReady.length) return jsonResponse({ error: members.length > 1 ? 'None of them has finished their passport yet, so postcards can’t reach them' : 'They haven’t finished their passport yet, so postcards can’t reach them' }, 409);
       return jsonResponse({ ok: true });
     }
-    // A card to someone who doesn't follow the sender lands under "From someone new" in their
-    // Mailbox (2026-10-18); a sender gets five such cards a day, so nobody can paper strangers.
-    if (deliver.length) {
-      const fq2 = await gbRest(env, `user_follows?follower_id=in.(${deliver.map((x) => x.user_id).join(',')})&followee_id=eq.${user.id}&status=eq.accepted&select=follower_id`, {});
-      const followsMe = new Set(fq2.ok ? (await fq2.json()).map((r) => r.follower_id) : []);
-      for (const mb of deliver) {
-        if (followsMe.has(mb.user_id)) continue;
-        const n = await gbDayCount(env, `pcs:${user.id}`);
-        if (n != null && n > PC_STRANGER_DAILY) return jsonResponse({ error: 'That’s five postcards today to people who don’t follow you. Try again tomorrow.' }, 429);
-      }
-    }
-    for (let i = 0; i < waitingEmails.length; i++) {
-      const n = await gbDayCount(env, `pce:${user.id}`);
-      if (n != null && n > PC_EMAIL_DAILY) return jsonResponse({ error: 'That’s five postcards to email addresses today. Try again tomorrow.' }, 429);
-    }
+    // A card to someone who doesn't follow the sender lands under "From someone new" in their Mailbox
+    // (2026-10-18). No daily caps on postcards since 2026-10-26 (founder: "remove limits to sending telegrams
+    // and postcards"): not to people who don't follow you, not to City Boards, not to email addresses.
     const cardRegion = !toCity && pcIsUSName(b.country) && b.city ? (pcUSCity(b.city, b.region).state || await pcStampState(env, user.id, b.city, b.country)) : null;
     const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
     // One copy of the photo per card (see above).
@@ -21490,10 +21478,6 @@ async function handleTelegramSend(request, env, ctx) {
     }
     if (!deliver.length && notReady.length && !waitingEmails.length) {
       return jsonResponse({ error: targets.length > 1 ? 'None of them has finished their passport yet, so telegrams can’t reach them' : 'They haven’t finished their passport yet, so telegrams can’t reach them' }, 409);
-    }
-    for (let i = 0; i < waitingEmails.length; i++) {
-      const n = await gbDayCount(env, `pce:${user.id}`);
-      if (n != null && n > PC_EMAIL_DAILY) return jsonResponse({ error: 'That’s five messages to email addresses today. Try again tomorrow.' }, 429);
     }
     // No daily cap to people who don't follow you (founder, 2026-10-26: "remove telegram limit from non follower");
     // was five a day. Blocks, reports, the kindness check and the per-minute guard below still stand.

@@ -3330,3 +3330,18 @@ matches what phones run.
   links a day.
 - **Activate:** push (worker only).
 
+## 2026-10-26 — No daily caps on sending postcards and telegrams (COMMITTED, not pushed)
+
+- Founder: "yes remove 5 a days. remove limits to posting, remove limits to sending telegrams and postcards".
+- Removed: postcards to people who don't follow you (5/day, `pcs:`), postcards to City Boards (5/day, `pcb:`), postcards
+  and telegrams to email addresses (5/day, `pce:`), text/share links (10/day, `lnk:`) — plus telegrams to non-followers
+  earlier today.
+- Kept (not sending caps): 20 telegrams a minute (bot guard); 10 people per message and per link; 4 words / 120 chars
+  per telegram, 240 chars per postcard; photo and word checks; City Board posts need a verified stamp in that city;
+  one invitation email per address per sender per 30 days; adults only; blocks. Also untouched (not mail): Things to Do
+  guestbook photos 20/day and place suggestions 10/day (each costs a moderation call), reports, blocks, code tries.
+- New safety net: the whole app sends at most 60 invitation emails a day (INVITE_EMAILS_DAILY) because they share
+  Resend's free plan (100/day) with sign-up codes; past it the card still waits and arrives when they join, and the
+  founder gets one ⚠️ ops alert. Raise it after upgrading Resend.
+- **Activate:** push (worker only).
+
