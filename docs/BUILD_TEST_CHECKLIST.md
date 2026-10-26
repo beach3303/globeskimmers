@@ -3272,3 +3272,14 @@ Main 962643f matches what phones run.
   check (pcBoardOwners: passport public, adult, albums open). The board photos seen 10-25 (Peach Springs, Liberty,
   Grand Canyon Village, Stone Mountain, Atlanta) belong to passports that are no longer 🌍 Everyone.
 
+## 2026-10-26 — Words: no more "circle" (PUSHED — main d7cd086; worker ✅; OTA needed)
+
+- Founder (screenshot of Arrivals): "this still uses 'circle'". Every visible "circle" is gone: the collective is
+  **Friends & followers** (Profile folder, the /Circle page title, Mailbox row, Traveler folder), casual lines say
+  **friends** (Arrivals "from your friends", "Where your friends have been", "Travel is better with friends", "how
+  friends find you…"), New arrivals' button is **Follow**, FollowSender "You don't follow Joy yet." Worker notification
+  copy too ("Reactions and notes from your friends", "Allow or not — it's up to you", "See them under Friends &
+  followers", "Only their friends can write here"). Route /Circle and code names unchanged.
+- Gates: worker check, eslint + no-undef, build, boot-check ✅.
+- **Activate:** `npm run ota` (carries this and the privacy screens).
+
