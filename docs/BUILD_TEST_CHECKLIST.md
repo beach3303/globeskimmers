@@ -3283,3 +3283,8 @@ Main 962643f matches what phones run.
 - Gates: worker check, eslint + no-undef, build, boot-check ✅.
 - **Activate:** `npm run ota` (carries this and the privacy screens).
 
+**OTA 1.0.2610260818 (2026-10-26 morning, run by the founder; `capgo channel list` → production 1.0.2610260818):** on
+phones (iOS + Android) — the privacy ceiling screens (passport chip + sheet, stamp greying + "Its photos", album chips,
+"Who can see it" after stamping, Settings → Privacy), "Friends" / "Friends & followers" instead of "circle". Main d2525d5
+matches what phones run.
+
