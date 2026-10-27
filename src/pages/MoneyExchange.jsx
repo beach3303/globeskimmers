@@ -31,6 +31,8 @@ import FinderHeader, { finderColumnStyle } from "@/components/finder/FinderHeade
 import { WorldChip, ChipRow, ResultLine } from "@/components/finder/FinderControls";
 import { WorldCard, worldGrid, NumberMark, FactsLine, CardKicker, CardName, ActionRow, WorldSkeleton } from "@/components/finder/FinderCard";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
+import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
+import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import { Guilloche } from "@/components/finder/motifs";
 import CurrencyPicker, { PILL_WIDTH } from "@/components/money/CurrencyPicker";
 import { currencyByCode, currencyForCountry, parseAmount, formatMoney, formatRate, formatAmount } from "@/components/money/currencies";
@@ -113,6 +115,7 @@ function mapStore(p) {
     hours: Array.isArray(p.hours) ? p.hours : [],
     phone: p.phone || p.nationalPhoneNumber || null,
     website: p.website || p.websiteUri || null,
+    photos: (Array.isArray(p.photos) ? p.photos : []).map((x) => (typeof x === "string" ? x : (x?.url || x?.full || null))).filter(Boolean),
   };
 }
 
@@ -145,12 +148,15 @@ function MoreRow({ label, children }) {
 }
 
 // ─── EXCHANGE ROW (Money.dc.html L130-155) ──────────────────────────────────
-// A quiet card: the serif numeral inline, the mono kicker, the serif name; the facts line
-// (open words, distance, street); "Rates not listed: ask at the counter"; Directions
-// (the one solid button), Map, Call, More (hours, address, website).
+// A quiet card: Google's photos of the office across the top when it has any (2026-10-26:
+// every card shows its photos), the serif numeral inline, the mono kicker, the serif name;
+// the facts line (open words, distance, street); "Rates not listed: ask at the counter";
+// Directions (the one solid button), Map, Call, More (hours, address, website).
 function ExchangeRow({ s, n, isLocal, formatDistance, onDirections, onShowOnMap, highlighted, cardRef }) {
   const [expanded, setExpanded] = useState(false);
+  const [gallery, setGallery] = useState({ open: false, idx: 0 });
   const moreId = useId();
+  const photos = s.photos || [];
   const os = openStateFor(s, { isLocal });
   const dist = Number.isFinite(s.distanceMiles) ? formatDistance(s.distanceMiles) : null;
   const kind = kindOf(s);
@@ -158,6 +164,10 @@ function ExchangeRow({ s, n, isLocal, formatDistance, onDirections, onShowOnMap,
   return (
     <WorldCard world="money" as="li" ref={cardRef}
       style={{ padding: "14px 16px", ...(highlighted ? { boxShadow: `0 0 0 3px ${W.ink}, ${W.cardShadow}` } : null) }}>
+      {photos.length > 0 && (
+        <PhotoOrIcon world="money" aspect="16 / 9" photos={photos} alt={s.name} style={{ margin: "-14px -16px 12px" }}
+          onClick={(i) => setGallery({ open: true, idx: Number.isFinite(i) ? i : 0 })} />
+      )}
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
         <NumberMark n={n} world="money" place="inline" />
         <div style={{ minWidth: 0 }}>
@@ -195,6 +205,7 @@ function ExchangeRow({ s, n, isLocal, formatDistance, onDirections, onShowOnMap,
           ) : null}
         </div>
       )}
+      {photos.length > 0 && <PhotoGalleryModal photos={photos} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />}
     </WorldCard>
   );
 }

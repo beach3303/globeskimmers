@@ -531,11 +531,14 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
   const [enriched,setEnriched]=useState(null);
   const sheetRef=useRef(null);
   const closeRef=useRef(null);
-  // Owned "Nearby attractions" carry no photos (the icons and regional rows come from
-  // Google with photos), so enrich on mount; rows with a photo skip it. Owned→Google
-  // resolves once and is cached 90 days.
+  // Every card shows at least 3 photos (founder, 2026-10-26). Our own rows (the iconic list,
+  // owned "Nearby attractions") carry one photo or none, so they fetch Google's on mount: the
+  // worker matches the place once and keeps the photos and details 30 days, Google's limit.
+  // Google rows already carry every photo Google has.
   useEffect(()=>{
-    if(enriched||(a.photos&&a.photos.length))return;
+    const pid=String(a.id||a.placeId||"");
+    const google=/^(places\/)?ChIJ|^(places\/)?[A-Za-z0-9_-]{27}$/.test(pid)&&!pid.includes(":");
+    if(enriched||google||(a.photos||[]).length>=3)return;
     callWorker('places/enrich-owned',{id:a.id||a.placeId,name:a.displayName?.text||a.name,lat:a.lat??a.location?.latitude,lng:a.lng??a.location?.longitude,maxPhotos:3})
       .then(({data})=>{if(data&&data.matched)setEnriched(data);}).catch(()=>{});
   },[]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -563,9 +566,10 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
     };
   }
   const name=a.displayName?.text||a.name||"Attraction";
-  // Enriched Google photos first; any photo object becomes its URL.
-  const _photos=(enriched?.photos?.length?enriched.photos:(a.photos||[]))
-    .map(p=>typeof p==="string"?p:(p?.url||p?.full||p?.thumbnail||null)).filter(Boolean);
+  // Google's photos first, then the row's own; any photo object becomes its URL, and a repeat
+  // shows once.
+  const _photos=[...new Set([...(enriched?.photos||[]),...(a.photos||[])]
+    .map(p=>typeof p==="string"?p:(p?.url||p?.full||p?.thumbnail||null)).filter(Boolean))];
   // The page's mi/km formatter when given; miles otherwise.
   const fmtDist=fmt||((d)=>`${d.toFixed(1)} mi`);
   // Standing at it? Only the device's own GPS fix counts (never a picked place).

@@ -589,7 +589,9 @@ export default function CoffeeFinderPage() {
     r=keepCountry(r,countryLock);
     if(nearFirstC) r=nearFirstList(r);
     if(submitted) r=pinInstitutions(r);
-    r=r.filter(s=>!ownedEnrich[s.id||s.placeId]?.closed); // Google says it closed for good
+    // Google says it closed for good, or has no listing here at all (former tenants, each a card
+    // with no photo): the card leaves the list.
+    r=r.filter(s=>{const e=ownedEnrich[s.id||s.placeId];return !e?.closed&&!e?.unverified;});
     return r;
   },[ownedEnrich,shopsWithHours,searchMerged,submitted,radius,filterSpecialty,sortBy,filterOpenNow,hoursKnown,filterWifi,filterShopType,filterWork,filterOutlets,filterQuiet,filterAC,workProfiles,countryLock,nearFirstC]);
 

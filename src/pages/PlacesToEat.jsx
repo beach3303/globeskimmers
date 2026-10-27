@@ -1182,7 +1182,9 @@ export default function PlacesToEat() {
     }
     if (nearFirst) r = nearFirstSplit(r);
     r = pinInstitutions(r, nearFirst ? 5 : Infinity);
-    r = r.filter(x => !ownedEnrich[x.id || x.placeId]?.closed); // Google says it closed for good
+    // Google says it closed for good, or has no listing here at all (2026-10-26: those were former
+    // tenants — Shunji's, Ruam Mitr — each a card with no photo): the card leaves the list.
+    r = r.filter(x => { const e = ownedEnrich[x.id || x.placeId]; return !e?.closed && !e?.unverified; });
     return r;
   }, [ownedEnrich, restaurants, filterBars, filterOpenNow, filterParking, filterOutdoor, filterIndoor, filterDriveThru, filterBakery, filterMinRating, filterMaxPrice, cuisineTypeFilter, filterVibes, filterDietary, searchText, sortByRating, nearFirst, presetCountry]);
 
