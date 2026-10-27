@@ -15106,25 +15106,26 @@ async function handlePassportStamp(request, env, ctx) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
-// POST /passport/album/privacy { stamp_ids: [uuid…], photos: 'same' | 'inner' | 'me' } — who sees
-// an album (founder, 2026-10-26: "albums should have a quick way to change privacy per album").
-// An album is a place's photos, across its stamps; it can only narrow them: 'same' follows each
-// stamp, 'inner' keeps them to friends even when a stamp is wider, 'me' hides them from everyone.
-// Anything but 'same' also takes them off the City Boards.
+// POST /passport/album/privacy { stamp_ids: [uuid…], photos: 'me' | 'inner' | 'followers' | 'public' }
+// — who sees an album (founder, 2026-10-26: "albums should have a quick way to change privacy per
+// album"; 2026-10-27: the same four words as everywhere, no "same as"). An album is a place's
+// photos across its stamps; its photos never reach more than their stamp or the passport, so
+// 'public' means "as far as each stamp goes". Only 'public' (or an old unset album) hangs them on
+// the City Boards. 'same' from an older app is read as 'public'.
 async function handleAlbumPrivacy(request, env) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
     const ids = [...new Set((Array.isArray(b.stamp_ids) ? b.stamp_ids : []).map(String).filter((x) => BL_UUID.test(x)))].slice(0, 200);
-    if (!ids.length || !['same', 'inner', 'me'].includes(b.photos)) return jsonResponse({ error: 'stamp_ids + photos required' }, 400);
-    const tier = b.photos === 'same' ? null : b.photos;
+    if (!ids.length || !['same', 'inner', 'me', 'followers', 'public'].includes(b.photos)) return jsonResponse({ error: 'stamp_ids + photos required' }, 400);
+    const tier = b.photos === 'same' ? 'public' : b.photos;
     const w = await gbRest(env, `passport_stamps?id=in.(${ids.join(',')})&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ photos_tier: tier, updated_at: new Date().toISOString() }) });
     if (!w.ok) return jsonResponse({ error: 'Couldn’t save that — try again' }, 502);
     const rows = await w.json();
     if (!rows.length) return jsonResponse({ error: 'Not found' }, 404);
     await pcBoardsCacheBust(env);
-    if (!tier) await pcNoticeForStamps(env, user.id, rows.map((r) => r.id));
+    if (tier === 'public') await pcNoticeForStamps(env, user.id, rows.map((r) => r.id));
     return jsonResponse({ ok: true, photos: b.photos, stamp_ids: rows.map((r) => r.id) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -15361,7 +15362,8 @@ const ppTierVisible = (st, lvl, fb = 'inner') => lvl >= (PP_TIER_NEED[ppStampTie
 const ppAud = (share) => (share?.is_public === true ? 'public' : share?.visibility === 'me' || share?.visibility === 'followers' ? share.visibility : 'inner');
 // The level this viewer reads the booklet at: their own, or -1 (nothing) below the audience.
 const ppUnder = (aud, lvl) => (lvl >= 3 || lvl >= (PP_TIER_NEED[aud] ?? 2) ? lvl : -1);
-// An album (a stamp's photos) may be narrower than its stamp: photos_tier 'inner' or 'me'.
+// An album (a stamp's photos) may be narrower than its stamp: photos_tier 'me' | 'inner' |
+// 'followers' | 'public' (2026-10-27); unset or 'public' follows the stamp.
 const ppPhotosVisible = (st, lvl) => lvl >= 3 || !st?.photos_tier || lvl >= (PP_TIER_NEED[st.photos_tier] ?? 99);
 // Who this viewer is to the owner: 3 the owner, 2 inner circle (mutual accepted),
 // 1 an approved follower, 0 a stranger.
@@ -15387,6 +15389,8 @@ function ppAlbumsAllowedAt(ownerSp, lvl) {
   const aud = ownerSp?.albums_audience || 'passport';
   if (aud === 'me') return false;
   if (aud === 'passport') return true;
+  // 'followers' (2026-10-27): friends and approved followers.
+  if (aud === 'followers') return lvl >= 1;
   return lvl >= 2;
 }
 // ── Photo links for other people (founder, 2026-10-18: "solidify our privacy") ──────────
@@ -15427,7 +15431,7 @@ async function ppPhotoOpenable(env, id, lvl) {
   if (gbOffSocial(sp)) return null;
   const fb = isPublic ? 'public' : 'inner';
   if (lvl === 'b') {
-    if (!isPublic || st.hidden || st.photos_tier || ppStampTier(st, fb) !== 'public' || row.board_hidden || !pcAdultRow(sp) || ['inner', 'me'].includes(sp?.albums_audience)) return null;
+    if (!isPublic || st.hidden || (st.photos_tier && st.photos_tier !== 'public') || ppStampTier(st, fb) !== 'public' || row.board_hidden || !pcAdultRow(sp) || ['inner', 'me', 'followers'].includes(sp?.albums_audience)) return null;
   } else {
     // Under the passport's ceiling (a viewer below it reads -1, which opens nothing).
     const n = ppUnder(ppAud(shareRow), Number(lvl));
@@ -18325,7 +18329,7 @@ async function handleSocialProfile(request, env, ctx) {
     const patch = { updated_at: new Date().toISOString() };
     // The privacy dials (founder, 2026-10-15). Only the known words are stored.
     if (b.approve_followers !== undefined) patch.approve_followers = b.approve_followers === true;
-    if (b.albums_audience !== undefined && ['passport', 'inner', 'me'].includes(b.albums_audience)) patch.albums_audience = b.albums_audience;
+    if (b.albums_audience !== undefined && ['passport', 'followers', 'inner', 'me'].includes(b.albums_audience)) patch.albums_audience = b.albums_audience;
     if (b.comments_audience !== undefined && ['inner', 'audience', 'off'].includes(b.comments_audience)) patch.comments_audience = b.comments_audience;
     if (b.default_stamp_tier !== undefined && PP_TIERS.includes(b.default_stamp_tier)) patch.default_stamp_tier = b.default_stamp_tier;
     // The one-time privacy check-up was answered (founder, 2026-10-18).
@@ -18737,14 +18741,14 @@ async function pcBoardOwners(env, ownerIds) {
     ]);
     if (!r.ok || !sq.ok) return null;
     const pub = new Set((await sq.json()).map((x) => x.user_id));
-    for (const row of await r.json()) if (pub.has(row.user_id) && pcAdultRow(gbTierRow(row)) && !['inner', 'me'].includes(row.albums_audience)) ok.add(row.user_id);
+    for (const row of await r.json()) if (pub.has(row.user_id) && pcAdultRow(gbTierRow(row)) && !['inner', 'me', 'followers'].includes(row.albums_audience)) ok.add(row.user_id);
   }
   return ok;
 }
 async function pcBoardPhotos(env, board, before, blocked, origin) {
   const none = { photos: [], more: false, total: 0 };
   try {
-    let where = `visibility=eq.public&hidden=eq.false&photos_tier=is.null&${pcCountryIn(board.country)}`;
+    let where = `visibility=eq.public&hidden=eq.false&or=(photos_tier.is.null,photos_tier.eq.public)&${pcCountryIn(board.country)}`;
     if (board.kind === 'city') where += `&city=ilike.${pcLike(board.city)}${pcIsUSName(board.country) ? '*' : ''}`;
     const sq = await gbRest(env, `passport_stamps?${where}&order=created_at.desc&select=id,user_id,name,kind,city,region,country,lat,lng&limit=${board.kind === 'city' ? 400 : 2000}`, {});
     if (!sq.ok) return none;
@@ -18786,7 +18790,7 @@ async function pcNoticeForStamps(env, userId, stampIds) {
     const gate = await pcBoardOwners(env, [userId]);
     if (!gate || !gate.has(userId)) return;
     const where = Array.isArray(stampIds) ? `id=in.(${stampIds.filter((x) => BL_UUID.test(x)).join(',')})&` : '';
-    const sq = await gbRest(env, `passport_stamps?${where}user_id=eq.${userId}&visibility=eq.public&hidden=eq.false&photos_tier=is.null&select=id,name,city,region,country&limit=500`, {});
+    const sq = await gbRest(env, `passport_stamps?${where}user_id=eq.${userId}&visibility=eq.public&hidden=eq.false&or=(photos_tier.is.null,photos_tier.eq.public)&select=id,name,city,region,country&limit=500`, {});
     const stamps = sq.ok ? await sq.json() : [];
     if (!stamps.length) return;
     const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${stamps.map((st) => st.id).join(',')})&mod_status=eq.ok&board_hidden=eq.false&select=stamp_id&limit=2000`, {});
@@ -19786,7 +19790,7 @@ async function blBoardShare(env, target) {
     if (!ph) return null;
     // The owner through the boards' own gate (pcBoardOwners: adult, albums open, passport public).
     const [sq, owners] = await Promise.all([
-      gbRest(env, `passport_stamps?id=eq.${ph.stamp_id}&visibility=eq.public&hidden=eq.false&photos_tier=is.null&select=id`, {}),
+      gbRest(env, `passport_stamps?id=eq.${ph.stamp_id}&visibility=eq.public&hidden=eq.false&or=(photos_tier.is.null,photos_tier.eq.public)&select=id`, {}),
       pcBoardOwners(env, [ph.user_id]),
     ]);
     const open = !!owners && owners.has(ph.user_id);
@@ -20299,7 +20303,7 @@ async function blReadBoard(env, request, user, ids, photoIds = [], contribIds = 
     const phq = await gbRest(env, `passport_stamp_photos?id=in.(${wantPh.join(',')})&mod_status=eq.ok&board_hidden=eq.false&select=id,user_id,stamp_id`, {});
     const phs = phq.ok ? await phq.json() : [];
     if (phs.length) {
-      const sq = await gbRest(env, `passport_stamps?id=in.(${[...new Set(phs.map((p) => p.stamp_id))].join(',')})&visibility=eq.public&hidden=eq.false&photos_tier=is.null&select=id`, {});
+      const sq = await gbRest(env, `passport_stamps?id=in.(${[...new Set(phs.map((p) => p.stamp_id))].join(',')})&visibility=eq.public&hidden=eq.false&or=(photos_tier.is.null,photos_tier.eq.public)&select=id`, {});
       const pub = new Set((sq.ok ? await sq.json() : []).map((st) => st.id));
       // Still hanging: its owner passes the boards' gate (adult, albums open, passport public).
       const owners = await pcBoardOwners(env, phs.map((p) => p.user_id));
@@ -20322,7 +20326,7 @@ async function blReadBoard(env, request, user, ids, photoIds = [], contribIds = 
   if (!blocks || !tq.ok || !oq.ok) return none;
   const profs = await tq.json();
   const adults = new Set(profs.map(gbTierRow).filter(pcAdultRow).map((r) => r.user_id));
-  const albumsOpen = new Set(profs.filter((r) => !['inner', 'me'].includes(r.albums_audience)).map((r) => r.user_id));
+  const albumsOpen = new Set(profs.filter((r) => !['inner', 'me', 'followers'].includes(r.albums_audience)).map((r) => r.user_id));
   const ownerBlocks = {};
   for (const r of await oq.json()) (ownerBlocks[r.user_id] = ownerBlocks[r.user_id] || new Set()).add(r.blocked_user_id);
   const ownerOf = {};
@@ -21397,7 +21401,7 @@ async function handleCityBoard(request, env) {
     // read. A photo also needs its owner's albums open to passport viewers — the dial that
     // defaults to "same as the stamp" since 2026-10-16; 'inner' and 'me' keep photos home.
     const adult = (id) => pcAdultRow(prof[id]);
-    const albumsOpen = (id) => !['inner', 'me'].includes(aud[id]);
+    const albumsOpen = (id) => !['inner', 'me', 'followers'].includes(aud[id]);
     const shownCards = cards.filter((p) => !blocked.has(p.sender_id) && adult(p.sender_id));
     // A contribution is public by design: the albums dial is about stamp photos.
     const shownPhotos = wall.photos.filter((p) => adult(p.user_id) && (p.contrib || albumsOpen(p.user_id)));
@@ -21462,7 +21466,7 @@ async function pcPhotoBoards(env, origin) {
   if (kv) { try { const c = JSON.parse((await kv.get('photoboards:v2')) || 'null'); if (c) return c; } catch { /* rebuild */ } }
   const out = { city: {}, state: {}, country: {} };
   try {
-    const sq = await gbRest(env, `passport_stamps?visibility=eq.public&hidden=eq.false&photos_tier=is.null&select=id,user_id,city,region,country,lat,lng&limit=3000`, {});
+    const sq = await gbRest(env, `passport_stamps?visibility=eq.public&hidden=eq.false&or=(photos_tier.is.null,photos_tier.eq.public)&select=id,user_id,city,region,country,lat,lng&limit=3000`, {});
     const stamps = sq.ok ? (await sq.json()).filter((st) => st.city && st.country) : [];
     // The photos travelers contributed (2026-10-27) count and cover their boards too.
     const cq = await gbRest(env, `board_contributions?mod_status=eq.ok&hidden=eq.false&order=created_at.desc&select=id,user_id,city,region,country,created_at&limit=6000`, {}).catch(() => null);
