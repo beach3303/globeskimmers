@@ -552,6 +552,16 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
     const t=setTimeout(()=>closeRef.current?.focus({preventScroll:true}),60);
     return()=>{clearTimeout(t);from?.focus?.({preventScroll:true});};
   },[expanded]);
+  // What the enrichment found fills what the row lacks (2026-10-26: the iconic cards come from our
+  // own list, with no hours or rating): weekly hours, the rating, the phone and the site.
+  if(enriched){
+    a={...a,
+      ...(enriched.hours?.weekdayDescriptions?.length&&!a.currentOpeningHours?.weekdayDescriptions?.length?{currentOpeningHours:{weekdayDescriptions:enriched.hours.weekdayDescriptions},utcOffsetMinutes:enriched.utcOffsetMinutes??a.utcOffsetMinutes}:{}),
+      ...(enriched.rating&&!a.rating?{rating:enriched.rating}:{}),
+      ...(enriched.nationalPhoneNumber&&!a.nationalPhoneNumber?{nationalPhoneNumber:enriched.nationalPhoneNumber}:{}),
+      ...(enriched.websiteUri&&!a.websiteUri?{websiteUri:enriched.websiteUri}:{}),
+    };
+  }
   const name=a.displayName?.text||a.name||"Attraction";
   // Enriched Google photos first; any photo object becomes its URL.
   const _photos=(enriched?.photos?.length?enriched.photos:(a.photos||[]))
@@ -627,10 +637,33 @@ function Waypoint({n,title,count,open,onToggle,controls,style=undefined}){
 // waypoint and, open, a row of strip cards that scrolls sideways to the screen's edge,
 // re-ranked by "Who's traveling?". `after` spaces it from the chapter above: 4px under
 // a closed one, 22px under an open one.
-function Chapter({n,title,items,open,onToggle,after,userLat,userLng,isTablet,gpsLat=null,gpsLng=null,fmt=null,markOf=null,isLocal=false}){
+function Chapter({n,title,items,open,onToggle,after,userLat,userLng,isTablet,gpsLat=null,gpsLng=null,fmt=null,markOf=null,isLocal=false,full=false}){
   const persona=usePersona();
   const id=`ttd-chapter-${n}`;
+  const [shown,setShown]=useState(6);
   if(!items?.length) return null;
+  if(full){
+    // Full cards (the iconic chapter): six, then ten more at a time.
+    const list=items.slice(0,shown);
+    return(
+      <section aria-label={title} style={{marginTop:after}}>
+        <Waypoint n={n} title={title} count={items.length} open={open} onToggle={onToggle} controls={id}/>
+        {open&&(
+          <>
+            <ol id={id} style={{...worldGrid(isTablet),marginTop:8}}>
+              {list.map((a,i)=><TierCard key={a.id||i} a={a} userLat={userLat} userLng={userLng} isTablet={isTablet} fullWidth inList gpsLat={gpsLat} gpsLng={gpsLng} fmt={fmt} markOf={markOf} isLocal={isLocal}/>)}
+            </ol>
+            {items.length>shown&&(
+              <button type="button" onClick={()=>setShown((s)=>s+10)}
+                style={{display:"block",width:"100%",minHeight:48,marginTop:10,borderRadius:14,border:`1px solid ${W.line}`,background:NEUTRAL.white,color:W.ink,fontFamily:"inherit",fontSize:fsx(14),fontWeight:650,cursor:"pointer"}}>
+                Show {Math.min(10,items.length-shown)} more iconic places
+              </button>
+            )}
+          </>
+        )}
+      </section>
+    );
+  }
   return(
     <section aria-label={title} style={{marginTop:after}}>
       <Waypoint n={n} title={title} count={items.length} open={open} onToggle={onToggle} controls={id}/>
@@ -708,12 +741,14 @@ export default function ThingsToDoFinder() {
   const isLocal=locationMode==="current";
 
   // Chapters open or closed (ThingsToDo.dc.html: National icons starts closed).
-  const [openCh,setOpenCh]=useState({national:false,regional:true,nearby:true,near:true});
+  const [openCh,setOpenCh]=useState({iconic:true,national:false,regional:true,nearby:true,near:true});
   const toggleCh=(k)=>setOpenCh((o)=>({...o,[k]:!o[k]}));
   // The strips' passport marks (makeMarks): one passport read, and the official stamps
   // around from D1 (free, no Google). Either read failing just leaves its marks off.
   const [myStamps,setMyStamps]=useState(null);
   const [stampable,setStampable]=useState(null);
+  const [retryTick,setRetryTick]=useState(0);
+  const partialTries=useRef(0);
   useEffect(()=>{
     let gone=false;
     listPassport().then(({stamps,error})=>{if(!gone&&!error)setMyStamps(stamps);}).catch(()=>{});
@@ -728,6 +763,13 @@ export default function ThingsToDoFinder() {
     return()=>{gone=true;};
   },[lat,lng]);
   const markOf=useMemo(()=>makeMarks(myStamps,stampable),[myStamps,stampable]);
+  // The stampable rows as cards: the row is the place's official stamp record too.
+  const iconicItems=useMemo(()=>(stampable||[]).filter((r)=>r&&r.name&&Number.isFinite(+r.lat)&&Number.isFinite(+r.lng)).map((r)=>({
+    id:r.id,placeId:r.id,name:r.name,displayName:{text:r.name},lat:+r.lat,lng:+r.lng,distanceMiles:r.distanceMiles,
+    formattedAddress:[r.city,r.country].filter(Boolean).join(", "),types:r.category?[r.category]:[],activityCategory:r.category,
+    rating:r.rating||undefined,photos:r.photoUrl?[r.photoUrl]:[],editorialSummary:r.whyVisit?{text:r.whyVisit}:undefined,
+    stamp:{id:r.id,name:r.name,lat:+r.lat,lng:+r.lng,city:r.city,country:r.country,category:r.category,footprint_radius_m:r.footprint_radius_m},
+  })),[stampable]);
 
   useEffect(()=>{ setRadius(25); }, [activeLocation?.placeId]); // fixed wide net (radius filter removed app-wide)
 
@@ -762,6 +804,7 @@ export default function ThingsToDoFinder() {
       setLoading(true); setError(null);
     }
 
+    let keepLoading=false;
     (async()=>{
       try{
         const fetchRadius=Math.max(radius,25)*1609; // always fetch at least 25mi
@@ -778,6 +821,14 @@ export default function ThingsToDoFinder() {
           if(!cached) setError(fetchErr==="timeout"?"The server took too long to respond — try again.":"Couldn't reach the server — check your connection and try again.");
           return; // finally{} below still clears the loading chip
         }
+        // A new area the server is still building (2026-10-26: it answers within ~12 s with
+        // { partial: true } and finishes in the background): keep what's on screen, ask again.
+        if(data.partial){
+          if(partialTries.current<3){ partialTries.current+=1; keepLoading=true; setTimeout(()=>{ if(!cancelled) setRetryTick((t)=>t+1); },15000); }
+          else if(!cached) setError("This area is taking a while to load — try again in a minute.");
+          return;
+        }
+        partialTries.current=0;
         const raw=data?.activities||[];
         const ni=data?.nationalIcons||[];
         const rg=data?.regionalGems||[];
@@ -801,10 +852,10 @@ export default function ThingsToDoFinder() {
         if(!cached) setError(`Failed: ${e.message}`);
         // If we had cache, leave it on-screen on network error.
       }
-      finally{ if(!cancelled) setLoading(false);}
+      finally{ if(!cancelled&&!keepLoading) setLoading(false);}
     })();
     return ()=>{ cancelled=true; };
-  },[lat,lng,radius,country,region,category,refreshTick]);
+  },[lat,lng,radius,country,region,category,refreshTick,retryTick]);
 
   // All owned/cached places from the getActivities call, deduped — the FREE,
   // instant first layer of search (main list + national icons + regional +
@@ -907,9 +958,16 @@ export default function ThingsToDoFinder() {
   const stats={total:cardsList.length};
   // The chapters that show (browsing, no filter), numbered in this order with no gaps.
   const showChapters=!submitted&&!browseFilterActive;
+  // Iconic places first (founder, 2026-10-26: "regional and iconic things to do cards are not
+  // showing up like before"): our own stampable list, nearest famous places first, which answers
+  // in under a second — so they show even while the slower searches below are still loading.
+  // Full cards, each with its official stamp, photos and the place's sheet (guestbook, prices).
+  const iconicNames=new Set(iconicItems.map((x)=>normName(x.name)));
+  const notIconic=(xs)=>xs.filter((x)=>!iconicNames.has(normName(x.displayName?.text||x.name)));
   const chapterList=showChapters?[
-    {key:"national",title:`National icons · ${country}`,items:nationalIcons},
-    {key:"regional",title:`Regional must-see · ${region||city}`,items:regionalGems},
+    {key:"iconic",title:`Iconic places near you`,items:iconicItems,full:true},
+    {key:"national",title:`National icons · ${country}`,items:notIconic(nationalIcons)},
+    {key:"regional",title:`Regional must-see · ${region||city}`,items:notIconic(regionalGems)},
     {key:"nearby",title:"Nearby attractions",items:nearbyAttractions},
   ].filter((c)=>c.items.length>0):[];
   const nearYouChapter=showChapters&&chapterList.length>0&&filtered.length>0;
@@ -1102,7 +1160,7 @@ export default function ThingsToDoFinder() {
         <div style={{...finderColumnStyle(isTablet),paddingTop:28}}>
           <FinderEmptyState world="todo" icon={MapPin} title="Choose a location to explore" reason="Use your current location or pick a city to see things to do nearby." actionLabel="Choose location" onAction={()=>setLocPicker(true)}/>
         </div>
-      ):loading&&activities.length===0&&nationalIcons.length===0&&regionalGems.length===0&&nearbyAttractions.length===0?(
+      ):loading&&activities.length===0&&nationalIcons.length===0&&regionalGems.length===0&&nearbyAttractions.length===0&&!(showChapters&&iconicItems.length)?(
         <TtdLoading isTablet={isTablet}/>
       ):error?(
         /* A failed read is never "nothing here"; an empty answer says so plainly. The
@@ -1115,7 +1173,7 @@ export default function ThingsToDoFinder() {
       ):viewMode==="list"?(
         <div style={{...finderColumnStyle(isTablet),paddingTop:14,paddingBottom:isTablet?170:100,display:"flex",flexDirection:"column"}}>
           {chapterList.map((c,i)=>(
-            <Chapter key={c.key} n={i+1} title={c.title} items={c.items} open={openCh[c.key]} onToggle={()=>toggleCh(c.key)}
+            <Chapter key={c.key} n={i+1} title={c.title} items={c.items} full={!!c.full} open={openCh[c.key]} onToggle={()=>toggleCh(c.key)}
               after={i===0?0:(openCh[chapterList[i-1].key]?14:4)} userLat={lat} userLng={lng} isTablet={isTablet}
               gpsLat={gpsLat} gpsLng={gpsLng} fmt={formatDistance} markOf={markOf} isLocal={isLocal}/>
           ))}
