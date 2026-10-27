@@ -21450,6 +21450,10 @@ async function pcBoardsCacheBust(env) { if (env.GLOBESKIMMERS_KV) await env.GLOB
 // comments ('bcp:<id>'). The phone sends 20 to a pick; the only limit here is a bot guard.
 const BC_OPEN_UNTIL = Date.parse('2027-07-01T07:00:00Z'); // the end of June 30, 2027, Pacific
 const BC_PER_MINUTE = 60;
+// A ceiling no traveler reaches (founder, 2026-10-27): it caps a script running all day at about
+// $3 an account; the founder hears when anyone passes BC_DAY_ALERT in a day.
+const BC_PER_DAY = 1000;
+const BC_DAY_ALERT = 300;
 const bcPhotoUrl = (origin, id) => `${origin}/board-photo/${id}`;
 // The city a photo was taken in: Google's reverse geocode, kept 30 days for its ~1 km square
 // (the coarse names only, as /reverse-geocode keeps them). { city, region, country } or null.
@@ -21532,6 +21536,10 @@ async function handleBoardContribute(request, env, ctx) {
     let bytes;
     try { bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0)); } catch { return jsonResponse({ error: 'Bad image data' }, 400); }
     if (bytes.length < 500 || bytes.length > 4 * 1024 * 1024 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return jsonResponse({ error: 'Please pick a photo (JPEG, under 4 MB)' }, 400);
+    // Counted before the paid checks run: a refused photo costs the same as a posted one.
+    const today = await gbDayCount(env, `bc:${user.id}`);
+    if (today != null && today > BC_PER_DAY) return jsonResponse({ error: 'That’s 1,000 photos today, the most for one day. Add the rest tomorrow.', code: 'day_full' }, 429);
+    if (today === BC_DAY_ALERT && ctx) ctx.waitUntil(founderAlert(env, `📸 Someone has sent ${BC_DAY_ALERT} photos to City Boards today. The ceiling is ${BC_PER_DAY.toLocaleString('en-US')} a day. Admin → Safety reports if it looks like spam.`, 'ops', { by: user.id }));
     const caption = String(b.caption || '').replace(/\s+/g, ' ').trim().slice(0, 200);
     const [place, v, capOk] = await Promise.all([
       bcPlaceAt(env, lat, lng),

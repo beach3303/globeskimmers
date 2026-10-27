@@ -96,7 +96,7 @@ function ContributeSheet({ photos, onChanged, onClose }) {
         } else if (r.code === "no_location" || r.code === "no_city") tally.noLocation += 1;
         else if (r.code === "child") tally.child += 1;
         else if (r.code === "not_allowed") tally.refused += 1;
-        else { tally.failed += 1; tally.firstError = tally.firstError || r.error; if (r.code === "slow_down" || r.code === "closed") break; }
+        else { tally.failed += 1; tally.firstError = tally.firstError || r.error; if (r.code === "slow_down" || r.code === "closed" || r.code === "day_full") break; }
       } catch (err) { tally.failed += 1; tally.firstError = tally.firstError || err?.message || "Upload failed"; }
     }
     setRun(null);
