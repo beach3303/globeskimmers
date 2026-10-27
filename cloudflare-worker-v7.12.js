@@ -3309,6 +3309,59 @@ async function handleAdminPassportMonthly(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// The passport counts, with each country and city counted once however it was spelled (founder,
+// 2026-10-26: the stats page counted "US" and "United States" as two countries, and two spellings
+// of one city as two). Airport stamps log a country code, other stamps its name; a city folds
+// accents, case and spacing. Computed in the worker from the raw stamp events, in the same
+// shapes the SQL answered. "cities" is now distinct cities; "city_stamps" stays the count of
+// city stamps.
+const PP_NORM_TYPES = new Set(['passport_totals', 'passport_by_country', 'passport_by_city', 'passport_countries_periods', 'passport_countries_by_month']);
+const ppNormCountry = (v) => {
+  const n = pcCountryName(String(v || '').trim());
+  return pcIsUSName(n) ? 'United States' : /^(uk|great britain|britain)$/i.test(n) ? 'United Kingdom' : n;
+};
+async function ppNormStats(env, type) {
+  const { results } = await env.DB.prepare(`SELECT ts, json_extract(payload,'$.kind') AS kind, json_extract(payload,'$.country') AS country, json_extract(payload,'$.city') AS city, json_extract(payload,'$.name') AS name FROM events WHERE event_type='passport_stamp'`).all();
+  const rows = (results || []).map((r) => ({ ts: Number(r.ts) || 0, kind: r.kind || null, country: r.country ? ppNormCountry(r.country) : '', city: String(r.city || '').trim() }));
+  const cityKey = (r) => `${pcFold(r.city)}|${pcFold(r.country)}`;
+  const withCountry = rows.filter((r) => r.country);
+  if (type === 'passport_totals') {
+    const n = (k) => rows.filter((r) => r.kind === k).length;
+    return [{ total_stamps: rows.length, countries: new Set(withCountry.map((r) => r.country)).size, cities: new Set(rows.filter((r) => r.city).map(cityKey)).size, attraction_stamps: n('attraction'), city_stamps: n('city'), airport_stamps: n('airport'), country_stamps: n('country') }];
+  }
+  if (type === 'passport_by_country') {
+    const by = {};
+    for (const r of withCountry) by[r.country] = (by[r.country] || 0) + 1;
+    return Object.entries(by).map(([country, stamps]) => ({ country, stamps })).sort((a, b) => b.stamps - a.stamps).slice(0, 100);
+  }
+  if (type === 'passport_by_city') {
+    const by = new Map();
+    for (const r of rows.filter((x) => x.city)) {
+      const k = cityKey(r);
+      const e = by.get(k) || { stamps: 0, names: {}, country: r.country || null };
+      e.stamps += 1; e.names[r.city] = (e.names[r.city] || 0) + 1;
+      by.set(k, e);
+    }
+    // Each city under its most used spelling.
+    return [...by.values()].map((e) => ({ city: Object.entries(e.names).sort((a, b) => b[1] - a[1])[0][0], country: e.country, stamps: e.stamps })).sort((a, b) => b.stamps - a.stamps).slice(0, 100);
+  }
+  const now = Date.now() / 1000;
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  if (type === 'passport_countries_periods') {
+    const count = (f) => new Set(withCountry.filter(f).map((r) => r.country)).size;
+    return [{ today: count((r) => new Date(r.ts * 1000).toISOString().slice(0, 10) === todayUtc), week: count((r) => r.ts >= now - 7 * 86400), month: count((r) => r.ts >= now - 30 * 86400) }];
+  }
+  // passport_countries_by_month: the last 12 months.
+  const by = new Map();
+  for (const r of rows.filter((x) => x.ts >= now - 365 * 86400)) {
+    const m = new Date(r.ts * 1000).toISOString().slice(0, 7);
+    const e = by.get(m) || { month: m, stamps: 0, set: new Set() };
+    e.stamps += 1; if (r.country) e.set.add(r.country);
+    by.set(m, e);
+  }
+  return [...by.values()].map((e) => ({ month: e.month, countries: e.set.size, stamps: e.stamps })).sort((a, b) => a.month.localeCompare(b.month));
+}
+
 async function handleAnalyticsQuery(request, env) {
   try {
     // Admin-only: the Admin page already sends the caller's JWT via callWorker.
@@ -3325,6 +3378,7 @@ async function handleAnalyticsQuery(request, env) {
         available: Object.keys(ANALYTICS_QUERIES),
       }, 400);
     }
+    if (PP_NORM_TYPES.has(type)) return jsonResponse({ type, results: await ppNormStats(env, type) });
     const sql = ANALYTICS_QUERIES[type];
     if (!sql) {
       return jsonResponse({

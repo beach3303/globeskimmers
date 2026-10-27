@@ -2099,7 +2099,9 @@ export default function AdminAnalytics() {
                 <div><b style={{ fontSize: 20 }}>{ppTotals.total_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Total stamps</div></div>
                 <div><b style={{ fontSize: 20 }}>{ppTotals.countries || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Countries</div></div>
                 <div><b style={{ fontSize: 20 }}>{ppTotals.attraction_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Attractions</div></div>
-                <div><b style={{ fontSize: 20 }}>{ppTotals.city_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Cities</div></div>
+                {/* Distinct cities, each counted once however it was spelled (2026-10-27); the city stamps beside it. */}
+                <div><b style={{ fontSize: 20 }}>{ppTotals.cities ?? ppTotals.city_stamps ?? 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Cities</div></div>
+                <div><b style={{ fontSize: 20 }}>{ppTotals.city_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>City stamps</div></div>
                 <div><b style={{ fontSize: 20 }}>{ppTotals.airport_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>✈️ Airports</div></div>
                 <div><b style={{ fontSize: 20 }}>{ppTotals.country_stamps || 0}</b><div style={{ color: COLORS.gray, fontSize: 11 }}>Country stamps</div></div>
               </div>
