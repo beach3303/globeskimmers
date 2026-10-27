@@ -14694,6 +14694,7 @@ async function handlePassportStamp(request, env, ctx) {
     // client resends the stamp with report:true. It is ALWAYS granted (as
     // 'reported', never \u2713 unless GPS passes after all) and ALWAYS filed.
     const reporting = b.report === true && kind === 'attraction';
+    const PP_REPORT_MAX_M = 1500;   // keep in step with REPORT_MAX_M in AttractionExtras.jsx
     let presence = null, refusal = null, meters = null, reach = null, reportEntity = entityId, variantParent = null;
     // The place check runs on the CLAIM (b.verified), before the anti-spoof
     // verdict above is applied (2026-10-11): a far-away reading is refused as
@@ -14775,6 +14776,16 @@ async function handlePassportStamp(request, env, ctx) {
       }
       // The anti-spoof checks above can still have taken the \u2713 away.
       if (!refusal && verified !== 'gps') refusal = 'unconfirmed';
+      // A report is for GPS that drifts, from someone at or near the place (2026-10-26: the stamp
+      // button is on every card now, so a report from home must not grant a stamp): it needs a
+      // reading, and a reading within PP_REPORT_MAX_M of the place. Farther, or none, is refused
+      // like any tap — the app shows no report button then either.
+      if (reporting && truth && (!hasFix || (Number.isFinite(meters) && meters > (reach || 0) + PP_REPORT_MAX_M))) {
+        if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp_refused', { code: hasFix ? 'report_far' : 'report_no_fix', entity_id: countedAs, name: countedName, d: ppBand(meters, [50, 150, 500, 1500, 5000]), radius_m: reach, reported: true }));
+        return jsonResponse(hasFix
+          ? { error: 'Stamps open when you\u2019re there \u2014 your GPS puts you too far from this place to report it', code: 'not_here', distance_m: Math.round(meters) }
+          : { error: 'Turn on location for GlobeSkimmers, then try again from the place', code: 'proof_needed' }, 409);
+      }
       // An inside-only place is never granted from outside, reported or not (founder, 2026-10-18).
       if ((refusal === 'not_here' || refusal === 'proof_needed') && reporting && truth?.shape?.inside_only) {
         return jsonResponse({ error: refusal === 'not_here' ? `${truth.shape.inside_note} Your GPS shows you outside the building.` : `${truth.shape.inside_note} Turn on location and try again from inside.`, code: refusal, inside_only: true, ...(Number.isFinite(meters) ? { distance_m: Math.round(meters) } : {}) }, 409);
