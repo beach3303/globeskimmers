@@ -14268,7 +14268,23 @@ async function gbModerateDoodle(env, base64, mediaType) {
   } catch { return { allow: false, reason: 'moderation-exception' }; }
 }
 
-const GB_UPLOADS_DAILY_MAX = 20;
+// One rule for the photos and doodles members post (founder, 2026-10-27: "remove limits to
+// posting"; the same as City Board contributions): no daily allowance a traveler would feel.
+// 60 a minute stops a script's burst, and 1,000 a day caps one running all day (each upload is
+// a paid photo check). A refusal Response, or null.
+const POST_PER_MINUTE = 60, POST_PER_DAY = 1000;
+async function gbPostGuard(env, name) {
+  const kv = env.GLOBESKIMMERS_KV;
+  if (kv) {
+    const mk = `pg:min:${name}:${Math.floor(Date.now() / 60000)}`;
+    const n = Number(await kv.get(mk).catch(() => 0)) || 0;
+    if (n >= POST_PER_MINUTE) return jsonResponse({ error: 'That’s a lot at once — wait a minute and keep going', code: 'slow_down' }, 429);
+    await kv.put(mk, String(n + 1), { expirationTtl: 120 }).catch(() => {});
+  }
+  const d = await gbDayCount(env, `pg:${name}`);
+  if (d != null && d > POST_PER_DAY) return jsonResponse({ error: 'That’s 1,000 photos today, the most for one day. Add the rest tomorrow.', code: 'day_full' }, 429);
+  return null;
+}
 // Upload one guestbook photo → moderate → store in R2 → return a servable URL.
 // The client resizes to ~1280px JPEG before sending (keeps payload small). The photo
 // is NOT attached to an entry here; the returned {key,url} is passed to /guestbook/sign.
@@ -14305,11 +14321,10 @@ async function handleGuestbookPhotoUpload(request, env, ctx) {
     if (bytes.length > 4 * 1024 * 1024) return jsonResponse({ error: 'Photo too large (please pick a smaller image)' }, 400);
     if (bytes.length < 500) return jsonResponse({ error: 'That image is too small' }, 400);
 
-    // At most GB_UPLOADS_DAILY_MAX a day per account (go-live round 3: each
-    // upload is a paid moderation call and an R2 object, and there was no
-    // limit), counted before the moderation call.
-    const nUp = await gbDayCount(env, `gbup:${user.id}`);
-    if (nUp != null && nUp > GB_UPLOADS_DAILY_MAX) return jsonResponse({ error: 'That’s a lot of photos for one day — try again tomorrow' }, 429);
+    // The posting guard (gbPostGuard: 60 a minute, 1,000 a day; was 20 a day until 2026-10-27),
+    // counted before the paid moderation call.
+    const guard = await gbPostGuard(env, `gbup:${user.id}`);
+    if (guard) return guard;
 
     // Moderate BEFORE storing (fails closed). Doodles get the drawing door.
     const isDoodle = b.doodle === true;
@@ -16112,7 +16127,7 @@ async function handlePassportPhotoCaption(request, env) {
 // place, founder 2026-10-05).
 const DISH_PROOF_M = 150;
 const DISH_PROOF_ATTRACTION_M = 1500;
-const DISH_DAILY_CAP = 12;
+
 const dishKey = (v) => String(v || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 // Canonical place id: an owned uuid becomes its Google id once one is known,
 // so the same restaurant collects one set of dishes. Reads check both.
@@ -16240,12 +16255,9 @@ async function handlePlaceDishAdd(request, env, ctx) {
     const proof = gpsOk ? 'gps' : exifOk ? 'photo_loc' : null;
     if (!proof) return jsonResponse({ error: 'proof_needed', message: kind === 'attraction' ? 'Share it while you\'re here, or pick a photo that has its location on.' : 'Share your dish while you\'re here, or pick a photo that has its location on.' }, 409);
 
-    if (env.GLOBESKIMMERS_KV) {
-      const ck = `dish:cap:${user.id}:${new Date().toISOString().slice(0, 10)}`;
-      const n = Number(await env.GLOBESKIMMERS_KV.get(ck).catch(() => 0)) || 0;
-      if (n >= DISH_DAILY_CAP) return jsonResponse({ error: 'That\'s a lot of dishes for one day — try again tomorrow' }, 429);
-      await env.GLOBESKIMMERS_KV.put(ck, String(n + 1), { expirationTtl: 2 * 86400 }).catch(() => {});
-    }
+    // The posting guard (gbPostGuard: 60 a minute, 1,000 a day; was 12 a day until 2026-10-27).
+    const guard = await gbPostGuard(env, `dish:${user.id}`);
+    if (guard) return guard;
 
     let data = String(b.image || '');
     const m = data.match(/^data:image\/(?:jpeg|jpg);base64,(.*)$/i);
