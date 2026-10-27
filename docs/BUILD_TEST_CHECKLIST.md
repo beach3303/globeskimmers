@@ -3345,3 +3345,38 @@ matches what phones run.
   founder gets one ⚠️ ops alert. Raise it after upgrading Resend.
 - **Activate:** push (worker only).
 
+
+## 2026-10-26/27 — Stamps on every card, Iconic places, photos, traveler photos, Contribute to City Boards, privacy words (COMMITTED on stamping-v2, not pushed — founder reviews first)
+
+22 commits ahead of origin/main (e21dd77 … 1174a86). Gates on each: `node --check` ✅, eslint (+no-undef) ✅,
+`npm run build` ✅, `npm run boot-check` ✅. Worker harness (real worker, mocked Supabase/Google/Claude/KV/R2;
+scratchpad `bctest/run.mjs`): 39/39 ✅.
+
+- **Stamps** (e6e2d75, afe1acb): "I was here, get the stamp" on every Eat/Coffee/Things to Do/Shopping card; a report
+  grants only with a reading within 1.5 km.
+- **Things to Do** (d66ca59, fa1e4ff): "Iconic places near you" first (our stampable list, full cards); the area's
+  answer is kept in KV (6 h fresh, 7 days), a new area answers within 12 s.
+- **Photos** (f3d3caf, d91cdd1, ccb8dd0): closed/unlisted owned eateries and attractions leave the lists; Things to Do
+  fetches Google's photos for our own cards with < 3; Money Exchange shows photos; ATMs/Restrooms stay at 2 (founder).
+- **Traveler photos** (c67734b, bb33878): travelers' reviewed photos join each place's photos (Eat, Coffee, Things to
+  Do, Shopping, Convenience), credited + reportable in the viewer; "Add a photo from your visit" + Guestbook on Things
+  to Do cards; "Add a photo of what you got here" + Guestbook on Shopping cards. Migration: place_dishes kind
+  'attraction'.
+- **Contribute to City Boards** (529d214, bf1505b, 0e0e1c8, 8c40748): the first album on the Profile (top right), open
+  until 2027-06-30; public, from "a traveler", delete any time, no recognizable children; 20 a pick, 60/min, 1,000/day,
+  founder notified at 300; "2¢ postage, on the house". Migration: board_contributions.
+- **Posting limits** (96f0c8d): card photos (was 12/day) and guestbook doodles (was 20/day) → 60/min + 1,000/day.
+- **Legal** (fe3eafe): privacy policy covers contributions and photos joining a place's photos (site deploys on push).
+- **Admin** (f8d6348): passport stats count each country/city once ("US" = "United States"); "Cities" is now distinct
+  cities, with "City stamps" beside it.
+- **Privacy words** (d605c3a, 40783e8, 1174a86): Only me · Friends · Friends & followers · Everyone everywhere; albums
+  take all four (greyed above the stamp/passport); no "Same as"; albums dial gains Friends & followers. Migration:
+  photos_tier + albums_audience constraints.
+- **Activate (push in two steps, `git fetch` first — the founder edits main on GitHub):**
+  1. `git push origin d605c3a:main` — everything through the privacy migration (3 migrations apply ~20 s after; the
+     worker's new routes answer "opens in a few minutes" until they land).
+  2. Wait ~30 s, confirm the "Applying migration" lines, then push the rest (`stamping-v2:main`).
+  3. Founder: `npm run ota` (both platforms).
+- **Test on a phone after the OTA:** Profile → City Boards album → add 3 photos with location → they appear on that
+  city's board as "From a traveler", like + comment, delete one; a Things to Do card → Add a photo from your visit;
+  Pink's card shows your hot dog as photo 2; Settings → Photo albums shows the four words; a stamp → Its photos.
