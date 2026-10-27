@@ -538,11 +538,13 @@ export async function blotterRead(slug) {
 }
 // The likes and comments on one board page's postcards (City Boards, 2026-10-14): the same
 // { targets, entries } shape, keyed 'pc:<id>'.
-export async function blotterReadBoard(postcardIds, photoIds = []) {
+// contribIds: photos travelers contributed to the board (2026-10-27).
+export async function blotterReadBoard(postcardIds, photoIds = [], contribIds = []) {
   const ids = (postcardIds || []).filter(Boolean).slice(0, 60);
   const photos = (photoIds || []).filter(Boolean).slice(0, 60);
-  if (!ids.length && !photos.length) return { targets: {}, entries: [] };
-  const { data } = await callWorker('blotter/read', { postcards: ids, ...(photos.length ? { photos } : {}) });
+  const contribs = (contribIds || []).filter(Boolean).slice(0, 60);
+  if (!ids.length && !photos.length && !contribs.length) return { targets: {}, entries: [] };
+  const { data } = await callWorker('blotter/read', { postcards: ids, ...(photos.length ? { photos } : {}), ...(contribs.length ? { contribs } : {}) });
   return data && !data.error ? data : { targets: {}, entries: [] };
 }
 // Press or peel one of the five reaction stamps (+ contextual 'yummy').

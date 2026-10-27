@@ -33,6 +33,7 @@ import VirtualItems from "@/components/profile/VirtualItems";
 import Luggage from "@/components/passport/Luggage";
 import PassportFolder from "@/components/passport/PassportFolder";
 import PhotoPackets from "@/components/passport/PhotoPackets";
+import ContributeAlbum from "@/components/passport/ContributeAlbum";
 import InviteButton from "@/components/passport/InviteButton";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
 import { initialOf } from "@/components/social/SocialMarks";
@@ -285,7 +286,8 @@ export default function ProfilePage({ embedded = false } = {}) {
                 book alone; the albums live here). */}
             {stamps ? (
               <div style={{ marginTop: GAP }}>
-                <PhotoPackets stamps={stamps} title="Photo albums" owner albums={albums} onChanged={reloadStamps} className="" />
+                <PhotoPackets stamps={stamps} title="Photo albums" owner albums={albums} onChanged={reloadStamps} className=""
+                  corner={socialTierReady && !teen ? <ContributeAlbum /> : null} />
               </div>
             ) : null}
             {!stamps ? (

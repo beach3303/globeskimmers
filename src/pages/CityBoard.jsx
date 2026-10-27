@@ -234,7 +234,7 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
         )}
         {row.id ? (
           <div style={{ marginTop: 12 }}>
-            <BlotterStrip {...(row.type === "photo" ? { boardPhotoId: row.id } : { postcardId: row.id })} blotter={book} food={!!row.dish} ownerView={ownerView} onChanged={onBook} readOnly={readOnly} />
+            <BlotterStrip {...(row.type === "photo" ? (row.contrib ? { contribId: row.id } : { boardPhotoId: row.id }) : { postcardId: row.id })} blotter={book} food={!!row.dish} ownerView={ownerView} onChanged={onBook} readOnly={readOnly} />
           </div>
         ) : null}
         {row.type === "photo" && onReport ? (
@@ -327,7 +327,11 @@ function Board({ kind, city, region, country, onBack }) {
   const [gbCount, setGbCount] = useState(null);
   // The cards' likes and comments (the guestbook, 2026-10-14), read for every card shown.
   const [book, setBook] = useState(null);
-  const readBook = (list) => blotterReadBoard((list || []).filter((x) => x?.type !== "photo").map((x) => x?.id), (list || []).filter((x) => x?.type === "photo").map((x) => x?.id)).then(setBook);
+  const readBook = (list) => blotterReadBoard(
+    (list || []).filter((x) => x?.type !== "photo").map((x) => x?.id),
+    (list || []).filter((x) => x?.type === "photo" && !x.contrib).map((x) => x?.id),
+    (list || []).filter((x) => x?.type === "photo" && x.contrib).map((x) => x?.id),   // contributed photos (2026-10-27)
+  ).then(setBook);
   const live = useRef(0);
   // A US city asked without its state opens the busiest one; later reads keep that state.
   const askOf = (b) => ({ city, country, kind, region: region || b?.board?.region || null });
@@ -372,7 +376,7 @@ function Board({ kind, city, region, country, onBack }) {
   const report = (row) => setTraveler({
     person: { ...(row.by || {}), postcard_id: row.type === "photo" ? null : row.id || null },
     report: row.type === "photo"
-      ? { kind: "photo", ...(row.id ? { ref: `ph:${row.id}` } : {}), note: clip(`Photo on ${name}’s board${row.place ? `, ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.caption ? `: "${row.caption}"` : ""}`, 480) }
+      ? { kind: "photo", ...(row.id ? { ref: `${row.contrib ? "bcp" : "ph"}:${row.id}` } : {}), note: clip(`Photo on ${name}’s board${row.place ? `, ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.caption ? `: "${row.caption}"` : ""}`, 480) }
       : { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(`City board ${name}${row.place ? `, ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.message ? `: "${row.message}"` : ""}`, 480) },
   });
 

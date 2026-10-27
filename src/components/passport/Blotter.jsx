@@ -51,17 +51,18 @@ const fmtDay = (iso) => {
 // `boardPhotoId` points it at a photo hanging on a city board (City Billboards, 2026-10-16):
 // board rules, like a postcard — anyone adult may react and comment, the owner hears of it.
 // `readOnly`: a minor on a board (founder, 2026-10-16) — sticker likes yes, comments read-only.
-export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, photoId = null, postcardId = null, boardPhotoId = null, readOnly = false }) {
-  const onBoard = !!postcardId || !!boardPhotoId;
+// `contribId` points it at a photo a traveler contributed to a board (2026-10-27).
+export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, photoId = null, postcardId = null, boardPhotoId = null, contribId = null, readOnly = false }) {
+  const onBoard = !!postcardId || !!boardPhotoId || !!contribId;
   // The comments dial, answered by blotter/read for THIS viewer (a board keeps board rules).
   const canWrite = readOnly ? false : onBoard ? true : blotter?.can_comment !== false;
   const commentsOff = !onBoard && blotter?.comments === "off";
   const [busy, setBusy] = useState(null);       // kind being pressed/peeled
   const [sheet, setSheet] = useState(false);
-  const one = postcardId ? `pc:${postcardId}` : boardPhotoId ? `bph:${boardPhotoId}` : photoId ? `ph:${photoId}` : null;
+  const one = postcardId ? `pc:${postcardId}` : contribId ? `bcp:${contribId}` : boardPhotoId ? `bph:${boardPhotoId}` : photoId ? `ph:${photoId}` : null;
   const targets = useMemo(() => (one ? [one] : (stamps || []).map((s) => `st:${s.id}`)), [stamps, one]);
   const lead = targets[0] || null;
-  const item = postcardId ? "postcard" : (photoId || boardPhotoId) ? "photo" : null;
+  const item = postcardId ? "postcard" : (photoId || boardPhotoId || contribId) ? "photo" : null;
 
   const agg = useMemo(() => {
     const counts = {}, mine = new Set();

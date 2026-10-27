@@ -1167,6 +1167,13 @@ export default function AdminAnalytics() {
     await callWorker('admin/reports', { id, resolve });
     loadReports();
   };
+  // A photo contributed to a City Board (ref bcp:<id>, 2026-10-27): it comes down by itself on a
+  // child-safety report or at three reporters; these take it down or put it back by hand.
+  const setContribHidden = async (ref, hidden) => {
+    const { data, error } = await callWorker('admin/board-contribution', { id: String(ref).slice(4), hidden });
+    if (error || data?.error) { alert(error || data.error); return; }
+    alert(hidden ? 'Taken down: it is off the City Board.' : 'Put back on the City Board.');
+  };
 
   // Held usernames (the founder's family reservations) + the Official Seal.
   const [held, setHeld] = useState({ rows: [], emailConfigured: false, error: null });
@@ -1657,6 +1664,13 @@ export default function AdminAnalytics() {
                   <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
                     <button type="button" onClick={() => resolveReport(r.id, 'resolved')} style={{ fontSize: 12, color: COLORS.accent, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>Resolved</button>
                     <button type="button" onClick={() => resolveReport(r.id, 'dismissed')} style={{ fontSize: 12, color: COLORS.gray, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>Dismiss</button>
+                    {/^bcp:/.test(r.ref || '') && (
+                      <>
+                        <a href={`https://globeskimmers-api.maizasimeon.workers.dev/board-photo/${String(r.ref).slice(4)}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: COLORS.accent }}>See photo</a>
+                        <button type="button" onClick={() => setContribHidden(r.ref, true)} style={{ fontSize: 12, color: '#B0472F', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>Take down photo</button>
+                        <button type="button" onClick={() => setContribHidden(r.ref, false)} style={{ fontSize: 12, color: COLORS.gray, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>Put back</button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}

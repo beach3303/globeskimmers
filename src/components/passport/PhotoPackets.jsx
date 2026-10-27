@@ -65,7 +65,9 @@ function Envelope({ packet, onOpen }) {
 
 // albums: the owner's "Who sees my photo albums" dial ('passport' | 'inner' | 'me'); a 🌍 print
 // hangs on the city board only while the dial is open to passport viewers.
-export default function PhotoPackets({ stamps, title = "Photo packets", owner = false, albums = "passport", onChanged = null, social = null, className = "max-w-md mx-auto px-4 mt-8" }) {
+// corner (2026-10-27): an album pinned at the top right of the shelf — the profile's
+// "Contribute to City Boards". With a corner the shelf shows even before any stamp has photos.
+export default function PhotoPackets({ stamps, title = "Photo packets", owner = false, albums = "passport", onChanged = null, social = null, className = "max-w-md mx-auto px-4 mt-8", corner = null }) {
   // social: { slug, blotter, onBlotterChanged } — the per-photo guestbook inside an open album.
   // className: the column (the profile passes its own, which widens on iPad).
   const packets = useMemo(() => derivePackets(stamps), [stamps]);
@@ -105,7 +107,7 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
     setBusyKey(null);
     if (added) { showToast(`${added} print${added === 1 ? "" : "s"} added to ${packet.city} 📸`, "success"); onChanged?.(); }
   };
-  if (!packets.length) return null;
+  if (!packets.length && !corner) return null;
   // The shelf used to scroll sideways; a lifetime of prints reads top to bottom, a year at
   // a time (founder, 2026-10-14 night). Newest year first, two envelopes across on a phone:
   // the envelopes size to the column (they were a fixed 176 px, and inside the Passport's own
@@ -113,14 +115,20 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
   const years = packetsByYear(packets);
   return (
     <div className={className}>
-      <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: "#8A5410" }}>{title}</div>
-      <div style={{ fontFamily: SERIF, fontSize: fs(22), color: "#16110D", lineHeight: 1.1 }}>Prints from every place</div>
-      {owner ? (
-        <p style={{ margin: "4px 0 0", fontFamily: MONO, fontSize: fs(9), letterSpacing: ".06em", lineHeight: 1.5, color: INK3 }}>
-          {/* Short (founder, 2026-10-17), but 🌍 prints showing on the city board is never left out. */}
-          Each album follows its stamps unless you make it more private. 🌍 prints also hang on the city board.
-        </p>
-      ) : null}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: "#8A5410" }}>{title}</div>
+          <div style={{ fontFamily: SERIF, fontSize: fs(22), color: "#16110D", lineHeight: 1.1 }}>Prints from every place</div>
+          {owner && packets.length ? (
+            <p style={{ margin: "4px 0 0", fontFamily: MONO, fontSize: fs(9), letterSpacing: ".06em", lineHeight: 1.5, color: INK3 }}>
+              {/* Short (founder, 2026-10-17), but 🌍 prints showing on the city board is never left out. */}
+              Each album follows its stamps unless you make it more private. 🌍 prints also hang on the city board.
+            </p>
+          ) : null}
+        </div>
+        {/* The first album, at the top right (founder, 2026-10-27). */}
+        {corner ? <div style={{ flex: "none", width: "44%", maxWidth: 190 }}>{corner}</div> : null}
+      </div>
       <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPick} />
       {years.map(({ year, prints, packets: list }) => (
         <section key={year} aria-label={`${year} — ${prints} prints`}>
@@ -156,9 +164,11 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
           </div>
         </section>
       ))}
-      <p style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, letterSpacing: ".03em", marginTop: 10 }}>
-        {owner ? "Tap + to add prints." : "Every destination gathers their memory photos, a year at a time."}
-      </p>
+      {packets.length ? (
+        <p style={{ fontFamily: MONO, fontSize: fs(10), color: INK3, letterSpacing: ".03em", marginTop: 10 }}>
+          {owner ? "Tap + to add prints." : "Every destination gathers their memory photos, a year at a time."}
+        </p>
+      ) : null}
       {albumFor && (
         <AudienceSheet title="Who sees this album" kicker={`${albumFor.city}${albumFor.year && albumFor.year !== "Undated" ? ` · ${albumFor.year}` : ""} · ${albumFor.photos.length} print${albumFor.photos.length === 1 ? "" : "s"}`}
           value={albumFor.albumTiers.length === 1 ? albumFor.albumTiers[0] : null} options={ALBUM_OPTS}
