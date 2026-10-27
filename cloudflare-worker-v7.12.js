@@ -1701,6 +1701,12 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
     await del('dish_posts', `place_dishes?user_id=eq.${userId}`);
   }
   if (uidOk) await r2Prefix('dish_photos_prefix', `dish/${userId}/`);
+  // City Board contributions (2026-10-27): the files, then the rows, then anything left under bc/<uid>/.
+  const contribs = await rows('board_contributions', `board_contributions?user_id=eq.${userId}&select=photo_key`);
+  if (contribs && await r2('board_contributions_r2', contribs.map((r) => r.photo_key))) {
+    await del('board_contributions', `board_contributions?user_id=eq.${userId}`);
+  }
+  if (uidOk) await r2Prefix('board_contributions_prefix', `bc/${userId}/`);
   await del('owner_notes', `owner_notes?user_id=eq.${userId}`);
 
   // 1g) The Blotter: signatures and doodles they left (co-signs under them
@@ -14207,17 +14213,22 @@ async function gbModerate(env, text) {
 // (2026-10-19, founder's cat postcard refused as "not a travel photo"): a member's own memory
 // going to people they chose — a postcard, a stamp's album, an avatar — so pets, selfies,
 // family, homes and indoor scenes are ordinary; only the safety list refuses.
+// kind 'board' (2026-10-27, Contribute to City Boards): a photo for a public City Board. Cities
+// are full of people, so crowds, passers-by, selfies, couples and friends are ordinary (founder:
+// adults may share themselves); the answer adds child=true when a child is clearly recognizable,
+// which the boards never take.
+const GB_BOARD_PHOTO_SYSTEM = 'You are an image safety reviewer for public City Boards in a travel app: photos travelers took in a city — streets, landmarks, views, food, markets, nature, nightlife, and the people who make a city busy. Reply with ONLY {"allow":true,"child":false,"food":false} (booleans as appropriate). Set allow=false if the image contains ANY of: nudity or sexual content, graphic violence or gore, hate symbols, illegal drugs, weapons brandished as a threat, personal documents / credit cards / screens showing private info, or content that is not a photo taken somewhere (memes, pure-text screenshots, spam, ads). Crowds, passers-by, selfies, couples and groups of adults are allowed. Set child=true when a child (anyone who looks under about 16) is clearly recognizable: posing for the camera, a main subject, or close enough that their face is clear. A child who is small in the frame, far away in a crowd, or seen from behind is child=false. Set food=true ONLY when food or drink is the MAIN subject.';
 async function gbModeratePhoto(env, base64, mediaType, kind = 'place') {
   if (!env.ANTHROPIC_API_KEY) return { allow: false, reason: 'moderation-unavailable' };
   try {
-    const system = kind === 'memory'
+    const system = kind === 'board' ? GB_BOARD_PHOTO_SYSTEM : kind === 'memory'
       ? 'You are an image safety reviewer for a travel app. This photo is a personal memory a member is sharing with people they chose: their trips, places, meals, friends, family, pets, home. Reply with ONLY {"allow":true,"food":false} (booleans as appropriate). Set allow=false ONLY if the image contains: nudity or sexual content, graphic violence or gore, hate symbols, illegal drugs, weapons brandished as a threat, personal documents / credit cards / screens showing private info, or spam, ads or pure-text screenshots. Allow every ordinary photo, including pets, selfies, groups, homes and indoor scenes. Set food=true ONLY when food or drink is the MAIN subject of the photo (a dish, plate, drink or spread filling the frame).'
       : 'You are an image safety reviewer for a public travel app where people share photos of food, drinks, dishes, cafes, storefronts, attractions, landmarks, and scenery. Reply with ONLY {"allow":true,"food":false} (booleans as appropriate). Set allow=false if the image contains ANY of: nudity or sexual content, graphic violence or gore, hate symbols, illegal drugs, weapons brandished as a threat, personal documents / credit cards / screens showing private info, or content that is clearly not a travel/food/place photo (memes, pure-text screenshots, spam, ads). Allow ordinary photos of food, drinks, interiors, storefronts, landmarks, nature, and people enjoying a place. Set food=true ONLY when food or drink is the MAIN subject of the photo (a dish, plate, drink or spread filling the frame) — not when food is merely on a table behind a person or in the background of a scene.';
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001', max_tokens: 24, system,
+        model: 'claude-haiku-4-5-20251001', max_tokens: 32, system,
         messages: [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
           { type: 'text', text: 'Is this photo allowed, and is food the main subject?' },
@@ -14229,7 +14240,9 @@ async function gbModeratePhoto(env, base64, mediaType, kind = 'place') {
     const t = (d.content && d.content[0] && d.content[0].text) || '';
     const m = t.match(/"allow"\s*:\s*(true|false)/i);
     const f = t.match(/"food"\s*:\s*(true|false)/i);
-    return { allow: m ? m[1].toLowerCase() === 'true' : false, food: f ? f[1].toLowerCase() === 'true' : false };
+    // A board answer that never says "child" is refused (fails closed, like every image check).
+    const c = t.match(/"child"\s*:\s*(true|false)/i);
+    return { allow: m ? m[1].toLowerCase() === 'true' : false, food: f ? f[1].toLowerCase() === 'true' : false, child: c ? c[1].toLowerCase() === 'true' : kind === 'board' };
   } catch { return { allow: false, reason: 'moderation-exception' }; }
 }
 
@@ -17268,7 +17281,7 @@ async function handlePassportDelete(request, env, ctx) {
 // Wipe every reaction, comment and doodle aimed at these targets (owner's
 // own blotter only). Co-signs cascade with their entries.
 async function blPurgeTargets(env, ownerId, targets, ctx) {
-  const list = (targets || []).filter((t) => /^(st|ph):[0-9a-f-]{36}$/i.test(t));
+  const list = (targets || []).filter((t) => /^(st|ph|bcp):[0-9a-f-]{36}$/i.test(t));
   if (!list.length) return;
   const inList = `in.(${list.map((t) => encodeURIComponent(`"${t}"`)).join(',')})`;
   const eq = await gbRest(env, `blotter_entries?owner_user_id=eq.${ownerId}&target=${inList}&select=id,doodle_key`, {});
@@ -18330,6 +18343,7 @@ async function handleSocialReport(request, env, ctx) {
     };
     const w = await gbRest(env, 'content_reports', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
     if (!w.ok) return jsonResponse({ error: 'Could not send the report' }, 502);
+    if (ctx && /^bcp:[0-9a-f-]{36}$/i.test(row.ref || '')) ctx.waitUntil(bcAfterReport(env, row.ref.slice(4), reason));
     if (ctx) {
       ctx.waitUntil(gbLogEvent(env, 'social_report', { kind, reason }));
       // The founder hears about a report at once (Apple 1.2: act within 24
@@ -19687,8 +19701,17 @@ async function blShareByOwner(env, ownerId) {
 // public as the board is, so blGate keeps every other rail (minors, blocks, the visitor's age)
 // without asking for the sender's passport to be public. Only a card on a board has one.
 async function blBoardShare(env, target) {
-  const m = /^(pc|bph):([0-9a-f-]{36})$/i.exec(String(target || ''));
+  const m = /^(pc|bph|bcp):([0-9a-f-]{36})$/i.exec(String(target || ''));
   if (!m || !BL_UUID.test(m[2])) return null;
+  if (m[1].toLowerCase() === 'bcp') {
+    // A contributed photo (2026-10-27) has its guestbook while it hangs: reviewed, not taken
+    // down, its owner an adult the boards may show. Public by design: no passport dial applies.
+    const q = await gbRest(env, `board_contributions?id=eq.${m[2]}&mod_status=eq.ok&hidden=eq.false&select=id,user_id`, {});
+    const ph = (q.ok ? await q.json() : [])[0];
+    if (!ph) return null;
+    const owners = await bcOwners(env, [ph.user_id]);
+    return owners && owners.has(ph.user_id) ? { user_id: ph.user_id, is_public: true, board: true, photo: true } : null;
+  }
   if (m[1].toLowerCase() === 'bph') {
     // A board photo (City Billboards, 2026-10-16) has a guestbook while it hangs there:
     // its stamp public, the photo reviewed and not taken down, its owner's albums open.
@@ -19707,7 +19730,7 @@ async function blBoardShare(env, target) {
   const pc = (q.ok ? await q.json() : [])[0];
   return pc && pc.to_city ? { user_id: pc.sender_id, is_public: true, board: true } : null;
 }
-const blShareFor = (env, b) => (/^(pc|bph):/.test(String(b?.target || '')) ? blBoardShare(env, b.target) : blShare(env, b?.slug));
+const blShareFor = (env, b) => (/^(pc|bph|bcp):/.test(String(b?.target || '')) ? blBoardShare(env, b.target) : blShare(env, b?.slug));
 // Gate: null = allowed, else a user-facing error string (blGateResp shapes
 // it). `identity: true` is the stricter door for acts that print the actor's
 // handle on a public page; `actor: true` checks the visitor's age only.
@@ -19771,6 +19794,14 @@ async function blStamp(env, share, target, lvl = 2) {
 // unchanged), and a visitor reaches only a photo that passed moderation.
 async function blTarget(env, share, target, viewerId) {
   const t = String(target || '');
+  if (t.startsWith('bcp:')) {
+    const id = t.slice(4);
+    if (!share?.board || !BL_UUID.test(id)) return null;
+    const q = await gbRest(env, `board_contributions?id=eq.${id}&user_id=eq.${share.user_id}&mod_status=eq.ok&hidden=eq.false&select=id,city`, {});
+    const ph = (q.ok ? await q.json() : [])[0];
+    // Its city, so I WANNA GO can land it on the liker's horizon.
+    return ph ? { photo: ph, place: { name: ph.city, city: ph.city }, target: `bcp:${ph.id}` } : null;
+  }
   if (t.startsWith('bph:')) {
     const id = t.slice(4);
     if (!share?.board || !BL_UUID.test(id)) return null;
@@ -19976,11 +20007,11 @@ async function handleBlotterCosign(request, env, ctx) {
     const q = await gbRest(env, `blotter_entries?id=eq.${id}&select=id,owner_user_id,author_user_id,target`, {});
     const e0 = (q.ok ? await q.json() : [])[0];
     if (!e0) return jsonResponse({ error: 'Not found' }, 404);
-    const share = String(e0.target || '').startsWith('pc:') ? await blBoardShare(env, e0.target) : await blShareByOwner(env, e0.owner_user_id);
+    const share = /^(pc|bcp):/.test(String(e0.target || '')) ? await blBoardShare(env, e0.target) : await blShareByOwner(env, e0.owner_user_id);
     const gate = await blGate(env, user, share, b.op === 'lift' ? {} : { identity: true });
     if (gate) return blGateResp(gate);
     if (user.id !== e0.author_user_id && await gbBlockedEither(env, user.id, e0.author_user_id)) return jsonResponse({ error: 'Not found' }, 404);
-    if (b.op !== 'lift' && !String(e0.target || '').startsWith('pc:')) {
+    if (b.op !== 'lift' && !/^(pc|bcp):/.test(String(e0.target || ''))) {
       const oq = await gbRest(env, `social_profiles?user_id=eq.${e0.owner_user_id}&select=*`, {});
       if (!(await blCanComment(env, (oq.ok ? await oq.json() : [])[0] || null, e0.owner_user_id, user.id))) return jsonResponse({ error: 'Only their friends can write here' }, 403);
     }
@@ -20006,7 +20037,7 @@ async function handleBlotterSweep(request, env, ctx) {
     if (b.op === 'mark') {
       const kind = String(b.kind || '');
       const target = String(b.target || '');
-      if (!BL_KINDS.has(kind) || !/^(st|ph|pc):[0-9a-f-]{36}$/i.test(target)) return jsonResponse({ error: 'Not found' }, 404);
+      if (!BL_KINDS.has(kind) || !/^(st|ph|pc|bph|bcp):[0-9a-f-]{36}$/i.test(target)) return jsonResponse({ error: 'Not found' }, 404);
       await gbRest(env, `blotter_marks?owner_user_id=eq.${user.id}&target=eq.${encodeURIComponent(target)}&kind=eq.${kind}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
     } else if (b.op === 'entry') {
       const id = String(b.entry_id || '');
@@ -20029,7 +20060,7 @@ async function handleBlotterRead(request, env) {
   try {
     const user = await gbUser(request, env); // optional — a signed-out reader still sees counts
     const b = await request.json().catch(() => ({}));
-    if (Array.isArray(b.postcards) || Array.isArray(b.photos)) return jsonResponse(await blReadBoard(env, request, user, b.postcards || [], b.photos || []));
+    if (Array.isArray(b.postcards) || Array.isArray(b.photos) || Array.isArray(b.contribs)) return jsonResponse(await blReadBoard(env, request, user, b.postcards || [], b.photos || [], b.contribs || []));
     const share = await blShare(env, b.slug);
     if (!share) return jsonResponse({ targets: {}, entries: [] });
     const isOwner = !!(user && user.id === share.user_id);
@@ -20183,12 +20214,13 @@ async function blDigest(env, request, user, marks, entries, hide) {
 // board page → { targets, entries } for those cards, by a page's rules: only cards on a board,
 // from adults the viewer hasn't blocked; nothing from anyone the viewer blocked, nor from
 // anyone a card's sender blocked on that card; minors never named.
-async function blReadBoard(env, request, user, ids, photoIds = []) {
+async function blReadBoard(env, request, user, ids, photoIds = [], contribIds = []) {
   const none = { targets: {}, entries: [] };
   if (!user) return none;
   const want = [...new Set((ids || []).map(String).filter((x) => BL_UUID.test(x)))].slice(0, 60);
   const wantPh = [...new Set((photoIds || []).map(String).filter((x) => BL_UUID.test(x)))].slice(0, 60);
-  if (!want.length && !wantPh.length) return none;
+  const wantC = [...new Set((contribIds || []).map(String).filter((x) => BL_UUID.test(x)))].slice(0, 60);
+  if (!want.length && !wantPh.length && !wantC.length) return none;
   let cards = [];
   if (want.length) {
     const pq = await gbRest(env, `postcards?id=in.(${want.join(',')})&select=id,sender_id,to_city`, {});
@@ -20208,7 +20240,13 @@ async function blReadBoard(env, request, user, ids, photoIds = []) {
       photos = owners ? phs.filter((p) => pub.has(p.stamp_id) && owners.has(p.user_id)) : [];
     }
   }
-  const senders = [...new Set([...cards.map((p) => p.sender_id), ...photos.map((p) => p.user_id)])];
+  // Contributed photos (2026-10-27) that hang right now; public by design, so no albums dial.
+  let contribs = [];
+  if (wantC.length) {
+    const cq = await gbRest(env, `board_contributions?id=in.(${wantC.join(',')})&mod_status=eq.ok&hidden=eq.false&select=id,user_id`, {});
+    contribs = cq.ok ? await cq.json() : [];
+  }
+  const senders = [...new Set([...cards.map((p) => p.sender_id), ...photos.map((p) => p.user_id), ...contribs.map((p) => p.user_id)])];
   if (!senders.length) return none;
   const [blocks, tq, oq] = await Promise.all([
     gbBlockSet(env, user.id),
@@ -20224,6 +20262,7 @@ async function blReadBoard(env, request, user, ids, photoIds = []) {
   const ownerOf = {};
   for (const p of cards) if (adults.has(p.sender_id) && !blocks.has(p.sender_id)) ownerOf[`pc:${p.id}`] = p.sender_id;
   for (const p of photos) if (adults.has(p.user_id) && albumsOpen.has(p.user_id) && !blocks.has(p.user_id)) ownerOf[`bph:${p.id}`] = p.user_id;
+  for (const p of contribs) if (adults.has(p.user_id) && !blocks.has(p.user_id)) ownerOf[`bcp:${p.id}`] = p.user_id;
   const targets = Object.keys(ownerOf);
   if (!targets.length) return none;
   const owners = [...new Set(Object.values(ownerOf))].join(',');
@@ -21263,7 +21302,8 @@ async function handleCityBoard(request, env) {
     const [q, there, wall, kit, cc] = await Promise.all([
       gbRest(env, `${cardsQ}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {}),
       board.kind === 'city' ? pcWasThere(env, user.id, key) : Promise.resolve(false),
-      pcBoardPhotos(env, board, before, blocked, origin),
+      // The wall: photos on public stamps, and the photos travelers contributed (2026-10-27).
+      Promise.all([pcBoardPhotos(env, board, before, blocked, origin), bcBoardPhotos(env, board, before, blocked, origin)]).then(([a, c]) => pcWallMerge(a, c)),
       // A board wears only its own kit: a city is not its state (founder, 2026-10-19: "atlanta is
       // separate from georgia … those state banners are just for state photos").
       pcKit(env, board, origin),
@@ -21293,7 +21333,8 @@ async function handleCityBoard(request, env) {
     const adult = (id) => pcAdultRow(prof[id]);
     const albumsOpen = (id) => !['inner', 'me'].includes(aud[id]);
     const shownCards = cards.filter((p) => !blocked.has(p.sender_id) && adult(p.sender_id));
-    const shownPhotos = wall.photos.filter((p) => adult(p.user_id) && albumsOpen(p.user_id));
+    // A contribution is public by design: the albums dial is about stamp photos.
+    const shownPhotos = wall.photos.filter((p) => adult(p.user_id) && (p.contrib || albumsOpen(p.user_id)));
     const senders = [...new Set(shownCards.map((p) => p.sender_id))];
     const gone = await gbPurgeQueued(env, senders.filter((id) => !share[id]?.handle && prof[id]?.display_name));
     const faces = await gbFaces(env, senders.filter((id) => !gone.has(id)), origin);
@@ -21312,7 +21353,8 @@ async function handleCityBoard(request, env) {
     const photoRows = shownPhotos.map((p) => ({
       type: 'photo', id: p.id, created_at: p.created_at, photo: p.photo, caption: p.caption || null,
       place: p.stamp.name, stamp_kind: p.stamp.kind || null, city: p.stamp.city || null, region: p.stamp.region || null, country: p.stamp.country || null,
-      by: { handle: share[p.user_id]?.handle || null, name: null },
+      // A contribution comes from "a traveler": no username (2026-10-27).
+      ...(p.contrib ? { contrib: true, by: { handle: null, name: null } } : { by: { handle: share[p.user_id]?.handle || null, name: null } }),
     }));
     // One page from two sources: it ends at the newer of the two sources' last items, and
     // anything older waits for the next page — nothing is skipped, nothing repeats.
@@ -21356,31 +21398,40 @@ async function pcPhotoBoards(env, origin) {
   try {
     const sq = await gbRest(env, `passport_stamps?visibility=eq.public&hidden=eq.false&photos_tier=is.null&select=id,user_id,city,region,country,lat,lng&limit=3000`, {});
     const stamps = sq.ok ? (await sq.json()).filter((st) => st.city && st.country) : [];
-    if (!stamps.length) return out;
-    await pcHealStates(env, stamps, 8);
+    // The photos travelers contributed (2026-10-27) count and cover their boards too.
+    const cq = await gbRest(env, `board_contributions?mod_status=eq.ok&hidden=eq.false&order=created_at.desc&select=id,user_id,city,region,country,created_at&limit=6000`, {}).catch(() => null);
+    const contribs = cq && cq.ok ? await cq.json() : [];
+    if (!stamps.length && !contribs.length) return out;
+    if (stamps.length) await pcHealStates(env, stamps, 8);
     const byId = Object.fromEntries(stamps.map((st) => [st.id, st]));
-    const pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${stamps.map((st) => st.id).join(',')})&mod_status=eq.ok&board_hidden=eq.false&order=created_at.desc&select=id,stamp_id,user_id,created_at&limit=6000`, {});
-    const photos = pq.ok ? (await pq.json()).filter((ph) => byId[ph.stamp_id]) : [];
-    const okOwner = await pcBoardOwners(env, photos.map((ph) => ph.user_id));
-    if (!okOwner) return out;
+    const pq = stamps.length ? await gbRest(env, `passport_stamp_photos?stamp_id=in.(${stamps.map((st) => st.id).join(',')})&mod_status=eq.ok&board_hidden=eq.false&order=created_at.desc&select=id,stamp_id,user_id,created_at&limit=6000`, {}) : null;
+    const photos = pq && pq.ok ? (await pq.json()).filter((ph) => byId[ph.stamp_id]) : [];
+    const [okOwner, okContrib] = await Promise.all([pcBoardOwners(env, photos.map((ph) => ph.user_id)), bcOwners(env, contribs.map((c) => c.user_id))]);
+    if (!okOwner || !okContrib) return out;
     const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
-    const add = (bucket, bd, ph) => {
+    const add = (bucket, bd, ph, contrib = false) => {
       if (!bd) return;
       const e = bucket[bd.key] || (bucket[bd.key] = { kind: bd.kind, key: bd.key, name: bd.name, city: bd.city, region: bd.region, country: bd.country, photos: 0, recent: 0, last_at: null, covers: [] });
       e.photos += 1; if (ph.created_at > weekAgo) e.recent += 1;
       if (!e.last_at || ph.created_at > e.last_at) e.last_at = ph.created_at;
       // Up to four newest, with their owners: each reader's blocks pick the cover (handleCityBoards).
-      if (e.covers.length < 4) e.covers.push({ id: ph.id, owner: ph.user_id });
+      // Two sources, each newest first: keep the four newest of both.
+      e.covers.push({ id: ph.id, owner: ph.user_id, contrib, at: ph.created_at });
+      if (e.covers.length > 4) { e.covers.sort((x, y) => String(y.at).localeCompare(String(x.at))); e.covers.length = 4; }
+    };
+    const addAll = (city, region, country, ph, contrib) => {
+      if (!pcIsUSName(country) || pcUSCity(city, region).state) add(out.city, pcBoardOf({ city, country, region }), ph, contrib);
+      if (region && pcIsUS(country)) add(out.state, pcBoardOf({ kind: 'state', region, country }), ph, contrib);
+      add(out.country, pcBoardOf({ kind: 'country', country }), ph, contrib);
     };
     for (const ph of photos) {
       if (!okOwner.has(ph.user_id)) continue;
       const st = byId[ph.stamp_id];
-      if (!pcIsUSName(st.country) || pcUSCity(st.city, st.region).state) add(out.city, pcBoardOf({ city: st.city, country: st.country, region: st.region }), ph);
-      if (st.region && pcIsUS(st.country)) add(out.state, pcBoardOf({ kind: 'state', region: st.region, country: st.country }), ph);
-      add(out.country, pcBoardOf({ kind: 'country', country: st.country }), ph);
+      addAll(st.city, st.region, st.country, ph, false);
     }
+    for (const c of contribs) if (okContrib.has(c.user_id)) addAll(c.city, c.region, c.country, c, true);
     // Signed for the board level (ppPhotoUrl); a link lives past the two-minute cache.
-    for (const bucket of [out.city, out.state, out.country]) for (const e of Object.values(bucket)) e.covers = await Promise.all(e.covers.map(async (c) => ({ owner: c.owner, url: await ppPhotoUrl(env, origin, c.id, 'b') })));
+    for (const bucket of [out.city, out.state, out.country]) for (const e of Object.values(bucket)) e.covers = await Promise.all(e.covers.sort((x, y) => String(y.at).localeCompare(String(x.at))).map(async (c) => ({ owner: c.owner, url: c.contrib ? bcPhotoUrl(origin, c.id) : await ppPhotoUrl(env, origin, c.id, 'b') })));
   } catch { return out; }
   if (kv) await kv.put('photoboards:v2', JSON.stringify(out), { expirationTtl: 120 }).catch(() => {});
   return out;
@@ -21388,6 +21439,246 @@ async function pcPhotoBoards(env, origin) {
 // A privacy change (passport switch, albums dial, a stamp's level, a takedown) clears the cached
 // covers at once rather than waiting out the two minutes.
 async function pcBoardsCacheBust(env) { if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.delete('photoboards:v2').catch(() => {}); }
+
+// ── Contribute to City Boards (founder, 2026-10-27) ─────────────────────────
+// An album on the profile, open until June 30, 2027, that sends a member's photos to the boards
+// of the cities they were taken in. Public by design (the album says so, and that each photo can
+// be deleted any time — which removes the file). A photo needs its own location (the "I was
+// there" rule; a downloaded photo carries none), passes the AI photo check, and is never one
+// where a child is clearly recognizable; adults, selfies and couples are fine (founder). On the
+// board it hangs with the stamp photos, from "a traveler" (no username), with likes and
+// comments ('bcp:<id>'). The phone sends 20 to a pick; the only limit here is a bot guard.
+const BC_OPEN_UNTIL = Date.parse('2027-07-01T07:00:00Z'); // the end of June 30, 2027, Pacific
+const BC_PER_MINUTE = 60;
+const bcPhotoUrl = (origin, id) => `${origin}/board-photo/${id}`;
+// The city a photo was taken in: Google's reverse geocode, kept 30 days for its ~1 km square
+// (the coarse names only, as /reverse-geocode keeps them). { city, region, country } or null.
+async function bcPlaceAt(env, lat, lng) {
+  const rLat = Math.round(lat * 100) / 100, rLng = Math.round(lng * 100) / 100;
+  const key = `revgeo2_${rLat}_${rLng}`;
+  const kv = env.GLOBESKIMMERS_KV;
+  if (kv) { const hit = await kv.get(key, { type: 'json' }).catch(() => null); if (hit?.country) return hit.city ? hit : null; }
+  if (!env.GOOGLE_API_KEY) return null;
+  let out = null;
+  try {
+    const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&language=en&key=${env.GOOGLE_API_KEY}`);
+    const d = r.ok ? await r.json() : null;
+    if (!d || !['OK', 'ZERO_RESULTS'].includes(d.status)) return null;   // an error isn't an answer: not kept
+    const pick = (types) => { for (const res of d.results || []) { const c = (res.address_components || []).find((x) => types.some((t) => x.types.includes(t))); if (c) return c; } return null; };
+    const city = pick(['locality', 'postal_town'])?.long_name || pick(['sublocality', 'administrative_area_level_3', 'administrative_area_level_2'])?.long_name || '';
+    const country = pick(['country'])?.long_name || '';
+    const region = pick(['administrative_area_level_1'])?.long_name || null;
+    out = { city, region, country };
+  } catch { return null; }
+  if (kv && out) await kv.put(key, JSON.stringify(out), { expirationTtl: 30 * 86400 }).catch(() => {});
+  return out.city && out.country ? out : null;
+}
+// Who may contribute: an adult who may post in public — the doors every public post uses.
+async function bcWriter(request, env) {
+  const user = await gbUser(request, env);
+  if (!user) return { refuse: jsonResponse({ error: 'Sign in' }, 401) };
+  const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+  if (sp === undefined) return { refuse: gbAgeUnknownResp() };
+  if (!sp?.birth_year) return { refuse: jsonResponse({ error: 'Add your birthday in Settings to share photos', code: 'age_required' }, 428) };
+  if (gbUnderAge(sp)) return { refuse: gbUnderAgeResp() };
+  if (gbAgeHeld(sp)) return { refuse: gbAgeHeldResp(sp) };
+  if (!pcAdultRow(sp)) return { refuse: jsonResponse({ error: 'City Board photos open at age 18', code: 'adult_only' }, 403) };
+  return { user, sp };
+}
+// Whose contributions hang: adults the boards may show (a frozen, minor or held account's don't).
+async function bcOwners(env, ids) {
+  const ok = new Set();
+  const list = [...new Set((ids || []).filter((x) => BL_UUID.test(String(x || ''))))];
+  for (let i = 0; i < list.length; i += 100) {
+    const r = await gbRest(env, `social_profiles?user_id=in.(${list.slice(i, i + 100).join(',')})&select=user_id,${GB_TIER_COLS}`, {});
+    if (!r.ok) return null;
+    for (const row of await r.json()) if (pcAdultRow(gbTierRow(row))) ok.add(row.user_id);
+  }
+  return ok;
+}
+// The rows a board hangs: a city board its own key, a US state its state's, a country all of
+// its own. `where` for PostgREST.
+const bcWhere = (board) => board.kind === 'city' ? `board_key=eq.${encodeURIComponent(board.key)}`
+  : board.kind === 'state' ? `${pcCountryIn(board.country)}&region=ilike.${pcLike(board.region)}`
+  : pcCountryIn(board.country);
+
+// POST /board/contribute { image, exif: { lat, lng, taken_at }, caption? }
+// → { ok, id, url, board: { key, name, city, region, country } }
+// → 422 { error, code: 'child' | 'not_allowed' } · 400 { error, code: 'no_location' | 'no_city' }
+async function handleBoardContribute(request, env, ctx) {
+  try {
+    if (Date.now() >= BC_OPEN_UNTIL) return jsonResponse({ error: 'Contributions closed on June 30, 2027', code: 'closed' }, 410);
+    const w = await bcWriter(request, env);
+    if (w.refuse) return w.refuse;
+    const { user } = w;
+    if (!env.MEDIA) return jsonResponse({ error: 'Photo storage not configured' }, 500);
+    const b = await request.json().catch(() => ({}));
+    // The bot guard: no person picks and sends more than this in a minute.
+    if (env.GLOBESKIMMERS_KV) {
+      const mk = `bc:min:${user.id}:${Math.floor(Date.now() / 60000)}`;
+      const n = Number(await env.GLOBESKIMMERS_KV.get(mk).catch(() => 0)) || 0;
+      if (n >= BC_PER_MINUTE) return jsonResponse({ error: 'That’s a lot at once — wait a minute and keep going', code: 'slow_down' }, 429);
+      await env.GLOBESKIMMERS_KV.put(mk, String(n + 1), { expirationTtl: 120 }).catch(() => {});
+    }
+    const exif = b.exif && typeof b.exif === 'object' ? b.exif : {};
+    const lat = Number(exif.lat), lng = Number(exif.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) {
+      return jsonResponse({ error: 'This photo has no location, so we can’t tell which city it’s from', code: 'no_location' }, 400);
+    }
+    let data = String(b.image || '');
+    const m = data.match(/^data:image\/(?:jpeg|jpg);base64,(.*)$/i);
+    if (m) data = m[1];
+    data = data.replace(/\s/g, '');
+    let bytes;
+    try { bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0)); } catch { return jsonResponse({ error: 'Bad image data' }, 400); }
+    if (bytes.length < 500 || bytes.length > 4 * 1024 * 1024 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return jsonResponse({ error: 'Please pick a photo (JPEG, under 4 MB)' }, 400);
+    const caption = String(b.caption || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    const [place, v, capOk] = await Promise.all([
+      bcPlaceAt(env, lat, lng),
+      gbModeratePhoto(env, data, 'image/jpeg', 'board'),
+      caption ? gbModerate(env, caption).then((r) => r.allow) : Promise.resolve(true),
+    ]);
+    if (!place) return jsonResponse({ error: 'We couldn’t tell which city this photo is from', code: 'no_city' }, 400);
+    const board = pcBoardOf({ city: place.city, region: place.region, country: place.country });
+    if (!board) return jsonResponse({ error: 'We couldn’t tell which city this photo is from', code: 'no_city' }, 400);
+    if (!v?.allow) return jsonResponse({ error: 'This photo can’t be shared on a City Board', code: 'not_allowed' }, 422);
+    if (v.child) return jsonResponse({ error: 'A child is clearly recognizable in this photo, so it stays off the boards', code: 'child' }, 422);
+    if (!capOk) return jsonResponse({ error: 'Let’s keep captions kind — try different words', code: 'caption' }, 422);
+    const key = `bc/${user.id}/${crypto.randomUUID()}.jpg`;
+    await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' } });
+    const takenAt = typeof exif.taken_at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(exif.taken_at) ? `${exif.taken_at}Z` : null;
+    const row = { user_id: user.id, board_key: board.key, city: board.city, region: board.region || null, country: board.country, taken_at: takenAt, caption: caption || null, photo_key: key, mod_status: 'ok' };
+    const ins = await gbRest(env, 'board_contributions', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
+    if (!ins.ok) { await env.MEDIA.delete(key).catch(() => {}); return jsonResponse({ error: ins.status === 404 ? 'City Board photos open in a few minutes — try again shortly' : 'Could not save — try again' }, 502); }
+    const saved = (await ins.json())[0] || {};
+    if (ctx) {
+      ctx.waitUntil(pcBoardsCacheBust(env));
+      ctx.waitUntil(gbLogEvent(env, 'board_contribution', { country: board.country }));
+    }
+    const origin = new URL(request.url).origin;
+    return jsonResponse({ ok: true, id: saved.id, url: bcPhotoUrl(origin, saved.id), caption: saved.caption || null, board: { key: board.key, name: board.name, city: board.city, region: board.region || null, country: board.country } });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /board/contributions → { photos: [{ id, url, caption, city, region, country, created_at, hidden }], open_until }
+// The member's own, newest first (taken-down ones too, marked, so they can delete them).
+async function handleBoardContributions(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&mod_status=eq.ok&order=created_at.desc&limit=1000&select=id,caption,city,region,country,taken_at,created_at,hidden`, {});
+    if (q.status === 404) return jsonResponse({ photos: [], open_until: '2027-06-30', unavailable: true });
+    if (!q.ok) return jsonResponse({ error: 'Couldn’t load your photos — try again', photos: [] }, 502);
+    const origin = new URL(request.url).origin;
+    const photos = (await q.json()).map((r) => ({ ...r, url: bcPhotoUrl(origin, r.id) }));
+    return jsonResponse({ photos, open_until: '2027-06-30', open: Date.now() < BC_OPEN_UNTIL });
+  } catch (e) { return jsonResponse({ error: e.message, photos: [] }, 500); }
+}
+
+// POST /board/contributions/delete { id } — off the board, and the file is deleted.
+async function handleBoardContributionDelete(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.id || '');
+    if (!BL_UUID.test(id)) return jsonResponse({ error: 'Not found' }, 404);
+    const q = await gbRest(env, `board_contributions?id=eq.${id}&user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=representation' } });
+    const rows = q.ok ? await q.json() : [];
+    if (!rows.length) return jsonResponse({ error: 'Not found' }, 404);
+    if (rows[0].photo_key && env.MEDIA) await env.MEDIA.delete(rows[0].photo_key).catch(() => {});
+    // Its likes, comments and doodles go with it.
+    await blPurgeTargets(env, user.id, [`bcp:${id}`], ctx).catch(() => {});
+    if (ctx) ctx.waitUntil(pcBoardsCacheBust(env));
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /board/contributions/caption { id, caption } — '' clears it; kept kind like every caption.
+async function handleBoardContributionCaption(request, env) {
+  try {
+    const w = await bcWriter(request, env);
+    if (w.refuse) return w.refuse;
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.id || '');
+    if (!BL_UUID.test(id)) return jsonResponse({ error: 'Not found' }, 404);
+    const caption = String(b.caption || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (caption && !(await gbModerate(env, caption)).allow) return jsonResponse({ error: 'Let’s keep captions kind — try different words' }, 422);
+    const q = await gbRest(env, `board_contributions?id=eq.${id}&user_id=eq.${w.user.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ caption: caption || null }) });
+    const rows = q.ok ? await q.json() : [];
+    if (!rows.length) return jsonResponse({ error: 'Not found' }, 404);
+    return jsonResponse({ ok: true, caption: caption || null });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// GET /board-photo/<id> — public while it hangs (reviewed, not taken down).
+async function handleBoardPhotoServe(request, env) {
+  try {
+    const m = /^\/board-photo\/([0-9a-f-]{36})$/i.exec(new URL(request.url).pathname);
+    if (!m) return new Response('Not found', { status: 404 });
+    return gbMediaResp(await gbRowMedia(env, 'board_contributions', m[1], 'photo_key', (r) => r.mod_status === 'ok' && r.hidden !== true && String(r.photo_key || '').startsWith('bc/')), 'image/jpeg', 'public, max-age=3600');
+  } catch { return new Response('Error', { status: 500 }); }
+}
+
+// Contributions a board hangs, the same page shape as pcBoardPhotos: newest first, `before`
+// pages by created_at, never from anyone the viewer blocked. Fails to none.
+async function bcBoardPhotos(env, board, before, blocked, origin) {
+  const none = { photos: [], more: false, total: 0 };
+  try {
+    const base = `board_contributions?${bcWhere(board)}&mod_status=eq.ok&hidden=eq.false`;
+    const [pq, cq] = await Promise.all([
+      gbRest(env, `${base}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&select=id,user_id,caption,city,region,country,created_at&limit=${PC_WALL_PAGE + 1}`, {}),
+      gbRest(env, `${base}&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } }),
+    ]);
+    if (!pq.ok) return none;
+    let got = (await pq.json()).filter((ph) => !blocked.has(ph.user_id));
+    const ok = await bcOwners(env, got.map((ph) => ph.user_id));
+    if (!ok) return none;
+    got = got.filter((ph) => ok.has(ph.user_id));
+    const total = cq.ok ? parseInt((cq.headers.get('content-range') || '').split('/')[1] || '0', 10) || got.length : got.length;
+    return {
+      photos: got.map((ph) => ({ ...ph, contrib: true, photo: bcPhotoUrl(origin, ph.id), stamp: { name: ph.city, kind: 'city', city: ph.city, region: ph.region, country: ph.country } })),
+      more: got.length > PC_WALL_PAGE, total,
+    };
+  } catch { return none; }
+}
+// The wall's two sources in one page, newest first: whatever doesn't fit is older than the
+// page's last photo, so the next page (before = that photo) brings it.
+// A reported contribution: down at once on a child-safety report, else when a third person
+// reports it. The founder's queue still has every report, and can put a photo back.
+async function bcAfterReport(env, id, reason) {
+  try {
+    if (!BL_UUID.test(id)) return;
+    let down = reason === 'minor_safety';
+    if (!down) {
+      const q = await gbRest(env, `content_reports?ref=eq.${encodeURIComponent(`bcp:${id}`)}&select=reporter_id&limit=50`, {});
+      down = q.ok && new Set((await q.json()).map((r) => r.reporter_id)).size >= 3;
+    }
+    if (!down) return;
+    await gbRest(env, `board_contributions?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ hidden: true }) });
+    await pcBoardsCacheBust(env);
+  } catch { /* the report itself is filed either way */ }
+}
+// POST /admin/board-contribution { id, hidden } — the founder takes a contributed photo down or
+// puts it back (from a report in the queue).
+async function handleAdminBoardContribution(request, env, ctx) {
+  try {
+    const denied = await requireAdmin(request, env);
+    if (denied) return denied;
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.id || '');
+    if (!BL_UUID.test(id)) return jsonResponse({ error: 'Not found' }, 404);
+    const q = await gbRest(env, `board_contributions?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ hidden: b.hidden !== false }) });
+    const rows = q.ok ? await q.json() : [];
+    if (!rows.length) return jsonResponse({ error: 'Not found' }, 404);
+    if (ctx) ctx.waitUntil(pcBoardsCacheBust(env));
+    return jsonResponse({ ok: true, hidden: rows[0].hidden === true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+function pcWallMerge(a, c) {
+  const all = [...a.photos, ...c.photos].sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)));
+  return { photos: all.slice(0, PC_WALL_PAGE), more: a.more || c.more || all.length > PC_WALL_PAGE, total: a.total + c.total };
+}
 
 async function handleCityBoards(request, env) {
   try {
@@ -22708,6 +22999,9 @@ async function handleSocialUnread(request, env) {
     // ...and for a board photo (City Billboards, 2026-10-16), the city of its stamp.
     const bphIds = [...new Set(items.map((i) => (i.target || '').startsWith('bph:') ? i.target.slice(4) : null).filter((x) => x && BL_UUID.test(x)))].slice(0, 200);
     const boardPhotoCity = {};
+    // ...and for a contributed photo (2026-10-27), its own city.
+    const bcpIds = [...new Set(items.map((i) => (i.target || '').startsWith('bcp:') ? i.target.slice(4) : null).filter((x) => x && BL_UUID.test(x)))].slice(0, 200);
+    if (bcpIds.length) for (const r of await gbRest(env, `board_contributions?id=in.(${bcpIds.join(',')})&user_id=eq.${me}&select=id,city`, {}).then(j)) boardPhotoCity[r.id] = r.city || null;
     if (bphIds.length) {
       const phs = await gbRest(env, `passport_stamp_photos?id=in.(${bphIds.join(',')})&user_id=eq.${me}&select=id,stamp_id`, {}).then(j);
       const sids = [...new Set(phs.map((p) => p.stamp_id))];
@@ -22751,7 +23045,7 @@ async function handleSocialUnread(request, env) {
         ...(i.kinds ? { reactions: i.kinds.map((k) => BL_KIND_LABEL[k] || k) } : {}),
         ...(i.target ? (i.target.startsWith('pc:')
           ? { board: boardCity[i.target.slice(3)] || null }
-          : i.target.startsWith('bph:')
+          : (i.target.startsWith('bph:') || i.target.startsWith('bcp:'))
             ? { board: boardPhotoCity[i.target.slice(4)] || null, photo: true }
             : { stamp: stampName[i.target.startsWith('ph:') ? photoStamp[i.target.slice(3)] : i.target.slice(3)] || null, photo: i.target.startsWith('ph:') }) : {}),
         ...(i.body !== undefined ? { body: i.body, doodle: i.doodle } : {}),
@@ -29022,6 +29316,7 @@ export default {
       // Passport (personal, private)
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
       if (pathname.startsWith('/dish-photo/') && request.method === 'GET') return await handleDishPhotoServe(request, env);
+      if (pathname.startsWith('/board-photo/') && request.method === 'GET') return await handleBoardPhotoServe(request, env);
       if (pathname.startsWith('/ps-photo/') && request.method === 'GET') return await handlePlaceSuggestPhotoServe(request, env);
       if (pathname === '/attractions/visit-info' && request.method === 'POST') return await handleAttractionVisitInfo(request, env, ctx);
       if (pathname === '/attractions/before-you-go' && request.method === 'POST') return await handleAttractionBeforeYouGo(request, env, ctx);
@@ -29090,6 +29385,11 @@ export default {
       if (pathname === '/telegrams/open' && request.method === 'POST') return await handleTelegramOpen(request, env);
       if (pathname === '/social/world' && request.method === 'POST') return await handleSocialWorld(request, env, ctx);
       if (pathname === '/city/board' && request.method === 'POST') return await handleCityBoard(request, env);
+      if (pathname === '/board/contribute' && request.method === 'POST') return await handleBoardContribute(request, env, ctx);
+      if (pathname === '/board/contributions' && request.method === 'POST') return await handleBoardContributions(request, env);
+      if (pathname === '/board/contributions/delete' && request.method === 'POST') return await handleBoardContributionDelete(request, env, ctx);
+      if (pathname === '/board/contributions/caption' && request.method === 'POST') return await handleBoardContributionCaption(request, env);
+      if (pathname === '/admin/board-contribution' && request.method === 'POST') return await handleAdminBoardContribution(request, env, ctx);
       if (pathname === '/passport/photo/board' && request.method === 'POST') return await handlePassportPhotoBoard(request, env);
       if (pathname === '/city/boards' && request.method === 'POST') return await handleCityBoards(request, env);
       if (pathname === '/social/avatar' && request.method === 'POST') return await handleSocialAvatar(request, env, ctx);
