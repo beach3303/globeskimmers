@@ -8445,7 +8445,8 @@ function rrProcessPlace(place, latitude, longitude, country, countryData) {
   const lng = place.location?.longitude || 0;
   const distKm = rrCalcDist(latitude, longitude, lat, lng);
   const weekdayDesc = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
-  const photos = (place.photos || []).map(p => p.url || p).filter(Boolean).slice(0, 2);
+  // Up to 6 (was 2): every card carries at least 3 when Google has them (photo audit 2026-10-26).
+  const photos = (place.photos || []).map(p => p.url || p).filter(Boolean).slice(0, 6);
   const name = place.displayName?.text || place.name || '';
   const types = place.types || [];
   const venue = rrClassifyVenue(name, types);
@@ -8721,7 +8722,8 @@ async function handleAtmLocations(request, env, ctx) {
       const lng = place.location?.longitude || 0;
       const distance = rrCalcDist(latitude, longitude, lat, lng);
       const weekdayDescriptions = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
-      const photos = (place.photos || []).map(p => p.url || p).filter(Boolean).slice(0, 2);
+      // Up to 6 (was 2): every card carries at least 3 when Google has them (photo audit 2026-10-26).
+      const photos = (place.photos || []).map(p => p.url || p).filter(Boolean).slice(0, 6);
       const placeName = (place.displayName?.text || place.name || '').toLowerCase();
       let networkInfo = { name: 'Independent ATM', network: 'Independent', feeInfo: 'Standard fees may apply', surcharge: '$2.50–$4.00 typical' };
       for (const [key, info] of Object.entries(ATM_NETWORKS)) { if (placeName.includes(key)) { networkInfo = info; break; } }
@@ -9224,6 +9226,8 @@ async function handleMoneyExchange(request, env, ctx) {
         hours: weekday,
         website: place.websiteUri || place.website || null,
         is_open: isOpen,
+        // Google's photos of the office (the search already has them; photo bytes keep 30 days).
+        photos: (place.photos || []).map((p) => p.url || p).filter(Boolean).slice(0, 6),
       });
     }
 
@@ -10203,8 +10207,10 @@ async function gaActivitiesBuild(env, ctx, origin, body) {
     }
 
     // Owned planet-DB nearby attractions — dedupe against curated + Google nearby.
+    // A gallery or church Google has no listing for (or calls closed) leaves too:
+    // each was a card with no photo (photo audit 2026-10-26).
     const shownIds = new Set([...iconIds, ...dedupedNearby.map((a) => a.id)]);
-    const nearbyAttractions = (ownedNearby || []).filter((a) => a && !shownIds.has(a.id)).slice(0, 20);
+    const nearbyAttractions = (await ownedDropClosed(env, (ownedNearby || []).filter((a) => a && !shownIds.has(a.id)), { dropUnlisted: true })).slice(0, 20);
 
     const total = dedupedNearby.length + nationalIcons.length + regionalGems.length + nearbyAttractions.length;
     return { activities: dedupedNearby, nationalIcons, regionalGems, nearbyAttractions, count: total, version: 'v6.2-owned' };
@@ -13565,7 +13571,7 @@ async function handleRestaurantsOwned(request, env, ctx) {
 
     if (cuisine && cuisine !== 'all') rows = rows.filter((r) => gsFold(r.category).includes(gsFold(cuisine)));
     if (query) rows = rows.filter((r) => gsFold(`${r.name} ${r.category}`).includes(gsFold(query)));
-    rows = rows.slice(0, maxResults);
+    // All the RPC's rows (≤ 60) until the closed and unlisted ones leave, then maxResults.
 
     // No list photos: real Google photos + hours are fetched on-tap (enrich-owned)
     // to keep the list free. The card shows a clean cuisine tile until then.
@@ -13590,7 +13596,7 @@ async function handleRestaurantsOwned(request, env, ctx) {
       };
     });
 
-    const open = await ownedDropClosed(env, places);
+    const open = (await ownedDropClosed(env, places, { dropUnlisted: true })).slice(0, maxResults);
     return jsonResponse({ places: open, count: open.length, version: 'owned-1', source: 'owned', fallbackInfo: null });
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
@@ -13711,10 +13717,10 @@ async function handleCoffeeOwned(request, env, ctx) {
     }
     rows = Array.isArray(rows) ? rows : [];
     if (query) rows = rows.filter((r) => `${r.name} ${r.category}`.toLowerCase().includes(query));
-    rows = rows.slice(0, maxResults);
+    // All the RPC's rows (≤ 60) until the closed and unlisted ones leave, then maxResults.
 
     const humanize = (s) => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
-    const places = rows.map((r) => ({
+    const listed = rows.map((r) => ({
       id: r.id, placeId: r.id, source: 'owned',
       displayName: { text: r.name }, name: r.name,
       location: { latitude: r.lat, longitude: r.lng }, latitude: r.lat, longitude: r.lng,
@@ -13730,6 +13736,7 @@ async function handleCoffeeOwned(request, env, ctx) {
       googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lng}`,
       parking: null, seating: null, reviews: [],
     }));
+    const places = (await ownedDropClosed(env, listed, { dropUnlisted: true })).slice(0, maxResults);
 
     // Fall through to Google when owned coffee is thin/empty here — otherwise an
     // uncovered city shows a blank list (audit T1.1). The body was already read,
@@ -13743,8 +13750,7 @@ async function handleCoffeeOwned(request, env, ctx) {
       } catch { /* Google failed — return whatever owned had below */ }
     }
 
-    const open = await ownedDropClosed(env, places);
-    return jsonResponse({ places: open, count: open.length, version: 'owned-1', source: 'owned', fallbackInfo: null });
+    return jsonResponse({ places, count: places.length, version: 'owned-1', source: 'owned', fallbackInfo: null });
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
   }
@@ -13990,10 +13996,15 @@ async function ownedGidCached(env, id, name, lat, lng) {
 // Google has no listing for at all (mostly closed too: Quiznos, Dean & DeLuca)
 // move below the rest — marked by the photo lookup above; a place nobody has
 // opened yet keeps its spot until it is checked.
-async function ownedDropClosed(env, places) {
+// dropUnlisted (restaurants and cafés, photo audit 2026-10-26): an eatery with no
+// open Google listing within 600 m leaves the list too. Measured on Melrose: all 20
+// such cards were former tenants (Shunji's, Ruam Mitr, LN2 — Google: closed for
+// good), each a card with no photo, hours or rating. Restrooms and ATMs keep theirs:
+// a public toilet or a lone ATM is often real and simply not on Google.
+async function ownedDropClosed(env, places, { dropUnlisted = false } = {}) {
   if (!env.GLOBESKIMMERS_KV || !places?.length) return places || [];
   const marks = await Promise.all(places.map((p) => /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(p.id || '')) ? env.GLOBESKIMMERS_KV.get(`owned2gid3:${p.id}`).catch(() => null) : null));
-  const open = places.map((p, i) => [p, marks[i]]).filter(([, m]) => m !== 'closed');
+  const open = places.map((p, i) => [p, marks[i]]).filter(([, m]) => m !== 'closed' && !(dropUnlisted && m === 'none'));
   return [...open.filter(([, m]) => m !== 'none'), ...open.filter(([, m]) => m === 'none')].map(([p]) => p);
 }
 async function resolveOwnedGid(env, id, name, lat, lng) {
@@ -14033,7 +14044,7 @@ async function enrichOwnedOne(env, origin, b) {
   }
   if (!gid) return { matched: false, photos: [], hours: null };
 
-  // Place details (90d KV cache — shared with AI-details / place-details).
+  // Place details (30-day KV cache, Google's limit — shared with AI-details / place-details).
   const dk = `details_${gid}`;
   let place; const cd = await getFromCache(env, dk);
   if (cd && cd.data) place = cd.data;
@@ -14061,7 +14072,7 @@ async function enrichOwnedOne(env, origin, b) {
   }
 
   // Photos: Google's real photos of this exact place (owner + customer), cached
-  // 90d as bytes in KV by handlePhotoProxy — first fetch $0.007, then $0.
+  // 30 days (Google's limit) as bytes in KV by handlePhotoProxy — first fetch $0.007, then $0.
   // (Website og:image was trialed as a "restaurant's own photo" lead but pulled:
   //  small-restaurant sites overwhelmingly expose builder templates / parked-
   //  domain placeholders / logos, i.e. exactly the junk we refuse to show. The
