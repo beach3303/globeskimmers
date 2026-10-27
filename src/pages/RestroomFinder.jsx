@@ -168,7 +168,7 @@ function RestroomCard({ r, n, isLocal, formatDistance, onDirections, onShowOnMap
   // list shows photos without a tap. Owned→Google resolves once and is cached.
   useEffect(() => {
     if (enriched || r.source !== "owned") return;
-    callWorker("places/enrich-owned", { id: r.id || r.placeId, name: r.name, lat: r.lat, lng: r.lng, maxPhotos: 3 })
+    callWorker("places/enrich-owned", { id: r.id || r.placeId, name: r.name, lat: r.lat, lng: r.lng, maxPhotos: 2 })
       .then(({ data }) => { if (data && data.matched) setEnriched(data); }).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

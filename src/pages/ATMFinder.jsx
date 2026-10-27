@@ -132,7 +132,7 @@ function ATMCard({ atm, n, isLocal, formatDistance, onDirections, onShowOnMap, h
   // row without photos is Google saying it has none.
   useEffect(() => {
     if (enriched || (atm.photos && atm.photos.length) || !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(atm.id || atm.placeId || ""))) return;
-    callWorker("places/enrich-owned", { id: atm.id || atm.placeId, name: nameOf(atm), lat: atm.lat, lng: atm.lng, maxPhotos: 3 })
+    callWorker("places/enrich-owned", { id: atm.id || atm.placeId, name: nameOf(atm), lat: atm.lat, lng: atm.lng, maxPhotos: 2 })
       .then(({ data }) => { if (data && data.matched) setEnriched(data); }).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

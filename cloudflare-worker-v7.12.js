@@ -8445,8 +8445,8 @@ function rrProcessPlace(place, latitude, longitude, country, countryData) {
   const lng = place.location?.longitude || 0;
   const distKm = rrCalcDist(latitude, longitude, lat, lng);
   const weekdayDesc = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
-  // Up to 6 (was 2): every card carries at least 3 when Google has them (photo audit 2026-10-26).
-  const photos = (place.photos || []).map(p => p.url || p).filter(Boolean).slice(0, 6);
+  // Two at most: a restroom card needs no more (founder, 2026-10-26).
+  const photos = (place.photos || []).map(p => p.url || p).filter(Boolean).slice(0, 2);
   const name = place.displayName?.text || place.name || '';
   const types = place.types || [];
   const venue = rrClassifyVenue(name, types);
@@ -8722,8 +8722,8 @@ async function handleAtmLocations(request, env, ctx) {
       const lng = place.location?.longitude || 0;
       const distance = rrCalcDist(latitude, longitude, lat, lng);
       const weekdayDescriptions = place.currentOpeningHours?.weekdayDescriptions || place.regularOpeningHours?.weekdayDescriptions || place.hours || [];
-      // Up to 6 (was 2): every card carries at least 3 when Google has them (photo audit 2026-10-26).
-      const photos = (place.photos || []).map(p => p.url || p).filter(Boolean).slice(0, 6);
+      // Two at most: an ATM card needs no more (founder, 2026-10-26).
+      const photos = (place.photos || []).map(p => p.url || p).filter(Boolean).slice(0, 2);
       const placeName = (place.displayName?.text || place.name || '').toLowerCase();
       let networkInfo = { name: 'Independent ATM', network: 'Independent', feeInfo: 'Standard fees may apply', surcharge: '$2.50–$4.00 typical' };
       for (const [key, info] of Object.entries(ATM_NETWORKS)) { if (placeName.includes(key)) { networkInfo = info; break; } }
