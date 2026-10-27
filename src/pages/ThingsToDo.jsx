@@ -12,7 +12,7 @@ import { openPartner } from "@/lib/openPartner";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import MapAppSelector from "@/components/MapAppSelector";
 import AttractionAIDetails from "@/components/AttractionAIDetails";
-import AttractionExtras from "@/components/attraction/AttractionExtras";
+import AttractionExtras, { HereStamp } from "@/components/attraction/AttractionExtras";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { metersBetween, listPassport } from "@/lib/passport";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
@@ -509,7 +509,9 @@ function FullCard({a,n,photos,mark,isLocal,fmt,onOpen,onMap,onDirections,onPhoto
             style={{position:"absolute",top:-8,right:-8,bottom:-8,left:-8,padding:0,border:0,borderRadius:12,background:"transparent",cursor:"pointer",outlineOffset:-2}}/>
         </div>
         {tags.length>0&&<TagRow max={3} style={{marginTop:10}}>{tags.map((t,i)=><WorldTag key={t} world="todo" tone={i?"outline":"wash"}>{t}</WorldTag>)}</TagRow>}
-        <ActionRow world="todo" name={name} onDirections={onDirections} onMap={onMap} onMore={onOpen} moreIcon style={{marginTop:14}}/>
+        {/* On every card (founder, 2026-10-26); an iconic place's own stamp record rides along. */}
+        <div style={{marginTop:14}}><HereStamp place={{id:a.id||a.placeId,name,lat:a.lat??a.location?.latitude,lng:a.lng??a.location?.longitude,types:a.types,formattedAddress:a.formattedAddress}} stamp={a.stamp||null} formatDistance={fmt}/></div>
+        <ActionRow world="todo" name={name} onDirections={onDirections} onMap={onMap} onMore={onOpen} moreIcon style={{marginTop:4}}/>
       </div>
       {children}
     </WorldCard>

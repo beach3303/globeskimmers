@@ -30,6 +30,7 @@ import FinderHeader, { finderColumnStyle } from "@/components/finder/FinderHeade
 import { WorldChip, ChipRow, WorldSegmented, ResultLine } from "@/components/finder/FinderControls";
 import { WorldCard, worldGrid, NumberMark, FactsLine, WorldTag, TagRow, CardKicker, CardName, ActionRow, WorldSkeleton } from "@/components/finder/FinderCard";
 import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
+import { HereStamp } from "@/components/attraction/AttractionExtras";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import FilterSheet, { FilterGroupLabel, FilterToggleRow } from "@/components/finder/FilterSheet";
 import { SwingTag } from "@/components/finder/motifs";
@@ -171,9 +172,13 @@ function ShopCard({ p, n, isLocal, formatDistance, onDirections, onShowOnMap, hi
               : <WorldTag key={t.key} world="shopping" tone="wash">{t.label}</WorldTag>))}
           </TagRow>
         )}
+        {/* On every card (founder, 2026-10-26: "also add shopping places card"). */}
+        <div style={{ marginTop: 12 }}>
+          <HereStamp place={{ id: p.placeId || p.id, name, lat: p.lat, lng: p.lng, types: p.types, formattedAddress: p.formattedAddress }} formatDistance={formatDistance} />
+        </div>
         <ActionRow world="shopping" name={name} onDirections={() => onDirections(p)} onMap={onShowOnMap} phone={phone}
           onMore={hasMore ? () => setExpanded((e) => !e) : undefined} moreIcon moreExpanded={hasMore ? expanded : undefined} moreControls={hasMore ? moreId : undefined}
-          style={{ marginTop: 12 }} />
+          style={{ marginTop: 4 }} />
         {hasMore && expanded && (
           <div id={moreId} style={{ marginTop: 12 }}>
             {week.length > 0 && (

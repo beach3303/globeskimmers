@@ -19,10 +19,9 @@ import {
   Check, ChevronDown, ClipboardList, DoorOpen, Info, Lock, Shirt, SquareParking, Ticket, Timer,
 } from "lucide-react";
 import { callWorker } from "@/lib/callWorker";
-import { addStamp, reportStamp, STAMP_REFUSALS, metersBetween, setStampNote, setStampArt } from "@/lib/passport";
+import { addStamp, reportStamp, STAMP_REFUSALS, setStampNote, setStampArt } from "@/lib/passport";
 import { respectPlaceFor } from "@/lib/respectPlaces";
 import RespectPlaceSheet from "@/components/passport/RespectPlaceSheet";
-import { stampRadiusFor } from "@/lib/stampRadius";
 import { resolveStampVariant } from "@/lib/stampVariants";
 import { countryCode } from "@/lib/countries";
 import { localISODate } from "@/lib/localDate";
@@ -30,7 +29,7 @@ import { getStampFix } from "@/lib/geolocation";
 import { showToast } from "@/components/Toast";
 import { openPartner } from "@/lib/openPartner";
 import Guestbook from "@/components/Guestbook";
-import { useLocation, isLiveFix } from "@/components/location/LocationContext";
+import { useLocation } from "@/components/location/LocationContext";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import RubberStamp, { STAMP_LABEL } from "@/components/redesign/RubberStamp";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
@@ -84,6 +83,8 @@ export function useAttractionLink(a) {
 // panels (how stamps work, a refusal, a memory, a sensitive place) sit on
 // cream or white in the shared inks, with line icons and no emoji. isTablet
 // is no longer read: the stamp is the same size on every screen.
+// How far from a place a report can come from (the worker refuses farther; keep in step).
+const REPORT_MAX_M = 1500;
 export function StampHereButton({ a, link: resolved, formatDistance = undefined, localFavorite = false }) {
   const link = resolved?.stamp || null;
   const [busy, setBusy] = useState(false);
@@ -233,6 +234,9 @@ export function StampHereButton({ a, link: resolved, formatDistance = undefined,
     granted(data, refused.req, true);
   };
   const away = (m) => fmtDist(m / 1609.34);
+  // "I'm here, but the app is saying I'm not" is for GPS that drifts — a reading near the place
+  // (2026-10-26, now that the stamp is on every card): no reading, or one far away, gets no report.
+  const reportable = (r) => !!r && !r.inside && r.why !== "denied" && r.why !== "no_fix" && !(Number.isFinite(r.meters) && r.meters > REPORT_MAX_M);
   // An inside-only place (the Empire State Building) says so in the worker's words (2026-10-18).
   const refusalText = (r) => (
     r.inside && r.message ? r.message
@@ -240,6 +244,7 @@ export function StampHereButton({ a, link: resolved, formatDistance = undefined,
       : r.why === "no_fix" ? "We couldn’t get a GPS reading just now — step outside or give it a moment, then tap Stamp again."
       : r.why === "unlocatable" ? "We can’t place this attraction on our map yet."
       : r.why === "unconfirmed" ? "We couldn’t confirm your GPS reading — a VPN, or a long trip today, can cause this."
+      : Number.isFinite(r.meters) && r.meters > REPORT_MAX_M ? `You’re about ${away(r.meters)} from ${name}. Stamps open when you’re there.`
       : Number.isFinite(r.meters) ? `Your GPS puts you about ${away(r.meters)} from ${name} on our map.`
       : r.message || "Your GPS doesn’t show you at this place yet."
   );
@@ -313,7 +318,7 @@ export function StampHereButton({ a, link: resolved, formatDistance = undefined,
         {refused && !stamped && (
           <div style={{ marginTop: 8, borderRadius: 14, border: `1px solid ${NEUTRAL.creamRule}`, background: NEUTRAL.cream, padding: "12px 12px 8px" }}>
             <p style={{ fontSize: fs(13), lineHeight: 1.45, color: NEUTRAL.ink }}>{refusalText(refused)}</p>
-            {!refused.inside && (
+            {reportable(refused) && (
               <>
                 <button type="button" onClick={report} aria-disabled={reportBusy || undefined}
                   style={{ ...stampOutline, marginTop: 10, width: "100%", padding: "8px 12px", fontSize: fs(13.5), cursor: reportBusy ? "default" : "pointer" }}>
@@ -329,20 +334,19 @@ export function StampHereButton({ a, link: resolved, formatDistance = undefined,
   );
 }
 
-// "You're here — stamp it" on any place card (restaurants, cafés…): "If you were
-// there, you can stamp it." Shows only while the device's own GPS fix is inside
-// the place; the worker re-checks against Google's location.
-export function HereStamp({ place, formatDistance = undefined }) {
-  const { currentGpsLocation } = useLocation();
-  // A reading from this app run only — never yesterday's café, restored.
-  const g = isLiveFix(currentGpsLocation, 60 * 60 * 1000) ? currentGpsLocation.coordinates : null;
+// "I was here, get the stamp" on every place card — restaurants, cafés, shops, things to do
+// (founder, 2026-10-26: "place and enable … on all … cards"). It used to show only while a
+// live GPS fix from this app run sat inside the place, so a phone that reopened on its saved
+// location never saw it, even standing at the counter. The proof is the tap: StampHereButton
+// takes fresh readings then and the worker measures them against the place. `stamp` is the
+// place's official stamp record when the card already knows it (an iconic place).
+export function HereStamp({ place, formatDistance = undefined, stamp = null }) {
   const lat = Number(place?.lat), lng = Number(place?.lng);
-  if (!g || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  if (metersBetween(g.latitude, g.longitude, lat, lng) > stampRadiusFor({ types: place.types }) + 50) return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   const pid = String(place.id || "");
   return (
     <StampHereButton a={{ ...place, lat, lng, placeId: pid, displayName: { text: place.name } }}
-      link={{ stamp: null, gid: idKind(pid) === "google" ? pid : null }} formatDistance={formatDistance} />
+      link={{ stamp: stamp || null, gid: idKind(pid) === "google" ? pid : null }} formatDistance={formatDistance} />
   );
 }
 
