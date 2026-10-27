@@ -12,10 +12,11 @@ import { useEffect, useState } from "react";
 import { callWorker } from "@/lib/callWorker";
 import { requirePassport } from "@/lib/passportGate";
 
+// The founder's words (2026-10-26): "only me, friends, friends & followers, everyone".
 export const AUDIENCES = [
   { key: "me", icon: "🔒", label: "Only me", line: "Nobody else, ever." },
   { key: "inner", icon: "🤝", label: "Friends", line: "People you follow who follow you back." },
-  { key: "followers", icon: "👥", label: "Followers", line: "Everyone who follows you. Friends included." },
+  { key: "followers", icon: "👥", label: "Friends & followers", line: "Everyone who follows you, friends included." },
   { key: "public", icon: "🌍", label: "Everyone", line: "Anyone with the app, and City Boards." },
 ];
 export const AUD = Object.fromEntries(AUDIENCES.map((a) => [a.key, a]));
@@ -28,18 +29,24 @@ export const aboveCeiling = (tier, ceiling) => !!ceiling && (RANK[tier] ?? 1) > 
 // What a stamp really shows at under its passport.
 export const capTo = (tier, ceiling) => (aboveCeiling(tier, ceiling) ? ceiling : tier);
 
-// An album (a place's photos) can only narrow: the same as each stamp, friends only, or only me.
+// An album (a place's photos) takes the same four words (founder, 2026-10-27: no "Same as stamp").
+// Its photos never reach more than their stamp or the passport: wider choices are greyed out.
 export const ALBUM_OPTS = [
-  { key: "same", icon: "📎", label: "Same as each stamp", line: "Each photo follows its stamp." },
-  { key: "inner", icon: "🤝", label: "Friends", line: "Only friends, even if a stamp is wider. Off City Boards." },
   { key: "me", icon: "🔒", label: "Only me", line: "Hidden from everyone. Off City Boards." },
+  { key: "inner", icon: "🤝", label: "Friends", line: "People you follow who follow you back. Off City Boards." },
+  { key: "followers", icon: "👥", label: "Friends & followers", line: "Everyone who follows you. Off City Boards." },
+  { key: "public", icon: "🌍", label: "Everyone", line: "Anyone with the app, and the city’s board." },
 ];
-export const albumWord = (k) => { const o = ALBUM_OPTS.find((x) => x.key === k); return o ? `${o.icon} ${o.label}` : ""; };
-// An album's setting from its stamps' photos_tier: one value when they agree, else null (mixed).
-export function albumSetting(stamps) {
-  const set = new Set((stamps || []).map((s) => s?.photos_tier || "same"));
-  return set.size === 1 ? [...set][0] : null;
-}
+export const albumWord = audWord;
+// The narrower of two levels.
+export const narrower = (a, b) => ((RANK[a] ?? 1) <= (RANK[b] ?? 1) ? a : b);
+// What a stamp's photos really show at: its album setting (unset = as far as the stamp goes),
+// never more than the stamp, and never more than the passport when it is known.
+export const albumLevel = (stamp, ceiling = null) => {
+  const own = stampTier(stamp);
+  const album = stamp?.photos_tier && RANK[stamp.photos_tier] !== undefined ? narrower(stamp.photos_tier, own) : own;
+  return ceiling ? capTo(album, ceiling) : album;
+};
 
 // One event so every open screen (Home's passport, Settings, a stamp sheet) shows the change.
 const EVENT = "gs:passport-audience";

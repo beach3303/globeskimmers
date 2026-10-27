@@ -1102,7 +1102,7 @@ export default function SettingsPage() {
             )}
             {dials && (
               <EdRow isTablet={isTablet} step={fontStep} icon={LayoutGrid} iconBg={CAT.weather.ink} title="New stamps start at"
-                desc={aboveCeiling(dials.default_stamp_tier, passAud) ? `Your passport is ${audWord(passAud)}, so new stamps reach ${passAud === "me" ? "only you" : passAud === "inner" ? "your friends" : "your followers"} at most until you open it.` : "Where each new stamp begins. You can change any stamp later."}
+                desc={aboveCeiling(dials.default_stamp_tier, passAud) ? `Your passport is ${audWord(passAud)}, so new stamps reach ${passAud === "me" ? "only you" : passAud === "inner" ? "your friends" : "your friends and followers"} at most until you open it.` : "Where each new stamp begins. You can change any stamp later."}
                 control={{ below: true, node: (
                   <div>
                     <EdChoices grid label="New stamps start at" value={dials.default_stamp_tier}
@@ -1124,15 +1124,21 @@ export default function SettingsPage() {
               />
             )}
             {dials && (
+              // The four words, no "Same as" (founder, 2026-10-27). 🌍 Everyone is the stored 'passport':
+              // no extra limit, so each stamp and album decides, up to the passport.
               <EdRow isTablet={isTablet} step={fontStep} icon={Images} iconBg={CAT.shopping.ink} title="Photo albums"
-                desc={dials.albums_audience === "passport"
-                  ? "Photos follow each stamp. Each album can also be set on its own."
-                  : dials.albums_audience === "inner"
-                  ? "Friends only — never strangers, never City Boards."
-                  : "Only you — never anyone else, never City Boards"}
+                desc={(() => {
+                  const level = { passport: "public", followers: "followers", inner: "inner", me: "me" }[dials.albums_audience] || "public";
+                  // Wider than the passport: say what it really shows at, first and short.
+                  if (aboveCeiling(level, passAud)) return `Your passport is ${audWord(passAud)}, so albums reach ${passAud === "me" ? "only you" : passAud === "inner" ? "friends" : "friends and followers"} at most.`;
+                  return level === "public" ? "Each stamp and album can be narrower. 🌍 photos also hang on City Boards."
+                    : level === "followers" ? "Friends and followers — never strangers, never City Boards."
+                    : level === "inner" ? "Friends only — never strangers, never City Boards."
+                    : "Only you — never anyone else, never City Boards.";
+                })()}
                 control={{ below: true, node: (
-                  <EdChoices label="Who sees my photo albums" value={dials.albums_audience}
-                    options={[["passport", "Same as each stamp"], ["inner", "🤝 Friends"], ["me", "🔒 Only me"]]}
+                  <EdChoices grid label="Who sees my photo albums" value={dials.albums_audience}
+                    options={[["me", "🔒 Only me"], ["inner", "🤝 Friends"], ["followers", "👥 Friends & followers"], ["passport", "🌍 Everyone"]]}
                     onPick={(v) => saveDial("albums_audience", v, dials.albums_audience)} />
                 ) }}
               />

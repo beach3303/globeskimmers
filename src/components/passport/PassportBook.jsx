@@ -45,7 +45,7 @@ const INK = "#243447", INK3 = "#66717D", STAMP = "#B0472F";
 const PP_TIER_RANK = { public: 0, followers: 1, inner: 2, me: 3 };
 const ppTierOf = (st) => st.visibility || (st.hidden ? "me" : null);
 const PP_TIER_MARK = { me: "🔒", inner: "🤝", followers: "👥", public: "🌍" };
-const PP_TIER_WORD = { me: "Only me", inner: "Friends", followers: "Followers", public: "Everyone" };
+const PP_TIER_WORD = { me: "Only me", inner: "Friends", followers: "Friends & followers", public: "Everyone" };
 
 const CITY_INKS = ["#1F6E6A", "#2B4A7E", "#3E5AA8", "#0E7C86", "#2E6B4E", "#5B4B8A", "#6D3A6E", "#2C6E9B", "#3A7D5B", "#4453A6"];
 // Inks for the iconic-place PLACEHOLDER stamp (used until bespoke art is uploaded

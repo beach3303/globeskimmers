@@ -28,7 +28,7 @@ import PostcardCompose from "@/components/passport/PostcardCompose";
 import PhotoEditor from "@/components/passport/PhotoEditor";
 import { isLocalFavorite, localFavoriteLine } from "@/components/passport/LocalFavoriteStamp";
 import { socialFollow, setStampNote, setStampVisibility, setStampArt, setAlbumPrivacy } from "@/lib/passport";
-import { usePassportAudience, aboveCeiling, capTo, audWord, AUD, ALBUM_OPTS, albumWord } from "@/lib/audience";
+import { usePassportAudience, aboveCeiling, capTo, audWord, AUD, ALBUM_OPTS, albumWord, albumLevel } from "@/lib/audience";
 import AudienceSheet from "@/components/privacy/AudienceSheet";
 import { PassportAudienceSheet } from "@/components/privacy/PassportPrivacy";
 import { respectPlaceFor } from "@/lib/respectPlaces";
@@ -87,14 +87,15 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   const [ceiling] = usePassportAudience(!readOnly);
   const [passportSheet, setPassportSheet] = useState(false);
   const shown = capTo(tier, ceiling);
-  // Its photos (an album of one stamp): the same as the stamp, friends only, or only me.
-  const [photosTier, setPhotosTier] = useState(stamp.photos_tier || "same");
+  // Its photos (an album of one stamp), in the four words (2026-10-27): never more than the stamp
+  // or the passport. An album never set reads as far as its stamp goes.
+  const [photosTier, setPhotosTier] = useState(stamp.photos_tier || null);
   const [photosSheet, setPhotosSheet] = useState(false);
   const savePhotos = async (v) => {
     const r = await setAlbumPrivacy([stamp.id], v);
     if (r.error) { showToast(r.error, "error"); return false; }
     setPhotosTier(v);
-    showToast(v === "same" ? "Its photos follow the stamp" : v === "inner" ? "Its photos: friends only" : "Its photos: only you", "success");
+    showToast(`Its photos: ${AUD[v]?.label || v}`, "success");
     onChanged?.();
     return true;
   };
@@ -372,17 +373,20 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
               </p>
             ) : null}
             <button type="button" onClick={() => setPhotosSheet(true)} className="w-full flex items-center gap-2 mt-2.5 pt-2.5 text-left" style={{ borderTop: `1px dashed ${RULE}`, minHeight: 40 }}>
-              <span className="flex-1 min-w-0" style={{ fontSize: fs(12.5), color: INK2 }}>Its photos: <b style={{ color: INK }}>{photosTier === "same" ? "📎 Same as this stamp" : albumWord(photosTier)}</b></span>
+              <span className="flex-1 min-w-0" style={{ fontSize: fs(12.5), color: INK2 }}>Its photos: <b style={{ color: INK }}>{albumWord(albumLevel({ ...stamp, visibility: tier, photos_tier: photosTier }, ceiling))}</b></span>
               <span style={{ fontSize: fs(12.5), fontWeight: 650, color: "#2B4A7E" }}>Change ›</span>
             </button>
             <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.45, marginTop: 4 }}>
               {minor
-                ? "The stamp's photos follow it, and stay private. Followers and Everyone open at age 18."
+                ? "The stamp's photos follow it, and stay private. Friends & followers and Everyone open at age 18."
                 : "🌍 Everyone also hangs its photos on the city board, signed @username — any photo can be taken off the board from your album. 🔒 Only me is never shared, in a link or a picture."}
             </p>
             {passportSheet && <PassportAudienceSheet onClose={() => setPassportSheet(false)} />}
             {photosSheet && (
-              <AudienceSheet title="Who sees its photos" kicker={stamp.name} value={photosTier} options={ALBUM_OPTS.map((o) => (o.key === "same" ? { ...o, label: "Same as this stamp", line: "The photos follow the stamp." } : o))}
+              <AudienceSheet title="Who sees its photos" kicker={stamp.name} options={ALBUM_OPTS}
+                value={albumLevel({ ...stamp, visibility: tier, photos_tier: photosTier }, ceiling)}
+                ceiling={shown}
+                ceilingNote={`This stamp is ${audWord(shown)}, so its photos can’t reach more than that.`}
                 onPick={savePhotos} onClose={() => setPhotosSheet(false)} />
             )}
           </div>

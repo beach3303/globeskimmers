@@ -26,8 +26,8 @@ export function confirmOpening(aud, counts) {
     ? `Anyone with the app will see your ${n} ${s(n)} set to 🌍 Everyone, and their photos can hang on City Boards. Your other stamps stay as they are.`
     : "Anyone with the app can open your passport — but no stamps are set to 🌍 Everyone yet, so they’ll see none until you set some.";
   if (aud === "followers") return n
-    ? `Your followers will see your ${n} ${s(n)} set to 👥 Followers or 🌍 Everyone. Friends-only and Only-me stamps stay as they are.`
-    : "Your followers can open your passport — but no stamps are set to 👥 Followers or wider yet.";
+    ? `Your followers will see your ${n} ${s(n)} set to 👥 Friends & followers or 🌍 Everyone. Friends-only and Only-me stamps stay as they are.`
+    : "Your followers can open your passport — but no stamps are set to 👥 Friends & followers or wider yet.";
   if (aud === "inner") return n
     ? `Your friends will see your ${n} ${s(n)} set to 🤝 Friends or wider.`
     : "Your friends can open your passport — but every stamp is 🔒 Only me right now.";

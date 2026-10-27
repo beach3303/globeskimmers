@@ -4,6 +4,8 @@
 // already holds, so packets can never disagree with the passport, cost no
 // network, and inherit the viewer's permissions automatically (a friend's
 // payload only ever contains photos that passed moderation).
+// The four levels, narrowest first (src/lib/audience.js).
+const RANK = { me: 0, inner: 1, followers: 2, public: 3 };
 const monthDay = (iso) => {
   if (!iso) return null;
   const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
@@ -20,17 +22,18 @@ export function derivePackets(stamps) {
     // 300–1000+ prints read as years, not one endless shelf).
     const year = String(s.visited_on || s.created_at || "").slice(0, 4) || "Undated";
     const key = `${city}|${(s.country || "").trim()}|${year}`;
-    if (!groups.has(key)) groups.set(key, { key, year, city, country: (s.country || "").trim(), photos: [], dates: [], tiers: [], stampId: null, stampWhen: "", stampIds: [], albumTiers: [] });
+    if (!groups.has(key)) groups.set(key, { key, year, city, country: (s.country || "").trim(), photos: [], dates: [], tiers: [], stampId: null, stampWhen: "", stampIds: [], albumTiers: [], widest: null });
     const g = groups.get(key);
     // The stamp's audience rides on each print (the tiers, 2026-10-15), narrowed by the album's own
-    // setting (photos_tier, 2026-10-26: an album can be Friends or Only me, never wider than its
-    // stamp); a 🌍 print also hangs on the city board unless taken down.
+    // setting (photos_tier: any of the four words since 2026-10-27, never wider than its stamp;
+    // unset = as far as the stamp goes); a 🌍 print also hangs on the city board unless taken down.
     const own = s.visibility || (s.hidden ? "me" : "inner");
-    const tier = s.photos_tier === "me" ? "me" : s.photos_tier === "inner" && own !== "me" ? "inner" : own;
+    const tier = s.photos_tier && RANK[s.photos_tier] !== undefined && RANK[s.photos_tier] < (RANK[own] ?? 1) ? s.photos_tier : own;
     if (!g.tiers.includes(tier)) g.tiers.push(tier);
     if (s.id) g.stampIds.push(s.id);
-    const album = s.photos_tier || "same";
-    if (!g.albumTiers.includes(album)) g.albumTiers.push(album);
+    // The album's level is what its photos really reach; the widest stamp is the most it can be set to.
+    if (!g.albumTiers.includes(tier)) g.albumTiers.push(tier);
+    if (!g.widest || (RANK[own] ?? 1) > (RANK[g.widest] ?? 1)) g.widest = own;
     for (const p of photos) g.photos.push({ src: p.photo_url, photo_url: p.photo_url, id: p.id, caption: p.caption || null, place: s.name, food: Number(p.food_subject) === 1, tier, board_hidden: p.board_hidden === true });
     if (s.visited_on) g.dates.push(String(s.visited_on).slice(0, 10));
     // The packet's newest stamp receives prints added from the packet itself
