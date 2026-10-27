@@ -9920,15 +9920,46 @@ function gaMapTieredPlace(p, uLat, uLng) {
   };
 }
 
+// POST /activities — Things to Do. The answer is built from dozens of searches (8 s warm,
+// 65 s cold, measured 2026-10-26), and the app gives up at 25 s — so on a cold area the
+// icons and regional sections never showed. The whole answer is now kept per area: a stored
+// answer comes back at once (refreshed in the background after ACT_FRESH_MS); a new area waits
+// at most ACT_DEADLINE_MS, then answers { partial: true } and the build finishes in the
+// background, so the next open is whole. Pull-to-refresh (forceRefresh) always rebuilds.
+const ACT_CACHE_V = 'act:v1';
+const ACT_FRESH_MS = 6 * 3600 * 1000;
+const ACT_DEADLINE_MS = 12000;
 async function handleActivities(request, env, ctx) {
+  const body = await request.json().catch(() => ({}));
+  const { latitude, longitude, radius = 24140, category = 'all', countryName = '', forceRefresh = false } = body;
+  if (!latitude || !longitude) return jsonResponse({ error: 'Location required' }, 400);
+  const origin = new URL(request.url).origin;
+  const kv = env.GLOBESKIMMERS_KV;
+  // ~1 km cells: everyone opening Things to Do in the same neighbourhood shares one answer.
+  const key = `${ACT_CACHE_V}:${Number(latitude).toFixed(2)},${Number(longitude).toFixed(2)}:${category}:${Math.round(Number(radius) / 1609)}:${String(countryName).slice(0, 40)}`;
+  const good = (r) => r && !r.error && ((r.activities || []).length || (r.nationalIcons || []).length || (r.regionalGems || []).length);
+  const build = () => gaActivitiesBuild(env, ctx, origin, body).then(async (r) => {
+    if (kv && good(r)) await kv.put(key, JSON.stringify({ at: Date.now(), r }), { expirationTtl: 7 * 86400 }).catch(() => {});
+    return r;
+  });
+  if (kv && !forceRefresh) {
+    const hit = await kv.get(key, 'json').catch(() => null);
+    if (hit && hit.r) {
+      if (Date.now() - (hit.at || 0) > ACT_FRESH_MS && ctx) ctx.waitUntil(build().catch(() => {}));
+      return jsonResponse({ ...hit.r, cached: true });
+    }
+  }
+  const job = build();
+  if (ctx) ctx.waitUntil(job.catch(() => {}));
+  const r = await Promise.race([job, new Promise((res) => setTimeout(() => res(null), ACT_DEADLINE_MS))]);
+  if (r) return jsonResponse(r);
+  return jsonResponse({ activities: [], nationalIcons: [], regionalGems: [], nearbyAttractions: [], count: 0, partial: true, version: 'v6.2-owned' });
+}
+async function gaActivitiesBuild(env, ctx, origin, body) {
   try {
-    const body = await request.json().catch(() => ({}));
     const { latitude, longitude, radius = 24140, maxResults = 30, category = 'all',
             smartRadius = false, countryName = '', regionName = '', cityName = '',
             forceRefresh = false } = body;
-    if (!latitude || !longitude) return jsonResponse({ error: 'Location required' }, 400);
-
-    const origin = new URL(request.url).origin;
     const INNER_RADIUS = 40234; // 25 miles in meters
     const useSmartRadius = smartRadius && radius > INNER_RADIUS;
 
@@ -10176,9 +10207,9 @@ async function handleActivities(request, env, ctx) {
     const nearbyAttractions = (ownedNearby || []).filter((a) => a && !shownIds.has(a.id)).slice(0, 20);
 
     const total = dedupedNearby.length + nationalIcons.length + regionalGems.length + nearbyAttractions.length;
-    return jsonResponse({ activities: dedupedNearby, nationalIcons, regionalGems, nearbyAttractions, count: total, version: 'v6.2-owned' });
+    return { activities: dedupedNearby, nationalIcons, regionalGems, nearbyAttractions, count: total, version: 'v6.2-owned' };
   } catch (e) {
-    return jsonResponse({ error: e.message, activities: [] }, 200);
+    return { error: e.message, activities: [] };
   }
 }
 
