@@ -51,6 +51,25 @@ function AirmailEnvelope({ count, peek, onOpen }) {
   );
 }
 
+// The postage (founder, 2026-10-27: "2 cents"): like a telegram's tolls, each photo's airmail
+// postage is printed and stamped ON THE HOUSE. Nobody ever pays; GlobeSkimmers covers it.
+function PostageBox({ sent = 0 }) {
+  return (
+    <div style={{ position: "relative", marginTop: 10, padding: "6px 10px 7px", border: `1px solid ${AIR_BLUE}`, borderRadius: 4, background: "#FFFDF8" }}>
+      <div className="flex justify-between gap-2" style={{ fontFamily: MONO, fontSize: fs(8.5), fontWeight: 600, letterSpacing: ".16em", lineHeight: 1.5, color: INK3 }}>
+        <span>POSTAGE</span><span style={{ color: AIR_RED }}>PAR AVION · AIRMAIL</span>
+      </div>
+      <div className="flex justify-between gap-2" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", lineHeight: 1.6, color: INK2 }}>
+        <span>{sent ? `${sent} PHOTO${sent === 1 ? "" : "S"} SENT` : "EACH PHOTO TO ITS CITY"}</span><span>{sent ? `${sent} × 2¢` : "2¢"}</span>
+      </div>
+      <div aria-hidden="true" style={{ position: "absolute", left: "38%", top: 9, transform: "rotate(-7deg)", padding: "2px 8px", border: `1.5px solid ${AIR_RED}`, borderRadius: 3, boxShadow: `inset 0 0 0 1px #FFFDF8, inset 0 0 0 2px ${AIR_RED}`, color: AIR_RED, opacity: 0.75, mixBlendMode: "multiply", fontFamily: MONO, fontSize: fs(9.5), fontWeight: 700, letterSpacing: ".2em", whiteSpace: "nowrap" }}>
+        ON THE HOUSE
+      </div>
+      <span className="sr-only">Postage is 2 cents a photo, on the house: you never pay.</span>
+    </div>
+  );
+}
+
 export default function ContributeAlbum() {
   const [photos, setPhotos] = useState(null);   // the member's contributions, newest first
   const [open, setOpen] = useState(false);
@@ -162,6 +181,7 @@ function ContributeSheet({ photos, onChanged, onClose }) {
                 <div style={{ width: `${Math.round((run.done / run.total) * 100)}%`, height: "100%", background: AIR_BLUE, transition: "width .3s" }} />
               </div>
             ) : null}
+            <PostageBox sent={summary ? postedCount : 0} />
           </>
         )}
 
