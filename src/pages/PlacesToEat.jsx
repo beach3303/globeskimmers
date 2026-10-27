@@ -26,7 +26,8 @@ import { ROUTE } from "@/lib/workerRoutes";
 import { logEvent } from "@/lib/analytics";
 import { logSearch, logZeroResults } from "@/lib/logSearch";
 import AIDetailsSection from "@/components/AIDetailsSection";
-import TravelerDishes from "@/components/finder/TravelerDishes";
+import TravelerDishes, { TravelerPhotoCredit } from "@/components/finder/TravelerDishes";
+import { useTravelerPhotos, withTravelerPhotos } from "@/lib/travelerPhotos";
 import { HereStamp } from "@/components/attraction/AttractionExtras";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
@@ -490,7 +491,9 @@ function processRest(place, userLat, userLng, isLocal = true) {
 // card's serif numeral and a mono "2/5". No photos: the Bordeaux strip with the
 // numeral in its middle. While an owned place's photos are still being looked up:
 // a quiet 16:10 wash, so the card doesn't jump when they land.
-function PhotoCarousel({ photos=[], rank, name, pending=false }) {
+// travelers: the travelers' photos among `photos` (2026-10-26); the viewer credits them
+// and offers "Report this photo" under each.
+function PhotoCarousel({ photos=[], rank, name, pending=false, travelers=[] }) {
   const [cur,setCur]=useState(0); const [errs,setErrs]=useState({}); const ref=useRef(null);
   const [lightbox,setLightbox]=useState(false);   // tap-to-enlarge full-screen viewer
   const [lbCur,setLbCur]=useState(0);
@@ -544,14 +547,20 @@ function PhotoCarousel({ photos=[], rank, name, pending=false }) {
             style={{flex:1,display:"flex",overflowX:"auto",scrollSnapType:"x mandatory",scrollbarWidth:"none"}}
           >
             {valid.map((p,i)=>(
-              <div key={i} style={{minWidth:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",scrollSnapAlign:"center",flexShrink:0,padding:"0 8px",boxSizing:"border-box"}}>
-                <img src={p} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+              // Exactly one screen wide: a slide sized by its photo (a traveler's is larger than
+              // Google's) put the page count, and the credit under it, on the wrong photo.
+              <div key={i} style={{flex:"0 0 100%",width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",scrollSnapAlign:"center",padding:"0 8px",boxSizing:"border-box"}}>
+                <img src={p} alt="" style={{maxWidth:"100%",maxHeight:"100%",minWidth:0,objectFit:"contain"}}/>
               </div>
             ))}
           </div>
           {valid.length>1&&(
             <div className="font-mono" style={{position:"absolute",bottom:"calc(env(safe-area-inset-bottom) + 18px)",left:"50%",transform:"translateX(-50%)",background:"rgba(0,0,0,0.6)",color:"#fff",padding:"4px 12px",borderRadius:"20px",fontSize:"13px"}}>{lbCur+1} / {valid.length}</div>
           )}
+          {(()=>{
+            const t=travelers.find(x=>x?.url===valid[lbCur]);
+            return t?<div style={{position:"absolute",left:16,right:16,bottom:`calc(env(safe-area-inset-bottom) + ${valid.length>1?56:18}px)`}}><TravelerPhotoCredit photo={t}/></div>:null;
+          })()}
         </div>,
         document.body
       )}
@@ -637,7 +646,9 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
     : restaurant.types?.[0]?.replace(/_/g,' ') || null;
   const weekdays = (enriched?.hours?.weekdayDescriptions?.length ? enriched.hours.weekdayDescriptions
     : (restaurant.currentOpeningHours?.weekdayDescriptions || restaurant.regularOpeningHours?.weekdayDescriptions || restaurant.hours || []));
-  const photosToShow = (enriched?.photos?.length ? enriched.photos : (restaurant.photos || (restaurant.photoUrl ? [restaurant.photoUrl] : [])));
+  // Google's photos with travelers' dishes among them (founder, 2026-10-26).
+  const travelerPhotos = useTravelerPhotos(placeId);
+  const photosToShow = withTravelerPhotos((enriched?.photos?.length ? enriched.photos : (restaurant.photos || (restaurant.photoUrl ? [restaurant.photoUrl] : []))), travelerPhotos);
   const photosPending = restaurant.source==='owned' && !enriched && batchEnrich===undefined && !photosToShow.length;
   // Open words: the place's own zone (offset from the enriched payload when the
   // worker sends it, else the row's own). A cached boolean is never trusted here.
@@ -671,7 +682,7 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
 
   return (
     <WorldCard world="eat" as="li" ref={cardRef}>
-      <PhotoCarousel photos={photosToShow} rank={rank} name={name} pending={photosPending}/>
+      <PhotoCarousel photos={photosToShow} rank={rank} name={name} pending={photosPending} travelers={travelerPhotos}/>
       <div style={{padding:"12px 16px 16px"}}>
         {(restaurant.tier || cuisineLabel) && (
           <div className="flex items-center flex-wrap" style={{columnGap:10,rowGap:4,minHeight:20}}>

@@ -14,7 +14,7 @@
 //                              shared open under the rows on a white panel with a mono
 //                              'FROM TRAVELERS'. No emoji. The row is the element the
 //                              lazy load watches.
-// Props: place, kind ('restaurant' | 'coffee' | 'store'), variant, and for the row: ink
+// Props: place, kind ('restaurant' | 'coffee' | 'store' | 'attraction'), variant, and for the row: ink
 // (the icon colour) and line (borders), or world (a WORLD row or key giving iconInk and
 // line). The add sheet is the same in both looks, with line icons and no emoji.
 import React, { useEffect, useRef, useState } from "react";
@@ -23,6 +23,7 @@ import { Camera, MapPin, X } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import { listDishes, addDish, deleteDish } from "@/lib/dishes";
+import { refreshTravelerPhotos } from "@/lib/travelerPhotos";
 import { reportShared } from "@/lib/passport";
 import { readPhotoExif } from "@/lib/photoExif";
 import { resizePhoto } from "@/lib/resizePhoto";
@@ -36,7 +37,11 @@ const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657", RULE = "rgba(22,17,13,.12)";
 const IVORY = "#FAF7F0", STAMP = "#B0472F";
 const fs = (n) => `calc(${n}px*var(--fs))`;
-const travelers = (n, loved, fav = 0, plain = false) => `Ordered by ${n} traveler${n === 1 ? "" : "s"}${loved > 0 ? ` · ${loved === n ? (n === 1 ? "loved it" : "all loved it") : `${loved} loved it`}` : ""}${fav > 0 ? ` · ${plain ? "" : "⭐ "}favorite of ${fav}` : ""}`;
+// attraction (2026-10-26): a Things to Do place — "a photo from your visit", any subject,
+// the caption optional, no favorite dish, and "Shared by N travelers".
+const ADD_LABEL = { store: "Add a photo of what you got here", attraction: "Add a photo from your visit" };
+const addLabel = (kind) => ADD_LABEL[kind] || "Add a photo of what you ordered";
+const travelers = (n, loved, fav = 0, plain = false, verb = "Ordered") => `${verb} by ${n} traveler${n === 1 ? "" : "s"}${loved > 0 ? ` · ${loved === n ? (n === 1 ? "loved it" : "all loved it") : `${loved} loved it`}` : ""}${fav > 0 ? ` · ${plain ? "" : "⭐ "}favorite of ${fav}` : ""}`;
 
 /**
  * @param {{ place?: any, kind?: string, variant?: 'panel'|'row', ink?: string, line?: string, world?: any }} props
@@ -48,7 +53,9 @@ export default function TravelerDishes({ place = undefined, kind = "restaurant",
   const [adding, setAdding] = useState(false);
   const [view, setView] = useState(null);   // { photos, index, title }
   const store = kind === "store";
-  const goods = kind === "coffee" ? "drinks and treats" : store ? "finds" : "dishes";
+  const visit = kind === "attraction";
+  const verb = visit ? "Shared" : "Ordered";
+  const goods = kind === "coffee" ? "drinks and treats" : store ? "finds" : visit ? "photos" : "dishes";
   const w = world && typeof world === "object" ? world : worldOf(world);
   const rowInk = ink || (w ? w.iconInk : STAMP);
   const rowLine = line || (w ? w.line : RULE);
@@ -75,13 +82,14 @@ export default function TravelerDishes({ place = undefined, kind = "restaurant",
     if (error) { showToast(error, "error"); return; }
     showToast("Removed", "success");
     load();
+    refreshTravelerPhotos(place?.id);
   };
 
   const overlays = (
     <>
       {adding && (
         <AddDishSheet place={place} kind={kind} goods={goods} known={dishes.map((d) => d.dish)} ink={variant === "row" ? rowInk : undefined}
-          onClose={() => setAdding(false)} onAdded={() => { setAdding(false); load(); }} />
+          onClose={() => setAdding(false)} onAdded={() => { setAdding(false); load(); refreshTravelerPhotos(place?.id); }} />
       )}
       {view && (
         <PhotoLightbox photos={view.photos} index={view.index} title={view.title} credit="Shared by travelers who were here"
@@ -97,7 +105,7 @@ export default function TravelerDishes({ place = undefined, kind = "restaurant",
     return (
       <>
         <QuietRow ref={rootRef} world={q} icon={Camera} aria-haspopup="dialog" onClick={() => setAdding(true)}>
-          {store ? "Add a photo of what you got here" : "Add a photo of what you ordered"}
+          {addLabel(kind)}
         </QuietRow>
         {dishes.length > 0 && (
           <QuietPanel world={q} order={1}>
@@ -111,7 +119,7 @@ export default function TravelerDishes({ place = undefined, kind = "restaurant",
                   </button>
                   <div className="min-w-0">
                     <div style={{ fontFamily: SERIF, fontSize: fs(17), color: INK, lineHeight: 1.15, overflowWrap: "break-word" }}>{d.dish}</div>
-                    <div style={{ fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.4 }}>{travelers(d.travelers, d.loved || 0, d.favorites || 0, true)}{d.photos.length > 1 ? ` · ${d.photos.length} photos` : ""}</div>
+                    <div style={{ fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.4 }}>{travelers(d.travelers, d.loved || 0, d.favorites || 0, true, verb)}{d.photos.length > 1 ? ` · ${d.photos.length} photos` : ""}</div>
                   </div>
                 </li>
               ))}
@@ -156,7 +164,7 @@ export default function TravelerDishes({ place = undefined, kind = "restaurant",
                 </button>
                 <div className="min-w-0">
                   <div className="truncate" style={{ fontFamily: SERIF, fontSize: fs(17), color: INK, lineHeight: 1.15 }}>{d.dish}</div>
-                  <div style={{ fontSize: fs(12), color: INK3, marginTop: 2 }}>{travelers(d.travelers, d.loved || 0, d.favorites || 0)}{d.photos.length > 1 ? ` · ${d.photos.length} photos` : ""}</div>
+                  <div style={{ fontSize: fs(12), color: INK3, marginTop: 2 }}>{travelers(d.travelers, d.loved || 0, d.favorites || 0, false, verb)}{d.photos.length > 1 ? ` · ${d.photos.length} photos` : ""}</div>
                 </div>
               </div>
             ))}
@@ -172,11 +180,11 @@ export default function TravelerDishes({ place = undefined, kind = "restaurant",
       <button type="button" onClick={() => setAdding(true)}
         className="w-full mt-2 rounded-[12px] py-2.5 font-semibold"
         style={{ background: "#fff", color: STAMP, border: `1.5px dashed ${STAMP}55`, fontSize: fs(13.5) }}>
-        📸 {kind === "store" ? "Add a photo of what you got here" : "Add a photo of what you ordered"}
+        📸 {addLabel(kind)}
       </button>
       {!dishes.length && (
         <p style={{ fontSize: fs(11.5), color: INK3, textAlign: "center", marginTop: 4, lineHeight: 1.4 }}>
-          {store ? "Picked up something good? Snap it and let others know how you liked it 😊" : `Help everyone find delicious ${goods} — snap what you ordered and tell us if you loved it 😋`}
+          {visit ? "Been here? Share a photo from your visit 📷" : store ? "Picked up something good? Snap it and let others know how you liked it 😊" : `Help everyone find delicious ${goods} — snap what you ordered and tell us if you loved it 😋`}
         </p>
       )}
       {mine.length > 0 && (
@@ -192,6 +200,21 @@ export default function TravelerDishes({ place = undefined, kind = "restaurant",
       )}
 
       {overlays}
+    </div>
+  );
+}
+
+// The line under a traveler's photo in a place's photo viewer (the card's own gallery,
+// 2026-10-26): where it comes from, and "Report this photo" (Apple 1.2).
+// photo: { id, url, caption } from useTravelerPhotos.
+export function TravelerPhotoCredit({ photo }) {
+  if (!photo?.id) return null;
+  return (
+    <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, margin: "0 auto", textAlign: "center" }}>
+      <p style={{ margin: 0, fontSize: fs(12.5), lineHeight: 1.45, color: "rgba(255,252,247,0.85)" }}>
+        {photo.caption ? <><span style={{ fontWeight: 600 }}>{photo.caption}</span> · </> : null}Shared by a traveler who was here
+      </p>
+      <DishPhotoReport photo={photo} dish={photo.caption || undefined} />
     </div>
   );
 }
@@ -252,6 +275,8 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded, ink = undef
   // The row look prints the sheet's choices and its Share in the world's ink.
   const accent = ink || STAMP;
   const on = ink || INK;
+  const visit = kind === "attraction";   // the caption is optional: it files under the place's name
+  const title = kind === "store" ? "Add a photo of what you got" : visit ? "Add a photo from your visit" : "Add a photo of what you ordered";
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   const pick = (e) => {
@@ -263,7 +288,7 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded, ink = undef
   };
 
   const submit = async () => {
-    if (!file || !dish.trim() || busy) return;
+    if (!file || (!visit && !dish.trim()) || busy) return;
     setBusy(true); setNote(null);
     try {
       const exif = await readPhotoExif(file);   // before resizing strips it
@@ -273,10 +298,10 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded, ink = undef
         const pos = await getCurrentPositionSmart({ timeout: 8000 });
         if (pos?.coords) gps = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy };
       } catch { /* no GPS — the photo's own location can still prove it */ }
-      const { data, error, proofNeeded } = await addDish({ place, kind, dish: dish.trim(), liked, favorite, image, gps, exif });
+      const { data, error, proofNeeded } = await addDish({ place, kind, dish: dish.trim(), liked, favorite: favorite && !visit, image, gps, exif });
       if (proofNeeded) { setNote(error); return; }
       if (error) { setNote(error); return; }
-      showToast(data?.replaced ? "Photo updated" : "Thank you! Your order is up", "success");
+      showToast(data?.replaced ? "Photo updated" : visit ? "Thank you! Your photo is up" : "Thank you! Your order is up", "success");
       onAdded();
     } catch (err) {
       setNote(err?.message || "Upload failed — try again");
@@ -287,13 +312,13 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded, ink = undef
 
   return createPortal(
     <div className="fixed inset-0 flex items-end justify-center" style={{ zIndex: 9997, background: "rgba(22,17,13,.5)" }} onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={kind === "store" ? "Add a photo of what you got" : "Add a photo of what you ordered"}
+      <div role="dialog" aria-modal="true" aria-label={title}
         className="w-full max-w-md rounded-t-[22px] px-5 pt-4 pb-6" style={{ background: "#F3EEE1", paddingBottom: "max(24px, env(safe-area-inset-bottom))" }} onClick={(e) => e.stopPropagation()}>
         <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: "rgba(22,17,13,.18)" }} />
-        <div style={{ fontFamily: SERIF, fontSize: fs(24), color: INK, lineHeight: 1.1 }}>{kind === "store" ? "Add a photo of what you got" : "Add a photo of what you ordered"}</div>
+        <div style={{ fontFamily: SERIF, fontSize: fs(24), color: INK, lineHeight: 1.1 }}>{title}</div>
         <div className="truncate" style={{ fontSize: fs(12.5), color: INK3, marginTop: 2 }}>{place.name}</div>
         <p style={{ fontSize: fs(13), color: INK2, lineHeight: 1.45, marginTop: 6 }}>
-          {kind === "store" ? "Could be anything — a snack, a drink, a find. We’ll let others know how you liked it." : `Help everyone find delicious ${goods}! Add a photo of what you ordered — and let us know if you loved it.`}
+          {visit ? "Show the next traveler what it’s like. Your photo joins this place’s photos." : kind === "store" ? "Could be anything — a snack, a drink, a find. We’ll let others know how you liked it." : `Help everyone find delicious ${goods}! Add a photo of what you ordered — and let us know if you loved it.`}
         </p>
 
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pick} />
@@ -305,7 +330,7 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded, ink = undef
         </button>
 
         <input value={dish} onChange={(e) => setDish(e.target.value.slice(0, 60))} maxLength={60}
-          placeholder={kind === "coffee" ? "What did you order? e.g. Iced oat latte" : kind === "store" ? "What did you get? e.g. Matcha Kit Kat" : "What did you order? e.g. Al pastor tacos"} aria-label={kind === "store" ? "What you got" : "What you ordered"}
+          placeholder={kind === "coffee" ? "What did you order? e.g. Iced oat latte" : kind === "store" ? "What did you get? e.g. Matcha Kit Kat" : visit ? "A few words (optional), e.g. The view from the top" : "What did you order? e.g. Al pastor tacos"} aria-label={kind === "store" ? "What you got" : visit ? "About the photo" : "What you ordered"}
           className="w-full mt-3 rounded-xl px-3 h-11 outline-none" style={{ background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(15), color: INK }} />
         {known.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2">
@@ -327,12 +352,14 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded, ink = undef
 
         {/* Founder, 2026-10-05: "a check box … this is my favorite dish in this
             restaurant". One per traveler per place — a new pick replaces the old. */}
-        <label className="flex items-center gap-2.5 mt-3 rounded-xl px-3 py-2.5 cursor-pointer" style={{ background: "#fff", border: `1px solid ${favorite ? accent : RULE}` }}>
-          <input type="checkbox" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} style={{ width: 18, height: 18, accentColor: accent }} />
-          <span style={{ fontSize: fs(13.5), color: INK }}>
-            This is my favorite {kind === "restaurant" ? "dish at this restaurant" : "here"}
-          </span>
-        </label>
+        {!visit && (
+          <label className="flex items-center gap-2.5 mt-3 rounded-xl px-3 py-2.5 cursor-pointer" style={{ background: "#fff", border: `1px solid ${favorite ? accent : RULE}` }}>
+            <input type="checkbox" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} style={{ width: 18, height: 18, accentColor: accent }} />
+            <span style={{ fontSize: fs(13.5), color: INK }}>
+              This is my favorite {kind === "restaurant" ? "dish at this restaurant" : "here"}
+            </span>
+          </label>
+        )}
 
         <p className="flex items-start gap-1.5" style={{ fontSize: fs(11.5), color: INK3, lineHeight: 1.45, marginTop: 10 }}>
           <MapPin size={14} color={INK3} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }} />
@@ -342,7 +369,7 @@ function AddDishSheet({ place, kind, goods, known, onClose, onAdded, ink = undef
 
         <div className="flex gap-2 mt-3">
           <button type="button" onClick={onClose} className="flex-1 rounded-xl py-3 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(14) }}>Cancel</button>
-          <button type="button" onClick={submit} disabled={!file || !dish.trim() || busy} className="flex-1 rounded-xl py-3 font-semibold disabled:opacity-50"
+          <button type="button" onClick={submit} disabled={!file || (!visit && !dish.trim()) || busy} className="flex-1 rounded-xl py-3 font-semibold disabled:opacity-50"
             style={{ background: accent, color: "#fff", fontSize: fs(14) }}>{busy ? "Checking…" : "Share"}</button>
         </div>
       </div>

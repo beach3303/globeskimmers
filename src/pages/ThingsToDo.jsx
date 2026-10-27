@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useId } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -22,12 +22,15 @@ import { matchesQuery } from "@/lib/searchText";
 import {
   SlidersHorizontal, Stamp, ChevronRight, ChevronDown, Compass, Palette, Telescope, Church, Trees, Waves, Fish,
   FerrisWheel, Mountain, Castle, Landmark, Drama, TramFront, Route, Martini, Flower2, Binoculars, Music, Ship, Tent, Library,
-  X, Heart, TriangleAlert, Sunrise, Clock, MapPin, WifiOff, SearchX, RotateCcw,
+  X, Heart, TriangleAlert, Sunrise, Clock, MapPin, WifiOff, SearchX, RotateCcw, BookOpen,
 } from "lucide-react";
 import { WORLD, NEUTRAL, fs as fsx, rgba } from "@/components/redesign/constants";
 import FinderHeader, { finderColumnStyle } from "@/components/finder/FinderHeader";
 import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
-import { WorldCard, worldGrid, NumberMark, FactsLine, WorldTag, TagRow, CardKicker, CardName, ActionRow, WorldSkeleton, ratingText } from "@/components/finder/FinderCard";
+import { WorldCard, worldGrid, NumberMark, FactsLine, WorldTag, TagRow, CardKicker, CardName, ActionRow, WorldSkeleton, ratingText, QuietRows, QuietRow, QuietPanel } from "@/components/finder/FinderCard";
+import TravelerDishes from "@/components/finder/TravelerDishes";
+import Guestbook from "@/components/Guestbook";
+import { useTravelerPhotos, withTravelerPhotos } from "@/lib/travelerPhotos";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import { openStateFor } from "@/lib/openState";
 import { useOverlayClose } from "@/components/home/SuggestPlaceSection";
@@ -470,6 +473,10 @@ function PlaceSheet({a,photos,isTablet,isLocal,fmt,onMap,onDirections,onPhotos})
         {tags.length>0&&<TagRow max={3} style={{marginTop:10}}>{tags.map((t,i)=><WorldTag key={t} world="todo" tone={i?"outline":"wash"}>{t}</WorldTag>)}</TagRow>}
         <ActionRow world="todo" name={name} onDirections={onDirections} onMap={onMap}
           phone={a.nationalPhoneNumber||null} website={a.websiteUri||null} onWebsite={a.websiteUri?()=>openPartner(a.websiteUri):undefined} style={{marginTop:14}}/>
+        {/* Travelers' photos from their visits (founder, 2026-10-26); they join the place's photos. */}
+        <QuietRows world="todo" style={{marginTop:12}}>
+          <TravelerDishes world="todo" variant="row" kind="attraction" place={{id:a.id||a.placeId,name,lat:a.lat??a.location?.latitude,lng:a.lng??a.location?.longitude}}/>
+        </QuietRows>
         <AttractionExtras a={a} formatDistance={fmt} isTablet={isTablet} world="todo">
           {love.length>0&&<SheetCard icon={Heart} title="What people love"><TagRow max={love.length}>{love.map((h)=><WorldTag key={h} world="todo">{capFirst(h)}</WorldTag>)}</TagRow></SheetCard>}
           {heads.length>0&&<SheetCard icon={TriangleAlert} title="Good to know"><TagRow max={heads.length}>{heads.map((h)=><WorldTag key={h} world="todo">{capFirst(h)}</WorldTag>)}</TagRow></SheetCard>}
@@ -492,6 +499,9 @@ function FullCard({a,n,photos,mark,isLocal,fmt,onOpen,onMap,onDirections,onPhoto
   const name=a.displayName?.text||a.name||"Attraction";
   const dist=Number.isFinite(a.distanceMiles)?fmt(a.distanceMiles):null;
   const tags=tagsOf(a).slice(0,3);
+  const [guestbookOpen,setGuestbookOpen]=useState(false);
+  const guestId=useId();
+  const pid=a.id||a.placeId;
   return(
     <WorldCard world="todo" as={as} ref={cardRef} style={highlighted?{boxShadow:`0 0 0 3px ${W.ink}, ${W.cardShadow}`}:undefined}>
       <PhotoOrIcon world="todo" photos={photos} alt={name} icon={placeIcon(a)} onClick={photos.length?onPhotos:undefined}>
@@ -510,7 +520,17 @@ function FullCard({a,n,photos,mark,isLocal,fmt,onOpen,onMap,onDirections,onPhoto
         </div>
         {tags.length>0&&<TagRow max={3} style={{marginTop:10}}>{tags.map((t,i)=><WorldTag key={t} world="todo" tone={i?"outline":"wash"}>{t}</WorldTag>)}</TagRow>}
         {/* On every card (founder, 2026-10-26); an iconic place's own stamp record rides along. */}
-        <div style={{marginTop:14}}><HereStamp place={{id:a.id||a.placeId,name,lat:a.lat??a.location?.latitude,lng:a.lng??a.location?.longitude,types:a.types,formattedAddress:a.formattedAddress}} stamp={a.stamp||null} formatDistance={fmt}/></div>
+        {/* Travelers' photos from their visits and the guestbook, on the card itself (founder, 2026-10-26). */}
+        <QuietRows world="todo" style={{marginTop:12}}>
+          <TravelerDishes world="todo" variant="row" kind="attraction" place={{id:pid,name,lat:a.lat??a.location?.latitude,lng:a.lng??a.location?.longitude}}/>
+          <QuietRow world="todo" icon={BookOpen} expanded={guestbookOpen} controls={guestId} onClick={()=>setGuestbookOpen((o)=>!o)}>
+            <span style={{fontFamily:MONO,fontSize:fsx(10.5),fontWeight:500,letterSpacing:".12em",textTransform:"uppercase"}}>Guestbook</span>
+          </QuietRow>
+          <QuietPanel world="todo" id={guestId} order={2} hidden={!guestbookOpen} style={{padding:"12px 14px"}}>
+            {guestbookOpen?<Guestbook entityType="attraction" entityId={pid} entityName={name} world="todo"/>:null}
+          </QuietPanel>
+        </QuietRows>
+        <div style={{marginTop:14}}><HereStamp place={{id:pid,name,lat:a.lat??a.location?.latitude,lng:a.lng??a.location?.longitude,types:a.types,formattedAddress:a.formattedAddress}} stamp={a.stamp||null} formatDistance={fmt}/></div>
         <ActionRow world="todo" name={name} onDirections={onDirections} onMap={onMap} onMore={onOpen} moreIcon style={{marginTop:4}}/>
       </div>
       {children}
@@ -567,9 +587,10 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
   }
   const name=a.displayName?.text||a.name||"Attraction";
   // Google's photos first, then the row's own; any photo object becomes its URL, and a repeat
-  // shows once.
-  const _photos=[...new Set([...(enriched?.photos||[]),...(a.photos||[])]
-    .map(p=>typeof p==="string"?p:(p?.url||p?.full||p?.thumbnail||null)).filter(Boolean))];
+  // shows once. Travelers' photos from their visits join them (2026-10-26).
+  const travelerPhotos=useTravelerPhotos(a.id||a.placeId);
+  const _photos=withTravelerPhotos([...new Set([...(enriched?.photos||[]),...(a.photos||[])]
+    .map(p=>typeof p==="string"?p:(p?.url||p?.full||p?.thumbnail||null)).filter(Boolean))],travelerPhotos);
   // The page's mi/km formatter when given; miles otherwise.
   const fmtDist=fmt||((d)=>`${d.toFixed(1)} mi`);
   // Standing at it? Only the device's own GPS fix counts (never a picked place).
@@ -581,7 +602,7 @@ function TierCard({a,userLat,userLng,isTablet,fullWidth=false,forceOpen=false,ca
   const opened=(
     <>
       <MapAppSelector isOpen={dirs} onClose={()=>setDirs(false)} destination={{name,address:a.formattedAddress||a.shortFormattedAddress||a.vicinity||a.address||"",latitude:a.lat,longitude:a.lng}} userLat={userLat} userLng={userLng}/>
-      <PhotoGalleryModal photos={_photos} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
+      <PhotoGalleryModal photos={_photos} travelers={travelerPhotos} initialIndex={gallery.idx} isOpen={gallery.open} onClose={()=>setGallery({open:false,idx:0})}/>
       <AnimatePresence>
         {expanded&&(
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onClick={closeSheet}

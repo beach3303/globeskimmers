@@ -3,8 +3,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useDismissable } from '@/lib/dismissStack';
 import useHorizontalSwipe from '@/lib/useHorizontalSwipe';
+import { TravelerPhotoCredit } from '@/components/finder/TravelerDishes';
 
-export default function PhotoGalleryModal({ photos, initialIndex = 0, isOpen, onClose }) {
+// travelers (optional, 2026-10-26): the travelers' photos among `photos` ([{ id, url, caption }]
+// from useTravelerPhotos). Under one of them the viewer says who shared it and offers
+// "Report this photo".
+export default function PhotoGalleryModal({ photos, initialIndex = 0, isOpen, onClose, travelers = undefined }) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
 
   // Re-seed from the tapped photo on EVERY open. Some callers (ActivityDetail)
@@ -101,6 +105,10 @@ export default function PhotoGalleryModal({ photos, initialIndex = 0, isOpen, on
                 {currentIndex + 1} / {photos.length}
               </div>
             )}
+            {(() => {
+              const t = (travelers || []).find((p) => p?.url === photos[currentIndex]);
+              return t ? <div className="mt-2" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}><TravelerPhotoCredit photo={t} /></div> : null;
+            })()}
           </motion.div>
         </div>
       )}

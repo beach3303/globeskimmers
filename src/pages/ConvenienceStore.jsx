@@ -34,6 +34,7 @@ import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import FilterSheet, { FilterGroupLabel, FilterToggleRow } from "@/components/finder/FilterSheet";
 import TravelerDishes from "@/components/finder/TravelerDishes";
+import { useTravelerPhotos, withTravelerPhotos } from "@/lib/travelerPhotos";
 import { AlertCircle, BookOpen, Clock, Coffee, CreditCard, Flame, Fuel, Landmark, MapPin, Moon, Pill, SearchX, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { WORLD, NEUTRAL, fs } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
@@ -193,7 +194,9 @@ function StoreCard({ store, n, isLocal, formatDistance, onDirections, onShowOnMa
     photos: enriched.photos?.length ? enriched.photos : store.photos,
     hours: enriched.hours?.weekdayDescriptions?.length ? enriched.hours.weekdayDescriptions : store.hours,
   } : store;
-  const photos = s.photos.map((p) => photoUrl(p)).filter(Boolean);
+  // Google's photos with travelers' finds among them (2026-10-26).
+  const travelerPhotos = useTravelerPhotos(s.placeId || s.id);
+  const photos = withTravelerPhotos(s.photos.map((p) => photoUrl(p)).filter(Boolean), travelerPhotos);
   const os = openStateFor(s, { isLocal });
   const allDay = is24(os);
   const chain = detectChain(s.name);
@@ -268,7 +271,7 @@ function StoreCard({ store, n, isLocal, formatDistance, onDirections, onShowOnMa
           </div>
         )}
       </div>
-      <PhotoGalleryModal photos={photos} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
+      <PhotoGalleryModal photos={photos} travelers={travelerPhotos} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
     </WorldCard>
   );
 }

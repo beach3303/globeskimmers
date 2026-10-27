@@ -28,14 +28,17 @@ import MapAppSelector from "@/components/MapAppSelector";
 import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import FinderHeader, { finderColumnStyle } from "@/components/finder/FinderHeader";
 import { WorldChip, ChipRow, WorldSegmented, ResultLine } from "@/components/finder/FinderControls";
-import { WorldCard, worldGrid, NumberMark, FactsLine, WorldTag, TagRow, CardKicker, CardName, ActionRow, WorldSkeleton } from "@/components/finder/FinderCard";
+import { WorldCard, worldGrid, NumberMark, FactsLine, WorldTag, TagRow, CardKicker, CardName, ActionRow, WorldSkeleton, QuietRows, QuietRow, QuietPanel } from "@/components/finder/FinderCard";
+import TravelerDishes from "@/components/finder/TravelerDishes";
+import Guestbook from "@/components/Guestbook";
+import { useTravelerPhotos, withTravelerPhotos } from "@/lib/travelerPhotos";
 import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
 import { HereStamp } from "@/components/attraction/AttractionExtras";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import FilterSheet, { FilterGroupLabel, FilterToggleRow } from "@/components/finder/FilterSheet";
 import { SwingTag } from "@/components/finder/motifs";
 import {
-  AlertCircle, Apple, Beef, Building2, Carrot, Clock, Gem, Gift, MapPin, Moon, Package, Plane, Scissors, SearchX,
+  AlertCircle, Apple, Beef, BookOpen, Building2, Carrot, Clock, Gem, Gift, MapPin, Moon, Package, Plane, Scissors, SearchX,
   ShoppingBag, ShoppingCart, SlidersHorizontal, Store, Tag, Tent, X,
 } from "lucide-react";
 import { WORLD, NEUTRAL, fs } from "@/components/redesign/constants";
@@ -111,7 +114,9 @@ function ShopCard({ p, n, isLocal, formatDistance, onDirections, onShowOnMap, hi
   const [expanded, setExpanded] = useState(false);
   const [gallery, setGallery] = useState({ open: false, idx: 0 });
   const [enriched, setEnriched] = useState(null);
+  const [guestbookOpen, setGuestbookOpen] = useState(false);
   const moreId = useId();
+  const guestId = useId();
   useEffect(() => { if (forceExpanded) setExpanded(true); }, [forceExpanded]);
   // Real Google photos and hours for planet-DB shops (owned records carry none). The page
   // batch-enriches every visible owned shop in one worker call and hands this card its
@@ -127,8 +132,11 @@ function ShopCard({ p, n, isLocal, formatDistance, onDirections, onShowOnMap, hi
   }, [batchEnrich]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const name = nameOf(p);
-  const photos = (enriched?.photos?.length ? enriched.photos : (p.photos || []))
-    .map((x) => (typeof x === "string" ? x : (x?.url || null))).filter(Boolean);
+  const placeId = p.placeId || p.id;
+  // Google's photos with travelers' finds among them (2026-10-26).
+  const travelerPhotos = useTravelerPhotos(placeId);
+  const photos = withTravelerPhotos((enriched?.photos?.length ? enriched.photos : (p.photos || []))
+    .map((x) => (typeof x === "string" ? x : (x?.url || null))).filter(Boolean), travelerPhotos);
   // The open words read the shop's clock: the enriched weekly hours when the planet-DB
   // row had none (never its cached openNow), else the row's own.
   const statusRow = enriched?.hours?.weekdayDescriptions?.length
@@ -172,9 +180,19 @@ function ShopCard({ p, n, isLocal, formatDistance, onDirections, onShowOnMap, hi
               : <WorldTag key={t.key} world="shopping" tone="wash">{t.label}</WorldTag>))}
           </TagRow>
         )}
+        {/* Travelers' finds and the guestbook, as on Convenience (founder, 2026-10-26). */}
+        <QuietRows world="shopping" style={{ marginTop: 12 }}>
+          <TravelerDishes world="shopping" variant="row" place={{ id: placeId, name, lat: p.lat, lng: p.lng }} kind="store" />
+          <QuietRow world="shopping" icon={BookOpen} expanded={guestbookOpen} controls={guestId} onClick={() => setGuestbookOpen((o) => !o)}>
+            <span style={{ fontFamily: MONO, fontSize: fs(10.5), fontWeight: 500, letterSpacing: ".12em", textTransform: "uppercase" }}>Guestbook</span>
+          </QuietRow>
+          <QuietPanel world="shopping" id={guestId} order={2} hidden={!guestbookOpen} style={{ padding: "12px 14px" }}>
+            {guestbookOpen ? <Guestbook entityType="store" entityId={placeId} entityName={name} world="shopping" /> : null}
+          </QuietPanel>
+        </QuietRows>
         {/* On every card (founder, 2026-10-26: "also add shopping places card"). */}
         <div style={{ marginTop: 12 }}>
-          <HereStamp place={{ id: p.placeId || p.id, name, lat: p.lat, lng: p.lng, types: p.types, formattedAddress: p.formattedAddress }} formatDistance={formatDistance} />
+          <HereStamp place={{ id: placeId, name, lat: p.lat, lng: p.lng, types: p.types, formattedAddress: p.formattedAddress }} formatDistance={formatDistance} />
         </div>
         <ActionRow world="shopping" name={name} onDirections={() => onDirections(p)} onMap={onShowOnMap} phone={phone}
           onMore={hasMore ? () => setExpanded((e) => !e) : undefined} moreIcon moreExpanded={hasMore ? expanded : undefined} moreControls={hasMore ? moreId : undefined}
@@ -205,7 +223,7 @@ function ShopCard({ p, n, isLocal, formatDistance, onDirections, onShowOnMap, hi
           </div>
         )}
       </div>
-      <PhotoGalleryModal photos={photos} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
+      <PhotoGalleryModal photos={photos} travelers={travelerPhotos} initialIndex={gallery.idx} isOpen={gallery.open} onClose={() => setGallery({ open: false, idx: 0 })} />
     </WorldCard>
   );
 }

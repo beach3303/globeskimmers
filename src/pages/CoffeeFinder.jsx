@@ -12,6 +12,7 @@ import { logSearch, logZeroResults } from "@/lib/logSearch";
 import { matchesQuery } from "@/lib/searchText";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import TravelerDishes from "@/components/finder/TravelerDishes";
+import { useTravelerPhotos, withTravelerPhotos } from "@/lib/travelerPhotos";
 import { HereStamp } from "@/components/attraction/AttractionExtras";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import { Coffee as CoffeeIcon, SlidersHorizontal, Sparkles, Clock, Laptop, MapPin, ExternalLink, X } from "lucide-react";
@@ -271,8 +272,10 @@ function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance
   const name    = shop.displayName?.text || shop.name || "Coffee Shop";
   const placeId = shop.placeId || shop.id;
   const address = shop.shortFormattedAddress || shop.formattedAddress || "";
-  const photos  = (enriched?.photos?.length ? enriched.photos : (shop.photos||(shop.photoUrl?[shop.photoUrl]:[])))
-    .map(p=>typeof p==="string"?p:(p?.url||p?.full||p?.thumbnail||null)).filter(Boolean);
+  // Google's photos with travelers' among them (their drinks and treats, 2026-10-26).
+  const travelerPhotos = useTravelerPhotos(placeId);
+  const photos  = withTravelerPhotos((enriched?.photos?.length ? enriched.photos : (shop.photos||(shop.photoUrl?[shop.photoUrl]:[])))
+    .map(p=>typeof p==="string"?p:(p?.url||p?.full||p?.thumbnail||null)).filter(Boolean), travelerPhotos);
   const weekdays = enriched?.hours?.weekdayDescriptions?.length ? enriched.hours.weekdayDescriptions : (shop.currentOpeningHours?.weekdayDescriptions||[]);
   // T1.5: open words come from the hours in the place's own zone, never from a
   // cached openNow; a navigated city with no zone gets "Hours not listed".
@@ -361,7 +364,7 @@ function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance
         )}
       </div>
       <MapAppSelector isOpen={showDir} onClose={()=>setShowDir(false)} destination={{name, address, latitude:shop.lat, longitude:shop.lng}} userLat={userLat} userLng={userLng}/>
-      {galleryOpen&&<PhotoGalleryModal photos={photos} initialIndex={galleryStart} isOpen onClose={()=>setGalleryOpen(false)}/>}
+      {galleryOpen&&<PhotoGalleryModal photos={photos} travelers={travelerPhotos} initialIndex={galleryStart} isOpen onClose={()=>setGalleryOpen(false)}/>}
     </WorldCard>
   );
 }
