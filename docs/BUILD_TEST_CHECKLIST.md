@@ -3380,3 +3380,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - **Test on a phone after the OTA:** Profile → City Boards album → add 3 photos with location → they appear on that
   city's board as "From a traveler", like + comment, delete one; a Things to Do card → Add a photo from your visit;
   Pink's card shows your hot dog as photo 2; Settings → Photo albums shows the four words; a stamp → Its photos.
+
+## 2026-10-28 — PUSHED: the 2026-10-26/27 batch + f7b8de8 (no dead or injured animals on City Boards)
+
+- Step 1 `d605c3a:main`: migrations applied (20261026160000_explicit_photo_levels, 20261026200000_place_dishes_attraction_kind,
+  20261027090000_board_contributions); workers + website deployed ✅.
+- Step 2 `stamping-v2:main` (f7b8de8): workers deployed ✅.
+- Probed live: /places/traveler-photos returns the Pink's dish photo; /board/contributions answers (401 signed out); Money
+  Exchange cards carry photos; ATMs/Restrooms ≤ 2; Melrose's closed former tenants are gone from Eat; privacy policy
+  "Last updated: October 27, 2026" with the City Board paragraph.
+- **Open:** founder `npm run ota` (both platforms), then the phone tests in the 2026-10-26/27 entry.
