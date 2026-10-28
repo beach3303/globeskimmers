@@ -21584,7 +21584,7 @@ const bcWhere = (board) => board.kind === 'city' ? `board_key=eq.${encodeURIComp
   : pcCountryIn(board.country);
 
 // POST /board/contribute { image, exif: { lat, lng, taken_at }, caption? }
-// → { ok, id, url, board: { key, name, city, region, country }, posted, every, reward: cbRow | null }
+// → { ok, id, url, board: { key, name, city, region, country }, progress, reward: cbRow | null }
 // → 422 { error, code: 'child' | 'not_allowed' } · 400 { error, code: 'no_location' | 'no_city' }
 async function handleBoardContribute(request, env, ctx) {
   try {
@@ -21640,15 +21640,22 @@ async function handleBoardContribute(request, env, ctx) {
       ctx.waitUntil(pcBoardsCacheBust(env));
       ctx.waitUntil(gbLogEvent(env, 'board_contribution', { country: board.country }));
     }
-    // The running count, and a collectible stamp at every tenth photo (founder, 2026-10-28).
-    // The photo is posted whatever happens here.
-    let posted = null, reward = null;
+    // The counts, and the collectible stamp once they reach 10 photos from 3 cities (founder,
+    // 2026-10-28). The photo is posted whatever happens here.
+    let progress = null, reward = null;
     try {
-      posted = await bcTallyBump(env, user.id);
-      if (posted && posted % BC_REWARD_EVERY === 0) reward = await bcAward(env, user.id, posted, ctx);
+      const t = await bcTallyBump(env, user.id, board.key);
+      if (t) {
+        const ready = t.posted >= BC_REWARD_PHOTOS && t.cities >= BC_REWARD_CITIES;
+        if (ready) reward = await bcAward(env, user.id, t.posted, ctx);
+        // earned: whether they hold it now (this photo's reward, or one from before).
+        const earned = !!reward || (ready && (await bcHasCollectible(env, user.id)));
+        progress = { posted: t.posted, cities: t.cities, need_photos: BC_REWARD_PHOTOS, need_cities: BC_REWARD_CITIES, earned };
+        if (reward) reward = { ...reward, cities: t.cities };
+      }
     } catch { /* counted next time */ }
     const origin = new URL(request.url).origin;
-    return jsonResponse({ ok: true, id: saved.id, url: bcPhotoUrl(origin, saved.id), caption: saved.caption || null, board: { key: board.key, name: board.name, city: board.city, region: board.region || null, country: board.country }, posted, every: BC_REWARD_EVERY, reward });
+    return jsonResponse({ ok: true, id: saved.id, url: bcPhotoUrl(origin, saved.id), caption: saved.caption || null, board: { key: board.key, name: board.name, city: board.city, region: board.region || null, country: board.country }, progress, reward });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -21703,43 +21710,48 @@ async function handleBoardContributionCaption(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
-// ── Collectible stamps (founder, 2026-10-28) ────────────────────────────────
-// Every BC_REWARD_EVERY photos a member posts to City Boards earn a collectible stamp, picked at
-// random from the six — Official Traveler (No. 1, 2), Certified Explorer (3, 4), Adventure Pro
-// (5, 6) — among the ones they don't have yet (any of the six once they have all six). Deleting
-// photos never takes a stamp back: the count (board_contrib_tally) only goes up. The member
-// places a stamp in their passport at any of the four levels, or leaves it for later; the
-// passport is the ceiling, as for every stamp. The art ships in the app (src/lib/collectibles.js).
-const BC_REWARD_EVERY = 10;
+// ── The collectible stamp (founder, 2026-10-28) ─────────────────────────────
+// A member who has posted at least BC_REWARD_PHOTOS photos to City Boards, from at least
+// BC_REWARD_CITIES different cities, earns ONE collectible stamp, picked at random from six:
+// Official Traveler (designs 1, 2), Certified Explorer (3, 4), Adventure Pro (5, 6). One per
+// member, ever, and it can't be exchanged for another. Deleting photos never takes it back: the
+// counts (board_contrib_tally) only go up. The member places it on their passport's first page
+// at any of the four levels, or leaves it for later; the passport is the ceiling, as for every
+// stamp. The art ships in the app (src/lib/collectibles.js).
+const BC_REWARD_PHOTOS = 10;
+const BC_REWARD_CITIES = 3;
 const CB_TITLES = { 1: 'Official Traveler', 2: 'Official Traveler', 3: 'Certified Explorer', 4: 'Certified Explorer', 5: 'Adventure Pro', 6: 'Adventure Pro' };
 const cbRow = (r) => ({ id: r.id, badge: r.badge, title: CB_TITLES[r.badge] || 'Collectible', milestone: r.milestone, earned_at: r.earned_at, placed: !!r.placed_at, visibility: r.visibility || null });
-// One more photo posted → the new count (null before the table exists).
-async function bcTallyBump(env, userId) {
-  const r = await gbRest(env, 'rpc/bc_tally_bump', { method: 'POST', body: JSON.stringify({ p_user: userId }) });
+// One more photo posted from this city → { posted, cities } (null before the table exists).
+async function bcTallyBump(env, userId, cityKey) {
+  const r = await gbRest(env, 'rpc/bc_tally_bump', { method: 'POST', body: JSON.stringify({ p_user: userId, p_city: String(cityKey || '') }) });
   if (!r.ok) return null;
   const v = await r.json().catch(() => null);
-  const n = Number(Array.isArray(v) ? v[0] : v);
-  return Number.isFinite(n) ? n : null;
+  const row = Array.isArray(v) ? v[0] : v;
+  const posted = Number(row?.n_posted), cities = Number(row?.n_cities);
+  return Number.isFinite(posted) && Number.isFinite(cities) ? { posted, cities } : null;
 }
 async function bcTally(env, userId) {
-  const r = await gbRest(env, `board_contrib_tally?user_id=eq.${userId}&select=posted`, {});
-  return r.ok ? Number((await r.json())[0]?.posted) || 0 : 0;
+  const r = await gbRest(env, `board_contrib_tally?user_id=eq.${userId}&select=posted,cities`, {});
+  const row = r.ok ? (await r.json())[0] : null;
+  return { posted: Number(row?.posted) || 0, cities: Array.isArray(row?.cities) ? row.cities.length : 0 };
 }
-// The stamp a milestone earns, once (unique per member and milestone). → cbRow + repeat, or null.
+async function bcHasCollectible(env, userId) {
+  const q = await gbRest(env, `collectibles?user_id=eq.${userId}&source=eq.city_boards&select=id&limit=1`, {});
+  return q.ok ? (await q.json()).length > 0 : false;
+}
+// The member's one stamp, the first time they qualify: a design at random. → cbRow, or null when
+// they already have theirs (unique per member, so two photos landing at once can't earn two).
 async function bcAward(env, userId, milestone, ctx) {
-  const q = await gbRest(env, `collectibles?user_id=eq.${userId}&source=eq.city_boards&select=badge`, {});
-  if (!q.ok) return null;
-  const have = new Set((await q.json()).map((r) => Number(r.badge)));
+  if (await bcHasCollectible(env, userId)) return null;
   const all = Object.keys(CB_TITLES).map(Number);
-  const pool = all.filter((n) => !have.has(n));
-  const from = pool.length ? pool : all;
-  const badge = from[crypto.getRandomValues(new Uint32Array(1))[0] % from.length];
+  const badge = all[crypto.getRandomValues(new Uint32Array(1))[0] % all.length];
   const ins = await gbRest(env, 'collectibles', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ user_id: userId, source: 'city_boards', badge, milestone }) });
   if (!ins.ok) return null;
   const row = (await ins.json())[0];
   if (!row) return null;
   if (ctx) ctx.waitUntil(gbLogEvent(env, 'collectible_earned', { badge, milestone }));
-  return { ...cbRow(row), repeat: have.has(badge) };
+  return cbRow(row);
 }
 // The stamps placed in a passport, oldest first.
 async function cbPlaced(env, userId) {
@@ -21747,23 +21759,25 @@ async function cbPlaced(env, userId) {
   return q && q.ok ? (await q.json()).map(cbRow) : [];
 }
 
-// POST /collectibles → { items: [cbRow…] newest first, posted, every }
+// POST /collectibles → { items: [cbRow] (none or their one), progress: { posted, cities, need_photos, need_cities, earned } }
 async function handleCollectibles(request, env) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
-    const [q, posted] = await Promise.all([
-      gbRest(env, `collectibles?user_id=eq.${user.id}&order=earned_at.desc&select=id,badge,milestone,visibility,earned_at,placed_at`, {}),
+    const [q, t] = await Promise.all([
+      gbRest(env, `collectibles?user_id=eq.${user.id}&source=eq.city_boards&select=id,badge,milestone,visibility,earned_at,placed_at`, {}),
       bcTally(env, user.id),
     ]);
-    if (q.status === 404) return jsonResponse({ items: [], posted: 0, every: BC_REWARD_EVERY, unavailable: true });
-    if (!q.ok) return jsonResponse({ error: 'Couldn’t load your stamps — try again', items: [] }, 502);
-    return jsonResponse({ items: (await q.json()).map(cbRow), posted, every: BC_REWARD_EVERY });
+    if (q.status === 404) return jsonResponse({ items: [], progress: null, unavailable: true });
+    if (!q.ok) return jsonResponse({ error: 'Couldn’t load your stamp — try again', items: [] }, 502);
+    const items = (await q.json()).map(cbRow);
+    return jsonResponse({ items, progress: { ...t, need_photos: BC_REWARD_PHOTOS, need_cities: BC_REWARD_CITIES, earned: items.length > 0 } });
   } catch (e) { return jsonResponse({ error: e.message, items: [] }, 500); }
 }
 
-// POST /collectibles/place { id, visibility } — into the passport at that level (or a new level
-// for one already there). { id, remove: true } takes it out again; it stays earned.
+// POST /collectibles/place { id, visibility } — onto the passport's first page at that level (or a
+// new level once there). { id, remove: true } takes it off again; it stays earned, and it is
+// always the same stamp: there's no exchanging it for another design.
 async function handleCollectiblePlace(request, env) {
   try {
     const user = await gbUser(request, env);
@@ -21819,7 +21833,7 @@ async function handleAdminCollectibles(request, env) {
     }
     const out = (period, t) => ({ period, by_badge: Object.fromEntries(Object.keys(CB_TITLES).map((n) => [n, t.by_badge[n]?.size || 0])), people: t.people.size, stamps: t.stamps });
     const last = (m) => [...m.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 12).map(([k, t]) => out(k, t));
-    return jsonResponse({ weeks: last(weeks), months: last(months), all_time: out('all', all), titles: CB_TITLES, every: BC_REWARD_EVERY, excluded: skip.size });
+    return jsonResponse({ weeks: last(weeks), months: last(months), all_time: out('all', all), titles: CB_TITLES, need_photos: BC_REWARD_PHOTOS, need_cities: BC_REWARD_CITIES, excluded: skip.size });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
