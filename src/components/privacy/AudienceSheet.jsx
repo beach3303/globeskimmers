@@ -24,7 +24,7 @@ const SERIF = "'Instrument Serif', Georgia, serif";
 const BLUE = NEUTRAL.airmailBlue;
 
 export default function AudienceSheet({ title, value, options = AUDIENCES, ceiling = null, onPick, onClose,
-  confirmWider = undefined, note = undefined, onChangePassport = undefined, kicker = undefined, ceilingNote = undefined }) {
+  confirmWider = undefined, note = undefined, onChangePassport = undefined, kicker = undefined, ceilingNote = undefined, extra = null }) {
   useDismissable(true, onClose);
   const titleId = `aud-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const [busy, setBusy] = useState(null);
@@ -67,6 +67,8 @@ export default function AudienceSheet({ title, value, options = AUDIENCES, ceili
             </button>
           </div>
 
+          {/* extra: what the choice covers, above the choices (an album lists its stamps). */}
+          {extra}
           <div role="radiogroup" aria-labelledby={titleId} style={{ marginTop: 10, display: "grid", gap: 8 }}>
             {options.map((o) => {
               const on = o.key === value;

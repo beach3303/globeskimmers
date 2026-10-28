@@ -22,7 +22,7 @@ export function derivePackets(stamps) {
     // 300–1000+ prints read as years, not one endless shelf).
     const year = String(s.visited_on || s.created_at || "").slice(0, 4) || "Undated";
     const key = `${city}|${(s.country || "").trim()}|${year}`;
-    if (!groups.has(key)) groups.set(key, { key, year, city, country: (s.country || "").trim(), photos: [], dates: [], tiers: [], stampId: null, stampWhen: "", stampIds: [], albumTiers: [], stampTiers: [], widest: null });
+    if (!groups.has(key)) groups.set(key, { key, year, city, country: (s.country || "").trim(), photos: [], dates: [], tiers: [], stampId: null, stampWhen: "", stampIds: [], albumTiers: [], stampTiers: [], stampList: [], widest: null });
     const g = groups.get(key);
     // The stamp's audience rides on each print (the tiers, 2026-10-15), narrowed by the album's own
     // setting (photos_tier: any of the four words since 2026-10-27, never wider than its stamp;
@@ -36,6 +36,9 @@ export function derivePackets(stamps) {
     if (!g.widest || (RANK[own] ?? 1) > (RANK[g.widest] ?? 1)) g.widest = own;
     // The stamps' own settings, shown quietly on the envelope (founder, 2026-10-28).
     if (!g.stampTiers.includes(own)) g.stampTiers.push(own);
+    // Each stamp by name with its own level and what its photos reach, so the album can say
+    // which stamp is private (founder, 2026-10-28: "which did people mark as only me").
+    g.stampList.push({ id: s.id || null, name: s.name || g.city, own, photos: tier });
     for (const p of photos) g.photos.push({ src: p.photo_url, photo_url: p.photo_url, id: p.id, caption: p.caption || null, place: s.name, food: Number(p.food_subject) === 1, tier, board_hidden: p.board_hidden === true });
     if (s.visited_on) g.dates.push(String(s.visited_on).slice(0, 10));
     // The packet's newest stamp receives prints added from the packet itself

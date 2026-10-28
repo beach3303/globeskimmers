@@ -17,6 +17,7 @@ import PhotoFooter from "@/components/passport/PhotoFooter";
 import AudienceSheet from "@/components/privacy/AudienceSheet";
 import { setAlbumPrivacy } from "@/lib/passport";
 import { ALBUM_OPTS, AUD, audWord, capTo, usePassportAudience, RANK } from "@/lib/audience";
+import PrivacyChip from "@/components/privacy/PrivacyChip";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -28,9 +29,11 @@ const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 const MARK = { me: "🔒", inner: "🤝", followers: "👥", public: "🌍" };
 const marksOf = (tiers) => (tiers || []).map((t) => MARK[t]).filter(Boolean).join(" ");
 
-// stampWord (the owner's view, founder 2026-10-28): the stamps' privacy, printed small inside the
-// envelope ("STAMPS · 🔒 ONLY ME"); the album's own setting is the line under it.
-function Envelope({ packet, onOpen, stampWord = null }) {
+// stampCounts (the owner's view, founder 2026-10-28): the stamps' privacy inside the envelope as
+// coloured chips — "STAMPS 🔒 Only me", or with a mix, how many stamps sit at each level
+// ("STAMPS 🔒 1 🌍 3") — so a private stamp in Atlanta is plain at a glance. The album's own
+// setting is the line under the envelope; which stamp is which is in its privacy sheet.
+function Envelope({ packet, onOpen, stampCounts = null }) {
   const peek = packet.photos[0]?.src;
   const marks = marksOf(packet.tiers);
   return (
@@ -52,8 +55,13 @@ function Envelope({ packet, onOpen, stampWord = null }) {
         {/* the envelope */}
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 76, borderRadius: 10, background: "linear-gradient(180deg,#EBDDB6,#E2D1A4)", border: "1.5px solid #C9B583", boxShadow: "0 4px 10px -6px rgba(0,0,0,.3)", zIndex: 2 }}>
           <div aria-hidden style={{ position: "absolute", top: 0, left: 0, right: 0, height: 24, background: "rgba(201,181,131,.55)", clipPath: "polygon(0 0, 100% 0, 50% 100%)", borderRadius: "10px 10px 0 0" }} />
-          {stampWord
-            ? <span style={{ position: "absolute", right: 7, top: 5, maxWidth: "calc(100% - 14px)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: MONO, fontSize: fs(7.5), letterSpacing: ".1em", lineHeight: 1.3, color: "#8A6E33", opacity: 0.9 }}>STAMPS · {stampWord.toUpperCase()}</span>
+          {stampCounts && stampCounts.length
+            ? <span style={{ position: "absolute", right: 6, top: 4, maxWidth: "calc(100% - 12px)", display: "flex", alignItems: "center", gap: 3, overflow: "hidden" }}>
+                <span aria-hidden="true" style={{ fontFamily: MONO, fontSize: fs(7), letterSpacing: ".12em", color: "#8A6E33" }}>STAMPS</span>
+                {stampCounts.length === 1
+                  ? <PrivacyChip level={stampCounts[0][0]} size="xs" />
+                  : stampCounts.map(([k, n]) => <PrivacyChip key={k} level={k} count={n} short size="xs" />)}
+              </span>
             : marks ? <span aria-hidden="true" style={{ position: "absolute", right: 7, top: 5, fontSize: fs(10.5), lineHeight: 1, opacity: 0.8 }}>{marks}</span> : null}
           <div className="absolute inset-x-0 bottom-2 text-center px-2">
             <div className="truncate" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: fs(14), color: "#6B4F1E", letterSpacing: ".04em" }}>{packet.city.toUpperCase()}</div>
@@ -83,14 +91,20 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
   // more than its stamps or the passport.
   const [passportAud] = usePassportAudience(owner);
   const levelsOf = (p) => [...new Set((p.albumTiers || []).map((t) => capTo(t, passportAud)))];
-  // The stamps' own settings as they really show under the passport: one word, or "Mixed".
-  // One level reads in words ("🔒 Only me"); a mix shows its icons, narrowest first ("🔒 + 🌍"),
-  // so the envelope and the line under it stay one line. Screen readers get the words (spoken).
+  // Levels read narrowest first; screen readers get the words (spoken).
   const sortL = (levels) => [...levels].sort((a, b) => (RANK[a] ?? 1) - (RANK[b] ?? 1));
-  const mixOf = (levels) => { const l = sortL(levels); return l.length === 1 ? audWord(l[0]) : l.map((k) => AUD[k]?.icon || "").join(" + "); };
   const spoken = (levels) => sortL(levels).map((k) => AUD[k]?.label || k).join(" and ");
   const stampLevels = (p) => new Set((p.stampTiers || []).map((t) => capTo(t, passportAud)));
-  const stampWordOf = (p) => mixOf(stampLevels(p));
+  // How many of the album's stamps sit at each level, narrowest first: [['me', 1], ['public', 3]].
+  // pick: 'own' (the stamp's setting) or 'photos' (what its photos reach).
+  const countsOf = (p, pick) => {
+    const c = {};
+    for (const st of p.stampList || []) { const k = capTo(st[pick], passportAud); c[k] = (c[k] || 0) + 1; }
+    return sortL(Object.keys(c)).map((k) => [k, c[k]]);
+  };
+  const chipsOf = (counts) => (counts.length === 1
+    ? <PrivacyChip level={counts[0][0]} size="xs" />
+    : counts.map(([k, n]) => <PrivacyChip key={k} level={k} count={n} short size="xs" />));
   const saveAlbum = async (v) => {
     const r = await setAlbumPrivacy(albumFor.stampIds, v);
     if (r.error) { showToast(r.error, "error"); return false; }
@@ -158,12 +172,14 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
           <div className="grid justify-items-center" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "16px 12px", paddingTop: 12 }}>
             {list.map((p) => (
               <div key={p.key} style={{ position: "relative", width: "100%", maxWidth: 190 }}>
-                <Envelope packet={p} stampWord={owner ? stampWordOf(p) : null} onOpen={() => setOpen({ photos: p.photos, index: 0, city: p.city, range: p.range, packet: p })} />
+                <Envelope packet={p} stampCounts={owner ? countsOf(p, "own") : null} onOpen={() => setOpen({ photos: p.photos, index: 0, city: p.city, range: p.range, packet: p })} />
                 {owner && p.stampIds?.length ? (
                   <button type="button" onClick={() => setAlbumFor(p)} aria-label={`Who sees the ${p.city} album: ${spoken(levelsOf(p))}. Its stamps: ${spoken(stampLevels(p))}. Change`}
-                    className="w-full flex items-center justify-center gap-1" style={{ minHeight: 34, marginTop: 4, background: "transparent", border: 0, fontSize: fs(11.5), color: "#5A4A33" }}>
-                    <span className="truncate">Album: {levelsOf(p).length === 1 ? audWord(levelsOf(p)[0]) : mixOf(levelsOf(p))}</span>
-                    <span style={{ color: "#2B4A7E", fontWeight: 650 }}>· Change</span>
+                    // Wraps rather than clips: three levels in a half-width column put Change on a second line.
+                    className="w-full flex flex-wrap items-center justify-center" style={{ minHeight: 34, marginTop: 4, columnGap: 4, rowGap: 2, background: "transparent", border: 0, fontSize: fs(11.5), color: "#5A4A33" }}>
+                    <span aria-hidden="true" style={{ flex: "none" }}>Album</span>
+                    <span aria-hidden="true" style={{ display: "inline-flex", gap: 3 }}>{chipsOf(countsOf(p, "photos"))}</span>
+                    <span aria-hidden="true" style={{ flex: "none", color: "#2B4A7E", fontWeight: 650 }}>Change</span>
                   </button>
                 ) : null}
                 {owner && p.stampId && (
@@ -194,6 +210,25 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
             ? `${albumFor.stampIds.length === 1 ? "Its stamp is" : "Its stamps are"} ${audWord(albumFor.widest)} at most, so these photos can’t reach more than that.`
             : undefined}
           onPick={saveAlbum} onClose={() => setAlbumFor(null)}
+          // Which stamp is which (founder, 2026-10-28): every stamp in the album by name, its own
+          // setting, and what its photos reach when the album keeps them narrower.
+          extra={(
+            <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 14, background: "#fff", border: "1px solid rgba(22,17,13,.10)" }}>
+              <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".14em", textTransform: "uppercase", color: INK3 }}>Stamps in this album</div>
+              <ul style={{ listStyle: "none", margin: "6px 0 0", padding: 0 }}>
+                {(albumFor.stampList || []).map((st, i) => {
+                  const own = capTo(st.own, passportAud), ph = capTo(st.photos, passportAud);
+                  return (
+                    <li key={st.id || i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: i ? "1px solid rgba(22,17,13,.08)" : 0 }}>
+                      <span className="truncate" style={{ flex: 1, minWidth: 0, fontSize: fs(13.5), color: "#16110D" }}>{st.name}</span>
+                      <PrivacyChip level={own} size="xs" />
+                      {ph !== own ? <><span style={{ fontSize: fs(11), color: INK3 }}>photos</span><PrivacyChip level={ph} size="xs" /></> : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           note="An album can make its photos more private than their stamps, never more public than their stamps or your passport." />
       )}
       {open && (
@@ -206,6 +241,14 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
           credit={open.range || undefined}
           renderFooter={(ph) => (
             <div>
+              {/* Whose eyes this photo reaches, with its stamp's name (founder, 2026-10-28). */}
+              {owner && ph?.tier ? (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 6, margin: "0 auto 8px", fontSize: fs(12.5), color: "rgba(255,252,247,.9)" }}>
+                  {ph.place ? <span className="truncate" style={{ maxWidth: 220 }}>{ph.place}</span> : null}
+                  <span>· Who sees it</span>
+                  <PrivacyChip level={capTo(ph.tier, passportAud)} size="xs" />
+                </div>
+              ) : null}
               {/* Inside the album too (founder, 2026-10-05): add prints without
                   leaving it, and every photo keeps its own guestbook. */}
               {owner && open.packet?.stampId && (
