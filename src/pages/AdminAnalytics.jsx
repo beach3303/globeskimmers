@@ -14,6 +14,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { exportCsv, saveCsvText } from '@/lib/adminExport';
+import { collectibleOf } from '@/lib/collectibles';
 import { callWorker } from '@/lib/callWorker';
 import { openPartner } from '@/lib/openPartner';
 import { createPageUrl } from '@/utils';
@@ -1126,6 +1127,62 @@ function Section({ title, icon: Icon, children, empty }) {
   );
 }
 
+// Collectible stamps (founder, 2026-10-28): how many people got each of the six — earned for every
+// 10 photos contributed to City Boards — per week (Monday, Pacific) and per month, plus all time.
+// A person counts once per stamp per period; the founder's and the demo accounts are left out.
+function CollectiblesReport({ report }) {
+  const nos = [1, 2, 3, 4, 5, 6];
+  const th = { textAlign: 'right', padding: '6px 6px', fontSize: 11, color: COLORS.gray, fontWeight: 600, borderBottom: `1px solid ${COLORS.border || '#E5E7EB'}` };
+  const td = { textAlign: 'right', padding: '6px 6px', fontSize: 13, color: COLORS.dark, borderBottom: `1px solid ${COLORS.border || '#F1F1F1'}` };
+  const Table = ({ rows, label }) => (
+    <div style={{ overflowX: 'auto', marginTop: 12 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 460 }}>
+        <thead>
+          <tr>
+            <th style={{ ...th, textAlign: 'left' }}>{label}</th>
+            {nos.map((n) => <th key={n} style={th} title={collectibleOf(n)?.title}>No. {n}</th>)}
+            <th style={th}>People</th>
+            <th style={th}>Stamps</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.period}>
+              <td style={{ ...td, textAlign: 'left', fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }}>{r.period}</td>
+              {nos.map((n) => <td key={n} style={{ ...td, color: r.by_badge?.[n] ? COLORS.dark : COLORS.gray }}>{r.by_badge?.[n] || 0}</td>)}
+              <td style={{ ...td, fontWeight: 700 }}>{r.people}</td>
+              <td style={td}>{r.stamps}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+  const all = report?.all_time;
+  return (
+    <Section title="🏅 Collectible stamps — people who earned each (City Boards)" icon={Sparkles}
+      empty={!report ? 'Couldn’t load the collectible stamps report.' : !all?.stamps ? 'Nobody has earned a collectible stamp yet. One comes with every 10 photos contributed to City Boards.' : null}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))', gap: 10 }}>
+        {nos.map((n) => {
+          const c = collectibleOf(n);
+          return (
+            <div key={n} style={{ textAlign: 'center' }}>
+              <img src={c?.art} alt="" style={{ width: 64, height: 64, objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+              <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.dark, lineHeight: 1.1, marginTop: 4 }}>{all?.by_badge?.[n] || 0}</div>
+              <div style={{ fontSize: 11, color: COLORS.gray, lineHeight: 1.3 }}>No. {n} · {c?.title}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 12, color: COLORS.gray, marginTop: 10 }}>
+        All time: <strong style={{ color: COLORS.dark }}>{all?.people || 0}</strong> people · <strong style={{ color: COLORS.dark }}>{all?.stamps || 0}</strong> stamps earned. Your own accounts and the demo account aren’t counted.
+      </div>
+      <Table rows={report?.weeks || []} label="Week of (Mon)" />
+      <Table rows={report?.months || []} label="Month" />
+    </Section>
+  );
+}
+
 export default function AdminAnalytics() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1361,7 +1418,13 @@ export default function AdminAnalytics() {
         const { data: pm } = await callWorker('admin/passport-monthly', {});
         if (pm && Array.isArray(pm.months)) passportTruth = pm;
       } catch { /* fallback below */ }
-      setData({ ...Object.fromEntries(pairs), passport_monthly_truth: passportTruth });
+      // Collectible stamps earned for City Board photos (2026-10-28): people per stamp, per week and month.
+      let collectiblesReport = null;
+      try {
+        const { data: cr } = await callWorker('admin/collectibles', {});
+        if (cr && Array.isArray(cr.weeks)) collectiblesReport = cr;
+      } catch { /* the section says so */ }
+      setData({ ...Object.fromEntries(pairs), passport_monthly_truth: passportTruth, collectibles_report: collectiblesReport });
       // Real user metrics from Supabase profiles (service-role, admin-gated in
       // the Worker). Non-fatal: if it fails, the event analytics still render.
       try {
@@ -2189,6 +2252,8 @@ export default function AdminAnalytics() {
                 <BarRow key={i} label={d.day} count={d.stamps} max={Math.max(...ppByDay.map(x => x.stamps || 0), 1)} color={COLORS.green} />
               ))}
             </Section>
+
+            <CollectiblesReport report={data?.collectibles_report || null} />
 
             <Section title="🛂 Stamps per month (12m)" icon={Activity} empty={ppByMonth.length === 0 ? 'No stamps in the last year.' : null}>
               {ppByMonth.map((d, i) => (
