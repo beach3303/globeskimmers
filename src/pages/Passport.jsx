@@ -33,6 +33,7 @@ import { resizePhoto } from "@/lib/resizePhoto";
 import { isPlain, renderLook } from "@/lib/photoLook";
 import PhotoEditor from "@/components/passport/PhotoEditor";
 import StampEarnedSheet from "@/components/passport/StampEarnedSheet";
+import CollectibleReward from "@/components/passport/CollectibleReward";
 import { readPhotoExif } from "@/lib/photoExif";
 import { takeSharedPhotos, SHARED_PHOTOS_EVENT } from "@/lib/sharedPhotos";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
@@ -1032,6 +1033,9 @@ function PassportInner({ embedded = false }) {
 
   // "See a sample passport" preview — sample stamps, view-only, never saved.
   const [preview, setPreview] = useState(false);
+  // Collectible stamps placed in this passport (City Boards, 2026-10-28), and the owner's open one.
+  const [collectibles, setCollectibles] = useState([]);
+  const [colOpen, setColOpen] = useState(null);
 
   // Read-only friend view: a shared link (globeskimmers://passport/view?u=slug)
   // drops the slug in sessionStorage; web can pass ?view_slug=. When set, we load
@@ -1052,13 +1056,13 @@ function PassportInner({ embedded = false }) {
     setLoading(true);
     if (viewSlug) {
       const { data } = await getPublicPassport(viewSlug);
-      if (data && !data.private) { setStamps(data.stamps || []); setStats(data.stats || {}); setBooklet(data.booklet || null); setViewHolder(data.holder || "A traveler"); }
-      else { setStamps([]); setStats({}); setViewHolder(null); }
+      if (data && !data.private) { setStamps(data.stamps || []); setStats(data.stats || {}); setBooklet(data.booklet || null); setViewHolder(data.holder || "A traveler"); setCollectibles(data.collectibles || []); }
+      else { setStamps([]); setStats({}); setViewHolder(null); setCollectibles([]); }
       setViewOwner(data?.owner_id || data?.user_id || null);
       setTags([]); setLoading(false); return;
     }
     const [pp, tg] = await Promise.all([listPassport(), listTags()]);
-    setStamps(pp.stamps); setStats(pp.stats); setBooklet(pp.booklet || null); setTags(tg.tags || []); setLoading(false);
+    setStamps(pp.stamps); setStats(pp.stats); setBooklet(pp.booklet || null); setCollectibles(pp.collectibles || []); setTags(tg.tags || []); setLoading(false);
   }, [viewSlug]);
   useEffect(() => { load(); }, [load]);
 
@@ -1615,6 +1619,8 @@ function PassportInner({ embedded = false }) {
               stamps={bookStamps}
               showTiers={!readOnly && !preview}
               visiting={readOnly}
+              collectibles={preview ? null : collectibles}
+              onOpenCollectible={!readOnly && !preview ? setColOpen : null}
               holder={holder}
               homeCountry={readOnly ? null : (profile?.home_country || null)}
               countries={statsView.countries || 0}
@@ -1742,6 +1748,7 @@ function PassportInner({ embedded = false }) {
           onClose={() => setStampQueue(null)} onDone={(d) => { const last = !stampQueue || stampQueue.i + 1 >= stampQueue.items.length; load(); nextInQueue(); if (last) offerShare(d); }} />
       )}
       <StampEarnedSheet stamp={earned} slug={share?.slug || null} onClose={() => setEarned(null)} onChanged={load} />
+      {colOpen ? <CollectibleReward key={colOpen.id} item={colOpen} fresh={false} onClose={() => setColOpen(null)} onSaved={load} /> : null}
 
       {/* Friend view: the quiet report door (and the sheet of reasons), and Block */}
       {readOnly && (

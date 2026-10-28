@@ -62,7 +62,7 @@ export const STAMP_REFUSALS = ['not_here', 'unlocatable', 'proof_needed'];
 // The user's whole passport: { stamps:[{...,photos:[]}], stats:{...} }.
 export async function listPassport() {
   const { data, error } = await callWorker('passport/list', {});
-  return { stamps: data?.stamps || [], stats: data?.stats || {}, booklet: data?.booklet || null, error };
+  return { stamps: data?.stamps || [], stats: data?.stats || {}, booklet: data?.booklet || null, collectibles: data?.collectibles || [], error };
 }
 
 // The earliest day a stamp can carry (the 5-year date picker, 2026-10-16).
