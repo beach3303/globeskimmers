@@ -28,7 +28,9 @@ const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 const MARK = { me: "🔒", inner: "🤝", followers: "👥", public: "🌍" };
 const marksOf = (tiers) => (tiers || []).map((t) => MARK[t]).filter(Boolean).join(" ");
 
-function Envelope({ packet, onOpen }) {
+// stampWord (the owner's view, founder 2026-10-28): the stamps' privacy, printed small inside the
+// envelope ("STAMPS · 🔒 ONLY ME"); the album's own setting is the line under it.
+function Envelope({ packet, onOpen, stampWord = null }) {
   const peek = packet.photos[0]?.src;
   const marks = marksOf(packet.tiers);
   return (
@@ -50,7 +52,9 @@ function Envelope({ packet, onOpen }) {
         {/* the envelope */}
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 76, borderRadius: 10, background: "linear-gradient(180deg,#EBDDB6,#E2D1A4)", border: "1.5px solid #C9B583", boxShadow: "0 4px 10px -6px rgba(0,0,0,.3)", zIndex: 2 }}>
           <div aria-hidden style={{ position: "absolute", top: 0, left: 0, right: 0, height: 24, background: "rgba(201,181,131,.55)", clipPath: "polygon(0 0, 100% 0, 50% 100%)", borderRadius: "10px 10px 0 0" }} />
-          {marks ? <span aria-hidden="true" style={{ position: "absolute", right: 7, top: 5, fontSize: fs(10.5), lineHeight: 1, opacity: 0.8 }}>{marks}</span> : null}
+          {stampWord
+            ? <span style={{ position: "absolute", right: 7, top: 5, maxWidth: "calc(100% - 14px)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: MONO, fontSize: fs(7.5), letterSpacing: ".1em", lineHeight: 1.3, color: "#8A6E33", opacity: 0.9 }}>STAMPS · {stampWord.toUpperCase()}</span>
+            : marks ? <span aria-hidden="true" style={{ position: "absolute", right: 7, top: 5, fontSize: fs(10.5), lineHeight: 1, opacity: 0.8 }}>{marks}</span> : null}
           <div className="absolute inset-x-0 bottom-2 text-center px-2">
             <div className="truncate" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: fs(14), color: "#6B4F1E", letterSpacing: ".04em" }}>{packet.city.toUpperCase()}</div>
             <div className="truncate" style={{ fontFamily: MONO, fontSize: fs(8), color: "#8A6E33", letterSpacing: ".12em" }}>
@@ -79,6 +83,14 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
   // more than its stamps or the passport.
   const [passportAud] = usePassportAudience(owner);
   const levelsOf = (p) => [...new Set((p.albumTiers || []).map((t) => capTo(t, passportAud)))];
+  // The stamps' own settings as they really show under the passport: one word, or "Mixed".
+  // One level reads in words ("🔒 Only me"); a mix shows its icons, narrowest first ("🔒 + 🌍"),
+  // so the envelope and the line under it stay one line. Screen readers get the words (spoken).
+  const sortL = (levels) => [...levels].sort((a, b) => (RANK[a] ?? 1) - (RANK[b] ?? 1));
+  const mixOf = (levels) => { const l = sortL(levels); return l.length === 1 ? audWord(l[0]) : l.map((k) => AUD[k]?.icon || "").join(" + "); };
+  const spoken = (levels) => sortL(levels).map((k) => AUD[k]?.label || k).join(" and ");
+  const stampLevels = (p) => new Set((p.stampTiers || []).map((t) => capTo(t, passportAud)));
+  const stampWordOf = (p) => mixOf(stampLevels(p));
   const saveAlbum = async (v) => {
     const r = await setAlbumPrivacy(albumFor.stampIds, v);
     if (r.error) { showToast(r.error, "error"); return false; }
@@ -126,7 +138,7 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
           {owner && packets.length ? (
             <p style={{ margin: "4px 0 0", fontFamily: MONO, fontSize: fs(9), letterSpacing: ".06em", lineHeight: 1.5, color: INK3 }}>
               {/* Short (founder, 2026-10-17), but 🌍 prints showing on the city board is never left out. */}
-              Each album follows its stamps unless you make it more private. 🌍 prints also hang on the city board.
+              Each envelope shows its stamps’ privacy; an album can be more private. 🌍 Everyone albums also hang on the city board.
             </p>
           ) : null}
         </div>
@@ -146,11 +158,11 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
           <div className="grid justify-items-center" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "16px 12px", paddingTop: 12 }}>
             {list.map((p) => (
               <div key={p.key} style={{ position: "relative", width: "100%", maxWidth: 190 }}>
-                <Envelope packet={p} onOpen={() => setOpen({ photos: p.photos, index: 0, city: p.city, range: p.range, packet: p })} />
+                <Envelope packet={p} stampWord={owner ? stampWordOf(p) : null} onOpen={() => setOpen({ photos: p.photos, index: 0, city: p.city, range: p.range, packet: p })} />
                 {owner && p.stampIds?.length ? (
-                  <button type="button" onClick={() => setAlbumFor(p)} aria-label={`Who sees the ${p.city} album: ${levelsOf(p).length === 1 ? AUD[levelsOf(p)[0]]?.label : "mixed"}. Change`}
+                  <button type="button" onClick={() => setAlbumFor(p)} aria-label={`Who sees the ${p.city} album: ${spoken(levelsOf(p))}. Its stamps: ${spoken(stampLevels(p))}. Change`}
                     className="w-full flex items-center justify-center gap-1" style={{ minHeight: 34, marginTop: 4, background: "transparent", border: 0, fontSize: fs(11.5), color: "#5A4A33" }}>
-                    <span className="truncate">{levelsOf(p).length === 1 ? audWord(levelsOf(p)[0]) : "Mixed"}</span>
+                    <span className="truncate">Album: {levelsOf(p).length === 1 ? audWord(levelsOf(p)[0]) : mixOf(levelsOf(p))}</span>
                     <span style={{ color: "#2B4A7E", fontWeight: 650 }}>· Change</span>
                   </button>
                 ) : null}
