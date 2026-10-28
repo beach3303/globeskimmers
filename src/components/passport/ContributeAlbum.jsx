@@ -6,7 +6,7 @@
 // until June 30, 2027; after that the album stays so members can still delete their photos.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Globe2, ImagePlus, Loader2, Trash2, X } from "lucide-react";
+import { Globe2, ImageUp, Loader2, Trash2, X } from "lucide-react";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import { showToast } from "@/components/Toast";
 import { readPhotoExif } from "@/lib/photoExif";
@@ -22,17 +22,29 @@ const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const placeOf = (p) => [p.city, p.country].filter(Boolean).join(", ");
 
-// The envelope on the shelf: airmail stripes, the 🌍 public mark, the count.
+// The envelope on the shelf: airmail stripes, the 🌍 public mark, an upload sign on its corner,
+// and under it what to do (founder, 2026-10-28: "make it clear what we want users to do … contribute
+// your travel/city photos to city boards. place an upload sign").
 function AirmailEnvelope({ count, peek, onOpen }) {
   return (
-    <button type="button" onClick={onOpen} aria-label={`Contribute to City Boards. Public. ${plural(count, "photo", "photos")}`}
-      className="block w-full active:scale-95 transition-transform">
+    <button type="button" onClick={onOpen}
+      aria-label={`Contribute your travel photos to City Boards. Public.${count ? ` ${plural(count, "photo", "photos")} so far.` : ""} Upload photos`}
+      className="block w-full active:scale-95 transition-transform" style={{ background: "transparent", border: 0, padding: 0 }}>
       <div style={{ position: "relative", height: 118 }}>
         {peek ? (
           <div aria-hidden style={{ position: "absolute", left: 12, right: 12, top: 0, height: 72, borderRadius: 6, overflow: "hidden", background: "#8FB2C8", transform: "rotate(-3deg)", border: "3px solid #fff", boxShadow: "0 2px 6px rgba(0,0,0,.18)" }}>
             <img src={peek} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           </div>
-        ) : null}
+        ) : (
+          // No photos yet: an empty print waiting for one.
+          <div aria-hidden style={{ position: "absolute", left: 14, right: 14, top: 2, height: 70, borderRadius: 6, background: "rgba(31,78,140,.07)", border: `1.5px dashed ${AIR_BLUE}`, transform: "rotate(-3deg)", display: "grid", placeItems: "start center", paddingTop: 8 }}>
+            <ImageUp size={20} color={AIR_BLUE} strokeWidth={2} />
+          </div>
+        )}
+        {/* The upload sign, where the albums keep their + (a picture only: the whole envelope is the button). */}
+        <span aria-hidden="true" style={{ position: "absolute", top: -6, right: -6, zIndex: 3, width: 30, height: 30, borderRadius: 999, background: AIR_BLUE, display: "grid", placeItems: "center", boxShadow: "0 2px 6px rgba(0,0,0,.22)", border: "2px solid #fff" }}>
+          <ImageUp size={15} color="#fff" strokeWidth={2.4} />
+        </span>
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 76, borderRadius: 10, overflow: "hidden", background: "#FFFDF8", border: `1.5px solid ${AIR_BLUE}`, boxShadow: "0 4px 10px -6px rgba(0,0,0,.3)", zIndex: 2 }}>
           {/* the airmail border */}
           <div aria-hidden style={{ position: "absolute", inset: 0, padding: 4, background: `repeating-linear-gradient(135deg, ${AIR_RED} 0 8px, #FFFDF8 8px 14px, ${AIR_BLUE} 14px 22px, #FFFDF8 22px 28px)` }}>
@@ -42,17 +54,27 @@ function AirmailEnvelope({ count, peek, onOpen }) {
           <div className="absolute inset-x-0 text-center px-2" style={{ bottom: 9 }}>
             <div className="truncate" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: fs(13.5), color: AIR_BLUE, letterSpacing: ".03em" }}>CITY BOARDS</div>
             <div className="truncate" style={{ fontFamily: MONO, fontSize: fs(8), color: AIR_RED, letterSpacing: ".12em" }}>
-              CONTRIBUTE · {count ? plural(count, "PHOTO", "PHOTOS") : "PUBLIC"}
+              {count ? `${plural(count, "PHOTO", "PHOTOS")} SHARED` : "PUBLIC · EVERY CITY"}
             </div>
           </div>
         </div>
       </div>
+      {/* What to do, in words, where the albums say who sees them. */}
+      {/* Inline icon, so a narrow phone wraps it like a sentence. */}
+      <span aria-hidden="true" className="block text-center" style={{ marginTop: 6, color: AIR_BLUE, fontSize: fs(12), fontWeight: 700, lineHeight: 1.25 }}>
+        <ImageUp size={14} strokeWidth={2.4} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} />
+        {count ? "Upload more photos" : "Upload your travel photos"}
+      </span>
+      <span aria-hidden="true" className="block text-center" style={{ marginTop: 1, color: INK3, fontSize: fs(10.5), lineHeight: 1.3 }}>
+        Each goes to its city’s board
+      </span>
     </button>
   );
 }
 
 // The postage (founder, 2026-10-27: "2 cents"): like a telegram's tolls, each photo's airmail
-// postage is printed and stamped ON THE HOUSE. Nobody ever pays; GlobeSkimmers covers it.
+// postage is printed and stamped ON THE HOUSE, across the box's bottom edge by the price, clear of
+// the words. Nobody ever pays; GlobeSkimmers covers it.
 function PostageBox({ sent = 0 }) {
   return (
     <div style={{ position: "relative", marginTop: 10, padding: "6px 10px 7px", border: `1px solid ${AIR_BLUE}`, borderRadius: 4, background: "#FFFDF8" }}>
@@ -62,7 +84,7 @@ function PostageBox({ sent = 0 }) {
       <div className="flex justify-between gap-2" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", lineHeight: 1.6, color: INK2 }}>
         <span>{sent ? `${sent} PHOTO${sent === 1 ? "" : "S"} SENT` : "EACH PHOTO TO ITS CITY"}</span><span>{sent ? `${sent} × 2¢` : "2¢"}</span>
       </div>
-      <div aria-hidden="true" style={{ position: "absolute", left: "38%", top: 9, transform: "rotate(-7deg)", padding: "2px 8px", border: `1.5px solid ${AIR_RED}`, borderRadius: 3, boxShadow: `inset 0 0 0 1px #FFFDF8, inset 0 0 0 2px ${AIR_RED}`, color: AIR_RED, opacity: 0.75, mixBlendMode: "multiply", fontFamily: MONO, fontSize: fs(9.5), fontWeight: 700, letterSpacing: ".2em", whiteSpace: "nowrap" }}>
+      <div aria-hidden="true" style={{ position: "absolute", right: 34, bottom: -9, transform: "rotate(-7deg)", padding: "2px 8px", border: `1.5px solid ${AIR_RED}`, borderRadius: 3, boxShadow: `inset 0 0 0 1px #FFFDF8, inset 0 0 0 2px ${AIR_RED}`, color: AIR_RED, opacity: 0.75, mixBlendMode: "multiply", fontFamily: MONO, fontSize: fs(9.5), fontWeight: 700, letterSpacing: ".2em", whiteSpace: "nowrap" }}>
         ON THE HOUSE
       </div>
       <span className="sr-only">Postage is 2 cents a photo, on the house: you never pay.</span>
@@ -143,6 +165,9 @@ function ContributeSheet({ photos, onChanged, onClose }) {
           <div>
             <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: AIR_RED }}>City Boards · Public</div>
             <h2 style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(26), fontWeight: 400, lineHeight: 1.1, color: INK }}>Contribute to City Boards</h2>
+            <p style={{ margin: "4px 0 0", fontSize: fs(14), lineHeight: 1.4, color: INK2 }}>
+              Share your travel and city photos: streets, food, sights, festivals. Each one goes up on the board of the city where you took it.
+            </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close"
             style={{ flex: "none", width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 999, background: "transparent", border: 0, color: INK2, cursor: "pointer" }}>
@@ -173,8 +198,8 @@ function ContributeSheet({ photos, onChanged, onClose }) {
             <button type="button" onClick={() => fileRef.current?.click()} disabled={!!run}
               className="w-full flex items-center justify-center gap-2 disabled:opacity-70"
               style={{ marginTop: 12, minHeight: 52, borderRadius: 14, border: 0, background: AIR_BLUE, color: "#fff", fontFamily: "inherit", fontSize: fs(15), fontWeight: 650, cursor: run ? "progress" : "pointer" }}>
-              {run ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <ImagePlus size={18} strokeWidth={2} aria-hidden="true" />}
-              {run ? `Posting ${Math.min(run.done + 1, run.total)} of ${run.total}${run.place ? ` · ${run.place}` : ""}…` : `Add photos (up to ${CONTRIBUTE_PICK} at a time)`}
+              {run ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <ImageUp size={18} strokeWidth={2} aria-hidden="true" />}
+              {run ? `Posting ${Math.min(run.done + 1, run.total)} of ${run.total}${run.place ? ` · ${run.place}` : ""}…` : `Upload photos (up to ${CONTRIBUTE_PICK} at a time)`}
             </button>
             {run ? (
               <div aria-hidden="true" style={{ marginTop: 8, height: 4, borderRadius: 999, background: "rgba(31,78,140,.15)", overflow: "hidden" }}>
