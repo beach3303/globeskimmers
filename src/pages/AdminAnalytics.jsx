@@ -1127,9 +1127,9 @@ function Section({ title, icon: Icon, children, empty }) {
   );
 }
 
-// Collectible stamps (founder, 2026-10-28): how many people got each of the six — earned for every
-// 10 photos contributed to City Boards — per week (Monday, Pacific) and per month, plus all time.
-// A person counts once per stamp per period; the founder's and the demo accounts are left out.
+// The collectible stamp (founder, 2026-10-28): how many people got each of the six designs — one
+// per member, for 10 photos shared with City Boards from 3 different cities — per week (Monday,
+// Pacific) and per month, plus all time. The founder's and the demo accounts are left out.
 function CollectiblesReport({ report }) {
   const nos = [1, 2, 3, 4, 5, 6];
   const th = { textAlign: 'right', padding: '6px 6px', fontSize: 11, color: COLORS.gray, fontWeight: 600, borderBottom: `1px solid ${COLORS.border || '#E5E7EB'}` };
@@ -1140,7 +1140,7 @@ function CollectiblesReport({ report }) {
         <thead>
           <tr>
             <th style={{ ...th, textAlign: 'left' }}>{label}</th>
-            {nos.map((n) => <th key={n} style={th} title={collectibleOf(n)?.title}>No. {n}</th>)}
+            {nos.map((n) => <th key={n} style={th} title={collectibleOf(n)?.title}>#{n}</th>)}
             <th style={th}>People</th>
             <th style={th}>Stamps</th>
           </tr>
@@ -1160,8 +1160,8 @@ function CollectiblesReport({ report }) {
   );
   const all = report?.all_time;
   return (
-    <Section title="🏅 Collectible stamps — people who earned each (City Boards)" icon={Sparkles}
-      empty={!report ? 'Couldn’t load the collectible stamps report.' : !all?.stamps ? 'Nobody has earned a collectible stamp yet. One comes with every 10 photos contributed to City Boards.' : null}>
+    <Section title="🏅 Collectible stamps — people who got each design (City Boards)" icon={Sparkles}
+      empty={!report ? 'Couldn’t load the collectible stamps report.' : !all?.stamps ? 'Nobody has earned a collectible stamp yet. It comes with 10 photos shared with City Boards from 3 different cities, one per member.' : null}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))', gap: 10 }}>
         {nos.map((n) => {
           const c = collectibleOf(n);
@@ -1169,13 +1169,13 @@ function CollectiblesReport({ report }) {
             <div key={n} style={{ textAlign: 'center' }}>
               <img src={c?.art} alt="" style={{ width: 64, height: 64, objectFit: 'contain', display: 'block', margin: '0 auto' }} />
               <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.dark, lineHeight: 1.1, marginTop: 4 }}>{all?.by_badge?.[n] || 0}</div>
-              <div style={{ fontSize: 11, color: COLORS.gray, lineHeight: 1.3 }}>No. {n} · {c?.title}</div>
+              <div style={{ fontSize: 11, color: COLORS.gray, lineHeight: 1.3 }}>#{n} · {c?.title}</div>
             </div>
           );
         })}
       </div>
       <div style={{ fontSize: 12, color: COLORS.gray, marginTop: 10 }}>
-        All time: <strong style={{ color: COLORS.dark }}>{all?.people || 0}</strong> people · <strong style={{ color: COLORS.dark }}>{all?.stamps || 0}</strong> stamps earned. Your own accounts and the demo account aren’t counted.
+        All time: <strong style={{ color: COLORS.dark }}>{all?.people || 0}</strong> people have their stamp (one each). The six designs are numbered #1–#6 here; every one is printed “1/80”. Your own accounts and the demo account aren’t counted.
       </div>
       <Table rows={report?.weeks || []} label="Week of (Mon)" />
       <Table rows={report?.months || []} label="Month" />
