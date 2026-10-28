@@ -13,8 +13,8 @@ import { readPhotoExif } from "@/lib/photoExif";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { useDismissable } from "@/lib/dismissStack";
 import { CONTRIBUTE_PICK, contributeOpen, contributePhoto, listContributions, deleteContribution, captionContribution } from "@/lib/boardContrib";
-import { REWARD_EVERY, collectibleOf, listCollectibles } from "@/lib/collectibles";
-import CollectibleReward from "@/components/passport/CollectibleReward";
+import { collectibleOf, listCollectibles, progressOf } from "@/lib/collectibles";
+import CollectibleReward, { CollectibleNudge } from "@/components/passport/CollectibleReward";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -117,10 +117,11 @@ function ContributeSheet({ photos, onChanged, onClose }) {
   const [summary, setSummary] = useState(null);
   const [view, setView] = useState(null);    // index into `shown` in the viewer
   const isOpen = contributeOpen();
-  // Collectible stamps (founder, 2026-10-28): one every REWARD_EVERY photos posted.
-  const [col, setCol] = useState(null);      // { items, posted, every }
-  const [rewards, setRewards] = useState([]); // stamps just earned, shown one after another
-  const [manage, setManage] = useState(null); // an earned stamp opened from the row
+  // The collectible stamp (founder, 2026-10-28): one, for 10 photos from 3 different cities.
+  const [col, setCol] = useState(null);       // { items: [] or [theirs], progress }
+  const [reward, setReward] = useState(null);  // the stamp, just earned
+  const [nudge, setNudge] = useState(null);    // progress, for "so close" (photos, not yet the cities)
+  const [manage, setManage] = useState(null);  // their stamp, opened from the card
   const loadCol = () => listCollectibles().then((r) => { if (!r.error && !r.unavailable) setCol(r); });
   useEffect(() => { loadCol(); }, []);
 
@@ -130,7 +131,7 @@ function ContributeSheet({ photos, onChanged, onClose }) {
     if (!all.length || run) return;
     const files = all.slice(0, CONTRIBUTE_PICK);
     const tally = { posted: {}, noLocation: 0, child: 0, refused: 0, failed: 0, extra: all.length - files.length, firstError: null };
-    const earned = [];
+    let earned = null, last = null;
     setSummary(null);
     for (let i = 0; i < files.length; i += 1) {
       setRun((r) => ({ done: i, total: files.length, place: r?.place || null }));
@@ -143,8 +144,8 @@ function ContributeSheet({ photos, onChanged, onClose }) {
           const name = r.board ? [r.board.city, r.board.country].filter(Boolean).join(", ") : "a City Board";
           tally.posted[name] = (tally.posted[name] || 0) + 1;
           setRun({ done: i + 1, total: files.length, place: r.board?.city || null });
-          if (r.posted != null) setCol((c) => (c ? { ...c, posted: r.posted } : c));
-          if (r.reward) earned.push(r.reward);
+          if (r.progress) { last = progressOf(r.progress); setCol((c) => (c ? { ...c, progress: last } : c)); }
+          if (r.reward) earned = r.reward;
         } else if (r.code === "no_location" || r.code === "no_city") tally.noLocation += 1;
         else if (r.code === "child") tally.child += 1;
         else if (r.code === "not_allowed") tally.refused += 1;
@@ -154,11 +155,13 @@ function ContributeSheet({ photos, onChanged, onClose }) {
     setRun(null);
     setSummary(tally);
     const n = Object.values(tally.posted).reduce((a, b) => a + b, 0);
-    // A stamp earned says it all (no toast over its title); otherwise the toast.
-    if (n && !earned.length) showToast(`${plural(n, "photo", "photos")} added to City Boards 🌍`, "success");
+    // The stamp, or "so close", says it all (no toast over its title); otherwise the toast. Both
+    // come after the pick finishes, not over the progress bar.
+    const close = !earned && last && !last.earned && last.posted >= last.needPhotos && last.cities < last.needCities;
+    if (n && !earned && !close) showToast(`${plural(n, "photo", "photos")} added to City Boards 🌍`, "success");
     if (n) onChanged();
-    // The reward after the pick finishes, not over the progress bar.
-    if (earned.length) { setRewards(earned); loadCol(); }
+    if (earned) { setReward(earned); loadCol(); }
+    else if (close) setNudge(last);
   };
 
   // The member's photos by city, newest city first.
@@ -265,8 +268,9 @@ function ContributeSheet({ photos, onChanged, onClose }) {
         )}
       </div>
 
-      {rewards.length ? <CollectibleReward key={rewards[0].id} item={rewards[0]} fresh onClose={() => setRewards((q) => q.slice(1))} onSaved={loadCol} /> : null}
+      {reward ? <CollectibleReward key={reward.id} item={reward} fresh onClose={() => setReward(null)} onSaved={loadCol} /> : null}
       {manage ? <CollectibleReward key={manage.id} item={manage} fresh={false} onClose={() => setManage(null)} onSaved={loadCol} /> : null}
+      {nudge ? <CollectibleNudge progress={nudge} onClose={() => setNudge(null)} onUpload={isOpen ? () => { setNudge(null); fileRef.current?.click(); } : undefined} /> : null}
 
       {view != null && shown[view] && (
         <div onClick={(e) => e.stopPropagation()}>
@@ -286,45 +290,49 @@ function ContributeSheet({ photos, onChanged, onClose }) {
   );
 }
 
-// The reward, in sight while sharing (founder, 2026-10-28): every REWARD_EVERY photos earn a
-// collectible stamp; how close the next one is; the ones earned, a tap away (placed or not).
+// The reward, in sight while sharing (founder, 2026-10-28): 10 photos from 3 different cities earn
+// one collectible stamp. Before: what it takes and how far along they are (photos, cities). After:
+// their stamp, a tap away to place it on their passport or change who sees it.
 function CollectiblesCard({ col, onOpen }) {
-  const every = col.every || REWARD_EVERY;
-  const into = col.posted % every;
-  const left = every - into;
+  const p = col.progress || progressOf(null);
+  const mine = col.items?.[0] || null;
+  const art = mine ? collectibleOf(mine.badge) : null;
+  const gold = "#E8CC86";
+  const bar = (label, have, need) => (
+    <div style={{ marginTop: 8 }}>
+      <div className="flex justify-between" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em", color: gold }}>
+        <span>{label}</span><span>{Math.min(have, need)} / {need}{have >= need ? " ✓" : ""}</span>
+      </div>
+      <div role="progressbar" aria-valuemin={0} aria-valuemax={need} aria-valuenow={Math.min(have, need)} aria-label={`${label}: ${Math.min(have, need)} of ${need}`}
+        style={{ marginTop: 4, height: 8, borderRadius: 999, background: "rgba(255,255,255,.16)", overflow: "hidden" }}>
+        <div style={{ width: `${Math.min(100, Math.round((have / need) * 100))}%`, height: "100%", borderRadius: 999, background: have >= need ? "linear-gradient(90deg,#3FA26B,#7FD3A0)" : "linear-gradient(90deg,#C9A227,#F2D878)", transition: "width .4s" }} />
+      </div>
+    </div>
+  );
   return (
     <div style={{ marginTop: 12, padding: "12px 14px 13px", borderRadius: 14, background: "#0C2B50", color: "#fff", boxShadow: "inset 0 0 0 1.5px rgba(201,162,39,.55)" }}>
-      <div className="flex items-center justify-between gap-2">
-        <span style={{ fontFamily: MONO, fontSize: fs(9.5), fontWeight: 600, letterSpacing: ".16em", textTransform: "uppercase", color: "#E8CC86" }}>🏅 Collectible stamps</span>
-        {col.items.length ? <span style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".1em", color: "rgba(255,255,255,.75)" }}>{col.items.length} EARNED</span> : null}
-      </div>
-      <p style={{ margin: "6px 0 0", fontSize: fs(13.5), lineHeight: 1.45, color: "rgba(255,255,255,.92)" }}>
-        Every {every} photos you share earn a collectible stamp for your passport: <b style={{ color: "#fff" }}>Official Traveler</b>, <b style={{ color: "#fff" }}>Certified Explorer</b> or <b style={{ color: "#fff" }}>Adventure Pro</b>.
-      </p>
-      <div role="progressbar" aria-valuemin={0} aria-valuemax={every} aria-valuenow={into} aria-label={`${into} of ${every} photos toward your next stamp`}
-        style={{ marginTop: 10, height: 8, borderRadius: 999, background: "rgba(255,255,255,.16)", overflow: "hidden" }}>
-        <div style={{ width: `${Math.round((into / every) * 100)}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#C9A227,#F2D878)", transition: "width .4s" }} />
-      </div>
-      <p style={{ margin: "6px 0 0", fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em", color: "#E8CC86" }}>
-        {into} / {every} · {left === 1 ? "1 more photo" : `${left} more photos`} to your next stamp
-      </p>
-      {col.items.length ? (
-        <div style={{ display: "flex", gap: 8, marginTop: 10, overflowX: "auto", paddingBottom: 2 }}>
-          {col.items.map((it) => {
-            const c = collectibleOf(it.badge);
-            if (!c) return null;
-            return (
-              <button key={it.id} type="button" onClick={() => onOpen(it)} aria-label={`${it.title}, No. ${c.no}${it.placed ? ", in your passport" : ", not placed yet"}`}
-                style={{ flex: "none", position: "relative", width: 64, padding: 0, background: "transparent", border: 0, textAlign: "center", cursor: "pointer" }}>
-                <img src={c.art} alt="" loading="lazy" style={{ width: 60, height: 60, objectFit: "contain", display: "block", margin: "0 auto" }} />
-                <span style={{ display: "block", marginTop: 2, fontFamily: MONO, fontSize: fs(8), letterSpacing: ".06em", color: it.placed ? "rgba(255,255,255,.7)" : "#F2D878", fontWeight: it.placed ? 400 : 700 }}>
-                  {it.placed ? `No. ${c.no}` : "PLACE ›"}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+      <div style={{ fontFamily: MONO, fontSize: fs(9.5), fontWeight: 600, letterSpacing: ".16em", textTransform: "uppercase", color: gold }}>🏅 {mine ? "Your collectible stamp" : "Earn a collectible stamp"}</div>
+      {mine && art ? (
+        <button type="button" onClick={() => onOpen(mine)} aria-label={`${mine.title}, your collectible stamp${mine.placed ? ", on your passport" : ", not placed yet"}`}
+          className="w-full flex items-center gap-3" style={{ marginTop: 8, padding: 0, background: "transparent", border: 0, textAlign: "left", color: "#fff", cursor: "pointer" }}>
+          <img src={art.art} alt="" style={{ flex: "none", width: 76, height: 76, objectFit: "contain" }} />
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontFamily: SERIF, fontSize: fs(21), lineHeight: 1.1 }}>{mine.title}</span>
+            <span style={{ display: "block", marginTop: 3, fontSize: fs(12.5), lineHeight: 1.4, color: "rgba(255,255,255,.85)" }}>
+              Thank you for contributing to City Boards. {mine.placed ? "It’s on your passport’s first page." : "Place it on your passport’s first page."}
+            </span>
+            <span style={{ display: "block", marginTop: 4, fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".1em", color: "#F2D878", fontWeight: 700 }}>{mine.placed ? "WHO SEES IT ›" : "PLACE IT ›"}</span>
+          </span>
+        </button>
+      ) : (
+        <>
+          <p style={{ margin: "6px 0 0", fontSize: fs(13.5), lineHeight: 1.45, color: "rgba(255,255,255,.92)" }}>
+            Share {p.needPhotos} photos from at least {p.needCities} different cities and earn a collectible stamp for your passport: <b style={{ color: "#fff" }}>Official Traveler</b>, <b style={{ color: "#fff" }}>Certified Explorer</b> or <b style={{ color: "#fff" }}>Adventure Pro</b>, picked at random.
+          </p>
+          {bar("📷 PHOTOS", p.posted, p.needPhotos)}
+          {bar("🏙️ DIFFERENT CITIES", p.cities, p.needCities)}
+        </>
+      )}
     </div>
   );
 }

@@ -1,18 +1,19 @@
-// CollectibleReward — the moment a collectible stamp is earned (founder, 2026-10-28: "make it
+// CollectibleReward — the moment the collectible stamp is earned (founder, 2026-10-28: "make it
 // sound exciting … show user what stamp looks like … they can dismiss the pop up, place the stamp
 // in the passport … say thank you for contributing to City Boards … allow user to make the stamp
-// private or public"). Every 10 photos contributed to City Boards earn one of six stamps, three
-// titles: Official Traveler, Certified Explorer, Adventure Pro (src/lib/collectibles.js).
+// private or public"). 10 photos shared with City Boards, from 3 different cities, earn ONE of six
+// designs at random, three titles: Official Traveler, Certified Explorer, Adventure Pro
+// (src/lib/collectibles.js). It's theirs for good and can't be exchanged for another.
 //
 // The stamp swings in with a little confetti (none with Reduce Motion), the title, a thank-you,
 // who it shows to (the four words, greyed above the passport's own setting), "Place it in my
-// passport" and "Not now" — an unplaced stamp waits in Contribute to City Boards.
-// Opened again for a stamp already placed (fresh = false, item.placed), it changes who sees it
-// or takes it out of the passport.
+// passport" (its first page) and "Not now" — an unplaced stamp waits in Contribute to City Boards.
+// Opened again (fresh = false), it places it, changes who sees it, or takes it off the page.
+// CollectibleNudge (below) is the "so close" card for 10 photos from fewer than 3 cities.
 //
 //   <CollectibleReward item fresh onClose onSaved />
-//   item     the worker's row: { id, badge, title, milestone, placed, visibility, repeat? }
-//   onSaved(item) after it is placed, moved or taken out
+//   item     the worker's row: { id, badge, title, milestone, placed, visibility, cities? }
+//   onSaved(item) after it is placed, moved or taken off
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, useReducedMotion } from "framer-motion";
@@ -24,7 +25,7 @@ import { useDismissable } from "@/lib/dismissStack";
 import { logEvent } from "@/lib/analytics";
 import { AUDIENCES, aboveCeiling, capTo, usePassportAudience } from "@/lib/audience";
 import { PRIVACY_TONE } from "@/components/privacy/PrivacyChip";
-import { collectibleOf, withArticle, placeCollectible, removeCollectible } from "@/lib/collectibles";
+import { COLLECTIBLES, collectibleOf, withArticle, placeCollectible, removeCollectible } from "@/lib/collectibles";
 
 const SERIF = "'Instrument Serif', Georgia, serif";
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
@@ -56,7 +57,7 @@ export default function CollectibleReward({ item, fresh = true, onClose, onSaved
     setBusy(null);
     if (!r.ok) { showToast(r.error || "Couldn’t place it — try again", "error"); return; }
     logEvent("collectible_placed", { badge: item.badge, visibility: shown, fresh }, "Profile");
-    showToast(placed ? "Saved" : `${item.title} is in your passport 🎉`, "success");
+    showToast(placed ? "Saved" : `${item.title} is on your passport’s first page 🎉`, "success");
     onSaved?.(r.item);
     onClose();
   };
@@ -66,7 +67,7 @@ export default function CollectibleReward({ item, fresh = true, onClose, onSaved
     const r = await removeCollectible(item.id);
     setBusy(null);
     if (!r.ok) { showToast(r.error || "Couldn’t take it out — try again", "error"); return; }
-    showToast("Taken out of your passport. It’s still yours.", "success");
+    showToast("Taken off your passport. It’s still yours.", "success");
     onSaved?.(r.item);
     onClose();
   };
@@ -90,9 +91,7 @@ export default function CollectibleReward({ item, fresh = true, onClose, onSaved
           </h2>
           {fresh ? (
             <p style={{ margin: "8px auto 0", maxWidth: 320, fontSize: fs(14), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
-              {item.repeat
-                ? <>{item.milestone} photos shared with travelers everywhere. You earned No. {art.no} again: another one for your collection.</>
-                : <>{item.milestone} photos shared with travelers everywhere. This collectible stamp is yours to keep, even if you delete the photos.</>}
+              {item.milestone} photos{item.cities ? ` from ${item.cities} cities` : ""}, shared with travelers everywhere. This collectible stamp is yours to keep, even if you delete the photos.
             </p>
           ) : null}
 
@@ -102,7 +101,7 @@ export default function CollectibleReward({ item, fresh = true, onClose, onSaved
             <motion.div initial={fresh && !reduce ? { scale: 0.3, rotate: -18, opacity: 0 } : false} animate={{ scale: 1, rotate: 0, opacity: 1 }}
               transition={{ type: "spring", stiffness: 160, damping: 13, delay: 0.15 }}
               style={{ position: "relative", width: "100%", height: "100%" }}>
-              <img src={art.art} alt={`${item.title} collectible stamp, number ${art.no}`} draggable={false}
+              <img src={art.art} alt={`${item.title} collectible stamp`} draggable={false}
                 style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", filter: "drop-shadow(0 10px 14px rgba(7,27,51,.35))" }} />
               {fresh && !reduce ? (
                 <motion.div aria-hidden="true" initial={{ x: "-120%" }} animate={{ x: "120%" }} transition={{ duration: 1.1, delay: 0.9, ease: "easeInOut" }}
@@ -112,7 +111,7 @@ export default function CollectibleReward({ item, fresh = true, onClose, onSaved
             </motion.div>
           </div>
           <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".16em", textTransform: "uppercase", color: NEUTRAL.ink3 }}>
-            Collectible No. {art.no} · {item.title}
+            Collectible stamp · {item.title}
           </div>
 
           {/* Who sees it in the passport: the four words, the passport's ceiling greyed. */}
@@ -145,10 +144,11 @@ export default function CollectibleReward({ item, fresh = true, onClose, onSaved
             {busy === "place" ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <span aria-hidden="true">🛂</span>}
             {placed ? "Save" : "Place it in my passport"}
           </button>
+          {!placed ? <p style={{ margin: "6px 0 0", fontSize: fs(11.5), lineHeight: 1.4, color: NEUTRAL.ink3 }}>It goes on the first page of your passport.</p> : null}
           {placed ? (
             <button type="button" onClick={remove} disabled={!!busy}
               style={{ width: "100%", minHeight: 44, marginTop: 4, background: "transparent", border: 0, color: RED, fontSize: fs(13.5), fontWeight: 600 }}>
-              {busy === "remove" ? "Taking it out…" : "Take it out of my passport"}
+              {busy === "remove" ? "Taking it off…" : "Take it off my passport"}
             </button>
           ) : (
             <>
@@ -172,6 +172,77 @@ export default function CollectibleReward({ item, fresh = true, onClose, onSaved
         </div>
       ) : null}
 
+    </div>,
+    document.body,
+  );
+}
+
+// CollectibleNudge — "so close" (founder, 2026-10-28: "if people [upload] 10 photos in the same
+// location … encourage them to have at least three different locations to receive a reward
+// stamp"). Shown after a pick when they have the photos but not yet the cities: a thank-you, the
+// six designs one of which could be theirs, how far along they are, and Upload more photos.
+//
+//   <CollectibleNudge progress onClose onUpload />
+//   progress   progressOf(…) from src/lib/collectibles.js: { posted, cities, needPhotos, needCities }
+export function CollectibleNudge({ progress, onClose, onUpload = undefined }) {
+  useDismissable(true, onClose);
+  if (!progress) return null;
+  const more = Math.max(0, progress.needCities - progress.cities);
+  const bar = (label, have, need) => (
+    <div style={{ marginTop: 8 }}>
+      <div className="flex justify-between" style={{ fontSize: fs(12.5), color: NEUTRAL.ink2 }}>
+        <span>{label}</span><b style={{ color: have >= need ? "#1D6B43" : NEUTRAL.ink }}>{Math.min(have, need)} / {need}{have >= need ? " ✓" : ""}</b>
+      </div>
+      <div aria-hidden="true" style={{ marginTop: 4, height: 7, borderRadius: 999, background: "rgba(12,43,80,.1)", overflow: "hidden" }}>
+        <div style={{ width: `${Math.min(100, Math.round((have / need) * 100))}%`, height: "100%", borderRadius: 999, background: have >= need ? "#2E8B57" : `linear-gradient(90deg, ${GOLD}, #F2D878)` }} />
+      </div>
+    </div>
+  );
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 10030, background: "rgba(7,27,51,.62)", padding: 16 }} onClick={(e) => { e.stopPropagation(); onClose(); }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="cb-nudge-h" onClick={(e) => e.stopPropagation()}
+        className="w-full overflow-y-auto" style={{ position: "relative", maxWidth: 400, maxHeight: "94vh", background: NEUTRAL.ivory, borderRadius: 24, boxShadow: "0 24px 60px -20px rgba(0,0,0,.55)" }}>
+        <AirmailChevron height={5} />
+        <button type="button" onClick={onClose} aria-label="Close"
+          style={{ position: "absolute", top: 8, right: 6, width: 44, height: 44, display: "grid", placeItems: "center", background: "transparent", border: 0, color: NEUTRAL.ink2 }}>
+          <X size={20} strokeWidth={2} aria-hidden="true" />
+        </button>
+        <div style={{ padding: "16px 20px calc(18px + env(safe-area-inset-bottom))", textAlign: "center" }}>
+          <div style={{ fontFamily: MONO, fontSize: fs(9.5), fontWeight: 600, letterSpacing: ".18em", textTransform: "uppercase", color: RED, padding: "0 28px", textWrap: "balance" }}>
+            Thank you for contributing to City Boards!
+          </div>
+          <h2 id="cb-nudge-h" style={{ margin: "6px 0 0", fontFamily: SERIF, fontSize: fs(29), fontWeight: 400, lineHeight: 1.05, color: NEUTRAL.ink }}>
+            You’re so close to a <em style={{ color: BLUE }}>collectible stamp!</em>
+          </h2>
+          <p style={{ margin: "8px auto 0", maxWidth: 330, fontSize: fs(14), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
+            You’ve shared {progress.posted} photos, from {progress.cities === 1 ? "1 city" : `${progress.cities} cities`}. Share photos from {more === 1 ? "1 more city" : `${more} more cities`} and one of these six is yours.
+          </p>
+          {/* The six designs, small: one of them could be theirs. */}
+          <div aria-hidden="true" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, margin: "14px auto 0", maxWidth: 300 }}>
+            {Object.values(COLLECTIBLES).map((c) => (
+              <img key={c.no} src={c.art} alt="" loading="lazy" style={{ width: "100%", aspectRatio: "1 / 1", objectFit: "contain", filter: "drop-shadow(0 3px 5px rgba(7,27,51,.25))" }} />
+            ))}
+          </div>
+          <p style={{ margin: "6px 0 0", fontFamily: MONO, fontSize: fs(9), letterSpacing: ".14em", textTransform: "uppercase", color: NEUTRAL.ink3, textWrap: "balance" }}>
+            Official Traveler · Certified Explorer · Adventure Pro
+          </p>
+          <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 14, background: "#fff", border: "1px solid rgba(22,17,13,.10)", textAlign: "left" }}>
+            {bar("📷 Photos shared", progress.posted, progress.needPhotos)}
+            {bar("🏙️ Different cities", progress.cities, progress.needCities)}
+          </div>
+          {onUpload ? (
+            <button type="button" onClick={onUpload}
+              className="w-full flex items-center justify-center gap-2"
+              style={{ marginTop: 14, minHeight: 52, borderRadius: 14, border: 0, background: BLUE, color: "#fff", fontSize: fs(15.5), fontWeight: 650 }}>
+              Upload photos from another city
+            </button>
+          ) : null}
+          <button type="button" onClick={onClose}
+            style={{ width: "100%", minHeight: 44, marginTop: 4, background: "transparent", border: 0, color: NEUTRAL.ink2, fontSize: fs(14), fontWeight: 600 }}>
+            Not now
+          </button>
+        </div>
+      </div>
     </div>,
     document.body,
   );

@@ -8,11 +8,12 @@ export const CONTRIBUTE_PICK = 20;   // photos per pick: they upload one at a ti
 const CLOSES_AT = Date.parse("2027-07-01T07:00:00Z"); // the end of June 30, 2027, Pacific
 export const contributeOpen = (now = Date.now()) => now < CLOSES_AT;
 
-// One photo → { ok, board, posted, reward } · { code: 'no_location' | 'no_city' | 'child' | 'not_allowed' | 'caption' | 'slow_down' | …, error }
-// posted: photos ever posted (deleted ones too); reward: a collectible stamp earned by this one (src/lib/collectibles.js).
+// One photo → { ok, board, progress, reward } · { code: 'no_location' | 'no_city' | 'child' | 'not_allowed' | 'caption' | 'slow_down' | …, error }
+// progress: photos posted and cities toward the collectible stamp (deleted ones still count);
+// reward: the stamp, when this photo earned it (src/lib/collectibles.js).
 export async function contributePhoto({ image, exif, caption = "" }) {
   const { data, error } = await callWorker("board/contribute", { image, exif: exif || {}, caption }, { timeoutMs: 45000 });
-  if (!error && data?.ok) return { ok: true, id: data.id, url: data.url, board: data.board || null, posted: Number.isFinite(data.posted) ? data.posted : null, reward: data.reward || null };
+  if (!error && data?.ok) return { ok: true, id: data.id, url: data.url, board: data.board || null, progress: data.progress || null, reward: data.reward || null };
   return { ok: false, code: data?.code || null, error: error || data?.error || "Upload failed" };
 }
 

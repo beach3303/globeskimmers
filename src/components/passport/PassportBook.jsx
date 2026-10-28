@@ -516,8 +516,12 @@ function Paper({ children, coverH, pageNo, watermark, grow = false, running = nu
   );
 }
 
-// Page 0 — the ownership page (passport-inspired, clearly fictional).
-function OwnershipPage({ holder, homeCountry, countries, totalStamps, coverH, pageNo, watermark }) {
+// Page 0 — the ownership page (passport-inspired, clearly fictional). It carries the collectible
+// stamp (City Boards, 2026-10-28: "place the stamp in the first page … reasonable in size, not too
+// big, not too small … good size enough for one to be proud of receiving it") in the open space
+// under the counts, pressed slightly askew like a real stamp. The owner taps it to change who sees
+// it. Unless it's set to Everyone, it stays out of a shared picture of the page.
+function OwnershipPage({ holder, homeCountry, countries, totalStamps, coverH, pageNo, watermark, collectible = null, tiers = false, onOpenCollectible = null }) {
   const Field = ({ label, value }) => (
     <div>
       <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".1em", color: INK3 }}>{label}</div>
@@ -542,6 +546,8 @@ function OwnershipPage({ holder, homeCountry, countries, totalStamps, coverH, pa
           A personal collection of places explored with Globeskimmers.
         </p>
 
+        {collectible ? <CollectibleOnPage item={collectible} tiers={tiers} onOpen={onOpenCollectible} /> : null}
+
         <div style={{ marginTop: "auto", paddingTop: 16 }}>
           <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(8), letterSpacing: ".12em", color: INK3, opacity: 0.8 }}>
             Not a government document · A keepsake travel journal
@@ -552,38 +558,27 @@ function OwnershipPage({ holder, homeCountry, countries, totalStamps, coverH, pa
   );
 }
 
-// Collectible stamps (City Boards, 2026-10-28): their own page right after the ownership page,
-// six to a page, in the order they were placed. The owner taps one to change who sees it.
-const COLLECT_PER_PAGE = 6;
-function CollectiblesPage({ items, coverH, pageNo, watermark, tiers = false, running = null, onOpen = null }) {
-  return (
-    <Paper coverH={coverH} pageNo={pageNo} watermark={watermark} running={running}>
-      <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", paddingBottom: 18 }}>
-        <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".22em", color: STAMP, marginTop: running ? 8 : 0 }}>Collectible stamps</div>
-        <div style={{ fontFamily: SERIF, fontSize: fs(19), color: INK, lineHeight: 1.1, marginTop: 4 }}>Earned by sharing photos with City Boards</div>
-        <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "repeat(3, minmax(0, 1fr))", gap: 8, marginTop: 10 }}>
-          {items.map((it) => {
-            const c = collectibleOf(it.badge);
-            if (!c) return null;
-            const label = `${c.title}, collectible No. ${c.no}${tiers && it.visibility ? `, ${PP_TIER_WORD[it.visibility]}` : ""}`;
-            const body = (
-              <>
-                <img src={c.art} alt="" loading="lazy" draggable={false} style={{ flex: 1, minHeight: 0, width: "100%", objectFit: "contain", display: "block", filter: "drop-shadow(0 4px 6px rgba(7,27,51,.25))" }} />
-                <span style={{ display: "block", maxWidth: "100%", marginTop: 3, fontFamily: SANS, fontSize: fs(11), fontWeight: 650, color: INK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.title}</span>
-                <span style={{ display: "block", fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".1em", textTransform: "uppercase", color: INK3 }}>
-                  {tiers && it.visibility ? `${PP_TIER_MARK[it.visibility]} ` : ""}No. {c.no}
-                </span>
-              </>
-            );
-            const box = { display: "flex", flexDirection: "column", alignItems: "center", minHeight: 0, minWidth: 0, padding: 0, background: "transparent", border: 0 };
-            return onOpen
-              ? <button key={it.id} type="button" onClick={() => onOpen(it)} aria-label={label} style={{ ...box, cursor: "pointer" }}>{body}</button>
-              : <div key={it.id} role="img" aria-label={label} style={box}>{body}</div>;
-          })}
-        </div>
-      </div>
-    </Paper>
+function CollectibleOnPage({ item, tiers, onOpen }) {
+  const c = collectibleOf(item.badge);
+  if (!c) return null;
+  const tier = tiers ? item.visibility || null : null;
+  const label = `${c.title}, collectible stamp for sharing photos with City Boards${tier ? `, ${PP_TIER_WORD[tier]}` : ""}`;
+  const body = (
+    <>
+      <img src={c.art} alt="" draggable={false}
+        style={{ display: "block", flex: "0 1 auto", minHeight: 0, height: "clamp(150px, 30vh, 220px)", maxWidth: "70%", width: "auto", objectFit: "contain", transform: "rotate(-3deg)", filter: "drop-shadow(0 6px 10px rgba(7,27,51,.28))" }} />
+      <span style={{ display: "block", flex: "none", marginTop: 8, fontFamily: SERIF, fontSize: fs(18), color: INK, lineHeight: 1.1 }}>{c.title}</span>
+      <span style={{ display: "block", flex: "none", marginTop: 3, fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".14em", textTransform: "uppercase", color: INK3 }}>
+        {tier ? `${PP_TIER_MARK[tier]} ` : ""}Collectible stamp · City Boards
+      </span>
+    </>
   );
+  const box = { flex: 1, minHeight: 0, width: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "14px 0 4px", background: "transparent", border: 0, textAlign: "center" };
+  // A picture of the page (Share) leaves it out unless the owner set it to Everyone.
+  const skip = tiers && item.visibility !== "public" ? "true" : undefined;
+  return onOpen
+    ? <button type="button" onClick={() => onOpen(item)} aria-label={label} data-html2canvas-ignore={skip} style={{ ...box, cursor: "pointer" }}>{body}</button>
+    : <div role="img" aria-label={label} data-html2canvas-ignore={skip} style={box}>{body}</div>;
 }
 
 // A page of stamps — can mix countries (each stamp carries its own place).
@@ -687,8 +682,8 @@ export default function PassportBook({
   showTiers = false,      // the owner's view: corner marks + tier-aware picture shares
   visiting = false,       // someone else's passport: their name on the cover and atop each page
   swipeToOpen = true,     // false inside Home's Virtual Passport tab: a swipe on the closed cover changes tabs
-  collectibles = null,    // placed collectible stamps (City Boards): their page follows the ownership page
-  onOpenCollectible = null, // (item) => void — the owner's tap on one
+  collectibles = null,    // the collectible stamp (City Boards), placed: it sits on the ownership page
+  onOpenCollectible = null, // (item) => void — the owner's tap on it
 }) {
   // The cover art reads "My Virtual Passport" (founder, 2026-10-25: a friend's "looks like mine"),
   // so someone else's names them: "Mary’s Virtual Passport" on the cover and every page.
@@ -720,19 +715,9 @@ export default function PassportBook({
   const bookPages = useMemo(() => packBookPages(stamps, pageW, readFontScale()), [stamps, pageW]);
 
   const stampCount = bookPages.length;
-  // The collectible pages sit between the ownership page and the stamps: `lead` of them, and
-  // pgAt(page) is the stamp page on screen (null on the ownership, collectible or blank pages).
-  const colPages = useMemo(() => {
-    const list = (collectibles || []).filter((c) => collectibleOf(c.badge));
-    const out = [];
-    for (let i = 0; i < list.length; i += COLLECT_PER_PAGE) out.push(list.slice(i, i + COLLECT_PER_PAGE));
-    return out;
-  }, [collectibles]);
-  const lead = colPages.length;
-  const pgAt = (p) => { const i = p - 1 - lead; return i >= 0 && i < stampCount ? bookPages[i] : null; };
   const MIN_TOTAL = 10; // a fresh passport ships as a 10-page booklet to flip through
-  // ownership + collectibles + every stamp page + always ≥1 trailing blank (auto-grows as stamps fill up)
-  const total = Math.max(MIN_TOTAL, 1 + lead + stampCount + 1);
+  // ownership + every stamp page + always ≥1 trailing blank (auto-grows as stamps fill up)
+  const total = Math.max(MIN_TOTAL, 1 + stampCount + 1);
   // Deleting a stamp (or rotating the phone, which repacks the pages) can shrink
   // `total` while the book is open — pull `page` back onto the last page so the
   // indicator never reads "11 / 10" and Next never re-enables past the end.
@@ -796,10 +781,10 @@ export default function PassportBook({
   const renderPage = (idx) => {
     const pageNo = idx + 1;
     const watermark = idx % 2 === 0 ? "🌍" : "✈️"; // alternate earth / airplane
-    if (idx === 0) return <OwnershipPage holder={holder} homeCountry={homeCountry} countries={countries} totalStamps={totalStamps} coverH={coverH} pageNo={pageNo} watermark={watermark} />;
+    if (idx === 0) return <OwnershipPage holder={holder} homeCountry={homeCountry} countries={countries} totalStamps={totalStamps} coverH={coverH} pageNo={pageNo} watermark={watermark}
+      collectible={(collectibles || []).find((c) => collectibleOf(c.badge)) || null} tiers={showTiers} onOpenCollectible={onOpenCollectible} />;
+    const ci = idx - 1; // 0-based index into the collection (stamp pages, then blanks)
     const running = owner ? bookName : null;
-    if (idx - 1 < lead) return <CollectiblesPage items={colPages[idx - 1]} coverH={coverH} pageNo={pageNo} watermark={watermark} tiers={showTiers} running={running} onOpen={onOpenCollectible} />;
-    const ci = idx - 1 - lead; // 0-based index into the collection (stamp pages, then blanks)
     if (ci < stampCount) return <StampPage pg={bookPages[ci]} onOpenStamp={onOpenStamp} coverH={coverH} pageNo={pageNo} watermark={watermark} pageW={pageW} tiers={showTiers} running={running} />;
     return <EmptyCollectionPage coverH={coverH} pageNo={pageNo} watermark={watermark} first={ci === stampCount && stampCount === 0} running={running} />;
   };
@@ -848,7 +833,7 @@ export default function PassportBook({
     // Two stamps too big to share together at full size would print smaller
     // (the share frame scales a tall page down). Open on the first stamp at full
     // size instead; the preview still offers the other stamp and the whole page.
-    const pgNow = pgAt(page);
+    const pgNow = page >= 1 && page - 1 < bookPages.length ? bookPages[page - 1] : null;
     // The owner's page may hold mixed tiers (founder, 2026-10-15): a picture is forever,
     // so it is cleaned by default — the sheet asks which tiers may ride before any pixels
     // render, and 🔒 Only me never rides in a page picture.
@@ -885,7 +870,7 @@ export default function PassportBook({
       ]);
       const img = await composeShare(pageCanvas, "story_meta");
       // The memory photos on THIS page, in page order — the carousel's slides 2+.
-      const pg = pgAt(page);
+      const pg = page >= 1 && page - 1 < bookPages.length ? bookPages[page - 1] : null;
       const pgShare = pg ? pg.stamps.filter(shareOk) : [];
       const photos = pgShare.flatMap((st) => (st.photos || []).filter((ph) => ph && ph.photo_url).map((ph) => ({ src: ph.photo_url, stamp: st })));
       if (!heroFirst) setHeroStamp(null);
@@ -900,7 +885,7 @@ export default function PassportBook({
       try { console.error("[passport share] render failed", e); } catch { /* ignore */ }
       setPreview({ status: "error", message: e?.message || String(e) });
     } finally { setSharing(false); }
-  }, [sharing, page, bookPages, lead, pageW, showTiers, shareTier, shareOk]);
+  }, [sharing, page, bookPages, pageW, showTiers, shareTier, shareOk]);
   // The chooser's pick: allow that tier, let the filtered share node paint, then render.
   const proceedShare = useCallback(async (tier) => {
     setShareTier(tier);
@@ -1041,9 +1026,7 @@ export default function PassportBook({
       showToast(`Couldn't share${e?.message ? ` — ${e.message}` : ""}`, "error");
     }
   }, [preview, closePreview]);
-  // No Share on a blank page, nor on a collectibles page (its levels aren't sorted for a picture).
-  const currentIsBlank = page > 0 && (page - 1 < lead || page - 1 - lead >= stampCount);
-  const pgNowView = open ? pgAt(page) : null;
+  const currentIsBlank = page > 0 && page - 1 >= stampCount;
 
   return (
     <div
@@ -1102,10 +1085,10 @@ export default function PassportBook({
           </div>
         )}
 
-        {pgNowView && !(pgNowView.stamps.length === 1 && isPhotoFirst(pgNowView.stamps[0])) && (
+        {open && page >= 1 && page - 1 < bookPages.length && !(bookPages[page - 1].stamps.length === 1 && isPhotoFirst(bookPages[page - 1].stamps[0])) && (
           <div ref={sharePageRef} data-pp-share-page="" aria-hidden style={{ position: "absolute", left: -10000, top: 0, width: pageW }}>
             {/* the picture that leaves the phone holds only the tiers the owner allowed */}
-            <StampPage pg={{ ...pgNowView, stamps: pgNowView.stamps.filter(shareOk) }} onOpenStamp={() => {}} coverH={coverH} pageNo={page + 1} watermark={page % 2 === 0 ? "🌍" : "✈️"} pageW={pageW} share />
+            <StampPage pg={{ ...bookPages[page - 1], stamps: bookPages[page - 1].stamps.filter(shareOk) }} onOpenStamp={() => {}} coverH={coverH} pageNo={page + 1} watermark={page % 2 === 0 ? "🌍" : "✈️"} pageW={pageW} share />
           </div>
         )}
 
@@ -1141,9 +1124,9 @@ export default function PassportBook({
       </div>
 
       {/* The Blotter — reactions + guestbook live UNDER the page, never inside */}
-      {pgNowView && renderUnderPage ? (
+      {open && page >= 1 && renderUnderPage && bookPages[page - 1] ? (
         <div style={{ width: pageW, maxWidth: "100%", margin: "10px auto 0" }}>
-          {renderUnderPage(pgNowView.stamps)}
+          {renderUnderPage(bookPages[page - 1].stamps)}
         </div>
       ) : null}
 
