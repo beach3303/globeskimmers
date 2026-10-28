@@ -12,7 +12,11 @@ const monthDay = (iso) => {
   return isNaN(d) ? null : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 };
 
-export function derivePackets(stamps) {
+// byLevel (the owner's shelf, founder 2026-10-28: "I don't get why an album can have 1 only me,
+// 1 friends, 2 everyone"): one album = one privacy. A stamp kept at another level gets its own
+// envelope for the same city ("Atlanta 🔒 Only me" beside "Atlanta 🌍 Everyone"), so no envelope
+// ever holds a mix. Friends viewing an album keep one envelope per city.
+export function derivePackets(stamps, { byLevel = false } = {}) {
   const groups = new Map();
   for (const s of stamps || []) {
     const photos = (s.photos || []).filter((p) => p && p.photo_url);
@@ -21,14 +25,15 @@ export function derivePackets(stamps) {
     // One envelope per destination PER YEAR (founder, 2026-10-14 night: lifetimes of
     // 300–1000+ prints read as years, not one endless shelf).
     const year = String(s.visited_on || s.created_at || "").slice(0, 4) || "Undated";
-    const key = `${city}|${(s.country || "").trim()}|${year}`;
-    if (!groups.has(key)) groups.set(key, { key, year, city, country: (s.country || "").trim(), photos: [], dates: [], tiers: [], stampId: null, stampWhen: "", stampIds: [], albumTiers: [], stampTiers: [], stampList: [], widest: null });
-    const g = groups.get(key);
     // The stamp's audience rides on each print (the tiers, 2026-10-15), narrowed by the album's own
     // setting (photos_tier: any of the four words since 2026-10-27, never wider than its stamp;
     // unset = as far as the stamp goes); a 🌍 print also hangs on the city board unless taken down.
     const own = s.visibility || (s.hidden ? "me" : "inner");
     const tier = s.photos_tier && RANK[s.photos_tier] !== undefined && RANK[s.photos_tier] < (RANK[own] ?? 1) ? s.photos_tier : own;
+    const place = `${city}|${(s.country || "").trim()}|${year}`;
+    const key = byLevel ? `${place}|${own}|${tier}` : place;
+    if (!groups.has(key)) groups.set(key, { key, place, year, city, country: (s.country || "").trim(), photos: [], dates: [], tiers: [], stampId: null, stampWhen: "", stampIds: [], albumTiers: [], stampTiers: [], stampList: [], widest: null });
+    const g = groups.get(key);
     if (!g.tiers.includes(tier)) g.tiers.push(tier);
     if (s.id) g.stampIds.push(s.id);
     // The album's level is what its photos really reach; the widest stamp is the most it can be set to.
@@ -46,6 +51,12 @@ export function derivePackets(stamps) {
     const when = String(s.visited_on || s.created_at || "");
     if (s.id && when >= g.stampWhen) { g.stampId = s.id; g.stampWhen = when; }
   }
+  // A city's envelopes sit side by side, narrowest first, ordered by the city's newest date.
+  const placeLast = new Map();
+  for (const g of groups.values()) {
+    const last = [...g.dates].sort().pop() || "";
+    if (last > (placeLast.get(g.place) || "")) placeLast.set(g.place, last);
+  }
   return [...groups.values()]
     .map((g) => {
       g.dates.sort();
@@ -57,18 +68,23 @@ export function derivePackets(stamps) {
       return g;
     })
     .sort((a, b) => b.year.localeCompare(a.year)
-      || String(b.dates[b.dates.length - 1] || "").localeCompare(String(a.dates[a.dates.length - 1] || ""))
+      || String(placeLast.get(b.place) || "").localeCompare(String(placeLast.get(a.place) || ""))
+      || a.place.localeCompare(b.place)
+      || (RANK[a.albumTiers[0]] ?? 1) - (RANK[b.albumTiers[0]] ?? 1)
+      || (RANK[a.stampTiers[0]] ?? 1) - (RANK[b.stampTiers[0]] ?? 1)
       || b.photos.length - a.photos.length);
 }
 
-// The year sections, newest first: [{ year, prints, packets }].
+// The year sections, newest first: [{ year, prints, places, packets }]. places counts cities,
+// not envelopes (a city split by privacy is still one place).
 export function packetsByYear(packets) {
   const by = new Map();
   for (const p of packets || []) {
-    if (!by.has(p.year)) by.set(p.year, { year: p.year, prints: 0, packets: [] });
+    if (!by.has(p.year)) by.set(p.year, { year: p.year, prints: 0, places: 0, seen: new Set(), packets: [] });
     const g = by.get(p.year);
     g.prints += p.photos.length;
     g.packets.push(p);
+    if (!g.seen.has(p.place)) { g.seen.add(p.place); g.places += 1; }
   }
-  return [...by.values()];
+  return [...by.values()].map(({ seen: _seen, ...g }) => g);
 }

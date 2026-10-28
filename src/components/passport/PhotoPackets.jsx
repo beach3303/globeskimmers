@@ -29,15 +29,17 @@ const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 const MARK = { me: "🔒", inner: "🤝", followers: "👥", public: "🌍" };
 const marksOf = (tiers) => (tiers || []).map((t) => MARK[t]).filter(Boolean).join(" ");
 
-// stampCounts (the owner's view, founder 2026-10-28): the stamps' privacy inside the envelope as
-// coloured chips — "STAMPS 🔒 Only me", or with a mix, how many stamps sit at each level
-// ("STAMPS 🔒 1 🌍 3") — so a private stamp in Atlanta is plain at a glance. The album's own
-// setting is the line under the envelope; which stamp is which is in its privacy sheet.
-function Envelope({ packet, onOpen, stampCounts = null }) {
+// stampLevel (the owner's view, founder 2026-10-28): the stamp's privacy inside the envelope as a
+// coloured chip — "STAMP 🔒 Only me", "2 STAMPS 🌍 Everyone". The owner's envelopes each hold one
+// privacy (derivePackets byLevel); the album's own setting is the line under the envelope.
+function Envelope({ packet, onOpen, stampLevel = null }) {
   const peek = packet.photos[0]?.src;
   const marks = marksOf(packet.tiers);
+  const nStamps = packet.stampList?.length || 1;
+  const stampWord = nStamps === 1 ? "STAMP" : `${nStamps} STAMPS`;
   return (
-    <button type="button" onClick={onOpen} aria-label={`Open the ${packet.city} photo packet — ${packet.photos.length} prints`}
+    <button type="button" onClick={onOpen}
+      aria-label={`Open the ${packet.city} photo packet — ${packet.photos.length} prints${stampLevel ? `. ${nStamps === 1 ? "Stamp" : `${nStamps} stamps`}: ${AUD[stampLevel]?.label || stampLevel}` : ""}`}
       className="block w-full active:scale-95 transition-transform">
       <div style={{ position: "relative", height: 118 }}>
         {/* prints peeking out -->*/}
@@ -55,12 +57,11 @@ function Envelope({ packet, onOpen, stampCounts = null }) {
         {/* the envelope */}
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 76, borderRadius: 10, background: "linear-gradient(180deg,#EBDDB6,#E2D1A4)", border: "1.5px solid #C9B583", boxShadow: "0 4px 10px -6px rgba(0,0,0,.3)", zIndex: 2 }}>
           <div aria-hidden style={{ position: "absolute", top: 0, left: 0, right: 0, height: 24, background: "rgba(201,181,131,.55)", clipPath: "polygon(0 0, 100% 0, 50% 100%)", borderRadius: "10px 10px 0 0" }} />
-          {stampCounts && stampCounts.length
-            ? <span style={{ position: "absolute", right: 6, top: 4, maxWidth: "calc(100% - 12px)", display: "flex", alignItems: "center", gap: 3, overflow: "hidden" }}>
-                <span aria-hidden="true" style={{ fontFamily: MONO, fontSize: fs(7), letterSpacing: ".12em", color: "#8A6E33" }}>STAMPS</span>
-                {stampCounts.length === 1
-                  ? <PrivacyChip level={stampCounts[0][0]} size="xs" />
-                  : stampCounts.map(([k, n]) => <PrivacyChip key={k} level={k} count={n} short size="xs" />)}
+          {stampLevel
+            // Wraps under the word on a narrow phone rather than clipping "Friends & followers".
+            ? <span aria-hidden="true" style={{ position: "absolute", right: 6, top: 4, maxWidth: "calc(100% - 12px)", display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "1px 3px" }}>
+                <span style={{ flex: "none", fontFamily: MONO, fontSize: fs(7), letterSpacing: ".12em", color: "#8A6E33" }}>{stampWord}</span>
+                <PrivacyChip level={stampLevel} size="xs" />
               </span>
             : marks ? <span aria-hidden="true" style={{ position: "absolute", right: 7, top: 5, fontSize: fs(10.5), lineHeight: 1, opacity: 0.8 }}>{marks}</span> : null}
           <div className="absolute inset-x-0 bottom-2 text-center px-2">
@@ -82,7 +83,7 @@ function Envelope({ packet, onOpen, stampCounts = null }) {
 export default function PhotoPackets({ stamps, title = "Photo packets", owner = false, albums = "passport", onChanged = null, social = null, className = "max-w-md mx-auto px-4 mt-8", corner = null }) {
   // social: { slug, blotter, onBlotterChanged } — the per-photo guestbook inside an open album.
   // className: the column (the profile passes its own, which widens on iPad).
-  const packets = useMemo(() => derivePackets(stamps), [stamps]);
+  const packets = useMemo(() => derivePackets(stamps, { byLevel: owner }), [stamps, owner]);
   const [open, setOpen] = useState(null); // { photos, index, city }
   // Who sees each album, one tap from its envelope (founder, 2026-10-26: "albums should have a
   // quick way to change privacy per album"). An album can only narrow its photos.
@@ -95,16 +96,9 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
   const sortL = (levels) => [...levels].sort((a, b) => (RANK[a] ?? 1) - (RANK[b] ?? 1));
   const spoken = (levels) => sortL(levels).map((k) => AUD[k]?.label || k).join(" and ");
   const stampLevels = (p) => new Set((p.stampTiers || []).map((t) => capTo(t, passportAud)));
-  // How many of the album's stamps sit at each level, narrowest first: [['me', 1], ['public', 3]].
-  // pick: 'own' (the stamp's setting) or 'photos' (what its photos reach).
-  const countsOf = (p, pick) => {
-    const c = {};
-    for (const st of p.stampList || []) { const k = capTo(st[pick], passportAud); c[k] = (c[k] || 0) + 1; }
-    return sortL(Object.keys(c)).map((k) => [k, c[k]]);
-  };
-  const chipsOf = (counts) => (counts.length === 1
-    ? <PrivacyChip level={counts[0][0]} size="xs" />
-    : counts.map(([k, n]) => <PrivacyChip key={k} level={k} count={n} short size="xs" />));
+  // The owner's envelopes hold one privacy each (byLevel): the stamp's, and the album's.
+  const stampLevelOf = (p) => capTo(p.stampTiers?.[0] || "inner", passportAud);
+  const albumLevelOf = (p) => capTo(p.albumTiers?.[0] || "inner", passportAud);
   const saveAlbum = async (v) => {
     const r = await setAlbumPrivacy(albumFor.stampIds, v);
     if (r.error) { showToast(r.error, "error"); return false; }
@@ -152,7 +146,7 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
           {owner && packets.length ? (
             <p style={{ margin: "4px 0 0", fontFamily: MONO, fontSize: fs(9), letterSpacing: ".06em", lineHeight: 1.5, color: INK3 }}>
               {/* Short (founder, 2026-10-17), but 🌍 prints showing on the city board is never left out. */}
-              Each envelope shows its stamps’ privacy; an album can be more private. 🌍 Everyone albums also hang on the city board.
+              Each envelope holds one privacy: its stamp’s inside, its album’s under it. 🌍 Everyone albums also hang on the city board.
             </p>
           ) : null}
         </div>
@@ -160,25 +154,25 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
         {corner ? <div style={{ flex: "none", width: "44%", maxWidth: 190 }}>{corner}</div> : null}
       </div>
       <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPick} />
-      {years.map(({ year, prints, packets: list }) => (
+      {years.map(({ year, prints, places, packets: list }) => (
         <section key={year} aria-label={`${year} — ${prints} prints`}>
           <div className="flex items-baseline gap-2.5" style={{ marginTop: 16 }}>
             <span style={{ fontFamily: SERIF, fontSize: fs(18), color: "#16110D" }}>{year}</span>
             <span className="uppercase" style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".14em", color: INK3 }}>
-              {list.length} PLACE{list.length === 1 ? "" : "S"} · {prints} PRINT{prints === 1 ? "" : "S"}
+              {places} PLACE{places === 1 ? "" : "S"} · {prints} PRINT{prints === 1 ? "" : "S"}
             </span>
             <span aria-hidden="true" className="flex-1" style={{ borderTop: "1px dashed rgba(22,17,13,.18)", transform: "translateY(-3px)" }} />
           </div>
           <div className="grid justify-items-center" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "16px 12px", paddingTop: 12 }}>
             {list.map((p) => (
               <div key={p.key} style={{ position: "relative", width: "100%", maxWidth: 190 }}>
-                <Envelope packet={p} stampCounts={owner ? countsOf(p, "own") : null} onOpen={() => setOpen({ photos: p.photos, index: 0, city: p.city, range: p.range, packet: p })} />
+                <Envelope packet={p} stampLevel={owner ? stampLevelOf(p) : null} onOpen={() => setOpen({ photos: p.photos, index: 0, city: p.city, range: p.range, packet: p })} />
                 {owner && p.stampIds?.length ? (
                   <button type="button" onClick={() => setAlbumFor(p)} aria-label={`Who sees the ${p.city} album: ${spoken(levelsOf(p))}. Its stamps: ${spoken(stampLevels(p))}. Change`}
-                    // Wraps rather than clips: three levels in a half-width column put Change on a second line.
+                    // Wraps rather than clips: a long word ("Friends & followers") puts Change on a second line.
                     className="w-full flex flex-wrap items-center justify-center" style={{ minHeight: 34, marginTop: 4, columnGap: 4, rowGap: 2, background: "transparent", border: 0, fontSize: fs(11.5), color: "#5A4A33" }}>
                     <span aria-hidden="true" style={{ flex: "none" }}>Album</span>
-                    <span aria-hidden="true" style={{ display: "inline-flex", gap: 3 }}>{chipsOf(countsOf(p, "photos"))}</span>
+                    <PrivacyChip level={albumLevelOf(p)} size="xs" style={{ flex: "none" }} />
                     <span aria-hidden="true" style={{ flex: "none", color: "#2B4A7E", fontWeight: 650 }}>Change</span>
                   </button>
                 ) : null}
@@ -214,7 +208,7 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
           // setting, and what its photos reach when the album keeps them narrower.
           extra={(
             <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 14, background: "#fff", border: "1px solid rgba(22,17,13,.10)" }}>
-              <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".14em", textTransform: "uppercase", color: INK3 }}>Stamps in this album</div>
+              <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".14em", textTransform: "uppercase", color: INK3 }}>{(albumFor.stampList || []).length === 1 ? "Stamp in this album" : "Stamps in this album"}</div>
               <ul style={{ listStyle: "none", margin: "6px 0 0", padding: 0 }}>
                 {(albumFor.stampList || []).map((st, i) => {
                   const own = capTo(st.own, passportAud), ph = capTo(st.photos, passportAud);
