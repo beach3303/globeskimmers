@@ -3459,3 +3459,19 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - **Open:** founder `npm run ota` (both platforms) — then the phone tests in the entries above (albums, collectible
   stamp, Post to any board, My postcards, City Cards). Follow-ups unchanged: old nearby passport stamps, the
   Shopping category stamp PNG, the City Board row decision.
+
+## 2026-10-28 (late night) — COMMITTED on stamping-v2, NOT pushed: City Cards repeat visits, the button's words, the Profile's City Boards row
+
+- **Migration** 20261029020000_city_card_visits: city_card_stamps.visits (default 1) + last_visited_on.
+- **Worker:** another day at a business already on the open card → visits+1 and the latest date (repeat: true, visits);
+  the same day → already; a completed card's business takes a new slot on the next card. The founder's bell: "📇 … is back
+  at Pink's — visit 3 on their Los Angeles 2026 card". Harness run-cc.mjs: 25 checks pass; the four older suites pass.
+- **App:** the four finders' button reads "I was here, get the stamp!" again (the line under it names the card, not the
+  passport); a place already on a card shows "On your Los Angeles 2026 card · stamped Oct 24 · 3 visits" under the button
+  before any tap (myCardStamps: one /city-cards read shared by every card on the page, cleared after a stamp); a tap on
+  another day shows "VISIT 3 · Back again"; the card face prints ×N on a stamp with visits. Profile: the two City Board
+  albums ("MY PHOTOS · ON CITY BOARDS", "MY POSTCARDS · ON CITY BOARDS") sit side by side in their own "City Boards ·
+  public · two albums" row with one line saying what each is; the albums header is full width again.
+- **Activate:** push (one migration applies, then the workers); founder `npm run ota`.
+- **Test on a phone:** stamp a place, come back the next day → "Visit 2"; the same day → "Already stamped today"; the
+  place card shows the remembered line on reopen; Profile → City Boards row.

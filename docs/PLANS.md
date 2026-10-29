@@ -78,6 +78,15 @@ founder's ChatGPT "Local Finds Card" boards are the brief):**
   stamp; (3) a visited Traveler page lists their cards at your level. **No card on a City Board
   page** (founder, 2026-10-28: "remove city board row with city card inside city board") — the
   board stays the public wall.
+- **The button's words (founder, 2026-10-28 late):** "I was here, get the stamp!" on the four
+  finders too — the line under it says which book ("Your Los Angeles card, not your passport · Only
+  at the place, by GPS"). Not "Stamp my Los Angeles card".
+- **Repeat visits (founder: "a plan for stamping twice or 10 or 20 times"; built 2026-10-28):** the
+  button stays. A business holds ONE slot per card; another day's tap adds a visit to that stamp
+  (×2, ×3… with the latest date), never a second slot, so a card stays ten different spots; twice
+  in a day reads "Already stamped today"; a business from a completed card can take a slot on the
+  next card. The place card remembers without a tap: "On your Los Angeles 2026 card · stamped
+  Oct 24 · 3 visits" under the button (one read of the member's cards per finder page).
 - Vocabulary everywhere: stamp / stamped / category stamp. Never punch, never seal.
 - **Open:** the card's name ("City Card" here; ChatGPT wrote "Local Finds Card"); what a partner
   pays for its own stamp; the Market artwork's finder; a Shopping category stamp from the founder.
