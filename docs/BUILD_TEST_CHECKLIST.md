@@ -3417,3 +3417,35 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   Contribute → add 10 photos from 3 cities → the stamp pop-up → Place it → Passport page 1; a City Board → Post to
   this board → both choices; a state board → Send a postcard; Profile → My postcards → Delete one; the founder's
   phone gets "📮 … posted a postcard on …" with the name and place.
+
+## 2026-10-28 (night) — COMMITTED on stamping-v2, NOT pushed: City Cards
+
+- **Decision (founder):** the Virtual Passport takes only Things to Do, airports, cities, border countries,
+  collectible stamps and the art stamps. Restaurants, cafés, shops and convenience stores stamp a **City Card**:
+  one card per city per year, numbered ("Los Angeles 2026 · No. 1"), ten slots, each a stamp = the founder's
+  category artwork + the business's name + the date. Ten stamps complete the card (the passport is NOT stamped);
+  the next find starts No. 2. ATMs, restrooms and Money Exchange stamp nothing. Vocabulary: stamp, never punch.
+- **Migration** 20261029010000_city_cards: city_cards (user, board_key, city, region, country, year, no, stamps,
+  completed_at, visibility) + city_card_stamps (card, slot, place_id, name, category, design, visited_on);
+  a business once per card.
+- **Worker:** /city-cards/stamp (GPS proof as "I was here": ttdPlaceTruth + footprint; the IP-country check;
+  the city from the card's words or the place's own address; category: the finder's, or Market for a grocer in
+  Shopping/Convenience; design by place id), /city-cards (mine), /city-cards/visibility; /social/world carries
+  city_cards at the viewer's level; the founder's bell rings per stamp ("📇 Maria @maria (#12) stamped Pink's on
+  their Los Angeles 2026 card (3/10)").
+- **App:** Home's "My Profile" tab is now **City Cards** (CityCardsPage; the Profile keeps its bottom-bar
+  button); "I was here" on Eat/Coffee/Shopping became "Stamp my Los Angeles card" (CityCardStampButton) and
+  Convenience Store gained it; Things to Do keeps stamping the passport. CityCard (the face, full and small),
+  CityCardSheet (who sees it + Share, html2canvas), CityCardComplete (the tenth stamp). A visited Traveler page
+  lists their cards at your level. Artwork: src/assets/citycards/*.webp (the founder's PNGs cut round; the two
+  Shopping ones are cut from her ChatGPT card until she sends one).
+- **Tested:** 21 harness checks (scratchpad bctest/run-cc.mjs) incl. far-away refusal, once-per-card, the tenth
+  completing, No. 2 starting, Market category, visibility + a stranger's view; the four older suites still pass.
+- **Activate (push the WHOLE branch at once — see the earlier note on the collectibles migration):**
+  `git fetch`, `git push origin stamping-v2:main`; watch 2 migrations apply, then the workers. Founder: `npm run ota`.
+- **Test on a phone after the OTA:** Home → City Cards tab (empty state); Places to Eat at a restaurant → Stamp my
+  <city> card → the stamped panel → See my card; Coffee/Shopping/Convenience the same; a second tap at the same
+  place → "Already on your card"; the Home tab shows the card; tap → who sees it + Share; the founder's phone
+  gets "📇 … stamped … (1/10)".
+- **Follow-ups:** convert the nearby-service passport stamps already minted into City Card stamps (needs a way to
+  tell them from Things to Do "I was here" rows — not stored today); a Shopping category stamp PNG from the founder.
