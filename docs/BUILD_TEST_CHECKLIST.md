@@ -3475,3 +3475,16 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - **Activate:** push (one migration applies, then the workers); founder `npm run ota`.
 - **Test on a phone:** stamp a place, come back the next day → "Visit 2"; the same day → "Already stamped today"; the
   place card shows the remembered line on reopen; Profile → City Boards row.
+
+## 2026-10-28 (late night) — COMMITTED, NOT pushed: Places to Eat — a typed name wins; browse strictly nearest first
+
+- **Founder, Westfield Santa Anita:** a few steps from The Cheesecake Factory, browse didn't surface it and typing
+  "cheesecake factory" didn't find it (the Desserts filter did). Measured live before the fix: typed → rank 24 of 30
+  behind 23 bakeries/dessert shops (the dish parser reads "cheesecake" as a dish and the chain is demoted); browse from
+  the mall centre → rank 17, and the owned list wasn't strictly sorted by distance.
+- **Fix (worker):** gsNameMatch — every typed word must be a word of the name or the start of one; places the words
+  name lead the list, nearest first, taken from the whole pool so no tier/chain/dish/tidy filter drops them (one word
+  counts as a name only when the parser saw no dish or cuisine: "pizza" never puts Pizza Hut first); the FOODISH
+  filter keeps a named place; the owned browse list is sorted strictly nearest first.
+- **Verify after the push:** the same two live calls at 34.13735,-118.04985 — typed "cheesecake factory" → rank 1;
+  browse → ordered by distance.
