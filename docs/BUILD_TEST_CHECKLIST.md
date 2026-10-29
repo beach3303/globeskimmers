@@ -3554,3 +3554,18 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - Gates: eslint no-undef clean, build OK, boot-check OK. Screenshots (synthetic pinch): `Claude outputs/zoom-*.png`.
 - **Phone test after OTA:** a City Board photo and a stamp photo in the passport: pinch in, pan, double-tap out;
   swipe left/right still pages only at 1×; swipe down still closes at 1×; the X stays reachable while zoomed.
+
+## 2026-10-29 — COMMITTED, NOT pushed: postcard photos open big and zoom (Mailbox, Sent, City Boards)
+
+- Founder: "Postcard photos when sent or when posted to city boards, allow users to also zoom to that photo." A
+  postcard's photo is now a button ("See the photo big"): in PostcardCard (the Mailbox card, a card on a City Board
+  wall and in the board viewer, My postcards on City Boards) and on the Sent list's open entry (SentList Front, big).
+  It opens the shared PhotoLightbox — title "Postcard from <place>", credit "From <who> · when" — where two fingers
+  zoom it like a memory photo. A photo that didn't load keeps the plain airmail panel, no tap.
+- PhotoLightbox now keeps its taps and swipes to itself (stopPropagation at its root): React carries them up the
+  owner's tree through the portal, so a swipe in the lightbox used to also page the board viewer behind it, and a
+  backdrop tap would have re-opened the wall tile it came from.
+- Gates: eslint no-undef clean, build OK, boot-check OK. Screenshots: `Claude outputs/zoom-4/5-board-postcard-*.png`
+  (the demo Mailbox has no postcards; the Mailbox card is the same PostcardCard).
+- **Phone test after OTA:** a postcard in the Mailbox, one in Sent (open it), one on a City Board: tap the photo →
+  big → pinch; × closes back to where you were; the board viewer doesn't page while you swipe in the lightbox.
