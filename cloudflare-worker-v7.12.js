@@ -9879,7 +9879,7 @@ async function handleCoffeeKeywordSearch(request, env, ctx) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return jsonResponse({ places: [] });
     const radiusMiles = Math.max(parseFloat(b.radiusMiles) || 10, 5);
     const geoKey = `${lat.toFixed(2)}_${lng.toFixed(2)}`;
-    const cacheKey = `coffeesearch:v3:${query.toLowerCase()}:${geoKey}:${Math.round(radiusMiles)}${b.namedPlace === true ? ':named' : ''}`; // v3: institutions
+    const cacheKey = `coffeesearch:v4:${query.toLowerCase()}:${geoKey}:${Math.round(radiusMiles)}${b.namedPlace === true ? ':named' : ''}`; // v4: a typed name wins
     const cached = await env.GLOBESKIMMERS_KV.get(cacheKey, { type: 'json' }).catch(() => null);
     if (cached) return jsonResponse(cached);
 
@@ -9903,7 +9903,18 @@ async function handleCoffeeKeywordSearch(request, env, ctx) {
         })
         .filter((p) => p && p.distanceMiles <= capMi)
         .sort((a, b) => (a.distanceMiles ?? 1e9) - (b.distanceMiles ?? 1e9));
+      // A typed name wins (the Places to Eat rule, 2026-10-28): the cafés the words name lead,
+      // nearest first, every branch — the tidy below keeps two per chain, which would show two
+      // Starbucks for "starbucks". A lone generic drink word ("coffee", "boba") names nothing.
+      const generic = /^(coffee|cafe|café|tea|boba|latte|espresso|matcha|dessert|bakery|donuts?|bubble|juice|smoothie|cakes?|pastry|pastries|cappuccino|brew|drinks?)$/i;
+      const words = gsNameWords(query).filter((w) => w !== 'the');
+      const named = words.length >= 2 || (words.length === 1 && !generic.test(words[0])) ? places.filter((p) => gsNameMatch(query, p.displayName?.text || p.name)) : [];
       places = gsTidy(places);
+      if (named.length) {
+        const ids = new Set(named.map((p) => p.id || p.placeId));
+        named.forEach((p) => { p.nameMatch = true; });
+        places = [...named, ...places.filter((p) => !ids.has(p.id || p.placeId))];
+      }
       // Famous cafés with a Wikipedia article that match lead (Café de Flore).
       const found = await gsInstitutionsFor(env, ctx, origin, { lat, lng, radiusM: searchRadiusM, query, finder: 'coffee', named: b.namedPlace === true }).catch(() => []);
       if (found.length) {

@@ -3494,3 +3494,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - One push `stamping-v2:main` (83dfa0c..dbb7b81). Migration 20261029020000_city_card_visits applied (run 40837024169);
   workers deployed (run 40837024161, api version 963c1e25).
 - **Open:** founder `npm run ota` (both platforms) — then the phone tests in the two entries above.
+
+## 2026-10-29 — COMMITTED, NOT pushed: Coffee — a typed name wins there too
+
+- /coffee/search: the cafés the typed words name lead, nearest first, every branch (gsTidy kept two per chain, so
+  "starbucks" showed two Starbucks); a lone generic drink word ("coffee", "boba") names nothing. Cache key v4.
+  Shopping and Convenience Store have no typed search — nothing to port.
+- **Verify after the push:** /coffee/search "starbucks" at Santa Anita → every Starbucks, nearest first.
