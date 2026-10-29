@@ -25,6 +25,7 @@ import { contributeOpen } from "@/lib/boardContrib";
 import { BoardContributeSheet } from "@/components/passport/ContributeAlbum";
 import { deleteBoardPostcard } from "@/lib/boardPostcards";
 import { showToast } from "@/components/Toast";
+import ZoomableImage from "@/components/ZoomableImage";
 import Guestbook, { BOARD_PROMPTS } from "@/components/Guestbook";
 import { createPageUrl } from "@/utils";
 import { cityBoardUrl } from "@/lib/boardLinks";
@@ -226,7 +227,9 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
       <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: "6px 12px calc(24px + env(safe-area-inset-bottom))" }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         {row.type === "photo" ? (
           <>
-            <img key={row.id} src={row.photo} alt={row.caption || `Photo from ${row.place || ""}`} style={{ display: "block", width: "100%", maxHeight: "54vh", objectFit: "contain", borderRadius: 6 }} />
+            {/* Pinch to zoom, pan while zoomed, double tap in or out (founder, 2026-10-29); a zoomed photo keeps its touches, so a swipe pages only at 1×. */}
+            <ZoomableImage key={row.id} src={row.photo} alt={row.caption || `Photo from ${row.place || ""}`} style={{ width: "100%" }}
+              imgStyle={{ display: "block", width: "100%", maxHeight: "54vh", objectFit: "contain", borderRadius: 6 }} />
             <div style={{ color: NEUTRAL.ivory, padding: "10px 4px 0" }}>
               {row.caption ? <p style={{ margin: 0, fontFamily: SERIF, fontStyle: "italic", fontSize: fs(16), lineHeight: 1.35 }}>&ldquo;{row.caption}&rdquo;</p> : null}
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 10px", marginTop: row.caption ? 8 : 0, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".1em", textTransform: "uppercase", color: NEUTRAL.goldPale }}>

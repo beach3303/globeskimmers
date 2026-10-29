@@ -6,6 +6,8 @@
 //     9996), so a room sheet can open a lightbox over itself;
 //   - swipe left/right pages, swipe-down (>80px) dismisses with a finger-follow
 //     (skipped for reduced-motion users), backdrop tap dismisses;
+//   - pinch to zoom, pan while zoomed, double tap in or out (ZoomableImage) —
+//     a zoomed photo keeps its touches, so paging and dismissing wait for 1×;
 //   - chevrons hide at the ends (no wrap — ends are ends), Escape / arrows work;
 //   - image source ladder hd → src → "Photo unavailable", keyed by src so
 //     onError climbs exactly once and never loops;
@@ -24,6 +26,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import ZoomableImage from "@/components/ZoomableImage";
 import { useDismissable } from "@/lib/dismissStack";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
@@ -66,9 +69,12 @@ export default function PhotoLightbox({ photos, index, onClose, onIndexChange, t
     onIndexChange?.(next);
   };
 
-  // Swipe — raw touch deltas so a mostly-vertical drag never pages.
+  // Swipe — raw touch deltas so a mostly-vertical drag never pages. imgRef is the
+  // photo's frame (ZoomableImage's wrapper): the finger-follow slides the frame,
+  // the zoom transforms the picture inside it, and neither touches the other.
   const touchRef = useRef(null);
   const imgRef = useRef(null);
+  const dropDrag = () => { touchRef.current = null; const f = imgRef.current; if (f) { f.style.transform = ""; f.style.opacity = ""; } };
   const onTouchStart = (e) => {
     const t = e.touches && e.touches[0];
     if (t) touchRef.current = { x: t.clientX, y: t.clientY, dx: 0, dy: 0 };
@@ -152,6 +158,7 @@ export default function PhotoLightbox({ photos, index, onClose, onIndexChange, t
           right: "max(12px, env(safe-area-inset-right))",
           background: "rgba(255,255,255,0.14)",
           color: "#fff",
+          zIndex: 6,   // above a zoomed photo (ZoomableImage lifts to 5 while zoomed)
         }}
       >
         <X className="w-5 h-5" strokeWidth={2.2} />
@@ -161,7 +168,7 @@ export default function PhotoLightbox({ photos, index, onClose, onIndexChange, t
           onClick={(e) => { e.stopPropagation(); step(-1); }}
           aria-label="Previous photo"
           className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center"
-          style={{ background: "rgba(255,255,255,0.14)", color: "#fff" }}
+          style={{ background: "rgba(255,255,255,0.14)", color: "#fff", zIndex: 6 }}
         >
           <ChevronLeft className="w-5 h-5" strokeWidth={2.2} />
         </button>
@@ -171,7 +178,7 @@ export default function PhotoLightbox({ photos, index, onClose, onIndexChange, t
           onClick={(e) => { e.stopPropagation(); step(1); }}
           aria-label="Next photo"
           className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center"
-          style={{ background: "rgba(255,255,255,0.14)", color: "#fff" }}
+          style={{ background: "rgba(255,255,255,0.14)", color: "#fff", zIndex: 6 }}
         >
           <ChevronRight className="w-5 h-5" strokeWidth={2.2} />
         </button>
@@ -183,12 +190,14 @@ export default function PhotoLightbox({ photos, index, onClose, onIndexChange, t
           </div>
         </div>
       ) : (
-        <img
+        <ZoomableImage
           ref={imgRef}
           key={showSrc || idx}
           src={showSrc}
           alt={photo.caption || title || ""}
-          className="gs-lb-img max-w-full flex-1 min-h-0 object-contain"
+          className="gs-lb-img w-full flex-1 min-h-0 flex items-center justify-center"
+          imgClassName="max-w-full max-h-full object-contain"
+          onCapture={dropDrag}
           onClick={(e) => e.stopPropagation()}
           onError={() => {
             // Climb once: hd→src, then src→placeholder.
