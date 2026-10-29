@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-10-25 (Home as swipeable pages, Mailbox Sent, group mail, events: decided directions + open decisions)
+Last updated: 2026-10-28 (what stamps the passport; City Cards for every nearby service except Things to Do)
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -30,6 +30,33 @@ Nuitée lane generally. Do not build on them without a new founder decision.
 docs/research/ and folded into one page — https://claude.ai/artifact/6q3WsLiBQw3qNq5j5pFomC
 (the sized build queue, the ten founder decisions, first five partnership deals, LA28
 timeline, the first-party data rules). It supersedes the raw list below as the working plan.
+
+## What stamps the Virtual Passport — founder decision 2026-10-28 (City Cards)
+
+**Decided (founder, 2026-10-28):** the Virtual Passport takes ONLY these stamps: Things to Do
+attractions ("I was here", typographic or official art), airports (arrivals), cities, countries at a
+border crossing, collectible stamps (the City Boards stamp and any future one), and the virtual art
+stamps (the commissioned art). **No nearby-service stamp ever lands in the passport again:**
+restaurants, cafés, shops and malls, convenience stores, money exchange, ATMs and restrooms are out.
+The 2026-10-28 "I was here" on the Eat, Coffee, Shopping and Convenience cards (kind 'city', entity
+places:<gid>, typographic) is to be retired; the stamps it already minted convert into City Card
+punches, never deleted.
+
+**City Cards — to build (realistic mockup https://claude.ai/artifact/BXGjgjt1bmzy15mGWoQdM8; the
+founder's ChatGPT "Local Finds Card" boards are the brief):** one card per city with ten circles. A
+restaurant, café, shop, mall or convenience store punches it with today's GPS proof — the card's
+button replaces "I was here" on those cards. Every business prints a TYPOGRAPHIC placeholder stamp
+(its name, its category word, the category's ink) until it partners with Globeskimmers financially
+and contractually; then its own stamp art replaces the placeholder on every card it has punched.
+Cards are shareable (a story card, like a stamp) and carry the four privacy words, capped by the
+passport; friends see them on the profile folder and in Home news. A full card earns ONE collectible
+stamp ("Los Angeles Regular"), which goes in the passport with the other collectibles per the list
+above (ChatGPT's mockup kept it out of the passport in a "Local Finds Collection" — founder to
+confirm which). **Placement:** (1) the passport folder on the Profile gets a CITY CARDS pocket under
+"Where I've been" — the home; (2) each City Board page shows the viewer's own card and which friends
+are already Regulars; (3) the nearby cards are where you punch. **Open:** whether ATMs and restrooms
+punch (Claude: no — nobody collects a restroom), the card's name ("City Card" here; ChatGPT wrote
+"Local Finds Card"), ten punches or fewer, what a partner pays for its own stamp.
 
 **Founder call, 2026-09-29 (late):** NO dish stamps inside the passport — the passport is
 places only ("a passport isn't a place to collect food"). Food sharing is wanted, big, but
