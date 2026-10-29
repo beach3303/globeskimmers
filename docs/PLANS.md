@@ -43,20 +43,26 @@ places:<gid>, typographic) is to be retired; the stamps it already minted conver
 punches, never deleted.
 
 **City Cards — to build (realistic mockup https://claude.ai/artifact/BXGjgjt1bmzy15mGWoQdM8; the
-founder's ChatGPT "Local Finds Card" boards are the brief):** one card per city with ten circles. A
-restaurant, café, shop, mall or convenience store punches it with today's GPS proof — the card's
-button replaces "I was here" on those cards. Every business prints a TYPOGRAPHIC placeholder stamp
-(its name, its category word, the category's ink) until it partners with Globeskimmers financially
-and contractually; then its own stamp art replaces the placeholder on every card it has punched.
+founder's ChatGPT "Local Finds Card" boards are the brief):** one card per city with ten slots.
+**No punches (founder, 2026-10-28 late: "i dont like punches").** A restaurant, café, shop, mall,
+market or convenience store STAMPS the card with today's GPS proof — the card's button replaces
+"I was here" on those cards. Each stamp is the founder's CATEGORY SEAL (the PNGs she sent:
+Restaurant ×2, Coffee Shop ×2, Convenience Store ×2, Market ×2; a standalone Shopping Mall seal is
+still needed — the mockup cuts two from her ChatGPT card) with the BUSINESS NAME and the DATE of the
+visit printed in type under it, in the category's ink — the placeholder until the business partners
+with Globeskimmers financially and contractually; then its own stamp art replaces the seal on every
+card it has stamped. The seals ship in the app (R2 or the bundle), the words come from the row.
 Cards are shareable (a story card, like a stamp) and carry the four privacy words, capped by the
-passport; friends see them on the profile folder and in Home news. A full card earns ONE collectible
-stamp ("Los Angeles Regular"), which goes in the passport with the other collectibles per the list
-above (ChatGPT's mockup kept it out of the passport in a "Local Finds Collection" — founder to
-confirm which). **Placement:** (1) the passport folder on the Profile gets a CITY CARDS pocket under
-"Where I've been" — the home; (2) each City Board page shows the viewer's own card and which friends
-are already Regulars; (3) the nearby cards are where you punch. **Open:** whether ATMs and restrooms
-punch (Claude: no — nobody collects a restroom), the card's name ("City Card" here; ChatGPT wrote
-"Local Finds Card"), ten punches or fewer, what a partner pays for its own stamp.
+passport; friends see them on the profile folder and in Home news. **Ten stamps completes the card
+and that is all: the Virtual Passport is NOT stamped** (founder, 2026-10-28 late: "once we reach 10
+we dont stamp virtual passport") — the card gets its COMPLETE mark and stays in City Cards.
+**Placement:** (1) the passport folder on the Profile gets a CITY CARDS pocket under "Where I've
+been" — the home; (2) each City Board page shows the viewer's own card and which friends have
+finished theirs; (3) the nearby cards are where you stamp. Vocabulary everywhere: stamp / stamped,
+never punch. **Open:** whether ATMs and restrooms stamp (Claude: no — nobody collects a restroom),
+the card's name ("City Card" here; ChatGPT wrote "Local Finds Card"), what happens after a tenth
+stamp in a city a traveler keeps visiting (a second card? Claude suggests yes, numbered), what a
+partner pays for its own stamp.
 
 **Founder call, 2026-09-29 (late):** NO dish stamps inside the passport — the passport is
 places only ("a passport isn't a place to collect food"). Food sharing is wanted, big, but
