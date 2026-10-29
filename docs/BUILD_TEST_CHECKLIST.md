@@ -3534,3 +3534,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - **Phone test after OTA:** Home → City Cards → a card → tap a stamp → the big type-only stamp, the visits line, the
   small category stamp, Share this stamp; swipe down closes the stamp only; a friend's card on their Traveler page
   opens stamps without Share.
+
+## 2026-10-29 — OTA 1.0.2610291325 on the production channel (main 4ee573e: tap a stamp)
+
+- Founder ran `npm run ota` 2026-10-29 13:25 UTC; `capgo channel list` shows production = 1.0.2610291325, iOS + Android.
+  Phones pick it up on the next launch (one open to download, the next to apply).
