@@ -13,7 +13,7 @@ import { matchesQuery } from "@/lib/searchText";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import TravelerDishes from "@/components/finder/TravelerDishes";
 import { useTravelerPhotos, withTravelerPhotos } from "@/lib/travelerPhotos";
-import { HereStamp } from "@/components/attraction/AttractionExtras";
+import CityCardStampButton from "@/components/citycards/CityCardStampButton";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import { Coffee as CoffeeIcon, SlidersHorizontal, Sparkles, Clock, Laptop, MapPin, ExternalLink, X } from "lucide-react";
 import { WORLD, fs } from "@/components/redesign/constants";
@@ -326,7 +326,7 @@ function CoffeeCard({ shop, index, onShowOnMap, userLat, userLng, formatDistance
           <AIDetailsSection world="coffee" placeId={placeId} placeName={name} lat={shop.lat} lng={shop.lng} page="CoffeeFinder" kind="coffee"/>
           <TravelerDishes world="coffee" variant="row" place={{id:placeId,name,lat:shop.lat,lng:shop.lng}} kind="coffee"/>
         </QuietRows>
-        <HereStamp place={{ id: placeId, name, lat: shop.lat, lng: shop.lng, types: shop.types, formattedAddress: shop.formattedAddress || shop.address }} formatDistance={formatDistance}/>
+        <CityCardStampButton finder="coffee" place={{ id: placeId, name, lat: shop.lat, lng: shop.lng, types: shop.types, formattedAddress: shop.formattedAddress || shop.address }} formatDistance={formatDistance}/>
         <ActionRow world="coffee" name={name} onDirections={()=>setShowDir(true)} onMap={()=>onShowOnMap?.(index)} phone={phone}
           onMore={hasMore?()=>setExpanded(e=>!e):undefined} moreExpanded={hasMore?expanded:undefined} moreControls={hasMore?moreId:undefined}
           style={{marginTop:4}}/>

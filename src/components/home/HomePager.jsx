@@ -1,6 +1,7 @@
 // HomePager — Home as six pages (founder's decision sheet, 2026-10-25: "Six pages, two rows of tabs",
 // "tabs should be tappable and pages should be swipeable"): two rows of folder tabs in the Home tabs'
-// airmail blue — Nearby · Stamps · Virtual Passport / Arrivals · City Board · My Profile — that stay
+// airmail blue — Nearby · Stamps · Virtual Passport / Arrivals · City Board · City Cards (which took
+// My Profile's tab on 2026-10-28: the Profile has its own button in the bottom bar) — that stay
 // stuck under the app banner, and the pages under them. A tap on a tab opens its page; a sideways
 // swipe slides to the page beside it, in reading order. A page mounts the first time it's opened and
 // stays mounted (its state kept); one not opened yet slides in as a quiet placeholder.
@@ -29,7 +30,7 @@ export const HOME_PAGES = [
   { id: "passport", label: "Virtual Passport" },
   { id: "arrivals", label: "Arrivals" },
   { id: "cityboard", label: "City Board" },
-  { id: "profile", label: "My Profile" },
+  { id: "citycards", label: "City Cards" },
 ];
 const KEY = "gs_home_page_v1";
 const BLUE = NEUTRAL.airmailBlue;

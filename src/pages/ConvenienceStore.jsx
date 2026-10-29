@@ -30,6 +30,7 @@ import Guestbook from "@/components/Guestbook";
 import FinderHeader, { finderColumnStyle } from "@/components/finder/FinderHeader";
 import { WorldChip, ChipRow, ResultLine } from "@/components/finder/FinderControls";
 import { WorldCard, worldGrid, NumberMark, FactsLine, WorldTag, TagRow, CardKicker, CardName, QuietRow, QuietRows, QuietPanel, ActionRow, WorldSkeleton } from "@/components/finder/FinderCard";
+import CityCardStampButton from "@/components/citycards/CityCardStampButton";
 import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import FilterSheet, { FilterGroupLabel, FilterToggleRow } from "@/components/finder/FilterSheet";
@@ -239,6 +240,10 @@ function StoreCard({ store, n, isLocal, formatDistance, onDirections, onShowOnMa
             {guestbookOpen ? <Guestbook entityType="store" entityId={placeId} entityName={s.name} world="convenience" /> : null}
           </QuietPanel>
         </QuietRows>
+        {/* The City Card stamp (founder, 2026-10-28): a convenience store stamps the city's card. */}
+        <div style={{ marginTop: 12 }}>
+          <CityCardStampButton finder="convenience" place={{ id: placeId, name: s.name, lat: s.lat, lng: s.lng, types: s.types, formattedAddress: s.formattedAddress || s.address }} formatDistance={formatDistance} />
+        </div>
         <ActionRow world="convenience" name={s.name} onDirections={() => onDirections(s)} onMap={onShowOnMap} phone={s.phone}
           onMore={() => setExpanded((e) => !e)} moreIcon moreExpanded={expanded} moreControls={moreId} style={{ marginTop: 4 }} />
         {expanded && (

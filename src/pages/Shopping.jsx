@@ -33,7 +33,7 @@ import TravelerDishes from "@/components/finder/TravelerDishes";
 import Guestbook from "@/components/Guestbook";
 import { useTravelerPhotos, withTravelerPhotos } from "@/lib/travelerPhotos";
 import PhotoOrIcon from "@/components/finder/PhotoOrIcon";
-import { HereStamp } from "@/components/attraction/AttractionExtras";
+import CityCardStampButton from "@/components/citycards/CityCardStampButton";
 import FinderEmptyState from "@/components/finder/FinderEmptyState";
 import FilterSheet, { FilterGroupLabel, FilterToggleRow } from "@/components/finder/FilterSheet";
 import { SwingTag } from "@/components/finder/motifs";
@@ -190,9 +190,9 @@ function ShopCard({ p, n, isLocal, formatDistance, onDirections, onShowOnMap, hi
             {guestbookOpen ? <Guestbook entityType="store" entityId={placeId} entityName={name} world="shopping" /> : null}
           </QuietPanel>
         </QuietRows>
-        {/* On every card (founder, 2026-10-26: "also add shopping places card"). */}
+        {/* The City Card stamp (founder, 2026-10-28): a shop stamps the city's card, never the passport. */}
         <div style={{ marginTop: 12 }}>
-          <HereStamp place={{ id: placeId, name, lat: p.lat, lng: p.lng, types: p.types, formattedAddress: p.formattedAddress }} formatDistance={formatDistance} />
+          <CityCardStampButton finder="shopping" place={{ id: placeId, name, lat: p.lat, lng: p.lng, types: p.types, formattedAddress: p.formattedAddress }} formatDistance={formatDistance} />
         </div>
         <ActionRow world="shopping" name={name} onDirections={() => onDirections(p)} onMap={onShowOnMap} phone={phone}
           onMore={hasMore ? () => setExpanded((e) => !e) : undefined} moreIcon moreExpanded={hasMore ? expanded : undefined} moreControls={hasMore ? moreId : undefined}

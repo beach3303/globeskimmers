@@ -28,7 +28,7 @@ import { logSearch, logZeroResults } from "@/lib/logSearch";
 import AIDetailsSection from "@/components/AIDetailsSection";
 import TravelerDishes, { TravelerPhotoCredit } from "@/components/finder/TravelerDishes";
 import { useTravelerPhotos, withTravelerPhotos } from "@/lib/travelerPhotos";
-import { HereStamp } from "@/components/attraction/AttractionExtras";
+import CityCardStampButton from "@/components/citycards/CityCardStampButton";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
 import MapAppSelector from "@/components/MapAppSelector";
 import { MapPin, Clock, Moon, SlidersHorizontal, SearchX, AlertCircle, Coffee, Target, Check, Link2, Utensils, ExternalLink, X } from "lucide-react";
@@ -705,7 +705,7 @@ function RestaurantCard({ restaurant, rank, onDirections, onShowOnMap, formatDis
           <AIDetailsSection world="eat" placeId={placeId} placeName={name} lat={restaurant.lat} lng={restaurant.lng} page="PlacesToEat" kind="restaurant"/>
           <TravelerDishes world="eat" variant="row" place={{id:placeId,name,lat:restaurant.lat,lng:restaurant.lng}} kind="restaurant"/>
         </QuietRows>
-        <HereStamp place={{id:placeId,name,lat:restaurant.lat,lng:restaurant.lng,types:restaurant.types,formattedAddress:restaurant.formattedAddress||restaurant.address}} formatDistance={formatDistance}/>
+        <CityCardStampButton finder="eat" place={{id:placeId,name,lat:restaurant.lat,lng:restaurant.lng,types:restaurant.types,formattedAddress:restaurant.formattedAddress||restaurant.address}} formatDistance={formatDistance}/>
         <ActionRow world="eat" name={name} onDirections={onDirections} onMap={onShowOnMap} phone={phone}
           onMore={hasMore?()=>setExpanded(e=>!e):undefined} moreExpanded={hasMore?expanded:undefined} moreControls={hasMore?moreId:undefined}
           style={{marginTop:4}}/>

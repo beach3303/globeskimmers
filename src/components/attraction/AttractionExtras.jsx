@@ -46,7 +46,7 @@ const idKind = (id) => {
 };
 
 // "6100 Woodley Ave, Van Nuys, CA 91406, USA" → { city, region, country }.
-function placeParts(address) {
+export function placeParts(address) {
   const parts = String(address || "").split(",").map((x) => x.trim()).filter(Boolean);
   if (parts.length < 2) return { city: null, region: null, country: null };
   const country = parts[parts.length - 1];
@@ -334,8 +334,9 @@ export function StampHereButton({ a, link: resolved, formatDistance = undefined,
   );
 }
 
-// "I was here, get the stamp" on every place card — restaurants, cafés, shops, things to do
-// (founder, 2026-10-26: "place and enable … on all … cards"). It used to show only while a
+// "I was here, get the stamp" on Things to Do cards (founder, 2026-10-26: "place and enable … on
+// all … cards"; since 2026-10-28 restaurants, cafés, shops and convenience stores stamp the City
+// Card instead — src/components/citycards/CityCardStampButton.jsx — never the passport). It used to show only while a
 // live GPS fix from this app run sat inside the place, so a phone that reopened on its saved
 // location never saw it, even standing at the counter. The proof is the tap: StampHereButton
 // takes fresh readings then and the worker measures them against the place. `stamp` is the

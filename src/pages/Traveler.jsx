@@ -31,6 +31,7 @@ import VirtualItems from "@/components/profile/VirtualItems";
 import Luggage from "@/components/passport/Luggage";
 import PassportFolder from "@/components/passport/PassportFolder";
 import PhotoPackets from "@/components/passport/PhotoPackets";
+import CityCardsPage from "@/components/citycards/CityCardsPage";
 import CircleOrbit, { CircleLegend, groupsFromKnown } from "@/components/social/CircleOrbit";
 import { TwoRingMark } from "@/components/social/SocialMarks";
 import TravelerActions from "@/components/social/TravelerActions";
@@ -284,6 +285,10 @@ function TravelerWorld() {
             blotter={blotter} onBlotterChanged={refreshBlotter}
             onOpenDoor={worldSlug ? () => navigate(`${createPageUrl("Passport")}?view_slug=${encodeURIComponent(worldSlug)}`) : undefined}
             style={{ marginTop: GAP }} />
+        ) : null}
+        {/* Their City Cards at my level (2026-10-28): the cards the worker sent, none when none. */}
+        {Array.isArray(world.city_cards) && world.city_cards.length ? (
+          <CityCardsPage cards={world.city_cards} owner={false} first={first} style={{ marginTop: GAP }} />
         ) : null}
         {world.gear ? (
           <VirtualItems readOnly gear={world.gear.gear} buddies={world.gear.buddies} layout={world.gear.layout}

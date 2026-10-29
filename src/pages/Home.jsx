@@ -43,7 +43,7 @@ import CityBoardPage from "@/components/home/CityBoardPage";
 import HomePager, { initialHomePage, rememberHomePage } from "@/components/home/HomePager";
 import ArrivalsPage from "@/components/home/ArrivalsPage";
 import PassportPage from "@/pages/Passport";
-import ProfilePage from "@/pages/Profile";
+import CityCardsPage from "@/components/citycards/CityCardsPage";
 import { openAttraction } from "@/lib/openAttraction";
 
 // Translation mapping for greetings — shown next to the mono "Hello" kicker
@@ -659,7 +659,7 @@ export default function HomePage() {
     if (id === 'passport') return <PassportPage embedded />;
     if (id === 'arrivals') return <ArrivalsPage wide={isTablet} />;
     if (id === 'cityboard') return <CityBoardPage city={activeLocation?.address?.city} country={activeLocation?.address?.country} region={activeLocation?.address?.state} />;
-    if (id === 'profile') return <ProfilePage embedded />;
+    if (id === 'citycards') return <CityCardsPage embedded />;
     return null;
   };
 
