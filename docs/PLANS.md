@@ -65,6 +65,9 @@ founder's ChatGPT "Local Finds Card" boards are the brief):**
   Shopping or Convenience?). This is the placeholder until a business partners with Globeskimmers
   financially and contractually; then its own stamp art replaces the category stamp on every card
   it has stamped. The artwork ships in the app (R2 or the bundle); the words come from the row.
+  **The partner plan is internal (founder, 2026-10-28 late: "we can hide our plans from the
+  public"): nothing in the app says a business can get its own stamp, no "their own stamp" slot, no
+  "coming soon" — a partner's art simply appears when it lands.**
 - Cards are shareable (a story card, like a stamp) and carry the four privacy words, capped by the
   passport; friends see them on the profile folder and in Home news.
 - **Ten stamps completes the card and that is all: the Virtual Passport is NOT stamped** (founder:
