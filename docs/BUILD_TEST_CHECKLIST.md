@@ -3577,3 +3577,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   big + pinch), 389f090 (pinch to zoom) and everything on main up to 4ee573e.
 - **Open:** the six commits behind it are still on stamping-v2 only — phones run code that isn't on main until the
   founder says "push". Push them before any other change goes to main.
+
+## 2026-10-29 — PUSHED: pinch to zoom + postcard photos (main d0a263b)
+
+- 4ee573e → d0a263b: 389f090 (ZoomableImage in the lightbox + board viewer), 59c7391 (postcard photos open big and
+  zoom) + five checklist notes. App and docs only — no deploy workflow. Main now matches OTA 1.0.2610291719.
