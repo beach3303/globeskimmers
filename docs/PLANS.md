@@ -73,9 +73,11 @@ founder's ChatGPT "Local Finds Card" boards are the brief):**
 - **Ten stamps completes the card and that is all: the Virtual Passport is NOT stamped** (founder:
   "once we reach 10 we dont stamp virtual passport") — the card gets its COMPLETE mark and stays in
   City Cards; no collectible either.
-- **Placement:** (1) the passport folder on the Profile gets a CITY CARDS pocket under "Where I've
-  been" — the home; (2) each City Board page shows the viewer's own card and which friends have
-  finished theirs; (3) the four finders' cards are where you stamp.
+- **Placement (built 2026-10-28):** (1) Home's CITY CARDS tab — it took My Profile's tab; the
+  Profile keeps its bottom-bar button — is the home; (2) the four finders' cards are where you
+  stamp; (3) a visited Traveler page lists their cards at your level. **No card on a City Board
+  page** (founder, 2026-10-28: "remove city board row with city card inside city board") — the
+  board stays the public wall.
 - Vocabulary everywhere: stamp / stamped / category stamp. Never punch, never seal.
 - **Open:** the card's name ("City Card" here; ChatGPT wrote "Local Finds Card"); what a partner
   pays for its own stamp; the Market artwork's finder; a Shopping category stamp from the founder.
