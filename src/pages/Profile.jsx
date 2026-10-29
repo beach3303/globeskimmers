@@ -34,6 +34,7 @@ import Luggage from "@/components/passport/Luggage";
 import PassportFolder from "@/components/passport/PassportFolder";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import ContributeAlbum from "@/components/passport/ContributeAlbum";
+import BoardPostcards from "@/components/passport/BoardPostcards";
 import InviteButton from "@/components/passport/InviteButton";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
 import { initialOf } from "@/components/social/SocialMarks";
@@ -287,7 +288,7 @@ export default function ProfilePage({ embedded = false } = {}) {
             {stamps ? (
               <div style={{ marginTop: GAP }}>
                 <PhotoPackets stamps={stamps} title="Photo albums" owner albums={albums} onChanged={reloadStamps} className=""
-                  corner={socialTierReady && !teen ? <ContributeAlbum /> : null} />
+                  corner={socialTierReady && !teen ? <div style={{ display: "grid", gap: 14 }}><ContributeAlbum /><BoardPostcards /></div> : null} />
               </div>
             ) : null}
             {!stamps ? (

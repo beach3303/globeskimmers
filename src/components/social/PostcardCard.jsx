@@ -48,7 +48,8 @@ const handleOf = (v) => String((v && typeof v === "object" ? v.handle : v) ?? ""
 // its ••• (the caller's TravelerSheet), so each action has one place on the card.
 // onFollow (2026-10-25): mail from someone you don't follow gets "+ Follow" (FollowSender).
 // onDelete (2026-10-25): a card addressed to me gets a trash button beside Reply (DeleteConfirm asks once).
-export default function PostcardCard({ row, me = undefined, meName = null, onReport = undefined, onKeep = undefined, onReply = undefined, onFollow = undefined, onDelete = undefined, className = undefined, style = undefined }) {
+// deleteLine (2026-10-28): what Delete says it does when it isn't the Mailbox (a card on a board).
+export default function PostcardCard({ row, me = undefined, meName = null, onReport = undefined, onKeep = undefined, onReply = undefined, onFollow = undefined, onDelete = undefined, deleteLine = undefined, className = undefined, style = undefined }) {
   const [deleting, setDeleting] = useState(false);
   const { socialTier } = useAuth();
   if (!row || typeof row !== "object") return null;
@@ -149,7 +150,17 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
               ) : null}
               {typeof onDelete === "function" ? <TrashButton onClick={() => setDeleting((v) => !v)} label="Delete this postcard" /> : null}
             </div>
-            {deleting ? <DeleteConfirm what="postcard" name={from} onDelete={() => onDelete(row)} onCancel={() => setDeleting(false)} style={{ marginTop: 8 }} /> : null}
+            {deleting ? <DeleteConfirm what="postcard" name={from} line={deleteLine} onDelete={() => onDelete(row)} onCancel={() => setDeleting(false)} style={{ marginTop: 8 }} /> : null}
+          </div>
+        ) : null}
+        {/* My own card on a City Board (founder, 2026-10-28): Delete takes it off the board for good. */}
+        {!toMe && typeof onDelete === "function" ? (
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${DIVIDE}` }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span style={{ fontSize: fs(12.5), color: NEUTRAL.ink2 }}>Your card on this board</span>
+              <TrashButton onClick={() => setDeleting((v) => !v)} label="Delete this postcard" />
+            </div>
+            {deleting ? <DeleteConfirm what="postcard" name={from} line={deleteLine} onDelete={() => onDelete(row)} onCancel={() => setDeleting(false)} style={{ marginTop: 8 }} /> : null}
           </div>
         ) : null}
       </div>

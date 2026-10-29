@@ -17,7 +17,9 @@ export function TrashButton({ onClick, label }) {
   );
 }
 
-export default function DeleteConfirm({ what = "postcard", name = null, onDelete, onCancel, style = undefined }) {
+// line: the sentence after the question, when the default ("It leaves your Mailbox…") isn't true —
+// a card on a City Board says it comes off the board for good (2026-10-28).
+export default function DeleteConfirm({ what = "postcard", name = null, onDelete, onCancel, style = undefined, line = undefined }) {
   const [busy, setBusy] = useState(false);
   const go = async () => {
     if (busy) return;
@@ -28,7 +30,7 @@ export default function DeleteConfirm({ what = "postcard", name = null, onDelete
   return (
     <div role="group" aria-label={`Delete this ${what}?`} style={{ padding: 10, borderRadius: 12, background: NEUTRAL.airmail, border: `1px solid ${NEUTRAL.airmailLine}`, ...style }}>
       <p style={{ margin: 0, fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}>
-        <b style={{ color: NEUTRAL.ink }}>Delete this {what}?</b> {what === "telegram" ? "It’s erased for good." : "It leaves your Mailbox."} {name ? `${name} isn’t told.` : "The sender isn’t told."}
+        <b style={{ color: NEUTRAL.ink }}>Delete this {what}?</b> {line ? line : <>{what === "telegram" ? "It’s erased for good." : "It leaves your Mailbox."} {name ? `${name} isn’t told.` : "The sender isn’t told."}</>}
       </p>
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
         <button type="button" onClick={go} aria-busy={busy || undefined}

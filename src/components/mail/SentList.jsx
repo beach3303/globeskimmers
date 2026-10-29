@@ -18,6 +18,7 @@ import { workerMessage } from "@/components/social/FollowByHandle";
 import { TINK, TINK3, TYPE } from "@/components/telegram/TelegramPaper";
 import { inkColor } from "@/lib/telegram";
 import { hideAllSent, hideSent, sentMail } from "@/lib/sentMail";
+import { deleteBoardPostcard } from "@/lib/boardPostcards";
 
 const SERIF = "'Instrument Serif', Georgia, serif";
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
@@ -50,7 +51,12 @@ function statusOf(it) {
     if (tg && it.opened > 0) return { tone: "ok", icon: Check, text: `Opened in the app by ${it.opened}` };
     return { tone: "plain", icon: Link2, text: tg ? "Shared as a link · not opened yet" : "Shared as a link" };
   }
-  if (it.mode === "board") return { tone: "plain", icon: Mail, text: it.board?.city ? `On ${it.board.city}’s City Board` : "On a City Board" };
+  // A card on a city's, a state's or a country's board (2026-10-28).
+  if (it.mode === "board") {
+    const kind = it.board?.kind === "state" ? "state" : it.board?.kind === "country" ? "country" : "city";
+    const name = kind === "state" ? it.board?.region : kind === "country" ? it.board?.country : it.board?.city;
+    return { tone: "plain", icon: Mail, text: name ? `On ${name}’s ${kind === "city" ? "City" : kind === "state" ? "State" : "Country"} Board` : "On a City Board" };
+  }
   if (tg) {
     const n = (it.to || []).length;
     if (n <= 1) return it.opened ? { tone: "ok", icon: Check, text: "Opened" } : { tone: "plain", icon: Check, text: "Delivered" };
@@ -91,13 +97,15 @@ function SentItem({ it, onRemoved }) {
   const mode = MODE[it.mode] || "";
   const words = tg ? it.body : it.message;
   const to = it.mode === "email" ? "an email address" : it.mode === "link" ? "whoever you sent the link to" : it.mode === "board" || it.mode === "lost" ? null : it.mode === "followers" ? "everyone who followed you" : toLine(it.to);
+  // A card on a City Board (2026-10-28): Delete takes it off the board for good, not just out of Sent.
+  const board = it.mode === "board" && it.kind !== "telegram";
   const remove = async () => {
     if (busy) return;
     setBusy(true);
-    const r = await hideSent(it);
+    const r = board ? await deleteBoardPostcard(it.ids?.[0]) : await hideSent(it);
     setBusy(false);
     if (!r.ok) { showToast(workerMessage(r.error, "Couldn’t delete it. Try again."), "error"); return; }
-    showToast("Deleted from your Sent", "success");
+    showToast(board ? "Taken off the board" : "Deleted from your Sent", "success");
     onRemoved(it);
   };
   const Icon = st.icon;
@@ -137,7 +145,7 @@ function SentItem({ it, onRemoved }) {
 
       {asking ? (
         <div role="group" aria-label="Delete from Sent" style={{ marginTop: 10, padding: 10, borderRadius: 12, background: NEUTRAL.airmail, border: `1px solid ${NEUTRAL.airmailLine}` }}>
-          <p style={{ margin: 0, fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}><b style={{ color: NEUTRAL.ink }}>Delete it from your Sent?</b> {it.mode === "board" ? "It stays on the City Board." : it.mode === "link" ? "The link still works." : "They keep theirs."}</p>
+          <p style={{ margin: 0, fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}>{board ? <><b style={{ color: NEUTRAL.ink }}>Take it off the board?</b> It comes off for good, likes and comments too.</> : <><b style={{ color: NEUTRAL.ink }}>Delete it from your Sent?</b> {it.mode === "link" ? "The link still works." : "They keep theirs."}</>}</p>
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <button type="button" onClick={remove} aria-busy={busy || undefined}
               style={{ minHeight: 40, padding: "0 16px", borderRadius: 12, border: 0, background: NEUTRAL.stamp, color: NEUTRAL.white, font: "inherit", fontSize: fs(13.5), fontWeight: 600, cursor: "pointer" }}>{busy ? "Deleting…" : "Delete"}</button>
