@@ -3506,3 +3506,17 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
 - Workers run 40876173659. Verified live: /coffee/search "starbucks" at Santa Anita → 20 results, every one a named
   Starbucks, nearest first.
+
+## 2026-10-29 — COMMITTED, NOT pushed: City Cards — tap a stamp, see the type-only stamp big
+
+- Founder (2026-10-29) liked stamp design A (the passport's type-only stamp) but keeps the ten category stamps on
+  the card. Built her option 1: in the card sheet every stamped slot is a button; a tap opens CityStampDetail — the
+  business's TypographicStamp at 250 px (name, city, state, country, first day), "3 VISITS · OCT 24 – OCT 28, 2026",
+  the category stamp small with "Restaurant · stamp 1 on your card · First stamped … · back N times, last …", and
+  Share this stamp (owner only; visitors on a Traveler page get the sheet without Share). "TAP A STAMP TO SEE IT
+  BIG" under the card. No worker change — the rows already carry visited_on, visits, last_visited_on.
+- Option 2 (the place card's stamped panel showing the type-only stamp) is a mockup only, on the City Cards canvas
+  (boards 5 and 6) — not built unless the founder picks it.
+- Gates: eslint no-undef clean, build OK, boot-check OK. Screenshots: `Claude outputs/city-cards-8..10-*.png`.
+- **Phone test after OTA:** Home → City Cards → a card → tap Pink's → the big stamp, visits, Share; swipe down
+  closes the stamp sheet only, the card stays open.

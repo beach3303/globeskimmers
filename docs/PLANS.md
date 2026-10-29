@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-10-28 (what stamps the passport; City Cards for every nearby service except Things to Do)
+Last updated: 2026-10-29 (City Cards: tap a stamp → the type-only stamp big; the card keeps its category stamps)
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -88,6 +88,13 @@ founder's ChatGPT "Local Finds Card" boards are the brief):**
   next card. The place card remembers without a tap: "On your Los Angeles 2026 card · stamped
   Oct 24 · 3 visits" under the button (one read of the member's cards per finder page).
 - Vocabulary everywhere: stamp / stamped / category stamp. Never punch, never seal.
+- **Tap a stamp (founder, 2026-10-29: "i like A but … i also like to keep the 10 local stamps";
+  built 2026-10-29):** the card keeps its ten category stamps; a tap on any of them opens the
+  business's TYPE-ONLY stamp big (the passport's TypographicStamp — name, city, state, country,
+  first day), the visits ("3 VISITS · OCT 24 – OCT 28, 2026"), the category stamp small with
+  the facts, and Share this stamp (owner only). "Tap a stamp to see it big" under the card.
+  The other placement — the place card's stamped panel showing the type-only stamp instead of the
+  category stamp — is a mockup only (canvas boards 5 and 6), not built unless she picks it.
 - **Open:** the card's name ("City Card" here; ChatGPT wrote "Local Finds Card"); what a partner
   pays for its own stamp; the Market artwork's finder; a Shopping category stamp from the founder.
 
