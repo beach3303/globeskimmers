@@ -7359,7 +7359,7 @@ async function ttdPlaceTruth(env, entityId, origin) {
   const d = gid ? await ttdPlaceDetails(env, gid, origin) : null;
   const lat = Number(d?.latitude ?? d?.location?.latitude), lng = Number(d?.longitude ?? d?.location?.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { lat, lng, radius: ppStampRadius({ category: [d.primaryType, ...(d.types || [])].filter(Boolean).join(' ') }), shape: ppShapeFor(null, gid) || ppShapeNear(d.name, lat, lng), gid, name: d.name || null, types: [d.primaryType, ...(d.types || [])].filter(Boolean) };
+  return { lat, lng, radius: ppStampRadius({ category: [d.primaryType, ...(d.types || [])].filter(Boolean).join(' ') }), shape: ppShapeFor(null, gid) || ppShapeNear(d.name, lat, lng), gid, name: d.name || null, address: d.address || null, types: [d.primaryType, ...(d.types || [])].filter(Boolean) };
 }
 
 // POST /attractions/link { placeId, name, lat, lng } → { stamp: {id,…} | null }
@@ -21921,6 +21921,186 @@ async function handleAdminCollectibles(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// ── City Cards (founder, 2026-10-28) ────────────────────────────────────────
+// A restaurant, café, shop or convenience store never stamps the Virtual Passport: it stamps the
+// traveler's CITY CARD — one card per city per year, numbered, ten slots. A slot is a stamp: the
+// founder's category artwork (restaurant · coffee · shopping · convenience · market, two designs
+// each, shipped in the app) with the business's name and the date. The tap is the proof, exactly
+// as "I was here" proves it: fresh GPS readings measured against the place's footprint. Ten
+// stamps complete a card and the next find there starts the next number; the passport is never
+// stamped. A business counts once per card. A card carries the four privacy words (unset reads
+// Friends), capped by the passport like everything else.
+const CC_SLOTS = 10;
+const CC_FINDER_CATEGORY = { eat: 'restaurant', coffee: 'coffee', shopping: 'shopping', convenience: 'convenience' };
+const CC_DESIGNS = 2;   // artworks per category in the app (src/lib/cityCards.js)
+const CC_MARKET_TYPES = new Set(['supermarket', 'grocery_store', 'grocery_or_supermarket', 'market', 'farmers_market', 'food_market', 'wholesaler', 'butcher_shop']);
+const CC_MARKET_NAME = /(?<![\p{L}\p{N}])(market|mercado|mercato|grocery|grocer|supermarket|farmers|palengke|bazaar|souk|hypermarket|produce)(?![\p{L}\p{N}])/iu;
+// A stamp's category: the finder's — except a market or grocer found in Shopping or Convenience,
+// which takes the Market artwork (founder, 2026-10-28: "go for it").
+function ccCategoryFor(finder, name, types) {
+  const base = CC_FINDER_CATEGORY[finder];
+  if (!base) return null;
+  if ((finder === 'shopping' || finder === 'convenience') && ((types || []).some((t) => CC_MARKET_TYPES.has(String(t))) || CC_MARKET_NAME.test(String(name || '')))) return 'market';
+  return base;
+}
+// A formatted address's city, region and country ("709 N La Brea Ave, Los Angeles, CA 90038, USA"),
+// the way the app reads one for a stamp.
+function ccAddressParts(address) {
+  const parts = String(address || '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (parts.length < 2) return { city: null, region: null, country: null };
+  const country = parts[parts.length - 1];
+  const region = parts.length >= 3 ? parts[parts.length - 2].replace(/\s*\d[\d\s-]*$/, '').trim() || null : null;
+  const city = parts.length >= 3 ? parts[parts.length - 3] : parts[0];
+  return { city, region, country };
+}
+// Which of the category's artworks a business prints — fixed by its id, so it never changes.
+function ccDesignFor(placeId) { let h = 0; const s = String(placeId || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return (h % CC_DESIGNS) + 1; }
+const ccStampRow = (r) => ({ id: r.id, slot: r.slot, place_id: r.place_id, name: r.name, category: r.category, design: r.design, visited_on: r.visited_on, created_at: r.created_at });
+const ccCardRow = (c, stamps, mine = true) => ({
+  id: c.id, key: c.board_key, city: c.city, region: c.region || null, country: c.country, year: c.year, no: c.no, count: c.stamps, slots: CC_SLOTS,
+  completed_at: c.completed_at || null, ...(mine ? { visibility: c.visibility || null } : {}), created_at: c.created_at, updated_at: c.updated_at,
+  stamps: (stamps || []).map(ccStampRow),
+});
+// A member's cards with their stamps, newest first. lvl is the viewer's level (3 = the owner):
+// a viewer gets the cards their level allows and never learns a card's level.
+async function ccCardsFor(env, userId, lvl = 3) {
+  const q = await gbRest(env, `city_cards?user_id=eq.${userId}&order=updated_at.desc&limit=200&select=*`, {});
+  if (!q.ok) return q.status === 404 ? { cards: [], unavailable: true } : null;
+  let cards = await q.json();
+  if (lvl < 3) cards = cards.filter((c) => lvl >= (PP_TIER_NEED[c.visibility || 'inner'] ?? 2));
+  if (!cards.length) return { cards: [] };
+  const sq = await gbRest(env, `city_card_stamps?card_id=in.(${cards.map((c) => c.id).join(',')})&order=slot.asc&select=*`, {});
+  const by = {};
+  for (const s of (sq.ok ? await sq.json() : [])) (by[s.card_id] = by[s.card_id] || []).push(s);
+  return { cards: cards.map((c) => ccCardRow(c, by[c.id], lvl >= 3)) };
+}
+
+// POST /city-cards/stamp { finder: 'eat'|'coffee'|'shopping'|'convenience', place: { id, name, types }, city, region, country, cc, visited_on, fix: { lat, lng, acc } }
+// → { ok, card, stamp, completed, already } · 409 { error, code: 'not_here' (distance_m) | 'proof_needed' | 'unlocatable' | 'unconfirmed' }
+async function handleCityCardStamp(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in to stamp your city card' }, 401);
+    const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (sp === undefined) return gbAgeUnknownResp();
+    if (gbUnderAge(sp)) return gbUnderAgeResp();
+    if (gbNeedsConfirm(sp)) return gbConfirmResp();
+    const b = await request.json().catch(() => ({}));
+    const finder = String(b.finder || '').toLowerCase();
+    if (!CC_FINDER_CATEGORY[finder]) return jsonResponse({ error: 'Which finder?' }, 400);
+    const place = b.place && typeof b.place === 'object' ? b.place : {};
+    const name = String(place.name || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+    if (!name) return jsonResponse({ error: 'name required' }, 400);
+    const guard = await gbPostGuard(env, `cc:${user.id}`);
+    if (guard) return guard;
+    const raw = String(place.id || '');
+    const k0 = ttdIdKind(raw);
+    const entityId = k0 === 'google' ? `places:${raw}` : k0 === 'owned' ? `owned:${raw}` : k0 === 'tagged' ? raw : null;
+    if (!entityId) return jsonResponse({ error: 'We can’t place this business on the map yet', code: 'unlocatable' }, 409);
+    // The proof: fresh readings measured against the place, as "I was here" measures them.
+    const fix = b.fix && typeof b.fix === 'object' ? { lat: Number(b.fix.lat), lng: Number(b.fix.lng), acc: Number.isFinite(+b.fix.acc) ? +b.fix.acc : null } : null;
+    if (!fix || !Number.isFinite(fix.lat) || !Number.isFinite(fix.lng)) return jsonResponse({ error: 'Turn on location for GlobeSkimmers, then try again from the place', code: 'proof_needed' }, 409);
+    const origin = new URL(request.url).origin;
+    const truth = await ttdPlaceTruth(env, entityId, origin);
+    if (!truth) return jsonResponse({ error: 'We can’t place this business on the map yet', code: 'unlocatable' }, 409);
+    // The card's city: the words the card showed, else the place's own address (a finder card often
+    // carries only the street), normalised like a City Board's (a US city carries its state).
+    const fromAddr = ccAddressParts(truth.address);
+    const city = String(b.city || fromAddr.city || '').trim().slice(0, 60), region = String(b.region || fromAddr.region || '').trim().slice(0, 60) || null, country = String(b.country || fromAddr.country || '').trim().slice(0, 60);
+    const board = city && country ? pcBoardOf({ kind: 'city', city, region, country }) : null;
+    if (!board) return jsonResponse({ error: 'We couldn’t tell which city this place is in — open it again and try once more', code: 'no_city' }, 400);
+    const slack = truth.shape?.inside_only ? 0 : Number.isFinite(fix.acc) && fix.acc >= 0 ? Math.min(fix.acc, 100) : 50;
+    const meters = truth.shape ? ppMetersToShape(truth.shape, fix.lat, fix.lng) : haversineMilesLoc(truth.lat, truth.lng, fix.lat, fix.lng) * 1609.34;
+    const reach = truth.shape ? truth.shape.buffer_m : truth.radius;
+    if (meters > reach + slack) {
+      if (ctx) ctx.waitUntil(gbLogEvent(env, 'city_card_refused', { code: 'not_here', finder, d: ppBand(meters, [50, 150, 500, 1500, 5000]) }));
+      return jsonResponse({ error: 'Your GPS doesn’t show you at this place yet — stamping opens when you’re here', code: 'not_here', distance_m: Math.round(meters) }, 409);
+    }
+    // A reading from another country than the connection's, unless that's home, isn't trusted (the passport's check).
+    const ipCC = String(request.headers.get('CF-IPCountry') || '').toUpperCase();
+    const claimCC = String(b.cc || ppCcForCountryName(board.country) || '').toUpperCase();
+    if (/^[A-Z]{2}$/.test(ipCC) && ipCC !== 'XX' && ipCC !== 'T1' && /^[A-Z]{2}$/.test(claimCC) && ipCC !== claimCC) {
+      let roamingHome = false;
+      try {
+        const pr = await gbRest(env, `profiles?id=eq.${user.id}&select=home_country`, { headers: { 'Accept-Profile': 'public' } });
+        const home = pr.ok ? (await pr.json())[0]?.home_country : null;
+        roamingHome = !!home && ppCcForCountryName(home) === ipCC;
+      } catch { /* a mismatch */ }
+      if (!roamingHome) return jsonResponse({ error: 'We couldn’t confirm your GPS reading — a VPN can cause this', code: 'unconfirmed' }, 409);
+    }
+    const stampName = String(truth.name || name).slice(0, 160);
+    const category = ccCategoryFor(finder, stampName, [...(truth.types || []), ...(Array.isArray(place.types) ? place.types : [])]);
+    const design = ccDesignFor(entityId);
+    const visitedOn = ppDate(b.visited_on) || new Date().toISOString().slice(0, 10);
+    const year = Number(visitedOn.slice(0, 4));
+    // The open card for this city and year — else the next number.
+    const cq = await gbRest(env, `city_cards?user_id=eq.${user.id}&board_key=eq.${encodeURIComponent(board.key)}&year=eq.${year}&order=no.desc&limit=1&select=*`, {});
+    if (cq.status === 404) return jsonResponse({ error: 'City cards open in a few minutes — try again shortly', code: 'unavailable' }, 503);
+    if (!cq.ok) return jsonResponse({ error: 'Couldn’t reach your cards — try again' }, 502);
+    const latest = (await cq.json())[0] || null;
+    let card = latest && !latest.completed_at ? latest : null;
+    if (!card) {
+      const ins = await gbRest(env, 'city_cards', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ user_id: user.id, board_key: board.key, city: board.city, region: board.region || null, country: board.country, year, no: latest ? Number(latest.no) + 1 : 1 }) });
+      if (!ins.ok) return jsonResponse({ error: 'Couldn’t start your card — try again' }, 502);
+      card = (await ins.json())[0];
+    }
+    // A business stamps a card once.
+    const sq = await gbRest(env, `city_card_stamps?card_id=eq.${card.id}&order=slot.asc&select=*`, {});
+    const stamps = sq.ok ? await sq.json() : [];
+    const had = stamps.find((s) => s.place_id === entityId);
+    if (had) return jsonResponse({ ok: true, already: true, card: ccCardRow(card, stamps), stamp: ccStampRow(had), completed: !!card.completed_at });
+    const slot = stamps.length + 1;
+    const sins = await gbRest(env, 'city_card_stamps', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ card_id: card.id, user_id: user.id, slot, place_id: entityId, name: stampName, category, design, visited_on: visitedOn }) });
+    if (!sins.ok) return jsonResponse({ error: 'Couldn’t stamp your card — try again' }, 502);
+    const stamp = (await sins.json())[0];
+    const completed = slot >= CC_SLOTS;
+    const now = new Date().toISOString();
+    const upd = await gbRest(env, `city_cards?id=eq.${card.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ stamps: slot, completed_at: completed ? now : null, updated_at: now }) });
+    const fresh = (upd.ok ? await upd.json() : [])[0] || { ...card, stamps: slot, completed_at: completed ? now : null, updated_at: now };
+    if (ctx) {
+      ctx.waitUntil(gbLogEvent(env, 'city_card_stamp', { category, finder, country: board.country, city: board.city, slot, completed }));
+      // The founder's bell: who, what, which card, how far along, and where they connected from.
+      ctx.waitUntil((async () => {
+        const { who, n } = await gbWhoLine(env, user);
+        await founderAlert(env, `📇 ${who} stamped ${stampName} on ${who === 'You' ? 'your' : 'their'} ${board.name} ${year} card (${slot}/${CC_SLOTS}${completed ? ' — complete!' : ''})${gbWhereLine(request)}`, 'bell', n ? { click: gbMemberLink(n) } : {});
+      })().catch(() => {}));
+    }
+    return jsonResponse({ ok: true, card: ccCardRow(fresh, [...stamps, stamp]), stamp: ccStampRow(stamp), completed });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /city-cards → { cards } — mine, newest first, with their stamps.
+async function handleCityCards(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const r = await ccCardsFor(env, user.id, 3);
+    if (!r) return jsonResponse({ error: 'Couldn’t load your cards — try again', cards: [] }, 502);
+    return jsonResponse(r);
+  } catch (e) { return jsonResponse({ error: e.message, cards: [] }, 500); }
+}
+
+// POST /city-cards/visibility { id, visibility } — one of the four words, as a stamp's.
+async function handleCityCardVisibility(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.id || '');
+    if (!BL_UUID.test(id)) return jsonResponse({ error: 'Not found' }, 404);
+    if (!PP_TIERS.includes(b.visibility)) return jsonResponse({ error: 'Pick who can see it' }, 400);
+    if (b.visibility === 'public' || b.visibility === 'followers') {
+      const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+      if (sp === undefined) return gbAgeUnknownResp();
+      if (sp?.social_tier === 'teen' || gbNeedsConfirm(sp)) return jsonResponse({ error: 'Sharing beyond friends opens at age 18', code: 'teen_hold' }, 403);
+    }
+    const w = await gbRest(env, `city_cards?id=eq.${id}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ visibility: b.visibility, updated_at: new Date().toISOString() }) });
+    const row = (w.ok ? await w.json() : [])[0];
+    if (!row) return jsonResponse({ error: 'Not found' }, 404);
+    return jsonResponse({ ok: true, visibility: row.visibility });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 // GET /board-photo/<id> — public while it hangs (reviewed, not taken down).
 async function handleBoardPhotoServe(request, env) {
   try {
@@ -22493,6 +22673,8 @@ async function handleSocialWorld(request, env, ctx) {
       gbRest(env, `user_follows?followee_id=eq.${sid}&status=eq.accepted&select=follower_id&limit=2000`, { headers: { Prefer: 'count=exact' } }),
     ]);
     const shared = await ppShareStamps(env, stamps, origin, withPhotos, lvl, share.is_public ? 'public' : 'inner');
+    // Their City Cards at my level (2026-10-28).
+    const ccCards = (await ccCardsFor(env, sid, lvl).catch(() => null))?.cards || [];
     const lug = (lq.ok ? await lq.json() : [])[0];
     const gearRow = (gq.ok ? await gq.json() : [])[0] || {};
     const gear = gearRow.gear && typeof gearRow.gear === 'object' ? { ...gearRow.gear } : {};
@@ -22536,7 +22718,7 @@ async function handleSocialWorld(request, env, ctx) {
     return jsonResponse({
       person, relation, private: false,
       slug: share.slug,
-      stamps: shared, stats: ppStats(shared),
+      stamps: shared, stats: ppStats(shared), city_cards: ccCards,
       booklet: { order: ownerSp?.booklet_order || 'newest', seed: ownerSp?.shuffle_seed ?? null, custom: Array.isArray(ownerSp?.custom_order) ? ownerSp.custom_order : null },
       luggage: { active: lug?.active || 'classic', placements: lug?.placements || {} },
       flags: { home_country: prof.home_country || null, home_city_country: prof.home_city_country || null },
@@ -29742,6 +29924,9 @@ export default {
       if (pathname === '/board/contributions' && request.method === 'POST') return await handleBoardContributions(request, env);
       if (pathname === '/board/contributions/delete' && request.method === 'POST') return await handleBoardContributionDelete(request, env, ctx);
       if (pathname === '/board/contributions/caption' && request.method === 'POST') return await handleBoardContributionCaption(request, env);
+      if (pathname === '/city-cards/stamp' && request.method === 'POST') return await handleCityCardStamp(request, env, ctx);
+      if (pathname === '/city-cards' && request.method === 'POST') return await handleCityCards(request, env);
+      if (pathname === '/city-cards/visibility' && request.method === 'POST') return await handleCityCardVisibility(request, env);
       if (pathname === '/collectibles' && request.method === 'POST') return await handleCollectibles(request, env);
       if (pathname === '/collectibles/place' && request.method === 'POST') return await handleCollectiblePlace(request, env);
       if (pathname === '/admin/collectibles' && request.method === 'POST') return await handleAdminCollectibles(request, env);
