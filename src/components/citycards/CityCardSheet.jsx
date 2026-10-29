@@ -1,6 +1,6 @@
 // CityCardSheet — one card, open (founder, 2026-10-28). The card at full size, and for the owner
 // who sees it (the four privacy words, capped by the passport, unset reads Friends) and Share.
-// A visitor gets the card alone.
+// A visitor gets the card alone. Any stamp on the card opens big on a tap (CityStampDetail).
 //
 //   <CityCardSheet card owner onClose onChanged />
 //   onChanged(card)  after the owner changes who sees it (the caller keeps its list current)
@@ -8,6 +8,7 @@ import React, { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Share2, X } from "lucide-react";
 import CityCard, { cardWords } from "@/components/citycards/CityCard";
+import CityStampDetail from "@/components/citycards/CityStampDetail";
 import PrivacyChip from "@/components/privacy/PrivacyChip";
 import AudienceSheet from "@/components/privacy/AudienceSheet";
 import { PassportAudienceSheet } from "@/components/privacy/PassportPrivacy";
@@ -26,7 +27,8 @@ export default function CityCardSheet({ card, owner = false, onClose, onChanged 
   const [picking, setPicking] = useState(false);
   const [passportSheet, setPassportSheet] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const close = () => { if (!picking && !passportSheet) onClose(); };
+  const [stamp, setStamp] = useState(null);   // the stamp open big, if any
+  const close = () => { if (!picking && !passportSheet && !stamp) onClose(); };
   useDismissable(true, close);
   const [ceiling] = usePassportAudience(owner);
   const ref = useRef(null);
@@ -34,6 +36,7 @@ export default function CityCardSheet({ card, owner = false, onClose, onChanged 
   const level = capTo(card.visibility || "inner", ceiling);
   const done = !!card.completed_at;
   const left = cardLeft(card);
+  const count = Number(card.count) || (card.stamps || []).length;
   const pick = async (v) => {
     const r = await setCityCardVisibility(card.id, v);
     if (!r.ok) { showToast(r.code === "teen_hold" ? "Sharing beyond friends opens at age 18" : (r.error || "Couldn’t save that — try again"), "error"); return false; }
@@ -60,7 +63,8 @@ export default function CityCardSheet({ card, owner = false, onClose, onChanged 
           </button>
         </div>
 
-        <div ref={ref} style={{ marginTop: 12 }}><CityCard card={card} size="full" /></div>
+        <div ref={ref} style={{ marginTop: 12 }}><CityCard card={card} size="full" onStamp={setStamp} /></div>
+        {count ? <p aria-hidden="true" style={{ margin: "8px 0 0", fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".14em", textTransform: "uppercase", color: NEUTRAL.ink3, textAlign: "center" }}>Tap a stamp to see it big</p> : null}
 
         {owner ? (
           <>
@@ -86,6 +90,7 @@ export default function CityCardSheet({ card, owner = false, onClose, onChanged 
             note="A card can’t reach more people than your passport does." />
         )}
         {passportSheet && <PassportAudienceSheet onClose={() => setPassportSheet(false)} />}
+        {stamp && <CityStampDetail card={card} stamp={stamp} owner={owner} onClose={() => setStamp(null)} />}
       </div>
     </div>,
     document.body,

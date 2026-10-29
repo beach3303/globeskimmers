@@ -4,9 +4,10 @@
 // with the business's name and the date of the visit in the category's ink; an empty one waits,
 // dashed, with its number. A complete card wears COMPLETE across it. Never a punch.
 //
-//   <CityCard card size />
-//   card   the worker's row: { city, region, country, year, no, count, slots, completed_at, stamps: [{ slot, name, category, design, visited_on }] }
-//   size   'full' (the sheet, the pop-up) or 'small' (a tile on the City Cards page)
+//   <CityCard card size onStamp />
+//   card     the worker's row: { city, region, country, year, no, count, slots, completed_at, stamps: [{ slot, name, category, design, visited_on, visits }] }
+//   size     'full' (the sheet, the pop-up) or 'small' (a tile on the City Cards page)
+//   onStamp  (full only) a tap on a stamped slot → onStamp(stamp): the sheet opens that stamp big
 import React from "react";
 import { fs } from "@/components/redesign/constants";
 import { SLOTS, artFor, inkFor, categoryLabel, stampDate, cardLeft } from "@/lib/cityCards";
@@ -21,7 +22,7 @@ const AIR = "repeating-linear-gradient(135deg, #B0472F 0 8px, #FFFDF8 8px 14px, 
 
 export const cardWords = (card) => `${card?.city || ""} ${card?.year || ""}${card?.no > 1 ? ` · No. ${card.no}` : ""}`.trim();
 
-export default function CityCard({ card, size = "full", style = undefined }) {
+export default function CityCard({ card, size = "full", style = undefined, onStamp = undefined }) {
   if (!card) return null;
   const slots = card.slots || SLOTS;
   const bySlot = new Map((card.stamps || []).map((s) => [Number(s.slot), s]));
@@ -44,9 +45,11 @@ export default function CityCard({ card, size = "full", style = undefined }) {
       );
     }
     const ink = inkFor(s.category);
-    return (
-      <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", minWidth: 0 }}>
-        <img src={artFor(s.category, s.design)} alt={small ? "" : `${categoryLabel(s.category)} stamp`} draggable={false}
+    const tappable = !small && typeof onStamp === "function";
+    const box = { display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", minWidth: 0 };
+    const body = (
+      <>
+        <img src={artFor(s.category, s.design)} alt={small || tappable ? "" : `${categoryLabel(s.category)} stamp`} draggable={false}
           style={{ width: art, height: art, display: "block", mixBlendMode: "multiply", transform: `rotate(${tilt}deg)` }} />
         {!small ? (
           <>
@@ -54,8 +57,19 @@ export default function CityCard({ card, size = "full", style = undefined }) {
             <span style={{ fontFamily: MONO, fontSize: fs(7), letterSpacing: ".1em", color: INK3, marginTop: 2 }}>{stampDate(s.visited_on)}{(s.visits || 1) > 1 ? <b style={{ color: ink, marginLeft: 3 }}>×{s.visits}</b> : null}</span>
           </>
         ) : null}
-      </div>
+      </>
     );
+    // In the sheet a stamp is a button: tap it and it opens big, as the type-only stamp.
+    if (tappable) {
+      return (
+        <button key={i} type="button" onClick={() => onStamp(s)} className="active:scale-95 transition-transform"
+          aria-label={`${s.name}, ${categoryLabel(s.category)} stamp, ${stampDate(s.visited_on)}${(s.visits || 1) > 1 ? `, ${s.visits} visits` : ""}. See it big`}
+          style={{ ...box, background: "transparent", border: 0, padding: 0, font: "inherit", color: "inherit", cursor: "pointer", WebkitTapHighlightColor: "transparent" }}>
+          {body}
+        </button>
+      );
+    }
+    return <div key={i} style={box}>{body}</div>;
   };
 
   const countLine = done ? `${slots} / ${slots} STAMPED · COMPLETE` : `${count} / ${slots} STAMPED · ${left} TO GO`;
