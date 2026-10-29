@@ -55,6 +55,32 @@ export async function listCityCards() {
   return { cards: Array.isArray(data?.cards) ? data.cards : [], error: error || data?.error || null, unavailable: !!data?.unavailable };
 }
 
+// The key a place is stamped under (the worker's): places:<google id> or owned:<uuid>.
+export const placeKey = (id) => {
+  const v = String(id || "");
+  if (/^(places|owned):/.test(v)) return v;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return `owned:${v}`;
+  if (/^[A-Za-z0-9_-]{16,250}$/.test(v) && /[A-Z]/.test(v)) return `places:${v}`;
+  return v;
+};
+// Which places I've stamped, read once and shared by every place card on screen (founder,
+// 2026-10-28: the card remembers "stamped Oct 24" without a tap). The newest card wins when a
+// business is on more than one. Cleared after a stamp, so the next read is fresh.
+let mineCache = null, minePromise = null;
+export function forgetMyCardStamps() { mineCache = null; minePromise = null; }
+export function myCardStamps() {
+  if (mineCache) return Promise.resolve(mineCache);
+  if (!minePromise) {
+    minePromise = listCityCards().then((r) => {
+      const m = new Map();
+      for (const c of [...r.cards].reverse()) for (const st of c.stamps || []) m.set(st.place_id, { card: c, stamp: st });
+      if (!r.error) mineCache = m; else minePromise = null;
+      return m;
+    }).catch(() => { minePromise = null; return new Map(); });
+  }
+  return minePromise;
+}
+
 export async function setCityCardVisibility(id, visibility) {
   const { data, error } = await callWorker("city-cards/visibility", { id, visibility });
   return { ok: !!data?.ok, visibility: data?.visibility || null, error: error || data?.error || null, code: data?.code || null };

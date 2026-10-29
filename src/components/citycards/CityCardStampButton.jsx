@@ -1,15 +1,17 @@
-// CityCardStampButton — "Stamp my Los Angeles card" on a Places to Eat, Coffee, Shopping or
+// CityCardStampButton — "I was here, get the stamp!" on a Places to Eat, Coffee, Shopping or
 // Convenience Store card (founder, 2026-10-28: those four stamp a City Card, never the passport;
-// ATMs, restrooms and Money Exchange stamp nothing). The tap is the proof, as "I was here": the
-// best of fresh GPS readings, measured by the worker against the place. A grant shows the stamp
-// that landed — the category artwork, the business's name, today's date — and how far the card
-// is; the tenth opens the card complete. A refusal says why, in the same words the passport uses,
-// and offers the tap again.
+// ATMs, restrooms and Money Exchange stamp nothing; the words stay the passport's, the line under
+// them says which book). The tap is the proof, as "I was here": the best of fresh GPS readings,
+// measured by the worker against the place. A grant shows the stamp that landed — the category
+// artwork, the business's name, today's date — and how far the card is; the tenth opens the card
+// complete. A refusal says why, in the same words the passport uses, and offers the tap again.
+// The card remembers (founder: the button stays): a place already on a card says so under the
+// button before any tap, and another day's tap adds a visit to that stamp — never a second slot.
 //
 //   <CityCardStampButton finder place formatDistance />
 //   finder   'eat' | 'coffee' | 'shopping' | 'convenience'
 //   place    { id, name, lat, lng, types, formattedAddress }
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Stamp } from "lucide-react";
 import RubberStamp from "@/components/redesign/RubberStamp";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
@@ -21,7 +23,7 @@ import { getStampFix } from "@/lib/geolocation";
 import { localISODate } from "@/lib/localDate";
 import { countryCode } from "@/lib/countries";
 import { logEvent } from "@/lib/analytics";
-import { stampCityCard, artFor, inkFor, stampDate, cardLeft } from "@/lib/cityCards";
+import { stampCityCard, artFor, inkFor, stampDate, cardLeft, myCardStamps, forgetMyCardStamps, placeKey } from "@/lib/cityCards";
 import CityCardSheet from "@/components/citycards/CityCardSheet";
 import CityCardComplete from "@/components/citycards/CityCardComplete";
 
@@ -37,7 +39,14 @@ export default function CityCardStampButton({ finder, place, formatDistance = un
   const [refused, setRefused] = useState(null);   // { why, meters, message } after a refusal
   const [open, setOpen] = useState(false);        // the card, in its sheet
   const [complete, setComplete] = useState(false); // the tenth stamp's pop-up
+  const [mine, setMine] = useState(null);         // { card, stamp } when this place is already on a card
   const name = place?.name || "this place";
+  const key = placeKey(place?.id);
+  useEffect(() => {
+    let gone = false;
+    myCardStamps().then((m) => { if (!gone) setMine(m.get(key) || null); });
+    return () => { gone = true; };
+  }, [key]);
   // The card's city: the place's address when it names one, else the location being browsed (a
   // finder card often carries only the street); the worker reads Google's own address as well.
   const { activeLocation } = useLocation();
@@ -66,10 +75,12 @@ export default function CityCardStampButton({ finder, place, formatDistance = un
     if (REFUSALS.includes(data?.code)) { setRefused({ why: data.code, meters: Number.isFinite(data.distance_m) ? data.distance_m : null, message: data.error || null }); return; }
     if (error || !data?.ok) { showToast(/sign in/i.test(error || "") ? "Sign in to stamp your city card" : (error || data?.error || "Couldn’t stamp your card — try again"), "error"); return; }
     setResult(data);
-    logEvent("citycard_stamp", { finder, slot: data.stamp?.slot, completed: !!data.completed, already: !!data.already }, "CityCards");
-    if (data.already) showToast(`Already on your ${data.card.city} ${data.card.year} card`, "success");
+    forgetMyCardStamps();
+    logEvent("citycard_stamp", { finder, slot: data.stamp?.slot, completed: !!data.completed, already: !!data.already, repeat: !!data.repeat, visits: data.visits || 1 }, "CityCards");
+    if (data.already) showToast(`Already stamped today — on your ${data.card.city} ${data.card.year} card`, "success");
+    else if (data.repeat) showToast(`Visit ${data.visits} at ${data.stamp?.name || name} — on your ${data.card.city} ${data.card.year} card`, "success");
     else showToast(data.completed ? `${data.card.city} ${data.card.year} card complete! 📇` : `Stamped on your ${data.card.city} ${data.card.year} card`, "success");
-    if (data.completed && !data.already) setComplete(true);
+    if (data.completed && !data.already && !data.repeat) setComplete(true);
   };
 
   const refusalText = (r) => (
@@ -92,13 +103,18 @@ export default function CityCardStampButton({ finder, place, formatDistance = un
       {!result ? (
         <>
           <RubberStamp state={busy ? "busy" : "idle"} onClick={stamp} placeName={name}>
-            {cityWord ? `Stamp my ${cityWord} card` : "Stamp my city card"}
+            I was here, get the stamp!
           </RubberStamp>
           {refused ? (
             <p style={{ marginTop: 6, fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.ink2, textAlign: "center" }}>{refusalText(refused)}</p>
+          ) : mine ? (
+            <p style={{ marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink2, textAlign: "center" }}>
+              <img src={artFor(mine.stamp.category, mine.stamp.design)} alt="" style={{ width: 22, height: 22, display: "block", mixBlendMode: "multiply", transform: "rotate(-7deg)", flex: "none" }} />
+              <span>On your <b style={{ color: BLUE }}>{mine.card.city} {mine.card.year}</b> card · stamped {stampDate(mine.stamp.visited_on)}{(mine.stamp.visits || 1) > 1 ? ` · ${mine.stamp.visits} visits` : ""}</span>
+            </p>
           ) : (
             <p style={{ marginTop: 6, fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink3, textAlign: "center" }}>
-              Your city card, not your passport&nbsp;· Only at the place, by GPS
+              Your {cityWord ? `${cityWord} ` : "city "}card, not your passport&nbsp;· Only at the place, by GPS
             </p>
           )}
         </>
@@ -110,9 +126,11 @@ export default function CityCardStampButton({ finder, place, formatDistance = un
             <span style={{ fontFamily: MONO, fontSize: fs(7.5), letterSpacing: ".1em", color: NEUTRAL.ink3, marginTop: 2 }}>{stampDate(st?.visited_on)}</span>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".18em", color: RED }}>{result.already ? "ALREADY ON YOUR CARD" : "STAMPED"}</div>
+            <div style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".18em", color: RED }}>{result.already ? "ALREADY STAMPED TODAY" : result.repeat ? `VISIT ${result.visits}` : "STAMPED"}</div>
             <div style={{ fontFamily: SERIF, fontSize: fs(17), lineHeight: 1.15, marginTop: 2, color: NEUTRAL.ink }}>
-              {result.already ? <>On your <em style={{ fontStyle: "italic", color: BLUE }}>{card.city} {card.year}</em> card since {stampDate(st?.visited_on)}</> : <>On your <em style={{ fontStyle: "italic", color: BLUE }}>{card.city} {card.year}</em> card</>}
+              {result.already ? <>On your <em style={{ fontStyle: "italic", color: BLUE }}>{card.city} {card.year}</em> card since {stampDate(st?.visited_on)}</>
+                : result.repeat ? <>Back again — on your <em style={{ fontStyle: "italic", color: BLUE }}>{card.city} {card.year}</em> card since {stampDate(st?.visited_on)}</>
+                : <>On your <em style={{ fontStyle: "italic", color: BLUE }}>{card.city} {card.year}</em> card</>}
             </div>
             <div aria-hidden="true" style={{ marginTop: 8, height: 6, borderRadius: 999, background: "rgba(176,71,47,.14)", overflow: "hidden" }}>
               <div style={{ width: `${Math.round(((card.count || 0) / (card.slots || 10)) * 100)}%`, height: "100%", borderRadius: 999, background: card.completed_at ? "#2E6B4E" : RED, transition: "width .4s" }} />

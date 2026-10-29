@@ -51,7 +51,7 @@ export default function CityCard({ card, size = "full", style = undefined }) {
         {!small ? (
           <>
             <span style={{ fontFamily: STAMP, fontWeight: 700, fontSize: fs(8.6), lineHeight: 1.15, letterSpacing: ".04em", textTransform: "uppercase", color: ink, marginTop: 5, maxWidth: 78, overflowWrap: "anywhere" }}>{s.name}</span>
-            <span style={{ fontFamily: MONO, fontSize: fs(7), letterSpacing: ".1em", color: INK3, marginTop: 2 }}>{stampDate(s.visited_on)}</span>
+            <span style={{ fontFamily: MONO, fontSize: fs(7), letterSpacing: ".1em", color: INK3, marginTop: 2 }}>{stampDate(s.visited_on)}{(s.visits || 1) > 1 ? <b style={{ color: ink, marginLeft: 3 }}>×{s.visits}</b> : null}</span>
           </>
         ) : null}
       </div>
