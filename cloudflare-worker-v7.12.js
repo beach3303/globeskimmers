@@ -11892,6 +11892,20 @@ const isKnownChain = (name) => {
   const n = (name || "").toLowerCase();
   return KNOWN_CHAINS.some((c) => n.includes(c));
 };
+// Does a typed search name this place? (founder, 2026-10-28, a few steps from The Cheesecake
+// Factory: "cheesecake factory" listed 23 bakeries first because cheesecake is a dish.) Every
+// word typed must be a word of the name, or the start of one ("cheesecake factory" →
+// "The Cheesecake Factory", "din tai" → "Din Tai Fung"); accents, case and punctuation don't
+// count. One word alone names a place only when it isn't a dish or cuisine the parser knows
+// (the caller checks the intent), so "pizza" never puts Pizza Hut first.
+const gsNameWords = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/['’]/g, "").split(/[^a-z0-9]+/).filter(Boolean);
+function gsNameMatch(query, name) {
+  const q = gsNameWords(query).filter((w) => w !== "the");
+  if (!q.length) return false;
+  const n = gsNameWords(name);
+  if (!n.length) return false;
+  return q.every((w) => n.some((t) => t === w || (w.length >= 3 && t.startsWith(w))));
+}
 
 const GS_WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 function gsOpenLateToday(hours, utcOffsetMinutes) {
@@ -12683,7 +12697,7 @@ async function handleRestaurantsFull(request, env, ctx) {
     }).filter((p) => p.distanceMiles <= effectiveRadiusMiles + 1)
       // A typed search on the FOOD finder returns places that serve food or
       // drink — Google's keyword match can surface shops (founder, 2026-10-07).
-      .filter((p) => !searchQuery?.trim() || [...(p.types || []), p.primaryType || ""].some((t) => FOODISH_TYPE.test(t)));
+      .filter((p) => !searchQuery?.trim() || gsNameMatch(searchQuery, p.displayName?.text || p.name) || [...(p.types || []), p.primaryType || ""].some((t) => FOODISH_TYPE.test(t)));
     const DIETARY_FILTER_TYPES = ["halal", "kosher", "vegan", "vegetarian", "glutenFree"];
     const DIETARY_INTENT_LABEL_TO_KEY = {
       "halal": "halal",
@@ -12811,6 +12825,18 @@ async function handleRestaurantsFull(request, env, ctx) {
     if (instMeta.size) {
       const famous = finalPlaces.filter((p) => p.institution?.lift).sort((a, b) => b.institution.fame - a.institution.fame);
       finalPlaces = [...famous, ...finalPlaces.filter((p) => !p.institution?.lift)];
+    }
+    // A typed name wins (founder, 2026-10-28, a few steps from The Cheesecake Factory: it sat 24th
+    // behind the bakeries because "cheesecake" is a dish): the places the words name lead, nearest
+    // first, taken from the whole pool so no tier, chain, dish or tidy rule can drop them. One
+    // word alone names a place only when the parser saw no dish or cuisine in it.
+    if (rawQuery && (gsNameWords(rawQuery).filter((w) => w !== "the").length >= 2 || intent.kind === "GENERAL")) {
+      const named = processedPlaces.filter((p) => gsNameMatch(rawQuery, p.displayName?.text || p.name)).sort((a, b) => (a.distanceKm || 999) - (b.distanceKm || 999));
+      if (named.length) {
+        const ids = new Set(named.map((p) => p.id || p.placeId));
+        named.forEach((p) => { p.nameMatch = true; });
+        finalPlaces = [...named, ...finalPlaces.filter((p) => !ids.has(p.id || p.placeId))];
+      }
     }
     const intentSorted = intent.kind !== "GENERAL" && !!searchQuery?.trim();
     finalPlaces.forEach((p, i) => {
@@ -13684,7 +13710,9 @@ async function handleRestaurantsOwned(request, env, ctx) {
       };
     });
 
-    const open = (await ownedDropClosed(env, places, { dropUnlisted: true })).slice(0, maxResults);
+    // Nearest first, strictly (the RPC's order drifted a few metres; founder 2026-10-28, a few
+    // steps from a restaurant that sat 17th).
+    const open = (await ownedDropClosed(env, places, { dropUnlisted: true })).sort((x, y) => (x.distanceKm || 0) - (y.distanceKm || 0)).slice(0, maxResults);
     return jsonResponse({ places: open, count: open.length, version: 'owned-1', source: 'owned', fallbackInfo: null });
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
