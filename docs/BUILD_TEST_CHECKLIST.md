@@ -3488,3 +3488,9 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   filter keeps a named place; the owned browse list is sorted strictly nearest first.
 - **Verify after the push:** the same two live calls at 34.13735,-118.04985 — typed "cheesecake factory" → rank 1;
   browse → ordered by distance.
+
+## 2026-10-29 — PUSHED: repeat visits, the button's words, the Profile's City Boards row, the Cheesecake Factory fix (main dbb7b81)
+
+- One push `stamping-v2:main` (83dfa0c..dbb7b81). Migration 20261029020000_city_card_visits applied (run 40837024169);
+  workers deployed (run 40837024161, api version 963c1e25).
+- **Open:** founder `npm run ota` (both platforms) — then the phone tests in the two entries above.
