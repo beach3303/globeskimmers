@@ -3539,3 +3539,18 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
 - Founder ran `npm run ota` 2026-10-29 13:25 UTC; `capgo channel list` shows production = 1.0.2610291325, iOS + Android.
   Phones pick it up on the next launch (one open to download, the next to apply).
+
+## 2026-10-29 — COMMITTED, NOT pushed: pinch to zoom on photos (passport lightbox + City Board viewer)
+
+- Founder (2026-10-29, with her Farmers Market stamp photo): "allow pictures in city board and passport (to be zoomed
+  in — if people want to)". New `src/components/ZoomableImage.jsx`: two fingers zoom about the point between them
+  (up to 4×), one finger pans while zoomed, a double tap zooms 2.5× where you tapped or puts the picture back,
+  letting go below 1× snaps back; desktop double-click does the same. At 1× it is an ordinary picture — swipes still
+  page the viewer and swipe-down still dismisses. Zoomed (or with two fingers down) it keeps its touches:
+  stopPropagation + preventDefault on native non-passive listeners (React's touch handlers are passive).
+- Wired into the shared PhotoLightbox (passport stamp photos, albums, guestbooks, Dream gallery, dishes) — the
+  finger-follow swipe-down now moves the photo's frame, the zoom the picture inside; close + chevrons sit above a
+  zoomed photo — and into CityBoard's BoardViewer photo.
+- Gates: eslint no-undef clean, build OK, boot-check OK. Screenshots (synthetic pinch): `Claude outputs/zoom-*.png`.
+- **Phone test after OTA:** a City Board photo and a stamp photo in the passport: pinch in, pan, double-tap out;
+  swipe left/right still pages only at 1×; swipe down still closes at 1×; the X stays reachable while zoomed.
