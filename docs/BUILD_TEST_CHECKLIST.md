@@ -3390,3 +3390,30 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   Exchange cards carry photos; ATMs/Restrooms ≤ 2; Melrose's closed former tenants are gone from Eat; privacy policy
   "Last updated: October 27, 2026" with the City Board paragraph.
 - **Open:** founder `npm run ota` (both platforms), then the phone tests in the 2026-10-26/27 entry.
+
+## 2026-10-28 (later) — COMMITTED on stamping-v2, NOT pushed: albums, collectible stamp, Post to any board, My postcards, the bell
+
+- **Albums say which stamp is private** (b9fa617, 714d729, fb2ad21): one privacy per envelope — a city's album splits
+  by privacy ("Atlanta 🔒 Only me" beside "Atlanta 🌍 Everyone"); coloured PrivacyChip (grey/green/blue/gold); the
+  album sheet names each stamp; an opened photo says who sees it.
+- **City Boards album says what to do** (3e7971b): upload badge, "Upload your travel photos — Each goes to its
+  city's board"; the sheet's button reads Upload photos.
+- **The collectible stamp** (ebc56da+c027ec4 migration, ff2dcc5+863aee4 worker, 0b394d4+16a4885 app, 19b1477+15ed551
+  admin): 10 photos from 3 different cities earn ONE of the founder's six designs at random, never a second, never
+  exchanged; "so close" card at 10 photos from fewer cities; the stamp sits on the passport's first page; Admin
+  report per design, week and month. Migration: board_contrib_tally (posted, cities[]) + bc_tally_bump + collectibles.
+- **Post to this board** (6ca2799 worker, 6915337 app): a two-choice sheet on city, state AND country boards —
+  Send a postcard (state/country cards: to_city = the board key, proof = a verified stamp inside it) or Add photos
+  (the board-mode photo sheet).
+- **My postcards on City Boards** (6ca2799, 9c7ca08): a second envelope under Contribute on the Profile; Delete
+  takes a card off its board for good (board page, Sent, and the home); likes/comments purge with it.
+- **The bell names who and where** (6ca2799): "Maria @maria (#12) … · from Los Angeles, California, United States"
+  on sign-ups, stamps, postcards, telegrams, usernames, the day's first City Board photo, a board postcard, and the
+  collectible stamp earned.
+- **Activate (push the WHOLE branch at once — ebc56da carries an older version of the collectibles migration
+  that c027ec4 rewrites; a push ending between them would apply the old one):** `git fetch`, then
+  `git push origin stamping-v2:main`; watch the migration job (1 migration), then the workers. Founder: `npm run ota`.
+- **Test on a phone after the OTA:** Profile → Photo albums → an album with one private stamp shows two envelopes;
+  Contribute → add 10 photos from 3 cities → the stamp pop-up → Place it → Passport page 1; a City Board → Post to
+  this board → both choices; a state board → Send a postcard; Profile → My postcards → Delete one; the founder's
+  phone gets "📮 … posted a postcard on …" with the name and place.
