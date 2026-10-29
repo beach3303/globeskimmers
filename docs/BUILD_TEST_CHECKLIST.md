@@ -3569,3 +3569,11 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   (the demo Mailbox has no postcards; the Mailbox card is the same PostcardCard).
 - **Phone test after OTA:** a postcard in the Mailbox, one in Sent (open it), one on a City Board: tap the photo →
   big → pinch; × closes back to where you were; the board viewer doesn't page while you swipe in the lightbox.
+
+## 2026-10-29 — OTA 1.0.2610291719 on the production channel (zoom + postcard photos; main NOT yet updated)
+
+- Founder: "Do the npm run ota for me please" — Claude ran it 2026-10-29 17:19 UTC (the permission gate allowed it this
+  time); `capgo channel list` shows production = 1.0.2610291719, iOS + Android. It carries 59c7391 (postcard photos
+  big + pinch), 389f090 (pinch to zoom) and everything on main up to 4ee573e.
+- **Open:** the six commits behind it are still on stamping-v2 only — phones run code that isn't on main until the
+  founder says "push". Push them before any other change goes to main.
