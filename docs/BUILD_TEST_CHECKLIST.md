@@ -3520,3 +3520,9 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - Gates: eslint no-undef clean, build OK, boot-check OK. Screenshots: `Claude outputs/city-cards-8..10-*.png`.
 - **Phone test after OTA:** Home → City Cards → a card → tap Pink's → the big stamp, visits, Share; swipe down
   closes the stamp sheet only, the card stays open.
+
+## 2026-10-29 — founder chose option 1; no partner slot on the mockup either
+
+- "i like option 1, i don't like to display the blank future partner's own art until the future when we have it."
+  Option 2's board and the dashed "their own stamp" design C are off the City Cards canvas (version 14); the app
+  never had either. Docs only — nothing new to test.

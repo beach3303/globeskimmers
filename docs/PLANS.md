@@ -67,7 +67,9 @@ founder's ChatGPT "Local Finds Card" boards are the brief):**
   it has stamped. The artwork ships in the app (R2 or the bundle); the words come from the row.
   **The partner plan is internal (founder, 2026-10-28 late: "we can hide our plans from the
   public"): nothing in the app says a business can get its own stamp, no "their own stamp" slot, no
-  "coming soon" — a partner's art simply appears when it lands.**
+  "coming soon" — a partner's art simply appears when it lands. Not on the mockup either (founder,
+  2026-10-29: "i don't like to display the blank future partner's own art until the future when we
+  have it") — the canvas shows a business's stamp as A and B only.**
 - Cards are shareable (a story card, like a stamp) and carry the four privacy words, capped by the
   passport; friends see them on the profile folder and in Home news.
 - **Ten stamps completes the card and that is all: the Virtual Passport is NOT stamped** (founder:
@@ -93,8 +95,8 @@ founder's ChatGPT "Local Finds Card" boards are the brief):**
   business's TYPE-ONLY stamp big (the passport's TypographicStamp — name, city, state, country,
   first day), the visits ("3 VISITS · OCT 24 – OCT 28, 2026"), the category stamp small with
   the facts, and Share this stamp (owner only). "Tap a stamp to see it big" under the card.
-  The other placement — the place card's stamped panel showing the type-only stamp instead of the
-  category stamp — is a mockup only (canvas boards 5 and 6), not built unless she picks it.
+  The other placement — the place card's stamped panel showing the type-only stamp — was mocked up
+  (option 2) and not chosen (founder, 2026-10-29: "i like option 1"); its board is off the canvas.
 - **Open:** the card's name ("City Card" here; ChatGPT wrote "Local Finds Card"); what a partner
   pays for its own stamp; the Market artwork's finder; a Shopping category stamp from the founder.
 
