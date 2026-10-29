@@ -36,33 +36,46 @@ timeline, the first-party data rules). It supersedes the raw list below as the w
 **Decided (founder, 2026-10-28):** the Virtual Passport takes ONLY these stamps: Things to Do
 attractions ("I was here", typographic or official art), airports (arrivals), cities, countries at a
 border crossing, collectible stamps (the City Boards stamp and any future one), and the virtual art
-stamps (the commissioned art). **No nearby-service stamp ever lands in the passport again:**
-restaurants, cafés, shops and malls, convenience stores, money exchange, ATMs and restrooms are out.
-The 2026-10-28 "I was here" on the Eat, Coffee, Shopping and Convenience cards (kind 'city', entity
-places:<gid>, typographic) is to be retired; the stamps it already minted convert into City Card
-punches, never deleted.
+stamps (the commissioned art). **No nearby-service stamp ever lands in the passport again.**
+Restaurants, cafés, shops and convenience stores go on City Cards (below); **ATMs, restrooms and
+Money Exchange stamp nothing at all** (founder, 2026-10-28 late: "no stamp for ATM, no stamp for
+restroom, no stamp for money exchange").
+
+Where "I was here, get the stamp" stands today (checked in the code 2026-10-28): on Places to Eat,
+Coffee and Things to Do cards on phones; Shopping got it in e6e2d75 (2026-10-26, on main, not on
+phones until the next OTA); Convenience Store never had it. Under this decision the button on Eat,
+Coffee and Shopping becomes the City Card stamp, Convenience Store gets it too, Things to Do keeps
+stamping the passport, and the nearby-service passport stamps already minted (kind 'city', entity
+places:<gid>, typographic) convert into City Card stamps — never deleted.
 
 **City Cards — to build (realistic mockup https://claude.ai/artifact/BXGjgjt1bmzy15mGWoQdM8; the
-founder's ChatGPT "Local Finds Card" boards are the brief):** one card per city with ten slots.
-**No punches (founder, 2026-10-28 late: "i dont like punches").** A restaurant, café, shop, mall,
-market or convenience store STAMPS the card with today's GPS proof — the card's button replaces
-"I was here" on those cards. Each stamp is the founder's CATEGORY SEAL (the PNGs she sent:
-Restaurant ×2, Coffee Shop ×2, Convenience Store ×2, Market ×2; a standalone Shopping Mall seal is
-still needed — the mockup cuts two from her ChatGPT card) with the BUSINESS NAME and the DATE of the
-visit printed in type under it, in the category's ink — the placeholder until the business partners
-with Globeskimmers financially and contractually; then its own stamp art replaces the seal on every
-card it has stamped. The seals ship in the app (R2 or the bundle), the words come from the row.
-Cards are shareable (a story card, like a stamp) and carry the four privacy words, capped by the
-passport; friends see them on the profile folder and in Home news. **Ten stamps completes the card
-and that is all: the Virtual Passport is NOT stamped** (founder, 2026-10-28 late: "once we reach 10
-we dont stamp virtual passport") — the card gets its COMPLETE mark and stays in City Cards.
-**Placement:** (1) the passport folder on the Profile gets a CITY CARDS pocket under "Where I've
-been" — the home; (2) each City Board page shows the viewer's own card and which friends have
-finished theirs; (3) the nearby cards are where you stamp. Vocabulary everywhere: stamp / stamped,
-never punch. **Open:** whether ATMs and restrooms stamp (Claude: no — nobody collects a restroom),
-the card's name ("City Card" here; ChatGPT wrote "Local Finds Card"), what happens after a tenth
-stamp in a city a traveler keeps visiting (a second card? Claude suggests yes, numbered), what a
-partner pays for its own stamp.
+founder's ChatGPT "Local Finds Card" boards are the brief):**
+- **One card per city per year, numbered:** "Los Angeles 2026 · No. 1". The year prints on the card
+  so each year gets its own design (founder: "put also 2026 so we can design different for 2027").
+  Ten stamps complete a card and the next find in that city starts No. 2 (founder: "YES!").
+- **Only four finders stamp a card:** Places to Eat, Coffee, Shopping, Convenience Store (founder:
+  "All i need is coffee, place to eat, shopping, and convenience store to be stampable in city
+  cards"). The card's button replaces "I was here" on those cards, with today's GPS proof.
+- **No punches** (founder: "i dont like punches"). Each slot is a STAMP: the founder's round
+  CATEGORY STAMP artwork — the PNGs she sent 2026-10-28: Restaurant ×2, Coffee Shop ×2,
+  Convenience Store ×2, Market ×2 (she calls them stamps; Claude's word "seal" confused her — don't
+  use it) — with the BUSINESS NAME and the DATE of the visit printed in type under it, in the
+  category's ink. A Shopping category stamp PNG is still needed (the mockup cuts two from her
+  ChatGPT card), and which finder the Market artwork belongs to is open (markets/grocers inside
+  Shopping or Convenience?). This is the placeholder until a business partners with Globeskimmers
+  financially and contractually; then its own stamp art replaces the category stamp on every card
+  it has stamped. The artwork ships in the app (R2 or the bundle); the words come from the row.
+- Cards are shareable (a story card, like a stamp) and carry the four privacy words, capped by the
+  passport; friends see them on the profile folder and in Home news.
+- **Ten stamps completes the card and that is all: the Virtual Passport is NOT stamped** (founder:
+  "once we reach 10 we dont stamp virtual passport") — the card gets its COMPLETE mark and stays in
+  City Cards; no collectible either.
+- **Placement:** (1) the passport folder on the Profile gets a CITY CARDS pocket under "Where I've
+  been" — the home; (2) each City Board page shows the viewer's own card and which friends have
+  finished theirs; (3) the four finders' cards are where you stamp.
+- Vocabulary everywhere: stamp / stamped / category stamp. Never punch, never seal.
+- **Open:** the card's name ("City Card" here; ChatGPT wrote "Local Finds Card"); what a partner
+  pays for its own stamp; the Market artwork's finder; a Shopping category stamp from the founder.
 
 **Founder call, 2026-09-29 (late):** NO dish stamps inside the passport — the passport is
 places only ("a passport isn't a place to collect food"). Food sharing is wanted, big, but
