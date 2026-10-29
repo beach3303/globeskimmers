@@ -21955,7 +21955,7 @@ function ccAddressParts(address) {
 }
 // Which of the category's artworks a business prints — fixed by its id, so it never changes.
 function ccDesignFor(placeId) { let h = 0; const s = String(placeId || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return (h % CC_DESIGNS) + 1; }
-const ccStampRow = (r) => ({ id: r.id, slot: r.slot, place_id: r.place_id, name: r.name, category: r.category, design: r.design, visited_on: r.visited_on, created_at: r.created_at });
+const ccStampRow = (r) => ({ id: r.id, slot: r.slot, place_id: r.place_id, name: r.name, category: r.category, design: r.design, visited_on: r.visited_on, visits: Number(r.visits) || 1, last_visited_on: r.last_visited_on || r.visited_on, created_at: r.created_at });
 const ccCardRow = (c, stamps, mine = true) => ({
   id: c.id, key: c.board_key, city: c.city, region: c.region || null, country: c.country, year: c.year, no: c.no, count: c.stamps, slots: CC_SLOTS,
   completed_at: c.completed_at || null, ...(mine ? { visibility: c.visibility || null } : {}), created_at: c.created_at, updated_at: c.updated_at,
@@ -22044,11 +22044,28 @@ async function handleCityCardStamp(request, env, ctx) {
       if (!ins.ok) return jsonResponse({ error: 'Couldn’t start your card — try again' }, 502);
       card = (await ins.json())[0];
     }
-    // A business stamps a card once.
+    // A business holds one slot on a card. Back on another day (founder, 2026-10-28: "a plan for
+    // stamping twice or 10 or 20 times"): a visit is added to its stamp — the count and the latest
+    // date grow, the slot stays, so a card stays ten different spots. Twice in a day: already.
     const sq = await gbRest(env, `city_card_stamps?card_id=eq.${card.id}&order=slot.asc&select=*`, {});
     const stamps = sq.ok ? await sq.json() : [];
     const had = stamps.find((s) => s.place_id === entityId);
-    if (had) return jsonResponse({ ok: true, already: true, card: ccCardRow(card, stamps), stamp: ccStampRow(had), completed: !!card.completed_at });
+    if (had) {
+      const last = String(had.last_visited_on || had.visited_on || '').slice(0, 10);
+      if (last >= visitedOn) return jsonResponse({ ok: true, already: true, card: ccCardRow(card, stamps), stamp: ccStampRow(had), completed: !!card.completed_at });
+      const visits = (Number(had.visits) || 1) + 1;
+      const w = await gbRest(env, `city_card_stamps?id=eq.${had.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ visits, last_visited_on: visitedOn }) });
+      const row = (w.ok ? await w.json() : [])[0] || { ...had, visits, last_visited_on: visitedOn };
+      await gbRest(env, `city_cards?id=eq.${card.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ updated_at: new Date().toISOString() }) }).catch(() => {});
+      if (ctx) {
+        ctx.waitUntil(gbLogEvent(env, 'city_card_visit', { category: had.category, finder, country: board.country, city: board.city, visits }));
+        ctx.waitUntil((async () => {
+          const { who, n } = await gbWhoLine(env, user);
+          await founderAlert(env, `📇 ${who} ${who === 'You' ? 'are' : 'is'} back at ${had.name} — visit ${visits} on ${who === 'You' ? 'your' : 'their'} ${board.name} ${year} card${gbWhereLine(request)}`, 'bell', n ? { click: gbMemberLink(n) } : {});
+        })().catch(() => {}));
+      }
+      return jsonResponse({ ok: true, repeat: true, visits, card: ccCardRow(card, stamps.map((x) => (x.id === had.id ? row : x))), stamp: ccStampRow(row), completed: !!card.completed_at });
+    }
     const slot = stamps.length + 1;
     const sins = await gbRest(env, 'city_card_stamps', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ card_id: card.id, user_id: user.id, slot, place_id: entityId, name: stampName, category, design, visited_on: visitedOn }) });
     if (!sins.ok) return jsonResponse({ error: 'Couldn’t stamp your card — try again' }, 502);
