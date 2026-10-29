@@ -30,7 +30,7 @@ const placeOf = (p) => [p.city, p.country].filter(Boolean).join(", ");
 function AirmailEnvelope({ count, peek, onOpen }) {
   return (
     <button type="button" onClick={onOpen}
-      aria-label={`Contribute your travel photos to City Boards. Public.${count ? ` ${plural(count, "photo", "photos")} so far.` : ""} Upload photos`}
+      aria-label={`Your photos on City Boards. Public.${count ? ` ${plural(count, "photo", "photos")} shared so far.` : " None yet."} Upload travel photos`}
       className="block w-full active:scale-95 transition-transform" style={{ background: "transparent", border: 0, padding: 0 }}>
       <div style={{ position: "relative", height: 118 }}>
         {peek ? (
@@ -54,9 +54,9 @@ function AirmailEnvelope({ count, peek, onOpen }) {
           </div>
           <span aria-hidden="true" style={{ position: "absolute", right: 9, top: 8, fontSize: fs(11), lineHeight: 1 }}>🌍</span>
           <div className="absolute inset-x-0 text-center px-2" style={{ bottom: 9 }}>
-            <div className="truncate" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: fs(13.5), color: AIR_BLUE, letterSpacing: ".03em" }}>CITY BOARDS</div>
+            <div className="truncate" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: fs(13.5), color: AIR_BLUE, letterSpacing: ".03em" }}>MY PHOTOS</div>
             <div className="truncate" style={{ fontFamily: MONO, fontSize: fs(8), color: AIR_RED, letterSpacing: ".12em" }}>
-              {count ? `${plural(count, "PHOTO", "PHOTOS")} SHARED` : "PUBLIC · EVERY CITY"}
+              ON CITY BOARDS · {count ? `${count} SHARED` : "NONE YET"}
             </div>
           </div>
         </div>
@@ -68,7 +68,7 @@ function AirmailEnvelope({ count, peek, onOpen }) {
         {count ? "Upload more photos" : "Upload your travel photos"}
       </span>
       <span aria-hidden="true" className="block text-center" style={{ marginTop: 1, color: INK3, fontSize: fs(10.5), lineHeight: 1.3 }}>
-        Each goes to its city’s board
+        Photos you upload, each to its city’s board
       </span>
     </button>
   );

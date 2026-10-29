@@ -288,7 +288,7 @@ export default function ProfilePage({ embedded = false } = {}) {
             {stamps ? (
               <div style={{ marginTop: GAP }}>
                 <PhotoPackets stamps={stamps} title="Photo albums" owner albums={albums} onChanged={reloadStamps} className=""
-                  corner={socialTierReady && !teen ? <div style={{ display: "grid", gap: 14 }}><ContributeAlbum /><BoardPostcards /></div> : null} />
+                  boards={socialTierReady && !teen ? <><ContributeAlbum /><BoardPostcards /></> : null} />
               </div>
             ) : null}
             {!stamps ? (

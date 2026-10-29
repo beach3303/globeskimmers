@@ -68,7 +68,7 @@ function Envelope({ count, peek, onOpen }) {
         {count ? "See or delete them" : "Post one from any board"}
       </span>
       <span aria-hidden="true" className="block text-center" style={{ marginTop: 1, color: INK3, fontSize: fs(10.5), lineHeight: 1.3 }}>
-        Delete any card any time
+        Only the cards you posted to boards
       </span>
     </button>
   );

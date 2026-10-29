@@ -78,9 +78,11 @@ function Envelope({ packet, onOpen, stampLevel = null }) {
 
 // albums: the owner's "Who sees my photo albums" dial ('passport' | 'inner' | 'me'); a 🌍 print
 // hangs on the city board only while the dial is open to passport viewers.
-// corner (2026-10-27): an album pinned at the top right of the shelf — the profile's
-// "Contribute to City Boards". With a corner the shelf shows even before any stamp has photos.
-export default function PhotoPackets({ stamps, title = "Photo packets", owner = false, albums = "passport", onChanged = null, social = null, className = "max-w-md mx-auto px-4 mt-8", corner = null }) {
+// corner (2026-10-27): an album pinned at the top right of the shelf. boards (2026-10-28, founder:
+// "line them up side by side … clarify what that album is for"): the profile's two City Board
+// albums — photos uploaded, postcards posted — in their own row under the header, with the words
+// that say what each is. With either the shelf shows even before any stamp has photos.
+export default function PhotoPackets({ stamps, title = "Photo packets", owner = false, albums = "passport", onChanged = null, social = null, className = "max-w-md mx-auto px-4 mt-8", corner = null, boards = null }) {
   // social: { slug, blotter, onBlotterChanged } — the per-photo guestbook inside an open album.
   // className: the column (the profile passes its own, which widens on iPad).
   const packets = useMemo(() => derivePackets(stamps, { byLevel: owner }), [stamps, owner]);
@@ -131,7 +133,7 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
     setBusyKey(null);
     if (added) { showToast(`${added} print${added === 1 ? "" : "s"} added to ${packet.city} 📸`, "success"); onChanged?.(); }
   };
-  if (!packets.length && !corner) return null;
+  if (!packets.length && !corner && !boards) return null;
   // The shelf used to scroll sideways; a lifetime of prints reads top to bottom, a year at
   // a time (founder, 2026-10-14 night). Newest year first, two envelopes across on a phone:
   // the envelopes size to the column (they were a fixed 176 px, and inside the Passport's own
@@ -153,6 +155,20 @@ export default function PhotoPackets({ stamps, title = "Photo packets", owner = 
         {/* The first album, at the top right (founder, 2026-10-27). */}
         {corner ? <div style={{ flex: "none", width: "44%", maxWidth: 190 }}>{corner}</div> : null}
       </div>
+      {/* On City Boards: the two public albums, side by side, and what each is for. */}
+      {boards ? (
+        <section aria-label="On City Boards" style={{ marginTop: 16 }}>
+          <div className="flex items-baseline gap-2.5">
+            <span style={{ fontFamily: SERIF, fontSize: fs(18), color: "#16110D" }}>City Boards</span>
+            <span className="uppercase" style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".14em", color: INK3 }}>PUBLIC · TWO ALBUMS</span>
+            <span aria-hidden="true" className="flex-1" style={{ borderTop: "1px dashed rgba(22,17,13,.18)", transform: "translateY(-3px)" }} />
+          </div>
+          <p style={{ margin: "4px 0 0", fontSize: fs(12), lineHeight: 1.45, color: INK3 }}>
+            What you’ve put on City Boards: the photos you uploaded, and the postcards you posted there. Both are public; delete any of it any time. Postcards to friends stay in your Mailbox.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, paddingTop: 12 }}>{boards}</div>
+        </section>
+      ) : null}
       <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPick} />
       {years.map(({ year, prints, places, packets: list }) => (
         <section key={year} aria-label={`${year} — ${prints} prints`}>
