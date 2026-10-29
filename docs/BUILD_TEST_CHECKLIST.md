@@ -3526,3 +3526,11 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - "i like option 1, i don't like to display the blank future partner's own art until the future when we have it."
   Option 2's board and the dashed "their own stamp" design C are off the City Cards canvas (version 14); the app
   never had either. Docs only — nothing new to test.
+
+## 2026-10-29 — PUSHED: tap a stamp on a City Card (main 4ee573e)
+
+- 7c53c70 → 4ee573e: the tap-a-stamp build (f35f6c2) + three docs commits. App and docs only — no worker, site or
+  migration path changed, so no deploy workflow runs; phones get it with the founder's `npm run ota` (both platforms).
+- **Phone test after OTA:** Home → City Cards → a card → tap a stamp → the big type-only stamp, the visits line, the
+  small category stamp, Share this stamp; swipe down closes the stamp only; a friend's card on their Traveler page
+  opens stamps without Share.
