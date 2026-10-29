@@ -3501,3 +3501,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   "starbucks" showed two Starbucks); a lone generic drink word ("coffee", "boba") names nothing. Cache key v4.
   Shopping and Convenience Store have no typed search — nothing to port.
 - **Verify after the push:** /coffee/search "starbucks" at Santa Anita → every Starbucks, nearest first.
+
+## 2026-10-29 — PUSHED: the Coffee typed-name rule (main 7c53c70)
+
+- Workers run 40876173659. Verified live: /coffee/search "starbucks" at Santa Anita → 20 results, every one a named
+  Starbucks, nearest first.
