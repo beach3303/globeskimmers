@@ -137,10 +137,13 @@ export default function PhotoLightbox({ photos, index, onClose, onIndexChange, t
       role="dialog"
       aria-modal="true"
       aria-label={title ? `Photos of ${title}` : "Photos"}
-      onClick={() => onClose?.()}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
+      /* A modal keeps its taps and swipes to itself: React carries them up the owner's tree even
+         through the portal, so a swipe here would also page the board viewer or flip the passport
+         behind it, and a backdrop tap would open the tile the lightbox came from. */
+      onClick={(e) => { e.stopPropagation(); onClose?.(); }}
+      onTouchStart={(e) => { e.stopPropagation(); onTouchStart(e); }}
+      onTouchMove={(e) => { e.stopPropagation(); onTouchMove(e); }}
+      onTouchEnd={(e) => { e.stopPropagation(); onTouchEnd(e); }}
     >
       {/* Cross-fade on photo change — reduced-motion users get an instant cut. */}
       <style>{`

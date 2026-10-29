@@ -19,7 +19,10 @@
 //            into the postcard box or lets it go. Cards addressed to you are always kept.
 // The postmark opens that city's board (City Boards, 2026-10-14): a 44px link wherever the
 // card names a city and a country, except on the board itself and for a held account.
+// The photo is a button (founder, 2026-10-29: "postcard photos … allow users to also zoom"): a
+// tap opens it big in the shared PhotoLightbox, where two fingers zoom it like any memory photo.
 import React, { useState } from "react";
+import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import { Link } from "react-router-dom";
 import { Bookmark, BookmarkCheck, CornerUpLeft } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
@@ -51,6 +54,8 @@ const handleOf = (v) => String((v && typeof v === "object" ? v.handle : v) ?? ""
 // deleteLine (2026-10-28): what Delete says it does when it isn't the Mailbox (a card on a board).
 export default function PostcardCard({ row, me = undefined, meName = null, onReport = undefined, onKeep = undefined, onReply = undefined, onFollow = undefined, onDelete = undefined, deleteLine = undefined, className = undefined, style = undefined }) {
   const [deleting, setDeleting] = useState(false);
+  const [big, setBig] = useState(false);       // the photo, enlarged — pinch to zoom from there
+  const [broken, setBroken] = useState(false); // the photo didn't load: the plain airmail panel, no tap
   const { socialTier } = useAuth();
   if (!row || typeof row !== "object") return null;
   const by = row.by || {};
@@ -79,10 +84,18 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
       style={{ position: "relative", background: NEUTRAL.cream, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 14, overflow: "hidden", boxShadow: `0 10px 22px -18px ${rgba(NEUTRAL.ink, 0.45)}`, ...style }}>
       <div style={{ margin: "8px 8px 0", borderRadius: 8, overflow: "hidden", aspectRatio: "3 / 2", background: NEUTRAL.airmailHair }}>
         {/* A photo that can't load leaves the plain airmail panel, never a broken-image icon. */}
-        <img src={row.photo} alt={place ? `Postcard from ${place}` : "A postcard"} loading="lazy" decoding="async"
-          onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
-          style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
+        {broken ? null : (
+          <button type="button" onClick={() => setBig(true)} aria-label={`See the photo big${place ? `: ${place}` : ""}`} className="active:opacity-90"
+            style={{ display: "block", width: "100%", height: "100%", padding: 0, border: 0, background: "transparent", cursor: "zoom-in" }}>
+            <img src={row.photo} alt={place ? `Postcard from ${place}` : "A postcard"} loading="lazy" decoding="async"
+              onError={() => setBroken(true)}
+              style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
+          </button>
+        )}
       </div>
+      <PhotoLightbox photos={big ? [{ src: row.photo }] : []} index={big ? 0 : null} onClose={() => setBig(false)}
+        title={place ? `Postcard from ${place}` : boardCity ? `Postcard from ${boardCity}` : "A postcard"}
+        credit={`${from === "You" ? "From you" : `From ${from}`}${when ? ` · ${when}` : ""}`} />
       <div style={{ padding: "12px 16px" }}>
         <div style={{ display: "flex", alignItems: "stretch", gap: 14 }}>
           <div style={{ flex: 1, minWidth: 0 }}>

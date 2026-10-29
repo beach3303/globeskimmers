@@ -19,6 +19,7 @@ import { TINK, TINK3, TYPE } from "@/components/telegram/TelegramPaper";
 import { inkColor } from "@/lib/telegram";
 import { hideAllSent, hideSent, sentMail } from "@/lib/sentMail";
 import { deleteBoardPostcard } from "@/lib/boardPostcards";
+import PhotoLightbox from "@/components/finder/PhotoLightbox";
 
 const SERIF = "'Instrument Serif', Georgia, serif";
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
@@ -70,8 +71,10 @@ const TONE = {
   plain: { bg: NEUTRAL.airmailHair, ink: BLUE },
 };
 
-// The small front: the card's photo, or a telegram slip with its first words.
+// The small front: the card's photo, or a telegram slip with its first words. The big front's
+// photo is a button (founder, 2026-10-29): a tap opens it full screen, where two fingers zoom it.
 function Front({ it, big = false }) {
+  const [enlarged, setEnlarged] = useState(false);
   if (it.kind === "telegram") {
     return (
       <div aria-hidden="true" style={{ flex: "none", width: big ? "100%" : 64, minHeight: big ? 0 : 46, padding: big ? "14px 16px" : "5px 6px", boxSizing: "border-box", background: SLIP, boxShadow: "inset 0 0 0 1px rgba(120,85,25,.18), 0 3px 6px -4px rgba(70,45,10,.4)", color: TINK }}>
@@ -80,10 +83,22 @@ function Front({ it, big = false }) {
       </div>
     );
   }
+  const img = it.photo ? <img src={it.photo} alt={big ? (it.place ? `Your postcard from ${it.place}` : "Your postcard") : ""} loading="lazy" decoding="async" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} /> : null;
   return (
-    <div aria-hidden="true" style={{ flex: "none", width: big ? "100%" : 64, aspectRatio: "3 / 2", borderRadius: big ? 10 : 3, overflow: "hidden", background: NEUTRAL.airmailHair, border: big ? 0 : `2px solid ${NEUTRAL.white}`, boxShadow: big ? "none" : "0 3px 6px -3px rgba(22,17,13,.45)" }}>
-      {it.photo ? <img src={it.photo} alt="" loading="lazy" decoding="async" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} /> : null}
-    </div>
+    <>
+      <div aria-hidden={big ? undefined : "true"} style={{ flex: "none", width: big ? "100%" : 64, aspectRatio: "3 / 2", borderRadius: big ? 10 : 3, overflow: "hidden", background: NEUTRAL.airmailHair, border: big ? 0 : `2px solid ${NEUTRAL.white}`, boxShadow: big ? "none" : "0 3px 6px -3px rgba(22,17,13,.45)" }}>
+        {big && img ? (
+          <button type="button" onClick={() => setEnlarged(true)} aria-label="See the photo big" className="active:opacity-90"
+            style={{ display: "block", width: "100%", height: "100%", padding: 0, border: 0, background: "transparent", cursor: "zoom-in" }}>
+            {img}
+          </button>
+        ) : img}
+      </div>
+      {big && it.photo ? (
+        <PhotoLightbox photos={enlarged ? [{ src: it.photo }] : []} index={enlarged ? 0 : null} onClose={() => setEnlarged(false)}
+          title={it.place ? `Postcard from ${it.place}` : "Your postcard"} credit={`From you · ${timeOf(it.at)}`} />
+      ) : null}
+    </>
   );
 }
 
