@@ -110,7 +110,28 @@ export default function ContributeAlbum() {
   );
 }
 
-function ContributeSheet({ photos, onChanged, onClose }) {
+// The same sheet from a board (founder, 2026-10-28: "Post to this board" offers photos as well as a
+// postcard, on city, state and country boards): titled for the board, listing the member's photos
+// on it, and saying when a photo landed elsewhere (it hangs where it was taken).
+export function BoardContributeSheet({ board, onClose, onPosted = undefined }) {
+  const [photos, setPhotos] = useState([]);
+  const load = () => listContributions().then((r) => { if (!r.error) setPhotos(r.photos); });
+  useEffect(() => { load(); }, []);
+  return <ContributeSheet photos={photos} board={board} onChanged={() => { load(); onPosted?.(); }} onClose={onClose} />;
+}
+
+// Does a photo's city sit on this board? (names, folded; a US city board also matches the state)
+const fold = (v) => String(v || "").trim().toLowerCase();
+const onBoard = (board, b) => {
+  if (!board || !b) return true;
+  if (fold(b.country) !== fold(board.country)) return false;
+  if (board.kind === "country") return true;
+  if (board.kind === "state") return fold(b.region) === fold(board.region);
+  return fold(b.city) === fold(board.city) && (!board.region || !b.region || fold(b.region) === fold(board.region));
+};
+const kindWord = (board) => (board?.kind === "state" ? "state" : board?.kind === "country" ? "country" : "city");
+
+function ContributeSheet({ photos, onChanged, onClose, board = null }) {
   useDismissable(true, onClose);
   const fileRef = useRef(null);
   const [run, setRun] = useState(null);      // { done, total, place } while sending
@@ -130,7 +151,7 @@ function ContributeSheet({ photos, onChanged, onClose }) {
     e.target.value = "";
     if (!all.length || run) return;
     const files = all.slice(0, CONTRIBUTE_PICK);
-    const tally = { posted: {}, noLocation: 0, child: 0, refused: 0, failed: 0, extra: all.length - files.length, firstError: null };
+    const tally = { posted: {}, elsewhere: {}, noLocation: 0, child: 0, refused: 0, failed: 0, extra: all.length - files.length, firstError: null };
     let earned = null, last = null;
     setSummary(null);
     for (let i = 0; i < files.length; i += 1) {
@@ -142,7 +163,9 @@ function ContributeSheet({ photos, onChanged, onClose }) {
         const r = await contributePhoto({ image, exif });
         if (r.ok) {
           const name = r.board ? [r.board.city, r.board.country].filter(Boolean).join(", ") : "a City Board";
-          tally.posted[name] = (tally.posted[name] || 0) + 1;
+          // From a board: a photo taken somewhere else hangs there instead, and the summary says so.
+          if (board && r.board && !onBoard(board, r.board)) tally.elsewhere[r.board.city || name] = (tally.elsewhere[r.board.city || name] || 0) + 1;
+          else tally.posted[name] = (tally.posted[name] || 0) + 1;
           setRun({ done: i + 1, total: files.length, place: r.board?.city || null });
           if (r.progress) { last = progressOf(r.progress); setCol((c) => (c ? { ...c, progress: last } : c)); }
           if (r.reward) earned = r.reward;
@@ -154,7 +177,7 @@ function ContributeSheet({ photos, onChanged, onClose }) {
     }
     setRun(null);
     setSummary(tally);
-    const n = Object.values(tally.posted).reduce((a, b) => a + b, 0);
+    const n = Object.values(tally.posted).reduce((a, b) => a + b, 0) + Object.values(tally.elsewhere).reduce((a, b) => a + b, 0);
     // The stamp, or "so close", says it all (no toast over its title); otherwise the toast. Both
     // come after the pick finishes, not over the progress bar.
     const close = !earned && last && !last.earned && last.posted >= last.needPhotos && last.cities < last.needCities;
@@ -164,27 +187,31 @@ function ContributeSheet({ photos, onChanged, onClose }) {
     else if (close) setNudge(last);
   };
 
-  // The member's photos by city, newest city first.
+  // The member's photos by city, newest city first; from a board, only the ones on it.
   const groups = useMemo(() => {
     const by = new Map();
-    for (const p of photos) { const k = placeOf(p) || "Somewhere"; if (!by.has(k)) by.set(k, []); by.get(k).push(p); }
+    for (const p of photos) { if (board && !onBoard(board, p)) continue; const k = placeOf(p) || "Somewhere"; if (!by.has(k)) by.set(k, []); by.get(k).push(p); }
     return [...by.entries()];
-  }, [photos]);
+  }, [photos, board]);
   const shown = useMemo(() => groups.flatMap(([, list]) => list), [groups]);
   const posted = summary ? Object.entries(summary.posted) : [];
   const postedCount = posted.reduce((a, [, n]) => a + n, 0);
+  const elsewhere = summary ? Object.entries(summary.elsewhere || {}) : [];
+  const elsewhereCount = elsewhere.reduce((a, [, n]) => a + n, 0);
 
   return createPortal(
     <div className="fixed inset-0 flex items-end justify-center" style={{ zIndex: 9997, background: "rgba(22,17,13,.5)" }} onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label="Contribute to City Boards" onClick={(e) => e.stopPropagation()}
+      <div role="dialog" aria-modal="true" aria-label={board ? `Add photos to ${board.name}` : "Contribute to City Boards"} onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md md:max-w-2xl overflow-y-auto" style={{ maxHeight: "92vh", background: "#F3EEE1", borderRadius: "22px 22px 0 0", padding: "14px 18px calc(24px + env(safe-area-inset-bottom))" }}>
         <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: "rgba(22,17,13,.18)" }} />
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
           <div>
-            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: AIR_RED }}>City Boards · Public</div>
-            <h2 style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(26), fontWeight: 400, lineHeight: 1.1, color: INK }}>Contribute to City Boards</h2>
+            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: AIR_RED }}>{board ? `${kindWord(board)} board · Public` : "City Boards · Public"}</div>
+            <h2 style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(26), fontWeight: 400, lineHeight: 1.1, color: INK }}>{board ? <>Add photos to <em style={{ fontStyle: "italic", color: AIR_BLUE }}>{board.name}</em></> : "Contribute to City Boards"}</h2>
             <p style={{ margin: "4px 0 0", fontSize: fs(14), lineHeight: 1.4, color: INK2 }}>
-              Share your travel and city photos: streets, food, sights, festivals. Each one goes up on the board of the city where you took it.
+              {board
+                ? <>Photos you took in {board.name} go up on this board: streets, food, sights, festivals. A photo from somewhere else goes to its own city’s board.</>
+                : <>Share your travel and city photos: streets, food, sights, festivals. Each one goes up on the board of the city where you took it.</>}
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close"
@@ -234,9 +261,10 @@ function ContributeSheet({ photos, onChanged, onClose }) {
           <div role="status" style={{ marginTop: 12, padding: "12px 14px", borderRadius: 14, background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(13), lineHeight: 1.5, color: INK2 }}>
             {postedCount ? (
               <p style={{ margin: 0, color: INK, fontWeight: 600 }}>
-                {plural(postedCount, "photo", "photos")} posted: {posted.map(([place, n]) => `${place} (${n})`).join(" · ")}
+                {board ? `${plural(postedCount, "photo", "photos")} posted to ${board.name}` : `${plural(postedCount, "photo", "photos")} posted: ${posted.map(([place, n]) => `${place} (${n})`).join(" · ")}`}
               </p>
-            ) : <p style={{ margin: 0, color: INK, fontWeight: 600 }}>Nothing was posted.</p>}
+            ) : elsewhereCount ? null : <p style={{ margin: 0, color: INK, fontWeight: 600 }}>Nothing was posted.</p>}
+            {elsewhereCount ? <p style={{ margin: postedCount ? "4px 0 0" : 0, color: INK, fontWeight: postedCount ? 400 : 600 }}>{elsewhere.map(([place, n]) => `${plural(n, "photo was", "photos were")} taken in ${place}, so ${n === 1 ? "it hangs" : "they hang"} on ${place}’s board instead`).join(". ")}.</p> : null}
             {summary.noLocation ? <p style={{ margin: "4px 0 0" }}>{plural(summary.noLocation, "photo has", "photos have")} no location, so we can’t tell the city. Screenshots and saved photos usually don’t.</p> : null}
             {summary.child ? <p style={{ margin: "4px 0 0" }}>{plural(summary.child, "photo stays", "photos stay")} off the boards: a child is clearly recognizable.</p> : null}
             {summary.refused ? <p style={{ margin: "4px 0 0" }}>{plural(summary.refused, "photo", "photos")} can’t be shared on a City Board.</p> : null}
@@ -264,7 +292,7 @@ function ContributeSheet({ photos, onChanged, onClose }) {
             </section>
           ))
         ) : (
-          <p style={{ marginTop: 16, fontSize: fs(13), lineHeight: 1.5, color: INK3, textAlign: "center" }}>Your photos will show here, by city.</p>
+          <p style={{ marginTop: 16, fontSize: fs(13), lineHeight: 1.5, color: INK3, textAlign: "center" }}>{board ? `Your photos on ${board.name}’s board will show here.` : "Your photos will show here, by city."}</p>
         )}
       </div>
 

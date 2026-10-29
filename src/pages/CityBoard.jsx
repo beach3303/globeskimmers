@@ -5,10 +5,13 @@
 // to the city woven in as full-width cards. Tap a photo to see it large, signed with its
 // @username. /CityBoard?city=Lisbon&country=Portugal; a US state is
 // ?kind=state&region=Texas&country=United%20States and a country ?kind=country&country=Ghana —
-// those roll up everything inside them and take no posts of their own.
+// those roll up everything inside them.
 //
-// 'Post to this city board' shows only when the worker says you can (can_post: an adult with a
-// verified stamp there); otherwise one line says how to earn it. It shows nothing untrue:
+// 'Post to this board' (founder, 2026-10-28: a postcard OR photos, on city, state and country
+// boards alike) opens a two-choice sheet. A postcard needs can_post (an adult with a verified
+// stamp there — a city's, or anywhere inside a state or a country); photos need an adult, and
+// prove themselves by where they were taken (Contribute to City Boards). One line says how to
+// earn the postcard when you can't yet. It shows nothing untrue:
 // nothing social until the age tier is known; the hold or birthday note for a held
 // account; a skeleton while the first page loads; 'Try again' when a read fails; an empty
 // board only when the read worked; and before the worker has boards, a line saying the
@@ -16,7 +19,12 @@
 // Unfollow, Block); cards from people you blocked never show.
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { BookOpen, ChevronLeft, ChevronRight, Mail, Stamp, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, ImageUp, Mail, Stamp, X } from "lucide-react";
+import { useDismissable } from "@/lib/dismissStack";
+import { contributeOpen } from "@/lib/boardContrib";
+import { BoardContributeSheet } from "@/components/passport/ContributeAlbum";
+import { deleteBoardPostcard } from "@/lib/boardPostcards";
+import { showToast } from "@/components/Toast";
 import Guestbook, { BOARD_PROMPTS } from "@/components/Guestbook";
 import { createPageUrl } from "@/utils";
 import { cityBoardUrl } from "@/lib/boardLinks";
@@ -79,6 +87,7 @@ const plateOf = (name) => { let h = 0; for (const c of String(name || "")) h = (
 const RAYS = Array.from({ length: 16 }, (_, k) => { const a = (k - 16) * 0.19635, b = (k - 15) * 0.19635; return `<polygon points="201,160 ${201 + 260 * Math.cos(a)},${160 + 260 * Math.sin(a)} ${201 + 260 * Math.cos(b)},${160 + 260 * Math.sin(b)}" fill="${k % 2 ? "#FFFFFF" : "#000000"}" opacity="${k % 2 ? 0.08 : 0.06}"/>`; }).join("");
 
 function Billboard({ name, kind = "city", country = "", region = "", kit = null, counts = null, onBack, onPost = undefined, guestbookCount = null, onGuestbook = undefined }) {
+  const kindLower = kind === "state" ? "state" : kind === "country" ? "country" : "city";
   const fallback = plateOf(name);
   const plate = kit?.palette?.plate || fallback.plate;
   const accent = kit?.palette?.accent || fallback.accent;
@@ -138,7 +147,7 @@ function Billboard({ name, kind = "city", country = "", region = "", kit = null,
               <button type="button" onClick={onPost}
                 style={{ flex: "none", display: "flex", alignItems: "center", gap: 7, minHeight: 40, padding: "0 14px", borderRadius: 999, border: 0, background: NEUTRAL.stamp, font: "inherit", fontSize: fs(12.5), fontWeight: 600, color: NEUTRAL.white, cursor: "pointer" }}>
                 <Mail size={15} strokeWidth={2} aria-hidden="true" focusable="false" />
-                Post to this city board
+                Post to this {kindLower} board
               </button>
             ) : null}
           </div>
@@ -170,7 +179,7 @@ function Billboard({ name, kind = "city", country = "", region = "", kit = null,
 // next, collapse so everything goes back to board"). One item at a time over the wall's rows,
 // swiped or arrowed through, each with its sticker tray and comments (board rules: anyone
 // adult may react, the owner hears of it in the Mailbox).
-function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, onReport, readOnly = false }) {
+function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, onReport, onDelete = undefined, readOnly = false }) {
   const row = rows[index];
   const touch = useRef(null);
   const go = (d) => { const n = index + d; if (n >= 0 && n < rows.length) onIndex(n); };
@@ -229,7 +238,7 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
           </>
         ) : (
           <div style={{ maxWidth: 420, margin: "0 auto" }}>
-            <PostcardCard row={row} me={me} meName={meName} onReport={onReport} />
+            <PostcardCard row={row} me={me} meName={meName} onReport={onReport} onDelete={row.mine && onDelete ? () => onDelete(row) : undefined} deleteLine="It comes off this board for good, likes and comments too." />
           </div>
         )}
         {row.id ? (
@@ -322,6 +331,8 @@ function Board({ kind, city, region, country, onBack }) {
   const [me, setMe] = useState({ handle: null, name: null });
   const [traveler, setTraveler] = useState(null);
   const [compose, setCompose] = useState(false);
+  const [choose, setChoose] = useState(false);     // the two-choice sheet: a postcard or photos
+  const [addPhotos, setAddPhotos] = useState(false); // the photos sheet, for this board
   const [view, setView] = useState(null);     // the viewer's index into rows, or null
   const [gbOpen, setGbOpen] = useState(false);
   const [gbCount, setGbCount] = useState(null);
@@ -372,7 +383,20 @@ function Board({ kind, city, region, country, onBack }) {
 
   const blocked = circle.blockedHandles || new Set();
   const rows = board && !board.error && !board.held && !board.unavailable ? (board.rows || []).filter((r) => !blocked.has(lc(r?.by?.handle))) : [];
-  const canPost = kind === "city" && !!board && board.can_post === true && !board.held && !board.unavailable;
+  // An adult on a board that loaded: a postcard once they've been there (can_post), photos any
+  // time while contributions are open (each photo proves where it was taken).
+  const writer = !!board && !board.error && !board.held && !board.unavailable && board.read_only !== true;
+  const canPostCard = writer && board.can_post === true;
+  const canAddPhotos = writer && contributeOpen();
+  const kindWord = kind === "state" ? "state" : kind === "country" ? "country" : "city";
+  // My own card comes off the board (founder, 2026-10-28): for good, likes and comments too.
+  const removeCard = async (row) => {
+    const r = await deleteBoardPostcard(row.id);
+    if (!r.ok) { showToast(r.error || "Couldn’t delete it — try again", "error"); return false; }
+    showToast(`Taken off ${name}’s board`, "success");
+    load();
+    return true;
+  };
   const report = (row) => setTraveler({
     person: { ...(row.by || {}), postcard_id: row.type === "photo" ? null : row.id || null },
     report: row.type === "photo"
@@ -415,7 +439,9 @@ function Board({ kind, city, region, country, onBack }) {
           Nothing from {name} <em style={{ fontStyle: "italic", color: BLUE }}>yet</em>
         </p>
         <p style={{ margin: "6px auto 0", maxWidth: "36ch", fontSize: fs(13), lineHeight: 1.5, color: NEUTRAL.ink2 }}>
-          {canPost ? "You were here, so the first card can be yours — and the photos on your public stamps hang here on their own." : `Photos on public stamps from ${name} hang here on their own; travelers who stamp it, verified, can post cards too.`}
+          {canPostCard
+            ? `You were here, so the first card can be yours${canAddPhotos ? `, and photos you took in ${name} can go up any time` : ""}. The photos on your public stamps hang here on their own.`
+            : `Photos on public stamps from ${name} hang here on their own${canAddPhotos ? `, and photos you took in ${name} can go up any time` : ""}; travelers who stamp it, verified, can post cards too.`}
         </p>
       </div>
     );
@@ -432,7 +458,7 @@ function Board({ kind, city, region, country, onBack }) {
               onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !e.target.closest("button, a")) { e.preventDefault(); setView(i); } }}
               style={{ gridColumn: "1 / -1", cursor: "pointer", ...(WALL === "pins" ? { position: "relative", transform: `rotate(${tiltOf(i) / 2}deg)`, margin: "8px 2px 4px", filter: "drop-shadow(0 8px 10px rgba(22,17,13,.28))" } : {}) }}>
               {WALL === "pins" ? <Pin color={NEUTRAL.airmailBlue} /> : null}
-              <PostcardCard row={r} me={me.handle} meName={me.name || profile?.first_name || null} onReport={report} />
+              <PostcardCard row={r} me={me.handle} meName={me.name || profile?.first_name || null} onReport={report} onDelete={r.mine ? () => removeCard(r) : undefined} deleteLine="It comes off this board for good, likes and comments too." />
             </div>
           )))}
         </div>
@@ -453,7 +479,7 @@ function Board({ kind, city, region, country, onBack }) {
 
   return (
     <div>
-      <Billboard name={name} kind={kind} country={country} region={kind === "city" ? board?.board?.region || region : ""} kit={board?.kit || null} counts={board?.counts || null} onBack={onBack} onPost={canPost ? () => setCompose(true) : undefined}
+      <Billboard name={name} kind={kind} country={country} region={kind === "city" ? board?.board?.region || region : ""} kit={board?.kit || null} counts={board?.counts || null} onBack={onBack} onPost={canPostCard || canAddPhotos ? () => setChoose(true) : undefined}
         guestbookCount={gbCount ?? board?.guestbook?.count ?? null}
         onGuestbook={board?.guestbook?.id && !board.held && !board.unavailable && !board.error ? () => setGbOpen(true) : undefined} />
       <div className={COLUMN}>
@@ -473,10 +499,10 @@ function Board({ kind, city, region, country, onBack }) {
             <Stamp size={15} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 1 }} />
             <span>Browse every photo, card and tip, and add sticker likes. Posting and notes open at age 18.</span>
           </p>
-        ) : kind === "city" && board && !board.held && !board.unavailable && !board.error && !canPost ? (
+        ) : writer && !canPostCard ? (
           <p style={{ display: "flex", alignItems: "flex-start", gap: 8, margin: "14px 0 0", fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
             <Stamp size={15} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 1 }} />
-            <span>Stamp {city} with GPS or a photo taken there, and you can post a card here too.</span>
+            <span>{kind === "city" ? `Stamp ${name} with GPS or a photo taken there, and you can send a postcard here too.` : `Stamp a place in ${name}, verified, and you can send a postcard here too.`}{canAddPhotos ? ` Photos you took in ${name} can go up any time.` : ""}</span>
           </p>
         ) : null}
         <section aria-label={`${name}’s board`} style={{ marginTop: 14 }}>{WALL === "pins" && rows.length ? null : body}</section>
@@ -492,16 +518,66 @@ function Board({ kind, city, region, country, onBack }) {
       ) : null}
       {view !== null && rows[view] ? (
         <BoardViewer rows={rows} index={view} onIndex={setView} onClose={() => setView(null)} book={book} onBook={() => readBook(board?.rows)} readOnly={board?.read_only === true}
-          me={me.handle} meName={me.name || profile?.first_name || null} onReport={(row) => { setView(null); report(row); }} />
+          me={me.handle} meName={me.name || profile?.first_name || null} onReport={(row) => { setView(null); report(row); }} onDelete={async (row) => { const ok = await removeCard(row); if (ok) setView(null); return ok; }} />
       ) : null}
       {traveler ? (
         <TravelerSheet person={traveler.person} report={traveler.report}
           onClose={() => setTraveler(null)} onChanged={() => { setTraveler(null); circle.retry(); retry(); }} />
       ) : null}
-      {kind === "city" ? (
-        <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={() => { setCompose(false); retry(); }}
-          toCity={{ city, country, region: region || board?.board?.region || null }} blocked={circle.blocked} />
+      {choose ? (
+        <PostChooser name={name} kindWord={kindWord} card={canPostCard} photos={canAddPhotos} onClose={() => setChoose(false)}
+          onCard={() => { setChoose(false); setCompose(true); }} onPhotos={() => { setChoose(false); setAddPhotos(true); }} />
       ) : null}
+      {addPhotos ? (
+        <BoardContributeSheet board={board?.board || { kind, name, city: kind === "city" ? city : null, region: kind === "country" ? null : region || null, country }}
+          onClose={() => setAddPhotos(false)} onPosted={load} />
+      ) : null}
+      <PostcardCompose open={compose} onClose={() => setCompose(false)} onSent={() => { setCompose(false); retry(); }}
+        toCity={{ kind, city: kind === "city" ? city : null, country, region: kind === "city" ? region || board?.board?.region || null : kind === "state" ? region : null }} blocked={circle.blocked} />
+    </div>
+  );
+}
+
+// The two ways onto a board (founder, 2026-10-28): a postcard — a photo, a few words and the
+// board's postmark, from someone who was really there — or photos, which hang from "a traveler"
+// and prove themselves by where they were taken. Both are public.
+function PostChooser({ name, kindWord, card, photos, onClose, onCard, onPhotos }) {
+  useDismissable(true, onClose);
+  const Option = ({ icon, title, line, on, onClick, why }) => (
+    <button type="button" onClick={on ? onClick : undefined} aria-disabled={on ? undefined : true}
+      style={{ display: "flex", alignItems: "flex-start", gap: 12, width: "100%", padding: "14px 14px", borderRadius: 16, border: `1.5px solid ${on ? NEUTRAL.airmailLine : "rgba(22,17,13,.08)"}`, background: NEUTRAL.white, textAlign: "left", opacity: on ? 1 : 0.6, cursor: on ? "pointer" : "default" }}>
+      <span aria-hidden="true" style={{ flex: "none", width: 40, height: 40, borderRadius: 12, display: "grid", placeItems: "center", background: on ? "rgba(31,78,140,.1)" : "rgba(22,17,13,.06)", color: on ? BLUE : NEUTRAL.ink3 }}>{icon}</span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: fs(15.5), fontWeight: 650, color: NEUTRAL.ink, lineHeight: 1.2 }}>{title}</span>
+        <span style={{ display: "block", marginTop: 3, fontSize: fs(12.5), lineHeight: 1.45, color: NEUTRAL.ink2 }}>{on ? line : why}</span>
+      </span>
+      {on ? <ChevronRight size={18} strokeWidth={2} color={NEUTRAL.ink3} aria-hidden="true" focusable="false" style={{ flex: "none", marginTop: 11 }} /> : null}
+    </button>
+  );
+  return (
+    <div role="dialog" aria-modal="true" aria-label={`Post to ${name}’s ${kindWord} board`} className="fixed inset-0 z-[9998] flex items-end justify-center" style={{ background: "rgba(22,17,13,.5)" }} onClick={onClose}>
+      <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()} style={{ background: NEUTRAL.ivory, borderRadius: "22px 22px 0 0", padding: "12px 16px calc(20px + env(safe-area-inset-bottom))" }}>
+        <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: "rgba(22,17,13,.18)" }} />
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+          <div>
+            <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", textTransform: "uppercase", color: NEUTRAL.stamp }}>{kindWord} board · public</div>
+            <h2 style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(24), fontWeight: 400, lineHeight: 1.1, color: NEUTRAL.ink }}>Post to <em style={{ fontStyle: "italic", color: BLUE }}>{name}</em></h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close"
+            style={{ flex: "none", width: 44, height: 44, display: "grid", placeItems: "center", borderRadius: 999, background: "transparent", border: 0, color: NEUTRAL.ink2, cursor: "pointer" }}>
+            <X size={20} strokeWidth={2} aria-hidden="true" focusable="false" />
+          </button>
+        </div>
+        <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
+          <Option icon={<Mail size={20} strokeWidth={2} aria-hidden="true" focusable="false" />} title="Send a postcard" on={card} onClick={onCard}
+            line={`A photo, a few words and ${name}’s postmark, signed with your @username or no name at all.`}
+            why={kindWord === "city" ? `Stamp ${name} with GPS or a photo taken there first, verified.` : `Stamp a place in ${name} first, verified.`} />
+          <Option icon={<ImageUp size={20} strokeWidth={2} aria-hidden="true" focusable="false" />} title="Add photos" on={photos} onClick={onPhotos}
+            line={`Photos you took in ${name} hang on this board from “a traveler”, up to 20 at a time. Delete any of them any time.`}
+            why="Contributions closed on June 30, 2027." />
+        </div>
+        <p style={{ margin: "10px 0 0", fontSize: fs(11.5), lineHeight: 1.45, color: NEUTRAL.ink3, textAlign: "center" }}>Everything on a board is public.</p>
+      </div>
     </div>
   );
 }

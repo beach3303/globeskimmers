@@ -17,7 +17,8 @@
 //                  only that address.
 //   blocked        people you blocked (op:list `blocked` rows, user ids, handles, or a Set):
 //                  never suggested as an address. A fixed address you blocked can't be sent to.
-//   toCity         { city, country }: a postcard to that city's public board (City Board).
+//   toCity         { city, country } (or { kind: 'state'|'country', region, country }, 2026-10-28): a
+//                  postcard to that city's, state's or country's public board (City Board).
 //                  The sheet reads 'A postcard to *Lisbon*', the address is the board alone,
 //                  and a line says who can see it. The worker checks you were really there.
 import React, { useEffect, useId, useRef, useState } from "react";
@@ -202,8 +203,12 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   if (!open) return null;
 
   const block = blockedKeys(blocked);
-  const board = toCity && String(toCity.city || "").trim() && String(toCity.country || "").trim()
-    ? { city: String(toCity.city).trim(), country: String(toCity.country).trim(), region: toCity.region ? String(toCity.region).trim() : null } : null;
+  // The board a card is addressed to: a city's, or (founder, 2026-10-28) a state's or a country's.
+  const toKind = toCity && (toCity.kind === "state" || toCity.kind === "country") ? toCity.kind : "city";
+  const toName = toCity ? String((toKind === "state" ? toCity.region : toKind === "country" ? toCity.country : toCity.city) || "").trim() : "";
+  const board = toCity && toName && String(toCity.country || "").trim()
+    ? { kind: toKind, name: toName, city: toKind === "city" ? toName : null, country: String(toCity.country).trim(), region: toCity.region ? String(toCity.region).trim() : null } : null;
+  const boardWord = board ? `${board.name}’s ${board.kind} board` : "";
   const fixedBlocked = !board && !!fixedTo && block.handles.has(fixedTo);
   const reply = !board && replyTo && replyTo.postcard_id ? replyTo : null;
   const replyOthers = reply && Array.isArray(reply.group) ? reply.group.filter(Boolean) : [];
@@ -252,7 +257,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     const one = picked.length === 1 ? picked[0] : null;
     const waiting = Array.isArray(data?.not_ready) && data.not_ready.length ? ` · ${data.not_ready.map((h) => `@${h}`).join(", ")} hasn’t finished their passport yet` : "";
     showToast(board
-      ? (sign === "anon" ? `Posted to ${board.city}’s city board, no name on it` : `Posted to ${board.city}’s city board`)
+      ? (sign === "anon" ? `Posted to ${boardWord}, no name on it` : `Posted to ${boardWord}`)
       : reply ? (toAllOnIt ? `Reply sent to all ${replyOthers.length + 1} on it` : `Reply sent to ${reply.name || "them"}`)
       : address ? `Postcard sent to @${address}`
         // An email address reads the same whether or not a member logs in with it.
@@ -402,7 +407,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
           <h3 id={titleId} style={{ margin: "2px 0 0", paddingRight: 40, fontFamily: SERIF, fontSize: fs(22), fontWeight: 400, lineHeight: 1.1, color: NEUTRAL.ink }}>
             {reply
               ? <>A postcard back to <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>{toAllOnIt ? "everyone" : reply.name || "them"}</em></>
-              : board ? <>A postcard to <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>{board.city}</em></> : <>Send a <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>postcard</em></>}
+              : board ? <>A postcard to <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>{board.name}</em></> : <>Send a <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>postcard</em></>}
           </h3>
 
           {/* the front */}
@@ -470,7 +475,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
           {board || reply || fixedTo ? <div id={`${titleId}-to`} style={{ ...kicker, marginTop: 16 }}>To</div> : null}
           {board ? (
             <div style={{ marginTop: 2 }}>
-              <Address on fixed>{board.city}’s city board</Address>
+              <Address on fixed>{boardWord}</Address>
               {/* Signed, or no name at all (founder, 2026-10-15): "a local" /
                   "a traveler" — the worker decides which of the two it signs. */}
               <div role="group" aria-label="Signed or no name" style={{ display: "flex", flexWrap: "wrap", columnGap: 6, marginTop: 8 }}>
@@ -480,8 +485,10 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
               <p style={{ display: "flex", alignItems: "flex-start", gap: 6, margin: "6px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
                 <Info size={14} strokeWidth={2} color={NEUTRAL.airmailBlue} aria-hidden="true" focusable="false" style={{ flexShrink: 0, marginTop: 2 }} />
                 <span>{sign === "anon"
-                  ? <>Everyone who opens {board.city}’s city board can see the card — signed @local if {board.city} is your home city, otherwise @traveler. Your @username stays off it.</>
-                  : <>Everyone who opens {board.city}’s city board can see it, with your @username.</>}</span>
+                  ? (board.kind === "city"
+                    ? <>Everyone who opens {boardWord} can see the card — signed @local if {board.name} is your home city, otherwise @traveler. Your @username stays off it.</>
+                    : <>Everyone who opens {boardWord} can see the card, signed @traveler. Your @username stays off it.</>)
+                  : <>Everyone who opens {boardWord} can see it, with your @username.</>}</span>
               </p>
             </div>
           ) : reply ? (
