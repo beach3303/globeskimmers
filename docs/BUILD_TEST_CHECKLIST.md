@@ -3449,3 +3449,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   gets "📇 … stamped … (1/10)".
 - **Follow-ups:** convert the nearby-service passport stamps already minted into City Card stamps (needs a way to
   tell them from Things to Do "I was here" rows — not stored today); a Shopping category stamp PNG from the founder.
+
+## 2026-10-28 (night) — PUSHED: everything above through City Cards (main 83dfa0c)
+
+- One push `stamping-v2:main` (f7b8de8..83dfa0c, 25 commits). Migrations applied: 20261028120000_board_collectibles,
+  20261029010000_city_cards (run 40809140550). Workers deployed (run 40809140467, api version e00bb3b0).
+- Probed live as the demo account: /city-cards → {cards:[]}, /collectibles → progress 0/10 · 0/3, /postcards/board-mine
+  → {items:[]}; signed out → 401.
+- **Open:** founder `npm run ota` (both platforms) — then the phone tests in the entries above (albums, collectible
+  stamp, Post to any board, My postcards, City Cards). Follow-ups unchanged: old nearby passport stamps, the
+  Shopping category stamp PNG, the City Board row decision.
