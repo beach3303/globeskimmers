@@ -911,15 +911,42 @@ async function founderAlert(env, text, tag = 'bell', opts = {}) {
     await gbBellSend(env, text, tag, opts);
   } catch { /* the bell never breaks the app */ }
 }
-// The founder's activity bell for usernames and mail (founder, 2026-10-26: "i want to get a notification when a
-// @handle is created, when postcard or when telegram is sent"). Who (a member number — "You" for an admin), and what
-// kind and how many; never a message's words, photo or place, nor who it went to: mail stays between its sender and
-// its recipients. A tap opens the member in Admin. line(who) → the alert's text.
-async function gbActivityBell(env, user, tag, line) {
+// Who, for the founder's bell only (founder, 2026-10-28: "allow admin to know name of who is stamping, name and
+// from what location"): the member's first name, @username and member number — "You" for an admin. These words
+// reach the founder's private topic and nothing member-facing.
+async function gbWhoLine(env, user) {
+  const mine = ADMIN_EMAILS_WORKER.includes(String(user?.email || '').trim().toLowerCase());
+  if (mine) return { who: 'You', n: null };
+  const [n, pr, sh] = await Promise.all([
+    gbMemberNumber(env, user.id).catch(() => null),
+    gbRest(env, `profiles?id=eq.${user.id}&select=first_name,display_name`, { headers: { 'Accept-Profile': 'public' } }).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    gbRest(env, `passport_shares?user_id=eq.${user.id}&select=handle`, {}).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+  ]);
+  const name = String(pr[0]?.first_name || pr[0]?.display_name || '').trim();
+  const handle = sh[0]?.handle ? `@${sh[0].handle}` : '';
+  const label = [name, handle].filter(Boolean).join(' ');
+  return { who: label ? `${label}${n ? ` (#${n})` : ''}` : n ? `Member #${n}` : 'A member', n };
+}
+// Where, for the bell: the connection's city and region as Cloudflare reads the network (not the member's GPS),
+// then the country gbConnectionPlace names. "" when nothing is known.
+function gbWhereLine(request) {
   try {
-    const mine = ADMIN_EMAILS_WORKER.includes(String(user?.email || '').trim().toLowerCase());
-    const n = mine ? null : await gbMemberNumber(env, user.id);
-    await founderAlert(env, line(mine ? 'You' : n ? `Member #${n}` : 'A member'), tag, n ? { click: gbMemberLink(n) } : {});
+    const cf = request?.cf || {};
+    const local = [cf.city, cf.region].filter((v) => typeof v === 'string' && v.trim()).join(', ');
+    const place = gbConnectionPlace(request);
+    if (place && place !== 'via Tor') return ` · from ${local ? `${local}, ` : ''}${place.replace(/^in /, '')}`;
+    return place ? ` · ${place}` : local ? ` · from ${local}` : '';
+  } catch { return ''; }
+}
+// The founder's activity bell for usernames and mail (founder, 2026-10-26: "i want to get a notification when a
+// @handle is created, when postcard or when telegram is sent"). Who (name, @username and member number since
+// 2026-10-28 — "You" for an admin) and where they connected from, and what kind and how many; never a message's
+// words, photo or place, nor who it went to: mail stays between its sender and its recipients. A tap opens the
+// member in Admin. line(who) → the alert's text.
+async function gbActivityBell(env, user, tag, line, request = null) {
+  try {
+    const { who, n } = await gbWhoLine(env, user);
+    await founderAlert(env, `${line(who)}${gbWhereLine(request)}`, tag, n ? { click: gbMemberLink(n) } : {});
   } catch { /* the bell never breaks the app */ }
 }
 const gbPeople = (k) => `${k} ${k === 1 ? 'person' : 'people'}`;
@@ -1220,7 +1247,8 @@ function gbBellNewMember(request, env, u) {
         await kv.put(key, '1').catch(() => {});
         if (!won) return;
       }
-      await founderAlert(env, `🎉 New member${n ? ` #${n}` : ''}${parts.map((p) => ` · ${p}`).join('')}${joined}`, 'new', n ? { click: gbMemberLink(n) } : {});
+      const { who } = await gbWhoLine(env, u).catch(() => ({ who: n ? `Member #${n}` : 'A member' }));
+      await founderAlert(env, `🎉 New member: ${who}${parts.map((p) => ` · ${p}`).join('')}${joined}`, 'new', n ? { click: gbMemberLink(n) } : {});
     })().catch(() => {}));
   } catch { /* the bell never touches sign-in */ }
 }
@@ -15089,8 +15117,8 @@ async function handlePassportStamp(request, env, ctx) {
     if (ctx && result.created && row.hidden && alertable) {
       const mineP = ADMIN_EMAILS_WORKER.includes(String(user.email || '').trim().toLowerCase());
       ctx.waitUntil((async () => {
-        const n = mineP ? null : await gbMemberNumber(env, user.id);
-        await founderAlert(env, `📍 ${mineP ? 'You' : n ? `Member #${n}` : 'A member'} stamped a place kept private (Only me)`, 'bell', n ? { click: gbMemberLink(n) } : {});
+        const { who, n } = mineP ? { who: 'You', n: null } : await gbWhoLine(env, user);
+        await founderAlert(env, `📍 ${who} stamped a place kept private (Only me)${gbWhereLine(request)}`, 'bell', n ? { click: gbMemberLink(n) } : {});
       })().catch(() => {}));
     }
     if (ctx && result.created && !row.hidden && alertable) {
@@ -15098,9 +15126,8 @@ async function handlePassportStamp(request, env, ctx) {
       const what = `${row.name}${where ? ` · ${where}` : ''} — ${kind} stamp${result.verified === 'gps' ? ' ✓' : ''}${result.verified === 'reported' ? ' (reported: "I’m here, but the app is saying I’m not")' : ''}${direction ? ` (${kind === 'airport' || mode === 'air' ? direction : direction === 'departure' ? 'exit' : 'entry'})` : ''}`;
       const mine = ADMIN_EMAILS_WORKER.includes(String(user.email || '').trim().toLowerCase());
       ctx.waitUntil((async () => {
-        const n = mine ? null : await gbMemberNumber(env, user.id);
-        const who = mine ? 'You' : n ? `Member #${n}` : 'A member';
-        await founderAlert(env, `📍 ${who} stamped ${what}`, 'bell', n ? { click: gbMemberLink(n) } : {});
+        const { who, n } = mine ? { who: 'You', n: null } : await gbWhoLine(env, user);
+        await founderAlert(env, `📍 ${who} stamped ${what}${gbWhereLine(request)}`, 'bell', n ? { click: gbMemberLink(n) } : {});
       })().catch(() => {}));
     }
     return jsonResponse({ id: result.id, created: !!result.created, updated: !!result.updated, verified: result.verified, reported: reporting, private: !!(result.created && startPrivate) });
@@ -17358,7 +17385,7 @@ async function handlePassportDelete(request, env, ctx) {
 // Wipe every reaction, comment and doodle aimed at these targets (owner's
 // own blotter only). Co-signs cascade with their entries.
 async function blPurgeTargets(env, ownerId, targets, ctx) {
-  const list = (targets || []).filter((t) => /^(st|ph|bcp):[0-9a-f-]{36}$/i.test(t));
+  const list = (targets || []).filter((t) => /^(st|ph|bcp|pc):[0-9a-f-]{36}$/i.test(t));
   if (!list.length) return;
   const inList = `in.(${list.map((t) => encodeURIComponent(`"${t}"`)).join(',')})`;
   const eq = await gbRest(env, `blotter_entries?owner_user_id=eq.${ownerId}&target=${inList}&select=id,doodle_key`, {});
@@ -18591,6 +18618,30 @@ async function pcWasThere(env, userId, key) {
     return maybe.some((st) => pcCityKey(st.city, st.country, st.region) === key);
   } catch { return false; }
 }
+// Was this traveler really somewhere on that board? A city: pcWasThere. A state or a country
+// (postcards to those boards, founder 2026-10-28): a verified stamp of theirs anywhere inside it.
+async function pcWasThereIn(env, userId, board) {
+  if (!board) return false;
+  if (board.kind === 'city') return pcWasThere(env, userId, board.key);
+  try {
+    const q = await gbRest(env, `passport_stamps?user_id=eq.${userId}&hidden=eq.false&verified=in.(gps,photo_loc,photo_ai)&select=id,city,region,country,lat,lng&limit=2000`, {});
+    if (!q.ok) return false;
+    const stamps = await q.json();
+    const inCountry = (st) => pcFold(pcCountryName(st.country)) === pcFold(board.country);
+    if (board.kind === 'country') return stamps.some(inCountry);
+    const us = pcIsUSName(board.country);
+    const want = pcNorm(us ? (pcUSState(board.region) || board.region) : board.region);
+    const stateOf = (st) => (pcIsUSName(st.country) ? (pcUSState(st.region) || pcUSCity(st.city, st.region).state || '') : (st.region || ''));
+    const inState = (st) => inCountry(st) && pcNorm(stateOf(st)) === want;
+    if (stamps.some(inState)) return true;
+    // A stateless US stamp learns its state from its coordinates, then is asked again.
+    if (!us) return false;
+    const maybe = stamps.filter((st) => pcIsUSName(st.country) && !stateOf(st));
+    if (!maybe.length) return false;
+    await pcHealStates(env, maybe, 3);
+    return maybe.some(inState);
+  } catch { return false; }
+}
 // A US stamp without its state (older stamps, some searches) learns it from its own
 // coordinates — the cached reverse geocode — and keeps it. A few per read, never more.
 async function pcHealStates(env, stamps, max = 6) {
@@ -19190,7 +19241,7 @@ async function handleLinkCreate(request, env, ctx) {
     const url = `https://globeskimmers.io/m/${code}`;
     const text = `${handle ? `${first} (@${handle})` : first} sent you a ${kind} on GlobeSkimmers ✈️ Open it here: ${url}`;
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'link_create', { kind }));
-    if (ctx) ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => `${kind === 'telegram' ? '⚡' : '💌'} ${who} made a ${kind} to send by text or share`));
+    if (ctx) ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => `${kind === 'telegram' ? '⚡' : '💌'} ${who} made a ${kind} to send by text or share`, request));
     return jsonResponse({ ok: true, code, url, text });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -19421,21 +19472,35 @@ async function handlePostcardSend(request, env, ctx) {
       // city (GPS, the photo's place or the photo itself). No proof, no post. Its
       // words are checked first, and five boards a day is plenty.
       if (sp.social_tier === 'teen') return jsonResponse({ error: 'City boards open at age 18' }, 403);
-      boardCity = clean(b.to_city.city, 60);
-      boardCountry = clean(pcCountryName(b.to_city.country), 60);
-      if (pcIsUSName(boardCountry)) {
-        boardCountry = 'United States';
-        const uc = pcUSCity(boardCity, b.to_city.region);
-        boardCity = uc.city;
-        boardRegion = uc.state || await pcStampState(env, user.id, boardCity, boardCountry);
+      const toKind = b.to_city.kind === 'state' || b.to_city.kind === 'country' ? b.to_city.kind : 'city';
+      if (toKind === 'city') {
+        boardCity = clean(b.to_city.city, 60);
+        boardCountry = clean(pcCountryName(b.to_city.country), 60);
+        if (pcIsUSName(boardCountry)) {
+          boardCountry = 'United States';
+          const uc = pcUSCity(boardCity, b.to_city.region);
+          boardCity = uc.city;
+          boardRegion = uc.state || await pcStampState(env, user.id, boardCity, boardCountry);
+        }
+        toCity = pcCityKey(boardCity, boardCountry, boardRegion);
+        if (!toCity) return jsonResponse({ error: 'Which city?' }, 400);
+        if (!(await pcWasThere(env, user.id, toCity))) return jsonResponse({ error: 'Only travelers who were really there can post here. Stamp it first, verified.', code: 'not_there' }, 403);
+      } else {
+        // A state's or a country's board (founder, 2026-10-28): the card is addressed to the
+        // board itself — its key in to_city, no city, its region and country — and its board
+        // rolls it up like every card inside it. From someone with a verified stamp inside it.
+        const tb = pcBoardOf({ kind: toKind, region: b.to_city.region, country: b.to_city.country });
+        if (!tb) return jsonResponse({ error: toKind === 'state' ? 'Which state?' : 'Which country?' }, 400);
+        boardCountry = tb.country;
+        boardRegion = tb.region || null;
+        toCity = tb.key;
+        if (!(await pcWasThereIn(env, user.id, tb))) return jsonResponse({ error: `Only travelers who were really in ${tb.name} can post here. Stamp a place there first, verified.`, code: 'not_there' }, 403);
       }
-      toCity = pcCityKey(boardCity, boardCountry, boardRegion);
-      if (!toCity) return jsonResponse({ error: 'Which city?' }, 400);
-      if (!(await pcWasThere(env, user.id, toCity))) return jsonResponse({ error: 'Only travelers who were really there can post here. Stamp it first, verified.', code: 'not_there' }, 403);
       if (msg && !(await gbModerate(env, msg)).allow) return jsonResponse({ error: 'Let’s keep the board kind. Try different words.' }, 422);
       // No name on the board (founder, 2026-10-15): the card signs "a local"
       // or "a traveler" instead — which one is decided here, never client-side.
-      if (b.anon === true) anonLabel = await pcAnonLabel(env, user.id, boardCity);
+      // A state's or a country's board signs "a traveler".
+      if (b.anon === true) anonLabel = boardCity ? await pcAnonLabel(env, user.id, boardCity) : 'traveler';
     } else {
       // No address at all: refused, never sent to everyone who follows you (the 2026-10-24 leak).
       return jsonResponse({ error: 'Who is it for? Add someone in Send to.' }, 400);
@@ -19510,7 +19575,7 @@ async function handlePostcardSend(request, env, ctx) {
     }
     if (direct && !deliver.length) {
       if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct: false, waiting: true, emailed, to: waitingEmails.length }));
-      if (ctx) ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => `💌 ${who} sent a postcard to ${gbPeople(waitingEmails.length)} by email`));
+      if (ctx) ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => `💌 ${who} sent a postcard to ${gbPeople(waitingEmails.length)} by email`, request));
       return jsonResponse({ ok: true, waiting: true, emailed });
     }
 
@@ -19547,11 +19612,12 @@ async function handlePostcardSend(request, env, ctx) {
       }
     }
     if (ctx) {
-      // A City Board card is a public post, so its board is named; a card to people names no one.
-      const boardCity = toCity ? String(toCity).split('|')[0].replace(/\b\w/g, (c) => c.toUpperCase()) : null;
+      // A City Board card is a public post, so its board is named (a city's, a state's or a country's);
+      // a card to people names no one.
+      const boardLabel = toCity ? (boardCity ? `${boardCity}’s city board` : boardRegion ? `${boardRegion}’s state board` : `${boardCountry}’s country board`) : null;
       const k = direct ? deliver.length + waitingEmails.length : 0;
-      ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => (boardCity ? `💌 ${who} posted a postcard on the ${boardCity} City Board`
-        : `💌 ${who} sent ${groupId ? 'a group postcard' : 'a postcard'} to ${gbPeople(k)}`)));
+      ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => (boardLabel ? `📮 ${who} posted a postcard on ${boardLabel}`
+        : `💌 ${who} sent ${groupId ? 'a group postcard' : 'a postcard'} to ${gbPeople(k)}`), request));
     }
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct, city: !!toCity, has_dish: !!cardMeta?.dish, anon: anonLabel || undefined, to: direct ? deliver.length + waitingEmails.length : undefined, group: !!groupId || undefined }));
     // A new board card shows in the City Boards list at once, not after its five minutes.
@@ -21184,7 +21250,7 @@ async function handleMailSent(request, env) {
         kind: 'postcard', from: 'postcards', ids: g.map((x) => x.id), at: r.created_at,
         photo: photo(r.photo_key), message: r.message || null, place: r.place_name || r.city || null, dish: r.meta?.dish || null,
         mode: board ? 'board' : !r.to_user_id ? (pcLeaked(r) ? 'lost' : 'followers') : r.group_id ? 'group' : g.length > 1 ? 'each' : 'one',
-        ...(board ? { board: { city: r.city || null, country: r.country || null, anon: !!r.meta?.anon } } : {}),
+        ...(board ? { board: { kind: /^state:/.test(r.to_city) ? 'state' : /^country:/.test(r.to_city) ? 'country' : 'city', city: r.city || null, region: r.region || null, country: r.country || null, anon: !!r.meta?.anon } } : {}),
         to: board || !r.to_user_id ? [] : g.map((x) => who(x.to_user_id)),
         // A card caught by the 2026-10-24 leak never reached who was picked: say so, and to send it again.
         status: pcLeaked(r) ? 'undelivered' : 'delivered',
@@ -21378,7 +21444,7 @@ async function handleCityBoard(request, env) {
       : `postcards?to_city=not.is.null&${pcCountryIn(country)}${board.kind === 'state' ? `&region=ilike.${pcLike(board.region)}` : ''}`;
     const [q, there, wall, kit, cc] = await Promise.all([
       gbRest(env, `${cardsQ}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {}),
-      board.kind === 'city' ? pcWasThere(env, user.id, key) : Promise.resolve(false),
+      pcWasThereIn(env, user.id, board),
       // The wall: photos on public stamps, and the photos travelers contributed (2026-10-27).
       Promise.all([pcBoardPhotos(env, board, before, blocked, origin), bcBoardPhotos(env, board, before, blocked, origin)]).then(([a, c]) => pcWallMerge(a, c)),
       // A board wears only its own kit: a city is not its state (founder, 2026-10-19: "atlanta is
@@ -21426,6 +21492,8 @@ async function handleCityBoard(request, env) {
       ...(p.meta?.anon
         ? { anon: p.meta.anon === 'local' ? 'local' : 'traveler', by: { handle: null, name: null } }
         : { by: { handle: share[p.sender_id]?.handle || null, name: null, ...(faces[p.sender_id] || {}) } }),
+      // The sender's own card (2026-10-28): they may take it off the board. Nobody else learns whose it is.
+      mine: p.sender_id === user.id,
     }));
     const photoRows = shownPhotos.map((p) => ({
       type: 'photo', id: p.id, created_at: p.created_at, photo: p.photo, caption: p.caption || null,
@@ -21447,7 +21515,7 @@ async function handleCityBoard(request, env) {
     const gq = await gbRest(env, `guestbook_entries?entity_id=eq.${encodeURIComponent(gbId)}&review_status=eq.ok&deleted_at=is.null&hidden=eq.false&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } }).catch(() => null);
     const gbCount = gq && gq.ok ? parseInt((gq.headers.get('content-range') || '').split('/')[1] || '0', 10) || 0 : 0;
     return jsonResponse({
-      rows, next, can_post: board.kind === 'city' && there && writer, read_only: !writer, city, country,
+      rows, next, can_post: there && writer, read_only: !writer, city, country,
       board: { kind: board.kind, key, name: board.name, city: board.city, region: board.region, country },
       ...(alternates.length ? { alternates } : {}),
       kit, counts: { photos: wall.total, cards: cardTotal },
@@ -21647,13 +21715,21 @@ async function handleBoardContribute(request, env, ctx) {
       const t = await bcTallyBump(env, user.id, board.key);
       if (t) {
         const ready = t.posted >= BC_REWARD_PHOTOS && t.cities >= BC_REWARD_CITIES;
-        if (ready) reward = await bcAward(env, user.id, t.posted, ctx);
+        if (ready) reward = await bcAward(env, user, t.posted, t.cities, ctx);
         // earned: whether they hold it now (this photo's reward, or one from before).
         const earned = !!reward || (ready && (await bcHasCollectible(env, user.id)));
         progress = { posted: t.posted, cities: t.cities, need_photos: BC_REWARD_PHOTOS, need_cities: BC_REWARD_CITIES, earned };
         if (reward) reward = { ...reward, cities: t.cities };
       }
     } catch { /* counted next time */ }
+    // The founder hears of each member's first photo of the day (2026-10-28), who and where.
+    if (ctx && env.GLOBESKIMMERS_KV) ctx.waitUntil((async () => {
+      const k = `bell:bc:${user.id}:${new Date().toISOString().slice(0, 10)}`;
+      if (await env.GLOBESKIMMERS_KV.get(k)) return;
+      await env.GLOBESKIMMERS_KV.put(k, '1', { expirationTtl: 2 * 86400 });
+      const { who, n } = await gbWhoLine(env, user);
+      await founderAlert(env, `📸 ${who} added photos to ${board.name}’s board (City Boards)${gbWhereLine(request)}`, 'bell', n ? { click: gbMemberLink(n) } : {});
+    })().catch(() => {}));
     const origin = new URL(request.url).origin;
     return jsonResponse({ ok: true, id: saved.id, url: bcPhotoUrl(origin, saved.id), caption: saved.caption || null, board: { key: board.key, name: board.name, city: board.city, region: board.region || null, country: board.country }, progress, reward });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
@@ -21742,7 +21818,9 @@ async function bcHasCollectible(env, userId) {
 }
 // The member's one stamp, the first time they qualify: a design at random. → cbRow, or null when
 // they already have theirs (unique per member, so two photos landing at once can't earn two).
-async function bcAward(env, userId, milestone, ctx) {
+// The founder hears who got which (2026-10-28).
+async function bcAward(env, user, milestone, cities, ctx) {
+  const userId = user.id;
   if (await bcHasCollectible(env, userId)) return null;
   const all = Object.keys(CB_TITLES).map(Number);
   const badge = all[crypto.getRandomValues(new Uint32Array(1))[0] % all.length];
@@ -21750,7 +21828,13 @@ async function bcAward(env, userId, milestone, ctx) {
   if (!ins.ok) return null;
   const row = (await ins.json())[0];
   if (!row) return null;
-  if (ctx) ctx.waitUntil(gbLogEvent(env, 'collectible_earned', { badge, milestone }));
+  if (ctx) {
+    ctx.waitUntil(gbLogEvent(env, 'collectible_earned', { badge, milestone }));
+    ctx.waitUntil((async () => {
+      const { who, n } = await gbWhoLine(env, user);
+      await founderAlert(env, `🏅 ${who} earned the collectible stamp: ${CB_TITLES[badge]} (design #${badge}) — ${milestone} photos from ${cities} cities on City Boards`, 'bell', n ? { click: gbMemberLink(n) } : {});
+    })().catch(() => {}));
+  }
   return cbRow(row);
 }
 // The stamps placed in a passport, oldest first.
@@ -22121,7 +22205,7 @@ async function handleTelegramSend(request, env, ctx) {
     if (waitingEmails.length && !waited && !deliver.length) return jsonResponse({ error: 'Telegrams to email addresses open in a few minutes — try again shortly' }, 503);
     if (!deliver.length) {
       if (ctx && waited) ctx.waitUntil(gbLogEvent(env, 'telegram_send', { reply: false, words, to: waited, waiting: true }));
-      if (ctx && waited) ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => `⚡ ${who} sent a telegram to ${gbPeople(waited)} by email`));
+      if (ctx && waited) ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => `⚡ ${who} sent a telegram to ${gbPeople(waited)} by email`, request));
       return jsonResponse({ ok: true, count: targets.length - notReady.length + waited, not_ready: notReadyHandles });
     }
 
@@ -22140,7 +22224,7 @@ async function handleTelegramSend(request, env, ctx) {
           route: `/Mailbox?tg=${r.id}`, collapse: `tg-${r.id}`,
         }, { each: true }));
       }
-      ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => `⚡ ${who} ${replyTo ? 'replied with' : 'sent'} ${groupId ? 'a group telegram' : 'a telegram'} to ${gbPeople(deliver.length + waited)}`));
+      ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => `⚡ ${who} ${replyTo ? 'replied with' : 'sent'} ${groupId ? 'a group telegram' : 'a telegram'} to ${gbPeople(deliver.length + waited)}`, request));
       ctx.waitUntil(gbLogEvent(env, 'telegram_send', { reply: !!replyTo, words, to: deliver.length + waited, group: !!groupId || undefined, reply_all: (replyTo && group) || undefined, waiting: waited || undefined }));
     }
     return jsonResponse({ ok: true, id: made?.[0]?.id || null, count: targets.length - notReady.length + waited, not_ready: notReadyHandles });
@@ -22194,6 +22278,47 @@ async function handlePostcardDelete(request, env) {
     if (!w.ok) return jsonResponse({ error: 'That didn’t go through — try again' }, 503);
     if (!(await w.json()).length) return jsonResponse({ error: 'That postcard isn’t here any more' }, 404);
     await gbRest(env, `postcard_keeps?user_id=eq.${user.id}&postcard_id=eq.${pid}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => {});
+    return jsonResponse({ ok: true });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// ── A member's own postcards on City Boards (founder, 2026-10-28) ──────────
+// Their home on the profile, next to Contribute to City Boards, and Delete: a card comes off its
+// board for good — the row, its photo, its likes and comments; nothing is kept.
+// POST /postcards/board-mine → { items: [{ id, board: { kind, name, city, region, country }, photo, message, place, dish, anon, created_at }] }
+async function handleBoardPostcardsMine(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const q = await gbRest(env, `postcards?sender_id=eq.${user.id}&to_city=not.is.null&order=created_at.desc&limit=300&select=id,to_city,city,region,country,place_name,message,photo_key,meta,created_at`, {});
+    if (!q.ok) return jsonResponse({ error: 'Couldn’t load your postcards — try again', items: [] }, 502);
+    const origin = new URL(request.url).origin;
+    const items = (await q.json()).map((r) => {
+      const kind = /^state:/.test(r.to_city) ? 'state' : /^country:/.test(r.to_city) ? 'country' : 'city';
+      return {
+        id: r.id, board: { kind, name: kind === 'state' ? r.region : kind === 'country' ? r.country : r.city, city: r.city || null, region: r.region || null, country: r.country || null },
+        photo: r.photo_key ? `${origin}/pc-photo/${r.photo_key}` : null, message: r.message || null, place: r.place_name || null, dish: r.meta?.dish || null, anon: r.meta?.anon || null, created_at: r.created_at,
+      };
+    });
+    return jsonResponse({ items });
+  } catch (e) { return jsonResponse({ error: e.message, items: [] }, 500); }
+}
+// POST /postcards/board-delete { postcard_id } — only a board card, only by its sender.
+async function handleBoardPostcardDelete(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const pid = BL_UUID.test(String(b.postcard_id || '')) ? String(b.postcard_id).toLowerCase() : null;
+    if (!pid) return jsonResponse({ error: 'Which postcard?' }, 400);
+    const d = await gbRest(env, `postcards?id=eq.${pid}&sender_id=eq.${user.id}&to_city=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=representation' } });
+    if (!d.ok) return jsonResponse({ error: 'That didn’t go through — try again' }, 503);
+    const rows = await d.json();
+    if (!rows.length) return jsonResponse({ error: 'That postcard isn’t on a board any more' }, 404);
+    if (rows[0].photo_key && env.MEDIA) await env.MEDIA.delete(rows[0].photo_key).catch(() => {});
+    await gbRest(env, `postcard_keeps?postcard_id=eq.${pid}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => {});
+    await blPurgeTargets(env, user.id, [`pc:${pid}`], ctx).catch(() => {});
+    if (ctx) ctx.waitUntil(pcBoardsCacheBust(env));
     return jsonResponse({ ok: true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -22984,7 +23109,7 @@ async function handleSocialHandle(request, env, ctx) {
     // member is never named or numbered to the bell).
     if (ctx) ctx.waitUntil(sp.social_tier === 'teen' || gbNeedsConfirm(sp)
       ? founderAlert(env, `🆔 A member under 18 ${mine?.handle ? 'changed their username' : 'picked a username'}`, 'new')
-      : gbActivityBell(env, user, 'new', (who) => (mine?.handle ? `🆔 ${who} changed @${mine.handle} to @${want}` : `🆔 ${who} is now @${want}${held && !held.claimed_at ? ' (a held name)' : ''}`)));
+      : gbActivityBell(env, user, 'new', (who) => (mine?.handle ? `🆔 ${who} changed @${mine.handle} to @${want}` : `🆔 ${who} is now @${want}${held && !held.claimed_at ? ' (a held name)' : ''}`), request));
     return jsonResponse({ handle: want, ...(held && !held.claimed_at ? { held_claim: true, held_name: held.display_name || null } : {}) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -29604,6 +29729,8 @@ export default {
       if (pathname === '/mail/sent/hide' && request.method === 'POST') return await handleMailSentHide(request, env);
       if (pathname === '/postcards/keep' && request.method === 'POST') return await handlePostcardKeep(request, env);
       if (pathname === '/postcards/delete' && request.method === 'POST') return await handlePostcardDelete(request, env);
+      if (pathname === '/postcards/board-mine' && request.method === 'POST') return await handleBoardPostcardsMine(request, env);
+      if (pathname === '/postcards/board-delete' && request.method === 'POST') return await handleBoardPostcardDelete(request, env, ctx);
       if (pathname === '/telegrams/send' && request.method === 'POST') return await handleTelegramSend(request, env, ctx);
       if (pathname === '/links/create' && request.method === 'POST') return await handleLinkCreate(request, env, ctx);
       if (pathname === '/links/claim' && request.method === 'POST') return await handleLinkClaim(request, env, ctx);
