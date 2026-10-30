@@ -19868,7 +19868,8 @@ async function handleLuggageSet(request, env, ctx) {
 // teen authors sign only on owners they follow (accepted); owner sweeps all.
 // 'cool' joined with the founder's sticker set, and 'yummy' retired, both 2026-10-14
 // (founder: "Remove yummy") — new presses are refused; old marks just sit unseen.
-const BL_KINDS = new Set(['wow', 'cool', 'takeme', 'been', 'wannago', 'morepics']);
+// + awesome, stunning, vibes, lovethis (founder's four new stickers, 2026-10-30).
+const BL_KINDS = new Set(['wow', 'cool', 'takeme', 'been', 'wannago', 'morepics', 'awesome', 'stunning', 'vibes', 'lovethis']);
 const BL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function blShare(env, slug) {
@@ -20652,7 +20653,7 @@ const PUSH_PREF = { postcards: 'alert_postcards', telegrams: 'alert_postcards', 
 // On unless switched off (founder, 2026-10-19: "turned on by default"); News stays opt-in — Apple
 // allows marketing alerts only to people who chose them.
 const PUSH_DEFAULT_ON = new Set(['postcards', 'telegrams', 'follows', 'pages', 'friend_stamps']);
-const BL_PUSH_LABEL = { wow: 'WOW', takeme: 'TAKE ME', wannago: 'I WANNA GO!', cool: 'COOL!' };
+const BL_PUSH_LABEL = { wow: 'WOW', takeme: 'TAKE ME', wannago: 'I WANNA GO!', cool: 'COOL!', been: 'BEEN THERE!', morepics: 'MORE PICS PLEASE!', awesome: 'AWESOME!', stunning: 'STUNNING!', vibes: 'VIBES!', lovethis: 'LOVE THIS!' };
 const pushPrefOn = (sp, kind) => { const col = PUSH_PREF[kind]; if (!col) return false; const v = sp?.[col]; return v == null ? PUSH_DEFAULT_ON.has(kind) : v === true; };
 const pushB64u = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const pushB64uStr = (s) => pushB64u(new TextEncoder().encode(s));
@@ -23926,7 +23927,7 @@ async function handleAdminHeldHandles(request, env) {
 // moves mailbox_seen_at to now AFTER reading. Teen activity under 24h stays
 // hidden, the same rail as the who-signed lists.
 // yummy stays only as a label, so Mailbox rows from before its retirement still read right.
-const BL_KIND_LABEL = { wow: 'WOW!', cool: 'COOL!', takeme: 'TAKE ME!', been: 'BEEN THERE!', wannago: 'I WANNA GO!', morepics: 'MORE PICS PLEASE!', yummy: 'YUMMY!' };
+const BL_KIND_LABEL = { wow: 'WOW!', cool: 'COOL!', takeme: 'TAKE ME!', been: 'BEEN THERE!', wannago: 'I WANNA GO!', morepics: 'MORE PICS PLEASE!', awesome: 'AWESOME!', stunning: 'STUNNING!', vibes: 'VIBES!', lovethis: 'LOVE THIS!', yummy: 'YUMMY!' };
 // When the "people can find you" heads-up started for this member (ISO), kept in KV for 7
 // days from the first Mailbox read; null for anyone who can't be found (a minor, a held
 // account) or when KV is away.
