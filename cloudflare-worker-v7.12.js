@@ -21523,6 +21523,61 @@ async function handlePostcardBox(request, env) {
 // either way, from a minor or from an unreadable age never show; a deleted sender
 // isn't named. can_post: the viewer is an adult with a verified stamp in that
 // city. Before the board's column exists PostgREST answers 400: { unavailable }.
+// ── Views on City Board photos and postcards (founder, 2026-10-30: "if user selects a photo from
+// city view and it enlarges, count that as 1 view … each photo have total views") ─────────────
+// One count per item, in D1 (item_views), bumped when a member opens the item in the board viewer
+// — once per member per item per day (a KV key), so flipping back and forth doesn't inflate it.
+// Counts only, never who. A clip, when built, bumps the same way when it starts playing.
+const ITEM_VIEWS_SQL = 'CREATE TABLE IF NOT EXISTS item_views (target TEXT PRIMARY KEY, views INTEGER NOT NULL DEFAULT 0, updated_at TEXT)';
+let ITEM_VIEWS_READY = false;
+const VIEW_TARGET = /^(bph|bcp|pc):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+async function itemViewsReady(env) {
+  if (!env.DB) return false;
+  if (!ITEM_VIEWS_READY) { await env.DB.prepare(ITEM_VIEWS_SQL).run(); ITEM_VIEWS_READY = true; }
+  return true;
+}
+// { target: views } for the targets given; {} when the counts can't be read (the board still loads).
+async function viewsFor(env, targets) {
+  const out = {};
+  try {
+    const list = [...new Set((targets || []).filter((t) => VIEW_TARGET.test(t)))];
+    if (!list.length || !(await itemViewsReady(env))) return out;
+    for (let i = 0; i < list.length; i += 60) {
+      const chunk = list.slice(i, i + 60);
+      const { results } = await env.DB.prepare(`SELECT target, views FROM item_views WHERE target IN (${chunk.map((_, k) => `?${k + 1}`).join(',')})`).bind(...chunk).all();
+      for (const r of results || []) out[r.target] = Number(r.views) || 0;
+    }
+  } catch { /* counts are decoration */ }
+  return out;
+}
+// One member's view of one item today → { counted, views }.
+async function viewBump(env, userId, target) {
+  if (!(await itemViewsReady(env))) return { counted: false, views: null };
+  const kv = env.GLOBESKIMMERS_KV;
+  const day = new Date().toISOString().slice(0, 10);
+  const key = `v:${day}:${userId}:${target}`;
+  if (kv && await kv.get(key)) {
+    const r = await env.DB.prepare('SELECT views FROM item_views WHERE target = ?1').bind(target).first();
+    return { counted: false, views: Number(r?.views) || 0 };
+  }
+  const r = await env.DB.prepare('INSERT INTO item_views (target, views, updated_at) VALUES (?1, 1, ?2) ON CONFLICT(target) DO UPDATE SET views = views + 1, updated_at = ?2 RETURNING views').bind(target, new Date().toISOString()).first();
+  if (kv) await kv.put(key, '1', { expirationTtl: 90000 }).catch(() => {});
+  return { counted: true, views: Number(r?.views) || 1 };
+}
+const viewTargetOf = (r) => (r?.type === 'photo' ? `${r.contrib ? 'bcp' : 'bph'}:${r.id}` : `pc:${r?.id}`);
+// POST /board/view { target } → { ok, views, counted }
+async function handleBoardView(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const target = String(b.target || '').toLowerCase().replace(/^(bph|bcp|pc):/i, (m) => m.toLowerCase());
+    if (!VIEW_TARGET.test(target)) return jsonResponse({ error: 'Not found' }, 404);
+    const r = await viewBump(env, user.id, target);
+    return jsonResponse({ ok: true, ...r });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleCityBoard(request, env) {
   try {
     const user = await gbUser(request, env);
@@ -21629,6 +21684,9 @@ async function handleCityBoard(request, env) {
     const gbId = pcGuestbookId(board);
     const gq = await gbRest(env, `guestbook_entries?entity_id=eq.${encodeURIComponent(gbId)}&review_status=eq.ok&deleted_at=is.null&hidden=eq.false&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } }).catch(() => null);
     const gbCount = gq && gq.ok ? parseInt((gq.headers.get('content-range') || '').split('/')[1] || '0', 10) || 0 : 0;
+    // Each item's view count (2026-10-30), so the viewer shows it before the member's own view lands.
+    const vm = await viewsFor(env, rows.map(viewTargetOf));
+    for (const r of rows) r.views = vm[viewTargetOf(r)] || 0;
     return jsonResponse({
       rows, next, can_post: there && writer, read_only: !writer, city, country,
       board: { kind: board.kind, key, name: board.name, city: board.city, region: board.region, country },
@@ -21861,6 +21919,9 @@ async function handleBoardContributions(request, env) {
     if (!q.ok) return jsonResponse({ error: 'Couldn’t load your photos — try again', photos: [] }, 502);
     const origin = new URL(request.url).origin;
     const photos = (await q.json()).map((r) => ({ ...r, url: bcPhotoUrl(origin, r.id) }));
+    // The owner sees how often each of their photos was opened on the boards (2026-10-30).
+    const vm = await viewsFor(env, photos.map((p) => `bcp:${p.id}`));
+    for (const p of photos) p.views = vm[`bcp:${p.id}`] || 0;
     return jsonResponse({ photos, open_until: '2027-06-30', open: Date.now() < BC_OPEN_UNTIL });
   } catch (e) { return jsonResponse({ error: e.message, photos: [] }, 500); }
 }
@@ -30068,6 +30129,7 @@ export default {
       if (pathname === '/telegrams/open' && request.method === 'POST') return await handleTelegramOpen(request, env);
       if (pathname === '/social/world' && request.method === 'POST') return await handleSocialWorld(request, env, ctx);
       if (pathname === '/city/board' && request.method === 'POST') return await handleCityBoard(request, env);
+      if (pathname === '/board/view' && request.method === 'POST') return await handleBoardView(request, env);
       if (pathname === '/board/contribute' && request.method === 'POST') return await handleBoardContribute(request, env, ctx);
       if (pathname === '/board/contributions' && request.method === 'POST') return await handleBoardContributions(request, env);
       if (pathname === '/board/contributions/delete' && request.method === 'POST') return await handleBoardContributionDelete(request, env, ctx);
