@@ -10,12 +10,14 @@
 //   <PhotoSorter files stamps shared onClose onStamp onChanged />
 //   files      File[] from Upload photos, or shared from the phone's gallery (src/lib/sharedPhotos.js)
 //   stamps     the owner's stamps (listPassport), to find one a group belongs to
-//   shared     a share from the gallery asks first: stamp the places, or send a postcard
+//   shared     a share from the gallery asks first: stamp the places, send a postcard, or put
+//              them on City Boards (founder, 2026-10-30: a third door, "upload to city board")
 //   onStamp    ([{ files, placeHint }]) — one per new place, in order; placeHint is the place
 //              lookup already made for its first photo, so Stamp a place doesn't ask again
+//   onContribute (files) — the share goes to City Boards (ContributeAlbum's SharedContributeSheet)
 //   onChanged  photos were added to a stamp you have (the Passport reloads)
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Image as ImageIcon, Loader2, Mail, MapPin, Stamp } from "lucide-react";
+import { Check, Globe2, Image as ImageIcon, Loader2, Mail, MapPin, Stamp } from "lucide-react";
 import { IVORY, IVORY_2 } from "@/components/redesign/constants";
 import { showToast } from "@/components/Toast";
 import PostcardCompose from "@/components/passport/PostcardCompose";
@@ -119,7 +121,7 @@ function Thumbs({ srcs, size = 44, max = 3 }) {
   );
 }
 
-export default function PhotoSorter({ files, stamps = [], shared = false, onClose, onStamp, onChanged }) {
+export default function PhotoSorter({ files, stamps = [], shared = false, onClose, onStamp, onContribute = null, onChanged }) {
   // ask (a share: stamp or postcard) → reading → list; or pick (which photo goes on the postcard) → postcard.
   const [phase, setPhase] = useState(shared ? "ask" : "reading");
   const [rows, setRows] = useState([]);
@@ -241,6 +243,15 @@ export default function PhotoSorter({ files, stamps = [], shared = false, onClos
                 <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>A photo and a note to the people you choose.</span>
               </span>
             </button>
+            {onContribute && (
+              <button type="button" onClick={() => onContribute(files)} className="w-full text-left flex items-center gap-3 rounded-2xl mt-2" style={{ padding: 14, background: "#fff", border: `1px solid ${RULE}` }}>
+                <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 12, background: IVORY_2, display: "grid", placeItems: "center", flexShrink: 0 }}><Globe2 size={19} color="#1F4E8C" /></span>
+                <span>
+                  <span style={{ display: "block", fontSize: fs(15), fontWeight: 700, color: INK }}>{files.length === 1 ? "Upload to a City Board" : "Upload to City Boards"}</span>
+                  <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>Public, from “a traveler”. {files.length === 1 ? "It goes on the board of the city where it was taken." : "Each one goes on the board of the city where it was taken."}</span>
+                </span>
+              </button>
+            )}
             <button onClick={onClose} className="w-full rounded-xl py-2.5 font-semibold mt-3" style={{ background: "transparent", color: INK3, fontSize: fs(14) }}>Not now</button>
           </>
         )}

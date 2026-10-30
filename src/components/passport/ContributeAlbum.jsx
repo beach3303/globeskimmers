@@ -123,6 +123,16 @@ export function BoardContributeSheet({ board, onClose, onPosted = undefined }) {
   return <ContributeSheet photos={photos} board={board} onChanged={() => { load(); onPosted?.(); }} onClose={onClose} />;
 }
 
+// Photos shared in from the phone's gallery (PhotoSorter's third door, founder 2026-10-30: "upload
+// to city board"): the same sheet, posting them as soon as it opens, with the public note above
+// the progress and the summary saying which boards they went to.
+export function SharedContributeSheet({ files, onClose }) {
+  const [photos, setPhotos] = useState([]);
+  const load = () => listContributions().then((r) => { if (!r.error) setPhotos(r.photos); });
+  useEffect(() => { load(); }, []);
+  return <ContributeSheet photos={photos} initialFiles={files} onChanged={load} onClose={onClose} />;
+}
+
 // Does a photo's city sit on this board? (names, folded; a US city board also matches the state)
 const fold = (v) => String(v || "").trim().toLowerCase();
 const onBoard = (board, b) => {
@@ -134,9 +144,10 @@ const onBoard = (board, b) => {
 };
 const kindWord = (board) => (board?.kind === "state" ? "state" : board?.kind === "country" ? "country" : "city");
 
-function ContributeSheet({ photos, onChanged, onClose, board = null }) {
+function ContributeSheet({ photos, onChanged, onClose, board = null, initialFiles = null }) {
   useDismissable(true, onClose);
   const fileRef = useRef(null);
+  const startedRef = useRef(false);   // files handed in with the sheet (a share) are sent once
   const [run, setRun] = useState(null);      // { done, total, place } while sending
   const [summary, setSummary] = useState(null);
   const [view, setView] = useState(null);    // index into `shown` in the viewer
@@ -183,6 +194,11 @@ function ContributeSheet({ photos, onChanged, onClose, board = null }) {
     await sendFiles(files);
   };
   const openPicker = () => (shrinkAvailable() ? pickNative() : fileRef.current?.click());
+  useEffect(() => {
+    if (!initialFiles?.length || startedRef.current) return;
+    startedRef.current = true;
+    sendFiles(initialFiles);
+  }, [initialFiles]);   // eslint-disable-line react-hooks/exhaustive-deps
   const sendFiles = async (all) => {
     if (!all.length || run) return;
     const files = all.slice(0, CONTRIBUTE_PICK);

@@ -40,6 +40,7 @@ import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import NearbyStampPrompt, { NEARBY_KEY, nearbySensingOn } from "@/components/passport/NearbyStampPrompt";
 import StampActions from "@/components/passport/StampActions";
 import PhotoSorter from "@/components/passport/PhotoSorter";
+import { SharedContributeSheet } from "@/components/passport/ContributeAlbum";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import HeldHandleClaim from "@/components/passport/HeldHandleClaim";
 import PhotoFooter from "@/components/passport/PhotoFooter";
@@ -1319,6 +1320,7 @@ function PassportInner({ embedded = false }) {
   // groups them by where and when they were taken; each new place then gets Stamp a place in
   // turn ("Place 1 of 3"). A share arriving on a cold start waits for the Passport to open.
   const [sorter, setSorter] = useState(null);       // { files, shared, n }
+  const [contrib, setContrib] = useState(null);     // { files, n } — a share going to City Boards (2026-10-30)
   const [stampQueue, setStampQueue] = useState(null); // { items: [{ files, placeHint }], i, n }
   const uploadRef = useRef(null);
   useEffect(() => {
@@ -1755,8 +1757,10 @@ function PassportInner({ embedded = false }) {
       {sorter && (
         <PhotoSorter key={sorter.n} files={sorter.files} shared={sorter.shared} stamps={stamps}
           onClose={() => setSorter(null)} onChanged={load}
+          onContribute={(files) => { setSorter(null); setContrib({ files, n: Date.now() }); }}
           onStamp={(items) => { setSorter(null); setStampQueue({ items, i: 0, n: Date.now() }); }} />
       )}
+      {contrib && <SharedContributeSheet key={contrib.n} files={contrib.files} onClose={() => setContrib(null)} />}
       {queued && (
         <StampPlaceModal key={`${stampQueue.n}-${stampQueue.i}`} sharedPhotos={queued.files} placeHint={queued.placeHint} look={queued.look || null}
           queue={stampQueue.items.length > 1 ? { at: stampQueue.i + 1, of: stampQueue.items.length } : null} onSkip={nextInQueue}
