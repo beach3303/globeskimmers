@@ -19,6 +19,20 @@ import FriendsTravels from "@/components/home/FriendsTravels";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
 import AddFriendsSheet from "@/components/social/AddFriendsSheet";
 import { newArrivals } from "@/lib/newArrivals";
+import { friendsAdded } from "@/lib/passport";
+import { artFor } from "@/lib/cityCards";
+import { cityBoardUrl } from "@/lib/boardLinks";
+import { whenLabel } from "@/components/social/Envelope";
+
+// One line per thing a friend added (founder, 2026-10-30), and where it opens: their card at that
+// stamp, the photo big on their page, or the board on that photo or clip.
+function addedRow(r) {
+  const who = r.by?.handle ? `@${r.by.handle}` : (r.by?.name || "A friend");
+  const h = r.by?.handle ? `h=${encodeURIComponent(r.by.handle)}` : "";
+  if (r.kind === "card") return { art: artFor(r.stamp?.category, r.stamp?.design), text: <><b style={{ fontWeight: 650 }}>{who}</b> stamped {r.stamp?.name} on the {r.card?.city} {r.card?.year} card</>, to: `${createPageUrl("Traveler")}?${h}&card=${r.card?.id}&stamp=${r.stamp?.id}` };
+  if (r.kind === "album") return { thumb: r.photo?.url, text: <><b style={{ fontWeight: 650 }}>{who}</b> added a photo to {r.stamp?.name}{r.stamp?.city ? `, ${r.stamp.city}` : ""}</>, to: `${createPageUrl("Traveler")}?${h}&photo=${r.photo?.id}` };
+  return { thumb: r.item?.photo, text: <><b style={{ fontWeight: 650 }}>{who}</b> added a {r.item?.video ? "clip" : "photo"} to {r.board_at?.city}’s city board</>, to: `${cityBoardUrl(r.board_at?.city, r.board_at?.country, r.board_at?.region)}&open=bcp:${r.item?.id}` };
+}
 import { showToast } from "@/components/Toast";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import { askForAlerts } from "@/lib/pushAlerts";
@@ -60,6 +74,14 @@ export default function ArrivalsPage({ wide = false }) {
     newArrivals().then((r) => { if (!gone) setArrivals(r); });
     return () => { gone = true; };
   }, [socialTierReady, held]);
+  // What the people I follow added lately (founder, 2026-10-30).
+  const [finds, setFinds] = useState(null);
+  useEffect(() => {
+    if (!socialTierReady || held) return undefined;
+    let gone = false;
+    friendsAdded().then((r) => { if (!gone) setFinds(r); });
+    return () => { gone = true; };
+  }, [socialTierReady, held]);
   const addToCircle = async (p) => {
     if (added[p.user_id]) return;
     setAdded((a) => ({ ...a, [p.user_id]: "busy" }));
@@ -86,6 +108,35 @@ export default function ArrivalsPage({ wide = false }) {
             </div>
           ) : null}
           <div style={{ marginTop: 6 }}><FriendsTravels wide={wide} /></div>
+          {finds && finds.rows.length ? (
+            <section aria-label="What your friends added" style={{ marginTop: 18 }}>
+              <div style={{ display: "flex" }}>
+                <span style={{ marginLeft: 12, padding: "5px 12px 4px", borderRadius: "8px 8px 0 0", fontFamily: "'JetBrains Mono', ui-monospace, Menlo, monospace", fontSize: fs(9.5), fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", background: NEUTRAL.cream, border: `1px solid ${NEUTRAL.creamRule}`, borderBottom: 0, color: BLUE }}>What your friends added</span>
+              </div>
+              <div style={{ padding: "4px 12px 10px", background: NEUTRAL.cream, border: `1px solid ${NEUTRAL.creamRule}`, borderRadius: 16 }}>
+                <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                  {finds.rows.slice(0, 12).map((r) => {
+                    const { thumb, art, text, to } = addedRow(r);
+                    return (
+                      <li key={`${r.kind}-${r.at}-${r.by?.user_id}`} style={{ borderBottom: `1px solid ${NEUTRAL.rule}` }}>
+                        <button type="button" onClick={() => navigate(to)}
+                          style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", minHeight: 56, padding: "6px 0", border: 0, background: "transparent", textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit" }}>
+                          <span aria-hidden="true" style={{ flex: "none", width: 40, height: 40, borderRadius: 8, overflow: "hidden", background: NEUTRAL.airmailHair, display: "grid", placeItems: "center" }}>
+                            {thumb ? <img src={thumb} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : art ? <img src={art} alt="" style={{ width: 34, height: 34, objectFit: "contain", mixBlendMode: "multiply" }} /> : null}
+                          </span>
+                          <span style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ display: "block", fontSize: fs(14), lineHeight: 1.3, color: NEUTRAL.ink }}>{text}</span>
+                            <span style={{ display: "block", marginTop: 2, fontFamily: "'JetBrains Mono', ui-monospace, Menlo, monospace", fontSize: fs(10), letterSpacing: ".04em", color: NEUTRAL.ink3 }}>{whenLabel(r.at)}</span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p style={{ margin: "8px 0 0", fontSize: fs(11.5), lineHeight: 1.4, color: NEUTRAL.ink3 }}>Only what they chose to share with you. Tap one to see it.</p>
+              </div>
+            </section>
+          ) : null}
           {fresh.length ? (
             <section aria-label="New arrivals" style={{ marginTop: 18 }}>
               <div style={{ display: "flex" }}>

@@ -5,7 +5,7 @@
 // PhotoLightbox to flip through. Derived entirely from the stamps the parent
 // already holds (src/lib/packets.js), so the friend view is automatically
 // moderation-safe and the owner view is instant.
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { derivePackets, packetsByYear } from "@/lib/packets";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
@@ -82,10 +82,19 @@ function Envelope({ packet, onOpen, stampLevel = null }) {
 // "line them up side by side … clarify what that album is for"): the profile's two City Board
 // albums — photos uploaded, postcards posted — in their own row under the header, with the words
 // that say what each is. With either the shelf shows even before any stamp has photos.
-export default function PhotoPackets({ stamps, title = "Photo packets", owner = false, albums = "passport", onChanged = null, social = null, className = "max-w-md mx-auto px-4 mt-8", corner = null, boards = null }) {
+export default function PhotoPackets({ stamps, title = "Photo packets", openPhoto = null, owner = false, albums = "passport", onChanged = null, social = null, className = "max-w-md mx-auto px-4 mt-8", corner = null, boards = null }) {
   // social: { slug, blotter, onBlotterChanged } — the per-photo guestbook inside an open album.
   // className: the column (the profile passes its own, which widens on iPad).
   const packets = useMemo(() => derivePackets(stamps, { byLevel: owner }), [stamps, owner]);
+  // A friend's find (2026-10-30): the photo asked for by id opens big once its packet is in.
+  const askedPhoto = useRef(false);
+  useEffect(() => {
+    if (!openPhoto || askedPhoto.current) return;
+    for (const p of packets) {
+      const i = (p.photos || []).findIndex((ph) => ph.id === openPhoto);
+      if (i >= 0) { askedPhoto.current = true; setOpen({ photos: p.photos, index: i, city: p.city, range: p.range, packet: p }); return; }
+    }
+  }, [packets, openPhoto]);
   const [open, setOpen] = useState(null); // { photos, index, city }
   // Who sees each album, one tap from its envelope (founder, 2026-10-26: "albums should have a
   // quick way to change privacy per album"). An album can only narrow its photos.

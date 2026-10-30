@@ -291,7 +291,7 @@ function TravelerWorld() {
         ) : null}
         {/* Their City Cards at my level (2026-10-28): the cards the worker sent, none when none. */}
         {Array.isArray(world.city_cards) && world.city_cards.length ? (
-          <CityCardsPage cards={world.city_cards} owner={false} first={first} style={{ marginTop: GAP }} />
+          <CityCardsPage cards={world.city_cards} owner={false} first={first} style={{ marginTop: GAP }} openId={params.get("card")} openStamp={params.get("stamp")} />
         ) : null}
         {world.gear ? (
           <VirtualItems readOnly gear={world.gear.gear} buddies={world.gear.buddies} layout={world.gear.layout}
@@ -301,7 +301,7 @@ function TravelerWorld() {
         {/* Their albums, last as on your own profile (founder, 2026-10-14: friends saw no
             albums). The server sends only reviewed photos, so no packet means none yet. */}
         {world.stamps ? (
-          <PhotoPackets stamps={orderedStamps} title={first ? `${first}’s photo packets` : "Their photo packets"} className="mt-8"
+          <PhotoPackets stamps={orderedStamps} title={first ? `${first}’s photo packets` : "Their photo packets"} className="mt-8" openPhoto={params.get("photo")}
             social={worldSlug ? { slug: worldSlug, blotter, onBlotterChanged: refreshBlotter } : null} />
         ) : null}
       </>

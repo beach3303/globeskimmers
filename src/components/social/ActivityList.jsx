@@ -44,12 +44,13 @@ export function activityLine(a) {
       const marks = Array.isArray(a.reactions) ? a.reactions.join(" · ") : "";
       // A board postcard (City Boards, 2026-10-14) carries `board`, its city.
       // A private postcard's thread (2026-10-30) carries `mail`: a card you sent or received.
-      const where = a.mail ? " on your postcard" : "board" in a ? ` on your ${a.photo ? "photo" : "postcard"}${a.board ? ` on ${a.board}’s city board` : ""}` : a.photo ? ` on your photo${a.stamp ? ` from ${a.stamp}` : ""}` : a.stamp ? ` on your ${a.stamp} page` : " on your passport";
+      const where = a.mail ? " on your postcard" : a.card ? ` on your ${a.card.city} ${a.card.year} card` : "board" in a ? ` on your ${a.photo ? "photo" : "postcard"}${a.board ? ` on ${a.board}’s city board` : ""}` : a.photo ? ` on your photo${a.stamp ? ` from ${a.stamp}` : ""}` : a.stamp ? ` on your ${a.stamp} page` : " on your passport";
       return { who, text: `stamped ${marks}${where}` };
     }
     case "signature": {
       const words = a.body ? `: “${a.body}”` : "";
       if (a.mail) return { who, text: `${a.doodle && !a.body ? "doodled on" : "commented on"} your postcard${words}` };
+      if (a.card) return { who, text: `${a.doodle && !a.body ? "doodled on" : "commented on"} your ${a.card.city} ${a.card.year} card${words}` };
       if ("board" in a) return { who, text: `${a.doodle && !a.body ? "doodled on" : "commented on"} your ${a.photo ? "photo" : "postcard"}${a.board ? ` on ${a.board}’s city board` : ""}${words}` };
       if (a.photo) return { who, text: `${a.doodle && !a.body ? "doodled on" : "commented on"} your photo${a.stamp ? ` from ${a.stamp}` : ""}${words}` };
       return { who, text: `${a.doodle && !a.body ? "left a doodle on" : "signed"}${a.stamp ? ` your ${a.stamp} page` : " your passport"}${words}` };
@@ -73,6 +74,7 @@ const destinationOf = (a) => {
   if ((a?.type === "reaction" || a?.type === "signature") && a.target) {
     if (/^(pc|bph|bcp):/.test(a.target)) return a.board_at?.city ? `board:${a.target}` : "boards";
     if (a.target.startsWith("ph:") && a.stamp_id) return `photo:${a.stamp_id}:${a.target.slice(3)}`;
+    if (a.target.startsWith("cc:")) return `card:${a.target.slice(3)}`;
     if (a.target.startsWith("st:")) return `stamp:${a.target.slice(3)}`;
   }
   if (a?.type === "reaction" || a?.type === "signature" || a?.type === "tag") return "passport";

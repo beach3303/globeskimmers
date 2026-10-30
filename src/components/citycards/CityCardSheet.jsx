@@ -4,11 +4,13 @@
 //
 //   <CityCardSheet card owner onClose onChanged />
 //   onChanged(card)  after the owner changes who sees it (the caller keeps its list current)
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Share2, X } from "lucide-react";
 import CityCard, { cardWords } from "@/components/citycards/CityCard";
 import CityStampDetail from "@/components/citycards/CityStampDetail";
+import { BlotterStrip } from "@/components/passport/Blotter";
+import { blotterReadCards } from "@/lib/passport";
 import PrivacyChip from "@/components/privacy/PrivacyChip";
 import AudienceSheet from "@/components/privacy/AudienceSheet";
 import { PassportAudienceSheet } from "@/components/privacy/PassportPrivacy";
@@ -23,11 +25,16 @@ const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const BLUE = "#1F4E8C", RED = "#B0472F";
 
-export default function CityCardSheet({ card, owner = false, onClose, onChanged = undefined }) {
+export default function CityCardSheet({ card, owner = false, onClose, onChanged = undefined, initialStamp = null }) {
   const [picking, setPicking] = useState(false);
   const [passportSheet, setPassportSheet] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const [stamp, setStamp] = useState(null);   // the stamp open big, if any
+  // The stamp open big, if any — the one a friend's find or a Mailbox line asked for, to start.
+  const [stamp, setStamp] = useState(() => (initialStamp && card ? (card.stamps || []).find((s) => s.id === initialStamp) || null : null));
+  // The card's stickers and comments (founder, 2026-10-30): whoever may see the card may add theirs.
+  const [book, setBook] = useState(null);
+  const readBook = () => { if (card?.id) blotterReadCards([card.id]).then(setBook); };
+  useEffect(() => { readBook(); }, [card?.id]);
   const close = () => { if (!picking && !passportSheet && !stamp) onClose(); };
   useDismissable(true, close);
   const [ceiling] = usePassportAudience(owner);
@@ -65,6 +72,8 @@ export default function CityCardSheet({ card, owner = false, onClose, onChanged 
 
         <div ref={ref} style={{ marginTop: 12 }}><CityCard card={card} size="full" onStamp={setStamp} /></div>
         {count ? <p aria-hidden="true" style={{ margin: "8px 0 0", fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".14em", textTransform: "uppercase", color: NEUTRAL.ink3, textAlign: "center" }}>Tap a stamp to see it big</p> : null}
+        {/* Friends like and comment under the card (founder, 2026-10-30). */}
+        <div style={{ marginTop: 10 }}><BlotterStrip cardId={card.id} blotter={book} ownerView={owner} onChanged={readBook} /></div>
 
         {owner ? (
           <>

@@ -556,6 +556,20 @@ export async function blotterReadMail(ids) {
   const { data } = await callWorker('blotter/read', { mail });
   return data && !data.error ? data : { targets: {}, entries: [] };
 }
+// The stickers and comments on City Cards (2026-10-30): a card answers only to a reader who may
+// see it. Keyed 'cc:<id>'.
+export async function blotterReadCards(ids) {
+  const cards = [...new Set((ids || []).filter(Boolean))].slice(0, 60);
+  if (!cards.length) return { targets: {}, entries: [] };
+  const { data } = await callWorker('blotter/read', { cards });
+  return data && !data.error ? data : { targets: {}, entries: [] };
+}
+// What the people I follow added lately (2026-10-30): a City Card stamp, a memory photo in an album
+// open to me, a photo or clip on a City Board → { rows: [{ kind, at, by, … }], error }.
+export async function friendsAdded() {
+  const { data, error } = await callWorker('friends/added', {});
+  return { rows: Array.isArray(data?.rows) ? data.rows : [], error: error || data?.error || null };
+}
 // One view of a City Board photo or postcard (2026-10-30): opened big in the board viewer. Counts
 // once per member per item per day; → { views, counted }.
 export async function boardView(target) {

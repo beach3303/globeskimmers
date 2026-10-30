@@ -659,7 +659,7 @@ export default function HomePage() {
     if (id === 'passport') return <PassportPage embedded />;
     if (id === 'arrivals') return <ArrivalsPage wide={isTablet} />;
     if (id === 'cityboard') return <CityBoardPage city={activeLocation?.address?.city} country={activeLocation?.address?.country} region={activeLocation?.address?.state} />;
-    if (id === 'citycards') return <CityCardsPage embedded />;
+    if (id === 'citycards') return <CityCardsPage embedded openId={new URLSearchParams(routerLocation.search).get('card')} />;
     return null;
   };
 

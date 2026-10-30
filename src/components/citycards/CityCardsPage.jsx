@@ -5,7 +5,7 @@
 //
 //   <CityCardsPage embedded />                       Home's tab: loads the member's own cards
 //   <CityCardsPage cards owner={false} first />      a visit: the cards given, read-only
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import CityCard from "@/components/citycards/CityCard";
 import CityCardSheet from "@/components/citycards/CityCardSheet";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
@@ -15,10 +15,12 @@ const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const RED = "#B0472F", BLUE = "#1F4E8C";
 
-export default function CityCardsPage({ embedded = false, cards: given = undefined, owner = true, first = null, style = undefined }) {
+// openId / openStamp (2026-10-30): the card (and its stamp) a Mailbox line or a friend's find asked for.
+export default function CityCardsPage({ embedded = false, cards: given = undefined, owner = true, first = null, style = undefined, openId = null, openStamp = null }) {
   const [mine, setMine] = useState(null);       // the owner's cards, null until read
   const [state, setState] = useState("loading"); // 'loading' | 'ready' | 'unavailable' | 'error'
   const [open, setOpen] = useState(null);       // the card in its sheet
+  const asked = useRef(false);
   const load = () => listCityCards().then((r) => {
     if (r.unavailable) { setMine([]); setState("unavailable"); return; }
     if (r.error) { setMine((m) => m || []); setState("error"); return; }
@@ -27,6 +29,12 @@ export default function CityCardsPage({ embedded = false, cards: given = undefin
   useEffect(() => { if (owner && !given) load(); }, [owner, given]);
   const cards = given || mine || [];
   const who = owner ? null : (first ? `${first}’s` : "Their");
+  // The card asked for by id opens once its list is in (a Mailbox line, a friend's find).
+  useEffect(() => {
+    if (!openId || asked.current) return;
+    const c = cards.find((x) => x.id === openId);
+    if (c) { asked.current = true; setOpen(c); }
+  }, [cards, openId]);
   const onChanged = (c) => { setMine((m) => (m ? m.map((x) => (x.id === c.id ? { ...x, ...c } : x)) : m)); setOpen((o) => (o && o.id === c.id ? { ...o, ...c } : o)); };
 
   return (
@@ -67,7 +75,7 @@ export default function CityCardsPage({ embedded = false, cards: given = undefin
       {owner && cards.length ? (
         <p style={{ margin: "12px 0 0", fontFamily: MONO, fontSize: fs(10), letterSpacing: ".03em", color: NEUTRAL.ink3 }}>Tap a card to see every stamp, who sees it, or share it.</p>
       ) : null}
-      {open ? <CityCardSheet card={open} owner={owner} onClose={() => setOpen(null)} onChanged={onChanged} /> : null}
+      {open ? <CityCardSheet card={open} owner={owner} onClose={() => setOpen(null)} onChanged={onChanged} initialStamp={open.id === openId ? openStamp : null} /> : null}
     </div>
   );
 }
