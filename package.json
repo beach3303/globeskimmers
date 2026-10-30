@@ -37,6 +37,7 @@
     "@capacitor/share": "^8.0.2",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
+    "@capawesome/capacitor-file-picker": "^8.1.1",
     "@capgo/capacitor-share-target": "^8.0.62",
     "@capgo/capacitor-updater": "^8.51.3",
     "@hello-pangea/dnd": "^17.0.0",

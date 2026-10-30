@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(AgeSignalsPlugin.class);
+        registerPlugin(VideoShrinkPlugin.class);   // clips: probe + shrink on the phone (2026-10-30)
         super.onCreate(savedInstanceState);
     }
 }

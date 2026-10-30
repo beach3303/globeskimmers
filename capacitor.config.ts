@@ -27,6 +27,7 @@ const config: CapacitorConfig = {
       '@capgo/capacitor-share-target',
       '@capgo/capacitor-updater',
       '@capacitor/push-notifications',
+      '@capawesome/capacitor-file-picker',   // clips (2026-10-30): the gallery picker that hands VideoShrink a path
     ],
   },
 

@@ -19,6 +19,7 @@ dependencies {
     implementation project(':capgo-capacitor-share-target')
     implementation project(':capgo-capacitor-updater')
     implementation project(':capacitor-push-notifications')
+    implementation project(':capawesome-capacitor-file-picker')
 
 }
 
