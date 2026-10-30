@@ -19938,7 +19938,25 @@ async function blMailShare(env, target, actorId) {
   if (!party.has(actorId)) return null;
   return { user_id: sender, is_public: false, board: false, mail: true, party: [...party], target: `pm:${rows[0].group_id || rows[0].id}`, pc: { city: rows[0].city, name: rows[0].place_name } };
 }
-const blShareFor = (env, b, actorId = null) => (/^pm:/.test(String(b?.target || '')) ? blMailShare(env, b.target, actorId) : /^(pc|bph|bcp):/.test(String(b?.target || '')) ? blBoardShare(env, b.target) : blShare(env, b?.slug));
+// A City Card's thread (founder, 2026-10-30: friends like and comment under each card): 'cc:<card id>'.
+// Whoever may see the card — its own privacy word, under the owner's passport ceiling — may press
+// and write there; the owner is the thread's owner. Never on a board, never in a feed.
+async function blCardShare(env, target, actorId) {
+  const m = /^cc:([0-9a-f-]{36})$/i.exec(String(target || ''));
+  if (!m || !BL_UUID.test(m[1])) return null;
+  const q = await gbRest(env, `city_cards?id=eq.${m[1].toLowerCase()}&select=id,user_id,visibility,city,year,no`, {});
+  const card = (q.ok ? await q.json() : [])[0];
+  if (!card) return null;
+  const owner = card.user_id;
+  const share = (await blShareByOwner(env, owner)) || { user_id: owner, is_public: false, visibility: 'inner' };
+  let lvl = 3;
+  if (actorId !== owner) {
+    lvl = actorId ? ppUnder(ppAud(share), await ppViewerLevel(env, owner, actorId)) : -1;
+    if (lvl < 0 || lvl < (PP_TIER_NEED[card.visibility || 'inner'] ?? 2)) return null;
+  }
+  return { user_id: owner, is_public: card.visibility === 'public' && share.is_public === true, visibility: share.visibility, card: { id: card.id, city: card.city, year: card.year, no: card.no, visibility: card.visibility || 'inner' }, lvl, target: `cc:${card.id}` };
+}
+const blShareFor = (env, b, actorId = null) => (/^pm:/.test(String(b?.target || '')) ? blMailShare(env, b.target, actorId) : /^cc:/.test(String(b?.target || '')) ? blCardShare(env, b.target, actorId) : /^(pc|bph|bcp):/.test(String(b?.target || '')) ? blBoardShare(env, b.target) : blShare(env, b?.slug));
 // Gate: null = allowed, else a user-facing error string (blGateResp shapes
 // it). `identity: true` is the stricter door for acts that print the actor's
 // handle on a public page; `actor: true` checks the visitor's age only.
@@ -19963,8 +19981,9 @@ async function blGate(env, user, share, opts) {
   // An approved follower reaches it too (tiers, 2026-10-15): the per-stamp
   // tier check then narrows them to the stamps shared with followers.
   // Under the passport's ceiling (2026-10-26): a Friends passport is friends only, Only me no one.
-  // A private postcard's thread (2026-10-30) has its own door — being on the card — not the passport's.
-  if (!share.is_public && !share.board && !share.mail && ppUnder(ppAud(share), await ppViewerLevel(env, share.user_id, user.id)) < 0) return 'Not found';
+  // A private postcard's thread (2026-10-30) has its own door — being on the card — not the passport's;
+  // a City Card's thread was already opened by the card's own word (blCardShare).
+  if (!share.is_public && !share.board && !share.mail && !share.card && ppUnder(ppAud(share), await ppViewerLevel(env, share.user_id, user.id)) < 0) return 'Not found';
   // A blocked pair answers like a page that isn't there (privacy §8: blocking
   // is silent; go-live round 3: 'Not available' told the blocked side).
   if (await gbBlockedEither(env, user.id, share.user_id)) return 'Not found';
@@ -20005,6 +20024,8 @@ async function blTarget(env, share, target, viewerId) {
   const t = String(target || '');
   // A private postcard's thread: blMailShare already checked the actor is on the card.
   if (t.startsWith('pm:')) return share?.mail ? { pc: share.pc, target: share.target, mail: true } : null;
+  // A City Card's thread: blCardShare already checked the actor may see the card (I WANNA GO lands its city).
+  if (t.startsWith('cc:')) return share?.card ? { card: share.card, pc: { city: share.card.city, name: share.card.city }, target: share.target } : null;
   if (t.startsWith('bcp:')) {
     const id = t.slice(4);
     if (!share?.board || !BL_UUID.test(id)) return null;
@@ -20094,7 +20115,10 @@ async function handleBlotterMark(request, env, ctx) {
       } else if (ctx && share?.user_id && share.user_id !== user.id) {
         const who = await ppHolder(env, user.id);
         const label = BL_PUSH_LABEL[kind] || String(kind).toUpperCase();
-        ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your friends', route: '/Passport' } : { title: `${who} stamped ${label} on your passport`, body: 'Open your passport to see where', route: '/Passport' })));
+        // On a City Card (2026-10-30): the card by name, and the line opens the City Cards tab.
+        const on = share.card ? `your ${share.card.city} ${share.card.year} card` : 'your passport';
+        const route = share.card ? '/Home?page=citycards' : '/Passport';
+        ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your friends', route } : { title: `${who} stamped ${label} on ${on}`, body: share.card ? 'Open your City Cards to see it' : 'Open your passport to see where', route })));
       }
       if (kind === 'wannago' && ctx) ctx.waitUntil(blAddHorizon(env, user.id, st || tgt.place || { city: tgt.pc?.city, name: tgt.pc?.city }));
     } else {
@@ -20162,6 +20186,12 @@ async function handleBlotterSign(request, env, ctx) {
     if (gate) return blGateResp(gate);
     const tgt = await blTarget(env, share, b.target, user.id);
     if (!tgt) return jsonResponse({ error: 'Not found' }, 404);
+    // A City Card (2026-10-30): whoever may see it may write under it (founder: "whoever can view
+    // can comment"); only a passport whose comments are switched off stays quiet.
+    if (share?.card && share.user_id !== user.id) {
+      const oq = await gbRest(env, `social_profiles?user_id=eq.${share.user_id}&select=comments_audience`, {});
+      if (((oq.ok ? await oq.json() : [])[0]?.comments_audience || 'inner') === 'off') return jsonResponse({ error: 'Comments are switched off on this passport' }, 403);
+    }
     // A board's cards AND photos keep the board's rules (City Billboards, 2026-10-16); the
     // comments dial is for the passport.
     if (!tgt.pc && !share?.board) {
@@ -20208,7 +20238,9 @@ async function handleBlotterSign(request, env, ctx) {
       for (const uid of share.party) if (uid !== user.id) ctx.waitUntil(pushNotify(env, uid, 'pages', (n) => (n > 1 ? { title: `${n} new on your postcards`, body: 'Reactions and comments, in your Mailbox', route: '/Mailbox' } : { title: doodleKey && !text ? `${who} doodled on your postcard` : `${who} commented on your postcard`, body: 'See it in your Mailbox', route: '/Mailbox' })));
     } else if (ctx && share?.user_id && share.user_id !== user.id) {
       const who = await ppHolder(env, user.id);
-      ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your friends', route: '/Passport' } : { title: doodleKey && !text ? `${who} left a doodle on your passport` : `${who} signed your passport`, body: 'Open your passport to see it', route: '/Passport' })));
+      const on = share.card ? `your ${share.card.city} ${share.card.year} card` : 'your passport';
+      const route = share.card ? '/Home?page=citycards' : '/Passport';
+      ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your friends', route } : { title: doodleKey && !text ? `${who} left a doodle on ${on}` : share.card ? `${who} commented on ${on}` : `${who} signed your passport`, body: share.card ? 'Open your City Cards to see it' : 'Open your passport to see it', route })));
     }
     const origin = new URL(request.url).origin;
     return jsonResponse({ entry: { id: row.id, target: row.target, body: row.body, doodle: row.doodle_key ? `${origin}/bl-doodle/e/${row.id}` : null, created_at: row.created_at } });
@@ -20227,11 +20259,11 @@ async function handleBlotterCosign(request, env, ctx) {
     const q = await gbRest(env, `blotter_entries?id=eq.${id}&select=id,owner_user_id,author_user_id,target`, {});
     const e0 = (q.ok ? await q.json() : [])[0];
     if (!e0) return jsonResponse({ error: 'Not found' }, 404);
-    const share = /^pm:/.test(String(e0.target || '')) ? await blMailShare(env, e0.target, user.id) : /^(pc|bcp):/.test(String(e0.target || '')) ? await blBoardShare(env, e0.target) : await blShareByOwner(env, e0.owner_user_id);
+    const share = /^pm:/.test(String(e0.target || '')) ? await blMailShare(env, e0.target, user.id) : /^cc:/.test(String(e0.target || '')) ? await blCardShare(env, e0.target, user.id) : /^(pc|bcp):/.test(String(e0.target || '')) ? await blBoardShare(env, e0.target) : await blShareByOwner(env, e0.owner_user_id);
     const gate = await blGate(env, user, share, b.op === 'lift' ? {} : { identity: true });
     if (gate) return blGateResp(gate);
     if (user.id !== e0.author_user_id && await gbBlockedEither(env, user.id, e0.author_user_id)) return jsonResponse({ error: 'Not found' }, 404);
-    if (b.op !== 'lift' && !/^(pc|bcp|pm):/.test(String(e0.target || ''))) {
+    if (b.op !== 'lift' && !/^(pc|bcp|pm|cc):/.test(String(e0.target || ''))) {
       const oq = await gbRest(env, `social_profiles?user_id=eq.${e0.owner_user_id}&select=*`, {});
       if (!(await blCanComment(env, (oq.ok ? await oq.json() : [])[0] || null, e0.owner_user_id, user.id))) return jsonResponse({ error: 'Only their friends can write here' }, 403);
     }
@@ -20257,7 +20289,7 @@ async function handleBlotterSweep(request, env, ctx) {
     if (b.op === 'mark') {
       const kind = String(b.kind || '');
       const target = String(b.target || '');
-      if (!BL_KINDS.has(kind) || !/^(st|ph|pc|bph|bcp|pm):[0-9a-f-]{36}$/i.test(target)) return jsonResponse({ error: 'Not found' }, 404);
+      if (!BL_KINDS.has(kind) || !/^(st|ph|pc|bph|bcp|pm|cc):[0-9a-f-]{36}$/i.test(target)) return jsonResponse({ error: 'Not found' }, 404);
       await gbRest(env, `blotter_marks?owner_user_id=eq.${user.id}&target=eq.${encodeURIComponent(target)}&kind=eq.${kind}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
     } else if (b.op === 'entry') {
       const id = String(b.entry_id || '');
@@ -20281,6 +20313,7 @@ async function handleBlotterRead(request, env) {
     const user = await gbUser(request, env); // optional — a signed-out reader still sees counts
     const b = await request.json().catch(() => ({}));
     if (Array.isArray(b.mail)) return jsonResponse(await blReadMail(env, request, user, b.mail));
+    if (Array.isArray(b.cards)) return jsonResponse(await blReadCards(env, request, user, b.cards));
     if (Array.isArray(b.postcards) || Array.isArray(b.photos) || Array.isArray(b.contribs)) return jsonResponse(await blReadBoard(env, request, user, b.postcards || [], b.photos || [], b.contribs || []));
     const share = await blShare(env, b.slug);
     if (!share) return jsonResponse({ targets: {}, entries: [] });
@@ -20523,6 +20556,39 @@ async function blReadMail(env, request, user, ids) {
   }
   const ownerOf = {};
   for (const [k, t] of threads) if (t.party.has(user.id)) ownerOf[`pm:${k}`] = t.owner;
+  const targets = Object.keys(ownerOf);
+  if (!targets.length) return none;
+  const blocks = await gbBlockSet(env, user.id);
+  if (!blocks) return none;
+  const owners = [...new Set(Object.values(ownerOf))].join(',');
+  const [mq, eq2] = await Promise.all([
+    gbRest(env, `blotter_marks?owner_user_id=in.(${owners})&target=in.(${targets.join(',')})&select=target,kind,user_id&limit=4000`, {}),
+    gbRest(env, `blotter_entries?owner_user_id=in.(${owners})&target=in.(${targets.join(',')})&order=created_at.desc&select=id,target,author_user_id,body,doodle_key,created_at,updated_at&limit=800`, {}),
+  ]);
+  if (!mq.ok || !eq2.ok) return none;
+  const marks = (await mq.json()).filter((m) => ownerOf[m.target]);
+  const entries = (await eq2.json()).reverse().filter((e) => ownerOf[e.target]);
+  return blDigest(env, request, user, marks, entries, (_t, who) => blocks.has(who));
+}
+
+// The threads of City Cards (2026-10-30): { cards: [card id, …] } → { targets, entries } keyed
+// 'cc:<id>'. A card answers only to a reader who may see it (its word, under the owner's ceiling).
+async function blReadCards(env, request, user, ids) {
+  const none = { targets: {}, entries: [] };
+  if (!user) return none;
+  const want = [...new Set((ids || []).map((x) => String(x).toLowerCase()).filter((x) => BL_UUID.test(x)))].slice(0, 60);
+  if (!want.length) return none;
+  const q = await gbRest(env, `city_cards?id=in.(${want.join(',')})&select=id,user_id,visibility`, {});
+  if (!q.ok) return none;
+  const cards = await q.json();
+  const lvlOf = {};   // owner → my level under their passport's ceiling (3 = my own)
+  for (const o of [...new Set(cards.map((c) => c.user_id))]) {
+    if (o === user.id) { lvlOf[o] = 3; continue; }
+    const share = (await blShareByOwner(env, o)) || { user_id: o, is_public: false, visibility: 'inner' };
+    lvlOf[o] = ppUnder(ppAud(share), await ppViewerLevel(env, o, user.id));
+  }
+  const ownerOf = {};
+  for (const c of cards) { const l = lvlOf[c.user_id]; if (l >= 0 && l >= (PP_TIER_NEED[c.visibility || 'inner'] ?? 2)) ownerOf[`cc:${c.id}`] = c.user_id; }
   const targets = Object.keys(ownerOf);
   if (!targets.length) return none;
   const blocks = await gbBlockSet(env, user.id);
@@ -22299,6 +22365,125 @@ async function handleCityCardStamp(request, env, ctx) {
 }
 
 // POST /city-cards → { cards } — mine, newest first, with their stamps.
+// POST /city-cards/friends → { rows: [{ at, by: { user_id, handle, name }, card: { id, city, region, country, year, no }, stamp }] }
+// Where the people I follow stamped lately (founder, 2026-10-30: "show on arrival when friends or who
+// we are following stamped on nearby services"): their City Card stamps of the last 14 days, newest
+// first, each only when its card is open to me (the card's word under their passport's ceiling);
+// adults only, never anyone in a block with me.
+async function handleCityCardsFriends(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (gbOffSocial(sp)) return jsonResponse({ rows: [] });
+    const fq = await gbRest(env, `user_follows?follower_id=eq.${user.id}&status=eq.accepted&select=followee_id&limit=300`, {});
+    if (!fq.ok) return jsonResponse({ rows: [] });
+    const blocks = await gbBlockSet(env, user.id);
+    const ids = [...new Set((await fq.json()).map((r) => r.followee_id))].filter((id) => id && BL_UUID.test(id) && !(blocks && blocks.has(id)));
+    if (!ids.length) return jsonResponse({ rows: [] });
+    const since = new Date(Date.now() - 14 * 864e5).toISOString();
+    const sq = await gbRest(env, `city_card_stamps?user_id=in.(${ids.join(',')})&created_at=gte.${encodeURIComponent(since)}&order=created_at.desc&limit=60&select=id,card_id,user_id,slot,place_id,name,category,design,visited_on,visits,last_visited_on,created_at`, {});
+    if (!sq.ok) return jsonResponse({ rows: [], ...(sq.status === 404 ? { unavailable: true } : {}) });
+    const stamps = await sq.json();
+    if (!stamps.length) return jsonResponse({ rows: [] });
+    const cq = await gbRest(env, `city_cards?id=in.(${[...new Set(stamps.map((s) => s.card_id))].join(',')})&select=id,user_id,visibility,city,region,country,year,no`, {});
+    const cards = Object.fromEntries((cq.ok ? await cq.json() : []).map((c) => [c.id, c]));
+    const owners = [...new Set(stamps.map((s) => s.user_id))];
+    const [shares, profs] = await Promise.all([
+      gbRest(env, `passport_shares?user_id=in.(${owners.join(',')})&select=user_id,handle,is_public,visibility`, {}).then((r) => (r.ok ? r.json() : [])),
+      gbRest(env, `social_profiles?user_id=in.(${owners.join(',')})&select=user_id,display_name,${GB_TIER_COLS}`, {}).then((r) => (r.ok ? r.json() : [])),
+    ]);
+    const shareOf = Object.fromEntries(shares.map((s) => [s.user_id, s]));
+    const profOf = Object.fromEntries(profs.map((p) => [p.user_id, p]));
+    // My level under each owner's passport, once per owner; adults only (the boards' rule).
+    const lvlOf = {};
+    for (const o of owners) {
+      const osp = profOf[o];
+      if (!osp || !pcAdultRow(gbTierRow(osp))) { lvlOf[o] = -1; continue; }
+      const share = shareOf[o] || { user_id: o, is_public: false, visibility: 'inner' };
+      lvlOf[o] = ppUnder(ppAud(share), await ppViewerLevel(env, o, user.id));
+    }
+    const rows = [];
+    for (const s of stamps) {
+      const c = cards[s.card_id];
+      if (!c) continue;
+      const l = lvlOf[s.user_id];
+      if (!(l >= 0 && l >= (PP_TIER_NEED[c.visibility || 'inner'] ?? 2))) continue;
+      rows.push({ at: s.created_at, by: { user_id: s.user_id, handle: shareOf[s.user_id]?.handle || null, name: profOf[s.user_id]?.display_name || null }, card: { id: c.id, city: c.city, region: c.region || null, country: c.country, year: c.year, no: c.no }, stamp: ccStampRow(s) });
+      if (rows.length >= 30) break;
+    }
+    return jsonResponse({ rows });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /friends/added → { rows: [{ kind: 'card'|'album'|'board', at, by: { user_id, handle, name }, … }] }
+// What the people I follow added lately (founder, 2026-10-30): a City Card stamp (→ their card at
+// that stamp), a memory photo in an album open to me (→ the photo, big, on their page), a photo or
+// clip on a City Board (→ the board, on it). Last 14 days, newest first; adults only; never anyone
+// in a block with me; each only at my level under their passport's ceiling.
+async function handleFriendsAdded(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const sp = await gbSocialProfile(env, user.id).catch(() => undefined);
+    if (gbOffSocial(sp)) return jsonResponse({ rows: [] });
+    const fq = await gbRest(env, `user_follows?follower_id=eq.${user.id}&status=eq.accepted&select=followee_id&limit=300`, {});
+    if (!fq.ok) return jsonResponse({ rows: [] });
+    const blocks = await gbBlockSet(env, user.id);
+    const ids = [...new Set((await fq.json()).map((r) => r.followee_id))].filter((id) => id && BL_UUID.test(id) && !(blocks && blocks.has(id)));
+    if (!ids.length) return jsonResponse({ rows: [] });
+    const origin = new URL(request.url).origin;
+    const since = encodeURIComponent(new Date(Date.now() - 14 * 864e5).toISOString());
+    const j = async (r) => (r.ok ? await r.json() : []);
+    const [stamps, photos, boards, shares, profs] = await Promise.all([
+      gbRest(env, `city_card_stamps?user_id=in.(${ids.join(',')})&created_at=gte.${since}&order=created_at.desc&limit=40&select=id,card_id,user_id,slot,place_id,name,category,design,visited_on,visits,last_visited_on,created_at`, {}).then(j),
+      gbRest(env, `passport_stamp_photos?user_id=in.(${ids.join(',')})&mod_status=eq.ok&created_at=gte.${since}&order=created_at.desc&limit=40&select=id,user_id,stamp_id,caption,created_at`, {}).then(j),
+      gbRest(env, `board_contributions?user_id=in.(${ids.join(',')})&mod_status=eq.ok&hidden=eq.false&video_ready=eq.true&created_at=gte.${since}&order=created_at.desc&limit=40&select=id,user_id,city,region,country,kind,duration,caption,created_at`, {}).then(j),
+      gbRest(env, `passport_shares?user_id=in.(${ids.join(',')})&select=user_id,handle,is_public,visibility`, {}).then(j),
+      gbRest(env, `social_profiles?user_id=in.(${ids.join(',')})&select=*`, {}).then(j),
+    ]);
+    const shareOf = Object.fromEntries(shares.map((s) => [s.user_id, s]));
+    const profOf = Object.fromEntries(profs.map((p) => [p.user_id, p]));
+    // My level under each owner's passport, once per owner; adults only (the boards' rule).
+    const lvlOf = {}, adultOf = {};
+    for (const o of [...new Set([...stamps, ...photos, ...boards].map((r) => r.user_id))]) {
+      const osp = profOf[o];
+      if (!osp || !pcAdultRow(gbTierRow(osp))) { lvlOf[o] = -1; continue; }
+      adultOf[o] = true;
+      const share = shareOf[o] || { user_id: o, is_public: false, visibility: 'inner' };
+      lvlOf[o] = ppUnder(ppAud(share), await ppViewerLevel(env, o, user.id));
+    }
+    const by = (uid) => ({ user_id: uid, handle: shareOf[uid]?.handle || null, name: profOf[uid]?.display_name || null });
+    const rows = [];
+    if (stamps.length) {
+      const cards = Object.fromEntries((await gbRest(env, `city_cards?id=in.(${[...new Set(stamps.map((s) => s.card_id))].join(',')})&select=id,user_id,visibility,city,region,country,year,no`, {}).then(j)).map((c) => [c.id, c]));
+      for (const s of stamps) {
+        const c = cards[s.card_id], l = lvlOf[s.user_id];
+        if (!c || !(l >= 0 && l >= (PP_TIER_NEED[c.visibility || 'inner'] ?? 2))) continue;
+        rows.push({ kind: 'card', at: s.created_at, by: by(s.user_id), card: { id: c.id, city: c.city, region: c.region || null, country: c.country, year: c.year, no: c.no }, stamp: ccStampRow(s) });
+      }
+    }
+    if (photos.length) {
+      // The stamp at my level, its album at my level, and the owner's albums dial — as their page shows it.
+      const stOf = Object.fromEntries((await gbRest(env, `passport_stamps?id=in.(${[...new Set(photos.map((p) => p.stamp_id))].join(',')})&select=id,user_id,name,city,hidden,visibility,photos_tier`, {}).then(j)).map((s) => [s.id, s]));
+      for (const p of photos) {
+        const st = stOf[p.stamp_id], l = lvlOf[p.user_id];
+        if (!st || st.hidden || !(l >= 0)) continue;
+        const share = shareOf[p.user_id] || { is_public: false };
+        if (!ppTierVisible(st, l, share.is_public ? 'public' : 'inner') || !ppPhotosVisible(st, l) || !ppAlbumsAllowedAt(profOf[p.user_id], l)) continue;
+        rows.push({ kind: 'album', at: p.created_at, by: by(p.user_id), photo: { id: p.id, url: await ppPhotoUrl(env, origin, p.id, Math.min(l, 2)), caption: p.caption || null }, stamp: { id: st.id, name: st.name, city: st.city || null } });
+      }
+    }
+    // A board photo or clip is public by design: any adult I follow, whatever their passport's word.
+    for (const b of boards) {
+      if (!adultOf[b.user_id]) continue;
+      rows.push({ kind: 'board', at: b.created_at, by: by(b.user_id), item: { id: b.id, photo: bcPhotoUrl(origin, b.id), ...(b.kind === 'video' ? { video: bcVideoUrl(origin, b.id), duration: b.duration || null } : {}), caption: b.caption || null }, board_at: { city: b.city, region: b.region || null, country: b.country } });
+    }
+    rows.sort((a, c) => String(c.at).localeCompare(String(a.at)));
+    return jsonResponse({ rows: rows.slice(0, 40) });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleCityCards(request, env) {
   try {
     const user = await gbUser(request, env);
@@ -23866,6 +24051,10 @@ async function handleSocialUnread(request, env) {
     // ...and for a contributed photo (2026-10-27), its own city.
     const bcpIds = [...new Set(items.map((i) => (i.target || '').startsWith('bcp:') ? i.target.slice(4) : null).filter((x) => x && BL_UUID.test(x)))].slice(0, 200);
     if (bcpIds.length) for (const r of await gbRest(env, `board_contributions?id=in.(${bcpIds.join(',')})&user_id=eq.${me}&select=id,city,region,country`, {}).then(j)) { boardPhotoCity[r.id] = r.city || null; if (r.city) boardAt[`bcp:${r.id}`] = { city: r.city, region: r.region || null, country: r.country || null }; }
+    // ...and a City Card by name (2026-10-30): "on your Los Angeles 2026 card".
+    const ccIds = [...new Set(items.map((i) => (i.target || '').startsWith('cc:') ? i.target.slice(3) : null).filter((x) => x && BL_UUID.test(x)))].slice(0, 200);
+    const cardOf = {};
+    if (ccIds.length) for (const c of await gbRest(env, `city_cards?id=in.(${ccIds.join(',')})&user_id=eq.${me}&select=id,city,year,no`, {}).then(j)) cardOf[`cc:${c.id}`] = { id: c.id, city: c.city, year: c.year, no: c.no };
     if (bphIds.length) {
       const phs = await gbRest(env, `passport_stamp_photos?id=in.(${bphIds.join(',')})&user_id=eq.${me}&select=id,stamp_id`, {}).then(j);
       const sids = [...new Set(phs.map((p) => p.stamp_id))];
@@ -23920,6 +24109,7 @@ async function handleSocialUnread(request, env) {
         ...(i.target && (i.type === 'reaction' || i.type === 'signature') ? {
           target: i.target,
           ...(boardAt[i.target] ? { board_at: boardAt[i.target] } : {}),
+          ...(cardOf[i.target] ? { card: cardOf[i.target] } : {}),
           ...(i.target.startsWith('ph:') && photoStamp[i.target.slice(3)] ? { stamp_id: photoStamp[i.target.slice(3)] } : i.target.startsWith('st:') ? { stamp_id: i.target.slice(3) } : {}),
         } : {}),
         ...(i.body !== undefined ? { body: i.body, doodle: i.doodle } : {}),
@@ -30270,6 +30460,8 @@ export default {
       if (pathname === '/board/contributions/caption' && request.method === 'POST') return await handleBoardContributionCaption(request, env);
       if (pathname === '/city-cards/stamp' && request.method === 'POST') return await handleCityCardStamp(request, env, ctx);
       if (pathname === '/city-cards' && request.method === 'POST') return await handleCityCards(request, env);
+      if (pathname === '/city-cards/friends' && request.method === 'POST') return await handleCityCardsFriends(request, env);
+      if (pathname === '/friends/added' && request.method === 'POST') return await handleFriendsAdded(request, env);
       if (pathname === '/city-cards/visibility' && request.method === 'POST') return await handleCityCardVisibility(request, env);
       if (pathname === '/collectibles' && request.method === 'POST') return await handleCollectibles(request, env);
       if (pathname === '/collectibles/place' && request.method === 'POST') return await handleCollectiblePlace(request, env);
