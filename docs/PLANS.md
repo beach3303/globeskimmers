@@ -1113,6 +1113,16 @@ app, then `npm run ota`.
   door as photos, before anyone sees it; again, all frames, the moment a clip is reported (it comes down if it fails,
   and the founder sees it in Admin); never a quiet re-judgement otherwise. Sound isn't checked at launch (a transcript
   check can be added later, cheaply); Report and Block cover it.
+- **Children in photos and video (founder's question, 2026-10-30 — DECISION OPEN).** Today: a Contribute upload with
+  a recognizable child (under ~16, posing or a clear face) is refused for the boards; a child small or far away in a
+  crowd is fine. Passport memory photos pass the lighter 'memory' check, which has NO child flag — so a public
+  passport's photo with a child CAN hang on a City Billboard today (gap found 2026-10-30). Claude's proposal, one
+  rule for photos and clips: family memories with children are welcome in a member's own albums and may be shared
+  up to **Friends & followers** (and in private postcards); on anything **public** — Everyone albums, City Boards and
+  Billboards, share links — recognizable children stay off. Done per item: the check marks the child, the item is
+  capped at Friends & followers automatically (the parent sees "kept for friends & followers — a child is
+  recognizable"), and it never reaches a board. Closing the billboard gap = the memory check gains the child flag and
+  such photos get `board_hidden` (they stay in the album). Awaiting the founder's call.
 - **City Board uploads (founder, 2026-10-30): public.** Photos AND videos go up from the same door on every board page
   (Post to this board → Add photos) and from the Profile's Contribute album. **The file's own GPS decides the board**,
   even when the upload starts on another city's page — already how photos work (`handleBoardContribute`: EXIF →
