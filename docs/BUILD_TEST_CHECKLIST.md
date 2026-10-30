@@ -3721,3 +3721,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   passport pages, memory photos, board photos and clips, City Cards, postcards. Ten stickers wrap to two rows of five.
 - Gates: node --check, blotter suites green, eslint no-undef, build + boot-check (see the OTA note). Screenshot:
   `Claude outputs/stickers-1-tray-of-ten.png`.
+
+## 2026-10-30 — PUSHED: video slice 1, Mailbox deep links, card threads, friends' finds, four stickers (main 697bac0)
+
+- ae0d39f → 697bac0, thirteen commits. Migrations run 41135293651: `20261030200000_board_videos` applied. Workers run
+  41135293645: api + tts green (api version cd09db5d / 82c31741). Live probes with the demo account: `/friends/added`
+  answers (empty — the demo follows no one), `/blotter/read { cards }` answers empty for a card it can't see,
+  `/board-video/<random>` 404, the LA board still answers with views.
+- **Open:** `npm run ota` (both platforms) for the app half: clips on boards, Mailbox lines that open the thing, the
+  cold-start back button, card stickers/comments, "What your friends added" on Arrivals, the four new stickers.
+  Then the phone-side shrinking plugin (store builds) before clips are usable from an iPhone's camera roll.
