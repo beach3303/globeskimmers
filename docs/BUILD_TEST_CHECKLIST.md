@@ -3594,3 +3594,23 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   (Traveler page), activity/one, activity/search, new arrivals, passport public and share landings carry no postcard or
   telegram at all. Push text is "N new postcards — X and others sent you postcards", never content. Admin reads counts only.
   `/m/<code>` links use 32–40 hex random tokens and deliver the card into the claimer's Mailbox.
+
+## 2026-10-30 — COMMITTED, NOT pushed: stickers + comments on PRIVATE postcards (Mailbox + Sent)
+
+- Founder: "put our like sticker … on the postcards, both for private ones and the ones in city boards … comment on them
+  also" → "build it". Board photos and board postcards already had the tray in the board viewer. New: a private postcard's
+  thread — worker blotter target `pm:<card id | group id>` (`blMailShare`): party = the sender + each addressee who still
+  has their copy; anyone else gets Not found on press, comment, co-sign and read (`/blotter/read { mail: [ids] }` →
+  `blReadMail`). The sender owns the thread (owner_user_id); every other party gets the push (no words, route Mailbox)
+  and the Mailbox line "stamped WOW! on your postcard" / "commented on your postcard" (opens the card when it's in my
+  Mailbox). Stickers open as on boards (minors may press); comments 18+. Sent entries carry `group`. Sweep accepts pm.
+- App: `BlotterStrip mailId=` → under every postcard in the Mailbox and under an opened Sent entry (group/one modes);
+  one `blotterReadMail` per list, again after a press; the tray always shows so either side can start.
+- Harness `scratchpad/bctest/run-pm.mjs`: 30 checks — party-only press/comment/read, outsider and signed-out read
+  nothing, board read never answers for a private card, feeds on both sides, group thread by copy id or group id,
+  deleted copy leaves the thread, owner sweep, board cards unchanged (one "fail" is the harness's own `postcard_box`
+  RPC stub; the real RPC returns every column incl. group_id). Older suites: 111/111. Gates: node --check, eslint
+  no-undef, build, boot-check all clean. Screenshot (mocked card): `Claude outputs/mail-thread-1-*.png`.
+- **After the push (worker deploys itself) and the OTA:** send yourself a postcard between two accounts: the addressee's
+  Mailbox card shows the tray; press WOW → the sender's Mailbox line and push say "stamped WOW! on your postcard";
+  the sender comments from Sent → the addressee's line opens the card; a third account sees nothing anywhere.
