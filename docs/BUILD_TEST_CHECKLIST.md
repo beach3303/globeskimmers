@@ -3673,3 +3673,20 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   4K/HEVC clips won't fit, and a MOV may not play on Android. Next: the plugin, then video postcards, memories, album.
 - **After the push:** the migration applies and the worker deploys; the app needs an OTA. Then on a phone: Post to this
   board → Add photos → pick a short MP4 → it hangs with ▶ and plays in the viewer.
+
+## 2026-10-30 — COMMITTED, NOT pushed: Mailbox lines open the thing they name; Traveler back button on a cold start
+
+- Founder (screenshots): "when user click notification, take user to that photo or video or public post card, or
+  passport page that was liked, or private postcard … instead of … virtual passport"; "the back button is not working"
+  (Traveler page). Worker (4c9018e): reaction/comment lines in `/social/unread` carry `target`, `board_at`
+  {city, region, country} for board items, `stamp_id` for a memory photo. App (the commit after it): ActivityList
+  destinations — `board:<target>` → `cityBoardUrl(...)&open=<target>` (the board page opens the viewer on that item,
+  reading up to 6 older pages, else "That one isn't on the board any more"), `photo:<stamp>:<photo>` →
+  `/Passport?stamp=&photo=` (the photo big), `stamp:<id>` → `/Passport?stamp=` (the stamp's sheet), private card →
+  the Mailbox card, a card I sent → the Sent tab. Traveler `useBack`: the session's first entry (location.key
+  'default') goes Home instead of asking for a page that isn't there. Harness: run-views.mjs +2 checks (a board
+  reaction's line carries target + board_at). Gates: eslint no-undef, build, boot-check. Screenshot:
+  `Claude outputs/open-1-board-opened-on-the-liked-photo.png` (the LA board opened straight onto the photo).
+- **Phone test after push + OTA:** tap "Maiza stamped WOW! on your photo on Santa Monica's city board" → the viewer on
+  that photo; a line about a memory photo → the photo big in the passport; open a Traveler page from a notification
+  → ‹ goes Home.
