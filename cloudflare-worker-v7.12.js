@@ -19912,7 +19912,31 @@ async function blBoardShare(env, target) {
   const pc = (q.ok ? await q.json() : [])[0];
   return pc && pc.to_city ? { user_id: pc.sender_id, is_public: true, board: true } : null;
 }
-const blShareFor = (env, b) => (/^(pc|bph|bcp):/.test(String(b?.target || '')) ? blBoardShare(env, b.target) : blShare(env, b?.slug));
+// A private postcard's thread (founder, 2026-10-30: stickers and comments on private postcards
+// too): 'pm:<uuid>' — the card's id, or the group_id of a group card, so everyone on a group card
+// shares one thread. Only the people ON the card are party to it: the sender and each addressee
+// who still has their copy. Never on a board, never in a feed. The sender is the thread's owner
+// (owner_user_id), as a board card's sender is; the Mailbox tells every other party of each act.
+async function blMailShare(env, target, actorId) {
+  const m = /^pm:([0-9a-f-]{36})$/i.exec(String(target || ''));
+  if (!m || !BL_UUID.test(m[1]) || !actorId) return null;
+  const id = m[1].toLowerCase();
+  const sel = 'select=id,sender_id,to_user_id,group_id,city,place_name,recipient_deleted_at';
+  let q = await gbRest(env, `postcards?or=(id.eq.${id},group_id.eq.${id})&to_city=is.null&to_user_id=not.is.null&${sel}`, {});
+  let rows = q.ok ? await q.json() : [];
+  // A copy's id names its whole group.
+  const head = rows.find((r) => r.id === id) || rows[0];
+  if (head?.group_id && head.group_id !== id) {
+    q = await gbRest(env, `postcards?group_id=eq.${head.group_id}&to_city=is.null&to_user_id=not.is.null&${sel}`, {});
+    rows = q.ok ? await q.json() : [];
+  }
+  if (!rows.length) return null;
+  const sender = rows[0].sender_id;
+  const party = new Set([sender, ...rows.filter((r) => r.sender_id === sender && !r.recipient_deleted_at).map((r) => r.to_user_id)]);
+  if (!party.has(actorId)) return null;
+  return { user_id: sender, is_public: false, board: false, mail: true, party: [...party], target: `pm:${rows[0].group_id || rows[0].id}`, pc: { city: rows[0].city, name: rows[0].place_name } };
+}
+const blShareFor = (env, b, actorId = null) => (/^pm:/.test(String(b?.target || '')) ? blMailShare(env, b.target, actorId) : /^(pc|bph|bcp):/.test(String(b?.target || '')) ? blBoardShare(env, b.target) : blShare(env, b?.slug));
 // Gate: null = allowed, else a user-facing error string (blGateResp shapes
 // it). `identity: true` is the stricter door for acts that print the actor's
 // handle on a public page; `actor: true` checks the visitor's age only.
@@ -19937,7 +19961,8 @@ async function blGate(env, user, share, opts) {
   // An approved follower reaches it too (tiers, 2026-10-15): the per-stamp
   // tier check then narrows them to the stamps shared with followers.
   // Under the passport's ceiling (2026-10-26): a Friends passport is friends only, Only me no one.
-  if (!share.is_public && !share.board && ppUnder(ppAud(share), await ppViewerLevel(env, share.user_id, user.id)) < 0) return 'Not found';
+  // A private postcard's thread (2026-10-30) has its own door — being on the card — not the passport's.
+  if (!share.is_public && !share.board && !share.mail && ppUnder(ppAud(share), await ppViewerLevel(env, share.user_id, user.id)) < 0) return 'Not found';
   // A blocked pair answers like a page that isn't there (privacy §8: blocking
   // is silent; go-live round 3: 'Not available' told the blocked side).
   if (await gbBlockedEither(env, user.id, share.user_id)) return 'Not found';
@@ -19949,11 +19974,11 @@ async function blGate(env, user, share, opts) {
     if (sp?.social_tier === 'blocked') return BL_FROZEN;
     // A sticker like on a board's photo or card is open to minors (founder, 2026-10-16);
     // a comment never is.
-    const boardSticker = !!share.board && !!opts.actor && !opts.identity;
+    const boardSticker = (!!share.board || !!share.mail) && !!opts.actor && !opts.identity;
     if (boardSticker && gbConsentRevoked(sp)) return BL_TEEN_HOLD;
     if (!boardSticker && gbNeedsConfirm(sp)) return GB_CONFIRM_MSG;
     if (!boardSticker && gbTeenHold(sp)) return BL_TEEN_HOLD;
-    if (opts.identity && share.board && (sp?.social_tier === 'teen' || gbNeedsConfirm(sp))) return 'Comments open at age 18';
+    if (opts.identity && (share.board || share.mail) && (sp?.social_tier === 'teen' || gbNeedsConfirm(sp))) return 'Comments open at age 18';
     if (opts.identity && sp?.social_tier === 'teen') {
       const f = await gbRest(env, `user_follows?follower_id=eq.${user.id}&followee_id=eq.${share.user_id}&status=eq.accepted&select=follower_id&limit=1`, {});
       if (!(f.ok && (await f.json()).length)) return 'Follow this traveler first — you can sign once they accept';
@@ -19976,6 +20001,8 @@ async function blStamp(env, share, target, lvl = 2) {
 // unchanged), and a visitor reaches only a photo that passed moderation.
 async function blTarget(env, share, target, viewerId) {
   const t = String(target || '');
+  // A private postcard's thread: blMailShare already checked the actor is on the card.
+  if (t.startsWith('pm:')) return share?.mail ? { pc: share.pc, target: share.target, mail: true } : null;
   if (t.startsWith('bcp:')) {
     const id = t.slice(4);
     if (!share?.board || !BL_UUID.test(id)) return null;
@@ -20047,7 +20074,7 @@ async function handleBlotterMark(request, env, ctx) {
     const kind = String(b.kind || '');
     const op = b.op === 'peel' ? 'peel' : 'press';
     if (!BL_KINDS.has(kind)) return jsonResponse({ error: 'Unknown stamp' }, 400);
-    const share = await blShareFor(env, b);
+    const share = await blShareFor(env, b, user.id);
     const gate = await blGate(env, user, share, { actor: op === 'press' });
     if (gate) return blGateResp(gate);
     const tgt = await blTarget(env, share, b.target, user.id);
@@ -20056,8 +20083,13 @@ async function handleBlotterMark(request, env, ctx) {
     if (op === 'press') {
       const w = await gbRest(env, 'blotter_marks?on_conflict=target,user_id,kind', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ owner_user_id: share.user_id, target, user_id: user.id, kind }) });
       if (!w.ok) return jsonResponse({ error: 'Could not press' }, 502);
-      // The knock (push, 2026-10-19): someone pressed a reaction on my pages.
-      if (ctx && share?.user_id && share.user_id !== user.id) {
+      // The knock (push, 2026-10-19): someone pressed a reaction on my pages — or on a private
+      // postcard we're both on (2026-10-30): everyone else on the card hears; never the words.
+      if (ctx && share?.mail) {
+        const who = await ppHolder(env, user.id);
+        const label = BL_PUSH_LABEL[kind] || String(kind).toUpperCase();
+        for (const uid of share.party) if (uid !== user.id) ctx.waitUntil(pushNotify(env, uid, 'pages', (n) => (n > 1 ? { title: `${n} new on your postcards`, body: 'Reactions and comments, in your Mailbox', route: '/Mailbox' } : { title: `${who} stamped ${label} on your postcard`, body: 'See it in your Mailbox', route: '/Mailbox' })));
+      } else if (ctx && share?.user_id && share.user_id !== user.id) {
         const who = await ppHolder(env, user.id);
         const label = BL_PUSH_LABEL[kind] || String(kind).toUpperCase();
         ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your friends', route: '/Passport' } : { title: `${who} stamped ${label} on your passport`, body: 'Open your passport to see where', route: '/Passport' })));
@@ -20123,7 +20155,7 @@ async function handleBlotterSign(request, env, ctx) {
       return jsonResponse({ ok: true });
     }
 
-    const share = await blShareFor(env, b);
+    const share = await blShareFor(env, b, user.id);
     const gate = await blGate(env, user, share, { identity: true });
     if (gate) return blGateResp(gate);
     const tgt = await blTarget(env, share, b.target, user.id);
@@ -20167,8 +20199,12 @@ async function handleBlotterSign(request, env, ctx) {
     if (!w.ok) return jsonResponse({ error: 'Could not sign' }, 502);
     const row = (await w.json())[0];
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'blotter_sign', { doodle: !!doodleKey }));
-    // The knock (push, 2026-10-19): someone signed or doodled on my pages.
-    if (ctx && share?.user_id && share.user_id !== user.id) {
+    // The knock (push, 2026-10-19): someone signed or doodled on my pages — or commented on a
+    // private postcard we're both on (2026-10-30): everyone else on the card hears; never the words.
+    if (ctx && share?.mail) {
+      const who = await ppHolder(env, user.id);
+      for (const uid of share.party) if (uid !== user.id) ctx.waitUntil(pushNotify(env, uid, 'pages', (n) => (n > 1 ? { title: `${n} new on your postcards`, body: 'Reactions and comments, in your Mailbox', route: '/Mailbox' } : { title: doodleKey && !text ? `${who} doodled on your postcard` : `${who} commented on your postcard`, body: 'See it in your Mailbox', route: '/Mailbox' })));
+    } else if (ctx && share?.user_id && share.user_id !== user.id) {
       const who = await ppHolder(env, user.id);
       ctx.waitUntil(pushNotify(env, share.user_id, 'pages', (n) => (n > 1 ? { title: `${n} new on your passport`, body: 'Reactions and notes from your friends', route: '/Passport' } : { title: doodleKey && !text ? `${who} left a doodle on your passport` : `${who} signed your passport`, body: 'Open your passport to see it', route: '/Passport' })));
     }
@@ -20189,11 +20225,11 @@ async function handleBlotterCosign(request, env, ctx) {
     const q = await gbRest(env, `blotter_entries?id=eq.${id}&select=id,owner_user_id,author_user_id,target`, {});
     const e0 = (q.ok ? await q.json() : [])[0];
     if (!e0) return jsonResponse({ error: 'Not found' }, 404);
-    const share = /^(pc|bcp):/.test(String(e0.target || '')) ? await blBoardShare(env, e0.target) : await blShareByOwner(env, e0.owner_user_id);
+    const share = /^pm:/.test(String(e0.target || '')) ? await blMailShare(env, e0.target, user.id) : /^(pc|bcp):/.test(String(e0.target || '')) ? await blBoardShare(env, e0.target) : await blShareByOwner(env, e0.owner_user_id);
     const gate = await blGate(env, user, share, b.op === 'lift' ? {} : { identity: true });
     if (gate) return blGateResp(gate);
     if (user.id !== e0.author_user_id && await gbBlockedEither(env, user.id, e0.author_user_id)) return jsonResponse({ error: 'Not found' }, 404);
-    if (b.op !== 'lift' && !/^(pc|bcp):/.test(String(e0.target || ''))) {
+    if (b.op !== 'lift' && !/^(pc|bcp|pm):/.test(String(e0.target || ''))) {
       const oq = await gbRest(env, `social_profiles?user_id=eq.${e0.owner_user_id}&select=*`, {});
       if (!(await blCanComment(env, (oq.ok ? await oq.json() : [])[0] || null, e0.owner_user_id, user.id))) return jsonResponse({ error: 'Only their friends can write here' }, 403);
     }
@@ -20219,7 +20255,7 @@ async function handleBlotterSweep(request, env, ctx) {
     if (b.op === 'mark') {
       const kind = String(b.kind || '');
       const target = String(b.target || '');
-      if (!BL_KINDS.has(kind) || !/^(st|ph|pc|bph|bcp):[0-9a-f-]{36}$/i.test(target)) return jsonResponse({ error: 'Not found' }, 404);
+      if (!BL_KINDS.has(kind) || !/^(st|ph|pc|bph|bcp|pm):[0-9a-f-]{36}$/i.test(target)) return jsonResponse({ error: 'Not found' }, 404);
       await gbRest(env, `blotter_marks?owner_user_id=eq.${user.id}&target=eq.${encodeURIComponent(target)}&kind=eq.${kind}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
     } else if (b.op === 'entry') {
       const id = String(b.entry_id || '');
@@ -20242,6 +20278,7 @@ async function handleBlotterRead(request, env) {
   try {
     const user = await gbUser(request, env); // optional — a signed-out reader still sees counts
     const b = await request.json().catch(() => ({}));
+    if (Array.isArray(b.mail)) return jsonResponse(await blReadMail(env, request, user, b.mail));
     if (Array.isArray(b.postcards) || Array.isArray(b.photos) || Array.isArray(b.contribs)) return jsonResponse(await blReadBoard(env, request, user, b.postcards || [], b.photos || [], b.contribs || []));
     const share = await blShare(env, b.slug);
     if (!share) return jsonResponse({ targets: {}, entries: [] });
@@ -20459,6 +20496,45 @@ async function blReadBoard(env, request, user, ids, photoIds = [], contribIds = 
   return blDigest(env, request, user, marks, entries, hide);
 }
 
+
+// The threads of private postcards in my Mailbox or Sent (2026-10-30): { mail: [card id or
+// group id, …] } → the same { targets, entries } shape, keyed 'pm:<id>'. Only the cards I'm on
+// answer — the sender, or an addressee who still has their copy; anyone else reads nothing.
+async function blReadMail(env, request, user, ids) {
+  const none = { targets: {}, entries: [] };
+  if (!user) return none;
+  const want = [...new Set((ids || []).map((x) => String(x).toLowerCase()).filter((x) => BL_UUID.test(x)))].slice(0, 60);
+  if (!want.length) return none;
+  const sel = 'to_city=is.null&to_user_id=not.is.null&select=id,sender_id,to_user_id,group_id,recipient_deleted_at';
+  const [q1, q2] = await Promise.all([
+    gbRest(env, `postcards?id=in.(${want.join(',')})&${sel}`, {}),
+    gbRest(env, `postcards?group_id=in.(${want.join(',')})&${sel}`, {}),
+  ]);
+  if (!q1.ok || !q2.ok) return none;
+  const seen = new Set();
+  const rows = [...(await q1.json()), ...(await q2.json())].filter((r) => !seen.has(r.id) && seen.add(r.id));
+  const threads = new Map();   // thread key → { owner, party }
+  for (const r of rows) {
+    const k = r.group_id || r.id;
+    if (!threads.has(k)) threads.set(k, { owner: r.sender_id, party: new Set([r.sender_id]) });
+    if (!r.recipient_deleted_at) threads.get(k).party.add(r.to_user_id);
+  }
+  const ownerOf = {};
+  for (const [k, t] of threads) if (t.party.has(user.id)) ownerOf[`pm:${k}`] = t.owner;
+  const targets = Object.keys(ownerOf);
+  if (!targets.length) return none;
+  const blocks = await gbBlockSet(env, user.id);
+  if (!blocks) return none;
+  const owners = [...new Set(Object.values(ownerOf))].join(',');
+  const [mq, eq2] = await Promise.all([
+    gbRest(env, `blotter_marks?owner_user_id=in.(${owners})&target=in.(${targets.join(',')})&select=target,kind,user_id&limit=4000`, {}),
+    gbRest(env, `blotter_entries?owner_user_id=in.(${owners})&target=in.(${targets.join(',')})&order=created_at.desc&select=id,target,author_user_id,body,doodle_key,created_at,updated_at&limit=800`, {}),
+  ]);
+  if (!mq.ok || !eq2.ok) return none;
+  const marks = (await mq.json()).filter((m) => ownerOf[m.target]);
+  const entries = (await eq2.json()).reverse().filter((e) => ownerOf[e.target]);
+  return blDigest(env, request, user, marks, entries, (_t, who) => blocks.has(who));
+}
 
 // GET /bl-doodle/<key> — serve a stored doodle (immutable, unguessable key).
 // GET /bl-doodle/e/<entry id>: by the signature, while it exists.
@@ -21286,7 +21362,7 @@ async function handleMailSent(request, env) {
       const r = g[0];
       const board = !!r.to_city;
       items.push({
-        kind: 'postcard', from: 'postcards', ids: g.map((x) => x.id), at: r.created_at,
+        kind: 'postcard', from: 'postcards', ids: g.map((x) => x.id), group: r.group_id || null, at: r.created_at,
         photo: photo(r.photo_key), message: r.message || null, place: r.place_name || r.city || null, dish: r.meta?.dish || null,
         mode: board ? 'board' : !r.to_user_id ? (pcLeaked(r) ? 'lost' : 'followers') : r.group_id ? 'group' : g.length > 1 ? 'each' : 'one',
         ...(board ? { board: { kind: /^state:/.test(r.to_city) ? 'state' : /^country:/.test(r.to_city) ? 'country' : 'city', city: r.city || null, region: r.region || null, country: r.country || null, anon: !!r.meta?.anon } } : {}),
@@ -23528,6 +23604,19 @@ async function handleSocialUnread(request, env) {
       // The heads-up that photos hang on a board (City Billboards, 2026-10-16); no table yet = none.
       gbRest(env, `board_notices?user_id=eq.${me}&created_at=gte.${floor}&select=board_name,kind,photos,created_at&order=created_at.desc&limit=20`, {}).then(j).catch(() => []),
     ]);
+    // Stickers and comments on private postcards sent TO me (2026-10-30): a thread belongs to the
+    // card's sender (owner_user_id), so it never shows under my owner_user_id above — read by target.
+    const pmMine = {};   // 'pm:<thread>' → my copy's id, so the row can open the card
+    for (const r of direct) if (r.id) pmMine[`pm:${r.group_id || r.id}`] = r.id;
+    const pmT = Object.keys(pmMine).slice(0, 60);
+    if (pmT.length) {
+      const [pm, pe] = await Promise.all([
+        gbRest(env, `blotter_marks?target=in.(${pmT.join(',')})&user_id=neq.${me}&created_at=gte.${floor}&select=target,user_id,kind,created_at&order=created_at.desc&limit=100`, {}).then(j),
+        gbRest(env, `blotter_entries?target=in.(${pmT.join(',')})&author_user_id=neq.${me}&created_at=gte.${floor}&select=id,target,author_user_id,body,doodle_key,created_at&order=created_at.desc&limit=50`, {}).then(j),
+      ]);
+      marks.push(...pm);
+      entries.push(...pe);
+    }
     // Blocks hide the pair both ways (block_v2, 2026-10-13), activity from
     // before the block included; unreadable blocks count nothing. Signatures
     // and presses on MY pages hide only for the people I blocked: someone
@@ -23632,7 +23721,10 @@ async function handleSocialUnread(request, env) {
         by: { user_id: i.uid, handle: who[i.uid]?.handle || null, name: who[i.uid]?.name || null, verified: !!who[i.uid]?.verified, seal: who[i.uid]?.seal || null },
         ...(i.entry_id ? { entry_id: i.entry_id } : {}),
         ...(i.kinds ? { reactions: i.kinds.map((k) => BL_KIND_LABEL[k] || k) } : {}),
-        ...(i.target ? (i.target.startsWith('pc:')
+        ...(i.target ? (i.target.startsWith('pm:')
+          // A private postcard's thread (2026-10-30): never a board; my copy's id opens the card.
+          ? { mail: true, ...(pmMine[i.target] ? { postcard_id: pmMine[i.target] } : {}) }
+          : i.target.startsWith('pc:')
           ? { board: boardCity[i.target.slice(3)] || null }
           : (i.target.startsWith('bph:') || i.target.startsWith('bcp:'))
             ? { board: boardPhotoCity[i.target.slice(4)] || null, photo: true }
