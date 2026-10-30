@@ -23855,21 +23855,23 @@ async function handleSocialUnread(request, env) {
     // Likes and comments on my board postcards name the board (City Boards, 2026-10-14).
     const pcIds = [...new Set(items.map((i) => (i.target || '').startsWith('pc:') ? i.target.slice(3) : null).filter((x) => x && BL_UUID.test(x)))].slice(0, 200);
     const boardCity = {};
+    // ...and where the board is (2026-10-30), so a Mailbox line can open the very item it names.
+    const boardAt = {};
     if (pcIds.length) {
-      for (const r of await gbRest(env, `postcards?id=in.(${pcIds.join(',')})&sender_id=eq.${me}&select=id,city`, {}).then(j)) boardCity[r.id] = r.city || null;
+      for (const r of await gbRest(env, `postcards?id=in.(${pcIds.join(',')})&sender_id=eq.${me}&select=id,city,region,country`, {}).then(j)) { boardCity[r.id] = r.city || null; if (r.city) boardAt[`pc:${r.id}`] = { city: r.city, region: r.region || null, country: r.country || null }; }
     }
     // ...and for a board photo (City Billboards, 2026-10-16), the city of its stamp.
     const bphIds = [...new Set(items.map((i) => (i.target || '').startsWith('bph:') ? i.target.slice(4) : null).filter((x) => x && BL_UUID.test(x)))].slice(0, 200);
     const boardPhotoCity = {};
     // ...and for a contributed photo (2026-10-27), its own city.
     const bcpIds = [...new Set(items.map((i) => (i.target || '').startsWith('bcp:') ? i.target.slice(4) : null).filter((x) => x && BL_UUID.test(x)))].slice(0, 200);
-    if (bcpIds.length) for (const r of await gbRest(env, `board_contributions?id=in.(${bcpIds.join(',')})&user_id=eq.${me}&select=id,city`, {}).then(j)) boardPhotoCity[r.id] = r.city || null;
+    if (bcpIds.length) for (const r of await gbRest(env, `board_contributions?id=in.(${bcpIds.join(',')})&user_id=eq.${me}&select=id,city,region,country`, {}).then(j)) { boardPhotoCity[r.id] = r.city || null; if (r.city) boardAt[`bcp:${r.id}`] = { city: r.city, region: r.region || null, country: r.country || null }; }
     if (bphIds.length) {
       const phs = await gbRest(env, `passport_stamp_photos?id=in.(${bphIds.join(',')})&user_id=eq.${me}&select=id,stamp_id`, {}).then(j);
       const sids = [...new Set(phs.map((p) => p.stamp_id))];
       const cityOf = {};
-      if (sids.length) for (const st of await gbRest(env, `passport_stamps?id=in.(${sids.join(',')})&select=id,city`, {}).then(j)) cityOf[st.id] = st.city || null;
-      for (const p of phs) boardPhotoCity[p.id] = cityOf[p.stamp_id] || null;
+      if (sids.length) for (const st of await gbRest(env, `passport_stamps?id=in.(${sids.join(',')})&select=id,city,region,country`, {}).then(j)) cityOf[st.id] = st;
+      for (const p of phs) { const st = cityOf[p.stamp_id]; boardPhotoCity[p.id] = st?.city || null; if (st?.city) boardAt[`bph:${p.id}`] = { city: st.city, region: st.region || null, country: st.country || null }; }
     }
     const [hs, psr, st] = await Promise.all([
       uids.length ? gbRest(env, `passport_shares?user_id=in.(${uids.join(',')})&select=user_id,handle,verified,seal`, {}).then(j) : [],
@@ -23913,6 +23915,13 @@ async function handleSocialUnread(request, env) {
           : (i.target.startsWith('bph:') || i.target.startsWith('bcp:'))
             ? { board: boardPhotoCity[i.target.slice(4)] || null, photo: true }
             : { stamp: stampName[i.target.startsWith('ph:') ? photoStamp[i.target.slice(3)] : i.target.slice(3)] || null, photo: i.target.startsWith('ph:') }) : {}),
+        // The thing itself (2026-10-30): a line opens the photo, clip, card or page it names — the
+        // target, where its board is, and a memory photo's stamp.
+        ...(i.target && (i.type === 'reaction' || i.type === 'signature') ? {
+          target: i.target,
+          ...(boardAt[i.target] ? { board_at: boardAt[i.target] } : {}),
+          ...(i.target.startsWith('ph:') && photoStamp[i.target.slice(3)] ? { stamp_id: photoStamp[i.target.slice(3)] } : i.target.startsWith('st:') ? { stamp_id: i.target.slice(3) } : {}),
+        } : {}),
         ...(i.body !== undefined ? { body: i.body, doodle: i.doodle } : {}),
         ...(i.place !== undefined ? { place: i.place } : {}),
         ...(i.to_me ? { to_me: true } : {}),
