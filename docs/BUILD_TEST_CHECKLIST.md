@@ -3650,3 +3650,26 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   the teens decisions: no under-13 accounts; City Cards for teens now; a one-day delay when teen social opens).
   Workers run 41125886875: api + tts green, api version 205b579b. `item_views` creates itself on first use.
 - **Open:** `npm run ota` for the app half ("N views" in the board viewer, VIEWS badges in the Contribute album).
+
+## 2026-10-30 — COMMITTED, NOT pushed: video on City Boards, slice 1 (20-second clips on R2)
+
+- Founder: "now lets work on 20 seconds video" (R2 chosen 10-30). Built the backbone, City Boards first:
+  - Migration `20261030200000_board_videos.sql`: `board_contributions` gains kind ('photo'|'video'), video_key, duration,
+    video_ready (default true). Applies on push.
+  - Worker: `/board/contribute { kind:'video', image: poster, frames: [4], exif, caption, duration }` → poster + frames
+    through the board photo check (same rules; a recognizable child keeps it off), ≤ 20 s, row with video_ready=false
+    and the key `vid/<uid>/<uuid>.mp4` → `{ upload: '/board/video/<id>' }`; `PUT /board/video/<id>` raw MP4 ≤ 25 MB,
+    length re-read from the file's mvhd, R2 put, row ready; `GET|HEAD /board-video/<id>` while it hangs, with Range
+    (206). Wall rows + owner list carry `video` + `duration`; delete and the account purge (`vid/` prefix) take the file;
+    strays older than an hour are swept; CORS allows PUT. Harness `run-video.mjs`: 17 checks with a real 6 s clip
+    (made with AVFoundation — no ffmpeg on this Mac). All older suites green after giving their row mocks the new
+    column's default.
+  - App: `src/lib/clips.js` (probe, stills, location + date from the file's own metadata, the two-step send via
+    `workerUpload`), the Contribute sheet accepts `image/*,video/mp4,video/quicktime` with a "too long / too big" line,
+    the wall tile wears ▶ 0:06, the viewer plays the clip (poster until play; the view counts on play), the owner's
+    album tile wears the play mark. Gates: eslint no-undef, build, boot-check. Screenshots (mocked clip):
+    `Claude outputs/video-1-*.png`, `video-2-*.png`.
+- **Not yet:** the phone-side shrinking (native plugin → store builds): today a clip must already be ≤ 25 MB; iPhone
+  4K/HEVC clips won't fit, and a MOV may not play on Android. Next: the plugin, then video postcards, memories, album.
+- **After the push:** the migration applies and the worker deploys; the app needs an OTA. Then on a phone: Post to this
+  board → Add photos → pick a short MP4 → it hangs with ▶ and plays in the viewer.
