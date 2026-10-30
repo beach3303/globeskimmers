@@ -3800,3 +3800,14 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   update)". Expected: the bundle only takes the native road when `VideoShrink` answers, so installs without it keep the
   web input. **Open (founder):** store builds on BOTH platforms for the clips picker + trimmer — bump versions,
   `npm run cap:all`, archive + AAB.
+
+## 2026-10-30 — SUBMITTED to both stores: iOS 1.0.6 (17) + Android 1.0.10 (13), the clips build
+
+- Prep (Claude): versions bumped (1636c8b); `scripts/ios-launch-check.sh` on iOS 27.0 — iPad Air 11-inch (M4) ✅,
+  iPhone 18 Pro ✅; signed AAB via `./gradlew :app:bundleRelease` → `Desktop/GlobeSkimmers-1.0.10-build13.aab`, same
+  upload key as 1.0.9 (SHA1 86:31:4D…), jar verified, no new native libs or permissions.
+- Founder: Xcode archive + upload; App Store Connect 1.0.6 → **Waiting for Review** (~4:28 PM PT). Play Console →
+  Production → submission 9 → **In review** (4:41 PM PT). Both builds carry VideoShrink + the native picker + the
+  trimmer; the web bundle in them is the OTA 1.0.2610302234 content.
+- **On approval:** `site/app-version.json` → 1.0.6 / 1.0.10 (as on 10-24); then test on an Android phone that a photo
+  picked through the new picker still lands on its board (Photo Picker vs EXIF location).
