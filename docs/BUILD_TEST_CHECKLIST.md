@@ -3582,3 +3582,15 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
 - 4ee573e → d0a263b: 389f090 (ZoomableImage in the lightbox + board viewer), 59c7391 (postcard photos open big and
   zoom) + five checklist notes. App and docs only — no deploy workflow. Main now matches OTA 1.0.2610291719.
+
+## 2026-10-30 — Privacy audit: postcards and telegrams (founder: "ensure … strictly private") — CLEAN, no change
+
+- Database: `api.postcards`, `api.telegrams`, `api.pending_*` have RLS on and grants to service_role only — the app's anon key
+  can't read them at all; no supabase-js read of those tables exists in `src/`. Every read goes through the worker.
+- Worker: every recipient read filters `to_user_id = me` (Mailbox box/news/unread, open, reply, delete, keep); the Sent list
+  filters `sender_id = me`; board reads filter `to_city` (City Board cards are public by design). Blotter targets `pc:` accept
+  only cards with `to_city`, so a private card can never carry public stickers or comments. The followers-feed query is dead
+  by design (`pcBroadcast` excludes everything since the broadcast option left the app, PC_BROADCAST_END). `/social/world`
+  (Traveler page), activity/one, activity/search, new arrivals, passport public and share landings carry no postcard or
+  telegram at all. Push text is "N new postcards — X and others sent you postcards", never content. Admin reads counts only.
+  `/m/<code>` links use 32–40 hex random tokens and deliver the card into the claimer's Mailbox.
