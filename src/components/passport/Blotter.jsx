@@ -52,17 +52,19 @@ const fmtDay = (iso) => {
 // board rules, like a postcard — anyone adult may react and comment, the owner hears of it.
 // `readOnly`: a minor on a board (founder, 2026-10-16) — sticker likes yes, comments read-only.
 // `contribId` points it at a photo a traveler contributed to a board (2026-10-27).
-export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, photoId = null, postcardId = null, boardPhotoId = null, contribId = null, readOnly = false }) {
-  const onBoard = !!postcardId || !!boardPhotoId || !!contribId;
+// mailId (2026-10-30): a PRIVATE postcard's thread — its id, or a group card's group id — read
+// with blotterReadMail; the worker lets only the people on the card press or write there.
+export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, photoId = null, postcardId = null, boardPhotoId = null, contribId = null, mailId = null, readOnly = false }) {
+  const onBoard = !!postcardId || !!boardPhotoId || !!contribId || !!mailId;
   // The comments dial, answered by blotter/read for THIS viewer (a board keeps board rules).
   const canWrite = readOnly ? false : onBoard ? true : blotter?.can_comment !== false;
   const commentsOff = !onBoard && blotter?.comments === "off";
   const [busy, setBusy] = useState(null);       // kind being pressed/peeled
   const [sheet, setSheet] = useState(false);
-  const one = postcardId ? `pc:${postcardId}` : contribId ? `bcp:${contribId}` : boardPhotoId ? `bph:${boardPhotoId}` : photoId ? `ph:${photoId}` : null;
+  const one = mailId ? `pm:${mailId}` : postcardId ? `pc:${postcardId}` : contribId ? `bcp:${contribId}` : boardPhotoId ? `bph:${boardPhotoId}` : photoId ? `ph:${photoId}` : null;
   const targets = useMemo(() => (one ? [one] : (stamps || []).map((s) => `st:${s.id}`)), [stamps, one]);
   const lead = targets[0] || null;
-  const item = postcardId ? "postcard" : (photoId || boardPhotoId || contribId) ? "photo" : null;
+  const item = (postcardId || mailId) ? "postcard" : (photoId || boardPhotoId || contribId) ? "photo" : null;
 
   const agg = useMemo(() => {
     const counts = {}, mine = new Set();
@@ -127,7 +129,7 @@ export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, phot
         </button>
       </div>
       {sheet && (
-        <GuestbookSheet slug={slug} targets={targets} lead={lead} entries={pageEntries}
+        <GuestbookSheet slug={slug} targets={targets} lead={lead} entries={pageEntries} priv={!!mailId}
           ownerView={ownerView} onChanged={onChanged} onClose={() => setSheet(false)} item={item}
           canWrite={canWrite} commentsOff={commentsOff} heldNote={readOnly ? "Comments open at age 18 — you can read them all, and add sticker likes." : null} />
       )}
@@ -136,7 +138,7 @@ export function BlotterStrip({ slug, stamps, blotter, ownerView, onChanged, phot
 }
 
 // ── The Guestbook sheet: signatures, doodles, co-signs ──────────────────────
-function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, onClose, item = null, canWrite = true, commentsOff = false, heldNote = null }) {
+function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, onClose, item = null, canWrite = true, commentsOff = false, heldNote = null, priv = false }) {
   // item: 'photo' or 'postcard' for one thing's comments, null for a page's guestbook.
   const forPhoto = !!item;
   useDismissable(true, onClose);
@@ -309,7 +311,7 @@ function GuestbookSheet({ slug, targets, lead, entries, ownerView, onChanged, on
       {pad && <DoodlePad onClose={() => setPad(false)} onPost={(dataUrl) => sign(dataUrl)} busy={busy} />}
       {aboutEntry && (
         <TravelerSheet person={{ user_id: aboutEntry.user_id || null, handle: aboutEntry.handle, name: aboutEntry.name, entry_id: aboutEntry.id }}
-          report={{ kind: "signature", slug, ref: `bl:${aboutEntry.id}`, note: `${item === "postcard" ? "Board postcard comment" : forPhoto ? "Photo comment" : "Guestbook signature"}${aboutEntry.doodle ? " (a doodle)" : ""}${aboutEntry.body ? `: "${String(aboutEntry.body).slice(0, 300)}"` : ""}` }}
+          report={{ kind: "signature", slug, ref: `bl:${aboutEntry.id}`, note: `${item === "postcard" ? (priv ? "Private postcard comment" : "Board postcard comment") : forPhoto ? "Photo comment" : "Guestbook signature"}${aboutEntry.doodle ? " (a doodle)" : ""}${aboutEntry.body ? `: "${String(aboutEntry.body).slice(0, 300)}"` : ""}` }}
           onClose={() => setAboutEntry(null)} onChanged={() => { setAboutEntry(null); onChanged?.(); }} />
       )}
 

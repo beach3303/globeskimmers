@@ -548,6 +548,14 @@ export async function blotterReadBoard(postcardIds, photoIds = [], contribIds = 
   const { data } = await callWorker('blotter/read', { postcards: ids, ...(photos.length ? { photos } : {}), ...(contribs.length ? { contribs } : {}) });
   return data && !data.error ? data : { targets: {}, entries: [] };
 }
+// The stickers and comments on private postcards (2026-10-30): ids are card ids or group ids; the
+// worker answers only for the cards I'm on. Keyed 'pm:<id>'.
+export async function blotterReadMail(ids) {
+  const mail = [...new Set((ids || []).filter(Boolean))].slice(0, 60);
+  if (!mail.length) return { targets: {}, entries: [] };
+  const { data } = await callWorker('blotter/read', { mail });
+  return data && !data.error ? data : { targets: {}, entries: [] };
+}
 // Press or peel one of the five reaction stamps (+ contextual 'yummy').
 export async function blotterMark(slug, target, kind, op) {
   const { data, error } = await callWorker('blotter/mark', { slug, target, kind, op });

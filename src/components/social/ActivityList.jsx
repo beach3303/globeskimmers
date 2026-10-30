@@ -43,11 +43,13 @@ export function activityLine(a) {
     case "reaction": {
       const marks = Array.isArray(a.reactions) ? a.reactions.join(" · ") : "";
       // A board postcard (City Boards, 2026-10-14) carries `board`, its city.
-      const where = "board" in a ? ` on your ${a.photo ? "photo" : "postcard"}${a.board ? ` on ${a.board}’s city board` : ""}` : a.photo ? ` on your photo${a.stamp ? ` from ${a.stamp}` : ""}` : a.stamp ? ` on your ${a.stamp} page` : " on your passport";
+      // A private postcard's thread (2026-10-30) carries `mail`: a card you sent or received.
+      const where = a.mail ? " on your postcard" : "board" in a ? ` on your ${a.photo ? "photo" : "postcard"}${a.board ? ` on ${a.board}’s city board` : ""}` : a.photo ? ` on your photo${a.stamp ? ` from ${a.stamp}` : ""}` : a.stamp ? ` on your ${a.stamp} page` : " on your passport";
       return { who, text: `stamped ${marks}${where}` };
     }
     case "signature": {
       const words = a.body ? `: “${a.body}”` : "";
+      if (a.mail) return { who, text: `${a.doodle && !a.body ? "doodled on" : "commented on"} your postcard${words}` };
       if ("board" in a) return { who, text: `${a.doodle && !a.body ? "doodled on" : "commented on"} your ${a.photo ? "photo" : "postcard"}${a.board ? ` on ${a.board}’s city board` : ""}${words}` };
       if (a.photo) return { who, text: `${a.doodle && !a.body ? "doodled on" : "commented on"} your photo${a.stamp ? ` from ${a.stamp}` : ""}${words}` };
       return { who, text: `${a.doodle && !a.body ? "left a doodle on" : "signed"}${a.stamp ? ` your ${a.stamp} page` : " your passport"}${words}` };
@@ -65,6 +67,8 @@ export function activityLine(a) {
 
 // Where a row leads, or null.
 const destinationOf = (a) => {
+  // On a private postcard: the card in the Mailbox when it's mine to open, else nowhere (a card I sent lives in Sent).
+  if ((a?.type === "reaction" || a?.type === "signature") && a.mail) return a.postcard_id ? `pc:${a.postcard_id}` : null;
   if (a?.type === "reaction" || a?.type === "signature" || a?.type === "tag") return "passport";
   if (a?.type === "follow" || a?.type === "follow_request") return "circle";
   if (a?.type === "postcard" && a.to_me && a.postcard_id) return `pc:${a.postcard_id}`;

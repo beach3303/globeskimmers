@@ -19,7 +19,9 @@ import { TINK, TINK3, TYPE } from "@/components/telegram/TelegramPaper";
 import { inkColor } from "@/lib/telegram";
 import { hideAllSent, hideSent, sentMail } from "@/lib/sentMail";
 import { deleteBoardPostcard } from "@/lib/boardPostcards";
+import { blotterReadMail } from "@/lib/passport";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
+import { BlotterStrip } from "@/components/passport/Blotter";
 
 const SERIF = "'Instrument Serif', Georgia, serif";
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
@@ -102,7 +104,8 @@ function Front({ it, big = false }) {
   );
 }
 
-function SentItem({ it, onRemoved }) {
+// book / onBook (2026-10-30): the stickers and comments on the private cards here, read once per list.
+function SentItem({ it, onRemoved, book = null, onBook = undefined }) {
   const [open, setOpen] = useState(false);
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -179,6 +182,10 @@ function SentItem({ it, onRemoved }) {
               {it.dish || it.place ? <p style={{ margin: "4px 0 0", fontSize: fs(12.5), color: NEUTRAL.ink2 }}>{it.dish ? <b style={{ fontWeight: 600 }}>{it.dish}</b> : null}{it.dish && it.place ? " · " : ""}{it.place}</p> : null}
             </div>
           ) : null}
+          {/* The card's thread (founder, 2026-10-30): stickers and comments, for the people on it only. */}
+          {!tg && (it.mode === "group" || it.mode === "one") && it.ids?.[0] ? (
+            <div style={{ marginTop: 10 }}><BlotterStrip mailId={it.group || it.ids[0]} blotter={book} ownerView={false} onChanged={onBook} /></div>
+          ) : null}
           {(it.to || []).length ? (
             <ul style={{ listStyle: "none", margin: "10px 0 0", padding: 0 }}>
               {it.to.map((p, i) => (
@@ -201,6 +208,10 @@ export default function SentList({ style = undefined }) {
   const [state, setState] = useState(null);      // { items, next, error } once read
   const [older, setOlder] = useState("idle");    // 'idle' | 'busy' | 'failed'
   const live = useRef(0);
+  // The stickers and comments on the private cards listed (2026-10-30): one read per list, again after a press.
+  const [book, setBook] = useState(null);
+  const readBook = () => blotterReadMail((state?.items || []).filter((it) => it.kind === "postcard" && (it.mode === "group" || it.mode === "one") && it.ids?.[0]).map((it) => it.group || it.ids[0])).then(setBook);
+  useEffect(() => { if (state?.items?.length) readBook(); }, [state]);
   const load = async () => {
     const n = ++live.current;
     const r = await sentMail();
@@ -281,7 +292,7 @@ export default function SentList({ style = undefined }) {
         </div>
       ) : null}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {state.items.map((it) => <SentItem key={`${it.from}:${it.ids[0]}`} it={it} onRemoved={removed} />)}
+        {state.items.map((it) => <SentItem key={`${it.from}:${it.ids[0]}`} it={it} onRemoved={removed} book={book} onBook={readBook} />)}
       </div>
       {state.next ? (
         <button type="button" onClick={readOlder} aria-busy={older === "busy" || undefined}

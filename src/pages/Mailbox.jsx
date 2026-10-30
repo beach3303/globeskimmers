@@ -21,7 +21,8 @@ import { createPageUrl } from "@/utils";
 import { cityBoardsUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
-import { socialFeed, getHandle, getSocialProfile, setHandle, setAgeGate, splitDob, socialUnread, keepPostcard, deletePostcard, postcardBox } from "@/lib/passport";
+import { socialFeed, getHandle, getSocialProfile, setHandle, setAgeGate, splitDob, socialUnread, keepPostcard, deletePostcard, postcardBox, blotterReadMail } from "@/lib/passport";
+import { BlotterStrip } from "@/components/passport/Blotter";
 import { showToast } from "@/components/Toast";
 import { AirmailChevron } from "@/components/redesign/ornaments";
 import { HOME_TAB } from "@/components/redesign/Zone";
@@ -388,6 +389,11 @@ function MailboxBody() {
     setBox(r);
     setOlder("idle");
   };
+  // The stickers and comments on the postcards here (founder, 2026-10-30: on private postcards too):
+  // one read per box, read again after a press or a comment. Only the people on a card see its thread.
+  const [book, setBook] = useState(null);
+  const readBook = () => blotterReadMail((box?.rows || []).filter((r) => (r.type === "postcard" || r.photo) && r.id).map((r) => r.group_id || r.id)).then(setBook);
+  useEffect(() => { if (box?.rows?.length) readBook(); }, [box]);
   const load = async () => {
     // Opening the Mailbox marks the activity read, which clears the nav dot.
     loadBox();
@@ -534,6 +540,8 @@ function MailboxBody() {
         <div key={`pc-${r.id || r.created_at}-${i}`} data-pc={r.id || undefined} style={{ borderRadius: 14 }}>
           <PostcardCard row={r} onReply={replyFor} me={me.handle} meName={meName} onKeep={keep} onFollow={followSender} onDelete={(row) => removeCard({ id: row.id, by: row.by, kind: "postcard" })}
             onReport={(row) => openTraveler({ ...row.by, postcard_id: row.id || null }, { kind: "postcard", ...(row.id ? { ref: `pc:${row.id}` } : {}), note: clip(fromNew ? `Postcard from someone new${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}` : `Postcard${row.place ? ` from ${row.place}` : ""}, ${whenLabel(row.created_at)}${row.message ? `: "${row.message}"` : ""}`, 480) }, mine(row))} />
+          {/* The card's thread (2026-10-30): stickers and comments, for the sender and the addressees only. */}
+          {r.id ? <div style={{ marginTop: 8 }}><BlotterStrip mailId={r.group_id || r.id} blotter={book} ownerView={false} onChanged={readBook} /></div> : null}
         </div>
       );
     }
