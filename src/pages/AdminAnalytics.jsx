@@ -253,6 +253,59 @@ function TicketTapsReport() {
   );
 }
 
+// Clips report (founder, 2026-10-30): how many clips in all, uploads per day and per month, plays per day
+// and per month (a play = a counted view in the board viewer, once per member per clip per day).
+function VideoReport() {
+  const [rep, setRep] = React.useState(null);
+  React.useEffect(() => {
+    (async () => {
+      const { data, error } = await callWorker('admin/videos', {});
+      setRep(error || data?.error ? { error: error || data.error } : data);
+    })();
+  }, []);
+  const title = '🎬 Clips on City Boards';
+  if (!rep) return <Section title={title} icon={Activity}><div style={{ color: COLORS.gray, fontSize: 13 }}>Counting…</div></Section>;
+  if (rep.error) return <Section title={title} icon={Activity}><div style={{ color: '#B0472F', fontSize: 13 }}>{rep.error}</div></Section>;
+  const Stat = ({ n, label }) => (
+    <div style={{ minWidth: 110 }}>
+      <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.dark, lineHeight: 1.1 }}>{Number(n || 0).toLocaleString()}</div>
+      <div style={{ fontSize: 11, color: COLORS.gray, lineHeight: 1.3 }}>{label}</div>
+    </div>
+  );
+  const Bars = ({ rows, label, color }) => (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 11, letterSpacing: '.05em', textTransform: 'uppercase', color: COLORS.gray, marginBottom: 4 }}>{label}</div>
+      {rows.length ? rows.map((r) => <BarRow key={r.k} label={r.k} count={r.n} max={Math.max(...rows.map((x) => x.n || 0), 1)} color={color} />) : <div style={{ fontSize: 12.5, color: COLORS.gray }}>None yet.</div>}
+    </div>
+  );
+  return (
+    <Section title={title} icon={Activity} empty={rep.unavailable ? 'Clips open with the next worker update.' : !rep.total && !rep.plays_total ? 'No clips uploaded yet.' : null}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
+        <Stat n={rep.total} label="clips uploaded, all time" />
+        <Stat n={rep.live} label="hanging on boards now" />
+        <Stat n={rep.plays_total} label="plays, all time" />
+        <Stat n={Math.round((rep.seconds || 0) / 60)} label="minutes stored" />
+        {rep.pending ? <Stat n={rep.pending} label="still uploading" /> : null}
+      </div>
+      <Bars rows={rep.plays_by_day || []} label="Plays per day (30d)" color={COLORS.green} />
+      <Bars rows={rep.uploads_by_day || []} label="Uploads per day (30d)" color={COLORS.blue || '#2C6E9B'} />
+      <Bars rows={rep.plays_by_month || []} label="Plays per month (12m)" color={COLORS.green} />
+      <Bars rows={rep.uploads_by_month || []} label="Uploads per month (12m)" color={COLORS.blue || '#2C6E9B'} />
+      {(rep.top || []).length ? (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 11, letterSpacing: '.05em', textTransform: 'uppercase', color: COLORS.gray, marginBottom: 4 }}>Most played</div>
+          {rep.top.map((t) => (
+            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 12.5, padding: '3px 0', borderBottom: '1px solid #F1F1F1' }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.city || 'Somewhere'}{t.country ? `, ${t.country}` : ''} · {t.duration ? `${Math.round(t.duration)} s` : ''} · {String(t.created_at || '').slice(0, 10)}</span>
+              <b>{t.plays}</b>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </Section>
+  );
+}
+
 // Virtual items report (founder, 2026-10-05): what travelers pick — laptops,
 // tumblers, bottles, buddies — current totals from profile_gear plus the pick
 // stream per day / week / month and per city / country, all CSV-exportable.
@@ -2254,6 +2307,8 @@ export default function AdminAnalytics() {
             </Section>
 
             <CollectiblesReport report={data?.collectibles_report || null} />
+
+            <VideoReport />
 
             <Section title="🛂 Stamps per month (12m)" icon={Activity} empty={ppByMonth.length === 0 ? 'No stamps in the last year.' : null}>
               {ppByMonth.map((d, i) => (
