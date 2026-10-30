@@ -3711,3 +3711,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - **Clips longer than 20 seconds (founder's question):** today turned back with a line in the summary ("trim it in
   Photos first"); an in-app trimmer (pick the 20-second window on a scrubber, preview, export just that range) comes
   with the native shrinking plugin, since cutting a file needs the native export. Recorded in PLANS.
+
+## 2026-10-30 — COMMITTED, NOT pushed: four more stickers — AWESOME! · STUNNING! · VIBES! · LOVE THIS!
+
+- Founder sent four new sticker artworks: "add these 4 stickers to each stamp-a-like-sticker under a passport page,
+  photos and videos." Art shrunk to 176 px (`src/assets/blotter/{awesome,stunning,vibes,lovethis}.png`, alpha kept,
+  `sips`); `KINDS` in Blotter.jsx gains the four (after MORE PICS PLEASE!); worker `BL_KINDS`, `BL_PUSH_LABEL`,
+  `BL_KIND_LABEL` know them, so Mailbox lines and pushes read "stamped LOVE THIS! on your …". One tray everywhere:
+  passport pages, memory photos, board photos and clips, City Cards, postcards. Ten stickers wrap to two rows of five.
+- Gates: node --check, blotter suites green, eslint no-undef, build + boot-check (see the OTA note). Screenshot:
+  `Claude outputs/stickers-1-tray-of-ten.png`.
