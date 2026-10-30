@@ -3741,3 +3741,41 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   plus all-time plays per clip from `item_views` and the ten most played. Admin page: `VideoReport` under the
   collectibles report (stats row + four bar lists + Most played). No new table — the events table and item_views.
 - Gates: node --check, suites green, eslint no-undef, build + boot-check. Needs push (worker) + OTA (the page).
+
+## 2026-10-30 — COMMITTED, NOT pushed: clips on the phone — VideoShrink plugin (iOS + Android), gallery picker, 20-second trimmer
+
+- Founder: "i thought we would submit our build to android and apple for our videos?" The phone half of clips, which the
+  R2 decision needs (the phone shrinks and converts; see docs/PLANS.md → Video). `VideoShrink`, a plugin in each native
+  app: `probe { path }` reads a clip's duration, size, location (ISO 6709) and capture date from its own metadata;
+  `shrink { path, start, duration, maxHeight }` exports those seconds as 720p H.264 MP4 (iOS: AVAssetExportSession
+  1280×720 preset; Android: Media3 Transformer 1.9.4 with ClippingConfiguration + Presentation, short side 720, never
+  upscaled; built and started on the main thread, where it wants a Looper). Registered in MainViewController.swift /
+  MainActivity.java; the Swift file is in project.pbxproj by hand (the project lists files explicitly).
+- The camera roll opens through `@capawesome/capacitor-file-picker` 8.1.1 (`pickMedia`, paths; PHPicker on iOS keeps
+  the original with its EXIF, the Photo Picker on Android), added to `android.includePlugins` in capacitor.config.ts —
+  the allow-list, or the Android build leaves it out (it did, on the first sync). `src/lib/videoShrink.js` wraps it;
+  `available()` is false on the web and on installs without the plugin, so Contribute's Upload button falls back to the
+  web input unchanged. `ClipTrimmer.jsx`: a clip over 20 s shows the preview with a start slider ("Pick your 20
+  seconds"; plays the window and stops at its end); "Use these 20 seconds" → shrink → upload with the probe's location.
+  "Shrinking your clip…" on the button while it works. Photos picked natively take the existing road (File → EXIF).
+- Gates: eslint no-undef on the four JS files, `npm run build`, `npm run boot-check` ✅, `npx cap sync` (file picker in
+  Package.swift + capacitor.settings.gradle), **iOS: `xcodebuild … generic/platform=iOS Simulator` BUILD SUCCEEDED**,
+  **Android: `./gradlew :app:assembleDebug` BUILD SUCCESSFUL**. Not run on a phone yet — needs the store build.
+- **Founder (store builds, both platforms — `npm run cap:all`):** bump the versions (the numbers in review can't be
+  reused), archive in Xcode → App Store Connect, build the AAB in Android Studio → Play. Then on a phone: Profile →
+  My Photos → Upload photos or clips → a clip over 20 s shows the trimmer; a 10 s clip goes straight up; check the
+  Android photo picker keeps the photo's location (the Photo Picker may strip EXIF location — if a photo lands "no
+  location" on Android only, the picker needs ACCESS_MEDIA_LOCATION or the web input back for photos).
+
+## 2026-10-30 — COMMITTED, NOT pushed: share sheet → a third door, "Upload to a City Board"
+
+- Founder: "when sharing photos from mobile phone gallery, or even when sharing photo from Google photo apps or even
+  from sharing photos from any drive, the options are only send a postcard or get a stamp … create another option …
+  uploaded to city board." PhotoSorter's ask sheet (a share) now offers Get a stamp · Send as a postcard · **Upload to
+  a City Board** ("Public, from 'a traveler'. It goes on the board of the city where it was taken."). It opens the
+  Contribute sheet (`SharedContributeSheet` in ContributeAlbum.jsx, `initialFiles`) which posts the shared photos at
+  once — the public note above the progress bar, then the summary (which boards, no-location, child, elsewhere).
+  Photos only, as the share target is today (iOS ShareExtension: images, max 10; Android: SEND image/*). Reaches
+  phones by OTA — the share target itself hasn't changed.
+- Gates: eslint no-undef (PhotoSorter, Passport, ContributeAlbum), build + boot-check ✅. No rig screenshot: the ask
+  sheet only opens from a real share (the shared-photo queue is module-private); test from Photos → Share → Globeskimmers.

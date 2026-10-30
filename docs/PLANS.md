@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-10-30 (video: R2 decided, not built; stickers + comments on private postcards built; privacy audit clean)
+Last updated: 2026-10-30 evening (video: server half live, phone plugin built — store builds next; share sheet → City Board door; stickers + comments on private postcards built; privacy audit clean)
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -1076,7 +1076,18 @@ under every album envelope, "Who can see it · Change" after stamping, Settings 
 "Friends" everywhere visible. Push order: the migration first (20261026090000_privacy_ceiling.sql), then the worker +
 app, then `npm run ota`.
 
-## Video — founder decision 2026-10-30: R2, for affordability (NOT built; research in `Claude outputs/video-uploads-research-2026-10-30.md`)
+## Video — founder decision 2026-10-30: R2, for affordability (research in `Claude outputs/video-uploads-research-2026-10-30.md`)
+
+**Status 2026-10-30 evening:** the server half is live (main 697bac0: clips on City Boards, 20 s / 25 MB, poster + four
+frames through the AI check, views and plays, the admin report committed). The phone half is BUILT and compiles on both
+platforms, awaiting the founder's store builds: `VideoShrink` (ios/App/App/VideoShrinkPlugin.swift,
+android/…/VideoShrinkPlugin.java — probe a clip's length, size, location and date; export the chosen seconds as 720p
+H.264 MP4), the native gallery picker (`@capawesome/capacitor-file-picker`, on the Android allow-list), and the in-app
+trimmer (`ClipTrimmer`: a clip over 20 s → slide to the 20 seconds you want). The web bundle only offers this road when
+the plugin answers, so older installs keep the web picker (a clip must already be ≤ 20 s). Next: video postcards, then
+stamp memories, then the profile album. Also 2026-10-30: the phone's share sheet (Photos / Google Photos / a drive →
+Globeskimmers) gained a third door, **Upload to a City Board**, beside Get a stamp and Send as a postcard (an OTA, not a
+store build — the share target already exists).
 
 - **Where:** City Boards first, then stamp memories (a clip among the memory photos — and a clip from the camera roll
   can earn a stamp exactly as a photo does: same location and date data; the landmark check reads one frame), then the
