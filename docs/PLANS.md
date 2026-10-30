@@ -1103,6 +1103,11 @@ app, then `npm run ota`.
   away. Trimming in the app for longer footage.
 - **Build order proposed:** the clip pipeline once (plugin → compress → poster + 4 frames → upload → the check → player),
   then video postcards, then City Boards, then stamp memories (a clip can earn a stamp), then the profile album.
+- **City Board uploads (founder, 2026-10-30): public.** Photos AND videos go up from the same door on every board page
+  (Post to this board → Add photos) and from the Profile's Contribute album. **The file's own GPS decides the board**,
+  even when the upload starts on another city's page — already how photos work (`handleBoardContribute`: EXIF →
+  `bcPlaceAt` → `pcBoardOf`; the sheet reports the ones that went "elsewhere"); a file with no location is refused, so a
+  board only ever shows what was taken there. Videos follow the same rule (the clip's location tag).
 
 ## Website (globeskimmers.io)
 
