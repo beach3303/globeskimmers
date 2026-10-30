@@ -357,7 +357,7 @@ function PhotoTile({ row, onOpen, index = 0 }) {
   );
 }
 
-function Board({ kind, city, region, country, onBack }) {
+function Board({ kind, city, region, country, onBack, open = "" }) {
   const { profile } = useAuth();
   const circle = useCircle();
   const name = kind === "state" ? region : kind === "country" ? country : city;
@@ -418,6 +418,18 @@ function Board({ kind, city, region, country, onBack }) {
 
   const blocked = circle.blockedHandles || new Set();
   const rows = board && !board.error && !board.held && !board.unavailable ? (board.rows || []).filter((r) => !blocked.has(lc(r?.by?.handle))) : [];
+  // A Mailbox line opens the item it names (founder, 2026-10-30): ?open=bcp:<id> | bph:<id> | pc:<id>.
+  // On this page → the viewer; older → the next pages, a few; gone → a line.
+  const openId = String(open || "").replace(/^(bcp|bph|pc):/i, "").toLowerCase();
+  const opened = useRef(false);
+  const dug = useRef(0);
+  useEffect(() => {
+    if (!openId || opened.current || !board || board.error || board.held || board.unavailable) return;
+    const i = rows.findIndex((r) => String(r.id || "").toLowerCase() === openId);
+    if (i >= 0) { opened.current = true; setView(i); return; }
+    if (board.next && older === "idle" && dug.current < 6) { dug.current += 1; readOlder(); return; }
+    if (!board.next || dug.current >= 6) { opened.current = true; showToast("That one isn’t on the board any more", "error"); }
+  }, [rows, board, older]);
   // An adult on a board that loaded: a postcard once they've been there (can_post), photos any
   // time while contributions are open (each photo proves where it was taken).
   const writer = !!board && !board.error && !board.held && !board.unavailable && board.read_only !== true;
@@ -643,5 +655,5 @@ export default function CityBoardPage() {
       </div>
     );
   }
-  return <Board kind={kind} city={city} region={region} country={country} onBack={onBack} />;
+  return <Board kind={kind} city={city} region={region} country={country} onBack={onBack} open={String(params.get("open") || "").trim()} />;
 }

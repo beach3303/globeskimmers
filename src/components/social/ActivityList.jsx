@@ -67,8 +67,14 @@ export function activityLine(a) {
 
 // Where a row leads, or null.
 const destinationOf = (a) => {
-  // On a private postcard: the card in the Mailbox when it's mine to open, else nowhere (a card I sent lives in Sent).
-  if ((a?.type === "reaction" || a?.type === "signature") && a.mail) return a.postcard_id ? `pc:${a.postcard_id}` : null;
+  // On a private postcard: the card in the Mailbox when it's mine to open, else Sent (a card I sent).
+  if ((a?.type === "reaction" || a?.type === "signature") && a.mail) return a.postcard_id ? `pc:${a.postcard_id}` : "sent";
+  // The thing itself (founder, 2026-10-30): the photo, clip or card on its board; a memory photo; a stamp's page.
+  if ((a?.type === "reaction" || a?.type === "signature") && a.target) {
+    if (/^(pc|bph|bcp):/.test(a.target)) return a.board_at?.city ? `board:${a.target}` : "boards";
+    if (a.target.startsWith("ph:") && a.stamp_id) return `photo:${a.stamp_id}:${a.target.slice(3)}`;
+    if (a.target.startsWith("st:")) return `stamp:${a.target.slice(3)}`;
+  }
   if (a?.type === "reaction" || a?.type === "signature" || a?.type === "tag") return "passport";
   if (a?.type === "follow" || a?.type === "follow_request") return "circle";
   if (a?.type === "postcard" && a.to_me && a.postcard_id) return `pc:${a.postcard_id}`;
@@ -119,7 +125,7 @@ export default function ActivityList({ items = [], onOpen = undefined, onMore = 
           return (
             <li key={`${a.type}-${a.at}-${i}`} style={{ margin: 0, display: "flex", alignItems: "flex-start", borderTop: rowStyle.borderTop, background: rowStyle.background }}>
               {to && typeof onOpen === "function" ? (
-                <button type="button" onClick={() => onOpen(to)} style={{ ...rowStyle, flex: 1, minWidth: 0, borderTop: 0, paddingRight: more ? 4 : 14, cursor: "pointer" }}>{body}</button>
+                <button type="button" onClick={() => onOpen(to, a)} style={{ ...rowStyle, flex: 1, minWidth: 0, borderTop: 0, paddingRight: more ? 4 : 14, cursor: "pointer" }}>{body}</button>
               ) : (
                 <div style={{ ...rowStyle, flex: 1, minWidth: 0, borderTop: 0, paddingRight: more ? 4 : 14 }}>{body}</div>
               )}

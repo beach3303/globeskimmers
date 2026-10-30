@@ -1369,6 +1369,21 @@ function PassportInner({ embedded = false }) {
     if (!photos.length) return;
     setLightbox({ photos, index: Math.min(Math.max(index || 0, 0), photos.length - 1), title: `I was here! ${st.name}`, credit: st.visited_on ? fmtDate(st.visited_on) : null, social: true });
   };
+  // A Mailbox line opens the thing it names (founder, 2026-10-30): ?stamp=<id> opens that stamp's
+  // sheet, &photo=<id> enlarges that memory photo. Once, when the stamps are in.
+  const openedFromUrl = useRef(false);
+  useEffect(() => {
+    if (openedFromUrl.current || preview || !stampsView.length) return;
+    let sid = null, pid = null;
+    try { const p = new URLSearchParams(window.location.search); sid = p.get("stamp"); pid = p.get("photo"); } catch { /* ignore */ }
+    if (!sid) { openedFromUrl.current = true; return; }
+    const st = stampsView.find((s) => s.id === sid);
+    if (!st) return;
+    openedFromUrl.current = true;
+    const at = pid ? (st.photos || []).findIndex((p) => p.id === pid) : -1;
+    if (at >= 0) enlargeStampPhotos(st, at);
+    else setActionsId(sid);
+  }, [stampsView]);
 
   return (
     <div className="min-h-screen" style={{ background: IVORY, fontFamily: SANS }}>

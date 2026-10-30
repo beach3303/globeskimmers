@@ -108,12 +108,15 @@ function TheirCircle({ world, first, cloth, inner, style }) {
   );
 }
 
-// Back to wherever you came from; a cold start (a shared link) goes Home.
+// Back to wherever you came from; the session's first page — a cold start, a notification, a
+// shared link — has nothing behind it (founder, 2026-10-30: "the back button is not working"),
+// so it goes Home instead of asking the browser for a page that isn't there.
 function useBack() {
   const navigate = useNavigate();
+  const { key } = useLocation();
   return () => {
-    if (typeof window !== "undefined" && window.history.length > 1) navigate(-1);
-    else navigate(createPageUrl("Home"));
+    if (typeof window !== "undefined" && window.history.length > 1 && key !== "default") navigate(-1);
+    else navigate(createPageUrl("Home"), { replace: true });
   };
 }
 

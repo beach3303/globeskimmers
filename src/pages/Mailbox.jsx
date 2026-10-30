@@ -18,7 +18,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronRight, Globe, Lock, Mail, Mailbox as MailboxIcon, UserPlus, Zap } from "lucide-react";
 import { createPageUrl } from "@/utils";
-import { cityBoardsUrl } from "@/lib/boardLinks";
+import { cityBoardsUrl, cityBoardUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
 import { socialFeed, getHandle, getSocialProfile, setHandle, setAgeGate, splitDob, socialUnread, keepPostcard, deletePostcard, postcardBox, blotterReadMail } from "@/lib/passport";
@@ -462,7 +462,7 @@ function MailboxBody() {
   const counts = circle.counts || {};
   const addressable = (circle.acc || []).some((r) => r.handle) || (counts.followYou || 0) > 0;
   // A passport-activity line that points at a message: its tab, opened.
-  const openFrom = (to) => {
+  const openFrom = (to, a = null) => {
     const [k, id] = String(to).split(":");
     if (k === "tg" || k === "pc") {
       setTab(k === "tg" ? "telegrams" : "postcards");
@@ -470,6 +470,12 @@ function MailboxBody() {
       setTimeout(() => bringIntoView(k, id), 350);
       return;
     }
+    // The thing a line names (founder, 2026-10-30): its board opened on it, a memory photo, a stamp's page, the Sent tab.
+    if (k === "board" && a?.board_at?.city) { navigate(`${cityBoardUrl(a.board_at.city, a.board_at.country, a.board_at.region)}&open=${encodeURIComponent(a.target || "")}`); return; }
+    if (to === "boards") { navigate(cityBoardsUrl()); return; }
+    if (k === "stamp") { navigate(`${createPageUrl("Passport")}?stamp=${id}`); return; }
+    if (k === "photo") { const [, sid, pid] = String(to).split(":"); navigate(`${createPageUrl("Passport")}?stamp=${sid}&photo=${pid}`); return; }
+    if (to === "sent") { setTab("sent"); return; }
     navigate(to === "passport" ? createPageUrl("Passport") : `${createPageUrl("Circle")}?tab=followers`);
   };
 
