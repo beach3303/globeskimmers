@@ -21,6 +21,10 @@ import takemeArt from "@/assets/blotter/takeme.png";
 import beenArt from "@/assets/blotter/been.png";
 import wannagoArt from "@/assets/blotter/wannago.png";
 import morepicsArt from "@/assets/blotter/morepics.png";
+import awesomeArt from "@/assets/blotter/awesome.png";
+import stunningArt from "@/assets/blotter/stunning.png";
+import vibesArt from "@/assets/blotter/vibes.png";
+import lovethisArt from "@/assets/blotter/lovethis.png";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -37,6 +41,11 @@ const KINDS = [
   { k: "been", label: "BEEN THERE!", color: "#2E6B4E", art: beenArt },
   { k: "wannago", label: "I WANNA GO!", color: "#A85A2E", art: wannagoArt },
   { k: "morepics", label: "MORE PICS PLEASE!", color: "#8B5A1A", art: morepicsArt },
+  // The founder's four new stickers (2026-10-30), on every tray: passport pages, photos, clips, cards, postcards.
+  { k: "awesome", label: "AWESOME!", color: "#B5541C", art: awesomeArt },
+  { k: "stunning", label: "STUNNING!", color: "#A8791C", art: stunningArt },
+  { k: "vibes", label: "VIBES!", color: "#C2552B", art: vibesArt },
+  { k: "lovethis", label: "LOVE THIS!", color: "#B0472F", art: lovethisArt },
 ];
 
 const fmtDay = (iso) => {
