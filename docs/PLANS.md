@@ -1103,6 +1103,16 @@ app, then `npm run ota`.
   away. Trimming in the app for longer footage.
 - **Build order proposed:** the clip pipeline once (plugin → compress → poster + 4 frames → upload → the check → player),
   then video postcards, then City Boards, then stamp memories (a clip can earn a stamp), then the profile album.
+- **Content rules for video (founder, 2026-10-30) — the same list for photos:** no animal cruelty (an animal hurt or
+  killed; food isn't cruelty — lechon, a fish market are fine), no nudity or sexual content (a man with his shirt off at
+  a beach, pool or game is fine; swimwear is fine), no drunkenness or glorified heavy drinking (a drink at dinner, a
+  beer at a game stays fine), no prostitution or sexual services, no violence (fights, assault, blood, threats, weapons
+  brandished), plus what photos already refuse: hate symbols, illegal drugs, private documents and screens, memes,
+  ads and spam. Children: the photo rule applies (a recognizable child keeps a clip off public boards).
+  **When the AI checks:** once, at upload — the poster frame plus four frames spread across the clip, through the same
+  door as photos, before anyone sees it; again, all frames, the moment a clip is reported (it comes down if it fails,
+  and the founder sees it in Admin); never a quiet re-judgement otherwise. Sound isn't checked at launch (a transcript
+  check can be added later, cheaply); Report and Block cover it.
 - **City Board uploads (founder, 2026-10-30): public.** Photos AND videos go up from the same door on every board page
   (Post to this board → Add photos) and from the Profile's Contribute album. **The file's own GPS decides the board**,
   even when the upload starts on another city's page — already how photos work (`handleBoardContribute`: EXIF →
