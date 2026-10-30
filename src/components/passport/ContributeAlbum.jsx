@@ -285,6 +285,8 @@ function ContributeSheet({ photos, onChanged, onClose, board = null }) {
                   <button key={p.id} type="button" onClick={() => setView(shown.indexOf(p))} aria-label={`Open your photo from ${place}${p.hidden ? ", taken down" : ""}`}
                     style={{ position: "relative", aspectRatio: "1 / 1", padding: 0, border: 0, borderRadius: 8, overflow: "hidden", background: "#E4DCC8", cursor: "pointer" }}>
                     <img src={p.url} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: p.hidden ? 0.35 : 1 }} />
+                    {/* How often it was opened on the boards (2026-10-30): counts only, never who. */}
+                    {p.views > 0 && !p.hidden ? <span style={{ position: "absolute", left: 4, top: 4, fontFamily: MONO, fontSize: fs(8), letterSpacing: ".08em", color: "#fff", background: "rgba(22,17,13,.55)", padding: "2px 6px", borderRadius: 999 }}>{p.views} {p.views === 1 ? "VIEW" : "VIEWS"}</span> : null}
                     {p.hidden ? <span style={{ position: "absolute", inset: "auto 4px 4px 4px", fontFamily: MONO, fontSize: fs(8), letterSpacing: ".08em", color: INK, background: "rgba(255,255,255,.85)", borderRadius: 4, padding: "1px 3px" }}>TAKEN DOWN</span> : null}
                   </button>
                 ))}

@@ -556,6 +556,12 @@ export async function blotterReadMail(ids) {
   const { data } = await callWorker('blotter/read', { mail });
   return data && !data.error ? data : { targets: {}, entries: [] };
 }
+// One view of a City Board photo or postcard (2026-10-30): opened big in the board viewer. Counts
+// once per member per item per day; → { views, counted }.
+export async function boardView(target) {
+  const { data } = await callWorker('board/view', { target });
+  return data && !data.error ? data : null;
+}
 // Press or peel one of the five reaction stamps (+ contextual 'yummy').
 export async function blotterMark(slug, target, kind, op) {
   const { data, error } = await callWorker('blotter/mark', { slug, target, kind, op });

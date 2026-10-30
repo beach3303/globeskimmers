@@ -31,7 +31,7 @@ import { createPageUrl } from "@/utils";
 import { cityBoardUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
-import { blotterReadBoard, cityBoard, getHandle, getSocialProfile } from "@/lib/passport";
+import { blotterReadBoard, boardView, cityBoard, getHandle, getSocialProfile } from "@/lib/passport";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { whenLabel } from "@/components/social/Envelope";
 import PostcardCard from "@/components/social/PostcardCard";
@@ -189,7 +189,19 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   });
+  // Opening an item big is one view (founder, 2026-10-30) — counted on the server once per member per
+  // day; the number shown is the server's, or the row's count until it answers.
+  const [views, setViews] = useState({});
+  useEffect(() => {
+    if (!row?.id) return undefined;
+    let gone = false;
+    const target = row.type === "photo" ? `${row.contrib ? "bcp" : "bph"}:${row.id}` : `pc:${row.id}`;
+    boardView(target).then((r) => { if (!gone && r && typeof r.views === "number") setViews((m) => ({ ...m, [row.id]: r.views })); });
+    return () => { gone = true; };
+  }, [row?.id]);
   if (!row) return null;
+  const nViews = views[row.id] ?? (Number(row.views) || 0);
+  const viewsLabel = `${nViews.toLocaleString()} ${nViews === 1 ? "view" : "views"}`;
   const handle = lc(row?.by?.handle);
   const ownerView = !!me && !!handle && lc(me) === handle;
   const onTouchStart = (e) => {
@@ -235,6 +247,7 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 10px", marginTop: row.caption ? 8 : 0, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".1em", textTransform: "uppercase", color: NEUTRAL.goldPale }}>
                 <span>{handle ? `From @${handle}` : "From a traveler"}</span>
                 {row.place ? <span>· {row.place}</span> : null}
+                <span>· {viewsLabel}</span>
                 {whenLabel(row.created_at) ? <span style={{ marginLeft: "auto" }}>{whenLabel(row.created_at)}</span> : null}
               </div>
             </div>
@@ -244,6 +257,9 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
             <PostcardCard row={row} me={me} meName={meName} onReport={onReport} onDelete={row.mine && onDelete ? () => onDelete(row) : undefined} deleteLine="It comes off this board for good, likes and comments too." />
           </div>
         )}
+        {row.type !== "photo" && row.id ? (
+          <div style={{ maxWidth: 420, margin: "8px auto 0", fontFamily: MONO, fontSize: fs(10), letterSpacing: ".1em", textTransform: "uppercase", color: NEUTRAL.goldPale }}>{viewsLabel}</div>
+        ) : null}
         {row.id ? (
           <div style={{ marginTop: 12 }}>
             <BlotterStrip {...(row.type === "photo" ? (row.contrib ? { contribId: row.id } : { boardPhotoId: row.id }) : { postcardId: row.id })} blotter={book} food={!!row.dish} ownerView={ownerView} onChanged={onBook} readOnly={readOnly} />
