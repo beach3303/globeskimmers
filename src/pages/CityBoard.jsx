@@ -19,7 +19,8 @@
 // Unfollow, Block); cards from people you blocked never show.
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { BookOpen, ChevronLeft, ChevronRight, ImageUp, Mail, Stamp, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, ImageUp, Mail, Play, Stamp, X } from "lucide-react";
+import { clipLength } from "@/lib/clips";
 import { useDismissable } from "@/lib/dismissStack";
 import { contributeOpen } from "@/lib/boardContrib";
 import { BoardContributeSheet } from "@/components/passport/ContributeAlbum";
@@ -189,16 +190,18 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   });
-  // Opening an item big is one view (founder, 2026-10-30) — counted on the server once per member per
-  // day; the number shown is the server's, or the row's count until it answers.
+  // Opening an item big is one view (founder, 2026-10-30) — a clip counts when it starts playing —
+  // counted on the server once per member per day; the number shown is the server's, or the row's
+  // count until it answers.
   const [views, setViews] = useState({});
-  useEffect(() => {
-    if (!row?.id) return undefined;
-    let gone = false;
-    const target = row.type === "photo" ? `${row.contrib ? "bcp" : "bph"}:${row.id}` : `pc:${row.id}`;
-    boardView(target).then((r) => { if (!gone && r && typeof r.views === "number") setViews((m) => ({ ...m, [row.id]: r.views })); });
-    return () => { gone = true; };
-  }, [row?.id]);
+  const counted = useRef(new Set());
+  const countView = (r) => {
+    if (!r?.id || counted.current.has(r.id)) return;
+    counted.current.add(r.id);
+    const target = r.type === "photo" ? `${r.contrib ? "bcp" : "bph"}:${r.id}` : `pc:${r.id}`;
+    boardView(target).then((x) => { if (x && typeof x.views === "number") setViews((m) => ({ ...m, [r.id]: x.views })); });
+  };
+  useEffect(() => { if (row?.id && !row.video) countView(row); }, [row?.id]);
   if (!row) return null;
   const nViews = views[row.id] ?? (Number(row.views) || 0);
   const viewsLabel = `${nViews.toLocaleString()} ${nViews === 1 ? "view" : "views"}`;
@@ -239,9 +242,16 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
       <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: "6px 12px calc(24px + env(safe-area-inset-bottom))" }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         {row.type === "photo" ? (
           <>
-            {/* Pinch to zoom, pan while zoomed, double tap in or out (founder, 2026-10-29); a zoomed photo keeps its touches, so a swipe pages only at 1×. */}
-            <ZoomableImage key={row.id} src={row.photo} alt={row.caption || `Photo from ${row.place || ""}`} style={{ width: "100%" }}
-              imgStyle={{ display: "block", width: "100%", maxHeight: "54vh", objectFit: "contain", borderRadius: 6 }} />
+            {row.video ? (
+              // A clip (2026-10-30): the poster until play; the view counts when it starts.
+              <video key={row.id} src={row.video} poster={row.photo} controls playsInline preload="metadata" onPlay={() => countView(row)}
+                aria-label={row.caption || `Clip from ${row.place || ""}`}
+                style={{ display: "block", width: "100%", maxHeight: "54vh", borderRadius: 6, background: "#000" }} />
+            ) : (
+              // Pinch to zoom, pan while zoomed, double tap in or out (founder, 2026-10-29); a zoomed photo keeps its touches, so a swipe pages only at 1×.
+              <ZoomableImage key={row.id} src={row.photo} alt={row.caption || `Photo from ${row.place || ""}`} style={{ width: "100%" }}
+                imgStyle={{ display: "block", width: "100%", maxHeight: "54vh", objectFit: "contain", borderRadius: 6 }} />
+            )}
             <div style={{ color: NEUTRAL.ivory, padding: "10px 4px 0" }}>
               {row.caption ? <p style={{ margin: 0, fontFamily: SERIF, fontStyle: "italic", fontSize: fs(16), lineHeight: 1.35 }}>&ldquo;{row.caption}&rdquo;</p> : null}
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 10px", marginTop: row.caption ? 8 : 0, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".1em", textTransform: "uppercase", color: NEUTRAL.goldPale }}>
@@ -325,7 +335,7 @@ function PhotoTile({ row, onOpen, index = 0 }) {
   const where = row?.place && !sameName(row.place, row.city) ? row.place : (row?.city || row?.place || "");
   const pinned = WALL === "pins";
   return (
-    <button type="button" onClick={() => onOpen(row)} aria-label={`Open the photo${row.place ? ` from ${row.place}` : ""}${handle ? ` by @${handle}` : ""}`}
+    <button type="button" onClick={() => onOpen(row)} aria-label={`Open the ${row.video ? "clip" : "photo"}${row.place ? ` from ${row.place}` : ""}${handle ? ` by @${handle}` : ""}`}
       style={pinned
         ? { position: "relative", display: "block", width: "100%", padding: "4px 4px 6px", border: 0, borderRadius: 3, background: NEUTRAL.ivory, boxShadow: "0 6px 12px rgba(22,17,13,.28)", transform: `rotate(${tiltOf(index)}deg)`, cursor: "pointer", marginTop: 6 }
         : { position: "relative", display: "block", width: "100%", aspectRatio: "1 / 1", padding: 0, borderRadius: 8, overflow: "hidden", border: 0, background: NEUTRAL.airmailHair, cursor: "pointer" }}>
@@ -333,6 +343,12 @@ function PhotoTile({ row, onOpen, index = 0 }) {
       <span style={{ position: "relative", display: "block", width: "100%", aspectRatio: "1 / 1", overflow: "hidden", borderRadius: pinned ? 2 : 8, background: NEUTRAL.airmailHair }}>
         <img src={row.photo} alt="" loading="lazy" decoding="async" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        {/* A clip wears its length and a play mark (2026-10-30). */}
+        {row.video ? (
+          <span style={{ position: "absolute", right: 5, top: 5, display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 6px", borderRadius: 999, background: "rgba(22,17,13,.55)", color: NEUTRAL.white, fontFamily: MONO, fontSize: fs(9), letterSpacing: ".06em" }}>
+            <Play size={10} strokeWidth={2.5} fill="currentColor" aria-hidden="true" focusable="false" />{clipLength(row.duration)}
+          </span>
+        ) : null}
         {where ? (
           <span style={{ position: "absolute", left: 5, bottom: 5, maxWidth: "calc(100% - 10px)", boxSizing: "border-box", padding: "2px 6px", borderRadius: 6, background: "rgba(22,17,13,.36)", color: NEUTRAL.white, textShadow: "0 1px 2px rgba(0,0,0,.55)", fontSize: fs(8.5), fontWeight: 600, lineHeight: 1.2, textAlign: "left", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{where}</span>
         ) : null}

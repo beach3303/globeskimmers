@@ -6,11 +6,12 @@
 // until June 30, 2027; after that the album stays so members can still delete their photos.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Globe2, ImageUp, Loader2, Trash2, X } from "lucide-react";
+import { Globe2, ImageUp, Loader2, Play, Trash2, X } from "lucide-react";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import { showToast } from "@/components/Toast";
 import { readPhotoExif } from "@/lib/photoExif";
 import { resizePhoto } from "@/lib/resizePhoto";
+import { isClip, readClipLocation, contributeClip, clipLength, CLIP_SECONDS } from "@/lib/clips";
 import { useDismissable } from "@/lib/dismissStack";
 import { CONTRIBUTE_PICK, contributeOpen, contributePhoto, listContributions, deleteContribution, captionContribution } from "@/lib/boardContrib";
 import { collectibleOf, listCollectibles, progressOf } from "@/lib/collectibles";
@@ -65,7 +66,7 @@ function AirmailEnvelope({ count, peek, onOpen }) {
       {/* Inline icon, so a narrow phone wraps it like a sentence. */}
       <span aria-hidden="true" className="block text-center" style={{ marginTop: 6, color: AIR_BLUE, fontSize: fs(12), fontWeight: 700, lineHeight: 1.25 }}>
         <ImageUp size={14} strokeWidth={2.4} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} />
-        {count ? "Upload more photos" : "Upload your travel photos"}
+        {count ? "Upload more photos or clips" : "Upload your travel photos and clips"}
       </span>
       <span aria-hidden="true" className="block text-center" style={{ marginTop: 1, color: INK3, fontSize: fs(10.5), lineHeight: 1.3 }}>
         Photos you upload, each to its city’s board
@@ -151,16 +152,17 @@ function ContributeSheet({ photos, onChanged, onClose, board = null }) {
     e.target.value = "";
     if (!all.length || run) return;
     const files = all.slice(0, CONTRIBUTE_PICK);
-    const tally = { posted: {}, elsewhere: {}, noLocation: 0, child: 0, refused: 0, failed: 0, extra: all.length - files.length, firstError: null };
+    const tally = { posted: {}, elsewhere: {}, noLocation: 0, child: 0, tooLong: 0, refused: 0, failed: 0, extra: all.length - files.length, firstError: null };
     let earned = null, last = null;
     setSummary(null);
     for (let i = 0; i < files.length; i += 1) {
       setRun((r) => ({ done: i, total: files.length, place: r?.place || null }));
       try {
-        const exif = await readPhotoExif(files[i]);   // before resizing strips it
+        // A clip (2026-10-30) comes through the same door: its own location decides the board too.
+        const clip = isClip(files[i]);
+        const exif = clip ? await readClipLocation(files[i]) : await readPhotoExif(files[i]);   // before resizing strips it
         if (!Number.isFinite(exif?.lat) || !Number.isFinite(exif?.lng)) { tally.noLocation += 1; continue; }
-        const image = await resizePhoto(files[i]);
-        const r = await contributePhoto({ image, exif });
+        const r = clip ? await contributeClip({ file: files[i], exif }) : await contributePhoto({ image: await resizePhoto(files[i]), exif });
         if (r.ok) {
           const name = r.board ? [r.board.city, r.board.country].filter(Boolean).join(", ") : "a City Board";
           // From a board: a photo taken somewhere else hangs there instead, and the summary says so.
@@ -171,6 +173,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null }) {
           if (r.reward) earned = r.reward;
         } else if (r.code === "no_location" || r.code === "no_city") tally.noLocation += 1;
         else if (r.code === "child") tally.child += 1;
+        else if (r.code === "too_long" || r.code === "too_big" || r.code === "unreadable") tally.tooLong += 1;
         else if (r.code === "not_allowed") tally.refused += 1;
         else { tally.failed += 1; tally.firstError = tally.firstError || r.error; if (r.code === "slow_down" || r.code === "closed" || r.code === "day_full") break; }
       } catch (err) { tally.failed += 1; tally.firstError = tally.firstError || err?.message || "Upload failed"; }
@@ -241,7 +244,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null }) {
 
         {isOpen && (
           <>
-            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={send} />
+            <input ref={fileRef} type="file" accept="image/*,video/mp4,video/quicktime" multiple className="hidden" onChange={send} />
             <button type="button" onClick={() => fileRef.current?.click()} disabled={!!run}
               className="w-full flex items-center justify-center gap-2 disabled:opacity-70"
               style={{ marginTop: 12, minHeight: 52, borderRadius: 14, border: 0, background: AIR_BLUE, color: "#fff", fontFamily: "inherit", fontSize: fs(15), fontWeight: 650, cursor: run ? "progress" : "pointer" }}>
@@ -267,6 +270,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null }) {
             {elsewhereCount ? <p style={{ margin: postedCount ? "4px 0 0" : 0, color: INK, fontWeight: postedCount ? 400 : 600 }}>{elsewhere.map(([place, n]) => `${plural(n, "photo was", "photos were")} taken in ${place}, so ${n === 1 ? "it hangs" : "they hang"} on ${place}’s board instead`).join(". ")}.</p> : null}
             {summary.noLocation ? <p style={{ margin: "4px 0 0" }}>{plural(summary.noLocation, "photo has", "photos have")} no location, so we can’t tell the city. Screenshots and saved photos usually don’t.</p> : null}
             {summary.child ? <p style={{ margin: "4px 0 0" }}>{plural(summary.child, "photo stays", "photos stay")} off the boards: a child is clearly recognizable.</p> : null}
+            {summary.tooLong ? <p style={{ margin: "4px 0 0" }}>{plural(summary.tooLong, "clip is", "clips are")} longer than {CLIP_SECONDS} seconds, over 25 MB, or couldn’t be read — trim it in Photos first.</p> : null}
             {summary.refused ? <p style={{ margin: "4px 0 0" }}>{plural(summary.refused, "photo", "photos")} can’t be shared on a City Board.</p> : null}
             {summary.failed ? <p style={{ margin: "4px 0 0" }}>{plural(summary.failed, "photo", "photos")} didn’t go up{summary.firstError ? ` (${summary.firstError})` : ""}. Try {summary.failed === 1 ? "it" : "them"} again.</p> : null}
             {summary.extra > 0 ? <p style={{ margin: "4px 0 0" }}>We took the first {CONTRIBUTE_PICK}. Add the other {summary.extra} next.</p> : null}
@@ -287,6 +291,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null }) {
                     <img src={p.url} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: p.hidden ? 0.35 : 1 }} />
                     {/* How often it was opened on the boards (2026-10-30): counts only, never who. */}
                     {p.views > 0 && !p.hidden ? <span style={{ position: "absolute", left: 4, top: 4, fontFamily: MONO, fontSize: fs(8), letterSpacing: ".08em", color: "#fff", background: "rgba(22,17,13,.55)", padding: "2px 6px", borderRadius: 999 }}>{p.views} {p.views === 1 ? "VIEW" : "VIEWS"}</span> : null}
+                    {p.video ? <span style={{ position: "absolute", right: 4, top: 4, display: "inline-flex", alignItems: "center", gap: 3, fontFamily: MONO, fontSize: fs(8), letterSpacing: ".06em", color: "#fff", background: "rgba(22,17,13,.55)", padding: "2px 6px", borderRadius: 999 }}><Play size={9} strokeWidth={2.5} fill="currentColor" aria-hidden="true" focusable="false" />{clipLength(p.duration)}</span> : null}
                     {p.hidden ? <span style={{ position: "absolute", inset: "auto 4px 4px 4px", fontFamily: MONO, fontSize: fs(8), letterSpacing: ".08em", color: INK, background: "rgba(255,255,255,.85)", borderRadius: 4, padding: "1px 3px" }}>TAKEN DOWN</span> : null}
                   </button>
                 ))}

@@ -61,6 +61,28 @@ export async function callWorker(path, body = {}, opts = {}) {
   }
 }
 
+// A raw upload (2026-10-30, clips): PUT a file's bytes as they are, with the member's token. Plain
+// fetch on every platform — a 20 MB clip has no business inside a JSON envelope — and the worker
+// answers the CORS preflight for PUT. → { data, error } like callWorker.
+export async function workerUpload(path, body, contentType, opts = {}) {
+  const token = await getToken();
+  const url = `${WORKER_BASE}/${String(path).replace(/^\//, '')}`;
+  const timeoutMs = opts.timeoutMs ?? 120000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': contentType || 'application/octet-stream', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body, signal: controller.signal });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return refusal(res.status, json);
+    return { data: json, error: null };
+  } catch (e) {
+    if (e?.name === 'AbortError') return { data: null, error: 'timeout' };
+    return { data: null, error: e?.message || 'Network error' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Thin wrapper for the generic LLM endpoint (Chunk 4). base44's InvokeLLM
 // returned the parsed object UNWRAPPED, so this returns data directly.
 export async function invokeLLM(params) {
