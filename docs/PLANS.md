@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-10-29 (City Cards: tap a stamp → the type-only stamp big; the card keeps its category stamps)
+Last updated: 2026-10-30 (video: R2 decided, not built; stickers + comments on private postcards built; privacy audit clean)
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -1075,6 +1075,22 @@ chip on the passport page, greyed options + "Change your passport ›" on each s
 under every album envelope, "Who can see it · Change" after stamping, Settings → Privacy regrouped, "Inner circle" →
 "Friends" everywhere visible. Push order: the migration first (20261026090000_privacy_ceiling.sql), then the worker +
 app, then `npm run ota`.
+
+## Video — founder decision 2026-10-30: R2, for affordability (NOT built; research in `Claude outputs/video-uploads-research-2026-10-30.md`)
+
+- **Where:** City Boards first, then stamp memories (a clip among the memory photos — and a clip from the camera roll
+  can earn a stamp exactly as a photo does: same location and date data; the landmark check reads one frame), then the
+  profile album (the same rows as memories).
+- **Hosting: R2**, the bucket the photos already use — 1.5¢ per GB a month, nothing when people watch (≈ $2 a month in
+  storage per 1,000 posting members after a year, plus ≈ $16 of AI checks). Not Cloudflare Stream ($5 per 1,000 minutes
+  stored + $1 per 1,000 watched). The price of R2 is that the PHONE must compress and convert each clip before upload
+  (iPhones record HEVC, which many Android browsers can't play): a native plugin, so this ships in a store build, not
+  an OTA. Clips 3–30 seconds, 5 a day per member; playback is a plain `<video>` tag with a poster frame.
+- **The check happens once, at upload** (four frames through the same AI door photos use), then Report and Block as the
+  human backstop — never a re-judgement later. Minors: the photo rails apply unchanged.
+- **Deletion:** a clip's file and its poster leave R2 when the clip, its stamp, its postcard or the account is deleted,
+  exactly as photos do today — each delete handler removes the files, and the account purge sweeps every file under the
+  member's own prefix (so `vid/<uid>/…`), rows or no rows. Nothing is kept.
 
 ## Website (globeskimmers.io)
 
