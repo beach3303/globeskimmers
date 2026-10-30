@@ -3643,3 +3643,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   isn't deployed yet): `Claude outputs/board-views-1-viewer-128-views.png`.
 - **After the push (worker) + OTA (app):** open a board photo twice — "1 view" stays 1; from a second account it reads 2.
   D1 needs nothing by hand (the table creates itself).
+
+## 2026-10-30 — PUSHED: views on City Board items + the day's plans (main ae0d39f; worker 205b579b)
+
+- eface60 → ae0d39f: the worker (d9e477c), the app (40ee7d4), and the plan notes (video on R2, content rules, children,
+  the teens decisions: no under-13 accounts; City Cards for teens now; a one-day delay when teen social opens).
+  Workers run 41125886875: api + tts green, api version 205b579b. `item_views` creates itself on first use.
+- **Open:** `npm run ota` for the app half ("N views" in the board viewer, VIEWS badges in the Contribute album).
