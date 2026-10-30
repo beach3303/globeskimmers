@@ -1091,6 +1091,18 @@ app, then `npm run ota`.
 - **Deletion:** a clip's file and its poster leave R2 when the clip, its stamp, its postcard or the account is deleted,
   exactly as photos do today — each delete handler removes the files, and the account purge sweeps every file under the
   member's own prefix (so `vid/<uid>/…`), rows or no rows. Nothing is kept.
+- **Video postcards (founder, 2026-10-30 late):** a private postcard whose front is a clip — to one person or a group,
+  the same addressing, privacy, stickers and comments as a photo postcard. The Mailbox row says "Video postcard from
+  Léa"; the push says "Léa sent you a video postcard" (no preview, as ever); the card shows the poster frame with a
+  play button and plays big in the lightbox. Telegrams stay words. Replies can be video too.
+- **Store builds (founder, 2026-10-30: "willing to submit android builds without ota"):** the compression plugin needs a
+  store build on BOTH platforms (iOS too — the plugin lives in the native app); the web bundle offers the video button
+  only when the plugin is present, so older installs keep working.
+- **Clip length:** one cap for every clip. Claude recommends **20 seconds** (a postcard is a greeting; ≈6 MB, uploads in
+  seconds on roaming; viewers finish it; the cost table assumed it) — the founder asked "20 or 30?"; 30 stays one number
+  away. Trimming in the app for longer footage.
+- **Build order proposed:** the clip pipeline once (plugin → compress → poster + 4 frames → upload → the check → player),
+  then video postcards, then City Boards, then stamp memories (a clip can earn a stamp), then the profile album.
 
 ## Website (globeskimmers.io)
 
