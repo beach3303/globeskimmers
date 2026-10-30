@@ -303,8 +303,8 @@ workable shape is a passport a PARENT creates and controls. (Not legal advice; t
 
 | | **Junior — 13 and under** | **Teen — 14–17** |
 |---|---|---|
-| Account | Created by a parent (an adult member) inside the parent's account: "Add a child passport". No email, no @handle, never findable. The parent consents in-app (email-plus; lawyer confirms the method), can see, export and delete everything, any time | Own account, birthday required; no handle in search, never suggested; exact-handle follow requests only, with the "no mutual friends" warning |
-| Virtual Passport | Yes — private. Seen by the child and the parent only. Share: the parent may share a picture of a page from their own account; never a link | Yes — private; mutual friends may view it, stamps 24 h late. Never public, never a `/p/` link |
+| Account | Created by a parent (an adult member) inside the parent's account: "Add a child passport". No email, no @handle, never findable. The parent consents in-app (email-plus; lawyer confirms the method), can see and delete everything, any time — but nothing leaves the app: no sharing, no export, no links (founder, 2026-10-30) | Own account, birthday required; no handle in search, never suggested; exact-handle follow requests only, with the "no mutual friends" warning |
+| Virtual Passport | Yes — private. Seen by the child and the parent only. Nothing from it can be shared, exported or linked — by the parent either (founder, 2026-10-30) | Yes — private; mutual friends may view it, stamps 24 h late. Never public, never a `/p/` link |
 | Stamps by GPS / by photo | Yes — the fun core. We keep the place, never the phone's fix; photo GPS is read for the proof then dropped | Yes — same place-only rule |
 | Nearby finders (eat, coffee, restrooms, shops…) | Yes (guides, no account data) | Yes |
 | City Cards | Yes — private, parent sees them | Yes — Only me or Friends, never further |
@@ -324,7 +324,7 @@ workable shape is a passport a PARENT creates and controls. (Not legal advice; t
 ### What it takes
 
 1. **Parental consent flow** (parent creates the child passport, reads the notice, consents; record kept; parent dashboard
-   to view/export/delete) — about a week, plus the lawyer's word on the consent method.
+   to view/delete; no export or sharing of anything from the child's passport) — about a week, plus the lawyer's word on the consent method.
 2. **A `child` tier on the server** — every social, public, mail, board and share route closed; passport, finders, cards,
    albums and pets open and private. The `blocked` tier's machinery is the start.
 3. **The app** — the child's home hides every social door; the parent sees the child's passport from their own Profile.
