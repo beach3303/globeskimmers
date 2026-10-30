@@ -3779,3 +3779,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   phones by OTA — the share target itself hasn't changed.
 - Gates: eslint no-undef (PhotoSorter, Passport, ContributeAlbum), build + boot-check ✅. No rig screenshot: the ask
   sheet only opens from a real share (the shared-photo queue is module-private); test from Photos → Share → Globeskimmers.
+
+## 2026-10-30 — PUSHED: admin clips report, VideoShrink plugin + picker + trimmer, share-sheet door (main c1ef654)
+
+- 697bac0 → c1ef654, seven commits. Workers run 41138612353: api + tts green. No migration in this batch. Live
+  probes with the demo account: `POST /admin/videos` → 403 Forbidden for a non-admin (the route is live), `/board/view`
+  and `/friends/added` answer as before.
+- **Open (founder):** `npm run ota` for the app half — the admin Clips report, the share sheet's "Upload to a City
+  Board", and everything since 697bac0 (board clips, Mailbox deep links, card threads, friends' finds, four stickers).
+  Then the store builds on BOTH platforms for the clips picker + trimmer (the plugin only runs in a native build):
+  bump versions, `npm run cap:all`, archive + AAB.
