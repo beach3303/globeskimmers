@@ -21635,7 +21635,7 @@ async function viewBump(env, userId, target) {
 }
 const viewTargetOf = (r) => (r?.type === 'photo' ? `${r.contrib ? 'bcp' : 'bph'}:${r.id}` : `pc:${r?.id}`);
 // POST /board/view { target } → { ok, views, counted }
-async function handleBoardView(request, env) {
+async function handleBoardView(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
@@ -21643,7 +21643,61 @@ async function handleBoardView(request, env) {
     const target = String(b.target || '').toLowerCase().replace(/^(bph|bcp|pc):/i, (m) => m.toLowerCase());
     if (!VIEW_TARGET.test(target)) return jsonResponse({ error: 'Not found' }, 404);
     const r = await viewBump(env, user.id, target);
+    // A counted play of a clip is an event too (2026-10-30), so Admin can count plays per day and month.
+    if (r.counted && ctx && target.startsWith('bcp:')) ctx.waitUntil((async () => {
+      const q = await gbRest(env, `board_contributions?id=eq.${target.slice(4)}&select=kind`, {});
+      if ((q.ok ? await q.json() : [])[0]?.kind === 'video') await gbLogEvent(env, 'board_play', { id: target.slice(4) });
+    })().catch(() => {}));
     return jsonResponse({ ok: true, ...r });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// POST /admin/videos → the clips report (founder, 2026-10-30: "how many videos in total have been
+// uploaded, how many video views per day, how many uploaded per month and how many plays per
+// month"). A play = a counted view in the board viewer (once per member per clip per day); Pacific days.
+async function handleAdminVideos(request, env) {
+  try {
+    const denied = await requireAdmin(request, env);
+    if (denied) return denied;
+    const rows = [];
+    for (let offset = 0, pageNo = 0; pageNo < 20; pageNo++, offset += 1000) {
+      const q = await gbRest(env, `board_contributions?kind=eq.video&select=id,created_at,video_ready,duration,city,country,hidden,mod_status&order=created_at.desc&limit=1000&offset=${offset}`, {});
+      if (q.status === 400) return jsonResponse({ total: 0, live: 0, pending: 0, seconds: 0, uploads_by_month: [], uploads_by_day: [], plays_by_month: [], plays_by_day: [], plays_total: 0, top: [], unavailable: true });
+      if (!q.ok) return jsonResponse({ error: `clips read failed (${q.status})` }, 502);
+      const page = await q.json();
+      rows.push(...page);
+      if (page.length < 1000) break;
+    }
+    const pt = (iso) => new Date(new Date(iso).toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const since30 = Date.now() - 30 * 864e5;
+    const live = rows.filter((r) => r.video_ready && r.mod_status === 'ok' && !r.hidden);
+    const upMonth = {}, upDay = {};
+    for (const r of rows) {
+      if (!r.video_ready) continue;
+      const k = ymd(pt(r.created_at));
+      upMonth[k.slice(0, 7)] = (upMonth[k.slice(0, 7)] || 0) + 1;
+      if (new Date(r.created_at).getTime() >= since30) upDay[k] = (upDay[k] || 0) + 1;
+    }
+    // Plays: the board_play events by day and month; all-time totals per clip from item_views.
+    const playDay = {}, playMonth = {};
+    let playsTotal = 0;
+    if (env.DB) {
+      try {
+        const { results } = await env.DB.prepare("SELECT ts FROM events WHERE event_type = 'board_play' AND ts >= ?1 ORDER BY ts DESC LIMIT 50000").bind(Math.floor((Date.now() - 400 * 864e5) / 1000)).all();
+        for (const r of results || []) {
+          const ms = Number(r.ts) * 1000, k = ymd(pt(new Date(ms).toISOString()));
+          playMonth[k.slice(0, 7)] = (playMonth[k.slice(0, 7)] || 0) + 1;
+          if (ms >= since30) playDay[k] = (playDay[k] || 0) + 1;
+        }
+      } catch { /* no events table yet */ }
+      const vm = await viewsFor(env, rows.map((r) => `bcp:${r.id}`));
+      for (const r of rows) r.plays = vm[`bcp:${r.id}`] || 0;
+      playsTotal = rows.reduce((a, r) => a + (r.plays || 0), 0);
+    }
+    const series = (o, n) => Object.entries(o).sort().slice(-n).map(([k, v]) => ({ k, n: v }));
+    const top = [...live].sort((a, b) => (b.plays || 0) - (a.plays || 0)).slice(0, 10).map((r) => ({ id: r.id, city: r.city, country: r.country, plays: r.plays || 0, duration: r.duration || null, created_at: r.created_at }));
+    return jsonResponse({ total: rows.filter((r) => r.video_ready).length, live: live.length, pending: rows.filter((r) => !r.video_ready).length, seconds: Math.round(live.reduce((a, r) => a + (Number(r.duration) || 0), 0)), uploads_by_month: series(upMonth, 12), uploads_by_day: series(upDay, 30), plays_by_month: series(playMonth, 12), plays_by_day: series(playDay, 30), plays_total: playsTotal, top });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -30454,7 +30508,7 @@ export default {
       if (pathname === '/telegrams/open' && request.method === 'POST') return await handleTelegramOpen(request, env);
       if (pathname === '/social/world' && request.method === 'POST') return await handleSocialWorld(request, env, ctx);
       if (pathname === '/city/board' && request.method === 'POST') return await handleCityBoard(request, env);
-      if (pathname === '/board/view' && request.method === 'POST') return await handleBoardView(request, env);
+      if (pathname === '/board/view' && request.method === 'POST') return await handleBoardView(request, env, ctx);
       if (pathname === '/board/contribute' && request.method === 'POST') return await handleBoardContribute(request, env, ctx);
       if (pathname === '/board/contributions' && request.method === 'POST') return await handleBoardContributions(request, env);
       if (pathname === '/board/contributions/delete' && request.method === 'POST') return await handleBoardContributionDelete(request, env, ctx);
@@ -30467,6 +30521,7 @@ export default {
       if (pathname === '/collectibles' && request.method === 'POST') return await handleCollectibles(request, env);
       if (pathname === '/collectibles/place' && request.method === 'POST') return await handleCollectiblePlace(request, env);
       if (pathname === '/admin/collectibles' && request.method === 'POST') return await handleAdminCollectibles(request, env);
+      if (pathname === '/admin/videos' && request.method === 'POST') return await handleAdminVideos(request, env);
       if (pathname === '/admin/board-contribution' && request.method === 'POST') return await handleAdminBoardContribution(request, env, ctx);
       if (pathname === '/passport/photo/board' && request.method === 'POST') return await handlePassportPhotoBoard(request, env);
       if (pathname === '/city/boards' && request.method === 'POST') return await handleCityBoards(request, env);
