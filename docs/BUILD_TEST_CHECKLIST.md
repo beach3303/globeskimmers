@@ -3690,3 +3690,24 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - **Phone test after push + OTA:** tap "Maiza stamped WOW! on your photo on Santa Monica's city board" → the viewer on
   that photo; a line about a memory photo → the photo big in the passport; open a Traveler page from a notification
   → ‹ goes Home.
+
+## 2026-10-30 — COMMITTED, NOT pushed: stickers + comments under City Cards; "What your friends added" on Arrivals
+
+- Founder: friends like (WOW etc.) and comment under each City Card, "whoever can view can comment"; Arrivals shows
+  when people I follow stamped a City Card, added a viewable album photo, or put a photo/clip on a City Board, and a
+  tap opens the thing. Worker: blotter target `cc:<card id>` (`blCardShare`: the card's word under the passport ceiling
+  decides who may press/write; comments stop only when the passport's comments are off), `/blotter/read { cards }`,
+  Mailbox lines "stamped WOW! on your Los Angeles 2026 card" (open the card on Home's City Cards tab), push wording;
+  `POST /friends/added` (14 days, adults, never a block; cards at my level, album photos at my level with signed links,
+  board items public). App: BlotterStrip `cardId=` under the card in CityCardSheet (owner + visitors); CityCardsPage
+  `openId/openStamp` (Home `?page=citycards&card=`, Traveler `?h=&card=&stamp=`); PhotoPackets `openPhoto`
+  (Traveler `?h=&photo=`); ArrivalsPage section "What your friends added" with rows → their card at that stamp / the
+  photo big on their page / the board on that item. Harness `run-cards.mjs`: 15 checks (friend yes, stranger no,
+  owner reads, Mailbox line names the card, public card needs a public passport, feed kinds and levels, a follower
+  sees only the public board photo). Gates: eslint no-undef, build, boot-check. Screenshots: `Claude outputs/cards-*.png`.
+- **Privacy words (founder's question):** kept at four — Only me · Friends · Friends & followers · Everyone — because a
+  friend is also a follower (a friend = someone who follows you and you follow back), so "Followers" alone would
+  always include friends; it is the same step as "Friends & followers". Explained; no fifth word added.
+- **Clips longer than 20 seconds (founder's question):** today turned back with a line in the summary ("trim it in
+  Photos first"); an in-app trimmer (pick the 20-second window on a scrubber, preview, export just that range) comes
+  with the native shrinking plugin, since cutting a file needs the native export. Recorded in PLANS.
