@@ -3614,3 +3614,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - **After the push (worker deploys itself) and the OTA:** send yourself a postcard between two accounts: the addressee's
   Mailbox card shows the tray; press WOW → the sender's Mailbox line and push say "stamped WOW! on your postcard";
   the sender comments from Sent → the addressee's line opens the card; a third account sees nothing anywhere.
+
+## 2026-10-30 — PUSHED: private postcard threads + plans (main eface60; worker dcbea401)
+
+- d0a263b → eface60: the worker (9e430c4), the app (1d187ff), the privacy-audit, plans and checklist notes. Workers run
+  41115541663: api + tts deployed, api version dcbea401. Live probe with the demo account: `/blotter/sweep` on a `pm:`
+  target answers ok (the old worker said Not found), `/blotter/read { mail }` answers empty for a card I'm not on.
+- **Open:** `npm run ota` (both platforms) for the Mailbox/Sent tray; then the two-account phone test in the entry above.
