@@ -335,3 +335,22 @@ workable shape is a passport a PARENT creates and controls. (Not legal advice; t
 5. **Teens** — switch `TEEN_SOCIAL_ENABLED` on behind the rails in §2 (mutual friends, 24 h delay, moderation); about a week.
 
 Order if the founder says yes: lawyer → teens (smaller, mostly built) → the Junior passport.
+
+
+## 11. 2026-10-30 — the founder's teen rule in one line, for stamps AND City Cards
+
+"Allow 14–17 teens to stamp and see their city cards but hide from all friends and family until 24 hours later …
+since GlobeSkimmers is location based, all their stamps are not viewable for their own safety … I'd love to make it
+the same behavior [as passport stamps]."
+
+Where it stands (checked in the worker 2026-10-30): no 24-hour delay exists yet for anything. While teen social is
+held (`TEEN_SOCIAL_ENABLED = false`, `gbOffSocial`), a teen's whole page is closed — nobody but the teen sees their
+stamps, albums or City Cards. So today is stricter than the rule; the rule is the §2 design, to be built as one piece:
+
+- The teen sees everything at once. Mutual friends see a stamp, a City Card stamp and a memory photo **24 hours after
+  it happened**; followers and the public never do. The Mailbox line and push that tell a friend of it arrive a day
+  late too (otherwise the timing leaks).
+- Explained in the app, on the teen's passport and cards: "GlobeSkimmers is built on places. For your safety, your
+  stamps and cards show to friends a day later — never where you are right now."
+- This needs the teen rails switched on (friends for teens = exact-handle requests, mutual follows; viewing by mutual
+  friends; mail with mutual friends only) — about a week; the lawyer consult (decision 8) in parallel.
