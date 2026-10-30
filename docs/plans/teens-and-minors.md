@@ -291,7 +291,7 @@ Decisions 3, 4, 5, 6 default to the recommended (a) answers unless the founder o
 
 ---
 
-## 10. Revisit, 2026-10-30 — a Junior passport (13 and under) and teen rails (14–17): PROPOSAL, founder to decide
+## 10. Revisit, 2026-10-30 — a Junior passport (13 and under) and teen rails (14–17): PROPOSAL — **founder decided the same day: no accounts for 13 and younger for now** (decision 1(a) stands: freeze and delete); the Junior column below is kept for a later revisit, not for building. 14–17 remains the open question.
 
 The founder asked (2026-10-30): let 13-and-under have a Virtual Passport, stamp nearby services, hold City Cards and
 albums — all private — and define 14–17. This reverses decision 1(a) above (freeze and delete). It is possible, but
