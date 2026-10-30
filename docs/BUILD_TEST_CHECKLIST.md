@@ -3621,3 +3621,11 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   41115541663: api + tts deployed, api version dcbea401. Live probe with the demo account: `/blotter/sweep` on a `pm:`
   target answers ok (the old worker said Not found), `/blotter/read { mail }` answers empty for a card I'm not on.
 - **Open:** `npm run ota` (both platforms) for the Mailbox/Sent tray; then the two-account phone test in the entry above.
+
+## 2026-10-30 — OTA 1.0.2610301943 on the production channel (private postcard threads; main eface60 + plans)
+
+- Founder: "ota" — Claude ran `npm run ota` 2026-10-30 19:43 UTC; `capgo channel list` shows production = 1.0.2610301943,
+  iOS + Android. Carries the Mailbox/Sent sticker tray and comments (1d187ff) over the live worker dcbea401.
+- **Phone test (two accounts):** send a postcard; the addressee's Mailbox card shows the tray; press WOW → the sender's
+  Mailbox line and push say "stamped WOW! on your postcard"; comment from Sent → the addressee's line opens the card;
+  a third account sees nothing anywhere.
