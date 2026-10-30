@@ -288,3 +288,49 @@ Decisions 3, 4, 5, 6 default to the recommended (a) answers unless the founder o
 8. **A lawyer.** (a) One focused consult on Texas and the other app-store laws, Mississippi, Australia, COPPA deletion timing, Brazil, India and the Philippines. (b) Go without. **Recommend (a) before the galleries ship.**
 
 ---
+
+---
+
+## 10. Revisit, 2026-10-30 — a Junior passport (13 and under) and teen rails (14–17): PROPOSAL, founder to decide
+
+The founder asked (2026-10-30): let 13-and-under have a Virtual Passport, stamp nearby services, hold City Cards and
+albums — all private — and define 14–17. This reverses decision 1(a) above (freeze and delete). It is possible, but
+under-13 users put the app under COPPA in the US even when everything is private: *collecting* a child's photos, GPS
+proofs and identifiers needs verifiable parental consent, parental notice, and parental access and deletion. The
+workable shape is a passport a PARENT creates and controls. (Not legal advice; the lawyer consult in decision 8 covers it.)
+
+### The two bands, feature by feature
+
+| | **Junior — 13 and under** | **Teen — 14–17** |
+|---|---|---|
+| Account | Created by a parent (an adult member) inside the parent's account: "Add a child passport". No email, no @handle, never findable. The parent consents in-app (email-plus; lawyer confirms the method), can see, export and delete everything, any time | Own account, birthday required; no handle in search, never suggested; exact-handle follow requests only, with the "no mutual friends" warning |
+| Virtual Passport | Yes — private. Seen by the child and the parent only. Share: the parent may share a picture of a page from their own account; never a link | Yes — private; mutual friends may view it, stamps 24 h late. Never public, never a `/p/` link |
+| Stamps by GPS / by photo | Yes — the fun core. We keep the place, never the phone's fix; photo GPS is read for the proof then dropped | Yes — same place-only rule |
+| Nearby finders (eat, coffee, restrooms, shops…) | Yes (guides, no account data) | Yes |
+| City Cards | Yes — private, parent sees them | Yes — Only me or Friends, never further |
+| Memory photos, albums | Yes — all albums locked to Only me (the family). The AI check still runs | Yes — up to Friends, 24 h late, place-check required. Never Followers or Everyone |
+| Video (when built) | Same as photos: private only | Same as photos: Friends at most |
+| City Boards — viewing | **No.** The boards are a social wall of adults with handles, profiles, stickers and comments; even read-only it is a path to strangers. Revisit later with a handle-free "postcards from this city" view | **Yes**, view and stickers (opened 2026-10-16); no posting, no comments (18+) |
+| Postcards, telegrams, Mailbox | None | Mutual friends only, both ways; text moderated |
+| Follow / find people | None | Exact handle only; requests; never in suggestions |
+| Guestbooks, dish photos, Suggest a place | None | Anonymous, 24 h late, month only (plan §2) |
+| Collectible stamps (10 board photos) | No (needs board uploads) | No (no board uploads) |
+| Virtual pets, luggage, covers | Yes | Yes |
+| Push notifications | To the parent only | Friend activity only; quiet 10 pm–7 am |
+| Ads, reports, leaderboards, streaks | Never | Never |
+| Data | Parental notice + consent record; delete on the parent's tap; no analytics beyond counts; no third-party sharing | As plan §6 |
+| Growing up | At 14 the parent can convert it to a teen account (or the child keeps it as is) | At 18, adult rules open; nothing posted as a teen becomes public on its own |
+
+### What it takes
+
+1. **Parental consent flow** (parent creates the child passport, reads the notice, consents; record kept; parent dashboard
+   to view/export/delete) — about a week, plus the lawyer's word on the consent method.
+2. **A `child` tier on the server** — every social, public, mail, board and share route closed; passport, finders, cards,
+   albums and pets open and private. The `blocked` tier's machinery is the start.
+3. **The app** — the child's home hides every social door; the parent sees the child's passport from their own Profile.
+4. **Stores and law** — Apple age rating and 5.1.4 (kids and COPPA), Google Play target audience and Families policy
+   review, the Texas/Utah/Louisiana parental-consent signals already in Phase 0, privacy policy and child-safety page
+   updated. The lawyer consult (decision 8) first.
+5. **Teens** — switch `TEEN_SOCIAL_ENABLED` on behind the rails in §2 (mutual friends, 24 h delay, moderation); about a week.
+
+Order if the founder says yes: lawyer → teens (smaller, mostly built) → the Junior passport.
