@@ -337,7 +337,7 @@ workable shape is a passport a PARENT creates and controls. (Not legal advice; t
 Order if the founder says yes: lawyer → teens (smaller, mostly built) → the Junior passport.
 
 
-## 11. 2026-10-30 — the founder's teen rule in one line, for stamps AND City Cards
+## 11. 2026-10-30 — the founder's teen rule, DECIDED: City Cards for teens now (already so); when teen social turns on, a one-day delay on their City Card stamps AND passport stamps for every viewer
 
 "Allow 14–17 teens to stamp and see their city cards but hide from all friends and family until 24 hours later …
 since GlobeSkimmers is location based, all their stamps are not viewable for their own safety … I'd love to make it
