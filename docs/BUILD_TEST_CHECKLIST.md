@@ -3731,3 +3731,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - **Open:** `npm run ota` (both platforms) for the app half: clips on boards, Mailbox lines that open the thing, the
   cold-start back button, card stickers/comments, "What your friends added" on Arrivals, the four new stickers.
   Then the phone-side shrinking plugin (store builds) before clips are usable from an iPhone's camera roll.
+
+## 2026-10-30 — COMMITTED, NOT pushed: Admin → Clips on City Boards (uploads + plays, per day and per month)
+
+- Founder: "create a database in admin how many videos in total have been uploaded, how many video views per day,
+  how many uploaded per month and how many plays per month." Worker `POST /admin/videos` (requireAdmin): clip rows →
+  total uploaded (ready), hanging now, still uploading, minutes stored, uploads per day (30d) and per month (12m);
+  plays = `board_play` events (new: `/board/view` logs one when a counted view lands on a clip) per day and per month,
+  plus all-time plays per clip from `item_views` and the ten most played. Admin page: `VideoReport` under the
+  collectibles report (stats row + four bar lists + Most played). No new table — the events table and item_views.
+- Gates: node --check, suites green, eslint no-undef, build + boot-check. Needs push (worker) + OTA (the page).
