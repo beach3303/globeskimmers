@@ -39,6 +39,7 @@ These are the design rules. They are goals the build must meet, not promises we 
 |---|---|---|---|---|
 | Private passport | Frozen, content deleted | Mutual friends can view it. Stamps appear to them 24h late | Same as 13–15 | Mutual friends can view it |
 | Stamps & GPS | Off | Allowed. We store the place's coordinates, not the phone's. "I'm here" reports keep no phone location | Same as 13–15 | Allowed |
+| City Cards (restaurants, cafés, shops, convenience stores; founder 2026-10-30) | Off | Allowed — already so in the worker (only an under-13 account is refused); the card stays Only me or Friends, never further | Same as 13–15 | Allowed |
 | Memory photos & videos | Off | Mutual friends only, 24h late, place-check required | Same as 13–15 | Allowed |
 | Public passport | Off | Off. Checked on save **and** on every view | Off | Opt-in |
 | Profile (name, avatar, bio, website, home city, favorites, dreams) | Off | First name and avatar shown to mutual friends only. No website. No home city outside mutual friends. Moderated | Same as 13–15 | Moderated. Shown per the user's privacy setting |
