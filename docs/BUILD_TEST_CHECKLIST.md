@@ -3789,3 +3789,14 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   Board", and everything since 697bac0 (board clips, Mailbox deep links, card threads, friends' finds, four stickers).
   Then the store builds on BOTH platforms for the clips picker + trimmer (the plugin only runs in a native build):
   bump versions, `npm run cap:all`, archive + AAB.
+
+## 2026-10-30 — OTA 1.0.2610302234 LIVE (22:34 UTC): the day's app half is on phones
+
+- Founder ran `npm run ota`; the production channel serves 1.0.2610302234 (both platforms). On phones now: board clips
+  (web picker rules: ≤ 20 s, ≤ 25 MB), Mailbox lines that open the thing, the cold-start back button, card stickers and
+  comments, "What your friends added", the four new stickers, views, the admin Clips report, and the share sheet's
+  "Upload to a City Board".
+- Capgo's upload check flagged `@capawesome/capacitor-file-picker` as "New native plugin added (requires app store
+  update)". Expected: the bundle only takes the native road when `VideoShrink` answers, so installs without it keep the
+  web input. **Open (founder):** store builds on BOTH platforms for the clips picker + trimmer — bump versions,
+  `npm run cap:all`, archive + AAB.
