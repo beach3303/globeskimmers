@@ -155,7 +155,7 @@ const CONFIG = {
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, HEAD, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Access-Control-Max-Age': '86400'
 };
@@ -1735,6 +1735,8 @@ async function gbPurgeUserContent(env, userId, opts = {}) {
     await del('board_contributions', `board_contributions?user_id=eq.${userId}`);
   }
   if (uidOk) await r2Prefix('board_contributions_prefix', `bc/${userId}/`);
+  // Their clips (2026-10-30): the files under vid/<uid>/, rows or no rows.
+  if (uidOk) await r2Prefix('board_clips_prefix', `vid/${userId}/`);
   await del('owner_notes', `owner_notes?user_id=eq.${userId}`);
 
   // 1g) The Blotter: signatures and doodles they left (co-signs under them
@@ -21667,6 +21669,8 @@ async function handleCityBoard(request, env) {
     }));
     const photoRows = shownPhotos.map((p) => ({
       type: 'photo', id: p.id, created_at: p.created_at, photo: p.photo, caption: p.caption || null,
+      // A clip (2026-10-30): the poster is `photo`; the viewer plays `video`.
+      ...(p.video ? { video: p.video, duration: p.duration || null } : {}),
       place: p.stamp.name, stamp_kind: p.stamp.kind || null, city: p.stamp.city || null, region: p.stamp.region || null, country: p.stamp.country || null,
       // A contribution comes from "a traveler": no username (2026-10-27).
       ...(p.contrib ? { contrib: true, by: { handle: null, name: null } } : { by: { handle: share[p.user_id]?.handle || null, name: null } }),
@@ -21773,6 +21777,10 @@ const BC_PER_MINUTE = 60;
 const BC_PER_DAY = 1000;
 const BC_DAY_ALERT = 300;
 const bcPhotoUrl = (origin, id) => `${origin}/board-photo/${id}`;
+const bcVideoUrl = (origin, id) => `${origin}/board-video/${id}`;
+// Clips (founder, 2026-10-30): 20 seconds, 25 MB after the phone shrinks them.
+const BC_CLIP_SECONDS = 20;
+const BC_CLIP_BYTES = 25 * 1024 * 1024;
 // The city a photo was taken in: Google's reverse geocode, kept 30 days for its ~1 km square
 // (the coarse names only, as /reverse-geocode keeps them). { city, region, country } or null.
 async function bcPlaceAt(env, lat, lng) {
@@ -21847,35 +21855,59 @@ async function handleBoardContribute(request, env, ctx) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) {
       return jsonResponse({ error: 'This photo has no location, so we can’t tell which city it’s from', code: 'no_location' }, 400);
     }
-    let data = String(b.image || '');
-    const m = data.match(/^data:image\/(?:jpeg|jpg);base64,(.*)$/i);
-    if (m) data = m[1];
-    data = data.replace(/\s/g, '');
-    let bytes;
-    try { bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0)); } catch { return jsonResponse({ error: 'Bad image data' }, 400); }
-    if (bytes.length < 500 || bytes.length > 4 * 1024 * 1024 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return jsonResponse({ error: 'Please pick a photo (JPEG, under 4 MB)' }, 400);
+    // A clip (2026-10-30): `image` is its poster frame, `frames` four more stills across it, `duration`
+    // its seconds; the clip's bytes come in a second call (PUT /board/video/<id>) once this passes.
+    const isVideo = b.kind === 'video';
+    const jpegOf = (s) => {
+      let d = String(s || '');
+      const mm = d.match(/^data:image\/(?:jpeg|jpg);base64,(.*)$/i);
+      if (mm) d = mm[1];
+      d = d.replace(/\s/g, '');
+      let bb;
+      try { bb = Uint8Array.from(atob(d), (c) => c.charCodeAt(0)); } catch { return null; }
+      return bb.length < 500 || bb.length > 4 * 1024 * 1024 || bb[0] !== 0xff || bb[1] !== 0xd8 ? null : { data: d, bytes: bb };
+    };
+    const poster = jpegOf(b.image);
+    if (!poster) return jsonResponse({ error: isVideo ? 'The clip’s poster frame didn’t come through — try again' : 'Please pick a photo (JPEG, under 4 MB)' }, 400);
+    const { data, bytes } = poster;
+    let duration = 0, frames = [];
+    if (isVideo) {
+      duration = Number(b.duration);
+      if (!Number.isFinite(duration) || duration < 1 || duration > BC_CLIP_SECONDS + 0.5) return jsonResponse({ error: `Clips are up to ${BC_CLIP_SECONDS} seconds — trim it first`, code: 'too_long' }, 400);
+      frames = (Array.isArray(b.frames) ? b.frames : []).slice(0, 4).map(jpegOf);
+      if (frames.length < 2 || frames.some((f) => !f)) return jsonResponse({ error: 'The clip’s frames didn’t come through — try again' }, 400);
+      // A clip still waiting for its bytes after an hour never lands: clear this member's strays.
+      await gbRest(env, `board_contributions?user_id=eq.${user.id}&kind=eq.video&video_ready=eq.false&created_at=lt.${encodeURIComponent(new Date(Date.now() - 3600e3).toISOString())}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => {});
+    }
     // Counted before the paid checks run: a refused photo costs the same as a posted one.
     const today = await gbDayCount(env, `bc:${user.id}`);
     if (today != null && today > BC_PER_DAY) return jsonResponse({ error: 'That’s 1,000 photos today, the most for one day. Add the rest tomorrow.', code: 'day_full' }, 429);
     if (today === BC_DAY_ALERT && ctx) ctx.waitUntil(founderAlert(env, `📸 Someone has sent ${BC_DAY_ALERT} photos to City Boards today. The ceiling is ${BC_PER_DAY.toLocaleString('en-US')} a day. Admin → Safety reports if it looks like spam.`, 'ops', { by: user.id }));
     const caption = String(b.caption || '').replace(/\s+/g, ' ').trim().slice(0, 200);
-    const [place, v, capOk] = await Promise.all([
+    // The check runs ONCE, here: the photo — or a clip's poster and four frames — through the same
+    // door (founder, 2026-10-30: the rules are the photo rules; a recognizable child keeps it off).
+    const [place, v, capOk, ...fv] = await Promise.all([
       bcPlaceAt(env, lat, lng),
       gbModeratePhoto(env, data, 'image/jpeg', 'board'),
       caption ? gbModerate(env, caption).then((r) => r.allow) : Promise.resolve(true),
+      ...frames.map((f) => gbModeratePhoto(env, f.data, 'image/jpeg', 'board')),
     ]);
-    if (!place) return jsonResponse({ error: 'We couldn’t tell which city this photo is from', code: 'no_city' }, 400);
+    const thing = isVideo ? 'clip' : 'photo';
+    if (!place) return jsonResponse({ error: `We couldn’t tell which city this ${thing} is from`, code: 'no_city' }, 400);
     const board = pcBoardOf({ city: place.city, region: place.region, country: place.country });
-    if (!board) return jsonResponse({ error: 'We couldn’t tell which city this photo is from', code: 'no_city' }, 400);
-    if (!v?.allow) return jsonResponse({ error: 'This photo can’t be shared on a City Board', code: 'not_allowed' }, 422);
-    if (v.child) return jsonResponse({ error: 'A child is clearly recognizable in this photo, so it stays off the boards', code: 'child' }, 422);
+    if (!board) return jsonResponse({ error: `We couldn’t tell which city this ${thing} is from`, code: 'no_city' }, 400);
+    const verdicts = [v, ...fv];
+    if (verdicts.some((x) => !x?.allow)) return jsonResponse({ error: `This ${thing} can’t be shared on a City Board`, code: 'not_allowed' }, 422);
+    if (verdicts.some((x) => x.child)) return jsonResponse({ error: `A child is clearly recognizable in this ${thing}, so it stays off the boards`, code: 'child' }, 422);
     if (!capOk) return jsonResponse({ error: 'Let’s keep captions kind — try different words', code: 'caption' }, 422);
-    const key = `bc/${user.id}/${crypto.randomUUID()}.jpg`;
+    const stem = crypto.randomUUID();
+    const key = `bc/${user.id}/${stem}.jpg`;
     await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' } });
     const takenAt = typeof exif.taken_at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(exif.taken_at) ? `${exif.taken_at}Z` : null;
-    const row = { user_id: user.id, board_key: board.key, city: board.city, region: board.region || null, country: board.country, taken_at: takenAt, caption: caption || null, photo_key: key, mod_status: 'ok' };
+    const row = { user_id: user.id, board_key: board.key, city: board.city, region: board.region || null, country: board.country, taken_at: takenAt, caption: caption || null, photo_key: key, mod_status: 'ok',
+      ...(isVideo ? { kind: 'video', duration: Math.round(duration * 10) / 10, video_key: `vid/${user.id}/${stem}.mp4`, video_ready: false } : {}) };
     const ins = await gbRest(env, 'board_contributions', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
-    if (!ins.ok) { await env.MEDIA.delete(key).catch(() => {}); return jsonResponse({ error: ins.status === 404 ? 'City Board photos open in a few minutes — try again shortly' : 'Could not save — try again' }, 502); }
+    if (!ins.ok) { await env.MEDIA.delete(key).catch(() => {}); return jsonResponse({ error: ins.status === 404 ? 'City Board photos open in a few minutes — try again shortly' : isVideo && ins.status === 400 ? 'Clips open with the next update — try again shortly' : 'Could not save — try again' }, 502); }
     const saved = (await ins.json())[0] || {};
     if (ctx) {
       ctx.waitUntil(pcBoardsCacheBust(env));
@@ -21904,7 +21936,7 @@ async function handleBoardContribute(request, env, ctx) {
       await founderAlert(env, `📸 ${who} added photos to ${board.name}’s board (City Boards)${gbWhereLine(request)}`, 'bell', n ? { click: gbMemberLink(n) } : {});
     })().catch(() => {}));
     const origin = new URL(request.url).origin;
-    return jsonResponse({ ok: true, id: saved.id, url: bcPhotoUrl(origin, saved.id), caption: saved.caption || null, board: { key: board.key, name: board.name, city: board.city, region: board.region || null, country: board.country }, progress, reward });
+    return jsonResponse({ ok: true, id: saved.id, url: bcPhotoUrl(origin, saved.id), caption: saved.caption || null, ...(isVideo ? { upload: `/board/video/${saved.id}`, video: bcVideoUrl(origin, saved.id) } : {}), board: { key: board.key, name: board.name, city: board.city, region: board.region || null, country: board.country }, progress, reward });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -21914,11 +21946,13 @@ async function handleBoardContributions(request, env) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
-    const q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&mod_status=eq.ok&order=created_at.desc&limit=1000&select=id,caption,city,region,country,taken_at,created_at,hidden`, {});
+    // Clips too (2026-10-30), once their bytes landed; a clip still uploading isn't listed.
+    let q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&mod_status=eq.ok&video_ready=eq.true&order=created_at.desc&limit=1000&select=id,caption,city,region,country,taken_at,created_at,hidden,kind,duration`, {});
+    if (q.status === 400) q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&mod_status=eq.ok&order=created_at.desc&limit=1000&select=id,caption,city,region,country,taken_at,created_at,hidden`, {});
     if (q.status === 404) return jsonResponse({ photos: [], open_until: '2027-06-30', unavailable: true });
     if (!q.ok) return jsonResponse({ error: 'Couldn’t load your photos — try again', photos: [] }, 502);
     const origin = new URL(request.url).origin;
-    const photos = (await q.json()).map((r) => ({ ...r, url: bcPhotoUrl(origin, r.id) }));
+    const photos = (await q.json()).map((r) => ({ ...r, url: bcPhotoUrl(origin, r.id), ...(r.kind === 'video' ? { video: bcVideoUrl(origin, r.id), duration: r.duration || null } : {}) }));
     // The owner sees how often each of their photos was opened on the boards (2026-10-30).
     const vm = await viewsFor(env, photos.map((p) => `bcp:${p.id}`));
     for (const p of photos) p.views = vm[`bcp:${p.id}`] || 0;
@@ -21938,6 +21972,8 @@ async function handleBoardContributionDelete(request, env, ctx) {
     const rows = q.ok ? await q.json() : [];
     if (!rows.length) return jsonResponse({ error: 'Not found' }, 404);
     if (rows[0].photo_key && env.MEDIA) await env.MEDIA.delete(rows[0].photo_key).catch(() => {});
+    // A clip's file goes with its poster (2026-10-30).
+    if (rows[0].video_key && env.MEDIA) await env.MEDIA.delete(rows[0].video_key).catch(() => {});
     // Its likes, comments and doodles go with it.
     await blPurgeTargets(env, user.id, [`bcp:${id}`], ctx).catch(() => {});
     if (ctx) ctx.waitUntil(pcBoardsCacheBust(env));
@@ -22294,6 +22330,92 @@ async function handleCityCardVisibility(request, env) {
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
+// PUT /board/video/<id> — the clip's bytes, after its poster and frames passed (2026-10-30). Raw
+// MP4 body, 25 MB at most, 20 seconds at most (read from the file's own header when it can be);
+// the row's video_key names the R2 object; then the row is ready and the board shows it.
+function mp4Duration(bytes) {
+  // moov → mvhd: timescale + duration. Returns null when the header isn't where it's looked for.
+  try {
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const tag = (o) => String.fromCharCode(bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3]);
+    const walk = (start, end) => {
+      let o = start;
+      while (o + 8 <= end) {
+        let size = dv.getUint32(o), type = tag(o + 4), head = 8;
+        if (size === 1) { size = Number(dv.getBigUint64(o + 8)); head = 16; } else if (size === 0) size = end - o;
+        if (size < head) return null;
+        if (type === 'moov') return walk(o + head, Math.min(end, o + size));
+        if (type === 'mvhd') {
+          const ver = bytes[o + head];
+          if (ver === 1) return Number(dv.getBigUint64(o + head + 24)) / dv.getUint32(o + head + 20);
+          return dv.getUint32(o + head + 16) / dv.getUint32(o + head + 12);
+        }
+        o += size;
+      }
+      return null;
+    };
+    const d = walk(0, bytes.byteLength);
+    return Number.isFinite(d) && d > 0 ? d : null;
+  } catch { return null; }
+}
+async function handleBoardVideoPut(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    if (!env.MEDIA) return jsonResponse({ error: 'Video storage not configured' }, 500);
+    const m = /^\/board\/video\/([0-9a-f-]{36})$/i.exec(new URL(request.url).pathname);
+    if (!m || !BL_UUID.test(m[1])) return jsonResponse({ error: 'Not found' }, 404);
+    const q = await gbRest(env, `board_contributions?id=eq.${m[1]}&user_id=eq.${user.id}&kind=eq.video&select=id,video_key,video_ready,duration`, {});
+    const row = (q.ok ? await q.json() : [])[0];
+    if (!row || !String(row.video_key || '').startsWith('vid/')) return jsonResponse({ error: 'Not found' }, 404);
+    if (row.video_ready) return jsonResponse({ ok: true, url: bcVideoUrl(new URL(request.url).origin, row.id), already: true });
+    const len = Number(request.headers.get('content-length') || 0);
+    if (len > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 25 MB at most', code: 'too_big' }, 413);
+    const bytes = new Uint8Array(await request.arrayBuffer());
+    if (bytes.byteLength > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 25 MB at most', code: 'too_big' }, 413);
+    if (bytes.byteLength < 2000 || String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7]) !== 'ftyp') return jsonResponse({ error: 'Please send an MP4 clip' }, 400);
+    const secs = mp4Duration(bytes);
+    if (secs != null && secs > BC_CLIP_SECONDS + 0.5) return jsonResponse({ error: `Clips are up to ${BC_CLIP_SECONDS} seconds — trim it first`, code: 'too_long' }, 400);
+    await env.MEDIA.put(row.video_key, bytes, { httpMetadata: { contentType: 'video/mp4', cacheControl: 'public, max-age=31536000, immutable' } });
+    const patch = { video_ready: true, ...(secs != null ? { duration: Math.round(secs * 10) / 10 } : {}) };
+    const w = await gbRest(env, `board_contributions?id=eq.${row.id}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
+    if (!w.ok) { await env.MEDIA.delete(row.video_key).catch(() => {}); return jsonResponse({ error: 'Could not save — try again' }, 502); }
+    if (ctx) { ctx.waitUntil(pcBoardsCacheBust(env)); ctx.waitUntil(gbLogEvent(env, 'board_clip', { secs: Math.round(secs || row.duration || 0) })); }
+    return jsonResponse({ ok: true, url: bcVideoUrl(new URL(request.url).origin, row.id) });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+// GET /board-video/<id> — the clip, public while it hangs; Range requests so a phone can scrub.
+async function handleBoardVideoServe(request, env) {
+  try {
+    const m = /^\/board-video\/([0-9a-f-]{36})$/i.exec(new URL(request.url).pathname);
+    if (!m || !env.MEDIA) return new Response('Not found', { status: 404 });
+    const q = await gbRest(env, `board_contributions?id=eq.${m[1]}&select=id,video_key,video_ready,mod_status,hidden`, {});
+    const row = (q.ok ? await q.json() : [])[0];
+    const key = row && row.video_ready && row.mod_status === 'ok' && row.hidden !== true ? String(row.video_key || '') : '';
+    if (!key.startsWith('vid/') || key.includes('..')) return new Response('Not found', { status: 404 });
+    const rangeH = request.headers.get('range') || '';
+    const rm = /^bytes=(\d*)-(\d*)$/.exec(rangeH.trim());
+    const head = await env.MEDIA.head(key);
+    if (!head) return new Response('Not found', { status: 404 });
+    const size = head.size;
+    const headers = new Headers({ 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Cache-Control': 'public, max-age=86400', 'Access-Control-Allow-Origin': '*', 'X-Content-Type-Options': 'nosniff' });
+    if (rm && (rm[1] || rm[2])) {
+      let start = rm[1] ? Number(rm[1]) : Math.max(0, size - Number(rm[2]));
+      let end = rm[1] && rm[2] ? Math.min(Number(rm[2]), size - 1) : size - 1;
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= size) return new Response('Range not satisfiable', { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+      const obj = await env.MEDIA.get(key, { range: { offset: start, length: end - start + 1 } });
+      if (!obj) return new Response('Not found', { status: 404 });
+      headers.set('Content-Range', `bytes ${start}-${end}/${size}`);
+      headers.set('Content-Length', String(end - start + 1));
+      return new Response(request.method === 'HEAD' ? null : obj.body, { status: 206, headers });
+    }
+    const obj = await env.MEDIA.get(key);
+    if (!obj) return new Response('Not found', { status: 404 });
+    headers.set('Content-Length', String(size));
+    return new Response(request.method === 'HEAD' ? null : obj.body, { status: 200, headers });
+  } catch { return new Response('Error', { status: 500 }); }
+}
+
 // GET /board-photo/<id> — public while it hangs (reviewed, not taken down).
 async function handleBoardPhotoServe(request, env) {
   try {
@@ -22308,9 +22430,10 @@ async function handleBoardPhotoServe(request, env) {
 async function bcBoardPhotos(env, board, before, blocked, origin) {
   const none = { photos: [], more: false, total: 0 };
   try {
-    const base = `board_contributions?${bcWhere(board)}&mod_status=eq.ok&hidden=eq.false`;
+    // A clip hangs only once its bytes landed (video_ready; a photo is always ready).
+    const base = `board_contributions?${bcWhere(board)}&mod_status=eq.ok&hidden=eq.false&video_ready=eq.true`;
     const [pq, cq] = await Promise.all([
-      gbRest(env, `${base}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&select=id,user_id,caption,city,region,country,created_at&limit=${PC_WALL_PAGE + 1}`, {}),
+      gbRest(env, `${base}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&select=id,user_id,caption,city,region,country,created_at,kind,duration&limit=${PC_WALL_PAGE + 1}`, {}),
       gbRest(env, `${base}&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } }),
     ]);
     if (!pq.ok) return none;
@@ -22320,7 +22443,7 @@ async function bcBoardPhotos(env, board, before, blocked, origin) {
     got = got.filter((ph) => ok.has(ph.user_id));
     const total = cq.ok ? parseInt((cq.headers.get('content-range') || '').split('/')[1] || '0', 10) || got.length : got.length;
     return {
-      photos: got.map((ph) => ({ ...ph, contrib: true, photo: bcPhotoUrl(origin, ph.id), stamp: { name: ph.city, kind: 'city', city: ph.city, region: ph.region, country: ph.country } })),
+      photos: got.map((ph) => ({ ...ph, contrib: true, photo: bcPhotoUrl(origin, ph.id), ...(ph.kind === 'video' ? { video: bcVideoUrl(origin, ph.id), duration: ph.duration || null } : {}), stamp: { name: ph.city, kind: 'city', city: ph.city, region: ph.region, country: ph.country } })),
       more: got.length > PC_WALL_PAGE, total,
     };
   } catch { return none; }
@@ -30059,6 +30182,8 @@ export default {
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
       if (pathname.startsWith('/dish-photo/') && request.method === 'GET') return await handleDishPhotoServe(request, env);
       if (pathname.startsWith('/board-photo/') && request.method === 'GET') return await handleBoardPhotoServe(request, env);
+      if (pathname.startsWith('/board-video/') && (request.method === 'GET' || request.method === 'HEAD')) return await handleBoardVideoServe(request, env);
+      if (pathname.startsWith('/board/video/') && request.method === 'PUT') return await handleBoardVideoPut(request, env, ctx);
       if (pathname.startsWith('/ps-photo/') && request.method === 'GET') return await handlePlaceSuggestPhotoServe(request, env);
       if (pathname === '/attractions/visit-info' && request.method === 'POST') return await handleAttractionVisitInfo(request, env, ctx);
       if (pathname === '/attractions/before-you-go' && request.method === 'POST') return await handleAttractionBeforeYouGo(request, env, ctx);
