@@ -3629,3 +3629,17 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - **Phone test (two accounts):** send a postcard; the addressee's Mailbox card shows the tray; press WOW → the sender's
   Mailbox line and push say "stamped WOW! on your postcard"; comment from Sent → the addressee's line opens the card;
   a third account sees nothing anywhere.
+
+## 2026-10-30 — COMMITTED, NOT pushed: views on City Board photos and postcards
+
+- Founder: a photo opened big on a City Board = 1 view; each photo (and later each clip, when it starts playing) shows
+  its total. Worker: D1 `item_views` (created on first use), `POST /board/view { target }` → `{ views, counted }`, once
+  per member per item per day (KV `v:<day>:<uid>:<target>`); `/city/board` rows and the owner's `/board/contributions`
+  carry `views`. Counts only, never who. App: the board viewer calls it on every item opened and prints "128 views"
+  under the photo's meta line (above a postcard's tray); the owner's Contribute album tiles wear a VIEWS badge.
+- Harness `run-views.mjs`: 12 checks (first open counts, same member same day doesn't, another member does, a
+  contributed photo counts, rows + owner list carry counts, signed out 401, bad target 404, `pm:` not a view target).
+  Older suites green. Gates: node --check, eslint no-undef, build, boot-check. Screenshot (counts mocked — the worker
+  isn't deployed yet): `Claude outputs/board-views-1-viewer-128-views.png`.
+- **After the push (worker) + OTA (app):** open a board photo twice — "1 view" stays 1; from a second account it reads 2.
+  D1 needs nothing by hand (the table creates itself).
