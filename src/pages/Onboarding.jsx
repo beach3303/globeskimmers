@@ -78,7 +78,8 @@ export default function OnboardingPage() {
     if (collected.home_country) update.home_country = collected.home_country;
     if (collected.heard_from) update.heard_from = collected.heard_from;
     // The sign-up event with its source (growth plan, 2026-10-19): the answer, or 'unknown' — never a guess.
-    logEvent("signed_up", { source: collected.heard_from || "unknown" }, "Onboarding");
+    // `passport`: whether the one stamp ask was taken ('now') or skipped ('later'), for the funnel.
+    logEvent("signed_up", { source: collected.heard_from || "unknown", passport: collected.passport_skipped ? "later" : "now" }, "Onboarding");
     // Home city + coordinates + exact timezone (from HomeCityField) so the home
     // clock is accurate worldwide, not just the country default.
     if (collected.home_city) update.home_city = collected.home_city;
@@ -130,7 +131,9 @@ export default function OnboardingPage() {
 
     try { sessionStorage.setItem("gsk_review_toured", "1"); } catch { /* fine */ } // review account: one tour per launch
     await refreshProfile(); // so Layout's gate sees onboarding_completed = true
-    navigate(createPageUrl("Passport"));   // the first thing a new member sees: Upload photos / Stamp where I am
+    // The passport ask is made once, on its own step (founder, 2026-10-30). Taken → the Passport
+    // (Upload photos / Stamp where I am). Skipped → Home, to look around; nothing asks again.
+    navigate(createPageUrl(collected.passport_skipped ? "Home" : "Passport"));
   };
 
   // Merge any answer, then advance — or finish on the last step.
@@ -172,7 +175,8 @@ export default function OnboardingPage() {
           homeCity={data.home_city}
           homeCountry={data.home_country}
           firstName={data.first_name || initialFirstName}
-          onNext={() => advance()}
+          onNext={() => advance({ passport_skipped: false })}
+          onSkip={() => advance({ passport_skipped: true })}
           onBack={onBack}
         />
       );

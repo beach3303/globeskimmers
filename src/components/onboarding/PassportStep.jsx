@@ -14,7 +14,10 @@ const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 
-export default function PassportStep({ homeCity, homeCountry, firstName, onNext, onBack }) {
+// The one ask (founder, 2026-10-30: "we only ask them one time to stamp their virtual passport, and
+// if they skip it, give them a chance to navigate by themselves all over the app"): Stamp my first
+// page opens on the Passport; Not now opens on Home, and nothing asks again.
+export default function PassportStep({ homeCity, homeCountry, firstName, onNext, onSkip = undefined, onBack }) {
   const city = homeCity || homeCountry || "Home";
   return (
     <OnboardingStepLayout
@@ -23,14 +26,26 @@ export default function PassportStep({ homeCity, homeCountry, firstName, onNext,
       subtitle="Page one is where your story starts."
       onBack={onBack}
       footer={
-        <button
-          type="button"
-          onClick={onNext}
-          className="w-full rounded-full py-3.5 font-semibold text-white"
-          style={{ background: "#0E7C86", fontSize: "calc(15px * var(--fs, 1))" }}
-        >
-          Stamp my first page
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={onNext}
+            className="w-full rounded-full py-3.5 font-semibold text-white"
+            style={{ background: "#0E7C86", fontSize: "calc(15px * var(--fs, 1))" }}
+          >
+            Stamp my first page
+          </button>
+          {onSkip && (
+            <button
+              type="button"
+              onClick={onSkip}
+              className="w-full text-gray-500 hover:text-gray-700 text-sm"
+              style={{ minHeight: 44, marginTop: 4 }}
+            >
+              Not now — I’ll look around first
+            </button>
+          )}
+        </>
       }
     >
       <div className="flex flex-col items-center">
