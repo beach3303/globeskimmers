@@ -599,10 +599,13 @@ export default function HomePage() {
   // ── The six pages ──────────────────────────────────────────────────────────
   const [homePage, setHomePage] = useState(() => initialHomePage(new URLSearchParams(routerLocation.search).get('page')));
   const openHomePage = (id) => {
-    setHomePage(id);
-    rememberHomePage(id);
     // Which pages people open tells us who uses Home for what (founder, 2026-10-25).
     trackEvent('home_page', { page: id });
+    // The Virtual Passport tab opens the Passport page itself — the full screen the bottom bar's
+    // Passport button opens, no tabs (founder, 2026-10-30). Home keeps the page it was on.
+    if (id === 'passport') { navigate(createPageUrl('Passport')); return; }
+    setHomePage(id);
+    rememberHomePage(id);
   };
   const renderHomePage = (id) => {
     if (id === 'nearby') {

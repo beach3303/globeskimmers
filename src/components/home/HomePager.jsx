@@ -24,10 +24,14 @@ import { MapPin } from "lucide-react";
 import { HOME_TAB } from "@/components/redesign/Zone";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 
+// A `link` tab (Virtual Passport, founder 2026-10-30: "direct the user to the same page where
+// user goes when they click the virtual passport from the bottom navigation bar") looks like the
+// others but opens a page of its own, full screen: onPage(id) fires, Home navigates, and no page
+// sits under it here — a swipe passes over it.
 export const HOME_PAGES = [
   { id: "nearby", label: "Nearby" },
   { id: "stamps", label: "Stamps" },
-  { id: "passport", label: "Virtual Passport" },
+  { id: "passport", label: "Virtual Passport", link: true },
   { id: "arrivals", label: "Arrivals" },
   { id: "cityboard", label: "City Board" },
   { id: "citycards", label: "City Cards" },
@@ -36,12 +40,13 @@ const KEY = "gs_home_page_v1";
 const BLUE = NEUTRAL.airmailBlue;
 const STICK = "calc(50px + env(safe-area-inset-top))";
 const SLIDE_MS = 300;
+const isPage = (id) => HOME_PAGES.some((p) => p.id === id && !p.link);
 
 // The page to open on: the one asked for, else the one used last, else Stamps for a new member
 // (founder's decision sheet: "Which page should a brand-new member see first? Stamps").
 export function initialHomePage(asked) {
-  if (HOME_PAGES.some((p) => p.id === asked)) return asked;
-  try { const v = localStorage.getItem(KEY); if (HOME_PAGES.some((p) => p.id === v)) return v; } catch { /* storage off */ }
+  if (isPage(asked)) return asked;
+  try { const v = localStorage.getItem(KEY); if (isPage(v)) return v; } catch { /* storage off */ }
   return "stamps";
 }
 export function rememberHomePage(id) {
@@ -104,9 +109,16 @@ export default function HomePager({ page, onPage, render, location = null }) {
   };
   const open = (i) => {
     const n = Math.max(0, Math.min(HOME_PAGES.length - 1, i));
+    if (HOME_PAGES[n].link) { onPage(HOME_PAGES[n].id); return; }   // its own page; Home navigates
     if (n === idx) return;
     onPage(HOME_PAGES[n].id);
     requestAnimationFrame(toTop);
+  };
+  // The page beside this one in a swipe, passing over a link tab.
+  const beside = (dir) => {
+    let n = idx + dir;
+    while (n >= 0 && n < HOME_PAGES.length && HOME_PAGES[n].link) n += dir;
+    return n;
   };
 
   const onTouchStart = (e) => {
@@ -126,7 +138,7 @@ export default function HomePager({ page, onPage, render, location = null }) {
       s.lock = Math.abs(dx) > Math.abs(dy) * 1.2 ? "x" : "y";
     }
     if (s.lock !== "x") return;
-    const n = dx < 0 ? idx + 1 : idx - 1;
+    const n = beside(dx < 0 ? 1 : -1);
     const edge = n < 0 || n >= HOME_PAGES.length;
     const v = edge ? dx / 3 : dx;     // a little give at either end
     dxRef.current = v;
@@ -208,7 +220,7 @@ export default function HomePager({ page, onPage, render, location = null }) {
         style={{ position: "relative", overflow: sliding ? "hidden" : "visible", touchAction: "pan-y" }}>
         {HOME_PAGES.map((p, i) => (
           <div key={p.id} role="tabpanel" id={`home-panel-${p.id}`} aria-labelledby={`home-tab-${p.id}`} aria-hidden={i !== idx || undefined} style={pos(i)}>
-            {mounted.has(i) ? render(p.id) : <Placeholder label={p.label} />}
+            {p.link ? null : mounted.has(i) ? render(p.id) : <Placeholder label={p.label} />}
           </div>
         ))}
       </div>
