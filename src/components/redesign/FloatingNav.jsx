@@ -16,15 +16,16 @@ import { logEvent } from '@/lib/analytics';
 // Passport; Profile, Circle and Settings light Profile; everything else (finders, a traveler's
 // page, the Mailbox) lights nothing.
 //
-// The Stamp button opens the Passport for now — step 2 of the redesign gives it its own sheet
-// (Upload photos · Stamp where I am · post to a City Board).
+// The Stamp button opens the Stamp sheet (Upload photos · Stamp where I am · post to a City
+// Board) through `onStamp`, which Layout wires; without it, the Passport.
 //
 // An always-on 1px cream outer ring keeps the pill's edge readable where it floats over dark
 // ground. Keyboard focus rings on the tabs are cream too (--gs-focus).
 //
 // Props:
-//   dark:   pass `true` over dark/map surfaces to lift contrast.
-//   active: optional explicit override; otherwise auto-detected from route.
+//   dark:    pass `true` over dark/map surfaces to lift contrast.
+//   active:  optional explicit override; otherwise auto-detected from route.
+//   onStamp: opens the Stamp sheet (Layout passes it).
 const STAMP_RED = '#B0472F';
 const FG = '#FAF7EE';
 
@@ -36,7 +37,7 @@ const ITEMS = [
   { id: 'profile',  label: 'Profile',  route: 'Profile',  Icon: CircleUserRound },
 ];
 
-export default function FloatingNav({ active, dark = false }) {
+export default function FloatingNav({ active, dark = false, onStamp = undefined }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -58,6 +59,7 @@ export default function FloatingNav({ active, dark = false }) {
   const bg = dark ? 'rgba(20,20,20,0.78)' : 'rgba(22,17,13,0.92)';
   const go = (it) => {
     logEvent('nav_tab', { tab: it.id }, 'Nav');
+    if (it.id === 'stamp' && typeof onStamp === 'function') { onStamp(); return; }
     navigate(createPageUrl(it.route));
   };
 

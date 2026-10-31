@@ -149,6 +149,15 @@ export function BoardContributeSheet({ board, onClose, onPosted = undefined }) {
   return <ContributeSheet photos={photos} board={board} onChanged={() => { load(); onPosted?.(); }} onClose={onClose} />;
 }
 
+// The sheet on its own (the bar's Stamp sheet, 2026-10-31: "Just sharing photos? Post them to a
+// City Board"): the public note, the Upload button and the member's uploads, from anywhere.
+export function ContributeStandaloneSheet({ onClose }) {
+  const [photos, setPhotos] = useState([]);
+  const load = () => listContributions().then((r) => { if (!r.error) setPhotos(r.photos); });
+  useEffect(() => { load(); }, []);
+  return <ContributeSheet photos={photos} onChanged={load} onClose={onClose} />;
+}
+
 // Photos shared in from the phone's gallery (PhotoSorter's third door, founder 2026-10-30: "upload
 // to city board"): the same sheet, posting them as soon as it opens, with the public note above
 // the progress and the summary saying which boards they went to.

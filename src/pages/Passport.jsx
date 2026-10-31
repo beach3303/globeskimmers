@@ -1326,15 +1326,24 @@ function PassportInner({ embedded = false }) {
   useEffect(() => {
     if (readOnly) return;
     const take = () => {
-      const { files, clips } = takeSharedPhotos();
+      const { files, clips, shared } = takeSharedPhotos();
       if (!files.length && !clips.length) return;
       setShowStampPlace(false); setStampPreset(null); setStampQueue(null);
       // Clips (2026-10-30) ride along by path: the ask sheet offers them the City Boards door.
-      setSorter({ files, clips, shared: true, n: Date.now() });
+      // Files from the bar's Stamp sheet (shared: false) skip the ask: straight to the places.
+      setSorter({ files, clips, shared: shared !== false, n: Date.now() });
     };
     take();
     window.addEventListener(SHARED_PHOTOS_EVENT, take);
     return () => window.removeEventListener(SHARED_PHOTOS_EVENT, take);
+  }, [readOnly]);
+  // The bar's Stamp sheet → "Stamp where I am" arrives as /Passport?stamp=here (2026-10-31): open
+  // Stamp a place at once, stamps or no stamps.
+  useEffect(() => {
+    if (readOnly) return;
+    let here = false;
+    try { here = new URLSearchParams(window.location.search).get("stamp") === "here"; } catch { /* ignore */ }
+    if (here) { setStampPreset(null); setShowStampPlace(true); }
   }, [readOnly]);
   const onUploadPhotos = (e) => {
     const files = [...(e.target.files || [])];

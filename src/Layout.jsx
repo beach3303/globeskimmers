@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { createPageUrl } from "@/utils";
@@ -9,6 +9,8 @@ import LocationMismatchSheet from "@/components/location/LocationMismatchSheet";
 import LocationAutoFollowOffer from "@/components/location/LocationAutoFollowOffer";
 import BrandBanner from "@/components/redesign/BrandBanner";
 import FloatingNav from "@/components/redesign/FloatingNav";
+import StampSheet from "@/components/passport/StampSheet";
+import { ContributeStandaloneSheet } from "@/components/passport/ContributeAlbum";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
 import MailButton from "@/components/mail/MailButton";
 import BackToTop from "@/components/BackToTop";
@@ -171,6 +173,10 @@ export default function Layout({ children, currentPageName }) {
 // The chrome around every page, painted in the page's ground. A child of the
 // PageGroundProvider so it sees a page's usePageGround override.
 function PageShell({ currentPageName, isOnboarding, children }) {
+  // The bar's Stamp button (navigation redesign, 2026-10-31): the sheet with Upload photos ·
+  // Stamp where I am · post to a City Board, and the Contribute sheet the last one opens.
+  const [stampOpen, setStampOpen] = useState(false);
+  const [contribOpen, setContribOpen] = useState(false);
   const ground = usePageGroundValue();
   const pageInk = usePageInk();
 
@@ -231,7 +237,9 @@ function PageShell({ currentPageName, isOnboarding, children }) {
       {BACK_TO_TOP_PAGES.has(currentPageName) && <BackToTop color={backToTopColor} />}
 
       {/* Floating pill nav — Boards · Nearby · Stamp · Passport · Profile (2026-10-31). */}
-      <FloatingNav />
+      <FloatingNav onStamp={() => setStampOpen(true)} />
+      {stampOpen ? <StampSheet onClose={() => setStampOpen(false)} onContribute={() => setContribOpen(true)} /> : null}
+      {contribOpen ? <ContributeStandaloneSheet onClose={() => setContribOpen(false)} /> : null}
 
       {/* Global location nudges — mounted here (not in Home) so they catch
           their events on ANY page after foreground: the "you appear to be in

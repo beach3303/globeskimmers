@@ -13,13 +13,24 @@ import { Capacitor } from "@capacitor/core";
 import { CapacitorShareTarget } from "@capgo/capacitor-share-target";
 
 export const SHARED_PHOTOS_EVENT = "gs:shared-photos";
-let waiting = { files: [], clips: [] };
+let waiting = { files: [], clips: [], shared: true };
 
-// What was shared, handed over once: { files: File[] (photos), clips: [{ path, name, mimeType }] }.
+// What was shared, handed over once: { files: File[] (photos), clips: [{ path, name, mimeType }],
+// shared } — `shared` is true for a share from the phone (the Passport asks stamp / postcard /
+// board first) and false for files the app's own Stamp button picked (straight to the places).
 export function takeSharedPhotos() {
   const out = waiting;
-  waiting = { files: [], clips: [] };
+  waiting = { files: [], clips: [], shared: true };
   return out;
+}
+
+// Files picked inside the app (the bar's Stamp sheet, 2026-10-31) take the same road as a share:
+// queued here, the Passport opens with them. Works whether or not the Passport is mounted.
+export function queueSharedPhotos(files, clips = [], { shared = false } = {}) {
+  const list = [...(files || [])].filter(Boolean);
+  if (!list.length && !(clips || []).length) return;
+  waiting = { files: list, clips: clips || [], shared: !!shared };
+  window.dispatchEvent(new Event(SHARED_PHOTOS_EVENT));
 }
 
 const isVideo = (f) => /^video\//i.test(f?.mimeType || "") || /\.(mp4|mov|m4v)(\?|$)/i.test(f?.name || f?.uri || "");
@@ -47,7 +58,7 @@ export function listenForSharedPhotos(onShared) {
     const clips = list.filter(isVideo).map((f, i) => ({ path: f.uri, name: f.name || `shared-${i + 1}.mp4`, mimeType: clipType(f) }));
     const files = (await Promise.all(list.filter((f) => !isVideo(f)).map(toFile))).filter(Boolean);
     if (!files.length && !clips.length) return;
-    waiting = { files, clips };
+    waiting = { files, clips, shared: true };
     window.dispatchEvent(new Event(SHARED_PHOTOS_EVENT));
     onShared?.();
   }).catch(() => null);
