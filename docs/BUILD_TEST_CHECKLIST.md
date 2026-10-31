@@ -3942,3 +3942,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   to upload. If the S10 still exits on 1.0.11 the next start will log `webview_renderer_gone` (if it was the
   renderer) — else it's a native crash and a USB `adb logcat` is the next step. Also worth trying on the S10: update
   "Android System WebView" in the Play Store.
+
+## 2026-10-30 — PUSHED: renderer safety net (main d26523b)
+
+- 211e29b → d26523b. No deploy runs. The app half (webview report) rides the next OTA; the native half is in the
+  rebuilt 1.0.11 AAB on the Desktop, still to upload.
