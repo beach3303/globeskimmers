@@ -3947,3 +3947,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
 - 211e29b → d26523b. No deploy runs. The app half (webview report) rides the next OTA; the native half is in the
   rebuilt 1.0.11 AAB on the Desktop, still to upload.
+
+## 2026-10-31 — Play 1.0.11 (14) SUBMITTED (1:32 AM PT, submission 10, In review)
+
+- The rebuilt AAB (geolocation 8.2.4, renderer safety net, video share). When Published: S10 retest, then
+  `site/app-version.json` android → 1.0.11. iOS 1.0.6 (18) still Waiting for Review.
