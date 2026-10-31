@@ -132,8 +132,9 @@ export default function OnboardingPage() {
     try { sessionStorage.setItem("gsk_review_toured", "1"); } catch { /* fine */ } // review account: one tour per launch
     await refreshProfile(); // so Layout's gate sees onboarding_completed = true
     // The passport ask is made once, on its own step (founder, 2026-10-30). Taken → the Passport
-    // (Upload photos / Stamp where I am). Skipped → Home, to look around; nothing asks again.
-    navigate(createPageUrl(collected.passport_skipped ? "Home" : "Passport"));
+    // (Upload photos / Stamp where I am). Skipped → the City Boards, to look around (navigation
+    // redesign, 2026-10-31); nothing asks again.
+    navigate(createPageUrl(collected.passport_skipped ? "Boards" : "Passport"));
   };
 
   // Merge any answer, then advance — or finish on the last step.

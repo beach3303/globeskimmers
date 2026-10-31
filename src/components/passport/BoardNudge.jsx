@@ -71,19 +71,39 @@ export default function BoardNudge() {
   return (
     <>
       {!compose ? (
+        // The after-stamp card (navigation redesign, 2026-10-31): the board first — See the board,
+        // Stamp another photo — with the postcard as the quiet third way. Honest wording: a stamp
+        // proves you were there; whether your photos hang on the board follows your album privacy.
         <div style={{ position: "fixed", left: 12, right: 12, bottom: "calc(96px + env(safe-area-inset-bottom))", zIndex: 9000, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
-          <div role="status" style={{ pointerEvents: "auto", width: "100%", maxWidth: 440, display: "flex", alignItems: "center", gap: 10, boxSizing: "border-box", padding: "8px 4px 8px 12px", background: NEUTRAL.airmail, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16, boxShadow: `0 14px 30px -16px ${rgba(NEUTRAL.ink, 0.5)}` }}>
-            <PostmarkRing city={city} date={new Date().toISOString()} color={BLUE} size={40} style={{ flexShrink: 0 }} />
+          <div role="status" style={{ pointerEvents: "auto", width: "100%", maxWidth: 440, boxSizing: "border-box", padding: "10px 12px 12px", background: NEUTRAL.airmail, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16, boxShadow: `0 14px 30px -16px ${rgba(NEUTRAL.ink, 0.5)}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <PostmarkRing city={city} date={new Date().toISOString()} color={BLUE} size={40} style={{ flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontFamily: SERIF, fontSize: fs(17), lineHeight: 1.15, color: NEUTRAL.ink, overflowWrap: "anywhere" }}>
+                  <em style={{ fontStyle: "italic", color: BLUE }}>{city}</em> has a City Board too
+                </span>
+                <span style={{ display: "block", marginTop: 2, fontSize: fs(12), lineHeight: 1.35, color: NEUTRAL.ink2 }}>
+                  {first ? "Nothing on it yet — you were really there, so you can be first." : "You were really there, so your photos and postcards can hang on it."}
+                </span>
+              </div>
+              <button type="button" onClick={() => setNudge(null)} aria-label="Not now"
+                style={{ flex: "none", display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, padding: 0, borderRadius: 999, background: "transparent", border: 0, color: NEUTRAL.ink2, cursor: "pointer" }}>
+                <X size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button type="button" onClick={() => { setNudge(null); navigate(cityBoardUrl(city, country, region)); }}
+                style={{ flex: 1, minHeight: 54, borderRadius: 14, border: 0, background: "#0E7C73", color: NEUTRAL.white, font: "inherit", fontSize: fs(15), fontWeight: 700, cursor: "pointer" }}>
+                See the board
+              </button>
+              <button type="button" onClick={() => { setNudge(null); try { window.dispatchEvent(new Event("gs:open-stamp")); } catch { /* no window */ } }}
+                style={{ flex: 1, minHeight: 54, borderRadius: 14, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.ink, font: "inherit", fontSize: fs(14), fontWeight: 650, cursor: "pointer" }}>
+                Stamp another photo
+              </button>
+            </div>
             <button type="button" onClick={() => setCompose(true)}
-              style={{ flex: 1, minWidth: 0, minHeight: 44, padding: 0, textAlign: "left", background: "transparent", border: 0, font: "inherit", cursor: "pointer" }}>
-              <span style={{ display: "block", fontFamily: SERIF, fontSize: fs(17), lineHeight: 1.15, color: NEUTRAL.ink, overflowWrap: "anywhere" }}>
-                {first ? "Send the first postcard to " : "Send a postcard to "}<em style={{ fontStyle: "italic", color: BLUE }}>{city}’s</em> board
-              </span>
-              <span style={{ display: "block", marginTop: 2, fontSize: fs(12), lineHeight: 1.35, color: NEUTRAL.ink2 }}>You were really there, so you can.</span>
-            </button>
-            <button type="button" onClick={() => setNudge(null)} aria-label="Not now"
-              style={{ flex: "none", display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, padding: 0, borderRadius: 999, background: "transparent", border: 0, color: NEUTRAL.ink2, cursor: "pointer" }}>
-              <X size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
+              style={{ display: "block", width: "100%", minHeight: 36, marginTop: 4, background: "transparent", border: 0, color: BLUE, font: "inherit", fontSize: fs(12.5), fontWeight: 600, cursor: "pointer" }}>
+              Send a postcard to the board
             </button>
           </div>
         </div>

@@ -177,6 +177,12 @@ function PageShell({ currentPageName, isOnboarding, children }) {
   // Stamp where I am · post to a City Board, and the Contribute sheet the last one opens.
   const [stampOpen, setStampOpen] = useState(false);
   const [contribOpen, setContribOpen] = useState(false);
+  // "Stamp another photo" (the after-stamp board card) opens the same sheet from anywhere.
+  useEffect(() => {
+    const open = () => setStampOpen(true);
+    window.addEventListener('gs:open-stamp', open);
+    return () => window.removeEventListener('gs:open-stamp', open);
+  }, []);
   const ground = usePageGroundValue();
   const pageInk = usePageInk();
 

@@ -37,9 +37,6 @@ import SmartSearchOverlay from "@/components/search/SmartSearchOverlay";
 import DestinationStrip from "@/components/search/DestinationStrip";
 import UpdateCard from "@/components/home/UpdateCard";
 import UpdateSheet from "@/components/home/UpdateSheet";
-import CityBoardPage from "@/components/home/CityBoardPage";
-import ArrivalsPage from "@/components/home/ArrivalsPage";
-import CityCardsPage from "@/components/citycards/CityCardsPage";
 import { openAttraction } from "@/lib/openAttraction";
 
 // Translation mapping for greetings — shown next to the mono "Hello" kicker
@@ -555,13 +552,17 @@ export default function HomePage() {
 
   // ── The six pages ──────────────────────────────────────────────────────────
   // Home is the Nearby tab now (navigation redesign, 2026-10-31: docs/NAV_REDESIGN_2026-10-31.md).
-  // The six-tab pager is gone; a `?page=` deep link to a page that hasn't moved yet (City Cards,
-  // Arrivals, City Board, Stamps) still renders that page here, tabs or no tabs, until steps 3–4
-  // give it its new home.
+  // The six-tab pager is gone; an old `?page=` deep link goes where that page lives now — City
+  // Cards on the Passport, Arrivals on the Profile, City Board on Boards. Stamps is this page.
   const askedPage = new URLSearchParams(routerLocation.search).get('page');
-  const bridged = ['stamps', 'arrivals', 'cityboard', 'citycards'].includes(askedPage) ? askedPage : null;
-  const renderHomePage = (id) => {
-    if (id === 'nearby') {
+  useEffect(() => {
+    if (!askedPage) return;
+    const q = new URLSearchParams(routerLocation.search);
+    if (askedPage === 'citycards') navigate(`${createPageUrl('Passport')}?tab=cards${q.get('card') ? `&card=${q.get('card')}` : ''}`, { replace: true });
+    else if (askedPage === 'arrivals') navigate(createPageUrl('Profile'), { replace: true });
+    else if (askedPage === 'cityboard') navigate(createPageUrl('Boards'), { replace: true });
+  }, [askedPage]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const renderNearby = () => {
       return (
         <div style={{ paddingTop: 12 }}>
           {/* SMART-SEARCH SPINE — one search that routes into the right world. */}
@@ -584,15 +585,8 @@ export default function HomePage() {
           {/* Every finder as a tile, phone too: the Nearby page has the room (2026-10-25). */}
           <NearbyServices wide={isTablet} compact={!isTablet} onAction={handleQuickAction} onAllServices={openAllServices} />
           {isTablet && <HomeRows unit={unit} onAction={handleQuickAction} />}
-        </div>
-      );
-    }
-    if (id === 'stamps') {
-      return (
-        <div style={{ paddingTop: 12 }}>
-          {/* The passport, as one slim line that opens its page (founder, 2026-10-25: the big banner
-              gave way so the stamps themselves lead). */}
-          <PassportLine total={passport.total} nearest={nearestStamp} unit={unit} onOpen={() => navigate(createPageUrl('Passport'))} />
+          {/* "Be there, and it's yours" — the stamps near you, then the shelves the old Stamps page
+              kept: the dream places, Suggest a place, the wanderlust line. */}
           <StampsNearYou unit={unit} onAction={handleQuickAction} onNearest={setNearestStamp} />
           {isDreamStack && (
             <DreamShelf
@@ -611,11 +605,6 @@ export default function HomePage() {
           <WanderlustLine />
         </div>
       );
-    }
-    if (id === 'arrivals') return <ArrivalsPage wide={isTablet} />;
-    if (id === 'cityboard') return <CityBoardPage city={activeLocation?.address?.city} country={activeLocation?.address?.country} region={activeLocation?.address?.state} />;
-    if (id === 'citycards') return <CityCardsPage embedded openId={new URLSearchParams(routerLocation.search).get('card')} />;
-    return null;
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -641,14 +630,8 @@ export default function HomePage() {
       {/* Phones on an older store build: update to get notifications (2026-10-24). Nothing otherwise. */}
       <UpdateCard />
       {/* NEARBY (the redesign's second tab, 2026-10-31): the search, Events & festivals, every finder
-          as a tile, then the stamps you can earn by being there. A deep link to a page that hasn't
-          moved yet renders that page instead (see `bridged`). */}
-      {bridged ? renderHomePage(bridged) : (
-        <>
-          {renderHomePage('nearby')}
-          <StampsNearYou unit={unit} onAction={handleQuickAction} onNearest={setNearestStamp} />
-        </>
-      )}
+          as a tile, then the stamps you can earn by being there and the shelves under them. */}
+      {renderNearby()}
 
       <SmartSearchOverlay isOpen={showSearch} onClose={() => setShowSearch(false)} />
 
@@ -670,34 +653,6 @@ export default function HomePage() {
       {/* Once a day, a phone on an older store build is asked to update (2026-10-25). */}
       {profile?.onboarding_completed && !showLocationPicker && <UpdateSheet />}
       {profile?.onboarding_completed && <BorderCrossingPrompt />}
-    </div>
-  );
-}
-
-// ── PassportLine — the passport on the Stamps page ───────────────────────────
-// One slim navy line (founder, 2026-10-25: the big banner gave way so the stamps lead): how many
-// stamps (only once known — never a fake 0), the nearest one still to collect, and Open, which goes
-// to the Virtual Passport page.
-const KM_PER_MI = 1.609344;
-function PassportLine({ total, nearest = null, unit = 'mi', onOpen }) {
-  let km = null;
-  if (nearest && Number.isFinite(nearest.km)) km = nearest.km;
-  else if (nearest && Number.isFinite(nearest.miles)) km = nearest.miles * KM_PER_MI;
-  const d = km == null ? null : unit === 'km' ? km : km / KM_PER_MI;
-  const dist = d == null ? '' : `${d < 10 ? d.toFixed(1) : Math.round(d)} ${unit === 'km' ? 'KM' : 'MI'}`;
-  const next = nearest && nearest.name ? `NEXT STAMP · ${String(nearest.name).toUpperCase()}${dist ? ` · ${dist}` : ''}` : null;
-  return (
-    <div className="max-w-md md:max-w-2xl mx-auto" style={{ padding: '0 16px', marginBottom: 6 }}>
-      <button type="button" onClick={onOpen} aria-label="Open your Virtual Passport"
-        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, minHeight: 54, padding: '8px 14px', borderRadius: 16, border: 0, background: NEUTRAL.navy, color: '#FBF6EC', textAlign: 'left', font: 'inherit', cursor: 'pointer' }}>
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: 'block', fontFamily: "'Instrument Serif', Georgia, serif", fontSize: fs(19), lineHeight: 1.1 }}>
-            {total == null ? <>My Virtual <em style={{ fontStyle: 'italic', color: NEUTRAL.gold }}>Passport</em></> : <>{total} {total === 1 ? 'stamp' : 'stamps'} <em style={{ fontStyle: 'italic', color: NEUTRAL.gold }}>collected</em></>}
-          </span>
-          {next ? <span style={{ display: 'block', marginTop: 3, fontFamily: "'JetBrains Mono', ui-monospace, Menlo, monospace", fontSize: fs(9), letterSpacing: '.14em', color: '#CFE0F5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{next}</span> : null}
-        </span>
-        <span style={{ flex: 'none', fontFamily: "'JetBrains Mono', ui-monospace, Menlo, monospace", fontSize: fs(9.5), letterSpacing: '.14em', color: NEUTRAL.gold }}>OPEN →</span>
-      </button>
     </div>
   );
 }
