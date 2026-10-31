@@ -15,6 +15,7 @@ import { isClip, readClipLocation, contributeClip, clipLength, CLIP_SECONDS } fr
 import { available as shrinkAvailable, pickMedia, isClipFile, probe, shrink, fileAt, previewUrl } from "@/lib/videoShrink";
 import ClipTrimmer from "@/components/passport/ClipTrimmer";
 import { useDismissable } from "@/lib/dismissStack";
+import { requirePassport } from "@/lib/passportGate";
 import { CONTRIBUTE_PICK, contributeOpen, contributePhoto, listContributions, deleteContribution, captionContribution } from "@/lib/boardContrib";
 import { collectibleOf, listCollectibles, progressOf } from "@/lib/collectibles";
 import CollectibleReward, { CollectibleNudge } from "@/components/passport/CollectibleReward";
@@ -252,6 +253,10 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
   }, [initialFiles, initialClips, autoPick]);   // eslint-disable-line react-hooks/exhaustive-deps
   const sendFiles = async (all) => {
     if (!all.length || run) return;
+    // Public posting needs the full birthday and, at 18+, a @username: the same required screens
+    // a stamp or a postcard shows, instead of the worker's dead-end "Add your birthday" (the
+    // founder's Android, 2026-10-31: month and day saved, no year, no way forward).
+    if (!(await requirePassport())) return;
     const files = all.slice(0, CONTRIBUTE_PICK);
     const tally = { posted: {}, elsewhere: {}, noLocation: 0, child: 0, tooLong: 0, refused: 0, failed: 0, extra: all.length - files.length, firstError: null };
     let earned = null, last = null;
@@ -276,6 +281,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
         else if (r.code === "child") tally.child += 1;
         else if (r.code === "too_long" || r.code === "too_big" || r.code === "unreadable") tally.tooLong += 1;
         else if (r.code === "not_allowed") tally.refused += 1;
+        else if (r.code === "age_required") { tally.failed += 1; tally.firstError = "add the year you were born under Settings → My birthday"; break; }
         else { tally.failed += 1; tally.firstError = tally.firstError || r.error; if (r.code === "slow_down" || r.code === "closed" || r.code === "day_full") break; }
       } catch (err) { tally.failed += 1; tally.firstError = tally.firstError || err?.message || "Upload failed"; }
     }

@@ -465,6 +465,20 @@ export default function SettingsPage() {
   // after the first write; under-13 and AU-under-16 accounts get no social).
   const [needYear, setNeedYear] = useState(false);
   const [yearDraft, setYearDraft] = useState("");
+  // The year alone, for a birthday saved as month and day only (2026-10-31): the worker keeps the
+  // month and day and sets the tier from the year; stamps, boards and postcards then open.
+  const [yearPick, setYearPick] = useState("");
+  const [yearBusy, setYearBusy] = useState(false);
+  const saveYear = async () => {
+    if (!yearPick || !bMonth || !bDay || yearBusy) return;
+    setYearBusy(true);
+    const { error } = await setAgeGate(Number(yearPick), `${bMonth}-${bDay}`);
+    setYearBusy(false);
+    if (error) { showToast(error, "error"); return; }
+    setBYear(Number(yearPick));
+    showToast("Saved privately 🎂", "success");
+    try { await refreshSocialTier?.(); } catch { /* the next open reads it */ }
+  };
   // Available alternatives the worker offers when a wanted name is taken.
   const [handleSugs, setHandleSugs] = useState([]);
   // Request door: businesses/officials may ask for a username or the Seal.
@@ -512,7 +526,7 @@ export default function SettingsPage() {
     }
   };
 
-  const { logout, deleteAccount, profile, user: authUser, refreshProfile, canRefresh, socialTier } = useAuth(); // Supabase
+  const { logout, deleteAccount, profile, user: authUser, refreshProfile, canRefresh, socialTier, refreshSocialTier } = useAuth(); // Supabase
   // The saved birthday (month and day), read again when the tier changes: a
   // 'confirm' account that finishes it in the sheet comes back to this row
   // locked, not empty.
@@ -1078,6 +1092,19 @@ export default function SettingsPage() {
                   </select>
                   {bYear ? (
                     <span aria-label={`Birth year ${bYear}`} className="h-12 rounded-xl px-3 flex items-center opacity-60" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 14 }}>{bYear}</span>
+                  ) : bLocked ? (
+                    // Month and day saved under the old flow, no year (the founder's Android, 2026-10-31: public
+                    // posting needs the year, and this row gave no way to add it).
+                    <>
+                      <select value={yearPick} onChange={(e) => setYearPick(e.target.value)} aria-label="The year you were born" autoComplete="bday-year"
+                        className="h-12 rounded-xl px-2" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 14 }}>
+                        <option value="">Year</option>
+                        {Array.from({ length: new Date().getFullYear() - 1899 }, (_, i) => String(new Date().getFullYear() - i)).map((y) => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                      <button type="button" onClick={saveYear} disabled={!yearPick || yearBusy} className="h-12 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 14 }}>
+                        {yearBusy ? 'Saving…' : 'Save year'}
+                      </button>
+                    </>
                   ) : null}
                   {!bLocked && <button type="button" onClick={saveBirthday} disabled={!bMonth || !bDay} className="h-12 px-4 rounded-xl font-semibold disabled:opacity-50" style={{ background: TEAL_DEEP, color: '#fff', fontSize: 14 }}>Save</button>}
                 </div>
