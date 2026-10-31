@@ -3909,3 +3909,14 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - 4f7d0b8 → 9c97717, seven commits; no worker / site / migration paths, so no deploy runs. **Open (founder):**
   `npm run ota` (passport-once + tonight's app half), Play 1.0.11 (14) from the Desktop AAB (location fix + video
   share), retest the S10 after it publishes, the two-phone account check.
+
+## 2026-10-30 — COMMITTED, NOT pushed: the Welcome splash removed
+
+- Founder: delete the "Where should we start? / Welcome to Globeskimmers. Search here, there, or before you arrive"
+  screen with the numbered starters. `WelcomeSplash.jsx` deleted; Home loses `showWelcome`, `WELCOME_MAX`,
+  `lastWelcomeHandledTick`, the sign-in-tick branch and `bumpWelcomeSplashCount` (the AuthContext helper and the
+  `profiles.welcome_splash_count` column stay, unused). Entry flow now: no location → the location picker once;
+  else the cold-open setting. Gates: eslint no-undef, build, boot-check ✅.
+- Founder also reported "Explore where I am" still exits the S10 after tonight's OTA — expected: the geolocation
+  8.2.4 fix is native and only arrives with Play 1.0.11 (14), not yet uploaded at that point. After ✕ on that
+  screen Home had no location because the GPS request never returned; the location pill's Change still works.
