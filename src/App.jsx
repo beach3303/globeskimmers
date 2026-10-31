@@ -10,6 +10,7 @@ import { ToastContainer } from '@/components/Toast';
 import FrozenScreen from '@/components/auth/FrozenScreen';
 import FinishPassport from '@/components/auth/FinishPassport';
 import { FontScaleProvider } from '@/components/a11y/FontScaleContext';
+import { reportWebViewCrashOnce } from '@/lib/webviewCrash';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -24,6 +25,8 @@ const LayoutWrapper = ({ children, currentPageName }) => Layout ?
 const ScrollToTop = () => {
   const { pathname } = useLocation();
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  // A WebView renderer death on the last run (Android) becomes one event, once.
+  useEffect(() => { reportWebViewCrashOnce(); }, []);
   return null;
 };
 
