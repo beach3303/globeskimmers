@@ -3872,3 +3872,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - **Open (founder):** `npm run ota` (tonight's app half: onboarding fixes, luggage off, follow pills, shelf, Virtual
   Passport tab, share-sheet clips); Play 1.0.11 (14) from the Desktop AAB; iOS: replace 1.0.6 (17) with 18 or ship
   1.0.7 — her call.
+
+## 2026-10-30 — iOS 1.0.6 (18) SUBMITTED, replacing 17 (9:20 PM PT)
+
+- Founder removed 1.0.6 (17) from review, attached build 18 (ShareExtension accepts movies + the night's bundle) and
+  submitted → Waiting for Review. Repo: 1.0.6 (18), e9b8874. Android 1.0.11 (14) still to upload to Play.
