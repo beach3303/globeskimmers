@@ -173,7 +173,7 @@ export default function PhotoPackets({ stamps, title = "Photo packets", openPhot
             <span aria-hidden="true" className="flex-1" style={{ borderTop: "1px dashed rgba(22,17,13,.18)", transform: "translateY(-3px)" }} />
           </div>
           <p style={{ margin: "4px 0 0", fontSize: fs(12), lineHeight: 1.45, color: INK3 }}>
-            What you’ve put on City Boards: the photos you uploaded, and the postcards you posted there. Both are public; delete any of it any time. Postcards to friends stay in your Mailbox.
+            Public. Delete any of it any time. Postcards to friends stay in your Mailbox.
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, paddingTop: 12 }}>{boards}</div>
         </section>

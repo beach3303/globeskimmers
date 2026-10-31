@@ -6,7 +6,7 @@
 // until June 30, 2027; after that the album stays so members can still delete their photos.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Globe2, ImageUp, Loader2, Play, Trash2, X } from "lucide-react";
+import { Globe2, ImageUp, Images, Loader2, Play, Trash2, X } from "lucide-react";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import { showToast } from "@/components/Toast";
 import { readPhotoExif } from "@/lib/photoExif";
@@ -27,13 +27,13 @@ const fs = (px) => `calc(${px}px * var(--fs, 1))`;
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const placeOf = (p) => [p.city, p.country].filter(Boolean).join(", ");
 
-// The envelope on the shelf: airmail stripes, the 🌍 public mark, an upload sign on its corner,
-// and under it what to do (founder, 2026-10-28: "make it clear what we want users to do … contribute
-// your travel/city photos to city boards. place an upload sign").
+// The album on the shelf: airmail stripes, the 🌍 public mark, and under it what it holds. The
+// upload is its own button above the shelf (founder, 2026-10-30: "I want upload icon to be on
+// top … function number one to upload … another button that's just album for contributed photos").
 function AirmailEnvelope({ count, peek, onOpen }) {
   return (
     <button type="button" onClick={onOpen}
-      aria-label={`Your photos on City Boards. Public.${count ? ` ${plural(count, "photo", "photos")} shared so far.` : " None yet."} Upload travel photos`}
+      aria-label={`My uploads on City Boards. Public.${count ? ` ${plural(count, "photo or clip", "photos and clips")}.` : " None yet."} See them`}
       className="block w-full active:scale-95 transition-transform" style={{ background: "transparent", border: 0, padding: 0 }}>
       <div style={{ position: "relative", height: 118 }}>
         {peek ? (
@@ -43,12 +43,12 @@ function AirmailEnvelope({ count, peek, onOpen }) {
         ) : (
           // No photos yet: an empty print waiting for one.
           <div aria-hidden style={{ position: "absolute", left: 14, right: 14, top: 2, height: 70, borderRadius: 6, background: "rgba(31,78,140,.07)", border: `1.5px dashed ${AIR_BLUE}`, transform: "rotate(-3deg)", display: "grid", placeItems: "start center", paddingTop: 8 }}>
-            <ImageUp size={20} color={AIR_BLUE} strokeWidth={2} />
+            <Images size={20} color={AIR_BLUE} strokeWidth={2} />
           </div>
         )}
-        {/* The upload sign, where the albums keep their + (a picture only: the whole envelope is the button). */}
+        {/* The album sign, where the albums keep their + (a picture only: the whole envelope is the button). */}
         <span aria-hidden="true" style={{ position: "absolute", top: -6, right: -6, zIndex: 3, width: 30, height: 30, borderRadius: 999, background: AIR_BLUE, display: "grid", placeItems: "center", boxShadow: "0 2px 6px rgba(0,0,0,.22)", border: "2px solid #fff" }}>
-          <ImageUp size={15} color="#fff" strokeWidth={2.4} />
+          <Images size={15} color="#fff" strokeWidth={2.4} />
         </span>
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 76, borderRadius: 10, overflow: "hidden", background: "#FFFDF8", border: `1.5px solid ${AIR_BLUE}`, boxShadow: "0 4px 10px -6px rgba(0,0,0,.3)", zIndex: 2 }}>
           {/* the airmail border */}
@@ -57,21 +57,37 @@ function AirmailEnvelope({ count, peek, onOpen }) {
           </div>
           <span aria-hidden="true" style={{ position: "absolute", right: 9, top: 8, fontSize: fs(11), lineHeight: 1 }}>🌍</span>
           <div className="absolute inset-x-0 text-center px-2" style={{ bottom: 9 }}>
-            <div className="truncate" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: fs(13.5), color: AIR_BLUE, letterSpacing: ".03em" }}>MY PHOTOS</div>
+            <div className="truncate" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: fs(13.5), color: AIR_BLUE, letterSpacing: ".03em" }}>MY UPLOADS</div>
             <div className="truncate" style={{ fontFamily: MONO, fontSize: fs(8), color: AIR_RED, letterSpacing: ".12em" }}>
-              ON CITY BOARDS · {count ? `${count} SHARED` : "NONE YET"}
+              PHOTOS & CLIPS · {count ? count : "NONE YET"}
             </div>
           </div>
         </div>
       </div>
-      {/* What to do, in words, where the albums say who sees them. */}
-      {/* Inline icon, so a narrow phone wraps it like a sentence. */}
+      {/* What it holds, in plain words. */}
       <span aria-hidden="true" className="block text-center" style={{ marginTop: 6, color: AIR_BLUE, fontSize: fs(12), fontWeight: 700, lineHeight: 1.25 }}>
-        <ImageUp size={14} strokeWidth={2.4} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} />
-        {count ? "Upload more photos or clips" : "Upload your travel photos and clips"}
+        {count ? "See everything you uploaded" : "Your uploads will show here"}
       </span>
       <span aria-hidden="true" className="block text-center" style={{ marginTop: 1, color: INK3, fontSize: fs(10.5), lineHeight: 1.3 }}>
-        Photos you upload, each to its city’s board
+        Photos and clips on City Boards, by city
+      </span>
+    </button>
+  );
+}
+
+// The upload, first and on its own (founder, 2026-10-30): one tap opens the camera roll; the
+// sheet with the public note and the progress opens as the photos go up.
+function UploadButton({ onClick }) {
+  return (
+    <button type="button" onClick={onClick} aria-label="Upload photos or clips to City Boards. Public."
+      className="active:scale-[.98] transition-transform"
+      style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 12, minHeight: 58, padding: "10px 14px", borderRadius: 16, border: 0, background: AIR_BLUE, color: "#fff", textAlign: "left", cursor: "pointer", boxShadow: "0 8px 16px -10px rgba(31,78,140,.7)" }}>
+      <span aria-hidden="true" style={{ flex: "none", width: 38, height: 38, borderRadius: 999, background: "rgba(255,255,255,.18)", display: "grid", placeItems: "center" }}>
+        <ImageUp size={21} strokeWidth={2.2} />
+      </span>
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: "block", fontFamily: "inherit", fontSize: fs(15), fontWeight: 700, lineHeight: 1.2 }}>Upload to City Boards</span>
+        <span style={{ display: "block", fontSize: fs(11.5), lineHeight: 1.3, opacity: 0.9, marginTop: 2 }}>Public photos and clips. Each goes to the board of the city where it was taken.</span>
       </span>
     </button>
   );
@@ -99,16 +115,25 @@ function PostageBox({ sent = 0 }) {
 
 export default function ContributeAlbum() {
   const [photos, setPhotos] = useState(null);   // the member's contributions, newest first
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(null);       // { files?, autoPick? } while the sheet is up
+  const fileRef = useRef(null);
   const load = () => listContributions().then((r) => { if (!r.error) setPhotos(r.photos); });
   useEffect(() => { load(); }, []);
   const count = photos?.length || 0;
+  const isOpen = contributeOpen();
   // After June 30, 2027 the album stays only for members who have photos to look at or delete.
-  if (!contributeOpen() && !count) return null;
+  if (!isOpen && !count) return null;
+  // The upload button: on the phone the native picker opens from the sheet (no gesture needed);
+  // on the web the file input must open from this very tap, so it lives here and hands its
+  // files to the sheet, which posts them at once under the public note.
+  const startUpload = () => { if (shrinkAvailable()) setOpen({ autoPick: true }); else fileRef.current?.click(); };
+  const picked = (e) => { const files = [...(e.target.files || [])]; e.target.value = ""; if (files.length) setOpen({ files }); };
   return (
     <>
-      <AirmailEnvelope count={count} peek={photos?.find((p) => !p.hidden)?.url || null} onOpen={() => setOpen(true)} />
-      {open && <ContributeSheet photos={photos || []} onChanged={load} onClose={() => setOpen(false)} />}
+      {isOpen ? <UploadButton onClick={startUpload} /> : null}
+      <input ref={fileRef} type="file" accept="image/*,video/mp4,video/quicktime" multiple className="hidden" onChange={picked} />
+      <AirmailEnvelope count={count} peek={photos?.find((p) => !p.hidden)?.url || null} onOpen={() => setOpen({})} />
+      {open ? <ContributeSheet photos={photos || []} initialFiles={open.files || null} autoPick={!!open.autoPick} onChanged={load} onClose={() => setOpen(null)} /> : null}
     </>
   );
 }
@@ -144,7 +169,7 @@ const onBoard = (board, b) => {
 };
 const kindWord = (board) => (board?.kind === "state" ? "state" : board?.kind === "country" ? "country" : "city");
 
-function ContributeSheet({ photos, onChanged, onClose, board = null, initialFiles = null }) {
+function ContributeSheet({ photos, onChanged, onClose, board = null, initialFiles = null, autoPick = false }) {
   useDismissable(true, onClose);
   const fileRef = useRef(null);
   const startedRef = useRef(false);   // files handed in with the sheet (a share) are sent once
@@ -195,10 +220,10 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
   };
   const openPicker = () => (shrinkAvailable() ? pickNative() : fileRef.current?.click());
   useEffect(() => {
-    if (!initialFiles?.length || startedRef.current) return;
-    startedRef.current = true;
-    sendFiles(initialFiles);
-  }, [initialFiles]);   // eslint-disable-line react-hooks/exhaustive-deps
+    if (startedRef.current) return;
+    if (initialFiles?.length) { startedRef.current = true; sendFiles(initialFiles); }
+    else if (autoPick) { startedRef.current = true; pickNative(); }   // the Upload button on the phone
+  }, [initialFiles, autoPick]);   // eslint-disable-line react-hooks/exhaustive-deps
   const sendFiles = async (all) => {
     if (!all.length || run) return;
     const files = all.slice(0, CONTRIBUTE_PICK);

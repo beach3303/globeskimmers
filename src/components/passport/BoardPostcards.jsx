@@ -37,7 +37,7 @@ export default function BoardPostcards() {
 function Envelope({ count, peek, onOpen }) {
   return (
     <button type="button" onClick={onOpen}
-      aria-label={`Your postcards on City Boards.${count ? ` ${plural(count, "card", "cards")}.` : " None yet."}`}
+      aria-label={`My postcards, sent to City Boards.${count ? ` ${plural(count, "card", "cards")}.` : " None yet."} See them`}
       className="block w-full active:scale-95 transition-transform" style={{ background: "transparent", border: 0, padding: 0 }}>
       <div style={{ position: "relative", height: 118 }}>
         {peek ? (
@@ -59,16 +59,17 @@ function Envelope({ count, peek, onOpen }) {
           <div className="absolute inset-x-0 text-center px-2" style={{ bottom: 9 }}>
             <div className="truncate" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: fs(13.5), color: AIR_BLUE, letterSpacing: ".03em" }}>MY POSTCARDS</div>
             <div className="truncate" style={{ fontFamily: MONO, fontSize: fs(8), color: AIR_RED, letterSpacing: ".12em" }}>
-              ON CITY BOARDS · {count ? plural(count, "CARD", "CARDS") : "NONE YET"}
+              SENT TO BOARDS · {count ? plural(count, "CARD", "CARDS") : "NONE YET"}
             </div>
           </div>
         </div>
       </div>
+      {/* Plain words (founder, 2026-10-30: "make it clear postcards that were sent to city board"). */}
       <span aria-hidden="true" className="block text-center" style={{ marginTop: 6, color: AIR_BLUE, fontSize: fs(12), fontWeight: 700, lineHeight: 1.25 }}>
-        {count ? "See or delete them" : "Post one from any board"}
+        {count ? "See the postcards you sent" : "Postcards you send to a board"}
       </span>
       <span aria-hidden="true" className="block text-center" style={{ marginTop: 1, color: INK3, fontSize: fs(10.5), lineHeight: 1.3 }}>
-        Only the cards you posted to boards
+        {count ? "Only the ones sent to City Boards" : "Post one from any board"}
       </span>
     </button>
   );
