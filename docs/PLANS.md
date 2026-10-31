@@ -1426,3 +1426,7 @@ separate and stay.
 - **Home tabs:** the Virtual Passport tab opens the Passport page itself (the bottom bar's page, full screen, no
   tabs); Home keeps the page it was on; a swipe passes over the tab.
 - **Luggage retired** (section above).
+- **Share sheet → clips (2026-10-30, late):** a video shared from Photos / Google Photos / a drive offers "Upload to
+  a City Board" too (the share targets accept movies; a clip travels by path and is shrunk by VideoShrink). Needs
+  Android 1.0.11 (built) and an iOS build (replace 1.0.6 build 17, or 1.0.7). Stamps and postcards from clips come
+  with video postcards / memories later.

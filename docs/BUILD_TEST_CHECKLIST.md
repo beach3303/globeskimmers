@@ -3838,3 +3838,29 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   screens above (demo account; the home step via a profile mock with no home, since the demo has one).
 - **Not verified on a phone:** the keyboard fold (needs a real keyboard) — ask the founder to retry "Where's home?"
   on the S10 after the OTA. **Open:** push + `npm run ota`.
+
+## 2026-10-30 — PUSHED (main 7a44cff): the Android-test batch; Play 1.0.10 (13) PUBLISHED 5:07 PM PT
+
+- 7a44cff pushed 8:35 PM PT: onboarding fixes, luggage retired, follow pills, City Boards shelf, Virtual Passport
+  tab, docs. No workflow runs (no worker / site / migration paths). OTA still to run.
+- Google Play submission 9 → **Published** (1.0.10, versionCode 13) at 5:07 PM PT — the clips picker + trimmer are on
+  Android. iOS 1.0.6 (17) still Waiting for Review. `site/app-version.json` android → 1.0.10 (committed, goes live
+  with the next push); ios stays 1.0.5 until Apple approves.
+
+## 2026-10-30 — COMMITTED, NOT pushed: a shared VIDEO offers Upload to a City Board (store builds again)
+
+- Founder: a photo shared from the gallery now offers the City Board door, a video doesn't. The share targets took
+  images only. iOS `ShareExtension/Info.plist` adds `NSExtensionActivationSupportsMovieWithMaxCount` 3;
+  `ShareViewController` copies each movie into the app group (`copyMovie`, no re-encode) and hands
+  `mimeType video/quicktime|video/mp4`; Android manifest SEND / SEND_MULTIPLE add `video/*` (the capgo plugin copies
+  any type to cache). App: `sharedPhotos.js` splits `{ files, clips }` (a clip is a PATH, never fetched whole);
+  Passport → PhotoSorter `clips` (ask sheet: "Your clip", ▶ chip, City Boards door only; photo doors stay for photos);
+  `SharedContributeSheet clips` → ContributeSheet `initialClips` → `takeClips`: VideoShrink probe/trim/shrink when
+  available (`prepareNative`, shared with the picker), else `fileAt` + web rules.
+- Gates: eslint no-undef, build, boot-check ✅; iOS `xcodebuild` (App + ShareExtension) BUILD SUCCEEDED; Android
+  `bundleRelease` BUILD SUCCESSFUL → `Desktop/GlobeSkimmers-1.0.11-build14.aab` (same upload key). Android bumped to
+  1.0.11 (14). iOS NOT bumped: the founder decides — replace 1.0.6 (17) in review with a build 18, or ship this in
+  1.0.7 after 1.0.6 is approved.
+- Not tested on a phone (needs the native builds): share a clip from Photos / Google Photos → "Your clip" → Upload.
+- **Open:** push (site deploy for app-version.json), `npm run ota` (the app half + tonight's batch), Play 1.0.11,
+  iOS decision.
