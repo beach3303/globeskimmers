@@ -3877,3 +3877,19 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
 - Founder removed 1.0.6 (17) from review, attached build 18 (ShareExtension accepts movies + the night's bundle) and
   submitted → Waiting for Review. Repo: 1.0.6 (18), e9b8874. Android 1.0.11 (14) still to upload to Play.
+
+## 2026-10-30 — COMMITTED, NOT pushed: Android exits after the location permission → geolocation plugin 8.2.4
+
+- Founder (Samsung S10, 1.0.10): after allowing location "while using the app" in onboarding the app closes; the
+  same from "Explore where I am". Both are the first position request. No Android age-signal sync in 3 days (D1),
+  Firebase resources ARE generated (processReleaseGoogleServices), so neither push nor the age signal is the cause.
+  `@capacitor/geolocation` was 8.2.0 (2026-03-31); upstream closed two Android crashes against it
+  (capacitor-plugins #2495: `UninitializedPropertyAccessException` on `resolveLocationSettingsResultFlow` when an
+  activity result fires first; #2516: NPE in the getPosition coroutine) and 8.2.1 / 8.2.4 fix permission requests,
+  the "turn on location" rejection, retrieval reliability and `bridge.registerForActivityResult`. Upgraded to 8.2.4
+  (ion-geolocation-android 2.2.2); `npx cap sync`; iOS xcodebuild BUILD SUCCEEDED; Android assembleDebug +
+  bundleRelease BUILD SUCCESSFUL → `Desktop/GlobeSkimmers-1.0.11-build14.aab` rebuilt (22:05, same upload key); web
+  build + boot-check ✅.
+- **Not reproduced here:** no Android device, and the emulator image download needs the founder's consent (the
+  permission gate refused it). Validation = the founder installs 1.0.11 from Play and retries both flows. iOS 1.0.6
+  (18), submitted before this, still has 8.2.0 (iOS doesn't crash); the next iOS build picks the upgrade up.
