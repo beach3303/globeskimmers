@@ -476,7 +476,7 @@ function MailboxBody() {
     if (k === "stamp") { navigate(`${createPageUrl("Passport")}?stamp=${id}`); return; }
     if (k === "photo") { const [, sid, pid] = String(to).split(":"); navigate(`${createPageUrl("Passport")}?stamp=${sid}&photo=${pid}`); return; }
     if (to === "sent") { setTab("sent"); return; }
-    if (k === "card") { navigate(`${createPageUrl("Home")}?page=citycards&card=${id}`); return; }
+    if (k === "card") { navigate(`${createPageUrl("Passport")}?tab=cards&card=${id}`); return; }   // City Cards live on the Passport (2026-10-31)
     navigate(to === "passport" ? createPageUrl("Passport") : `${createPageUrl("Circle")}?tab=followers`);
   };
 

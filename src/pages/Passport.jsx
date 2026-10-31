@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { ChevronLeft, Loader2, Plus, Trash2, Calendar, RefreshCw, X, UserPlus, Mail, Camera } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Plus, Trash2, Calendar, RefreshCw, X, UserPlus, Mail, Camera } from "lucide-react";
 import { IVORY, IVORY_2, TEAL_DEEP, SHADOW_CARD_SOFT, NEUTRAL } from "@/components/redesign/constants";
 import { useIsTablet } from "@/lib/useIsTablet";
 import { useAuth } from "@/lib/AuthContext";
@@ -40,7 +40,10 @@ import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import NearbyStampPrompt, { NEARBY_KEY, nearbySensingOn } from "@/components/passport/NearbyStampPrompt";
 import StampActions from "@/components/passport/StampActions";
 import PhotoSorter from "@/components/passport/PhotoSorter";
-import { SharedContributeSheet } from "@/components/passport/ContributeAlbum";
+import ContributeAlbum, { SharedContributeSheet } from "@/components/passport/ContributeAlbum";
+import BoardPostcards from "@/components/passport/BoardPostcards";
+import CityCardsPage from "@/components/citycards/CityCardsPage";
+import { BookplateStats } from "@/components/profile/Bookplate";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import HeldHandleClaim from "@/components/passport/HeldHandleClaim";
 import PhotoFooter from "@/components/passport/PhotoFooter";
@@ -1381,6 +1384,14 @@ function PassportInner({ embedded = false }) {
     if (!photos.length) return;
     setLightbox({ photos, index: Math.min(Math.max(index || 0, 0), photos.length - 1), title: `I was here! ${st.name}`, credit: st.visited_on ? fmtDate(st.visited_on) : null, social: true });
   };
+  // The three tabs (navigation redesign, 2026-10-31): Stamps (the book) · Photos (the albums,
+  // from the Profile) · Cards (City Cards, from Home). ?tab= picks one; the Mailbox's card lines
+  // open ?tab=cards&card=<id>.
+  const [tab, setTab] = useState(() => {
+    try { const t = new URLSearchParams(window.location.search).get("tab"); return t === "photos" || t === "cards" ? t : "stamps"; } catch { return "stamps"; }
+  });
+  const { activeLocation: hereLoc } = useLocation();
+  const hereCity = hereLoc?.address?.city || profile?.home_city || null;
   // A Mailbox line opens the thing it names (founder, 2026-10-30): ?stamp=<id> opens that stamp's
   // sheet, &photo=<id> enlarges that memory photo. Once, when the stamps are in.
   const openedFromUrl = useRef(false);
@@ -1617,6 +1628,45 @@ function PassportInner({ embedded = false }) {
         ) : (
           /* THE BOOK — tap the cover to open, then flip through the pages */
           <div className="mt-1 mb-2" ref={bookRef}>
+            {/* The passport's own header (navigation redesign, 2026-10-31): the kicker, the title and
+                the counts; a new member's first upload comes before the book; then the three tabs. */}
+            {!readOnly && !preview && isAuthenticated && (
+              <div className="mb-3">
+                <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".2em", color: STAMP, fontWeight: 700 }}>My Virtual Passport</div>
+                <h1 style={{ margin: "4px 0 0", fontFamily: SERIF, fontSize: fs(30), fontWeight: 400, lineHeight: 1.05, color: INK }}>
+                  {stamps.length === 0 ? <>Your first page is <em style={{ fontStyle: "italic", color: STAMP }}>waiting</em></> : <>Everywhere you’ve <em style={{ fontStyle: "italic", color: STAMP }}>been</em></>}
+                </h1>
+                {stamps.length > 0 ? <BookplateStats stats={statsView} style={{ marginTop: 6, color: INK2 }} /> : null}
+                {stamps.length === 0 && (
+                  <>
+                    <p style={{ margin: "6px 0 0", fontSize: fs(14), lineHeight: 1.5, color: INK2 }}>Stamps are earned by being there. Start with a trip you’ve already taken.</p>
+                    <div className="mt-3 rounded-[18px] p-3" style={{ background: "#FBF6EC", border: "1px solid #EADFC9" }}>
+                      <button type="button" onClick={() => uploadRef.current?.click()} className="w-full font-semibold" style={{ minHeight: 54, borderRadius: 14, background: STAMP, color: "#fff", border: 0, fontSize: fs(15) }}>Upload photos</button>
+                      <p style={{ color: INK3, fontSize: fs(12), lineHeight: 1.4, marginTop: 6, textAlign: "center" }}>One photo or many. We find where and when each was taken.</p>
+                      <button type="button" onClick={() => setShowStampPlace(true)} className="w-full font-semibold mt-2" style={{ minHeight: 48, borderRadius: 14, background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(14) }}>Stamp where I am</button>
+                    </div>
+                    {hereCity ? (
+                      <button type="button" onClick={() => navigate(createPageUrl("Boards"))} className="w-full flex items-center justify-between mt-3 rounded-[14px] px-3.5"
+                        style={{ minHeight: 46, background: "#fff", border: `1px solid ${RULE}`, color: INK2, fontSize: fs(13.5), textAlign: "left" }}>
+                        <span>Meanwhile, on the <b style={{ color: INK }}>{hereCity}</b> board</span>
+                        <ChevronRight size={16} strokeWidth={2.2} color={INK3} aria-hidden="true" />
+                      </button>
+                    ) : null}
+                  </>
+                )}
+                {stamps.length > 0 && (
+                  <div role="tablist" aria-label="Your passport" className="flex mt-3" style={{ borderBottom: `1px solid ${RULE}` }}>
+                    {[["stamps", "Stamps"], ["photos", "Photos"], ["cards", "Cards"]].map(([id, label]) => (
+                      <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
+                        style={{ flex: 1, minHeight: 44, background: "transparent", border: 0, borderBottom: tab === id ? "2px solid #0E7C73" : "2px solid transparent", marginBottom: -1, color: tab === id ? INK : INK3, fontWeight: tab === id ? 700 : 600, fontSize: fs(14), cursor: "pointer" }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {(readOnly || preview || tab === "stamps" || stamps.length === 0) && (<>
             {/* The book stands alone (founder, 2026-10-19): the page order folds into one small
                 "Page order" control above it. */}
             {!readOnly && !preview && stampsView.length > 1 && (
@@ -1657,28 +1707,10 @@ function PassportInner({ embedded = false }) {
                 <BlotterStrip slug={blSlug} stamps={pgStamps} blotter={blotter} ownerView={!readOnly} onChanged={refreshBlotter} />
               ) : null}
             />
-            {!readOnly && isAuthenticated && !preview && stamps.length === 0 && (
-              <div className="mt-4 rounded-[18px] p-4 text-center" style={{ background: "#FFFBF0", border: "1px solid #EAD9AE" }}>
-                <p style={{ fontFamily: SERIF, fontSize: fs(19), color: INK }}>Your passport is ready</p>
-                {/* Two ways in, nothing else (founder, 2026-10-17: "Stamp Los Angeles" — what in Los
-                    Angeles? — and "famous places" — a claim — confused more than they helped). */}
-                <p style={{ color: INK2, fontSize: fs(13), lineHeight: 1.5, marginTop: 4 }}>
-                  Stamps are earned by being there: stamp the place you’re at right now, or upload a photo from a trip.
-                </p>
-              </div>
-            )}
+            {/* The upload moved: a new member's sits above the book, everyone else's is the bar's Stamp
+                button (2026-10-31). The hidden input stays for that card; the nearby switch stays here. */}
             {!readOnly && isAuthenticated && !preview && (
               <div className="text-center mt-4">
-                <div className="mx-auto flex flex-col gap-3" style={{ maxWidth: 340 }}>
-                  <div>
-                    <button onClick={() => uploadRef.current?.click()} className="w-full rounded-full px-5 py-3 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(14) }}>📷 Upload photo to get a stamp</button>
-                    <p style={{ color: INK3, fontSize: fs(12), lineHeight: 1.4, marginTop: 5 }}>One photo or many. We find where each was taken.</p>
-                  </div>
-                  <div>
-                    <button onClick={() => setShowStampPlace(true)} className="w-full rounded-full px-5 py-3 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(14) }}>📍 Stamp where I am</button>
-                    <p style={{ color: INK3, fontSize: fs(12), lineHeight: 1.4, marginTop: 5 }}>At a place right now? Your phone’s location proves it.</p>
-                  </div>
-                </div>
                 <input ref={uploadRef} type="file" accept="image/*" multiple className="hidden" onChange={onUploadPhotos} />
                 {/* Small switch — the same setting as Settings → Virtual Passport → Sense nearby stamps */}
                 <button type="button" onClick={toggleSenseNearby} role="switch" aria-checked={senseNearby} aria-label="Sense nearby stamps when the Passport opens"
@@ -1713,16 +1745,21 @@ function PassportInner({ embedded = false }) {
             {/* The book stands alone (founder, 2026-10-19): your luggage and your photo albums live on
                 your Profile. A passport someone shared with you (readOnly) — or the preview of what
                 visitors see — still carries its photo packets. */}
-            {!readOnly && !preview && isAuthenticated && stampsView.length > 0 && (
-              <p className="text-center mt-5" style={{ fontSize: fs(13), color: INK3 }}>
-                Your photo albums are on <button type="button" onClick={() => navigate(createPageUrl("Profile"))} style={{ background: "none", border: 0, padding: 0, color: TEAL_DEEP, fontWeight: 650, fontSize: "inherit", cursor: "pointer" }}>your Profile ›</button>
-              </p>
-            )}
             {(readOnly || preview) && <PhotoPackets stamps={stampsView} title={readOnly ? "Their photo packets" : "Photo packets"} owner={!readOnly && !preview} albums={booklet?.albums || "passport"} onChanged={load} social={!preview && blSlug ? { slug: blSlug, blotter, onBlotterChanged: refreshBlotter } : null} />}
             {isDev && !readOnly && !preview && (
               <div className="text-center mt-3">
                 <button onClick={() => setPreview(true)} className="rounded-full px-4 py-2" style={{ background: "#fff", border: `1px solid ${RULE}`, color: INK2, fontSize: fs(12.5), fontWeight: 600 }}>👁 See a sample passport (admin)</button>
               </div>
+            )}
+            </>)}
+            {/* PHOTOS — the owner's albums, with the City Boards shelf (from the Profile, 2026-10-31). */}
+            {!readOnly && !preview && isAuthenticated && stamps.length > 0 && tab === "photos" && (
+              <PhotoPackets stamps={stampsView} title="Photo albums" owner albums={booklet?.albums || "passport"} onChanged={load} className=""
+                boards={socialTierReady && socialTier !== "teen" && socialTier !== "blocked" ? <><ContributeAlbum /><BoardPostcards /></> : null} />
+            )}
+            {/* CARDS — City Cards (from Home, 2026-10-31); ?card= and &stamp= open one. */}
+            {!readOnly && !preview && isAuthenticated && stamps.length > 0 && tab === "cards" && (
+              <CityCardsPage embedded openId={new URLSearchParams(window.location.search).get("card")} openStamp={new URLSearchParams(window.location.search).get("stamp")} />
             )}
           </div>
         )}
