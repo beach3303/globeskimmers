@@ -17,7 +17,7 @@
 //   onContribute (files) — the share goes to City Boards (ContributeAlbum's SharedContributeSheet)
 //   onChanged  photos were added to a stamp you have (the Passport reloads)
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Globe2, Image as ImageIcon, Loader2, Mail, MapPin, Stamp } from "lucide-react";
+import { Check, Globe2, Image as ImageIcon, Loader2, Mail, MapPin, Play, Stamp } from "lucide-react";
 import { IVORY, IVORY_2 } from "@/components/redesign/constants";
 import { showToast } from "@/components/Toast";
 import PostcardCompose from "@/components/passport/PostcardCompose";
@@ -55,6 +55,12 @@ const span = (a, b) => {
   return a.slice(0, 7) === b.slice(0, 7) && a.slice(0, 4) === String(new Date().getFullYear()) ? `${short(a)}–${Number(b.slice(8, 10))}` : `${short(a)} – ${short(b)}`;
 };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+// "Your photo" · "Your clip" · "Your 3 photos" · "Your 4 photos and clips"
+const askTitle = (photos, clips) => {
+  const n = photos + clips;
+  if (n === 1) return photos ? "Your photo" : "Your clip";
+  return `Your ${n} ${photos && clips ? "photos and clips" : clips ? "clips" : "photos"}`;
+};
 
 // Rows for the list: { key, kind: 'new' | 'add' | 'noloc' | 'old', items: [{ file, exif, day, at }],
 // at, day, lastDay, stamp? }. New places first (by date), then additions, no location, too old.
@@ -121,7 +127,8 @@ function Thumbs({ srcs, size = 44, max = 3 }) {
   );
 }
 
-export default function PhotoSorter({ files, stamps = [], shared = false, onClose, onStamp, onContribute = null, onChanged }) {
+// clips: shared videos, by path ({ path, name, mimeType }); only the City Boards door takes them (2026-10-30).
+export default function PhotoSorter({ files, clips = [], stamps = [], shared = false, onClose, onStamp, onContribute = null, onChanged }) {
   // ask (a share: stamp or postcard) → reading → list; or pick (which photo goes on the postcard) → postcard.
   const [phase, setPhase] = useState(shared ? "ask" : "reading");
   const [rows, setRows] = useState([]);
@@ -226,32 +233,48 @@ export default function PhotoSorter({ files, stamps = [], shared = false, onClos
       <div className="relative w-full max-w-md rounded-t-3xl px-4 pt-4 pb-6 flex flex-col" style={{ background: IVORY, maxHeight: "86vh" }}>
         {phase === "ask" && (
           <>
-            <p style={{ fontFamily: SERIF, fontSize: fs(22), color: INK }}>{files.length === 1 ? "Your photo" : `Your ${files.length} photos`}</p>
+            <p style={{ fontFamily: SERIF, fontSize: fs(22), color: INK }}>{askTitle(files.length, clips.length)}</p>
             <p style={{ color: INK3, fontSize: fs(12.5), lineHeight: 1.4, marginTop: 2 }}>What would you like to do?</p>
-            <div className="mt-3"><Thumbs srcs={srcs(files)} size={52} max={5} /></div>
-            <button type="button" onClick={() => setPhase("reading")} className="w-full text-left flex items-center gap-3 rounded-2xl mt-4" style={{ padding: 14, background: "#fff", border: `1px solid ${RULE}` }}>
-              <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 12, background: IVORY_2, display: "grid", placeItems: "center", flexShrink: 0 }}><Stamp size={19} color={STAMP} /></span>
-              <span>
-                <span style={{ display: "block", fontSize: fs(15), fontWeight: 700, color: INK }}>{files.length === 1 ? "Get a stamp" : "Get stamps"}</span>
-                <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>{files.length === 1 ? "Where this photo was taken." : "Where each photo was taken, one place at a time."}</span>
-              </span>
-            </button>
-            <button type="button" onClick={() => (files.length === 1 ? choosePostcard(files[0]) : setPhase("pick"))} className="w-full text-left flex items-center gap-3 rounded-2xl mt-2" style={{ padding: 14, background: "#fff", border: `1px solid ${RULE}` }}>
-              <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 12, background: IVORY_2, display: "grid", placeItems: "center", flexShrink: 0 }}><Mail size={19} color={STAMP} /></span>
-              <span>
-                <span style={{ display: "block", fontSize: fs(15), fontWeight: 700, color: INK }}>Send as a postcard</span>
-                <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>A photo and a note to the people you choose.</span>
-              </span>
-            </button>
+            <div className="mt-3 flex items-center gap-2">
+              {files.length ? <Thumbs srcs={srcs(files)} size={52} max={5} /> : null}
+              {clips.length ? (
+                <span aria-hidden="true" className="inline-flex items-center gap-1.5 rounded-xl px-3" style={{ height: 52, background: IVORY_2, border: `1px solid ${RULE}`, fontSize: fs(12.5), fontWeight: 600, color: INK2 }}>
+                  <Play size={14} strokeWidth={2.5} fill="currentColor" /> {clips.length === 1 ? "1 clip" : `${clips.length} clips`}
+                </span>
+              ) : null}
+            </div>
+            {files.length > 0 && (
+              <>
+                <button type="button" onClick={() => setPhase("reading")} className="w-full text-left flex items-center gap-3 rounded-2xl mt-4" style={{ padding: 14, background: "#fff", border: `1px solid ${RULE}` }}>
+                  <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 12, background: IVORY_2, display: "grid", placeItems: "center", flexShrink: 0 }}><Stamp size={19} color={STAMP} /></span>
+                  <span>
+                    <span style={{ display: "block", fontSize: fs(15), fontWeight: 700, color: INK }}>{files.length === 1 ? "Get a stamp" : "Get stamps"}</span>
+                    <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>{files.length === 1 ? "Where this photo was taken." : "Where each photo was taken, one place at a time."}{clips.length ? " Photos only." : ""}</span>
+                  </span>
+                </button>
+                <button type="button" onClick={() => (files.length === 1 ? choosePostcard(files[0]) : setPhase("pick"))} className="w-full text-left flex items-center gap-3 rounded-2xl mt-2" style={{ padding: 14, background: "#fff", border: `1px solid ${RULE}` }}>
+                  <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 12, background: IVORY_2, display: "grid", placeItems: "center", flexShrink: 0 }}><Mail size={19} color={STAMP} /></span>
+                  <span>
+                    <span style={{ display: "block", fontSize: fs(15), fontWeight: 700, color: INK }}>Send as a postcard</span>
+                    <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>A photo and a note to the people you choose.</span>
+                  </span>
+                </button>
+              </>
+            )}
             {onContribute && (
-              <button type="button" onClick={() => onContribute(files)} className="w-full text-left flex items-center gap-3 rounded-2xl mt-2" style={{ padding: 14, background: "#fff", border: `1px solid ${RULE}` }}>
+              <button type="button" onClick={() => onContribute(files, clips)} className={`w-full text-left flex items-center gap-3 rounded-2xl ${files.length ? "mt-2" : "mt-4"}`} style={{ padding: 14, background: "#fff", border: `1px solid ${RULE}` }}>
                 <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 12, background: IVORY_2, display: "grid", placeItems: "center", flexShrink: 0 }}><Globe2 size={19} color="#1F4E8C" /></span>
                 <span>
-                  <span style={{ display: "block", fontSize: fs(15), fontWeight: 700, color: INK }}>{files.length === 1 ? "Upload to a City Board" : "Upload to City Boards"}</span>
-                  <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>Public, from “a traveler”. {files.length === 1 ? "It goes on the board of the city where it was taken." : "Each one goes on the board of the city where it was taken."}</span>
+                  <span style={{ display: "block", fontSize: fs(15), fontWeight: 700, color: INK }}>{files.length + clips.length === 1 ? "Upload to a City Board" : "Upload to City Boards"}</span>
+                  <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>
+                    Public, from “a traveler”. {files.length + clips.length === 1 ? "It goes on the board of the city where it was taken." : "Each one goes on the board of the city where it was taken."}{clips.length ? " Clips are 20 seconds; a longer one you trim." : ""}
+                  </span>
                 </span>
               </button>
             )}
+            {!files.length && clips.length ? (
+              <p style={{ color: INK3, fontSize: fs(12), lineHeight: 1.4, marginTop: 10, textAlign: "center" }}>For now, a clip goes to City Boards.</p>
+            ) : null}
             <button onClick={onClose} className="w-full rounded-xl py-2.5 font-semibold mt-3" style={{ background: "transparent", color: INK3, fontSize: fs(14) }}>Not now</button>
           </>
         )}

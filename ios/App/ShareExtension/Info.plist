@@ -28,6 +28,8 @@
 			<dict>
 				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
 				<integer>10</integer>
+				<key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+				<integer>3</integer>
 			</dict>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>

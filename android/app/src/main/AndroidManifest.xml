@@ -34,17 +34,21 @@
             </intent-filter>
 
             <!-- "Globeskimmers" in the Gallery / Photos share list (2026-10-17): one photo or
-                 several. @capgo/capacitor-share-target copies them to the cache and
-                 src/lib/sharedPhotos.js opens Stamp a place with them. -->
+                 several, and since 2026-10-30 clips too (founder: a shared video should offer
+                 "Upload to a City Board"). @capgo/capacitor-share-target copies them to the cache
+                 and src/lib/sharedPhotos.js hands photos to the photo sorter and clips, by path, to
+                 the City Boards upload. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
             </intent-filter>
         </activity>
 

@@ -151,11 +151,11 @@ export function BoardContributeSheet({ board, onClose, onPosted = undefined }) {
 // Photos shared in from the phone's gallery (PhotoSorter's third door, founder 2026-10-30: "upload
 // to city board"): the same sheet, posting them as soon as it opens, with the public note above
 // the progress and the summary saying which boards they went to.
-export function SharedContributeSheet({ files, onClose }) {
+export function SharedContributeSheet({ files, clips = [], onClose }) {
   const [photos, setPhotos] = useState([]);
   const load = () => listContributions().then((r) => { if (!r.error) setPhotos(r.photos); });
   useEffect(() => { load(); }, []);
-  return <ContributeSheet photos={photos} initialFiles={files} onChanged={load} onClose={onClose} />;
+  return <ContributeSheet photos={photos} initialFiles={files} initialClips={clips} onChanged={load} onClose={onClose} />;
 }
 
 // Does a photo's city sit on this board? (names, folded; a US city board also matches the state)
@@ -169,7 +169,9 @@ const onBoard = (board, b) => {
 };
 const kindWord = (board) => (board?.kind === "state" ? "state" : board?.kind === "country" ? "country" : "city");
 
-function ContributeSheet({ photos, onChanged, onClose, board = null, initialFiles = null, autoPick = false }) {
+// initialClips: shared videos by path ({ path, name, mimeType }, 2026-10-30) — shrunk on the phone
+// when it can, else read whole under the web rules — posted with the initialFiles.
+function ContributeSheet({ photos, onChanged, onClose, board = null, initialFiles = null, initialClips = null, autoPick = false }) {
   useDismissable(true, onClose);
   const fileRef = useRef(null);
   const startedRef = useRef(false);   // files handed in with the sheet (a share) are sent once
@@ -195,10 +197,9 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
   // its 20 seconds first (ClipTrimmer). Photos take the same road as the web picker's.
   const [trim, setTrim] = useState(null);   // { src, duration, resolve } while the trimmer is up
   const askTrim = (src, duration) => new Promise((resolve) => setTrim({ src, duration, resolve }));
-  const pickNative = async () => {
-    let picked;
-    try { picked = await pickMedia(CONTRIBUTE_PICK); } catch { return; }   // cancelled
-    if (!picked.length || run) return;
+  // Picked or shared files by path → Files to send: a photo as it is; a clip probed, trimmed to
+  // its 20 seconds when longer, shrunk by the phone, carrying the location the probe read.
+  const prepareNative = async (picked) => {
     const files = [];
     let bad = 0;
     for (const f of picked) {
@@ -215,15 +216,40 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
       } catch { bad += 1; }
     }
     setRun(null);
+    return { files, bad };
+  };
+  const pickNative = async () => {
+    let picked;
+    try { picked = await pickMedia(CONTRIBUTE_PICK); } catch { return; }   // cancelled
+    if (!picked.length || run) return;
+    const { files, bad } = await prepareNative(picked);
     if (bad && !files.length) { showToast("Couldn’t read that — try another photo or clip", "error"); return; }
     await sendFiles(files);
+  };
+  // Shared clips (paths from the phone's share sheet): the phone shrinks them when it can; an
+  // install without the plugin reads each whole, and the web rules (20 s, 25 MB) decide.
+  const takeClips = async (clips) => {
+    if (shrinkAvailable()) return prepareNative(clips.map((c) => ({ path: c.path, name: c.name, mimeType: c.mimeType })));
+    const files = [];
+    let bad = 0;
+    for (const c of clips) {
+      try { files.push(await fileAt(c.path, c.name || "clip.mp4", c.mimeType || "video/mp4")); } catch { bad += 1; }
+    }
+    return { files, bad };
   };
   const openPicker = () => (shrinkAvailable() ? pickNative() : fileRef.current?.click());
   useEffect(() => {
     if (startedRef.current) return;
-    if (initialFiles?.length) { startedRef.current = true; sendFiles(initialFiles); }
-    else if (autoPick) { startedRef.current = true; pickNative(); }   // the Upload button on the phone
-  }, [initialFiles, autoPick]);   // eslint-disable-line react-hooks/exhaustive-deps
+    if (initialFiles?.length || initialClips?.length) {
+      startedRef.current = true;
+      (async () => {
+        const { files: clipFiles, bad } = initialClips?.length ? await takeClips(initialClips) : { files: [], bad: 0 };
+        const all = [...(initialFiles || []), ...clipFiles];
+        if (!all.length) { showToast(bad ? "Couldn’t read that clip — try another" : "Nothing to upload", "error"); return; }
+        sendFiles(all);
+      })();
+    } else if (autoPick) { startedRef.current = true; pickNative(); }   // the Upload button on the phone
+  }, [initialFiles, initialClips, autoPick]);   // eslint-disable-line react-hooks/exhaustive-deps
   const sendFiles = async (all) => {
     if (!all.length || run) return;
     const files = all.slice(0, CONTRIBUTE_PICK);

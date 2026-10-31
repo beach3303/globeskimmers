@@ -15,6 +15,10 @@ class ShareViewController: UIViewController {
     // NSExtensionActivationSupportsImageWithMaxCount in Info.plist is the same 10: past it the
     // share sheet drops Globeskimmers from the list. A stamp keeps the first 4.
     private let maxPhotos = 10
+    // Clips too (founder, 2026-10-30: a video shared from the gallery should offer "Upload to a City
+    // Board"): NSExtensionActivationSupportsMovieWithMaxCount is the same 3. A clip is copied as it
+    // is — the app's VideoShrink plugin reads it by path, trims it to 20 seconds and shrinks it.
+    private let maxClips = 3
     // The app resizes to 1280 before upload; this keeps the copy small without losing detail.
     private let maxPixels = 2560
 
@@ -42,7 +46,7 @@ class ShareViewController: UIViewController {
         titleLabel.text = "Globeskimmers"
         titleLabel.font = UIFont(name: "Georgia", size: 22) ?? .systemFont(ofSize: 22, weight: .semibold)
         titleLabel.textColor = ink
-        bodyLabel.text = "Adding your photos…"
+        bodyLabel.text = "Adding your photos and clips…"
         bodyLabel.font = .systemFont(ofSize: 15)
         bodyLabel.textColor = ink3
         bodyLabel.numberOfLines = 0
@@ -85,18 +89,26 @@ class ShareViewController: UIViewController {
     }
 
     private func handOver() async {
-        let providers = (extensionContext?.inputItems as? [NSExtensionItem] ?? [])
-            .flatMap { $0.attachments ?? [] }
-            .filter { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }
+        let attachments = (extensionContext?.inputItems as? [NSExtensionItem] ?? []).flatMap { $0.attachments ?? [] }
+        let movie = UTType.movie.identifier
+        let providers = attachments
+            .filter { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) && !$0.hasItemConformingToTypeIdentifier(movie) }
             .prefix(maxPhotos)
-        guard let dir = sharedDir() else { return show("These photos couldn’t be added. Try again from Globeskimmers.") }
+        let movies = attachments.filter { $0.hasItemConformingToTypeIdentifier(movie) }.prefix(maxClips)
+        guard let dir = sharedDir() else { return show("These couldn’t be added. Try again from Globeskimmers.") }
         var files: [[String: Any]] = []
         for provider in providers {
             if let url = await copyPhoto(provider, into: dir) {
                 files.append(["uri": url.path, "name": url.lastPathComponent, "mimeType": "image/jpeg"])
             }
         }
-        guard !files.isEmpty else { return show("These photos couldn’t be read. Try another photo.") }
+        for provider in movies {
+            if let url = await copyMovie(provider, into: dir) {
+                let ext = url.pathExtension.lowercased()
+                files.append(["uri": url.path, "name": url.lastPathComponent, "mimeType": ext == "mp4" || ext == "m4v" ? "video/mp4" : "video/quicktime"])
+            }
+        }
+        guard !files.isEmpty else { return show("These couldn’t be read. Try another photo or clip.") }
         UserDefaults(suiteName: appGroupId)?.set(["title": "", "texts": [String](), "files": files], forKey: dataKey)
         openApp(URL(string: "globeskimmers://share")!) { [weak self] opened in
             if opened { self?.close() } else { self?.show("Your photos are ready. Open Globeskimmers to stamp them.") }
@@ -133,6 +145,24 @@ class ShareViewController: UIViewController {
                     else if let d = item as? Data { src = CGImageSourceCreateWithData(d as CFData, nil) }
                     else if let img = item as? UIImage, let d = img.jpegData(compressionQuality: 0.9) { src = CGImageSourceCreateWithData(d as CFData, nil) }
                     done.resume(returning: src.map { self.writeJPEG($0, to: out) } == true ? out : nil)
+                }
+            }
+        }
+    }
+
+    // A clip is copied whole, as the gallery hands it over (MOV or MP4, with its own location and
+    // date inside): the app reads it by path and shrinks it there, not in this extension's memory.
+    private func copyMovie(_ provider: NSItemProvider, into dir: URL) async -> URL? {
+        return await withCheckedContinuation { (done: CheckedContinuation<URL?, Never>) in
+            provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { url, _ in
+                guard let url else { done.resume(returning: nil); return }
+                let ext = url.pathExtension.isEmpty ? "mov" : url.pathExtension.lowercased()
+                let out = dir.appendingPathComponent("share-\(UUID().uuidString).\(ext)")
+                do {
+                    try FileManager.default.copyItem(at: url, to: out)
+                    done.resume(returning: out)
+                } catch {
+                    done.resume(returning: nil)
                 }
             }
         }

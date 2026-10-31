@@ -1326,10 +1326,11 @@ function PassportInner({ embedded = false }) {
   useEffect(() => {
     if (readOnly) return;
     const take = () => {
-      const files = takeSharedPhotos();
-      if (!files.length) return;
+      const { files, clips } = takeSharedPhotos();
+      if (!files.length && !clips.length) return;
       setShowStampPlace(false); setStampPreset(null); setStampQueue(null);
-      setSorter({ files, shared: true, n: Date.now() });
+      // Clips (2026-10-30) ride along by path: the ask sheet offers them the City Boards door.
+      setSorter({ files, clips, shared: true, n: Date.now() });
     };
     take();
     window.addEventListener(SHARED_PHOTOS_EVENT, take);
@@ -1755,12 +1756,12 @@ function PassportInner({ embedded = false }) {
       )}
       {showStampPlace && <StampPlaceModal preset={stampPreset} onClose={() => { setShowStampPlace(false); setStampPreset(null); }} onDone={(d) => { setShowStampPlace(false); setStampPreset(null); load(); offerShare(d); }} />}
       {sorter && (
-        <PhotoSorter key={sorter.n} files={sorter.files} shared={sorter.shared} stamps={stamps}
+        <PhotoSorter key={sorter.n} files={sorter.files} clips={sorter.clips || []} shared={sorter.shared} stamps={stamps}
           onClose={() => setSorter(null)} onChanged={load}
-          onContribute={(files) => { setSorter(null); setContrib({ files, n: Date.now() }); }}
+          onContribute={(files, clips) => { setSorter(null); setContrib({ files, clips: clips || [], n: Date.now() }); }}
           onStamp={(items) => { setSorter(null); setStampQueue({ items, i: 0, n: Date.now() }); }} />
       )}
-      {contrib && <SharedContributeSheet key={contrib.n} files={contrib.files} onClose={() => setContrib(null)} />}
+      {contrib && <SharedContributeSheet key={contrib.n} files={contrib.files} clips={contrib.clips} onClose={() => setContrib(null)} />}
       {queued && (
         <StampPlaceModal key={`${stampQueue.n}-${stampQueue.i}`} sharedPhotos={queued.files} placeHint={queued.placeHint} look={queued.look || null}
           queue={stampQueue.items.length > 1 ? { at: stampQueue.i + 1, of: stampQueue.items.length } : null} onSkip={nextInQueue}
