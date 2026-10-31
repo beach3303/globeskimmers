@@ -3864,3 +3864,11 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - Not tested on a phone (needs the native builds): share a clip from Photos / Google Photos → "Your clip" → Upload.
 - **Open:** push (site deploy for app-version.json), `npm run ota` (the app half + tonight's batch), Play 1.0.11,
   iOS decision.
+
+## 2026-10-30 — PUSHED: video share + Android 1.0.11 bump + site version (main 4f7d0b8)
+
+- 7a44cff → 4f7d0b8, four commits. Site run 41166202758 green: `https://globeskimmers.io/app-version.json` now
+  `{ "ios": "1.0.5", "android": "1.0.10" }` (Android phones on 1.0.9 get the update card). No worker or migration.
+- **Open (founder):** `npm run ota` (tonight's app half: onboarding fixes, luggage off, follow pills, shelf, Virtual
+  Passport tab, share-sheet clips); Play 1.0.11 (14) from the Desktop AAB; iOS: replace 1.0.6 (17) with 18 or ship
+  1.0.7 — her call.
