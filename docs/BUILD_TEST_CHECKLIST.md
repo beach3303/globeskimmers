@@ -3920,3 +3920,25 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - Founder also reported "Explore where I am" still exits the S10 after tonight's OTA — expected: the geolocation
   8.2.4 fix is native and only arrives with Play 1.0.11 (14), not yet uploaded at that point. After ✕ on that
   screen Home had no location because the GPS request never returned; the location pill's Change still works.
+
+## 2026-10-30 — COMMITTED, NOT pushed: the S10 exit — emulator findings + a renderer safety net (Android 1.0.11 rebuilt)
+
+- Founder: "Find out." An Android 12 (API 31, Google APIs, Pixel 4 profile) emulator was built
+  (`sdkmanager system-images;android-31;google_apis;arm64-v8a`, AVD `s10`), the demo session seeded into
+  `CapacitorStorage.xml` via `run-as`, the WebView driven over DevTools (`scratchpad/drive.mjs`). With the OLD
+  plugin (geolocation 8.2.0, ion lib 2.2.0): onboarding → Continue → "While using the app" → **no crash**, landed on
+  the Passport; with location services OFF → the step shows "Location access was denied…", **no crash**. So the S10's
+  exit is phone-specific, not the plain permission path.
+- Capacitor's `BridgeWebViewClient.onRenderProcessGone` returns false unless a listener handles it → a WebView
+  renderer death kills the whole app ("closes completely"). Built: MainActivity adds a `WebViewListener` that notes
+  the event in Preferences (`gs_webview_gone_v1`) and `recreate()`s the activity; `src/lib/webviewCrash.js`
+  (`reportWebViewCrashOnce`, called from App.jsx's ScrollToTop) logs `webview_renderer_gone` {at, crashed, priority,
+  url, platform, chrome, ua} on the next start and removes the note. Emulator test with DevTools `Page.crash`: logcat
+  `WebView renderer gone: crashed=true priority=2`, same pid, app back on /Onboarding ✅. The JS half couldn't be
+  seen consuming the note there because the emulator app had already switched to the live OTA bundle
+  (1.0.2610310512 — the founder's OTA of tonight), which predates it; the Preferences read/remove calls were verified
+  from the page by hand.
+- `Desktop/GlobeSkimmers-1.0.11-build14.aab` REBUILT (geolocation 8.2.4 + the safety net), same upload key. Founder
+  to upload. If the S10 still exits on 1.0.11 the next start will log `webview_renderer_gone` (if it was the
+  renderer) — else it's a native crash and a USB `adb logcat` is the next step. Also worth trying on the S10: update
+  "Android System WebView" in the Play Store.
