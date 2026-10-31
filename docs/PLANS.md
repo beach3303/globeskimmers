@@ -1041,7 +1041,8 @@ Proposed build order: group default → friend's cover → Sent → Mailbox tabs
 3. **Mailbox tabs: Postcards · Telegrams · Sent · News**; the Postcard box page retires; sealed telegrams still tap open.
 4. **Home: six pages, two rows of folder tabs** — Nearby · Stamps · Virtual Passport / **Arrivals** · City Board ·
    My Profile (the circle tab is named **Arrivals**; Just joined becomes "New arrivals"). New members open on
-   **Stamps**. **Bottom bar stays as it is** (Passport/Profile open the same tabs; Settings unchanged).
+   **Stamps**. **Bottom bar stays as it is** (Passport/Profile open the same tabs; Settings unchanged). — **Superseded
+   2026-10-31** by the navigation redesign (one bar, the stamp in the middle; see that section near the end).
 5. **Adding friends:** labeled "+ Add friends", Follow on mail from someone new, people listed when Find people
    opens; the sheet also shows **Invite by text** and **Invite by email** plainly (both already exist since 10-24).
 6. **Events & festivals:** nine kinds as mocked (Games = NFL/NBA/MLB/MLS/NHL/college from Ticketmaster); taps:
@@ -1430,3 +1431,19 @@ separate and stay.
   a City Board" too (the share targets accept movies; a clip travels by path and is shrunk by VideoShrink). Needs
   Android 1.0.11 (built) and an iOS build (replace 1.0.6 build 17, or 1.0.7). Stamps and postcards from clips come
   with video postcards / memories later.
+
+## Navigation redesign — one bar, the stamp in the middle (founder decision 2026-10-31; spec: docs/NAV_REDESIGN_2026-10-31.md)
+
+**Replaces the 2026-10-25 "Bottom bar stays as it is."** A new Skimmer comes to stamp a photo, look at City Boards and
+find their own page; those sat behind eleven doors in two menus. New map — **bottom bar: Boards · Nearby · Stamp
+(raised, centre) · Passport · Profile.** One rule: Passport is what you've collected; Profile is who you are and who
+you know. Mail becomes an envelope at the banner's top-left (red dot for new mail); Settings a gear on the Profile
+cover. Retired: Home's six-tab pager, the Virtual Passport Home tab, the Settings and Mailbox tabs, Profile's passport
+folder and photo packets (they move to Passport's Stamps · Photos · Cards tabs).
+
+Build order, one commit each: (1) bar + banner envelope + Boards page + Home = Nearby only — **built 2026-10-31**;
+(2) the Stamp sheet (Upload photos · Stamp where I am · post to a City Board); (3) Passport: upload above the book for
+new members, Stamps · Photos · Cards; (4) Profile: passport folder + albums out, Friends' news + Add friends into YOUR
+CIRCLE; (5) clean-up: delete HomePager, onboarding's "Not now" → Boards, Stamp earned → the board; (6) optional:
+Mailbox Inbox · Sent, the cold-start chooser stops asking by default. Step 1 keeps `/Home?page=` deep links to City
+Cards, Arrivals, City Board and Stamps rendering on Home until steps 3–4 move them.

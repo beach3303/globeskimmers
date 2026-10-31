@@ -10,6 +10,7 @@ import LocationAutoFollowOffer from "@/components/location/LocationAutoFollowOff
 import BrandBanner from "@/components/redesign/BrandBanner";
 import FloatingNav from "@/components/redesign/FloatingNav";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
+import MailButton from "@/components/mail/MailButton";
 import BackToTop from "@/components/BackToTop";
 import BoardNudge from "@/components/passport/BoardNudge";
 import { PageGroundProvider, usePageGroundValue, usePageInk } from "@/components/redesign/PageGround";
@@ -22,7 +23,7 @@ const BACK_TO_TOP_PAGES = new Set([
   "PlacesToEat", "CoffeeFinder", "ATMFinder", "RestroomFinder",
   "ConvenienceStore", "ThingsToDo", "Shopping", "MoneyExchange",
   "CultureInformation", "BasicPhrases", "Weather",
-  "Mailbox", "Postcards", "Sent", "CityBoard", "CityBoards", "Circle",
+  "Mailbox", "Postcards", "Sent", "CityBoard", "CityBoards", "Boards", "Circle",
 ]);
 
 // The bottom reserve under every page except Onboarding: the nav pill sits 22px above
@@ -44,6 +45,7 @@ const PAGE_GROUND = new Map(Object.entries({
   Sent: NEUTRAL.airmail,
   CityBoard: NEUTRAL.airmail,
   CityBoards: NEUTRAL.airmail,
+  Boards: NEUTRAL.airmail,
   Profile: HARBOUR.paper,
   Circle: HARBOUR.paper,
   Traveler: HARBOUR.paper,
@@ -58,6 +60,7 @@ const PAGE_INK = new Map(Object.entries({
   Postcards: NEUTRAL.airmailBlue,
   Sent: NEUTRAL.airmailBlue,
   CityBoard: NEUTRAL.airmailBlue,
+  Boards: NEUTRAL.airmailBlue,
   CityBoards: NEUTRAL.airmailBlue,
   Circle: HARBOUR.cloth,
 }));
@@ -203,6 +206,13 @@ function PageShell({ currentPageName, isOnboarding, children }) {
           <FontScaleButton />
         </div>
       )}
+      {/* Mail: the envelope at the banner's left, mirroring the glasses (navigation redesign,
+          2026-10-31) — a red dot while postcards or telegrams wait. Opens the Mailbox. */}
+      {!isOnboarding && (
+        <div style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 3px)', left: 10, zIndex: 60 }}>
+          <MailButton />
+        </div>
+      )}
 
       {/* App Content — offset by banner height (50px + status-bar safe
           area, so content clears the now-safe-area-aware BrandBanner) and
@@ -220,7 +230,7 @@ function PageShell({ currentPageName, isOnboarding, children }) {
       {/* Floating "back to top" on long content/list pages, in the page's ink. */}
       {BACK_TO_TOP_PAGES.has(currentPageName) && <BackToTop color={backToTopColor} />}
 
-      {/* Floating pill nav — 5 anchors (Home / Mailbox / Passport / Profile / Settings). */}
+      {/* Floating pill nav — Boards · Nearby · Stamp · Passport · Profile (2026-10-31). */}
       <FloatingNav />
 
       {/* Global location nudges — mounted here (not in Home) so they catch

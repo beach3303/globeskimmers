@@ -24,7 +24,8 @@ import { useMyCloth, clothOf } from "@/lib/cloth";
 import { usePageGround } from "@/components/redesign/PageGround";
 import { Folder } from "@/components/redesign/Zone";
 import { NEUTRAL, ZONE, fs, rgba } from "@/components/redesign/constants";
-import CoverBand from "@/components/profile/CoverBand";
+import CoverBand, { COVER_CIRCLE } from "@/components/profile/CoverBand";
+import { Settings as SettingsIcon } from "lucide-react";
 import Bookplate from "@/components/profile/Bookplate";
 import CircleFolder from "@/components/profile/CircleFolder";
 import MapFolder from "@/components/profile/MapFolder";
@@ -203,13 +204,19 @@ export default function ProfilePage({ embedded = false } = {}) {
   const shown = social || { name: "", bio: "", website: "", favorites: [], dreams: [] };
   const place = [profile?.home_city, profile?.home_country].map((x) => String(x || "").trim()).filter((x, i, a) => x && a.indexOf(x) === i);
   const owner = { name: shown.name || fallbackName, handle: handle.handle, avatar, cloth: cloth.key };
+  // Settings left the bottom bar (navigation redesign, 2026-10-31): the gear on the cover opens it.
+  const gear = (
+    <button type="button" onClick={() => navigate(createPageUrl("Settings"))} aria-label="Settings" style={COVER_CIRCLE}>
+      <SettingsIcon size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
+    </button>
+  );
   const fieldStyle = { display: "block", width: "100%", boxSizing: "border-box", marginTop: 6, padding: "0 12px", minHeight: 44, borderRadius: 12, background: NEUTRAL.white, border: `1px solid ${cloth.fieldLine}`, fontSize: fs(15), color: NEUTRAL.ink, outline: "none" };
 
   return (
     <div style={{ "--gs-focus": cloth.cloth, ...(embedded ? { background: cloth.paper, paddingBottom: 24 } : {}) }}>
       {/* The 12px mat in the owner's paper, then the cover. */}
       <div aria-hidden="true" style={{ height: 12 }} />
-      <CoverBand cloth={cloth.key} kicker="My world" leading="edit" onLeading={edit ? cancelEdit : startEdit}
+      <CoverBand cloth={cloth.key} kicker="My world" leading="edit" onLeading={edit ? cancelEdit : startEdit} extra={gear}
         leadingLabel={edit ? "Stop editing your world" : "Edit your world"} leadingPressed={edit} contentMaxWidth={672} />
 
       <div className={COLUMN}>

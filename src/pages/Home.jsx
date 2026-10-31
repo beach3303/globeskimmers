@@ -38,9 +38,7 @@ import DestinationStrip from "@/components/search/DestinationStrip";
 import UpdateCard from "@/components/home/UpdateCard";
 import UpdateSheet from "@/components/home/UpdateSheet";
 import CityBoardPage from "@/components/home/CityBoardPage";
-import HomePager, { initialHomePage, rememberHomePage } from "@/components/home/HomePager";
 import ArrivalsPage from "@/components/home/ArrivalsPage";
-import PassportPage from "@/pages/Passport";
 import CityCardsPage from "@/components/citycards/CityCardsPage";
 import { openAttraction } from "@/lib/openAttraction";
 
@@ -556,16 +554,12 @@ export default function HomePage() {
   };
 
   // ── The six pages ──────────────────────────────────────────────────────────
-  const [homePage, setHomePage] = useState(() => initialHomePage(new URLSearchParams(routerLocation.search).get('page')));
-  const openHomePage = (id) => {
-    // Which pages people open tells us who uses Home for what (founder, 2026-10-25).
-    trackEvent('home_page', { page: id });
-    // The Virtual Passport tab opens the Passport page itself — the full screen the bottom bar's
-    // Passport button opens, no tabs (founder, 2026-10-30). Home keeps the page it was on.
-    if (id === 'passport') { navigate(createPageUrl('Passport')); return; }
-    setHomePage(id);
-    rememberHomePage(id);
-  };
+  // Home is the Nearby tab now (navigation redesign, 2026-10-31: docs/NAV_REDESIGN_2026-10-31.md).
+  // The six-tab pager is gone; a `?page=` deep link to a page that hasn't moved yet (City Cards,
+  // Arrivals, City Board, Stamps) still renders that page here, tabs or no tabs, until steps 3–4
+  // give it its new home.
+  const askedPage = new URLSearchParams(routerLocation.search).get('page');
+  const bridged = ['stamps', 'arrivals', 'cityboard', 'citycards'].includes(askedPage) ? askedPage : null;
   const renderHomePage = (id) => {
     if (id === 'nearby') {
       return (
@@ -598,7 +592,7 @@ export default function HomePage() {
         <div style={{ paddingTop: 12 }}>
           {/* The passport, as one slim line that opens its page (founder, 2026-10-25: the big banner
               gave way so the stamps themselves lead). */}
-          <PassportLine total={passport.total} nearest={nearestStamp} unit={unit} onOpen={() => openHomePage('passport')} />
+          <PassportLine total={passport.total} nearest={nearestStamp} unit={unit} onOpen={() => navigate(createPageUrl('Passport'))} />
           <StampsNearYou unit={unit} onAction={handleQuickAction} onNearest={setNearestStamp} />
           {isDreamStack && (
             <DreamShelf
@@ -618,7 +612,6 @@ export default function HomePage() {
         </div>
       );
     }
-    if (id === 'passport') return <PassportPage embedded />;
     if (id === 'arrivals') return <ArrivalsPage wide={isTablet} />;
     if (id === 'cityboard') return <CityBoardPage city={activeLocation?.address?.city} country={activeLocation?.address?.country} region={activeLocation?.address?.state} />;
     if (id === 'citycards') return <CityCardsPage embedded openId={new URLSearchParams(routerLocation.search).get('card')} />;
@@ -645,16 +638,17 @@ export default function HomePage() {
         showTime={isTablet}
       />
 
-      {/* SIX PAGES (founder's decision sheet, 2026-10-25: "Six pages, two rows of tabs"; tabs tap,
-          pages swipe): Nearby · Stamps · Virtual Passport / Arrivals · City Board · My Profile. The
-          lobby stays above them; HomePager keeps the tabs stuck under the banner and, once the lobby
-          has scrolled away, a slim location line with Change. A new member opens on Stamps; after
-          that Home reopens on the page used last. */}
-      {/* Phones on an older store build: update to get notifications (2026-10-24). Above the tabs since
-          2026-10-25, so every page shows it, not just Nearby. Nothing otherwise. */}
+      {/* Phones on an older store build: update to get notifications (2026-10-24). Nothing otherwise. */}
       <UpdateCard />
-      <HomePager page={homePage} onPage={openHomePage} render={renderHomePage}
-        location={{ label: placeText, onChange: () => setShowLocationPicker(true) }} />
+      {/* NEARBY (the redesign's second tab, 2026-10-31): the search, Events & festivals, every finder
+          as a tile, then the stamps you can earn by being there. A deep link to a page that hasn't
+          moved yet renders that page instead (see `bridged`). */}
+      {bridged ? renderHomePage(bridged) : (
+        <>
+          {renderHomePage('nearby')}
+          <StampsNearYou unit={unit} onAction={handleQuickAction} onNearest={setNearestStamp} />
+        </>
+      )}
 
       <SmartSearchOverlay isOpen={showSearch} onClose={() => setShowSearch(false)} />
 

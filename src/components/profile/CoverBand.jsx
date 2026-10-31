@@ -131,6 +131,10 @@ function OrbitMotif() {
  *   as?: any, className?: string, style?: CSS, children?: import('react').ReactNode,
  * }} props
  */
+// The 44px disc the cover's buttons share (the pencil here; the Profile's gear, 2026-10-31).
+export const COVER_CIRCLE = CIRCLE;
+
+// extra: more 44px buttons beside the leading one (the Profile's gear to Settings, 2026-10-31).
 export default function CoverBand({
   cloth = undefined,
   height = 132,
@@ -139,6 +143,7 @@ export default function CoverBand({
   onLeading = undefined,
   leadingLabel = undefined,
   leadingPressed = undefined,
+  extra = null,
   title = null,
   orbitMotif = undefined,
   contentMaxWidth = undefined,
@@ -228,6 +233,7 @@ export default function CoverBand({
       {band === 112 ? (
         <div style={{ position: 'relative', minHeight: 112, maxWidth: contentMaxWidth, margin: '0 auto', boxSizing: 'border-box', padding: '12px 22px', display: 'flex', alignItems: 'center', gap: 14 }}>
           {button}
+          {extra}
           <div style={{ minWidth: 0, flex: '1 1 auto' }}>
             {hasKicker ? <div style={kickerStyle}>{kicker}</div> : null}
             {h1}
@@ -236,15 +242,19 @@ export default function CoverBand({
         </div>
       ) : (
         <div style={{ position: 'relative', minHeight: 132, maxWidth: contentMaxWidth, margin: '0 auto', boxSizing: 'border-box' }}>
-          {showLeading ? (
-            <span style={{ position: 'absolute', top: 12, ...(kind === 'edit' ? { right: 24 } : { left: 24 }) }}>{button}</span>
+          {showLeading || extra ? (
+            <span style={{ position: 'absolute', top: 12, display: 'flex', alignItems: 'center', gap: 8, ...(kind === 'back' ? { left: 24 } : { right: 24 }) }}>
+              {kind === 'back' ? button : null}
+              {extra}
+              {kind === 'edit' ? button : null}
+            </span>
           ) : null}
           {hasKicker || h1 || children ? (
             <div
               style={{
                 position: 'relative',
                 boxSizing: 'border-box',
-                padding: `28px ${showLeading && kind === 'edit' ? 80 : 24}px 12px ${showLeading && kind === 'back' ? 80 : 24}px`,
+                padding: `28px ${(showLeading && kind === 'edit' ? 80 : 24) + (extra ? 52 : 0)}px 12px ${showLeading && kind === 'back' ? 80 : 24}px`,
               }}
             >
               {hasKicker ? <div style={kickerStyle}>{kicker}</div> : null}

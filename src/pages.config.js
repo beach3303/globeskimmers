@@ -53,6 +53,7 @@ import ATMFinder from './pages/ATMFinder';
 import ActivityDetail from './components/attraction/ActivityRedirect';
 import AdminAnalytics from './pages/AdminAnalytics';
 import BasicPhrases from './pages/BasicPhrases';
+import Boards from './pages/Boards';
 import Circle from './pages/Circle';
 import CityBoard from './pages/CityBoard';
 import CityBoards from './pages/CityBoards';
@@ -89,6 +90,7 @@ export const PAGES = {
     "ActivityDetail": ActivityDetail,
     "AdminAnalytics": AdminAnalytics,
     "BasicPhrases": BasicPhrases,
+    "Boards": Boards,
     "Circle": Circle,
     "CityBoard": CityBoard,
     "CityBoards": CityBoards,
