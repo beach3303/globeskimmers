@@ -3903,3 +3903,9 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   member opens the Passport themselves; the Home upload bar and the Passport's two-choice empty state are page
   content, not prompts. Gates: eslint no-undef, build, boot-check ✅; screenshot
   `Claude outputs/onboarding-passport-one-ask-2026-10-30.png`.
+
+## 2026-10-30 — PUSHED: geolocation 8.2.4, iOS build 18 number, passport asked once (main 9c97717)
+
+- 4f7d0b8 → 9c97717, seven commits; no worker / site / migration paths, so no deploy runs. **Open (founder):**
+  `npm run ota` (passport-once + tonight's app half), Play 1.0.11 (14) from the Desktop AAB (location fix + video
+  share), retest the S10 after it publishes, the two-phone account check.
