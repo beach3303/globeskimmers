@@ -3964,3 +3964,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   (`setAgeGate(year, "MM-DD")` — the worker's year branch accepts it when no year is stored); ContributeSheet.sendFiles
   awaits `requirePassport()` first (FinishPassport → ConfirmSheet "Add the year you were born"); `age_required` maps to
   "add the year you were born under Settings → My birthday". Gates: eslint no-undef, build, boot-check ✅.
+
+## 2026-10-31 — PUSHED: birthday year + Contribute gate (main f6a03a1)
+
+- d26523b → f6a03a1. No deploy runs. **Open (founder):** `npm run ota`, then Settings → My birthday → Save year on
+  either phone, then the City Boards upload; Play 1.0.11 (14) in review; iOS 1.0.6 (18) Waiting for Review.
