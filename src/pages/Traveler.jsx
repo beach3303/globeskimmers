@@ -28,7 +28,7 @@ import CoverBand from "@/components/profile/CoverBand";
 import Bookplate from "@/components/profile/Bookplate";
 import MapFolder from "@/components/profile/MapFolder";
 import VirtualItems from "@/components/profile/VirtualItems";
-import Luggage from "@/components/passport/Luggage";
+import Luggage, { SHOW_LUGGAGE } from "@/components/passport/Luggage";
 import PassportFolder from "@/components/passport/PassportFolder";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import CityCardsPage from "@/components/citycards/CityCardsPage";
@@ -250,7 +250,7 @@ function TravelerWorld() {
     const firstCard = { marginTop: -72, position: "relative", zIndex: 1 };
     body = (
       <>
-        {world.luggage ? (
+        {SHOW_LUGGAGE && world.luggage ? (
           <Luggage variant="card" readOnly cloth={cloth.key} stamps={orderedStamps} luggage={world.luggage}
             ownerFlags={world.flags || {}} ownerFirst={first} style={firstCard} />
         ) : null}
@@ -266,7 +266,7 @@ function TravelerWorld() {
           stats={world.stats}
           bio={world.bio || null}
           website={world.website || null}
-          style={world.luggage ? { marginTop: GAP } : firstCard}
+          style={SHOW_LUGGAGE && world.luggage ? { marginTop: GAP } : firstCard}
         />
         <TravelerActions person={person} relation={rel} cloth={cloth.key} fallback={world.fallback} slug={worldSlug} report={report}
           onChanged={onChanged} style={{ marginTop: GAP }} />

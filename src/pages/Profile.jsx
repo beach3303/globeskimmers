@@ -30,7 +30,7 @@ import CircleFolder from "@/components/profile/CircleFolder";
 import MapFolder from "@/components/profile/MapFolder";
 import PrivacyCard from "@/components/profile/PrivacyCard";
 import VirtualItems from "@/components/profile/VirtualItems";
-import Luggage from "@/components/passport/Luggage";
+import Luggage, { SHOW_LUGGAGE } from "@/components/passport/Luggage";
 import PassportFolder from "@/components/passport/PassportFolder";
 import PhotoPackets from "@/components/passport/PhotoPackets";
 import ContributeAlbum from "@/components/passport/ContributeAlbum";
@@ -213,8 +213,11 @@ export default function ProfilePage({ embedded = false } = {}) {
         leadingLabel={edit ? "Stop editing your world" : "Edit your world"} leadingPressed={edit} contentMaxWidth={672} />
 
       <div className={COLUMN}>
-        <Luggage variant="card" cloth={cloth.key} stamps={stamps} luggage={luggage} onLuggageChanged={reloadLuggage}
-          style={{ marginTop: -72 }} />
+        {/* The trunk is retired for everyone (founder, 2026-10-30); the bookplate takes its place under the cover. */}
+        {SHOW_LUGGAGE ? (
+          <Luggage variant="card" cloth={cloth.key} stamps={stamps} luggage={luggage} onLuggageChanged={reloadLuggage}
+            style={{ marginTop: -72 }} />
+        ) : null}
 
         <input ref={avatarRef} type="file" accept="image/*" className="hidden" onChange={pickAvatar} />
         <Bookplate
@@ -232,7 +235,7 @@ export default function ProfilePage({ embedded = false } = {}) {
           onClaim={() => navigate(createPageUrl("Settings"))}
           onAvatar={() => avatarRef.current?.click()}
           avatarBusy={avatarBusy}
-          style={{ marginTop: GAP }}
+          style={SHOW_LUGGAGE ? { marginTop: GAP } : { marginTop: -72, position: "relative", zIndex: 1 }}
         >
           {edit ? (teen ? (
             <div style={{ marginTop: 4 }}><TeenHoldNote /></div>

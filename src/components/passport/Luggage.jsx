@@ -51,6 +51,12 @@ const INK = NEUTRAL.ink, INK2 = NEUTRAL.ink2, INK3 = NEUTRAL.ink3, RULE = "rgba(
 
 const ART_BASE = "https://globeskimmers-api.maizasimeon.workers.dev/stamp-art/luggage";
 
+// Founder, 2026-10-30: "remove my luggage from all of users and … from future users." The trunk is
+// off every page (Profile, a traveler's page, the share). The code, the art on R2, the worker's
+// /luggage routes and each member's luggage_state row stay, so it can come back with one flag.
+// Its story is recorded in docs/PLANS.md (Virtual Luggage).
+export const SHOW_LUGGAGE = false;
+
 // The card's window onto the render (Profile L44-45).
 const CARD_W = 280, CARD_H = 176, CROP_X = 0.5, CROP_Y = 0.39;
 const CAPTURE_W = 360; // the off-screen bezel the story image is drawn from

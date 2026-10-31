@@ -1705,7 +1705,7 @@ function PassportInner({ embedded = false }) {
                 visitors see — still carries its photo packets. */}
             {!readOnly && !preview && isAuthenticated && stampsView.length > 0 && (
               <p className="text-center mt-5" style={{ fontSize: fs(13), color: INK3 }}>
-                Your photo albums and luggage are on <button type="button" onClick={() => navigate(createPageUrl("Profile"))} style={{ background: "none", border: 0, padding: 0, color: TEAL_DEEP, fontWeight: 650, fontSize: "inherit", cursor: "pointer" }}>your Profile ›</button>
+                Your photo albums are on <button type="button" onClick={() => navigate(createPageUrl("Profile"))} style={{ background: "none", border: 0, padding: 0, color: TEAL_DEEP, fontWeight: 650, fontSize: "inherit", cursor: "pointer" }}>your Profile ›</button>
               </p>
             )}
             {(readOnly || preview) && <PhotoPackets stamps={stampsView} title={readOnly ? "Their photo packets" : "Photo packets"} owner={!readOnly && !preview} albums={booklet?.albums || "passport"} onChanged={load} social={!preview && blSlug ? { slug: blSlug, blotter, onBlotterChanged: refreshBlotter } : null} />}
