@@ -3811,3 +3811,30 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   trimmer; the web bundle in them is the OTA 1.0.2610302234 content.
 - **On approval:** `site/app-version.json` → 1.0.6 / 1.0.10 (as on 10-24); then test on an Android phone that a photo
   picked through the new picker still lands on its board (Photo Picker vs EXIF location).
+
+## 2026-10-30 — COMMITTED, NOT pushed: the Android-test fixes, luggage retired, follow pills, City Boards shelf, Virtual Passport tab
+
+- Five commits, all app-side (an OTA, no worker or migration):
+  1. **Onboarding** — "Where's home?" recognizes a country on its own (US / USA / United States of America /
+     Philippines / UK … ~75 names + short names, `matchCountry`), offered with its flag; the step folds its icon away
+     while the keyboard is up and the list fits the visual viewport (Android S10: the choices were under the
+     keyboard); location screen two lines, the "Why we need this" and "Need help? … address bar" boxes gone; birthday
+     asks explain the 13+ rule in one line (ConfirmSheet required + Settings inline); a @username claimed in Settings
+     sets `onboarding_completed` (the friend's full-first-run-after-claiming case); a home on the profile skips the
+     home step. Screenshots: `Claude outputs/onboarding-home-country-usa-2026-10-30.png`,
+     `onboarding-location-short-2026-10-30.png`.
+  2. **Luggage retired** — `SHOW_LUGGAGE=false` (Luggage.jsx); Profile + Traveler cards off, bookplate under the cover,
+     passport note reworded. Code/art/routes/rows kept; record in PLANS.md.
+  3. **Follow** — Requested / Following / Friends pills in FindPeople, ArrivalsPage, AddFriendsSheet and the traveler
+     page's Requested are buttons → UnfollowConfirm (cancel / unfollow / inner) → `circle.unfollow`; UnfollowConfirm
+     gained `zIndex` (10020 inside Add friends).
+  4. **Profile shelf** — ContributeAlbum renders a full-width Upload to City Boards button (`gridColumn: 1 / -1`; web:
+     hidden input clicked in the tap, files → sheet `initialFiles`; phone: sheet `autoPick` → native picker), then
+     MY UPLOADS and MY POSTCARDS tiles with plain captions; PhotoPackets intro one line. Screenshot:
+     `profile-shelf-upload-first-2026-10-30.png`.
+  5. **Home** — HOME_PAGES passport entry `link: true`; `openHomePage('passport')` navigates to the Passport page and
+     doesn't remember it; swipes pass over it; a stored 'passport' page falls back to Stamps.
+- Gates: eslint no-undef on every touched file, `npm run build`, `npm run boot-check` ✅; rig captures of the three
+  screens above (demo account; the home step via a profile mock with no home, since the demo has one).
+- **Not verified on a phone:** the keyboard fold (needs a real keyboard) — ask the founder to retry "Where's home?"
+  on the S10 after the OTA. **Open:** push + `npm run ota`.

@@ -6,7 +6,7 @@ changes; keep dates absolute. Item-level to-dos live in the pinned Launch Ledger
 (https://claude.ai/code/artifact/c1a784c9-8694-46df-b0e0-f4bffeb00843); IDs like G11 or N7
 point there.
 
-Last updated: 2026-10-30 evening (video: server half live, phone plugin built — store builds next; share sheet → City Board door; stickers + comments on private postcards built; privacy audit clean)
+Last updated: 2026-10-30 night (stores: 1.0.6 (17) + 1.0.10 (13) in review; luggage retired; onboarding country+keyboard fixes; follow pills undo; City Boards shelf upload-first; Virtual Passport tab → page)
 
 ## THE PIVOT — 2026-09-29, founder decision, effective immediately
 
@@ -1393,3 +1393,36 @@ monthly report by hand until it's built.
 - Founder kit for Launchhouse Atlanta (pitches, prep-app answers, LinkedIn; fact-checked): docs/FOUNDER_KIT_2026-09.md
 - Traveler scenarios, what real trips demand: docs/TRAVELER_SCENARIOS.md
 - Shipped receipts: the bottom of docs/BUILD_TEST_CHECKLIST.md
+
+## Virtual Luggage — retired 2026-10-30 (founder: "remove my luggage from all of users and … from future users")
+
+What it was (2026-09-30 → 2026-10-30): a collectible travel trunk on the Profile ("My luggage · 3 of 9 placed"),
+six skins (The Classic first; photo-real renders on R2 under `stamp-art/luggage/<type>/<face>.webp`), five faces
+that turned in a pseudo-3D walk-around, and 1920s hotel-style labels DERIVED from the passport's stamps (never
+bought) that the member placed on the faces; a shareable "My Virtual Luggage" story image; a visitor met the
+owner's trunk on their page. Worker: `/luggage/get`, `/luggage/set`, the `luggage_state` row per member,
+`luggage_save` events; the account purge deletes the row. The founder's call on 2026-10-30: off for everyone,
+present and future, but keep the record. Done with one flag, `SHOW_LUGGAGE = false` in
+`src/components/passport/Luggage.jsx` (Profile, Traveler and the passport's note read it); nothing deleted —
+components, art, routes and rows all stay, so it can return with one line. The travel buddies (pets) are
+separate and stay.
+
+## Evening of 2026-10-30 — the founder's Android test and five asks (all built, committed, awaiting push + OTA)
+
+- **Onboarding** (Samsung S10 test): a country typed alone ("US", "USA", "United States of America") is recognized
+  and offered as home with its flag (`matchCountry` in src/lib/homePlace.js, ~75 countries with the short names
+  people type; the city can follow in Settings). The choices stay above the keyboard (the step folds its icon away
+  when the keyboard is up; the list's height follows the visual viewport). Location screen: two lines, boxes gone.
+  Birthday asks say why: "We ask once so we know you're over 13 — Globeskimmers uses your location, so it isn't
+  open to anyone 13 or younger." A @username claimed in Settings marks the account onboarded (an old install's
+  friend was sent through the whole first run after claiming hers); a home already on the profile isn't asked again.
+- **Follow:** every Requested / Following pill (Find people, Arrivals, Add friends, a traveler's page) is a button
+  that cancels the request or unfollows, after the same confirm sheet the circle list uses. Unfollowing a friend ends
+  the friendship on your side; they still follow you. Block remains the way to cut both directions. No "remove a
+  follower" exists yet — a worker op if the founder wants it.
+- **Profile → City Boards shelf:** "Upload to City Boards" first (full width, the upload icon, "Public photos and
+  clips. Each goes to the board of the city where it was taken."), then MY UPLOADS (photos & clips, by city) and MY
+  POSTCARDS (sent to boards). Screenshot: `Claude outputs/profile-shelf-upload-first-2026-10-30.png`.
+- **Home tabs:** the Virtual Passport tab opens the Passport page itself (the bottom bar's page, full screen, no
+  tabs); Home keeps the page it was on; a swipe passes over the tab.
+- **Luggage retired** (section above).
