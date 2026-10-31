@@ -43,6 +43,9 @@ export default function OnboardingPage() {
     [profile, user]
   );
 
+  // A home already on the profile (set in Settings, or by an earlier run) isn't asked again
+  // (2026-10-30: an old install answered it in Settings, then met the whole first run).
+  const hasHome = !!(profile?.home_city || profile?.home_country);
   const steps = useMemo(() => {
     const list = [];
     if (!initialFirstName) list.push("first_name");
@@ -51,9 +54,10 @@ export default function OnboardingPage() {
     // traveler knows exactly why the app wants it (stamps are earned by being
     // there), which is the honest frame for the permission.
     // "Where did you hear about us?" (2026-10-19): one optional tap, the honest install source.
-    list.push("home_country", "heard_from", "passport", "location");
+    if (!hasHome) list.push("home_country");
+    list.push("heard_from", "passport", "location");
     return list;
-  }, [initialFirstName]);
+  }, [initialFirstName, hasHome]);
 
   const [stepIndex, setStepIndex] = useState(0);
   const [data, setData] = useState({});
@@ -100,7 +104,7 @@ export default function OnboardingPage() {
     // distance) from home country + device locale. Only fill gaps — an explicit
     // answer (if a step is ever re-added) always wins. Soft defaults; editable
     // in Settings.
-    const inferred = inferProfileDefaults(collected.home_country);
+    const inferred = inferProfileDefaults(collected.home_country || profile?.home_country);
     if (!update.preferred_currency) update.preferred_currency = inferred.currency;
     if (!update.preferred_language) update.preferred_language = inferred.language;
     if (!update.temp_unit) update.temp_unit = inferred.tempUnit;
@@ -135,6 +139,7 @@ export default function OnboardingPage() {
     if (partial) setData(merged);
     if (stepIndex >= steps.length - 1) finish(merged);
     else setStepIndex((i) => i + 1);
+    try { window.scrollTo(0, 0); } catch { /* fine */ }   // a step opens at its top, keyboard or not
   };
 
   const key = steps[stepIndex];

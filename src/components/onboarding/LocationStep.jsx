@@ -365,8 +365,9 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
           Find what&rsquo;s near you
         </h2>
         
+        {/* Two lines, no more (founder, 2026-10-30: "short and sweet"). */}
         <p className="text-gray-600 mb-8 text-center">
-          Globeskimmers needs your location to provide personalized travel recommendations and nearby experiences
+          Globeskimmers uses your location to show what&rsquo;s near you and to stamp the places you visit. It stays private.
         </p>
 
         {error && (
@@ -487,26 +488,6 @@ export default function LocationStep({ onNext, onLocationGranted, onExit }) {
           )}
         </div>
 
-        <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-          <p className="text-sm text-gray-700 font-semibold mb-2">Why we need this:</p>
-          <p className="text-sm text-gray-700">
-            Required for nearby ATMs, currency exchange, weather updates, and location-based features.
-          </p>
-        </div>
-
-        {!error && (
-          <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-            <div className="flex items-start gap-2">
-              <Settings className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-xs font-semibold text-yellow-900 mb-1">Need help?</p>
-                <p className="text-xs text-yellow-800">
-                  If you're having trouble, look for the <strong>🔒 lock icon</strong> or <strong>aA button</strong> in your browser's address bar to manage location permissions.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </motion.div>
   );

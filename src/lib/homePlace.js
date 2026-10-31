@@ -27,6 +27,52 @@ export function homeTimezoneForCountry(name) {
   return HOME_COUNTRY_TIMEZONES[name] || null;
 }
 
+// Countries, by name and by the short names people type (2026-10-30: the founder's Android test
+// typed "US", "USA" and "United States of America" into "Where's home?" and got "No cities
+// match"). The home picker offers the country itself as an answer; the home clock then uses the
+// country's default zone until a city is added in Settings.
+const C = (name, iso, ...aliases) => ({ name, iso, aliases });
+export const COUNTRIES = [
+  C('United States', 'US', 'us', 'usa', 'america', 'united states of america', 'the states', 'estados unidos'),
+  C('United Kingdom', 'GB', 'uk', 'britain', 'great britain', 'england', 'scotland', 'wales'),
+  C('Philippines', 'PH', 'ph', 'pinas', 'pilipinas', 'philipines', 'phillipines', 'phillippines'),
+  C('Canada', 'CA'), C('Mexico', 'MX', 'méxico'), C('Australia', 'AU', 'aus', 'oz'), C('New Zealand', 'NZ', 'nz', 'aotearoa'),
+  C('Japan', 'JP', 'nippon', 'nihon'), C('South Korea', 'KR', 'korea', 'republic of korea'), C('China', 'CN', 'prc'),
+  C('Taiwan', 'TW'), C('Hong Kong', 'HK', 'hk'), C('Singapore', 'SG', 'sg'), C('Malaysia', 'MY'), C('Thailand', 'TH'),
+  C('Vietnam', 'VN', 'viet nam'), C('Indonesia', 'ID'), C('India', 'IN', 'bharat'), C('Pakistan', 'PK'), C('Bangladesh', 'BD'),
+  C('Sri Lanka', 'LK'), C('Nepal', 'NP'), C('United Arab Emirates', 'AE', 'uae', 'emirates'), C('Saudi Arabia', 'SA', 'ksa'),
+  C('Qatar', 'QA'), C('Kuwait', 'KW'), C('Israel', 'IL'), C('Turkey', 'TR', 'türkiye', 'turkiye'), C('Egypt', 'EG'),
+  C('South Africa', 'ZA', 'rsa'), C('Nigeria', 'NG'), C('Kenya', 'KE'), C('Ghana', 'GH'), C('Morocco', 'MA'), C('Ethiopia', 'ET'),
+  C('Germany', 'DE', 'deutschland'), C('France', 'FR'), C('Italy', 'IT', 'italia'), C('Spain', 'ES', 'españa', 'espana'),
+  C('Portugal', 'PT'), C('Netherlands', 'NL', 'holland', 'the netherlands'), C('Belgium', 'BE'), C('Switzerland', 'CH'),
+  C('Austria', 'AT'), C('Ireland', 'IE'), C('Sweden', 'SE'), C('Norway', 'NO'), C('Denmark', 'DK'), C('Finland', 'FI'),
+  C('Iceland', 'IS'), C('Poland', 'PL', 'polska'), C('Czech Republic', 'CZ', 'czechia'), C('Hungary', 'HU'), C('Greece', 'GR'),
+  C('Romania', 'RO'), C('Croatia', 'HR'), C('Ukraine', 'UA'), C('Russia', 'RU'),
+  C('Brazil', 'BR', 'brasil'), C('Argentina', 'AR'), C('Chile', 'CL'), C('Colombia', 'CO'), C('Peru', 'PE', 'perú'),
+  C('Venezuela', 'VE'), C('Ecuador', 'EC'), C('Bolivia', 'BO'), C('Uruguay', 'UY'), C('Dominican Republic', 'DO'),
+  C('Puerto Rico', 'PR'), C('Cuba', 'CU'), C('Jamaica', 'JM'), C('Costa Rica', 'CR'), C('Panama', 'PA', 'panamá'),
+  C('Guatemala', 'GT'), C('Honduras', 'HN'), C('El Salvador', 'SV'), C('Nicaragua', 'NI'), C('Guam', 'GU'), C('Fiji', 'FJ'),
+];
+const flagOf = (iso) => String.fromCodePoint(...[...iso.toUpperCase()].map((ch) => 127397 + ch.charCodeAt(0)));
+const fold = (s) => String(s || '').toLowerCase().replace(/[.’'`]/g, '').replace(/\s+/g, ' ').replace(/^the /, '').trim();
+
+// The countries a query names: an exact name or short name first ("us", "usa", "philippines");
+// otherwise, from four letters, the names that begin with it ("unit" → United States, United
+// Kingdom, United Arab Emirates). At most three, each with its flag.
+export function matchCountry(query) {
+  const q = fold(query);
+  if (q.length < 2) return [];
+  const exact = COUNTRIES.filter((c) => fold(c.name) === q || c.aliases.some((a) => fold(a) === q));
+  const list = exact.length ? exact
+    : q.length >= 4 ? COUNTRIES.filter((c) => fold(c.name).startsWith(q) || c.aliases.some((a) => a.length >= 4 && fold(a).startsWith(q))) : [];
+  return list.slice(0, 3).map((c) => ({ name: c.name, iso: c.iso, flag: flagOf(c.iso) }));
+}
+
+// A country picked as home, with no city: the flag's country and the country's default zone.
+export function countryHomePlace(c) {
+  return { city: '', state: '', country: c.name, latitude: null, longitude: null, timezone: homeTimezoneForCountry(c.name), label: c.name, countryOnly: true };
+}
+
 // Search cities/places for the home picker. Reuses the Worker's search-location
 // route, which already rejects too-broad country/state queries (so users are
 // nudged to a specific city). Returns [] on error or short queries.

@@ -168,7 +168,8 @@ export function ConfirmSheet({ onLater, onSaved, onNothingToAsk, account, requir
                 ? (yearOnly
                   ? `One thing first${firstName ? `, ${firstName}` : ""}: we have your birthday as ${mdSpoken} — add the year you were born, and you’re all set.`
                   : needYear
-                  ? `One thing first${firstName ? `, ${firstName}` : ""}: everyone on GlobeSkimmers adds their birthday — it takes a moment, and then you’re all set.`
+                  // Why we ask, in a line (founder, 2026-10-30: "nice and sweet and polite and clear").
+                  ? `One thing first${firstName ? `, ${firstName}` : ""}: your birthday. We ask once so we know you’re over 13 — Globeskimmers uses your location, so it isn’t open to anyone 13 or younger.`
                   : `One thing first${firstName ? `, ${firstName}` : ""}: we have the year you were born — add the month and day, and you’re all set.`)
                 : yearOnly
                   ? `We have your birthday as ${mdSpoken}, but not the year. Stamps and posts wait until we have it; everything else works as usual.`
@@ -177,7 +178,9 @@ export function ConfirmSheet({ onLater, onSaved, onNothingToAsk, account, requir
                   : "We have the year you were born, but not the month and day. Stamps and posts wait until we have them; everything else works as usual."}
             </p>
             <p style={{ fontSize: fs(12.5), lineHeight: 1.45, color: INK3, marginTop: 6 }}>
-              It keeps GlobeSkimmers safe and sets the right privacy for your age. Private: never shown on your profile or passport.
+              {required && needYear && !yearOnly
+                ? "Private: never shown on your profile or passport."
+                : "It keeps GlobeSkimmers safe and sets the right privacy for your age. Private: never shown on your profile or passport."}
             </p>
             {yearOnly ? (
               <select value={yearSel} onChange={(e) => { setYearSel(e.target.value); setErr(null); }} aria-label="The year you were born" autoComplete="bday-year"

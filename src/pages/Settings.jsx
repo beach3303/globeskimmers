@@ -501,6 +501,15 @@ export default function SettingsPage() {
     if (error) { showToast(error, "error"); return; }
     setHandleState(h); setHandleDraft(h);
     showToast(`You're @${h}`, "success");
+    // Claimed here before the first-run screens ever ran (an old install updated, 2026-10-30: a
+    // friend claimed her name in Settings and was then sent through the whole onboarding): a
+    // member with a @username is onboarded. Home city and location are both here in Settings.
+    if (profile && profile.onboarding_completed !== true && authUser?.id) {
+      try {
+        await supabase.from("profiles").update({ onboarding_completed: true }).eq("id", authUser.id);
+        await refreshProfile();
+      } catch { /* the gate may still run; nothing is lost */ }
+    }
   };
 
   const { logout, deleteAccount, profile, user: authUser, refreshProfile, canRefresh, socialTier } = useAuth(); // Supabase
@@ -952,7 +961,7 @@ export default function SettingsPage() {
                     <label htmlFor="gs-birth-year" style={{ display: 'block', fontSize: 13, color: ED_INK, fontWeight: 600 }}>
                       One thing first — your birthday
                     </label>
-                    <p style={{ fontSize: 12, color: ED_INK3, marginTop: 2 }}>Asked once, never shown. It keeps GlobeSkimmers age-appropriate.</p>
+                    <p style={{ fontSize: 12, color: ED_INK3, marginTop: 2 }}>We ask once so we know you’re over 13: Globeskimmers uses your location, so it isn’t open to anyone 13 or younger. Never shown.</p>
                     <input id="gs-birth-year" type="date" value={yearDraft} onChange={(e) => setYearDraft(e.target.value)} autoComplete="bday"
                       min="1900-01-01" max={new Date().toISOString().slice(0, 10)}
                       className="mt-2 w-48 rounded-xl px-3 h-11 outline-none" style={{ border: `1px solid ${ED_RULE}`, background: '#fff', fontSize: 15 }} />
