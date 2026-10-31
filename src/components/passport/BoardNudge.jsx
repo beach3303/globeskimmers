@@ -73,7 +73,8 @@ export default function BoardNudge() {
       {!compose ? (
         // The after-stamp card (navigation redesign, 2026-10-31): the board first — See the board,
         // Stamp another photo — with the postcard as the quiet third way. Honest wording: a stamp
-        // proves you were there; whether your photos hang on the board follows your album privacy.
+        // proves you were there; a stamp photo hangs on the board only from a 🌍 Everyone album, while
+        // City Board uploads and postcards to boards are contributions and always public (founder, 2026-10-31).
         <div style={{ position: "fixed", left: 12, right: 12, bottom: "calc(96px + env(safe-area-inset-bottom))", zIndex: 9000, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
           <div role="status" style={{ pointerEvents: "auto", width: "100%", maxWidth: 440, boxSizing: "border-box", padding: "10px 12px 12px", background: NEUTRAL.airmail, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16, boxShadow: `0 14px 30px -16px ${rgba(NEUTRAL.ink, 0.5)}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

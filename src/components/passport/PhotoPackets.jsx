@@ -173,7 +173,8 @@ export default function PhotoPackets({ stamps, title = "Photo packets", openPhot
             <span aria-hidden="true" className="flex-1" style={{ borderTop: "1px dashed rgba(22,17,13,.18)", transform: "translateY(-3px)" }} />
           </div>
           <p style={{ margin: "4px 0 0", fontSize: fs(12), lineHeight: 1.45, color: INK3 }}>
-            Public. Delete any of it any time. Postcards to friends stay in your Mailbox.
+            {/* Founder, 2026-10-31: "album for city board has to be public because they’re contribution to city board" — the passport dial above never reaches these two. */}
+            Always public, whatever your passport setting — they’re contributions to each city’s board. Delete any of it any time. Postcards to friends stay in your Mailbox.
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, paddingTop: 12 }}>{boards}</div>
         </section>

@@ -50,7 +50,7 @@ export function PassportAudienceSheet({ onClose, onSaved = undefined }) {
   return (
     <AudienceSheet title="Who can see your passport" value={aud || "inner"} onPick={pick} onClose={onClose}
       confirmWider={(v) => confirmOpening(v, counts)}
-      note="The most anyone can see. Each stamp and album can be the same or more private — never more public." />
+      note="The most anyone can see. Each stamp and album can be the same or more private — never more public. Your City Board uploads and postcards to boards are contributions, so they stay public." />
   );
 }
 
