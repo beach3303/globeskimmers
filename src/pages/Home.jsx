@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { ChevronRight, MapPin, PartyPopper } from "lucide-react";
-import { AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { trackEvent } from "../Layout";
@@ -38,7 +37,6 @@ import SmartSearchOverlay from "@/components/search/SmartSearchOverlay";
 import DestinationStrip from "@/components/search/DestinationStrip";
 import UpdateCard from "@/components/home/UpdateCard";
 import UpdateSheet from "@/components/home/UpdateSheet";
-import WelcomeSplash from "@/components/onboarding/WelcomeSplash";
 import CityBoardPage from "@/components/home/CityBoardPage";
 import HomePager, { initialHomePage, rememberHomePage } from "@/components/home/HomePager";
 import ArrivalsPage from "@/components/home/ArrivalsPage";
@@ -86,16 +84,9 @@ const HOME_CAPITAL_COORDS = {
 // not just the ~20 that used to be hardcoded here.
 
 // Module-scoped so it survives Home re-mounts within one app session: the
-// signInTick of the last sign-in we already showed the welcome splash for. Keeps
-// the splash to ONCE per sign-in (not on every Home re-mount/navigation).
-let lastWelcomeHandledTick = 0;
 // Module-scoped so the cold-open "Where to?" chooser fires at most ONCE per app
 // launch (a true cold open), not on every Home re-mount/tab navigation.
 let coldOpenAsked = false;
-// Per-account cap: the welcome splash shows on at most this many sign-ins, then
-// it's gone for good. The counter lives on the Supabase profile
-// (profile.welcome_splash_count) — see AuthContext.bumpWelcomeSplashCount.
-const WELCOME_MAX = 10;
 
 // Times and dates in a place's own timezone (the lobby, its clock rows and the iPad layout).
 function formatLocalTime(date, tz) {
@@ -119,7 +110,7 @@ function formatLocalDate(date, tz) {
 export default function HomePage() {
   const navigate = useNavigate();
   const { locationMode, selectedLocation, currentGpsLocation, getActiveLocation, getCurrentLocation, switchToCurrentLocation, loading: locationLoading } = useLocation();
-  const { profile, user: authUser, signInTick, bumpWelcomeSplashCount } = useAuth();
+  const { profile, user: authUser } = useAuth();
   // iPad renders the same Home as the phone, in a 720px column, with the local
   // time in the lobby, the inline services grid and the "Around you" rows.
   const isTablet = useIsTablet();
@@ -136,7 +127,6 @@ export default function HomePage() {
   const destSearch = routerLocation.state?.destinationSearch || null; // "everything <place>" mode
   useEffect(() => { setDestDismissed(false); }, [destSearch]);
   const [coldOpenChooser, setColdOpenChooser] = useState(false); // picker opened as the cold-open "Where to?" chooser
-  const [showWelcome, setShowWelcome] = useState(false); // welcome splash (first launches, before the location selector)
   const [tempUnit, setTempUnit] = useState('F');
   const [homeCountryInfo, setHomeCountryInfo] = useState(null);
   const [homeCountryWeather, setHomeCountryWeather] = useState(null);
@@ -163,29 +153,12 @@ export default function HomePage() {
      
   }, [locationLoading, locationMode, selectedLocation, currentGpsLocation, profile]);
 
-  // ENTRY FLOW — one ATOMIC decision (so the splash and the location picker can
-  // never both open at once):
-  //   • A FRESH sign-in/sign-up (signInTick bumped in AuthContext — never on a
-  //     plain app-launch session restore) shows the Welcome splash, capped at
-  //     WELCOME_MAX per account via profile.welcome_splash_count. When shown we
-  //     RETURN, so the picker is not opened underneath it (the splash leads; its
-  //     Start exploring / Skip / ✕ opens the picker next).
-  //   • Otherwise (no fresh sign-in, or cap reached) open the location picker
-  //     once if no location is set yet. Keyed to lastWelcomeHandledTick so the
-  //     splash shows once per sign-in, not on every Home re-mount in a session.
+  // ENTRY FLOW. The Welcome splash ("Where should we start?", five starters) is gone (founder,
+  // 2026-10-30: "I think we can delete that screen"): Home opens the location picker once when no
+  // location is set yet, and otherwise honours the member's cold-open setting.
   useEffect(() => {
     if (locationLoading) return;
-    if (signInTick && signInTick !== lastWelcomeHandledTick) {
-      if (!profile) return; // wait for the account's count before deciding
-      lastWelcomeHandledTick = signInTick;
-      if ((profile.welcome_splash_count ?? 0) < WELCOME_MAX) {
-        setShowWelcome(true);
-        bumpWelcomeSplashCount(); // persist +1 to the per-account counter
-        return; // splash leads — do NOT also open the picker underneath
-      }
-      // cap reached → fall through to the picker
-    }
-    if (!pickerPrompted.current && !showWelcome) {
+    if (!pickerPrompted.current) {
       const hasLoc = !!getActiveLocation()?.coordinates;
       if (!hasLoc) {
         // First run / no location yet — open the chooser (📍 current vs 🗺️ pick).
@@ -208,13 +181,13 @@ export default function HomePage() {
       }
     }
      
-  }, [locationLoading, signInTick, profile, showWelcome, locationMode, selectedLocation, currentGpsLocation]);
+  }, [locationLoading, profile, locationMode, selectedLocation, currentGpsLocation]);
 
-  // Tell LocationContext's mismatch detector to defer while the chooser / welcome
-  // splash is open, so the two location prompts never stack on top of each other.
+  // Tell LocationContext's mismatch detector to defer while the chooser is open, so two
+  // location prompts never stack on top of each other.
   useEffect(() => {
-    try { window.__gsChooserOpen = showLocationPicker || showWelcome; } catch { /* ignore */ }
-  }, [showLocationPicker, showWelcome]);
+    try { window.__gsChooserOpen = showLocationPicker; } catch { /* ignore */ }
+  }, [showLocationPicker]);
 
   // Drive the local greeting word (e.g. "Hola", "Bonjour") from the active
   // location's country. Theme-system country-code sync was removed when the
@@ -506,20 +479,6 @@ export default function HomePage() {
      
   }, [locationMode, selectedLocation, currentGpsLocation, profile]);
 
-  // Welcome-splash actions:
-  //   • Proceed (Start exploring / Skip / ✕) → open the location selector.
-  //   • Timeout (30s with no interaction)    → go straight to the home screen.
-  // The starter rows are display-only. Both stable (useCallback) so the splash's
-  // 30s auto-dismiss timer isn't reset on re-render.
-  const welcomeExplore = useCallback(() => {
-    setShowWelcome(false);
-    pickerPrompted.current = true; // we're opening it; don't let the effect re-open on close
-    setShowLocationPicker(true);
-  }, []);
-  const welcomeClose = useCallback(() => {
-    setShowWelcome(false);
-  }, []);
-
   const toggleTempUnit = () => setTempUnit((prev) => (prev === 'C' ? 'F' : 'C'));
 
   // No full-page spinner: the lobby paints at once from the profile, and the
@@ -669,11 +628,6 @@ export default function HomePage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen font-sans" style={{ background: IVORY }}>
-      {/* First-launches Welcome splash — overlays Home (phone + tablet) BEFORE
-          the location selector; any dismissal opens the selector → home. */}
-      <AnimatePresence>
-        {showWelcome && <WelcomeSplash onProceed={welcomeExplore} onTimeout={welcomeClose} />}
-      </AnimatePresence>
       {/* THE LOBBY (Home-Boxes L29-51): hello and the name, the date (on iPad
           also the local time), temperature and location pill, any extra clocks,
           then the search bar. It paints at once; HomeLobby owns the 1 s clock. */}
@@ -718,10 +672,10 @@ export default function HomePage() {
 
 
       {/* Arrival stamps — airport (domestic + international) + land/boat border crossings */}
-      {profile?.onboarding_completed && !showWelcome && <AirportArrivalPrompt />}
+      {profile?.onboarding_completed && <AirportArrivalPrompt />}
       {/* Once a day, a phone on an older store build is asked to update (2026-10-25). */}
-      {profile?.onboarding_completed && !showWelcome && !showLocationPicker && <UpdateSheet />}
-      {profile?.onboarding_completed && !showWelcome && <BorderCrossingPrompt />}
+      {profile?.onboarding_completed && !showLocationPicker && <UpdateSheet />}
+      {profile?.onboarding_completed && <BorderCrossingPrompt />}
     </div>
   );
 }
