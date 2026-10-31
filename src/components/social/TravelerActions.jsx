@@ -199,8 +199,12 @@ export default function TravelerActions({ person, relation = null, cloth = undef
         <button type="button" onClick={() => setConfirm("unfollow")} aria-label={`Following ${who}. Unfollow?`} style={outline}>Following</button>
       );
     } else if (rel === "requested") {
+      // A tap cancels the request (founder, 2026-10-30: "allow users to cancel their request to follow").
       primary = (
-        <span style={{ ...big, cursor: "default", color: NEUTRAL.ink3, fontWeight: 500 }}>Requested</span>
+        <button type="button" onClick={() => setConfirm("cancel")} aria-label={`You asked to follow ${who}. Cancel the request?`}
+          style={{ ...outline, borderColor: NEUTRAL.rule, color: NEUTRAL.ink3, fontWeight: 500 }}>
+          Requested
+        </button>
       );
     } else if (h) {
       primary = (

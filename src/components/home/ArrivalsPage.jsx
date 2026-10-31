@@ -36,6 +36,7 @@ function addedRow(r) {
 import { showToast } from "@/components/Toast";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import { askForAlerts } from "@/lib/pushAlerts";
+import UnfollowConfirm from "@/components/social/UnfollowConfirm";
 
 const SERIF = "'Instrument Serif', Georgia, serif";
 const BLUE = NEUTRAL.airmailBlue;
@@ -68,6 +69,8 @@ export default function ArrivalsPage({ wide = false }) {
   const [adding, setAdding] = useState(false);
   const [arrivals, setArrivals] = useState(null);   // { rows, … } once read
   const [added, setAdded] = useState({});          // user_id -> "Following" | "Requested" | "busy"
+  const [confirm, setConfirm] = useState(null);    // { person, mode } — a Following / Requested pill was tapped
+  const [undoing, setUndoing] = useState(false);
   useEffect(() => {
     if (!socialTierReady || held) return undefined;
     let gone = false;
@@ -91,6 +94,18 @@ export default function ArrivalsPage({ wide = false }) {
     setAdded((a) => ({ ...a, [p.user_id]: pending ? "Requested" : "Following" }));
     askForAlerts();
     showToast(pending ? `Asked to follow @${p.handle} — they approve first` : `Following @${p.handle}`, "success");
+  };
+  // Tapping the pill undoes it (founder, 2026-10-30): the request is withdrawn, or the follow ends.
+  const undo = async () => {
+    if (!confirm || undoing) return;
+    const { person: p, mode } = confirm;
+    setUndoing(true);
+    const res = await circle.unfollow({ user_id: p.user_id, handle: p.handle });
+    setUndoing(false);
+    if (!res.ok) { showToast(workerMessage(res.error, "That didn’t go through. Try again."), "error"); return; }
+    setConfirm(null);
+    setAdded((a) => ({ ...a, [p.user_id]: undefined }));
+    showToast(mode === "cancel" ? "Request cancelled" : `Unfollowed @${p.handle}`, "success");
   };
   const fresh = arrivals && !arrivals.off && !arrivals.held ? arrivals.rows : [];
   return (
@@ -154,7 +169,9 @@ export default function ArrivalsPage({ wide = false }) {
                           <span style={{ display: "block", fontSize: fs(12.5), color: NEUTRAL.ink3 }}>{p.from ? `joined from ${withThe(p.from)} · ` : "joined "}{p.days === 0 ? "today" : p.days === 1 ? "yesterday" : `${p.days} days ago`}</span>
                         </span>
                         {state === "Following" || state === "Requested" ? (
-                          <span style={{ flex: "none", minHeight: 34, display: "inline-flex", alignItems: "center", padding: "0 12px", borderRadius: 999, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.ink2, fontSize: fs(12.5), fontWeight: 600 }}>{state}</span>
+                          <button type="button" onClick={() => setConfirm({ person: { user_id: p.user_id, handle: p.handle, name: `@${p.handle}` }, mode: state === "Requested" ? "cancel" : "unfollow" })}
+                            aria-label={state === "Requested" ? `You asked to follow @${p.handle}. Cancel the request?` : `Following @${p.handle}. Unfollow?`}
+                            style={{ flex: "none", minHeight: 34, display: "inline-flex", alignItems: "center", padding: "0 12px", borderRadius: 999, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.ink2, font: "inherit", fontSize: fs(12.5), fontWeight: 600, cursor: "pointer" }}>{state}</button>
                         ) : (
                           <button type="button" onClick={() => addToCircle(p)} aria-busy={state === "busy" || undefined} aria-label={`Follow @${p.handle}`}
                             style={{ flex: "none", minHeight: 34, padding: "0 12px", borderRadius: 999, border: 0, background: BLUE, color: NEUTRAL.white, font: "inherit", fontSize: fs(12.5), fontWeight: 650, cursor: "pointer" }}>{state === "busy" ? "…" : "Follow"}</button>
@@ -172,6 +189,7 @@ export default function ArrivalsPage({ wide = false }) {
             <UserPlus size={17} strokeWidth={2} aria-hidden="true" focusable="false" /> Add friends
           </button>
           {adding ? <AddFriendsSheet onClose={() => setAdding(false)} /> : null}
+          <UnfollowConfirm person={confirm?.person || null} mode={confirm?.mode || "unfollow"} busy={undoing} onConfirm={undo} onClose={() => setConfirm(null)} />
         </>
       )}
     </div>

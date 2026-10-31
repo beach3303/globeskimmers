@@ -27,6 +27,7 @@ import { Face } from '@/components/social/SocialMarks';
 import InviteButton from '@/components/passport/InviteButton';
 import { workerMessage } from '@/components/social/FollowByHandle';
 import { askForAlerts } from '@/lib/pushAlerts';
+import UnfollowConfirm from '@/components/social/UnfollowConfirm';
 
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -59,6 +60,8 @@ export default function FindPeople({ accent = undefined, cloth = undefined, onFo
   const [busy, setBusy] = useState(false);
   const [following, setFollowing] = useState(null);
   const [focused, setFocused] = useState(false);
+  const [confirm, setConfirm] = useState(null);   // { person, mode } — a Requested / Following pill was tapped
+  const [undoing, setUndoing] = useState(false);
   const seq = useRef(0);
 
   const row = cloth !== undefined && cloth !== null ? clothRow(cloth) : null;
@@ -94,6 +97,19 @@ export default function FindPeople({ accent = undefined, cloth = undefined, onFo
     setRows((rs) => (rs || []).map((r) => (r.user_id === p.user_id ? { ...r, relation: status === 'pending' ? 'requested' : (r.relation === 'follows_you' ? 'friends' : 'following') } : r)));
     showToast(status === 'pending' ? `Asked to follow ${who} — they approve first` : `Following ${who}`, 'success');
     if (typeof onFollowed === 'function') onFollowed({ user_id: p.user_id, handle: p.handle, status });
+  };
+  // The pill undoes itself (founder, 2026-10-30: cancel a follow request; unfriend): a tap asks
+  // first, then the request is withdrawn or the follow ends. A friend you unfollow still follows you.
+  const undo = async () => {
+    if (!confirm || undoing) return;
+    const { person: p, mode } = confirm;
+    setUndoing(true);
+    const res = await circle.unfollow({ user_id: p.user_id, handle: p.handle || '' });
+    setUndoing(false);
+    if (!res.ok) { showToast(workerMessage(res.error, 'That didn’t go through. Try again.'), 'error'); return; }
+    setConfirm(null);
+    setRows((rs) => (rs || []).map((r) => (r.user_id === p.user_id ? { ...r, relation: mode === 'inner' ? 'follows_you' : null } : r)));
+    showToast(mode === 'cancel' ? 'Request cancelled' : `Unfollowed ${p.handle ? `@${p.handle}` : p.name}`, 'success');
   };
 
   const hint = what.kind === 'email' && !what.ready ? 'Type the whole email address'
@@ -165,9 +181,12 @@ export default function FindPeople({ accent = undefined, cloth = undefined, onFo
                         {p.relation === 'follows_you' ? 'Follow back' : 'Follow'}
                       </button>
                     ) : (
-                      <span style={{ flex: 'none', minHeight: 44, padding: '0 12px', display: 'flex', alignItems: 'center', borderRadius: 12, border: `1px solid ${fieldLine}`, background: NEUTRAL.ivory, color: NEUTRAL.ink2, fontSize: fs(12.5), fontWeight: 600 }}>
+                      <button type="button"
+                        onClick={() => setConfirm({ person: p, mode: p.relation === 'requested' ? 'cancel' : p.relation === 'friends' ? 'inner' : 'unfollow' })}
+                        aria-label={p.relation === 'requested' ? `You asked to follow ${p.name}. Cancel the request?` : `${RELATION[p.relation] || 'Following'} ${p.name}. Unfollow?`}
+                        style={{ flex: 'none', minHeight: 44, padding: '0 12px', display: 'flex', alignItems: 'center', borderRadius: 12, border: `1px solid ${fieldLine}`, background: NEUTRAL.ivory, color: NEUTRAL.ink2, font: 'inherit', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>
                         {RELATION[p.relation] || 'Following'}
-                      </span>
+                      </button>
                     )}
                   </li>
                 );
@@ -176,6 +195,7 @@ export default function FindPeople({ accent = undefined, cloth = undefined, onFo
           )}
         </div>
       )}
+      <UnfollowConfirm person={confirm?.person || null} mode={confirm?.mode || 'unfollow'} busy={undoing} onConfirm={undo} onClose={() => setConfirm(null)} />
     </div>
   );
 }

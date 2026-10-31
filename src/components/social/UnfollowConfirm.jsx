@@ -45,7 +45,8 @@ const WORDS = {
 /**
  * @param {{ person?: any, mode?: 'unfollow'|'inner'|'cancel'|'block', busy?: boolean, onConfirm?: () => void, onClose?: () => void }} props
  */
-export default function UnfollowConfirm({ person = null, mode = "unfollow", busy = false, onConfirm = undefined, onClose = undefined }) {
+// zIndex: above the sheet that opened it (Add friends sits at 10010, 2026-10-30).
+export default function UnfollowConfirm({ person = null, mode = "unfollow", busy = false, onConfirm = undefined, onClose = undefined, zIndex = 9998 }) {
   const open = !!person;
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const sheetRef = useRef(/** @type {HTMLDivElement|null} */ (null));
@@ -80,7 +81,7 @@ export default function UnfollowConfirm({ person = null, mode = "unfollow", busy
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[9998] flex items-end justify-center" style={{ background: rgba(NEUTRAL.ink, 0.5) }} onClick={close}>
+    <div className="fixed inset-0 flex items-end justify-center" style={{ zIndex, background: rgba(NEUTRAL.ink, 0.5) }} onClick={close}>
       <div ref={sheetRef} role="alertdialog" aria-modal="true" aria-labelledby={`${uid}-t`} aria-describedby={`${uid}-d`} tabIndex={-1}
         className="w-full max-w-md" onClick={(e) => e.stopPropagation()}
         style={{ position: "relative", background: NEUTRAL.ivory, borderRadius: "22px 22px 0 0", overflow: "hidden", outline: "none" }}>

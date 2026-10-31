@@ -25,6 +25,7 @@ import { Face } from "@/components/social/SocialMarks";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import FindPeople from "@/components/social/FindPeople";
 import InviteButton, { inviteText } from "@/components/passport/InviteButton";
+import UnfollowConfirm from "@/components/social/UnfollowConfirm";
 
 const SERIF = "'Instrument Serif', Georgia, serif";
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
@@ -32,7 +33,7 @@ const BLUE = NEUTRAL.airmailBlue;
 const lc = (v) => String(v ?? "").trim().replace(/^@+/, "").toLowerCase();
 const KICKER = { margin: 0, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".16em", textTransform: "uppercase", color: BLUE };
 
-function Person({ p, label, sub, busy, done, onFollow }) {
+function Person({ p, label, sub, busy, done, onFollow, onUndo = undefined }) {
   return (
     <li style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 52, borderBottom: `1px solid ${NEUTRAL.rule}` }}>
       <Face name={p.name} handle={p.handle} avatar={p.avatar} cloth={p.cloth} size={34} />
@@ -41,7 +42,9 @@ function Person({ p, label, sub, busy, done, onFollow }) {
         <span style={{ display: "block", fontSize: fs(12), color: NEUTRAL.ink3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name && p.handle ? `@${p.handle} · ` : ""}{sub}</span>
       </span>
       {done ? (
-        <span style={{ flex: "none", minHeight: 36, display: "inline-flex", alignItems: "center", padding: "0 12px", borderRadius: 999, border: `1px solid ${NEUTRAL.airmailLine}`, color: NEUTRAL.ink2, fontSize: fs(13), fontWeight: 600 }}>{done}</span>
+        // A tap undoes it (founder, 2026-10-30): cancel the request, or unfollow.
+        <button type="button" onClick={onUndo} aria-label={done === "Requested" ? `You asked to follow ${p.name || `@${p.handle}`}. Cancel the request?` : `Following ${p.name || `@${p.handle}`}. Unfollow?`}
+          style={{ flex: "none", minHeight: 36, display: "inline-flex", alignItems: "center", padding: "0 12px", borderRadius: 999, border: `1px solid ${NEUTRAL.airmailLine}`, background: "transparent", color: NEUTRAL.ink2, font: "inherit", fontSize: fs(13), fontWeight: 600, cursor: "pointer" }}>{done}</button>
       ) : (
         <button type="button" onClick={onFollow} aria-busy={busy || undefined} aria-label={`${label} ${p.name || `@${p.handle}`}`}
           style={{ flex: "none", minHeight: 36, padding: "0 14px", borderRadius: 999, border: 0, background: BLUE, color: NEUTRAL.white, font: "inherit", fontSize: fs(13), fontWeight: 650, cursor: "pointer" }}>
@@ -83,6 +86,22 @@ export default function AddFriendsSheet({ onClose, writers = [], onFollowed = un
     showToast(pending ? `Asked to follow @${h} — they approve first` : `Following @${h}`, "success");
     if (typeof onFollowed === "function") onFollowed({ handle: h, status: pending ? "pending" : "accepted" });
   };
+  // The pill undoes itself: the request is withdrawn, or the follow ends (founder, 2026-10-30).
+  const [confirm, setConfirm] = useState(null);   // { person, mode }
+  const [undoing, setUndoing] = useState(false);
+  const askUndo = (p) => setConfirm({ person: p, mode: done[lc(p.handle)] === "Requested" ? "cancel" : "unfollow" });
+  const undo = async () => {
+    if (!confirm || undoing) return;
+    const { person: p, mode } = confirm;
+    const h = lc(p.handle);
+    setUndoing(true);
+    const res = await circle.unfollow({ user_id: p.user_id, handle: h });
+    setUndoing(false);
+    if (!res.ok) { showToast(workerMessage(res.error, "That didn’t go through. Try again."), "error"); return; }
+    setConfirm(null);
+    setDone((d) => { const n = { ...d }; delete n[h]; return n; });
+    showToast(mode === "cancel" ? "Request cancelled" : `Unfollowed @${h}`, "success");
+  };
 
   const [mailing, setMailing] = useState(false);
   const emailInvite = async () => {
@@ -113,12 +132,13 @@ export default function AddFriendsSheet({ onClose, writers = [], onFollowed = un
           </div>
 
           <FindPeople onFollowed={onFollowed} labelHidden style={{ marginTop: 6 }} />
+          <UnfollowConfirm person={confirm?.person || null} mode={confirm?.mode || "unfollow"} busy={undoing} onConfirm={undo} onClose={() => setConfirm(null)} zIndex={10020} />
 
           {wrote.length ? (
             <section aria-label="People who wrote to you" style={{ marginTop: 18 }}>
               <h3 style={KICKER}>People who wrote to you</h3>
               <ul style={{ listStyle: "none", margin: "4px 0 0", padding: 0 }}>
-                {wrote.map((p) => <Person key={lc(p.handle)} p={p} label="Follow" sub="sent you mail" busy={busy === lc(p.handle)} done={done[lc(p.handle)]} onFollow={() => follow(p)} />)}
+                {wrote.map((p) => <Person key={lc(p.handle)} p={p} label="Follow" sub="sent you mail" busy={busy === lc(p.handle)} done={done[lc(p.handle)]} onFollow={() => follow(p)} onUndo={() => askUndo(p)} />)}
               </ul>
             </section>
           ) : null}
@@ -126,7 +146,7 @@ export default function AddFriendsSheet({ onClose, writers = [], onFollowed = un
             <section aria-label="They follow you" style={{ marginTop: 18 }}>
               <h3 style={KICKER}>They follow you</h3>
               <ul style={{ listStyle: "none", margin: "4px 0 0", padding: 0 }}>
-                {back.map((p) => <Person key={lc(p.handle)} p={p} label="Follow back" sub="follows you" busy={busy === lc(p.handle)} done={done[lc(p.handle)]} onFollow={() => follow(p)} />)}
+                {back.map((p) => <Person key={lc(p.handle)} p={p} label="Follow back" sub="follows you" busy={busy === lc(p.handle)} done={done[lc(p.handle)]} onFollow={() => follow(p)} onUndo={() => askUndo(p)} />)}
               </ul>
             </section>
           ) : null}
