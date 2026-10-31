@@ -22,8 +22,7 @@ import { showToast } from "@/components/Toast";
 import { listPassport, getHandle, getSocialProfile, setSocialProfile, getShareLink, setAvatar, luggageGet } from "@/lib/passport";
 import { useMyCloth, clothOf } from "@/lib/cloth";
 import { usePageGround } from "@/components/redesign/PageGround";
-import { Folder } from "@/components/redesign/Zone";
-import { NEUTRAL, ZONE, fs, rgba } from "@/components/redesign/constants";
+import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
 import CoverBand, { COVER_CIRCLE } from "@/components/profile/CoverBand";
 import { Settings as SettingsIcon } from "lucide-react";
 import Bookplate from "@/components/profile/Bookplate";
@@ -32,10 +31,7 @@ import MapFolder from "@/components/profile/MapFolder";
 import PrivacyCard from "@/components/profile/PrivacyCard";
 import VirtualItems from "@/components/profile/VirtualItems";
 import Luggage, { SHOW_LUGGAGE } from "@/components/passport/Luggage";
-import PassportFolder from "@/components/passport/PassportFolder";
-import PhotoPackets from "@/components/passport/PhotoPackets";
-import ContributeAlbum from "@/components/passport/ContributeAlbum";
-import BoardPostcards from "@/components/passport/BoardPostcards";
+import ArrivalsPage from "@/components/home/ArrivalsPage";
 import InviteButton from "@/components/passport/InviteButton";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
 import { initialOf } from "@/components/social/SocialMarks";
@@ -137,7 +133,6 @@ export default function ProfilePage({ embedded = false } = {}) {
 
   const reloadLuggage = () => { luggageGet().then((d) => setLuggage(d)); };
   // New prints from a photo packet show at once.
-  const reloadStamps = () => { listPassport().then((pp) => { if (pp.error) return; setStamps(pp.stamps || []); setStats(pp.stats || null); setAlbums(pp.booklet?.albums || "passport"); }); };
 
   const startEdit = () => {
     const s = social || { name: "", bio: "", website: "", favorites: [], dreams: [] };
@@ -240,6 +235,7 @@ export default function ProfilePage({ embedded = false } = {}) {
           website={shown.website}
           showClaim={handle.loaded && !teen}
           onClaim={() => navigate(createPageUrl("Settings"))}
+          onPassport={() => navigate(createPageUrl("Passport"))}
           onAvatar={() => avatarRef.current?.click()}
           avatarBusy={avatarBusy}
           style={SHOW_LUGGAGE ? { marginTop: GAP } : { marginTop: -72, position: "relative", zIndex: 1 }}
@@ -290,22 +286,13 @@ export default function ProfilePage({ embedded = false } = {}) {
         ) : (
           <>
             <CircleFolder owner={owner} cloth={cloth.key} style={{ marginTop: GAP }} />
-            {stamps ? (
-              <PassportFolder mode="own" cloth={cloth.key} stamps={stamps} onOpenDoor={() => navigate(createPageUrl("Passport"))} style={{ marginTop: GAP }} />
-            ) : null}
-            {/* Your albums right under your passport (founder, 2026-10-19: the Passport page is the
-                book alone; the albums live here). */}
-            {stamps ? (
-              <div style={{ marginTop: GAP }}>
-                <PhotoPackets stamps={stamps} title="Photo albums" owner albums={albums} onChanged={reloadStamps} className=""
-                  boards={socialTierReady && !teen ? <><ContributeAlbum /><BoardPostcards /></> : null} />
+            {/* Friends' news, inside YOUR CIRCLE (navigation redesign, 2026-10-31): what the people you
+                follow did lately, who joined, + Add friends — the Home › Arrivals page, here. The
+                passport folder and the photo albums moved to the Passport's Stamps · Photos · Cards. */}
+            {!teen ? (
+              <div style={{ marginTop: GAP, background: NEUTRAL.white, border: `1px solid ${rgba(cloth.cloth, 0.25)}`, borderRadius: 18, padding: "4px 0 14px" }}>
+                <ArrivalsPage embedded />
               </div>
-            ) : null}
-            {!stamps ? (
-              <Folder stock="passport" size="profile" tab="My Virtual Passport" style={{ marginTop: GAP }}>
-                <div aria-hidden="true" className="animate-pulse motion-reduce:animate-none" style={{ height: 132, borderRadius: 12, background: rgba(ZONE.passport.tile, 0.12) }} />
-                <span className="sr-only">Loading your passport</span>
-              </Folder>
             ) : null}
             <MapFolder favorites={shown.favorites} dreams={shown.dreams} cloth={cloth.key} style={{ marginTop: GAP }} />
             {SHOW_VIRTUAL_ITEMS && <VirtualItems stamps={stamps} luggage={luggage} style={{ marginTop: GAP }} />}

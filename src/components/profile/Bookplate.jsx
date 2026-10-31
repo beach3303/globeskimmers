@@ -236,6 +236,7 @@ const websiteText = (w) => w.replace(/^https?:\/\//i, '').replace(/\/$/, '');
  */
 export default function Bookplate({
   mode = 'own',
+  onPassport = undefined,   // "My passport ›" under the stats (navigation redesign, 2026-10-31)
   cloth = undefined,
   avatar = null,
   name = null,
@@ -388,6 +389,12 @@ export default function Bookplate({
             </button>
           ) : null}
           <BookplateStats stats={stats} style={{ position: 'relative' }} />
+          {typeof onPassport === 'function' ? (
+            <button type="button" onClick={onPassport}
+              style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 6px', margin: '-4px 0 -6px', background: 'transparent', border: 0, fontSize: fs(12.5), fontWeight: 650, color: NEUTRAL.tealInk, cursor: 'pointer' }}>
+              My passport ›
+            </button>
+          ) : null}
           {about ? <Bio text={about} c={c} /> : null}
           {site ? (
             <a

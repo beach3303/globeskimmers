@@ -59,7 +59,9 @@ function CountTile({ n, label, people, onClick }) {
   );
 }
 
-export default function ArrivalsPage({ wide = false }) {
+// embedded (2026-10-31): inside the Profile's YOUR CIRCLE as "Friends' news" — no page padding, a
+// smaller heading.
+export default function ArrivalsPage({ wide = false, embedded = false }) {
   const navigate = useNavigate();
   const { socialTier, socialTierReady } = useAuth();
   const circle = useCircle();
@@ -109,9 +111,9 @@ export default function ArrivalsPage({ wide = false }) {
   };
   const fresh = arrivals && !arrivals.off && !arrivals.held ? arrivals.rows : [];
   return (
-    <div className="max-w-md md:max-w-2xl mx-auto" style={{ padding: "16px 16px 0" }}>
-      <h2 style={{ margin: 0, fontFamily: SERIF, fontSize: fs(28), fontWeight: 400, lineHeight: 1.05, color: NEUTRAL.ink }}>
-        Arrivals <em style={{ fontStyle: "italic", color: BLUE }}>from your friends</em>
+    <div className={embedded ? "" : "max-w-md md:max-w-2xl mx-auto"} style={{ padding: embedded ? "12px 14px 0" : "16px 16px 0" }}>
+      <h2 style={{ margin: 0, fontFamily: SERIF, fontSize: fs(embedded ? 22 : 28), fontWeight: 400, lineHeight: 1.05, color: NEUTRAL.ink }}>
+        {embedded ? <>Friends’ <em style={{ fontStyle: "italic", color: BLUE }}>news</em></> : <>Arrivals <em style={{ fontStyle: "italic", color: BLUE }}>from your friends</em></>}
       </h2>
       <p style={{ margin: "4px 0 0", fontSize: fs(13), lineHeight: 1.45, color: NEUTRAL.ink2 }}>Where your people have been, and who you travel with.</p>
       {held ? <div style={{ marginTop: 16 }}><TeenHoldNote /></div> : (
