@@ -3969,3 +3969,22 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
 - d26523b → f6a03a1. No deploy runs. **Open (founder):** `npm run ota`, then Settings → My birthday → Save year on
   either phone, then the City Boards upload; Play 1.0.11 (14) in review; iOS 1.0.6 (18) Waiting for Review.
+
+## 2026-10-31 — COMMITTED, NOT pushed: the navigation redesign, steps 1–5 (docs/NAV_REDESIGN_2026-10-31.md)
+
+- Five commits, one per step. (1) `FloatingNav` → Boards · Nearby · Stamp (raised red disc, Camera) · Passport ·
+  Profile, lucide icons, `nav_tab` events; `MailButton` (envelope + unread dot, the bar's old polling) top-left of
+  the banner; `pages/Boards.jsx` (CityBoardPage for the active location) registered; Home = lobby + Nearby content;
+  Profile cover gear → Settings (`CoverBand extra`, `COVER_CIRCLE`). (2) `StampSheet` (file input in the sheet;
+  `queueSharedPhotos` → Passport sorter without the ask; `?stamp=here` opens Stamp a place;
+  `ContributeStandaloneSheet`); Layout owns the sheets. (3) Passport: kicker/title/counts (`BookplateStats`), new
+  member's upload card above the book + "Meanwhile, on the {city} board", tabs Stamps · Photos (PhotoPackets + the
+  City Boards shelf) · Cards (CityCardsPage embedded; `?tab=cards&card=`), post-book buttons and the albums line gone;
+  Mailbox card lines retargeted. (4) Profile: PassportFolder + PhotoPackets out, `ArrivalsPage embedded` as Friends'
+  news under YOUR CIRCLE, bookplate "My passport ›" (`onPassport`). (5) HomePager deleted; `?page=` redirects; the old
+  Stamps shelves under Stamps near you; onboarding Not now → Boards; BoardNudge card → See the board · Stamp another
+  photo (`gs:open-stamp`) + postcard link.
+- Gates per step: eslint no-undef (+ the config's unused-imports), `npm run build`, `npm run boot-check` ✅.
+  Screenshots: `Claude outputs/nav-*-2026-10-31.png`. Not done: step 6 (optional). Not checked on a real iPad or at
+  the largest text size — the bar's raised disc and the Passport tabs should be eyeballed there.
+- **Open (founder):** look it over, then push + `npm run ota`.

@@ -1441,9 +1441,12 @@ you know. Mail becomes an envelope at the banner's top-left (red dot for new mai
 cover. Retired: Home's six-tab pager, the Virtual Passport Home tab, the Settings and Mailbox tabs, Profile's passport
 folder and photo packets (they move to Passport's Stamps · Photos · Cards tabs).
 
-Build order, one commit each: (1) bar + banner envelope + Boards page + Home = Nearby only — **built 2026-10-31**;
-(2) the Stamp sheet (Upload photos · Stamp where I am · post to a City Board); (3) Passport: upload above the book for
-new members, Stamps · Photos · Cards; (4) Profile: passport folder + albums out, Friends' news + Add friends into YOUR
-CIRCLE; (5) clean-up: delete HomePager, onboarding's "Not now" → Boards, Stamp earned → the board; (6) optional:
-Mailbox Inbox · Sent, the cold-start chooser stops asking by default. Step 1 keeps `/Home?page=` deep links to City
-Cards, Arrivals, City Board and Stamps rendering on Home until steps 3–4 move them.
+Build order, one commit each — **steps 1–5 built 2026-10-31** (commits c94dcd4, 5d1095f, 9cf9126, ef11958 and the
+clean-up): (1) bar + banner envelope + Boards page + Home = Nearby only; (2) the Stamp sheet (Upload photos · Stamp
+where I am · post to a City Board); (3) Passport: header, upload above the book for new members, Stamps · Photos ·
+Cards; (4) Profile: passport folder + albums out, Friends' news (the Arrivals page, embedded) + "My passport ›" on the
+bookplate; (5) clean-up: HomePager deleted, old `/Home?page=` links redirect (City Cards → Passport › Cards, Arrivals →
+Profile, City Board → Boards), onboarding's "Not now" → Boards, the after-stamp card → See the board · Stamp another
+photo (the postcard stays as the quiet third way; worded honestly — a stamp proves presence, album privacy decides
+what hangs on the board). **Not done:** (6) optional — Mailbox Inbox · Sent (Mailbox › News still lives in the
+Mailbox, not yet in Friends' news), the cold-start chooser default. Awaiting the founder's look, push and OTA.
