@@ -3988,3 +3988,23 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   Screenshots: `Claude outputs/nav-*-2026-10-31.png`. Not done: step 6 (optional). Not checked on a real iPad or at
   the largest text size — the bar's raised disc and the Passport tabs should be eyeballed there.
 - **Open (founder):** look it over, then push + `npm run ota`.
+
+## 2026-10-31 — APPROVED: iOS 1.0.6 (18) Ready for Distribution + Play 1.0.11 (14) Published
+
+- Play submission 10 (1.0.11, versionCode 14) Published 1:32 AM PT; App Store Connect shows iOS 1.0.6 "Ready for
+  Distribution" (3:40 PM PT screenshot). Both carry VideoShrink + the native picker + the trimmer + video share from
+  the gallery; Android also geolocation 8.2.4 + the WebView renderer safety net. `site/app-version.json` →
+  `{ "ios": "1.0.6", "android": "1.0.11" }` committed (the site Action ships it on push; the update card then shows on
+  older installs). **Open (founder):** push; `npm run ota`; S10 retest on 1.0.11 (onboarding location + Explore where
+  I am) — if it still exits, read `webview_renderer_gone` events in D1.
+
+## 2026-10-31 — City Board albums are always public (copy; the rule already held)
+
+- Founder: "album for city board has to be public because they're contribution to city board." The worker already
+  treats contributions as public whatever the passport dial says (board wall: `p.contrib || albumsOpen(owner)`;
+  sticker/comment owners `bcp:` unconditioned on `albums_audience`), and the client never gates the two albums on the
+  audience. What changed is wording, because the Photos tab now sits under the passport's "Who can see it" pill:
+  PhotoPackets' City Boards line → "Always public, whatever your passport setting — they're contributions to each
+  city's board…"; the Who-can-see-your-passport sheet note adds that uploads and postcards to boards stay public;
+  BoardNudge's comment corrected (a stamp photo hangs on the board only from a 🌍 Everyone album). Gates: eslint
+  no-undef, build, boot-check.
