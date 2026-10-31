@@ -3893,3 +3893,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - **Not reproduced here:** no Android device, and the emulator image download needs the founder's consent (the
   permission gate refused it). Validation = the founder installs 1.0.11 from Play and retries both flows. iOS 1.0.6
   (18), submitted before this, still has 8.2.0 (iOS doesn't crash); the next iOS build picks the upgrade up.
+
+## 2026-10-30 — COMMITTED, NOT pushed: the passport ask happens once in onboarding
+
+- Founder: ask once; a skip means they explore on their own, no second or third passport prompt. PassportStep gets
+  "Not now — I'll look around first" (`onSkip`); Onboarding ends on **Home** when skipped, on the **Passport** when
+  taken (`passport_skipped` in the collected answers, never written to the profile; the `signed_up` event carries
+  `passport: now|later`). After onboarding nothing auto-opens a stamp ask: NearbyStampPrompt only senses when the
+  member opens the Passport themselves; the Home upload bar and the Passport's two-choice empty state are page
+  content, not prompts. Gates: eslint no-undef, build, boot-check ✅; screenshot
+  `Claude outputs/onboarding-passport-one-ask-2026-10-30.png`.
