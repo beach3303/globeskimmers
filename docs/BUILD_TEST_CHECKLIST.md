@@ -3952,3 +3952,15 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
 - The rebuilt AAB (geolocation 8.2.4, renderer safety net, video share). When Published: S10 retest, then
   `site/app-version.json` android → 1.0.11. iOS 1.0.6 (18) still Waiting for Review.
+
+## 2026-10-31 — COMMITTED, NOT pushed: birthday year on a saved month/day; Contribute runs the passport gate
+
+- Founder's S10 (1.0.10 + OTA): Settings → My birthday = "Aug 30" (locked), Contribute upload → "1 photo didn't go up
+  (Add your birthday in Settings to share photos)". Cause: `social_profiles.birth_md` set, `birth_year` null (the
+  pre-10-18 flow); the worker's posting doors require `birth_year` (`age_required`, 428); Settings had no year field
+  for a locked month/day, and Contribute never called `requirePassport()` (stamps/postcards/shares do), so no screen
+  asked. This is one account seen from two phones, not two accounts — the iPhone would refuse the same upload.
+- Fix (app, OTA): Settings → My birthday shows a Year select + Save year when `bLocked && !bYear`
+  (`setAgeGate(year, "MM-DD")` — the worker's year branch accepts it when no year is stored); ContributeSheet.sendFiles
+  awaits `requirePassport()` first (FinishPassport → ConfirmSheet "Add the year you were born"); `age_required` maps to
+  "add the year you were born under Settings → My birthday". Gates: eslint no-undef, build, boot-check ✅.
