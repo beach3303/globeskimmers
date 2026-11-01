@@ -217,14 +217,16 @@ export async function socialRequest({ kind, handle, note }) {
   const { data, error } = await callWorker('social/request', { kind, handle, note });
   return { ok: !!data?.ok, error: error || data?.error || null };
 }
-// The Mailbox unread signal: { total, activity? }. mark:true (the Mailbox
-// opening) returns the activity with unread flags, then marks it all seen and
-// tells the nav to clear its dot.
-export async function socialUnread({ mark = false } = {}) {
-  const { data, error } = await callWorker('social/unread', mark ? { mark: true } : {});
+// The unread signal: { total, mail, news, requests, activity? }. mark:true (Friends' news
+// opening) returns the activity with unread flags, then marks it all seen and tells the
+// dots (gs:unread); activity:true returns the list without marking (the Profile's preview).
+export async function socialUnread({ mark = false, activity = false } = {}) {
+  const { data, error } = await callWorker('social/unread', mark ? { mark: true } : activity ? { activity: true } : {});
   if (mark && !error) { try { window.dispatchEvent(new Event("gs:unread")); } catch { /* no window */ } }
-  // mail (2026-10-19): unread postcards to me + sealed telegrams — the number on the Mailbox tab.
-  return { total: data?.total || 0, mail: Number(data?.mail) || 0, activity: data?.activity || [], error };
+  // mail (2026-10-19): unread postcards to me + sealed telegrams — the banner envelope's dot.
+  // news + requests (2026-10-31): unread lines that aren't mail, and people waiting for an
+  // answer — the bar's Profile dot.
+  return { total: data?.total || 0, mail: Number(data?.mail) || 0, news: Number(data?.news) || 0, requests: Number(data?.requests) || 0, activity: data?.activity || [], error };
 }
 // A stamp's trip note ("what was this trip for?") — private unless shared.
 export async function setStampNote(stamp_id, { note, isPublic } = {}) {

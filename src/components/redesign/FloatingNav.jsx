@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { BookOpen, Camera, CircleUserRound, LayoutGrid, MapPin } from 'lucide-react';
+import { BookOpen, CircleUserRound, LayoutGrid, MapPin, Stamp } from 'lucide-react';
 import { createPageUrl } from '@/utils';
 import { NEUTRAL, rgba } from '@/components/redesign/constants';
 import { logEvent } from '@/lib/analytics';
+import { refreshUnread, useUnread, wireUnread } from '@/lib/unreadStore';
 
 // Floating pill nav — fixed, centred, 22px above the bottom safe area. Five items (founder's
 // navigation redesign, 2026-10-31, docs/NAV_REDESIGN_2026-10-31.md): Boards · Nearby · Stamp
@@ -13,11 +14,19 @@ import { logEvent } from '@/lib/analytics';
 //
 // Active state comes from useLocation().pathname so Layout can render <FloatingNav /> without
 // prop wiring: Boards (and the board pages) light Boards; Home lights Nearby; Passport lights
-// Passport; Profile, Circle and Settings light Profile; everything else (finders, a traveler's
-// page, the Mailbox) lights nothing.
+// Passport; Profile, Circle, Settings and Friends' news light Profile; everything else (finders,
+// a traveler's page, the Mailbox) lights nothing.
 //
 // The Stamp button opens the Stamp sheet (Upload photos · Stamp where I am · post to a City
-// Board) through `onStamp`, which Layout wires; without it, the Passport.
+// Board) through `onStamp`, which Layout wires; without it, the Passport. In the circle: the
+// founder's 3D rubber stamp (2026-10-31, option B — not a camera, since the button doesn't open
+// the camera): a cream disc with a stamp-red ring holding the photo-real render at 40 × 40, served
+// from the website (site/img/stamp-button@2x.png 80 px, @3x 120 px, docs/STAMP_ICON_RENDER_PROMPT.md).
+// Until that render exists, and while it loads, the flat version: a stamp-red disc with a cream
+// ring and the lucide Stamp glyph.
+//
+// The Profile dot: a follow request waiting, or passport news unread (src/lib/unreadStore.js;
+// mail lights the envelope instead, never this dot).
 //
 // An always-on 1px cream outer ring keeps the pill's edge readable where it floats over dark
 // ground. Keyboard focus rings on the tabs are cream too (--gs-focus).
@@ -27,26 +36,53 @@ import { logEvent } from '@/lib/analytics';
 //   active:  optional explicit override; otherwise auto-detected from route.
 //   onStamp: opens the Stamp sheet (Layout passes it).
 const STAMP_RED = '#B0472F';
+const CREAM = '#FBF6EC';
 const FG = '#FAF7EE';
+const DOT = '#E0533C';
+const PILL = '#16110D';
+const STAMP_ART = 'https://globeskimmers.io/img/stamp-button@2x.png';
+const STAMP_ART_3X = 'https://globeskimmers.io/img/stamp-button@3x.png';
 
 const ITEMS = [
   { id: 'boards',   label: 'Boards',   route: 'Boards',   Icon: LayoutGrid },
   { id: 'nearby',   label: 'Nearby',   route: 'Home',     Icon: MapPin },
-  { id: 'stamp',    label: 'Stamp',    route: 'Passport', Icon: Camera, raised: true },
+  { id: 'stamp',    label: 'Stamp',    route: 'Passport', Icon: Stamp, raised: true },
   { id: 'passport', label: 'Passport', route: 'Passport', Icon: BookOpen },
   { id: 'profile',  label: 'Profile',  route: 'Profile',  Icon: CircleUserRound },
 ];
 
+// The render, once: null while unknown, true when it loaded, false when there is none yet.
+let artKnown = null;
+function useStampArt() {
+  const [art, setArt] = useState(artKnown);
+  useEffect(() => {
+    if (artKnown !== null || typeof Image === 'undefined') return undefined;
+    let gone = false;
+    const img = new Image();
+    img.onload = () => { artKnown = true; if (!gone) setArt(true); };
+    img.onerror = () => { artKnown = false; if (!gone) setArt(false); };
+    img.src = STAMP_ART;
+    return () => { gone = true; };
+  }, []);
+  return art === true;
+}
+
 export default function FloatingNav({ active, dark = false, onStamp = undefined }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const art = useStampArt();
+  const { news, requests } = useUnread();
+  const profileDot = news > 0 || requests > 0;
 
   const path = location.pathname.toLowerCase();
+  // The shared unread read: on navigation, at most once a minute (the envelope reads it too).
+  useEffect(() => { wireUnread(); refreshUnread(); }, [location.pathname]);
+
   const detectActive = () => {
     if (active) return active;
     if (path.includes('boards') || path.includes('cityboard')) return 'boards';
     if (path.includes('passport')) return 'passport';
-    if (path.includes('profile') || path.includes('circle') || path.includes('settings')) return 'profile';
+    if (path.includes('profile') || path.includes('circle') || path.includes('settings') || path.includes('friendsnews')) return 'profile';
     if (path === '/' || path.includes('home')) return 'nearby';
     return null;
   };
@@ -91,7 +127,7 @@ export default function FloatingNav({ active, dark = false, onStamp = undefined 
       {ITEMS.map((it) => {
         const { Icon } = it;
         if (it.raised) {
-          // The stamp: a red disc rising out of the pill, the camera on it, "Stamp" under it.
+          // The stamp: a disc rising out of the pill, the rubber stamp on it, "Stamp" under it.
           return (
             <button
               key={it.id}
@@ -120,26 +156,30 @@ export default function FloatingNav({ active, dark = false, onStamp = undefined 
                   height: 58,
                   marginTop: -30,
                   borderRadius: 9999,
-                  background: STAMP_RED,
-                  boxShadow: `0 0 0 3px ${FG}, 0 10px 22px -8px rgba(176,71,47,0.7)`,
+                  background: art ? CREAM : STAMP_RED,
+                  boxShadow: `0 0 0 3px ${art ? STAMP_RED : FG}, 0 10px 22px -8px rgba(176,71,47,0.7)`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  overflow: 'hidden',
                 }}
               >
-                <Camera size={26} strokeWidth={2} color="#fff" aria-hidden="true" focusable="false" />
+                {art
+                  ? <img src={STAMP_ART} srcSet={`${STAMP_ART} 2x, ${STAMP_ART_3X} 3x`} alt="" width={40} height={40} draggable={false} style={{ width: 40, height: 40, display: 'block', objectFit: 'contain' }} />
+                  : <Icon size={26} strokeWidth={2} color="#fff" aria-hidden="true" focusable="false" />}
               </span>
               <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.2, lineHeight: 1, paddingBottom: 7 }}>{it.label}</span>
             </button>
           );
         }
         const isActive = activeTab === it.id;
+        const dot = it.id === 'profile' && profileDot;
         return (
           <button
             key={it.id}
             type="button"
             onClick={() => go(it)}
-            aria-label={it.label}
+            aria-label={dot ? 'Profile, something new' : it.label}
             aria-current={isActive ? 'page' : undefined}
             style={{
               width: 62,
@@ -159,7 +199,13 @@ export default function FloatingNav({ active, dark = false, onStamp = undefined 
               transition: 'background 120ms, opacity 120ms',
             }}
           >
-            <Icon size={22} strokeWidth={2} aria-hidden="true" focusable="false" />
+            <span style={{ position: 'relative', display: 'inline-flex', lineHeight: 0 }}>
+              <Icon size={22} strokeWidth={2} aria-hidden="true" focusable="false" />
+              {dot ? (
+                // A follow request or unread news: a red dot at the icon's top-right, ringed in the pill.
+                <span aria-hidden="true" style={{ position: 'absolute', top: -3, right: -4, width: 10, height: 10, borderRadius: 999, background: DOT, boxShadow: `0 0 0 2px ${isActive ? '#13877C' : PILL}` }} />
+              ) : null}
+            </span>
             <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.2, lineHeight: 1 }}>{it.label}</span>
           </button>
         );
