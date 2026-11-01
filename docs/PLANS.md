@@ -1451,11 +1451,12 @@ photo (the postcard stays as the quiet third way; worded honestly — a stamp pr
 what hangs on the board). Steps 1–5 PUSHED 2026-10-31 (main f6a319c).
 
 **Spec v2 (founder, 2026-10-31 evening, `NAV_REDESIGN_2026-10-31_2.md`, saved over the spec file) — BUILT the same
-evening, committed on stamping-v2, not pushed:** the Stamp button holds a **3D rubber stamp** (option B — not a camera,
-the button doesn't open the camera): cream disc, stamp-red ring, the photo-real render at 40 × 40 served from
-`site/img/stamp-button@2x.png` / `@3x.png` (prompt and sizes in `docs/STAMP_ICON_RENDER_PROMPT.md`; until the files
-exist the bar shows the flat red disc with the lucide Stamp glyph and switches on its own when they land — no OTA
-needed for the art). A **Profile dot** on the bar for a follow request or unread news; the envelope's dot is mail only
+evening, committed on stamping-v2, not pushed:** the Stamp button holds a **3D rubber stamp** (not a camera, the button
+doesn't open the camera). **Founder, 2026-11-01: option C** — the render stands on the bar by itself at 64 × 64, no disc,
+a flared flat-topped handle (replaces option B's cream disc + ring); served by the API worker from R2 like the trunk
+(`stamp-art/ui/stamp-button-2x.png` 128 px, `-3x.png` 192 px; the founder's prompt kit and the upload one-liners in
+`docs/STAMP_ICON_RENDER_PROMPT.md`); until the files exist the bar shows the flat red disc with the lucide Stamp
+glyph and switches on its own when they land — no OTA needed for the art. A **Profile dot** on the bar for a follow request or unread news; the envelope's dot is mail only
 (one shared read, `src/lib/unreadStore.js`; the worker's /social/unread now returns news + requests). **YOUR CIRCLE** =
 three count buttons (Friends · You follow · Follow you — counts only once loaded, a zero shows the name alone; the
 orbit art gave way to them) + the **Friends' news card** ("FRIENDS' NEWS · N NEW", See all ›, the newest two lines, a

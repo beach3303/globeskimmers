@@ -4113,3 +4113,12 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
 - The R8 keep-rules build. When it publishes: S10 → Explore where I am (and onboarding's Continue on a fresh install);
   `site/app-version.json` android → 1.0.12; Play vitals should show no new `getPermissionStates` crashes on 15.
+
+## 2026-11-01 — Stamp button art: option C (founder's prompt kit `STAMP_ICON_RENDER_PROMPT_1.md`)
+
+- Option C replaces option B: the photo-real stamp (flared, flat-topped handle) stands on the bar by itself at
+  64 × 64, no disc; the flat red disc + lucide Stamp stays the fallback. `FloatingNav` now probes the API worker's
+  `/stamp-art/ui/stamp-button-2x.png` (R2 `globeskimmers-media`, like the trunk renders; the worker's key check
+  refuses `@`, hence the dash names; 30-day cache → a redo uses new names). `docs/STAMP_ICON_RENDER_PROMPT.md` is the
+  founder's kit verbatim plus the two `wrangler r2 object put` one-liners. Gates: eslint, build, boot-check.
+- **Founder:** generate, export @3x 192 px / @2x 128 px, run the two one-liners, tell Claude Code the names.

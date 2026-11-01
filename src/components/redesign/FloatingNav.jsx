@@ -18,12 +18,12 @@ import { refreshUnread, useUnread, wireUnread } from '@/lib/unreadStore';
 // a traveler's page, the Mailbox) lights nothing.
 //
 // The Stamp button opens the Stamp sheet (Upload photos · Stamp where I am · post to a City
-// Board) through `onStamp`, which Layout wires; without it, the Passport. In the circle: the
-// founder's 3D rubber stamp (2026-10-31, option B — not a camera, since the button doesn't open
-// the camera): a cream disc with a stamp-red ring holding the photo-real render at 40 × 40, served
-// from the website (site/img/stamp-button@2x.png 80 px, @3x 120 px, docs/STAMP_ICON_RENDER_PROMPT.md).
-// Until that render exists, and while it loads, the flat version: a stamp-red disc with a cream
-// ring and the lucide Stamp glyph.
+// Board) through `onStamp`, which Layout wires; without it, the Passport. On the bar: the founder's
+// photo-real rubber stamp, standing by itself (2026-11-01, option C: a flared flat-topped handle,
+// no disc behind it — not a camera, since the button doesn't open the camera), 64 × 64, served by
+// the API worker from R2 like the trunk renders (stamp-art/ui/stamp-button-2x.png 128 px and
+// -3x.png 192 px; docs/STAMP_ICON_RENDER_PROMPT.md). Until that render exists, and while it loads,
+// the flat version: a stamp-red disc with a cream ring and the lucide Stamp glyph.
 //
 // The Profile dot: a follow request waiting, or passport news unread (src/lib/unreadStore.js;
 // mail lights the envelope instead, never this dot).
@@ -36,12 +36,11 @@ import { refreshUnread, useUnread, wireUnread } from '@/lib/unreadStore';
 //   active:  optional explicit override; otherwise auto-detected from route.
 //   onStamp: opens the Stamp sheet (Layout passes it).
 const STAMP_RED = '#B0472F';
-const CREAM = '#FBF6EC';
 const FG = '#FAF7EE';
 const DOT = '#E0533C';
 const PILL = '#16110D';
-const STAMP_ART = 'https://globeskimmers.io/img/stamp-button@2x.png';
-const STAMP_ART_3X = 'https://globeskimmers.io/img/stamp-button@3x.png';
+const STAMP_ART = 'https://globeskimmers-api.maizasimeon.workers.dev/stamp-art/ui/stamp-button-2x.png';
+const STAMP_ART_3X = 'https://globeskimmers-api.maizasimeon.workers.dev/stamp-art/ui/stamp-button-3x.png';
 
 const ITEMS = [
   { id: 'boards',   label: 'Boards',   route: 'Boards',   Icon: LayoutGrid },
@@ -127,7 +126,8 @@ export default function FloatingNav({ active, dark = false, onStamp = undefined 
       {ITEMS.map((it) => {
         const { Icon } = it;
         if (it.raised) {
-          // The stamp: a disc rising out of the pill, the rubber stamp on it, "Stamp" under it.
+          // The stamp rising out of the pill, "Stamp" under it: the render by itself once it loads,
+          // the flat red disc until then.
           return (
             <button
               key={it.id}
@@ -149,25 +149,27 @@ export default function FloatingNav({ active, dark = false, onStamp = undefined 
                 cursor: 'pointer',
               }}
             >
-              <span
-                aria-hidden="true"
-                style={{
-                  width: 58,
-                  height: 58,
-                  marginTop: -30,
-                  borderRadius: 9999,
-                  background: art ? CREAM : STAMP_RED,
-                  boxShadow: `0 0 0 3px ${art ? STAMP_RED : FG}, 0 10px 22px -8px rgba(176,71,47,0.7)`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden',
-                }}
-              >
-                {art
-                  ? <img src={STAMP_ART} srcSet={`${STAMP_ART} 2x, ${STAMP_ART_3X} 3x`} alt="" width={40} height={40} draggable={false} style={{ width: 40, height: 40, display: 'block', objectFit: 'contain' }} />
-                  : <Icon size={26} strokeWidth={2} color="#fff" aria-hidden="true" focusable="false" />}
-              </span>
+              {art ? (
+                <img src={STAMP_ART} srcSet={`${STAMP_ART} 2x, ${STAMP_ART_3X} 3x`} alt="" width={64} height={64} draggable={false} aria-hidden="true"
+                  style={{ width: 64, height: 64, marginTop: -34, display: 'block', objectFit: 'contain', filter: 'drop-shadow(0 8px 10px rgba(0,0,0,0.45))' }} />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 58,
+                    height: 58,
+                    marginTop: -30,
+                    borderRadius: 9999,
+                    background: STAMP_RED,
+                    boxShadow: `0 0 0 3px ${FG}, 0 10px 22px -8px rgba(176,71,47,0.7)`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Icon size={26} strokeWidth={2} color="#fff" aria-hidden="true" focusable="false" />
+                </span>
+              )}
               <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.2, lineHeight: 1, paddingBottom: 7 }}>{it.label}</span>
             </button>
           );
