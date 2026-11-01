@@ -1,7 +1,9 @@
-// FriendsTravels — Home's circle zone on the airmail stock (Home-Boxes L70-118): the
-// people you travel with. Your circle's newest stamps and postcards, newest first and
-// never ranked, from the same feed Mailbox reads; taps go to Mailbox. With no follows
-// yet it is a small invite you can hide.
+// FriendsTravels — the people you travel with (Home-Boxes L70-118; now under Friends' news as
+// "Where your friends have been", and on the iPad Home). Your circle's newest STAMPS, newest first
+// and never ranked, from the same feed the Mailbox reads. Postcards and telegrams never show here:
+// private mail is read in the Mailbox alone, by its addressees alone, and on no feed anywhere
+// (founder rule, 2026-10-25, restated 2026-11-01); a card to a City Board is the board's. With no
+// follows yet it is a small invite you can hide.
 //
 // It shows nothing rather than something untrue:
 //   - nothing until AuthContext.socialTierReady, the feed and the circle have all
@@ -66,7 +68,8 @@ export default function FriendsTravels({ wide = false }) {
   const toMailbox = () => navigate(createPageUrl("Mailbox"));
   const blocked = circle.blockedHandles || new Set();
   const rows = (Array.isArray(feed.rows) ? feed.rows : [])
-    .filter((r) => r && !blocked.has(handleOf(r.by?.handle)))
+    // Stamps only: a postcard or telegram addressed to you belongs in your Mailbox, not on a feed.
+    .filter((r) => r && r.type === "stamp" && !blocked.has(handleOf(r.by?.handle)))
     .sort((a, b) => timeOf(b) - timeOf(a))
     .slice(0, 10);
 

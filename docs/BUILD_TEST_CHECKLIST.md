@@ -4145,3 +4145,14 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   still names the friend who added a board photo — followers only, as the founder wants.
 - Gates: `node --check`, eslint, build, boot-check. **Push** flips the 13 photos on the live boards; the stamp
   sheet wording rides the next OTA.
+
+## 2026-11-01 — Mail privacy audit (founder: "strictly viewed by the addressees; on no feed anywhere")
+
+- Worker: the feed asks only for postcards/telegrams `to_user_id = me` (the query for cards to everyone is inert
+  since 10-25); the box and the unread list the same; board cards (`to_city`) are left out of feeds; a private
+  postcard's thread (`pm:`) is party-only (`blMailShare`). Friends' news lines filter mail out; "What your friends
+  added" carries no mail; the unread counts are numbers; pushes carry no preview.
+- One fix: `FriendsTravels` ("Where your friends have been" under Friends' news, and the iPad Home) rendered every
+  feed row, so a postcard or telegram addressed to the viewer showed as an envelope there. It now shows friends'
+  **stamps only**; private mail is read in the Mailbox alone. (Group postcards still show co-addressees to each
+  other — founder's 10-24 design.) Gates: eslint, build, boot-check.
