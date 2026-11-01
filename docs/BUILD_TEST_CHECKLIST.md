@@ -4041,3 +4041,15 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   the bar on an iPad (1032×1376), the Profile at the largest text size.
 - **Open (founder):** the two stamp render PNGs (the bar switches on its own); look it over → push (worker redeploys)
   → `npm run ota`. Step 7 (cold-start chooser default) stays optional.
+
+## 2026-11-01 — COMMITTED, NOT pushed: the four new stickers failed with "Could not press" (database check)
+
+- Founder: "the new liking stickers … when clicked puts out an error." Cause: AWESOME! / STUNNING! / VIBES! / LOVE THIS!
+  were added to the app and the worker on 2026-10-30 (`BL_KINDS`), but `api.blotter_marks.kind` still carried the
+  2026-10-17 check (seven kinds), so every insert of a new kind failed — the worker answered 502 "Could not press".
+  Reproduced live with the demo account on an LA board photo: `awesome` → 502 "Could not press", `cool` → ok.
+- Fix: `supabase/migrations/20261101000000_blotter_marks_four_more.sql` replaces the check with all eleven kinds
+  (same guarded form as the COOL! fix). Applies on its own ~20 s after the push; no app or worker change, no OTA.
+- Lesson (second time): a new sticker kind = app + worker + **a migration for the check**. Next time grep
+  `check (kind` in `supabase/migrations` before calling a sticker done.
+- **Open (founder):** push; then press one of the four on any photo.
