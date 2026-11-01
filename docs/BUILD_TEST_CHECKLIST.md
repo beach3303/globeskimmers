@@ -4008,3 +4008,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   city's board…"; the Who-can-see-your-passport sheet note adds that uploads and postcards to boards stay public;
   BoardNudge's comment corrected (a stamp photo hangs on the board only from a 🌍 Everyone album). Gates: eslint
   no-undef, build, boot-check.
+
+## 2026-10-31 — PUSHED: nav redesign + store versions + City Board albums copy (main 005dc20)
+
+- f6a03a1 → f6a319c (nav redesign steps 1–5 + docs, no deploy runs) and f6a319c → 005dc20 (site version file, album
+  copy, checklist). Site run 41258996384 green: `https://globeskimmers.io/app-version.json` serves 1.0.6 / 1.0.11.
+  **Open (founder):** `npm run ota` (nav redesign, passport-once onboarding, birthday-year fix, WebView report, album
+  copy — none on phones yet); S10 retest on Play 1.0.11.
