@@ -12,7 +12,7 @@ import { NEUTRAL, rgba } from '@/components/redesign/constants';
 // on a finder, airmail blue on Mailbox, the cloth on Circle); the default is the
 // neutral ink at 82%. bottom still accepts a number (px) or any CSS length.
 const THRESHOLD = 500;
-const BOTTOM_RESERVE = 'calc(96px + env(safe-area-inset-bottom))';
+const BOTTOM_RESERVE = 'calc(128px + env(safe-area-inset-bottom))';   // clear of the stamp handle's top (Layout's reserve)
 const DEFAULT_COLOR = rgba(NEUTRAL.ink, 0.82); // rgba(22,17,13,0.82)
 
 export default function BackToTop({ bottom = BOTTOM_RESERVE, color = DEFAULT_COLOR }) {

@@ -4175,3 +4175,14 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
 - Deploy website 41309657858 green; `https://globeskimmers.io/app-version.json` serves `{ ios 1.0.6, android 1.0.12 }`.
   **Open (founder):** the S10 retest on Play 1.0.12 (update from the Play Store page if it hasn't auto-updated).
+
+## 2026-11-01 — More room above the stamp handle (founder, from iPhone + S10 screenshots)
+
+- With the walnut render the handle rises ~28px above the pill, and the pages still reserved space for the old
+  disc: the last row of each page (Emerson quote, "All City Boards ›", Invite a friend) touched the knob. Raised
+  from 96 to 128px above the safe area: Layout's `BOTTOM_RESERVE`, `BackToTop`, the after-stamp `BoardNudge` card,
+  and the two location banners (`LocationAutoFollowOffer`, `LocationMismatchSheet`, 84 → 128). `.main-content` in
+  index.css is unused and was left alone. Pages with Back-to-top (finders, Mailbox, boards, Circle, Friends’ news)
+  reserve 192px so the last row never hides under the 44px disc (the Boards’ “All City Boards ›” did, on both
+  phones). Gates: eslint, build, boot-check. Screenshots `Claude outputs/reserve-*-bottom-2026-11-01.png`. Reaches
+  phones with the next `npm run ota`.

@@ -35,7 +35,7 @@ export default function LocationAutoFollowOffer() {
           exit={{ y: 120, opacity: 0 }}
           transition={{ type: 'spring', damping: 30, stiffness: 320 }}
           className="fixed left-0 right-0 z-[9997] flex justify-center px-3"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 84px)' }}
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 128px)' }}   /* above the bar and the stamp handle (2026-11-01) */
           role="dialog"
           aria-live="polite"
         >

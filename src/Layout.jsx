@@ -29,9 +29,14 @@ const BACK_TO_TOP_PAGES = new Set([
 ]);
 
 // The bottom reserve under every page except Onboarding: the nav pill sits 22px above
-// the safe area and is about 62px tall, so 96px keeps the last card (and Back-to-top)
-// 12px clear of it.
-const BOTTOM_RESERVE = "calc(96px + env(safe-area-inset-bottom))";
+// the safe area and is about 64px tall, and the stamp's handle rises another ~28px above
+// it (the walnut render, 2026-11-01), so 128px keeps the last card (and Back-to-top)
+// 12px clear of the handle's top (founder, 2026-11-01: "a little more space so the bottom
+// of each page is not touching the top of the stamp handle").
+const BOTTOM_RESERVE = "calc(128px + env(safe-area-inset-bottom))";
+// Pages with Back-to-top reserve its footprint too (a 48px disc 12px above the handle), so the
+// last row never hides under it at the end of the scroll (the Boards' "All City Boards ›").
+const BOTTOM_RESERVE_WITH_TOP = "calc(192px + env(safe-area-inset-bottom))";
 
 // Each page's ground (the paper it is printed on), painted all the way down. A page can
 // override it with usePageGround (Profile, Circle and Traveler set the owner's cloth
@@ -235,7 +240,7 @@ function PageShell({ currentPageName, isOnboarding, children }) {
         className="w-full max-w-full overflow-x-clip min-h-screen"
         style={{
           paddingTop: 'calc(50px + env(safe-area-inset-top))',
-          paddingBottom: isOnboarding ? undefined : BOTTOM_RESERVE,
+          paddingBottom: isOnboarding ? undefined : BACK_TO_TOP_PAGES.has(currentPageName) ? BOTTOM_RESERVE_WITH_TOP : BOTTOM_RESERVE,
         }}
       >
         {children}
