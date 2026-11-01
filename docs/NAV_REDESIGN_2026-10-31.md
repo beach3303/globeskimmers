@@ -25,8 +25,8 @@ Passport, Profile, Arrivals and Mailbox.
 | **Nearby** | "Hello {name} in *{city}*", the date, temperature, location pill with Change; `SmartSearchBar`; Events & festivals; **Nearby services** (all 11 finders, 3 across, as today's `NearbyServices compact`); "Be there, and it's *yours*" (`StampsNearYou`). | Home lobby, Home › Nearby, Home › Stamps |
 | **Stamp** | Opens a bottom sheet: *Upload photos* · *Stamp where I am* · "Just sharing photos? Post them to a City Board". | "Upload photo to get a stamp" under the booklet |
 | **Passport** | Kicker MY VIRTUAL PASSPORT, title "Everywhere you've *been*", counts; the book; tabs **Stamps · Photos · Cards**. Photos = the owner's photo albums (`PhotoPackets`). Cards = `CityCardsPage embedded`. | Passport, Profile's photo albums, Home › City Cards |
-| **Profile** | Cloth cover "MY WORLD" with the pencil (edit) and a **gear (Settings)**; bookplate (photo, name, @handle, about) with a "4 stamps · 2 countries · My passport ›" link; YOUR CIRCLE (Inner circle · You follow · Follow you, **Friends' news**, + Add friends); ON MY MAP; "Who sees my passport"; invite; My kit. | Profile, Home › Arrivals, Mailbox › News, Settings tab |
-| **Mail** (not a tab) | An envelope at the **top-left of the banner** with a red dot for new mail. Opens Mailbox. | Bottom bar |
+| **Profile** | Cloth cover "MY WORLD" with the pencil (edit) and a **gear (Settings)**; bookplate (photo, name, @handle, about) with a "4 stamps · 2 countries · My passport ›" link; YOUR CIRCLE (Friends · You follow · Follow you, each a button with its count on top — the circle's own figures from `useCircle()`, shown only once loaded, and a zero shows the name alone, never a bare 0; the app's word is "Friends", never "Inner circle"; **Friends' news** — Mailbox's old News tab: follow requests, updates on your passport, friends' new stamps, plus new arrivals — shown on Profile as a preview card: "Friends' news · N NEW" with *See all ›* to the full page, then the newest two items, a follow request answerable in place (Accept / ✕); and + Add friends); ON MY MAP (My favorite places · On the horizon, unchanged; hidden when both are empty); "Who sees my passport"; invite; My kit. | Profile, Home › Arrivals, Mailbox › News, Settings tab |
+| **Mail** (not a tab) | An envelope at the **top-left of the banner** with a red dot for new mail. Opens Mailbox, which keeps **Postcards · Telegrams · Sent**. Its News tab moves to Profile. | Bottom bar |
 
 Retired: Home's six-tab `HomePager`, the Virtual Passport Home tab, the Settings tab, the Mailbox tab,
 Profile's MY VIRTUAL PASSPORT folder and its photo packets (they now live on Passport).
@@ -37,13 +37,14 @@ Profile's MY VIRTUAL PASSPORT folder and its photo packets (they now live on Pas
 - Pill: `rgba(22,17,13,0.92)`, text `#FAF7EE`, padding 6, gap 2, radius 9999, `shadow-nav`. Fixed, centred, `bottom: calc(22px + env(safe-area-inset-bottom))` (unchanged).
 - Items: 62px wide, min-height 52, radius 18, icon 22px stroke 2, label 10.5px/700, letter-spacing 0.2px. Inactive opacity 0.62. Active: `linear-gradient(180deg,#1AA093,#0E6E66)`, opacity 1 (unchanged).
 - Icons: Boards `LayoutGrid` · Nearby `MapPin` · Passport `BookOpen` · Profile `CircleUserRound`.
-- **Stamp** (centre): 70px slot; a 58px circle raised 30px above the pill (`margin-top: -30px`), fill stamp red `#B0472F`, 3px `#FAF7EE` ring, shadow `0 10px 22px -8px rgba(176,71,47,0.7)`, white `Camera` icon 26px; label "Stamp" under it. `aria-label="Stamp: upload photos or stamp where you are"`.
+- **Stamp** (centre): 70px slot; a 58px circle raised 30px above the pill (`margin-top: -30px`), shadow `0 10px 22px -8px rgba(176,71,47,0.7)`; label "Stamp" under it. **Founder, 2026-10-31: a 3D rubber stamp in the circle** (option B; not a camera, since the button doesn't open the camera): the circle is cream `#FBF6EC` with a 3px stamp-red `#B0472F` ring, holding the photo-real stamp render at 40 × 40 (`stamp-button@2x.png` 80px / `@3x` 120px, made with STAMP_ICON_RENDER_PROMPT.md, transparent background). Until that render exists, and while it loads, show the flat version: a stamp-red `#B0472F` circle with a 3px `#FAF7EE` ring and a white lucide `Stamp` icon, 26px. `aria-label="Stamp: upload photos or stamp where you are"`.
 - Active tab by route: Boards → Boards; Home → Nearby; Passport → Passport; Profile/Circle/Settings → Profile. Others light nothing.
+- **Profile dot:** a 10px `#E0533C` dot at the top-right of the Profile icon (2px ring in the pill colour) when there's a follow request or unread news. `aria-label` "Profile" / "Profile, something new".
 - Track taps: `trackEvent('nav_tab', { tab })`.
 
 **Banner envelope** (`src/Layout.jsx`, beside the existing `FontScaleButton`):
 - Mirror the glasses button on the left: 44px hit area at `top: calc(env(safe-area-inset-top) + 3px)`, `left: 10px`; 40px white disc, 1px `rule` (#F0E9DC) border, lucide `Mail` 19px in `ink`.
-- Red dot `#E0533C`, 10px, 2px white ring, top-right of the disc, when `socialUnread()` mail > 0 (move the polling FloatingNav does today here). `aria-label`: "Mail" / "Mail, new messages". Hidden on Onboarding.
+- Red dot `#E0533C`, 10px, 2px white ring, top-right of the disc, when there are unread postcards or sealed telegrams (`socialUnread()` mail > 0; move the polling FloatingNav does today here). Requests and news light the Profile dot instead, never this one. `aria-label`: "Mail" / "Mail, new messages". Hidden on Onboarding.
 
 **Stamp sheet** (new, e.g. `src/components/passport/StampSheet.jsx`):
 - Bottom sheet, white, radius 24 24 0 0, grabber 38×5 `#E5DDC8`; title serif "Add a *stamp*" (stamp red italic), line "Stamps are earned by being there: right now, or in a photo from the trip.", a 44px close.
@@ -68,6 +69,7 @@ Profile's MY VIRTUAL PASSPORT folder and its photo packets (they now live on Pas
 3. **Passport:** upload above the book for new members; Stamps · Photos · Cards tabs.
 4. **Profile:** remove the passport folder and albums; Friends' news and + Add friends in YOUR CIRCLE.
 5. **Clean-up:** retire `HomePager`'s six tabs; onboarding's "Not now" lands on Boards instead of Home; Stamp earned links to the board.
-6. **Later, optional:** Mailbox tabs become Inbox (postcards + telegrams) · Sent; the location chooser stops asking on every cold start by default.
+6. **Mailbox and news (founder, 2026-10-31):** Mailbox keeps Postcards · Telegrams · Sent and drops its News tab. News becomes **Friends' news** on Profile › Your circle (opened from a row there, with a back button to Profile): follow requests first with Accept / Decline, then "On your passport" (reactions, guestbook — each row opens that page of the book), then "Where your friends have been", then New arrivals with Add to circle. Mailbox's masthead loses "+ Add friends" (it lives in Your circle). Old `?tab=news` links and notifications open Friends' news.
+7. **Later, optional:** the location chooser stops asking on every cold start by default.
 
 Before each commit (from CLAUDE.md): `npx eslint --quiet <changed files>`, `npm run build`, `npm run boot-check`. Show the diff before committing and ask before pushing. Check the bar on iPhone **and** iPad (`useIsTablet`, `HomeTablet`), and at the largest text size (the eyeglass `--fs` multiplier).

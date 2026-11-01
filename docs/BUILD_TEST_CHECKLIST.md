@@ -4015,3 +4015,29 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   copy, checklist). Site run 41258996384 green: `https://globeskimmers.io/app-version.json` serves 1.0.6 / 1.0.11.
   **Open (founder):** `npm run ota` (nav redesign, passport-once onboarding, birthday-year fix, WebView report, album
   copy — none on phones yet); S10 retest on Play 1.0.11.
+
+## 2026-10-31 (night) — COMMITTED on stamping-v2, NOT pushed: navigation redesign spec v2 (stamp art, Profile dot, Friends' news)
+
+- The founder's `NAV_REDESIGN_2026-10-31_2.md` saved over `docs/NAV_REDESIGN_2026-10-31.md` (diff: the Stamp button's
+  3D rubber stamp, option B; the Profile dot; YOUR CIRCLE as count buttons + a Friends' news preview card; step 6 is
+  now a decision). Built in four commits:
+  1. Worker: `/social/unread` returns `news` (unread lines that aren't mail) and `requests` (pending follows); the
+     friend-stamps and follow-accepted pushes route to `/Mailbox?tab=news` ("See it under Friends' news").
+  2. Bar + envelope: `FloatingNav` shows the lucide `Stamp` glyph on the red disc and, once
+     `https://globeskimmers.io/img/stamp-button@2x.png` loads, the cream disc with the render (probed once per
+     launch, `useStampArt`); a 10px `#E0533C` dot on the Profile icon for news/requests ("Profile, something new");
+     `src/lib/unreadStore.js` is the one poll (≤ 1/min, gs:unread clears news at once, gs:mail re-reads); `MailButton`
+     lights for mail only. `docs/STAMP_ICON_RENDER_PROMPT.md` carries the prompt, sizes and where the PNGs go.
+  3. Profile + Friends' news: `CircleFolder` = three `CountButton`s (faces, the count only when > 0, the name) +
+     `NewsCard` (activity read with `activity:true`, never marking; one request answerable in place; two newest
+     lines; See all ›) + "+ Add friends"; `src/pages/FriendsNews.jsx` (CoverBand back to Profile) renders
+     `FriendsNewsBody` (requests → On your passport → Where your friends have been → What your friends added → New
+     arrivals → Add friends; `socialUnread({ mark: true })` on open); `src/lib/newsLinks.js` (newsDestination,
+     foldBoards); `/Home?page=arrivals` → `/FriendsNews`; `ArrivalsPage.jsx` deleted.
+  4. Mailbox: `MAIL_TABS` = postcards · telegrams · sent; News tab, CircleRow, openFrom, the activity read and
+     "+ Add friends" removed; `?tab=news` redirects to Friends' news; after the feed read it dispatches `gs:mail`.
+- Gates: eslint no-undef (+ unused-imports) on every touched file, `node --check` on the worker, `npm run build`,
+  `npm run boot-check` ✅. Screenshots `Claude outputs/nav-v2-*-2026-10-31.png`: Profile, Friends' news, Mailbox,
+  the bar on an iPad (1032×1376), the Profile at the largest text size.
+- **Open (founder):** the two stamp render PNGs (the bar switches on its own); look it over → push (worker redeploys)
+  → `npm run ota`. Step 7 (cold-start chooser default) stays optional.

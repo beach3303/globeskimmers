@@ -1448,5 +1448,21 @@ Cards; (4) Profile: passport folder + albums out, Friends' news (the Arrivals pa
 bookplate; (5) clean-up: HomePager deleted, old `/Home?page=` links redirect (City Cards → Passport › Cards, Arrivals →
 Profile, City Board → Boards), onboarding's "Not now" → Boards, the after-stamp card → See the board · Stamp another
 photo (the postcard stays as the quiet third way; worded honestly — a stamp proves presence, album privacy decides
-what hangs on the board). **Not done:** (6) optional — Mailbox Inbox · Sent (Mailbox › News still lives in the
-Mailbox, not yet in Friends' news), the cold-start chooser default. Awaiting the founder's look, push and OTA.
+what hangs on the board). Steps 1–5 PUSHED 2026-10-31 (main f6a319c).
+
+**Spec v2 (founder, 2026-10-31 evening, `NAV_REDESIGN_2026-10-31_2.md`, saved over the spec file) — BUILT the same
+evening, committed on stamping-v2, not pushed:** the Stamp button holds a **3D rubber stamp** (option B — not a camera,
+the button doesn't open the camera): cream disc, stamp-red ring, the photo-real render at 40 × 40 served from
+`site/img/stamp-button@2x.png` / `@3x.png` (prompt and sizes in `docs/STAMP_ICON_RENDER_PROMPT.md`; until the files
+exist the bar shows the flat red disc with the lucide Stamp glyph and switches on its own when they land — no OTA
+needed for the art). A **Profile dot** on the bar for a follow request or unread news; the envelope's dot is mail only
+(one shared read, `src/lib/unreadStore.js`; the worker's /social/unread now returns news + requests). **YOUR CIRCLE** =
+three count buttons (Friends · You follow · Follow you — counts only once loaded, a zero shows the name alone; the
+orbit art gave way to them) + the **Friends' news card** ("FRIENDS' NEWS · N NEW", See all ›, the newest two lines, a
+follow request answerable in place) + "+ Add friends". **Step 6 is a decision, built:** Mailbox keeps Postcards ·
+Telegrams · Sent and drops News and "+ Add friends"; **Friends' news** is its own page (`/FriendsNews`, back to the
+Profile): follow requests → On your passport → Where your friends have been → What your friends added → New arrivals
+→ + Add friends; it marks the news seen (the Profile dot clears), mail stays unread until the Mailbox shows it; old
+`/Mailbox?tab=news` links and the news notifications open it (the worker's friend-stamp and follow-accepted pushes
+route to `/Mailbox?tab=news`, which the new build redirects and an old build shows as its News tab). **Open:** (7)
+optional — the cold-start chooser default; the founder's stamp render files; push + OTA.
