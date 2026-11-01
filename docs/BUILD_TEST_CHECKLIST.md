@@ -4122,3 +4122,12 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   refuses `@`, hence the dash names; 30-day cache → a redo uses new names). `docs/STAMP_ICON_RENDER_PROMPT.md` is the
   founder's kit verbatim plus the two `wrangler r2 object put` one-liners. Gates: eslint, build, boot-check.
 - **Founder:** generate, export @3x 192 px / @2x 128 px, run the two one-liners, tell Claude Code the names.
+
+## 2026-11-01 ~04:30 PT — Stamp button render UPLOADED (option C live on every phone at its next launch)
+
+- The founder's chosen render (walnut, brass collar, red rubber; a round knob — her pick over the kit's flat top),
+  1254 × 1254 RGBA transparent, exported with `sips` to 192 px (@3x) and 128 px (@2x); source kept as
+  `~/Desktop/stamp-button-source-1254.png`. Uploaded: `globeskimmers-media/stamp-art/ui/stamp-button-2x.png`
+  (18,319 B) and `…-3x.png` (38,181 B); the worker serves both (200, image/png, 30-day cache). The bar's probe finds
+  the 2x file and shows the stamp by itself at 64 × 64. Screenshots `Claude outputs/nav-stamp-render-*-2026-11-01.png`.
+  A redo = new names + a one-line FloatingNav change (the 30-day cache).
