@@ -559,7 +559,7 @@ export default function HomePage() {
     if (!askedPage) return;
     const q = new URLSearchParams(routerLocation.search);
     if (askedPage === 'citycards') navigate(`${createPageUrl('Passport')}?tab=cards${q.get('card') ? `&card=${q.get('card')}` : ''}`, { replace: true });
-    else if (askedPage === 'arrivals') navigate(createPageUrl('Profile'), { replace: true });
+    else if (askedPage === 'arrivals') navigate(createPageUrl('FriendsNews'), { replace: true });
     else if (askedPage === 'cityboard') navigate(createPageUrl('Boards'), { replace: true });
   }, [askedPage]);   // eslint-disable-line react-hooks/exhaustive-deps
   const renderNearby = () => {

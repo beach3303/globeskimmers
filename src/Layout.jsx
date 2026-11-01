@@ -25,7 +25,7 @@ const BACK_TO_TOP_PAGES = new Set([
   "PlacesToEat", "CoffeeFinder", "ATMFinder", "RestroomFinder",
   "ConvenienceStore", "ThingsToDo", "Shopping", "MoneyExchange",
   "CultureInformation", "BasicPhrases", "Weather",
-  "Mailbox", "Postcards", "Sent", "CityBoard", "CityBoards", "Boards", "Circle",
+  "Mailbox", "Postcards", "Sent", "CityBoard", "CityBoards", "Boards", "Circle", "FriendsNews",
 ]);
 
 // The bottom reserve under every page except Onboarding: the nav pill sits 22px above
@@ -50,6 +50,7 @@ const PAGE_GROUND = new Map(Object.entries({
   Boards: NEUTRAL.airmail,
   Profile: HARBOUR.paper,
   Circle: HARBOUR.paper,
+  FriendsNews: HARBOUR.paper,
   Traveler: HARBOUR.paper,
 }));
 
@@ -65,6 +66,7 @@ const PAGE_INK = new Map(Object.entries({
   Boards: NEUTRAL.airmailBlue,
   CityBoards: NEUTRAL.airmailBlue,
   Circle: HARBOUR.cloth,
+  FriendsNews: HARBOUR.cloth,
 }));
 
 

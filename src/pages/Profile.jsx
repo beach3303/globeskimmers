@@ -31,7 +31,6 @@ import MapFolder from "@/components/profile/MapFolder";
 import PrivacyCard from "@/components/profile/PrivacyCard";
 import VirtualItems from "@/components/profile/VirtualItems";
 import Luggage, { SHOW_LUGGAGE } from "@/components/passport/Luggage";
-import ArrivalsPage from "@/components/home/ArrivalsPage";
 import InviteButton from "@/components/passport/InviteButton";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
 import { initialOf } from "@/components/social/SocialMarks";
@@ -286,14 +285,9 @@ export default function ProfilePage({ embedded = false } = {}) {
         ) : (
           <>
             <CircleFolder owner={owner} cloth={cloth.key} style={{ marginTop: GAP }} />
-            {/* Friends' news, inside YOUR CIRCLE (navigation redesign, 2026-10-31): what the people you
-                follow did lately, who joined, + Add friends — the Home › Arrivals page, here. The
-                passport folder and the photo albums moved to the Passport's Stamps · Photos · Cards. */}
-            {!teen ? (
-              <div style={{ marginTop: GAP, background: NEUTRAL.white, border: `1px solid ${rgba(cloth.cloth, 0.25)}`, borderRadius: 18, padding: "4px 0 14px" }}>
-                <ArrivalsPage embedded />
-              </div>
-            ) : null}
+            {/* Friends' news lives inside CircleFolder (the card) and on its own page (navigation redesign,
+                2026-10-31, step 6). The passport folder and the photo albums moved to the Passport's
+                Stamps · Photos · Cards. */}
             <MapFolder favorites={shown.favorites} dreams={shown.dreams} cloth={cloth.key} style={{ marginTop: GAP }} />
             {SHOW_VIRTUAL_ITEMS && <VirtualItems stamps={stamps} luggage={luggage} style={{ marginTop: GAP }} />}
             <PrivacyCard cloth={cloth.key} share={share} onShare={setShare} style={{ marginTop: GAP }} />

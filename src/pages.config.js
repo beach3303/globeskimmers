@@ -54,6 +54,7 @@ import ActivityDetail from './components/attraction/ActivityRedirect';
 import AdminAnalytics from './pages/AdminAnalytics';
 import BasicPhrases from './pages/BasicPhrases';
 import Boards from './pages/Boards';
+import FriendsNews from './pages/FriendsNews';
 import Circle from './pages/Circle';
 import CityBoard from './pages/CityBoard';
 import CityBoards from './pages/CityBoards';
@@ -91,6 +92,7 @@ export const PAGES = {
     "AdminAnalytics": AdminAnalytics,
     "BasicPhrases": BasicPhrases,
     "Boards": Boards,
+    "FriendsNews": FriendsNews,
     "Circle": Circle,
     "CityBoard": CityBoard,
     "CityBoards": CityBoards,
