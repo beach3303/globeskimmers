@@ -4131,3 +4131,17 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   (18,319 B) and `…-3x.png` (38,181 B); the worker serves both (200, image/png, 30-day cache). The bar's probe finds
   the 2x file and shows the stamp by itself at 64 × 64. Screenshots `Claude outputs/nav-stamp-render-*-2026-11-01.png`.
   A redo = new names + a one-line FloatingNav change (the 30-day cache).
+
+## 2026-11-01 — RULE: every photo on a City Board hangs from “a traveler” (COMMITTED, not pushed)
+
+- Founder: "friends can open the photos and like them, but when those photos are posted to a City Board they are
+  labelled @traveler … people like it that their names are hidden as contributors." Audit of all 37 boards with
+  items: 110 photos, 97 contributions (anonymous already), **13 passport-album 🌍 Everyone prints signed
+  "From @handle"** (Grand Canyon Village 1, Peach Springs 4, Stone Mountain 4, Liberty 3, Atlanta 1 — the 10-16
+  "signed @username" design), 1 postcard (unsigned). Clips: 0 so far (contributions → anonymous).
+- Change: `handleCityBoard` photo rows now always carry `by: { handle: null, name: null }` (the `contrib` flag
+  stays for the client's `bph`/`bcp` targets); the stamp sheet's line reads "from “a traveler” with no @username".
+  Postcards keep their own rule (signed @username, or @traveler/@local when the sender chose that). Friends' news
+  still names the friend who added a board photo — followers only, as the founder wants.
+- Gates: `node --check`, eslint, build, boot-check. **Push** flips the 13 photos on the live boards; the stamp
+  sheet wording rides the next OTA.

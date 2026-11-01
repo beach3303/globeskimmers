@@ -379,7 +379,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
             <p style={{ color: INK3, fontSize: fs(10.5), lineHeight: 1.45, marginTop: 4 }}>
               {minor
                 ? "The stamp's photos follow it, and stay private. Friends & followers and Everyone open at age 18."
-                : "🌍 Everyone also hangs its photos on the city board, signed @username — any photo can be taken off the board from your album. 🔒 Only me is never shared, in a link or a picture."}
+                : "🌍 Everyone also hangs its photos on the city board, from “a traveler” with no @username — any photo can be taken off the board from your album. 🔒 Only me is never shared, in a link or a picture."}
             </p>
             {passportSheet && <PassportAudienceSheet onClose={() => setPassportSheet(false)} />}
             {photosSheet && (

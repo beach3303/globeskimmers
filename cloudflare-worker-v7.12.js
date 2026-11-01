@@ -21795,8 +21795,10 @@ async function handleCityBoard(request, env) {
       // A clip (2026-10-30): the poster is `photo`; the viewer plays `video`.
       ...(p.video ? { video: p.video, duration: p.duration || null } : {}),
       place: p.stamp.name, stamp_kind: p.stamp.kind || null, city: p.stamp.city || null, region: p.stamp.region || null, country: p.stamp.country || null,
-      // A contribution comes from "a traveler": no username (2026-10-27).
-      ...(p.contrib ? { contrib: true, by: { handle: null, name: null } } : { by: { handle: share[p.user_id]?.handle || null, name: null } }),
+      // Every photo on a board comes from "a traveler" (founder, 2026-11-01: "people like it that their
+      // names are hidden as contributors") — a contribution (2026-10-27) and a 🌍 Everyone album print alike.
+      // Friends still learn who added it from their own Friends' news; the board itself never says.
+      ...(p.contrib ? { contrib: true } : {}), by: { handle: null, name: null },
     }));
     // One page from two sources: it ends at the newer of the two sources' last items, and
     // anything older waits for the next page — nothing is skipped, nothing repeats.
