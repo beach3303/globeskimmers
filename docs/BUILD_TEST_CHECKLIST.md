@@ -4163,3 +4163,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   **0 with a handle** (97 contributions + 13 passport prints, all "From a traveler"). The app half (option C bar,
   Friends' travels stamps-only, the stamp-sheet wording) waits for the founder's `npm run ota`.
 - **Open (founder):** `npm run ota`; Play 1.0.12 (15) review → S10 retest → `site/app-version.json` android → 1.0.12.
+
+## 2026-11-01 ~05:00 PT — Play 1.0.12 (15) PUBLISHED (submission 11) + OTA after main 6f5b3d0
+
+- The location-crash fix is on Play. `site/app-version.json` android → 1.0.12 (committed; live on the next push).
+  The founder's `npm run ota` after the push carries the walnut stamp, Friends' travels stamps-only and the stamp-sheet
+  wording. **Open (founder):** update the S10 from the Play Store page if it hasn't auto-updated, then Explore where
+  I am; Play vitals on build 15 should stay clean.
