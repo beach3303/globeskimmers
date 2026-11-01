@@ -4082,3 +4082,29 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   locally with a temporary `debuggable true` (build.gradle restored): no crash on onboarding's Continue nor on
   Explore where I am. → device-specific. **Next:** the phone's crash log (USB debugging + `adb logcat -b crash`, or
   Play Console → Android vitals → Crashes and ANRs).
+
+## 2026-11-01 — FOUND + FIXED: Android crashed on the first location check in every Play build since 1.0.8 (R8)
+
+- **Cause:** Play vitals (Monitor and improve → Android vitals → Crashes and ANRs) listed the crash on 1.0.8, 1.0.9
+  and 1.0.10: `java.lang.NullPointerException` at `Bridge.getPermissionStates` (obfuscated `com.getcapacitor.d0`),
+  reached from `GeolocationPlugin.checkPermissions` → `checkLocationState` → `super.checkPermissions`. Retraced with
+  the mapping inside the shipped AAB: `Bridge.java:1217` — the plugin's `@CapacitorPlugin` annotation is null. R8 in
+  full mode (AGP 8 default) strips the annotation because Capacitor's consumer rules keep the plugin classes but not
+  the annotation interface; `minifyEnabled` has been on since 1.0.8 (2026-10-14, the Play "DEX code optimization"
+  nudge). Known upstream (capawesome.io, "Google Play DEX code optimization in Capacitor apps"). **Not the S10, not
+  geolocation 8.2.0, not the WebView**: every Android phone on a Play build crashed the first time location was asked.
+- **Why the emulator passed before:** the debug APK and a release built with a temporary `debuggable true` both run
+  R8 in debug mode (31 renamed classes instead of 3,872), so nothing was stripped. A true `assembleRelease` on the
+  emulator reproduced the crash to the frame; the same build with the rules below survived onboarding's Continue
+  and Home's Explore where I am and resolved Los Angeles.
+- **Fix:** `android/app/proguard-rules.pro` — `-keep class com.getcapacitor.** { *; }`, `-keep @interface
+  com.getcapacitor.annotation.** { *; }`, `-keep class com.capacitorjs.plugins.** { *; }`, `-keep class
+  io.ionic.libs.** { *; }`, `-keep class com.globeskimmers.app.** { *; }`, `-keepattributes *Annotation*,Signature,
+  InnerClasses,EnclosingMethod`. Android 1.0.12 (versionCode 15); AAB on the Desktop as
+  `GlobeSkimmers-1.0.12-build15.aab` (upload key, `webContentsDebuggingEnabled` absent, Capacitor classes kept in the
+  bundle's mapping). iOS has no R8 and is unaffected; no web change, no OTA.
+- **Founder:** Play Console → Test and release → Production → Create new release → upload the AAB → release notes
+  "Fixes a crash when allowing location on Android" → review → start rollout. Then on the S10: Explore where I am.
+  After it publishes: `site/app-version.json` android → 1.0.12.
+- **Rule for next time:** test Android on a real `assembleRelease` APK (no `debuggable`), never only the debug build;
+  the emulator recipe (seed + DevTools via a temporary `webContentsDebuggingEnabled`) is in the 11-01 memory note.
