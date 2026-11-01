@@ -4156,3 +4156,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   feed row, so a postcard or telegram addressed to the viewer showed as an envelope there. It now shows friends'
   **stamps only**; private mail is read in the Mailbox alone. (Group postcards still show co-addressees to each
   other — founder's 10-24 design.) Gates: eslint, build, boot-check.
+
+## 2026-11-01 — PUSHED: "a traveler" on every board photo + Mailbox-only mail (main 6f5b3d0)
+
+- 10cca9a → 6f5b3d0. Deploy Cloudflare Workers 41309173106 green. Live sweep after the deploy: 37 boards, 110 photos,
+  **0 with a handle** (97 contributions + 13 passport prints, all "From a traveler"). The app half (option C bar,
+  Friends' travels stamps-only, the stamp-sheet wording) waits for the founder's `npm run ota`.
+- **Open (founder):** `npm run ota`; Play 1.0.12 (15) review → S10 retest → `site/app-version.json` android → 1.0.12.
