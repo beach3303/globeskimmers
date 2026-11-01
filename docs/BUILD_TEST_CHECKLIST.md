@@ -4186,3 +4186,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   reserve 192px so the last row never hides under the 44px disc (the Boards’ “All City Boards ›” did, on both
   phones). Gates: eslint, build, boot-check. Screenshots `Claude outputs/reserve-*-bottom-2026-11-01.png`. Reaches
   phones with the next `npm run ota`.
+
+## 2026-11-01 — PUSHED: more room above the stamp handle (main 19b1f8a)
+
+- 62de33f → 19b1f8a, no deploy runs (app code + docs). **Open (founder):** `npm run ota` puts the taller reserve on
+  phones; then the S10 check on Play 1.0.12 (Explore where I am).
