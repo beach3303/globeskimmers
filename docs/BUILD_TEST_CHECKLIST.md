@@ -4170,3 +4170,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   The founder's `npm run ota` after the push carries the walnut stamp, Friends' travels stamps-only and the stamp-sheet
   wording. **Open (founder):** update the S10 from the Play Store page if it hasn't auto-updated, then Explore where
   I am; Play vitals on build 15 should stay clean.
+
+## 2026-11-01 — PUSHED: site store version Android 1.0.12 (main 62de33f)
+
+- Deploy website 41309657858 green; `https://globeskimmers.io/app-version.json` serves `{ ios 1.0.6, android 1.0.12 }`.
+  **Open (founder):** the S10 retest on Play 1.0.12 (update from the Play Store page if it hasn't auto-updated).
