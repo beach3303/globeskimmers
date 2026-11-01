@@ -4108,3 +4108,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   After it publishes: `site/app-version.json` android → 1.0.12.
 - **Rule for next time:** test Android on a real `assembleRelease` APK (no `debuggable`), never only the debug build;
   the emulator recipe (seed + DevTools via a temporary `webContentsDebuggingEnabled`) is in the 11-01 memory note.
+
+## 2026-11-01 4:15 AM PT — Play 1.0.12 (15) SUBMITTED (submission 11, Production, In review)
+
+- The R8 keep-rules build. When it publishes: S10 → Explore where I am (and onboarding's Continue on a fresh install);
+  `site/app-version.json` android → 1.0.12; Play vitals should show no new `getPermissionStates` crashes on 15.
