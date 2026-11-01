@@ -4053,3 +4053,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - Lesson (second time): a new sticker kind = app + worker + **a migration for the check**. Next time grep
   `check (kind` in `supabase/migrations` before calling a sticker done.
 - **Open (founder):** push; then press one of the four on any photo.
+
+## 2026-11-01 — COMMITTED, NOT pushed: the Profile cover's gear and pencil took no taps
+
+- Founder: "check also if settings and edit profile works inside of profile page." In the 132px cover
+  (`CoverBand`), the title block (`position: relative`, since 2026-10-13) comes after the buttons' absolute span
+  in the DOM, so it painted over the gear and the pencil and swallowed their taps (elementsFromPoint showed the
+  kicker div on top; the button underneath). The pencil alone had the same stacking on the phones' build
+  (697bac0), so Edit from the cover was dead there too. Fix: `zIndex: 2` on the span. Verified with the rig:
+  gear → Settings, pencil → edit mode (`Claude outputs/check-profile-gear-2026-11-01.png`, `…-pencil-…`).
+  Gates: eslint, build, boot-check ✅. Reaches phones with the next `npm run ota`.

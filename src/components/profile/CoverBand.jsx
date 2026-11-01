@@ -243,7 +243,9 @@ export default function CoverBand({
       ) : (
         <div style={{ position: 'relative', minHeight: 132, maxWidth: contentMaxWidth, margin: '0 auto', boxSizing: 'border-box' }}>
           {showLeading || extra ? (
-            <span style={{ position: 'absolute', top: 12, display: 'flex', alignItems: 'center', gap: 8, ...(kind === 'back' ? { left: 24 } : { right: 24 }) }}>
+            // zIndex: the title block below is positioned too and comes later, so without it the
+            // block painted over the buttons and swallowed their taps (founder, 2026-11-01).
+            <span style={{ position: 'absolute', top: 12, zIndex: 2, display: 'flex', alignItems: 'center', gap: 8, ...(kind === 'back' ? { left: 24 } : { right: 24 }) }}>
               {kind === 'back' ? button : null}
               {extra}
               {kind === 'edit' ? button : null}
