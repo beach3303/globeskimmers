@@ -4063,3 +4063,12 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   (697bac0), so Edit from the cover was dead there too. Fix: `zIndex: 2` on the span. Verified with the rig:
   gear → Settings, pencil → edit mode (`Claude outputs/check-profile-gear-2026-11-01.png`, `…-pencil-…`).
   Gates: eslint, build, boot-check ✅. Reaches phones with the next `npm run ota`.
+
+## 2026-11-01 — PUSHED: nav redesign v2, stickers migration, cover fix (main ea5c464)
+
+- 005dc20 → ea5c464, eight commits. Runs green: Apply Supabase Migrations 41288180035 (the eleven-kind check) and
+  Deploy Cloudflare Workers 41288180010 (unread `news` + `requests`, news pushes → `/Mailbox?tab=news`). Verified
+  live with the demo account: AWESOME! on an LA board photo → `{"ok":true}` (then peeled, nothing left behind);
+  `/social/unread` answers `{ total, mail, news, requests }`. **Open (founder):** `npm run ota` — the navigation
+  redesign (v1 + v2), the cover's gear/pencil fix, the passport-once onboarding, the birthday-year fix and the
+  WebView report are all still off phones until then; then the two stamp render PNGs.
