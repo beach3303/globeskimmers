@@ -20854,8 +20854,10 @@ async function pushFriendStamps(env, uid) {
   const places = stamps.length;
   const title = who.length > 1 ? `Your friends stamped ${places} places`
     : `${await ppHolder(env, who[0])} stamped ${places === 1 ? stamps[0].name : `${places} places`}`;
-  const body = places === 1 ? 'See it in your Mailbox' : 'See them in your Mailbox';
-  await pushNotify(env, uid, 'friend_stamps', { title, body, route: '/Mailbox' }, { now: true });
+  // Friends' news lives on the Profile (navigation redesign, 2026-10-31); /Mailbox?tab=news opens it
+  // there, and the News tab on a build from before.
+  const body = places === 1 ? 'See it under Friends’ news' : 'See them under Friends’ news';
+  await pushNotify(env, uid, 'friend_stamps', { title, body, route: '/Mailbox?tab=news' }, { now: true });
 }
 // POST /push/register { token, platform, app_version } — this phone, this account. A token
 // moving to another account (a shared phone) follows the sign-in. Never read back to the app.
@@ -21192,7 +21194,7 @@ async function handleSocialFollow(request, env, ctx) {
         }
         await gbRest(env, `user_follows?follower_id=eq.${fid}&followee_id=eq.${user.id}&status=eq.pending`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'accepted', responded_at: new Date().toISOString() }) });
         // The knock (push): the follow was allowed.
-        if (ctx) { const who = await ppHolder(env, user.id); ctx.waitUntil(pushNotify(env, fid, 'follows', { title: `${who} accepted your follow`, body: 'Their new stamps land in your Mailbox', route: '/Mailbox' })); }
+        if (ctx) { const who = await ppHolder(env, user.id); ctx.waitUntil(pushNotify(env, fid, 'follows', { title: `${who} accepted your follow`, body: 'Their new stamps show under Friends’ news', route: '/Mailbox?tab=news' })); }
       } else {
         await gbRest(env, `user_follows?follower_id=eq.${fid}&followee_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
       }
@@ -24176,6 +24178,11 @@ async function handleSocialUnread(request, env) {
         ...(i.type === 'board' ? { board: i.board_name, board_kind: i.board_kind, photos: i.photos } : {}),
       }));
     const total = activity.filter((a) => a.unread).length;
+    // The bar's Profile dot (navigation redesign, 2026-10-31): news = unread lines that aren't mail
+    // (mail lights the banner's envelope instead); requests = people still waiting for an answer,
+    // lit whether or not the line was seen.
+    const news = activity.filter((a) => a.unread && !((a.type === 'postcard' && a.to_me) || a.type === 'telegram')).length;
+    const requests = shown.filter((i) => i.type === 'follow_request').length;
     // A traveler already deleted, whose clean-up hasn't reached them yet, is
     // never named in the list (go-live round 2, gbPurgeQueued) — checked for
     // the rows actually returned, and only when the list is asked for.
@@ -24192,7 +24199,7 @@ async function handleSocialUnread(request, env) {
       if (sp) await gbRest(env, `social_profiles?user_id=eq.${me}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mailbox_seen_at: now }) });
       else await gbRest(env, 'social_profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: me, mailbox_seen_at: now }) });
     }
-    return jsonResponse({ total, mail, activity: b.mark === true || b.activity === true ? activity : undefined });
+    return jsonResponse({ total, mail, news, requests, activity: b.mark === true || b.activity === true ? activity : undefined });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
