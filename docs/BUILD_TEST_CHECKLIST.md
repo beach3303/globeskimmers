@@ -4072,3 +4072,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   `/social/unread` answers `{ total, mail, news, requests }`. **Open (founder):** `npm run ota` — the navigation
   redesign (v1 + v2), the cover's gear/pencil fix, the passport-once onboarding, the birthday-year fix and the
   WebView report are all still off phones until then; then the two stamp render PNGs.
+
+## 2026-11-01 — S10 still exits on "Explore where I am" (1.0.11 confirmed); not reproducible on the emulator
+
+- Capgo device list: the Android phone runs native 1.0.11, bundle 1.0.2611010059. No `webview_renderer_gone` from it
+  (the report path works: the emulator's old marker reported itself today), so this is not a renderer death.
+- Emulator (API 31 google_apis, debug build): no crash with precise + location on, with location services off, with
+  approximate-only permission, or through the system permission dialog. Release build (R8, shrinkResources) built
+  locally with a temporary `debuggable true` (build.gradle restored): no crash on onboarding's Continue nor on
+  Explore where I am. → device-specific. **Next:** the phone's crash log (USB debugging + `adb logcat -b crash`, or
+  Play Console → Android vitals → Crashes and ANRs).
