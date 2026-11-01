@@ -1,11 +1,12 @@
-// Mailbox: your mail in folder tabs (founder, 2026-10-25, decision sheet: "Tabs: Postcards ·
-// Telegrams · Sent · News"; it replaced one long page and the separate postcard box). The masthead
-// (Postcard, Telegram, + Add friends), then four tabs in the Home tabs' airmail blue:
+// Mailbox: your mail in folder tabs (founder, 2026-10-25, decision sheet; it replaced one long page
+// and the separate postcard box). The masthead (Postcard, Telegram), then three tabs in the Home
+// tabs' airmail blue:
 //   Postcards  new cards to me first (the feed), then every one I've read (the box), as compact
 //              rows that open into the full card;
 //   Telegrams  the same, sealed ones first — each still waits to be tapped open;
-//   Sent       everything I sent (SentList);
-//   News       follow requests, what happened on my passport, and my circle's new stamps.
+//   Sent       everything I sent (SentList).
+// News (follow requests, what happened on my passport, my circle's new stamps) moved to Friends'
+// news on the Profile (navigation redesign, 2026-10-31, step 6); /Mailbox?tab=news opens it there.
 // The tab comes from ?tab=, else the one used last; a tapped notification (?tg= / ?pc=) opens its
 // tab and brings that message into view, opened. /Postcards and /Sent now land here.
 //
@@ -15,13 +16,12 @@
 // line, a request) has a door to TravelerSheet: Report, Unfollow, Block. A 'confirm' account
 // (a birthday still to complete) gets the note that lets it finish.
 import React, { useEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, Globe, Lock, Mail, Mailbox as MailboxIcon, UserPlus, Zap } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { ChevronDown, ChevronRight, Lock, Mail, Mailbox as MailboxIcon, Zap } from "lucide-react";
 import { createPageUrl } from "@/utils";
-import { cityBoardsUrl, cityBoardUrl } from "@/lib/boardLinks";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
-import { socialFeed, getHandle, getSocialProfile, setHandle, setAgeGate, splitDob, socialUnread, keepPostcard, deletePostcard, postcardBox, blotterReadMail } from "@/lib/passport";
+import { socialFeed, getHandle, getSocialProfile, setHandle, setAgeGate, splitDob, keepPostcard, deletePostcard, postcardBox, blotterReadMail } from "@/lib/passport";
 import { BlotterStrip } from "@/components/passport/Blotter";
 import { showToast } from "@/components/Toast";
 import { AirmailChevron } from "@/components/redesign/ornaments";
@@ -30,14 +30,9 @@ import { NEUTRAL, fs } from "@/components/redesign/constants";
 import Envelope, { whenLabel } from "@/components/social/Envelope";
 import TravelerSheet from "@/components/social/TravelerSheet";
 import ConfirmBirthdayNote from "@/components/social/ConfirmBirthdayNote";
-import { Face } from "@/components/social/SocialMarks";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import { claimLink, linkCodeOf } from "@/lib/messageLinks";
-import AddFriendsSheet from "@/components/social/AddFriendsSheet";
-import Requests from "@/components/social/Requests";
-import ActivityList from "@/components/social/ActivityList";
 import PostcardCard from "@/components/social/PostcardCard";
-import InviteButton from "@/components/passport/InviteButton";
 import PostcardCompose from "@/components/passport/PostcardCompose";
 import TelegramCard from "@/components/telegram/TelegramCard";
 import TelegramCompose from "@/components/telegram/TelegramCompose";
@@ -54,17 +49,14 @@ const BLUE = NEUTRAL.airmailBlue;
 const GAP = 20;
 
 const lc = (v) => String(v ?? "").trim().replace(/^@+/, "").toLowerCase();
-// What a report from an activity line is about (the report queue's kinds), and a short note.
-const ACTIVITY_KIND = { follow_request: "profile", follow: "profile", postcard: "postcard", telegram: "telegram", reaction: "profile", signature: "signature", tag: "tag" };
 const clip = (t, n) => { const v = String(t || "").replace(/\s+/g, " ").trim(); return v.length > n ? `${v.slice(0, n - 1)}…` : v; };
-const whoOf = (by) => String(by?.name ?? "").trim() || (by?.handle ? `@${lc(by.handle)}` : "A traveler");
 
 /** @type {import('react').CSSProperties} */
 const KICKER = { margin: 0, fontFamily: MONO, fontSize: fs(10), fontWeight: 500, letterSpacing: ".16em", lineHeight: 1.2, textTransform: "uppercase", color: BLUE };
 
 // The masthead on the page, then the full-bleed chevron (Mailbox L28-41): the seal, then the ways
-// to write and "+ Add friends", which wraps under them at large text sizes.
-function Masthead({ onPostcard = undefined, onTelegram = undefined, onFind = undefined, addressable = false }) {
+// to write. "+ Add friends" lives in YOUR CIRCLE on the Profile (2026-10-31).
+function Masthead({ onPostcard = undefined, onTelegram = undefined, addressable = false }) {
   const write = { flex: "1 1 auto", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 44, padding: "0 14px", borderRadius: 999, font: "inherit", fontSize: fs(13.5), fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" };
   return (
     <>
@@ -91,12 +83,6 @@ function Masthead({ onPostcard = undefined, onTelegram = undefined, onFind = und
                 <Zap size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Telegram
               </button>
             ) : null}
-            {/* A labeled door to Find people (founder, 2026-10-25: it hid behind a bare magnifier). */}
-            {onFind ? (
-              <button type="button" onClick={onFind} style={{ ...write, flex: "0 1 auto", border: 0, background: BLUE, color: NEUTRAL.white }}>
-                <UserPlus size={16} strokeWidth={2} aria-hidden="true" focusable="false" /> Add friends
-              </button>
-            ) : null}
           </div>
         ) : null}
       </header>
@@ -105,16 +91,15 @@ function Masthead({ onPostcard = undefined, onTelegram = undefined, onFind = und
   );
 }
 
-// The four folder tabs, in the Home tabs' airmail blue on one baseline. Postcards and Telegrams
-// carry how many are new; News a dot when something waits.
-const MAIL_TABS = ["postcards", "telegrams", "sent", "news"];
+// The three folder tabs, in the Home tabs' airmail blue on one baseline. Postcards and Telegrams
+// carry how many are new.
+const MAIL_TABS = ["postcards", "telegrams", "sent"];
 const TAB_KEY = "gs_mailbox_tab_v1";
 function MailTabs({ tab, onTab, counts }) {
   const tabs = [
     { id: "postcards", label: "Postcards", n: counts.postcards },
     { id: "telegrams", label: "Telegrams", n: counts.telegrams },
     { id: "sent", label: "Sent" },
-    { id: "news", label: "News", dot: counts.news },
   ];
   return (
     <div role="tablist" aria-label="Your mail" style={{ display: "flex", gap: 4, marginTop: 16, borderBottom: `2px solid ${BLUE}` }}>
@@ -261,32 +246,6 @@ function ClaimCard({ onClaimed, style = undefined }) {
 
 // 'Your circle · 18' with up to five faces (your inner circle first, then the newest),
 // opening the Circle screen (Mailbox L211-221). Hidden while nobody is on either side.
-function CircleRow({ circle, style = undefined }) {
-  const counts = circle.counts || {};
-  if (circle.status !== "ready" || (!counts.youFollow && !counts.followYou)) return null;
-  const seen = new Set();
-  const faces = [...(circle.mutual || []), ...(circle.acc || []), ...(circle.fol || [])].filter((p) => {
-    const k = String(p.user_id ?? p.handle ?? "");
-    if (!k || seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  }).slice(0, 5);
-  return (
-    <Link to={createPageUrl("Circle")}
-      style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 56, boxSizing: "border-box", padding: "0 12px 0 16px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 16, textDecoration: "none", ...style }}>
-      <span style={{ flex: 1, minWidth: 0, fontSize: fs(15), fontWeight: 600, lineHeight: 1.3, color: NEUTRAL.ink }}>
-        Friends & followers{counts.youFollow ? <span style={{ fontFamily: MONO, fontSize: fs(11), fontWeight: 500, letterSpacing: ".06em", color: NEUTRAL.ink3 }}> · {counts.youFollow}</span> : null}
-      </span>
-      <span aria-hidden="true" style={{ flex: "none", display: "flex", alignItems: "center" }}>
-        {faces.map((p, i) => (
-          <Face key={String(p.user_id ?? p.handle)} name={p.name} handle={p.handle} avatar={p.avatar} cloth={p.cloth} size={24} style={{ marginLeft: i ? -7 : 0 }} />
-        ))}
-      </span>
-      <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
-    </Link>
-  );
-}
-
 function MailboxBody() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -296,25 +255,14 @@ function MailboxBody() {
   const [box, setBox] = useState(null);          // every card and telegram to me: { rows, next, held, error, partial }
   const [older, setOlder] = useState("idle");    // reading an older page of the box: 'idle' | 'busy' | 'failed'
   const [me, setMe] = useState({ loaded: false, handle: null });
-  const [activity, setActivity] = useState([]);
-  // Several "city board now shows…" lines fold into one (founder, 2026-10-19: "quite a scroll");
-  // the Find people heads-up and a single board line stay as they are.
-  const foldBoards = (items) => {
-    const boards = items.filter((a) => a?.type === "board" && a.board_kind !== "find" && a.board_kind !== "many");
-    if (boards.length < 2) return items;
-    const first = items.findIndex((a) => a?.type === "board" && a.board_kind !== "find");
-    const folded = { type: "board", board_kind: "many", boards: boards.map((b) => b.board_name).filter(Boolean), photos: boards.reduce((n, b) => n + (b.photos || 0), 0),
-      at: boards.map((b) => b.at).sort().pop(), unread: boards.some((b) => b.unread) };
-    const rest = items.filter((a) => !(a?.type === "board" && a.board_kind !== "find"));
-    const at = Math.min(Math.max(first, 0), rest.length);
-    return [...rest.slice(0, at), folded, ...rest.slice(at)];
-  };
 
   // The tab: ?tab=, else the tab of a tapped notification (?tg= / ?pc=), else the one used last.
   const params = new URLSearchParams(location.search);
   const tabParam = params.get("tab");
   const wantedTg = params.get("tg");
   const wantedPc = params.get("pc");
+  // The old News tab (links and notifications from before 2026-10-31) opens Friends' news on the Profile.
+  useEffect(() => { if (tabParam === "news") navigate(createPageUrl("FriendsNews"), { replace: true }); }, [tabParam]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [tab, setTabState] = useState(() => {
     if (MAIL_TABS.includes(tabParam)) return tabParam;
     if (wantedTg) return "telegrams";
@@ -331,7 +279,6 @@ function MailboxBody() {
   const toggleOpen = (id) => setOpenIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const [compose, setCompose] = useState(false);
-  const [sheet, setSheet] = useState(null);   // 'find'
   // Reply and Delete on a postcard or telegram addressed to me (2026-10-19). A postcard's Reply
   // asks which way (ReplyWays: a postcard back or a telegram back) once telegrams are open; a
   // telegram's Reply is a telegram back.
@@ -352,7 +299,6 @@ function MailboxBody() {
     const type = tg ? "telegram" : "postcard";
     setFeed((f) => (f && Array.isArray(f.rows) ? { ...f, rows: f.rows.filter((x) => !(x?.type === type && x.id === row.id)) } : f));
     setBox((b) => (b && Array.isArray(b.rows) ? { ...b, rows: b.rows.filter((x) => x.id !== row.id) } : b));
-    setActivity((list) => list.filter((a) => (tg ? a.telegram_id : a.postcard_id) !== row.id));
     showToast(tg ? "Telegram deleted" : "Postcard deleted", "success");
     load();
     return true;
@@ -395,12 +341,12 @@ function MailboxBody() {
   const readBook = () => blotterReadMail((box?.rows || []).filter((r) => (r.type === "postcard" || r.photo) && r.id).map((r) => r.group_id || r.id)).then(setBook);
   useEffect(() => { if (box?.rows?.length) readBook(); }, [box]);
   const load = async () => {
-    // Opening the Mailbox marks the activity read, which clears the nav dot.
     loadBox();
-    const [f, h, u] = await Promise.all([socialFeed(), getHandle(), socialUnread({ mark: true })]);
+    const [f, h] = await Promise.all([socialFeed(), getHandle()]);
     setFeed(f);
     setMe({ loaded: true, handle: h.handle || null });
-    setActivity(foldBoards(u.activity || []));
+    // The feed read showed the new postcards (read_at): the envelope's dot reads again (gs:mail).
+    try { window.dispatchEvent(new Event("gs:mail")); } catch { /* no window */ }
   };
   useEffect(() => { load(); }, []);
   const retry = () => { setFeed(null); setBox(null); load(); };
@@ -461,24 +407,6 @@ function MailboxBody() {
   const rows = feed && !feed.error ? (feed.rows || []).filter((r) => !blocked.has(lc(r?.by?.handle))) : [];
   const counts = circle.counts || {};
   const addressable = (circle.acc || []).some((r) => r.handle) || (counts.followYou || 0) > 0;
-  // A passport-activity line that points at a message: its tab, opened.
-  const openFrom = (to, a = null) => {
-    const [k, id] = String(to).split(":");
-    if (k === "tg" || k === "pc") {
-      setTab(k === "tg" ? "telegrams" : "postcards");
-      setOpenIds((s) => new Set([...s, id]));
-      setTimeout(() => bringIntoView(k, id), 350);
-      return;
-    }
-    // The thing a line names (founder, 2026-10-30): its board opened on it, a memory photo, a stamp's page, the Sent tab.
-    if (k === "board" && a?.board_at?.city) { navigate(`${cityBoardUrl(a.board_at.city, a.board_at.country, a.board_at.region)}&open=${encodeURIComponent(a.target || "")}`); return; }
-    if (to === "boards") { navigate(cityBoardsUrl()); return; }
-    if (k === "stamp") { navigate(`${createPageUrl("Passport")}?stamp=${id}`); return; }
-    if (k === "photo") { const [, sid, pid] = String(to).split(":"); navigate(`${createPageUrl("Passport")}?stamp=${sid}&photo=${pid}`); return; }
-    if (to === "sent") { setTab("sent"); return; }
-    if (k === "card") { navigate(`${createPageUrl("Passport")}?tab=cards&card=${id}`); return; }   // City Cards live on the Passport (2026-10-31)
-    navigate(to === "passport" ? createPageUrl("Passport") : `${createPageUrl("Circle")}?tab=followers`);
-  };
 
   // Keep a card sent to everyone in your postcard box, or let it go: the pill flips at once
   // and flips back when the worker says no; let go from the box, it leaves the box.
@@ -514,12 +442,10 @@ function MailboxBody() {
     return res;
   };
 
-  // Mail to me (the feed's new postcards and telegrams) vs the circle's news; postcards and
-  // telegrams leave the passport's activity — the card is the notification, and the tab counts it.
+  // Mail to me (the feed's new postcards and telegrams); the circle's stamps and broadcast cards
+  // are Friends' news now (2026-10-31).
   const mailRows = rows.filter((r) => r.type === "telegram" || (r.type === "postcard" && r.to_me));
   const circleRows = rows.filter((r) => !(r.type === "telegram" || (r.type === "postcard" && r.to_me)));
-  const passportNews = (activity || []).filter((a) => a && a.type !== "postcard" && a.type !== "telegram");
-  const newsFresh = passportNews.filter((a) => a.unread).length;
   const meName = myName || profile?.first_name || null;
   // What I've read: everything in the box that isn't new in the feed.
   const fresh = new Set(mailRows.map((r) => r.id));
@@ -528,8 +454,7 @@ function MailboxBody() {
   const newTg = mailRows.filter((r) => r.type === "telegram");
   const readPc = boxRows.filter((r) => r.type !== "telegram");
   const readTg = boxRows.filter((r) => r.type === "telegram");
-  const requests = circle.status === "ready" ? circle.requests || [] : [];
-  const tabCounts = { postcards: newPc.length, telegrams: newTg.filter((r) => !r.received_at).length, news: newsFresh > 0 || requests.length > 0 };
+  const tabCounts = { postcards: newPc.length, telegrams: newTg.filter((r) => !r.received_at).length };
 
   const isNew = (r) => (r.type === "postcard" || r.type === "telegram") && r.from_new;
   // One message or stamp, in full. `fresh`: from someone you don't follow.
@@ -642,53 +567,14 @@ function MailboxBody() {
     );
   };
 
-  const newsTab = () => {
-    if (!feed) return skeleton("Loading your news");
-    if (feed.held) return <TeenHoldNote />;
-    const nothing = !requests.length && !passportNews.length && !(feed && !feed.error && circleRows.length);
-    return (
-      <>
-        {requests.length ? (
-          <section aria-label="Follow requests">
-            <h2 style={KICKER}>{requests.length === 1 ? "1 person asked to follow you" : `${requests.length} people asked to follow you`}</h2>
-            <Requests rows={requests} onAccept={answer("accept")} onDecline={answer("decline")} style={{ marginTop: 8 }}
-              onMore={(r) => openTraveler(r, { kind: "profile", note: "Asked to follow me" })} />
-          </section>
-        ) : null}
-        {passportNews.length ? (
-          <section aria-label="On your passport" style={{ marginTop: requests.length ? GAP : 0 }}>
-            <h2 style={KICKER}>On your passport{newsFresh ? ` · ${newsFresh} new` : ""}</h2>
-            <ActivityList items={passportNews} limit={8} heading={false} onOpen={openFrom} style={{ marginTop: 6 }}
-              onMore={(a) => openTraveler({ ...a.by, entry_id: a.entry_id || null }, { kind: ACTIVITY_KIND[a.type] || "profile", note: clip(`Mailbox, ${whenLabel(a.at)}: ${whoOf(a.by)} (${a.type})`, 480) })} />
-          </section>
-        ) : null}
-        {feed.error ? <div style={{ marginTop: requests.length || passportNews.length ? GAP : 0 }}>{failed}</div> : circleRows.length ? (
-          <section aria-label="Where your friends have been" style={{ marginTop: requests.length || passportNews.length ? GAP : 0 }}>
-            <h2 style={KICKER}>Where your friends have been · newest first</h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
-              {circleRows.map((r, i) => card(r, i, false))}
-            </div>
-          </section>
-        ) : null}
-        {nothing && !feed.error ? empty(<>Nothing new, <em style={{ fontStyle: "italic", color: BLUE }}>for now</em></>, "Follow requests, news about your passport, and your friends’ new stamps land here.", <InviteButton style={{ marginTop: 16 }} />) : null}
-        <CircleRow circle={circle} style={{ marginTop: 16 }} />
-        <Link to={cityBoardsUrl()} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 52, marginTop: 8, padding: "0 12px 0 14px", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 14, textDecoration: "none" }}>
-          <Globe size={18} strokeWidth={1.8} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
-          <span style={{ flex: 1, minWidth: 0, fontSize: fs(14), color: NEUTRAL.ink2 }}><b style={{ fontWeight: 650, color: NEUTRAL.ink }}>City boards</b> — photos from real travelers</span>
-          <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
-        </Link>
-      </>
-    );
-  };
-
   return (
     <div>
-      <Masthead onPostcard={() => setCompose(true)} onTelegram={wires ? () => setWireTo({}) : undefined} onFind={() => setSheet("find")} addressable={addressable} />
+      <Masthead onPostcard={() => setCompose(true)} onTelegram={wires ? () => setWireTo({}) : undefined} addressable={addressable} />
       <div className={COLUMN}>
         {me.loaded && !me.handle ? <ClaimCard onClaimed={(h) => setMe({ loaded: true, handle: h })} style={{ marginTop: 16 }} /> : null}
         <MailTabs tab={tab} onTab={setTab} counts={tabCounts} />
         <div role="tabpanel" id={`mail-panel-${tab}`} aria-labelledby={`mail-tab-${tab}`} style={{ paddingTop: 16 }}>
-          {tab === "sent" ? <SentList /> : tab === "news" ? newsTab() : mailTab(tab)}
+          {tab === "sent" ? <SentList /> : mailTab(tab)}
         </div>
 
         {/* A friend texted a postcard or telegram (2026-10-24): the link's code opens it here. */}
@@ -717,10 +603,6 @@ function MailboxBody() {
         ) : null}
       </div>
 
-      {sheet === "find" ? (
-        <AddFriendsSheet onClose={() => setSheet(null)} writers={[...mailRows, ...boxRows].map((r) => r.by).filter(Boolean)} onFollowed={() => load()}
-          onPostcard={() => { setSheet(null); setCompose(true); }} onTelegram={wires ? () => { setSheet(null); setWireTo({}); } : undefined} />
-      ) : null}
       {traveler ? (
         <TravelerSheet person={traveler.person} report={traveler.report}
           postcard={traveler.pc ? { what: traveler.pc.kind, onReply: traveler.pc.reply ? () => (traveler.pc.kind === "telegram" ? wireBack(traveler.pc) : replyFor(traveler.pc)) : undefined, onDelete: () => removeCard(traveler.pc) } : null}
