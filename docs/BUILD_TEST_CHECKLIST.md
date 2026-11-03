@@ -4502,3 +4502,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - Gates: node --check worker; eslint (no-undef) on ClipTrimmer / ClipPlayer / FlightCard / ListenBar / ThenNow /
   CityBoard / PostcardCard / SentList / PostcardCompose / ContributeAlbum / PhotoSorter / Passport / PhotoLightbox;
   libs clean; build; boot-check. Needs push (worker + 2 migrations) + OTA. Passport Wrapped keeps its 11-24 slot.
+
+## 2026-11-03 — PUSHED: the rest of the clip list (main fe29dc1)
+
+  Deploy Cloudflare Workers run 41695136741 and Apply Supabase Migrations run 41695136788 (postcard marks, stamp
+  clip memories) both green. Live probe: `PUT /passport/video/<id>`, `PUT /postcards/video/<id>` and
+  `POST /board/same-spot` answer 401 without a session (the old worker fell through to 404). **Open (founder):**
+  `npm run ota` — then upload a clip from a board and open MARKS ("How far from home" and "Flight path" need a home
+  city on the profile); play a marked clip to the end for the flight card; tap "Listen to <city>" on a board with
+  clips; share a clip from Photos → "Get a stamp" / "Send as a video postcard". Then and now appears under a
+  board's uploads only once `kits/<slug>/then.jpg` + `then.json` are on R2 (one-liners in the entry above).
