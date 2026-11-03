@@ -4365,4 +4365,31 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - The founder had pushed c80ee00/612f5a1 herself (workers run for 612f5a1 green: a clip's look now reaches the board
   page). Then main ad600d1: Apply Supabase Migrations run 41674432999 green (`opens_at`/`opens_on`/`opened_at` live),
   Deploy Cloudflare Workers run 41674432953 green. **Open (founder):** `npm run ota`, then seal a telegram to a friend
-  for tomorrow and look at Sent and their Mailbox.
+  for tomorrow and look at Sent and their Mailbox. OTA done by the founder 2026-11-03 ~08:55 PT ("done w/ npm ota").
+
+## 2026-11-03 — Video postcards: a clip on the front of a private postcard (the 10-30 plan's next item; a sealed clip = a sealed video postcard) (COMMITTED, not pushed)
+
+- Data: migration `20261103190000_video_postcards.sql` — `kind` ('photo' default, 'video'), `video_key`, `duration`,
+  `video_ready` (default true), `filter` on `postcards`; no check constraint on kind (the worker validates).
+- Worker: `/postcards/send` with `kind: 'video'` — the poster rides as the card's photo (every photo path keeps
+  working), `frames` (2–4 stills) go through the same check as the poster ('memory' context, as private photo
+  cards), duration ≤ 20 s, the look from `BC_CLIP_FILTERS`; rows carry `kind/video_key/video_ready=false/duration/
+  filter` with ONE clip object per send (`vid/<sender>/pc-<uuid>.mp4`, inside the account purge's clip sweep); no
+  unsealed/photo fallback insert (503 until the columns exist); the answer carries `upload` + `video`. NEW
+  `PUT /postcards/video/<id>` (25 MB, MP4 `ftyp`, mvhd duration) marks every row of the send ready and sends the
+  knock then ("sent you a video postcard" / the sealed knock). NEW `GET|HEAD /pc-video/<id>` with Range, by the
+  card's id (as unguessable as a photo's key), closed while sealed. Feed, box and unread skip a card whose clip
+  hasn't landed; rows carry `video`, `duration`, `filter` (a sealed row nulls `video` too); `/mail/sent` carries
+  them and status `uploading` for a clip that never finished; `/mail/recall` deletes the clip object once no row
+  shares it; `pcVideoStraysPrune` (an hour, posters + objects + rows) at send time for the sender and in the daily
+  cron for everyone. Never a board card, never an email that waits.
+- App: `src/lib/videoPostcards.js` `sendVideoPostcard` (probe → stills → `sendPostcard` kind video → `workerUpload`
+  of the bytes); `PostcardCompose` — "Or send a clip" / "Use a clip instead" (native: picker → probe → ClipTrimmer
+  editor with trim + look → shrink; web: a clip that already fits → the editor for its look), the clip on the front
+  with its look and a "Clip · N s" tag, "Change the clip" / "Use a photo instead", no photo-looks button and no
+  text/share link with a clip, the toast says "Video postcard"; `PostcardCard` plays the clip (poster until play,
+  the look applied); Sent's opened item plays it, status line for `uploading`. Sealing applies unchanged.
+- Gates: node --check worker; eslint (no-undef) on PostcardCompose / PostcardCard / SentList; libs clean; build;
+  boot-check. Needs push (worker + migration) + OTA. Open: the share sheet's "Send as a postcard" door doesn't take
+  clips yet (PhotoSorter hands clips to City Boards only); board video postcards stay out (boards take clips from
+  their Upload door).

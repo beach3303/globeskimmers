@@ -1500,7 +1500,8 @@ recipient's age on the open date, so an 18th-birthday postcard can be sealed to 
 before the day; the content opens at 18). Build: sealing for postcards and telegrams first (`opens_at`, the compose
 sheets' "Seal until" date, the Mailbox's sealed-until envelope, Sent's "Opens … · Take back", the morning
 notification), then **video postcards** (a clip in a private postcard, the 10-30 plan's next item) so a sealed clip
-is a sealed video postcard.
+is a sealed video postcard. **Status 2026-11-03:** sealing PUSHED + on phones (main ad600d1, OTA ~08:55 PT); video
+postcards BUILT the same morning (BUILD_TEST_CHECKLIST 2026-11-03), awaiting push + OTA.
 
 **Also agreed:** a clip earns a stamp (film the landmark → the passport stamps it; already in the video plan);
 **Passport Wrapped** (a member's clips city by city with title cards in the passport style, sequenced in the viewer,
