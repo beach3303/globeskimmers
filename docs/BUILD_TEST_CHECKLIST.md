@@ -4406,3 +4406,26 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - **OTA 1.0.2611031630 LIVE 2026-11-03 16:30 UTC** (founder: "did the ota"; `channel list` shows production on it):
   on phones now — the iPhone clip read fix, clip looks (editor + board), sealed postcards and telegrams, video
   postcards, "Topic (optional)". Nothing from today is still waiting on an OTA.
+
+## 2026-11-03 — The verified stamp outro + the four House frames on board clips (founder: "build both") (COMMITTED, not pushed)
+
+- Data: migration `20261103210000_board_clip_marks.sql` — `board_contributions.marks jsonb` ({ frame, outro }); one
+  column so later marks (distance from home, golden hour) need no migration; no check constraint.
+- Worker: `BC_CLIP_FRAMES` (airmail, postmark, passport, print) + `bcMarksOf` (unknown names dropped); `/board/contribute`
+  kind video stores `marks`; the wall, My uploads and friends-feed selects and rows carry `marks` (the wall row also
+  `taken_at`, the day the clip was shot, for the stamp); the wall query's no-column fallback stands until the
+  migration lands.
+- App: `src/lib/clipMarks.js` (CLIP_FRAMES, packMarks, frameOf, outroOf, markDate); `ClipFrame` (the four frames as
+  CSS chrome around the <video> — the postmark and the passport stamp sit in TOP corners so nothing covers the
+  player's controls; the print's film date too); `StampOutro` + `useOutro` (TypographicStamp of the city in stamp
+  red, `strength 2`, slams in over the clip's last two seconds — scale 1.8 → 1 with a bounce, 320 ms — and stays
+  while it ends; the city, region, country and the shot date come from the row); `ClipTrimmer` is now the editor
+  for look + FRAME strip (each chip the frame's own CSS miniature) + "Stamp it at the end" (on by default) with the
+  preview wearing all three (`marks={false}` hides frame/stamp — the video-postcard sheet, where they aren't drawn
+  yet); the Contribute sheet passes `marks` (and the probe's `takenAt` + the board's city for the preview) →
+  `contributeClip({ marks })`; `CityBoard`'s viewer wraps the clip in `ClipFrame` and `ClipStage` (video + outro).
+  Tiles stay plain.
+- Gates: node --check worker; eslint (no-undef) on ClipFrame / StampOutro / ClipTrimmer / ContributeAlbum /
+  PostcardCompose / CityBoard; libs clean; build; boot-check. Needs push (worker + migration) + OTA.
+- Parked the same morning (founder): the Nth-traveler mark ("hold off"); the same-spot strip waits on her read of
+  its mock-up (fifth artboard on the House frames canvas, https://claude.ai/artifact/9T8zBNUdS8RNQYoF2n27Rr).
