@@ -35,6 +35,7 @@ import PhotoEditor from "@/components/passport/PhotoEditor";
 import StampEarnedSheet from "@/components/passport/StampEarnedSheet";
 import CollectibleReward from "@/components/passport/CollectibleReward";
 import { readPhotoExif } from "@/lib/photoExif";
+import { uploadStampClip } from "@/lib/clips";
 import { takeSharedPhotos, SHARED_PHOTOS_EVENT } from "@/lib/sharedPhotos";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import NearbyStampPrompt, { NEARBY_KEY, nearbySensingOn } from "@/components/passport/NearbyStampPrompt";
@@ -698,7 +699,7 @@ function StampPlaceModal({ onClose, onDone, preset = null, sharedPhotos = null, 
     if (senseThis) { setPhotoNote(null); setLocated({ loading: true, at: null }); }
     const t0 = Date.now();
     const settle = () => new Promise((r) => setTimeout(r, Math.max(0, (senseThis ? SENSE_MS : 0) - (Date.now() - t0))));
-    Promise.all(f.map((x) => readPhotoExif(x).catch(() => null))).then(async (all) => {
+    Promise.all(f.map((x) => (x.gsExif ? Promise.resolve(x.gsExif) : readPhotoExif(x).catch(() => null)))).then(async (all) => {
       if (!senseThis) setPhotoNote(null);
       const today = localISODate();
       const days = all.map((x) => String(x?.taken_at || "").slice(0, 10)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today).sort();
@@ -795,7 +796,8 @@ function StampPlaceModal({ onClose, onDone, preset = null, sharedPhotos = null, 
     // Each photo's own location tag and time, read before resizing strips them. Photos all
     // dated before stamps reach back prove nothing, so nothing is created.
     const sending = [...photos, ...extraRef.current];
-    const exifs = await Promise.all(sending.map((f) => readPhotoExif(f).catch(() => null)));
+    // A clip's poster carries the clip's own location and date (gsExif, 2026-11-03); a photo is read.
+    const exifs = await Promise.all(sending.map((f) => (f.gsExif ? Promise.resolve(f.gsExif) : readPhotoExif(f).catch(() => null))));
     const photoDays = exifs.map((x) => String(x?.taken_at || "").slice(0, 10)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
     if (verified !== "gps" && photoDays.length === sending.length && photoDays.every((d) => d < STAMP_EARLIEST)) {
       setBusy(false);
@@ -822,9 +824,15 @@ function StampPlaceModal({ onClose, onDone, preset = null, sharedPhotos = null, 
       // send the photo?" — this is where the photo really goes, 1–3 s each, so narrate it).
       setBusyMsg(sending.length > 1 ? `Sending photo ${i + 1} of ${sending.length}…` : "Sending your photo — checking it proves the visit…");
       try {
-        const plain = await resizePhoto(sending[i]);
-        const image = look && !isPlain(look) ? await renderLook(plain, look) : plain;   // Upload photos' chosen look
-        const up = await uploadStampPhoto({ stamp_id: data.id, image, visited_on: dateVal, exif: exifs[i] });
+        let up;
+        if (sending[i].gsClip) {
+          // A clip (2026-11-03): its poster is the proof photo, then the clip itself follows.
+          up = await uploadStampClip({ stamp_id: data.id, file: sending[i].gsClip.file, exif: exifs[i], filter: sending[i].gsClip.filter, marks: sending[i].gsClip.marks, visited_on: dateVal });
+        } else {
+          const plain = await resizePhoto(sending[i]);
+          const image = look && !isPlain(look) ? await renderLook(plain, look) : plain;   // Upload photos' chosen look
+          up = await uploadStampPhoto({ stamp_id: data.id, image, visited_on: dateVal, exif: exifs[i] });
+        }
         if (up?.data?.proof && !proof) proof = up.data.proof;
       } catch { /* skip a bad photo */ }
     }
@@ -1380,7 +1388,11 @@ function PassportInner({ embedded = false }) {
   useEffect(() => { if (actionsId && !stampsView.some((s) => s.id === actionsId)) setActionsId(null); }, [stampsView, actionsId]);
   // Every memory photo of a stamp, in the lightbox's shape, opened at `index`.
   const enlargeStampPhotos = (st, index) => {
-    const photos = (st.photos || []).map((p) => ({ src: p.photo_url, id: p.id, caption: p.caption || null, food: Number(p.food_subject) === 1 }));
+    const photos = (st.photos || []).map((p) => ({
+      src: p.photo_url, id: p.id, caption: p.caption || null, food: Number(p.food_subject) === 1,
+      // A clip memory (2026-11-03): the lightbox plays it, with the stamp's own place and date for its marks.
+      ...(p.video ? { video: p.video, look: p.filter || null, marks: p.marks || null, city: st.city || st.name || null, region: st.region || null, country: st.country || null, date: st.visited_on || null } : {}),
+    }));
     if (!photos.length) return;
     setLightbox({ photos, index: Math.min(Math.max(index || 0, 0), photos.length - 1), title: `I was here! ${st.name}`, credit: st.visited_on ? fmtDate(st.visited_on) : null, social: true });
   };

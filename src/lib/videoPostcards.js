@@ -8,14 +8,16 @@ import { workerUpload } from "@/lib/callWorker";
 import { sendPostcard } from "@/lib/passport";
 import { probeClip, clipStills, CLIP_SECONDS, CLIP_BYTES } from "@/lib/clips";
 
-export async function sendVideoPostcard({ file, filter = null, ...card }) {
+// `marks` ({ frame, outro, home, light, flight }) and `exif` ({ lat, lng, taken_at } from the clip's own
+// metadata) ride along: the worker keeps the frame and the stamp and works out the rest from the spot.
+export async function sendVideoPostcard({ file, filter = null, marks = null, exif = null, ...card }) {
   const meta = await probeClip(file);
   if (!meta || !Number.isFinite(meta.duration) || meta.duration <= 0) return { data: null, error: "Couldn’t read this clip" };
   if (meta.duration > CLIP_SECONDS + 0.5) return { data: null, error: `Clips are up to ${CLIP_SECONDS} seconds — trim it first` };
   if (file.size > CLIP_BYTES) return { data: null, error: "That clip is too big — 25 MB at most" };
   let stills;
   try { stills = await clipStills(file, meta.duration); } catch { return { data: null, error: "Couldn’t read this clip" }; }
-  const { data, error } = await sendPostcard({ ...card, image: stills.poster, kind: "video", frames: stills.frames, duration: Math.round(meta.duration * 10) / 10, filter });
+  const { data, error } = await sendPostcard({ ...card, image: stills.poster, kind: "video", frames: stills.frames, duration: Math.round(meta.duration * 10) / 10, filter, marks, exif });
   if (error || !data?.ok) return { data, error: error || data?.error || "Couldn’t send the postcard" };
   if (!data.upload) return { data, error: null };   // nobody could receive it: answered like a photo card
   const up = await workerUpload(data.upload, file, "video/mp4", { timeoutMs: 180000 });

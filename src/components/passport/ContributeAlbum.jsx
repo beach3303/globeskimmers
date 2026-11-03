@@ -19,6 +19,7 @@ import { clipFilterCss } from "@/lib/clipFilters";
 import { available as shrinkAvailable, pickMedia, isClipFile, probe, shrink, fileAt, previewUrl } from "@/lib/videoShrink";
 import ClipTrimmer from "@/components/passport/ClipTrimmer";
 import { useDismissable } from "@/lib/dismissStack";
+import { useAuth } from "@/lib/AuthContext";
 import { requirePassport } from "@/lib/passportGate";
 import { CONTRIBUTE_PICK, contributeOpen, contributePhoto, listContributions, deleteContribution, captionContribution } from "@/lib/boardContrib";
 import { collectibleOf, listCollectibles, progressOf } from "@/lib/collectibles";
@@ -195,6 +196,9 @@ const noteSeen = () => { try { return localStorage.getItem(NOTE_SEEN_KEY) === "1
 const markNoteSeen = () => { try { localStorage.setItem(NOTE_SEEN_KEY, "1"); } catch { /* storage off */ } };
 
 function ContributeSheet({ photos, onChanged, onClose, board = null, initialFiles = null, initialClips = null, autoPick = false, album = false }) {
+  // The marks that need a home (miles from home, the flight path) are offered once a home city is set.
+  const { profile } = useAuth();
+  const homeSet = Number.isFinite(Number(profile?.home_lat)) && Number.isFinite(Number(profile?.home_lng));
   const [noteOpen, setNoteOpen] = useState(() => !noteSeen());
   useEffect(() => { markNoteSeen(); }, []);
   useDismissable(true, onClose);
@@ -462,7 +466,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
       {reward ? <CollectibleReward key={reward.id} item={reward} fresh onClose={() => setReward(null)} onSaved={loadCol} /> : null}
       {manage ? <CollectibleReward key={manage.id} item={manage} fresh={false} onClose={() => setManage(null)} onSaved={loadCol} /> : null}
       {nudge ? <CollectibleNudge progress={nudge} onClose={() => setNudge(null)} onUpload={isOpen ? () => { setNudge(null); openPicker(); } : undefined} /> : null}
-      {edit ? <ClipTrimmer src={edit.src} duration={edit.duration} seconds={CLIP_SECONDS} trim={edit.trim} city={board?.city || null} date={edit.date || null}
+      {edit ? <ClipTrimmer src={edit.src} duration={edit.duration} seconds={CLIP_SECONDS} trim={edit.trim} city={board?.city || null} date={edit.date || null} homeSet={homeSet}
         onPick={(pick) => { const { resolve } = edit; setEdit(null); resolve(pick); }}
         onClose={() => { const { resolve } = edit; setEdit(null); resolve(null); }} /> : null}
 

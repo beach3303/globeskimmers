@@ -10,7 +10,7 @@
 //   <ClipTrimmer src duration seconds trim marks city date onPick({ start, filter, marks }) onClose />
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Scissors, Stamp, X } from "lucide-react";
+import { Check, Home, Plane, Scissors, Stamp, Sun, X } from "lucide-react";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { useDismissable } from "@/lib/dismissStack";
 import { CLIP_FILTERS, clipFilterCss } from "@/lib/clipFilters";
@@ -35,12 +35,15 @@ function FrameMini({ id }) {
   return <span style={{ ...base, border: "1.5px dashed rgba(22,17,13,.3)", borderRadius: 8 }} />;
 }
 
-export default function ClipTrimmer({ src, duration, seconds = 20, trim = true, marks = true, city = null, date = null, onPick, onClose }) {
+export default function ClipTrimmer({ src, duration, seconds = 20, trim = true, marks = true, homeSet = false, city = null, date = null, onPick, onClose }) {
   useDismissable(true, onClose);
   const [start, setStart] = useState(0);
   const [look, setLook] = useState("none");
   const [frame, setFrame] = useState("none");
   const [outro, setOutro] = useState(marks);   // the stamp at the end: on unless switched off
+  const [light, setLight] = useState(marks);   // golden hour and the time: on unless switched off
+  const [home, setHome] = useState(false);     // miles from home: a choice, since it says something about you
+  const [flight, setFlight] = useState(false); // the flight path when it ends: a choice too
   const [still, setStill] = useState(null);     // one still of the clip, behind the look thumbnails
   const ref = useRef(null);
   const max = trim ? Math.max(0, (Number(duration) || 0) - seconds) : 0;
@@ -170,19 +173,29 @@ export default function ClipTrimmer({ src, duration, seconds = 20, trim = true, 
               </div>
             </div>
 
-            {/* The verified stamp outro (2026-11-03): the city's stamp in the last two seconds, with the date. */}
-            <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, padding: "10px 12px", borderRadius: 14, background: "#fff", border: `1px solid ${outro ? BLUE : "rgba(22,17,13,.1)"}`, cursor: "pointer" }}>
-              <input type="checkbox" checked={outro} onChange={(e) => setOutro(e.target.checked)} style={{ width: 18, height: 18, margin: 0, accentColor: BLUE }} />
-              <Stamp size={16} strokeWidth={2} color={RED} aria-hidden="true" focusable="false" />
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: "block", fontSize: fs(13.5), fontWeight: 650, color: NEUTRAL.ink }}>Stamp it at the end</span>
-                <span style={{ display: "block", fontSize: fs(12), lineHeight: 1.4, color: NEUTRAL.ink2 }}>The city’s stamp and the date, from where and when you shot it. Verified, so nobody can fake it.</span>
-              </span>
-            </label>
+            {/* The marks only we can put on a clip (2026-11-03): each from the clip's own spot and time, drawn at playback. */}
+            <div style={{ marginTop: 12, padding: "4px 12px", borderRadius: 14, background: "#fff", border: "1px solid rgba(22,17,13,.1)" }}>
+              <div style={{ padding: "8px 0 4px", fontFamily: MONO, fontSize: fs(10), letterSpacing: ".1em", color: NEUTRAL.ink3 }}>MARKS</div>
+              {[
+                { on: outro, set: setOutro, title: "Stamp it at the end", line: "The city’s stamp and the date, from where and when you shot it. Verified, so nobody can fake it.", icon: <Stamp size={16} strokeWidth={2} color={RED} aria-hidden="true" focusable="false" /> },
+                { on: light, set: setLight, title: "Golden hour and the time", line: "A line under the clip: the light you had and the time you shot it, from the sun and your clip’s own clock.", icon: <Sun size={16} strokeWidth={2} color={RED} aria-hidden="true" focusable="false" /> },
+                { on: home, set: setHome, title: "How far from home", line: homeSet ? "The miles between your home city and this spot. The miles only — never your city." : "Set your home city in Settings first; then the miles show here.", icon: <Home size={16} strokeWidth={2} color={RED} aria-hidden="true" focusable="false" />, off: !homeSet },
+                { on: flight, set: setFlight, title: "Flight path at the end", line: homeSet ? "When the clip ends: a dashed gold arc from home to here, with the miles." : "Set your home city in Settings first; then the arc can fly.", icon: <Plane size={16} strokeWidth={2} color={RED} aria-hidden="true" focusable="false" />, off: !homeSet },
+              ].map((t) => (
+                <label key={t.title} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: "1px solid rgba(22,17,13,.06)", cursor: t.off ? "default" : "pointer", opacity: t.off ? 0.55 : 1 }}>
+                  <input type="checkbox" checked={!!t.on && !t.off} disabled={!!t.off} onChange={(e) => t.set(e.target.checked)} style={{ width: 18, height: 18, margin: 0, accentColor: BLUE }} />
+                  {t.icon}
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", fontSize: fs(13.5), fontWeight: 650, color: NEUTRAL.ink }}>{t.title}</span>
+                    <span style={{ display: "block", fontSize: fs(12), lineHeight: 1.4, color: NEUTRAL.ink2 }}>{t.line}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
           </>
         ) : null}
 
-        <button type="button" onClick={() => onPick({ start, filter: look === "none" ? null : look, marks: marks ? packMarks({ frame: frame === "none" ? null : frame, outro }) : null })}
+        <button type="button" onClick={() => onPick({ start, filter: look === "none" ? null : look, marks: marks ? packMarks({ frame: frame === "none" ? null : frame, outro, light, home: homeSet && home, flight: homeSet && flight }) : null })}
           style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", marginTop: 12, minHeight: 48, borderRadius: 999, border: 0, background: BLUE, color: "#fff", font: "inherit", fontSize: fs(15), fontWeight: 700, cursor: "pointer" }}>
           {trim ? <Scissors size={16} strokeWidth={2.2} aria-hidden="true" focusable="false" /> : <Check size={16} strokeWidth={2.4} aria-hidden="true" focusable="false" />}
           {trim ? `Use these ${seconds} seconds` : "Use this clip"}

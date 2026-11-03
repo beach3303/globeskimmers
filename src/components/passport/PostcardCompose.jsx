@@ -36,8 +36,9 @@ import PhotoEditor from "@/components/passport/PhotoEditor";
 import ClipTrimmer from "@/components/passport/ClipTrimmer";
 import { clipFilterCss } from "@/lib/clipFilters";
 import { available as shrinkAvailable, pickMedia, isClipFile, probe, shrink, fileAt, previewUrl } from "@/lib/videoShrink";
-import { probeClip, clipStills, CLIP_SECONDS } from "@/lib/clips";
+import { probeClip, clipStills, readClipLocation, CLIP_SECONDS } from "@/lib/clips";
 import { sendVideoPostcard } from "@/lib/videoPostcards";
+import { useAuth } from "@/lib/AuthContext";
 import { askForAlerts } from "@/lib/pushAlerts";
 import { createLink, shareText } from "@/lib/messageLinks";
 
@@ -154,11 +155,14 @@ function Address({ on, onClick = undefined, children, fixed = false }) {
 // replyTo (2026-10-19): { postcard_id, name, group?, all? } — the address is the sender of that card,
 // resolved by the worker; the To row shows "Reply to Mary". A group card (group = the other
 // @usernames on it) also offers "Reply to all" (founder, 2026-10-25); all = start there.
-export default function PostcardCompose({ open = false, onClose = undefined, onSent = undefined, preset = undefined, toHandle = null, blocked = undefined, toCity = null, replyTo = null }) {
+export default function PostcardCompose({ open = false, onClose = undefined, onSent = undefined, preset = undefined, toHandle = null, blocked = undefined, toCity = null, replyTo = null, initialClip = null }) {
   const fileRef = useRef(/** @type {HTMLInputElement|null} */ (null));
   const sheetRef = useRef(/** @type {HTMLDivElement|null} */ (null));
   const titleId = `pc-title-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const fixedTo = lc(toHandle);
+  // The marks that need a home (miles from home, the flight path) are offered once a home city is set.
+  const { profile } = useAuth();
+  const homeSet = Number.isFinite(Number(profile?.home_lat)) && Number.isFinite(Number(profile?.home_lng));
   const [image, setImage] = useState(preset?.image || null);
   const [message, setMessage] = useState("");
   const [place, setPlace] = useState(preset?.place_name || "");
@@ -212,6 +216,14 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     };
   }, [open]);
 
+  // A clip shared into the app (the share sheet's "Send as a video postcard", 2026-11-03): prepared once, on open.
+  const sharedClip = useRef(null);
+  useEffect(() => {
+    if (!open || !initialClip?.path || sharedClip.current === initialClip.path) return;
+    sharedClip.current = initialClip.path;
+    prepareClipPath({ path: initialClip.path, name: initialClip.name || "clip.mp4", mimeType: initialClip.mimeType || "video/mp4" });
+  }, [open, initialClip]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!open) return null;
 
   const block = blockedKeys(blocked);
@@ -243,10 +255,10 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   // Its poster becomes the card's front (`image`), so everything a photo card does still works.
   function clearClip() { setClip((c) => { if (c?.src) { try { URL.revokeObjectURL(c.src); } catch { /* fine */ } } return null; }); }
   const askEdit = (src, duration, trim) => new Promise((resolve) => setEdit({ src, duration, trim, resolve }));
-  const setClipFront = async (file, src, filter, duration) => {
+  const setClipFront = async (file, src, filter, duration, exif = null, marks = null) => {
     let poster = null;
     try { poster = (await clipStills(file, duration)).poster; } catch { /* the send makes the stills again */ }
-    setClip((c) => { if (c?.src && c.src !== src) { try { URL.revokeObjectURL(c.src); } catch { /* fine */ } } return { file, src, filter: filter || null, duration }; });
+    setClip((c) => { if (c?.src && c.src !== src) { try { URL.revokeObjectURL(c.src); } catch { /* fine */ } } return { file, src, filter: filter || null, duration, exif, marks }; });
     if (poster) setImage(poster);
   };
   const pickClip = async (e) => {
@@ -259,13 +271,19 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     const src = URL.createObjectURL(f);
     const chosen = await askEdit(src, meta.duration, false);
     if (!chosen) { URL.revokeObjectURL(src); return; }
-    await setClipFront(f, src, chosen.filter, meta.duration);
+    // Where and when it was shot, from the clip's own metadata: the marks and the stamp come from it.
+    const exif = await readClipLocation(f).catch(() => null);
+    await setClipFront(f, src, chosen.filter, meta.duration, exif, chosen.marks || null);
   };
   const pickClipNative = async () => {
     let found;
     try { found = await pickMedia(1); } catch { return; }   // cancelled
     const f = (found || []).find(isClipFile);
     if (!f) { showToast("Pick a clip from your camera roll", "error"); return; }
+    await prepareClipPath(f);
+  };
+  // A clip by its path — picked, or shared into the app (2026-11-03): the probe, the editor, the shrink, the front.
+  const prepareClipPath = async (f) => {
     setClipBusy(true);
     try {
       const info = await probe(f.path);
@@ -273,7 +291,8 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
       if (!chosen) return;
       const out = await shrink(f.path, chosen.start || 0, Math.min(CLIP_SECONDS, info.duration));
       const file = await fileAt(out.path, "clip.mp4", "video/mp4");
-      await setClipFront(file, URL.createObjectURL(file), chosen.filter, out.duration || Math.min(CLIP_SECONDS, info.duration));
+      const exif = Number.isFinite(info.lat) && Number.isFinite(info.lng) ? { lat: info.lat, lng: info.lng, taken_at: info.takenAt || null } : { lat: null, lng: null, taken_at: info.takenAt || null };
+      await setClipFront(file, URL.createObjectURL(file), chosen.filter, out.duration || Math.min(CLIP_SECONDS, info.duration), exif, chosen.marks || null);
     } catch (err) {
       showToast(`Couldn’t read that clip — ${String(err?.message || err || "").slice(0, 120)}`, "error");
     } finally { setClipBusy(false); }
@@ -308,7 +327,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
       opens_on: !board && sealOn ? sealOn : undefined,
     };
     // A clip on the front (2026-11-03): its poster and stills go first, then the clip's bytes.
-    const { data, error } = clip ? await sendVideoPostcard({ file: clip.file, filter: clip.filter, ...card }) : await sendPostcard(card);
+    const { data, error } = clip ? await sendVideoPostcard({ file: clip.file, filter: clip.filter, marks: clip.marks || null, exif: clip.exif || null, ...card }) : await sendPostcard(card);
     setBusy(false);
     if (error === "age_required") { showToast("Set your birth year in Settings first (one time)", "error"); return; }
     if (error) { showToast(workerMessage(error, "Couldn't send the postcard. Try again."), "error"); return; }
@@ -527,7 +546,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
             </button>
           ) : null}
           <PhotoEditor open={editing} image={image} aspect="3:2" onDone={(u) => { setImage(u); setEditing(false); }} onClose={() => setEditing(false)} />
-          {edit ? <ClipTrimmer src={edit.src} duration={edit.duration} seconds={CLIP_SECONDS} trim={edit.trim} marks={false}
+          {edit ? <ClipTrimmer src={edit.src} duration={edit.duration} seconds={CLIP_SECONDS} trim={edit.trim} marks homeSet={homeSet} city={place || preset?.place_name || null}
             onPick={(chosen) => { const { resolve } = edit; setEdit(null); resolve(chosen); }}
             onClose={() => { const { resolve } = edit; setEdit(null); resolve(null); }} /> : null}
 

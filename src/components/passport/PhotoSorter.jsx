@@ -28,6 +28,9 @@ import { LOOKS, isPlain, lookFor, renderLook } from "@/lib/photoLook";
 import { localISODate } from "@/lib/localDate";
 import { useDismissable } from "@/lib/dismissStack";
 import useCircle from "@/lib/useCircle";
+import ClipTrimmer from "@/components/passport/ClipTrimmer";
+import { available as shrinkAvailable, probe, shrink, fileAt, previewUrl } from "@/lib/videoShrink";
+import { clipStills, uploadStampClip, CLIP_SECONDS } from "@/lib/clips";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657", RULE = "rgba(22,17,13,.12)";
@@ -67,7 +70,8 @@ const askTitle = (photos, clips) => {
 export async function sortPhotos(files, stamps = []) {
   const today = localISODate();
   const items = await Promise.all(files.map(async (file, i) => {
-    const exif = await readPhotoExif(file).catch(() => null);
+    // A clip's poster carries the clip's own location and date (gsExif, 2026-11-03); a photo is read.
+    const exif = file.gsExif || await readPhotoExif(file).catch(() => null);
     const d = String(exif?.taken_at || "").slice(0, 10);
     // A screenshot or a chat photo has no date; a camera clock set ahead dates it in the future.
     const day = /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today ? d : null;
@@ -107,10 +111,10 @@ export async function sortPhotos(files, stamps = []) {
 }
 
 // The postcard sheet; the circle is read only for who you blocked (never suggested in Send to).
-function SharedPostcard({ image, onClose }) {
+function SharedPostcard({ image = null, clip = null, onClose }) {
   const circle = useCircle();
   return (
-    <PostcardCompose open preset={{ image }} onClose={onClose} onSent={onClose}
+    <PostcardCompose open preset={image ? { image } : undefined} initialClip={clip || undefined} onClose={onClose} onSent={onClose}
       blocked={circle.blocked} />
   );
 }
@@ -137,9 +141,44 @@ export default function PhotoSorter({ files, clips = [], stamps = [], shared = f
   const [look, setLook] = useState("none");   // one of our looks for every photo here (2026-10-19)
   const [busy, setBusy] = useState(null);        // "Adding photos to Eiffel Tower…"
   const [postcardImage, setPostcardImage] = useState(null);
+  const [postcardClip, setPostcardClip] = useState(null);   // a shared clip going out as a video postcard (2026-11-03)
+  // Clips going for a stamp (2026-11-03): each becomes its poster, a JPEG File carrying the clip's own
+  // location and date (gsExif) and the shrunk clip itself (gsClip), so it sorts and stamps like a photo.
+  const [extra, setExtra] = useState([]);
+  const [edit, setEdit] = useState(null);   // the clip editor (its seconds, look, frame and marks) while it's up
+  const askEdit = (src, duration, trim, more = {}) => new Promise((resolve) => setEdit({ src, duration, trim, ...more, resolve }));
+  const clipsStamp = clips.length > 0 && shrinkAvailable();
+  const allFiles = useMemo(() => [...files, ...extra], [files, extra]);
   const startedRef = useRef(false);
-  useDismissable(phase !== "postcard" && !busy, onClose);
-  const srcOf = useMemo(() => new Map(files.map((f) => [f, URL.createObjectURL(f)])), [files]);
+  useDismissable(phase !== "postcard" && !busy && !edit, onClose);
+  const srcOf = useMemo(() => new Map(allFiles.map((f) => [f, URL.createObjectURL(f)])), [allFiles]);
+  const startReading = async () => {
+    if (clipsStamp) {
+      const posters = [];
+      for (const c of clips) {
+        try {
+          setBusy("Reading your clip…");
+          const info = await probe(c.path);
+          setBusy(null);
+          const chosen = await askEdit(previewUrl(c.path), info.duration, info.duration > CLIP_SECONDS + 0.5, { date: info.takenAt || null });
+          if (!chosen) continue;
+          setBusy("Shrinking your clip…");
+          const out = await shrink(c.path, chosen.start || 0, Math.min(CLIP_SECONDS, info.duration));
+          const file = await fileAt(out.path, "clip.mp4", "video/mp4");
+          const stills = await clipStills(file, out.duration || Math.min(CLIP_SECONDS, info.duration));
+          const blob = await (await fetch(stills.poster)).blob();
+          const pf = new File([blob], `${String(c.name || "clip").replace(/\.[^.]+$/, "")}-poster.jpg`, { type: "image/jpeg" });
+          pf.gsExif = Number.isFinite(info.lat) && Number.isFinite(info.lng) ? { lat: info.lat, lng: info.lng, taken_at: info.takenAt || null } : { lat: null, lng: null, taken_at: info.takenAt || null };
+          pf.gsClip = { file, filter: chosen.filter || null, marks: chosen.marks || null };
+          posters.push(pf);
+        } catch (err) { showToast(`Couldn’t read that clip — ${String(err?.message || err || "").slice(0, 120)}`, "error"); }
+      }
+      setBusy(null);
+      setExtra(posters);
+      if (!files.length && !posters.length) return;
+    }
+    setPhase("reading");
+  };
   useEffect(() => () => srcOf.forEach((u) => URL.revokeObjectURL(u)), [srcOf]);
   const srcs = (list) => list.map((f) => srcOf.get(f)).filter(Boolean);
   // The reading outlives the Passport's re-renders; only closing the sheet drops its answer.
@@ -154,7 +193,7 @@ export default function PhotoSorter({ files, clips = [], stamps = [], shared = f
     startedRef.current = true;
     const t0 = Date.now();
     (async () => {
-      const sorted = await sortPhotos(files, stamps);
+      const sorted = await sortPhotos(allFiles, stamps);
       const looked = await Promise.all(sorted.map(async (r) => {
         if (r.kind !== "new") return [r.key, null];
         const at = { lat: Math.round(r.at.lat * 1000) / 1000, lng: Math.round(r.at.lng * 1000) / 1000 };
@@ -197,9 +236,15 @@ export default function PhotoSorter({ files, clips = [], stamps = [], shared = f
       for (let i = 0; i < list.length; i++) {
         setBusy(list.length > 1 ? `Adding photo ${i + 1} of ${list.length} to ${r.stamp.name}…` : `Adding your photo to ${r.stamp.name}…`);
         try {
-          const plain = await resizePhoto(list[i].file);
-          const image = isPlain(lookFor(look)) ? plain : await renderLook(plain, lookFor(look));
-          const up = await uploadStampPhoto({ stamp_id: r.stamp.id, image, exif: list[i].exif || undefined });
+          let up;
+          if (list[i].file.gsClip) {
+            // A clip joining an album (2026-11-03): its poster, then the clip itself.
+            up = await uploadStampClip({ stamp_id: r.stamp.id, file: list[i].file.gsClip.file, exif: list[i].exif || undefined, filter: list[i].file.gsClip.filter, marks: list[i].file.gsClip.marks });
+          } else {
+            const plain = await resizePhoto(list[i].file);
+            const image = isPlain(lookFor(look)) ? plain : await renderLook(plain, lookFor(look));
+            up = await uploadStampPhoto({ stamp_id: r.stamp.id, image, exif: list[i].exif || undefined });
+          }
           if (!up?.error) added += 1;
         } catch { /* skip a bad photo */ }
       }
@@ -214,7 +259,7 @@ export default function PhotoSorter({ files, clips = [], stamps = [], shared = f
     : toAdd.length && !toStamp.length ? (toAdd.length === 1 ? "Add the photos" : `Add to ${toAdd.length} stamps`)
     : "Continue";
 
-  if (phase === "postcard") return <SharedPostcard image={postcardImage} onClose={onClose} />;
+  if (phase === "postcard") return <SharedPostcard image={postcardImage} clip={postcardClip} onClose={onClose} />;
 
   const toggle = (key) => setPicked((s) => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); return n; });
   const rowText = (r) => {
@@ -229,6 +274,10 @@ export default function PhotoSorter({ files, clips = [], stamps = [], shared = f
 
   return (
     <div className="fixed inset-0 z-[9998] flex items-end justify-center" role="dialog" aria-modal="true" aria-label="Your photos">
+      {/* A shared clip going for a stamp meets the editor first (2026-11-03): its seconds, look, frame and marks. */}
+      {edit ? <ClipTrimmer src={edit.src} duration={edit.duration} seconds={CLIP_SECONDS} trim={edit.trim} date={edit.date || null}
+        onPick={(chosen) => { const { resolve } = edit; setEdit(null); resolve(chosen); }}
+        onClose={() => { const { resolve } = edit; setEdit(null); resolve(null); }} /> : null}
       <button aria-label="Close" onClick={busy ? undefined : onClose} className="absolute inset-0" style={{ background: "rgba(22,17,13,.5)" }} />
       <div className="relative w-full max-w-md rounded-t-3xl px-4 pt-4 pb-6 flex flex-col" style={{ background: IVORY, maxHeight: "86vh" }}>
         {phase === "ask" && (
@@ -243,15 +292,19 @@ export default function PhotoSorter({ files, clips = [], stamps = [], shared = f
                 </span>
               ) : null}
             </div>
+            {files.length > 0 || clipsStamp ? (
+              <button type="button" onClick={startReading} className="w-full text-left flex items-center gap-3 rounded-2xl mt-4" style={{ padding: 14, background: "#fff", border: `1px solid ${RULE}` }}>
+                <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 12, background: IVORY_2, display: "grid", placeItems: "center", flexShrink: 0 }}><Stamp size={19} color={STAMP} /></span>
+                <span>
+                  <span style={{ display: "block", fontSize: fs(15), fontWeight: 700, color: INK }}>{files.length + (clipsStamp ? clips.length : 0) === 1 ? "Get a stamp" : "Get stamps"}</span>
+                  <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>
+                    {files.length + (clipsStamp ? clips.length : 0) === 1 ? (files.length ? "Where this photo was taken." : "Where this clip was shot — 20 seconds of it, with a stamp at the end.") : "Where each one was taken, one place at a time."}{clips.length && !clipsStamp ? " Photos only." : ""}
+                  </span>
+                </span>
+              </button>
+            ) : null}
             {files.length > 0 && (
               <>
-                <button type="button" onClick={() => setPhase("reading")} className="w-full text-left flex items-center gap-3 rounded-2xl mt-4" style={{ padding: 14, background: "#fff", border: `1px solid ${RULE}` }}>
-                  <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 12, background: IVORY_2, display: "grid", placeItems: "center", flexShrink: 0 }}><Stamp size={19} color={STAMP} /></span>
-                  <span>
-                    <span style={{ display: "block", fontSize: fs(15), fontWeight: 700, color: INK }}>{files.length === 1 ? "Get a stamp" : "Get stamps"}</span>
-                    <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>{files.length === 1 ? "Where this photo was taken." : "Where each photo was taken, one place at a time."}{clips.length ? " Photos only." : ""}</span>
-                  </span>
-                </button>
                 <button type="button" onClick={() => (files.length === 1 ? choosePostcard(files[0]) : setPhase("pick"))} className="w-full text-left flex items-center gap-3 rounded-2xl mt-2" style={{ padding: 14, background: "#fff", border: `1px solid ${RULE}` }}>
                   <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 12, background: IVORY_2, display: "grid", placeItems: "center", flexShrink: 0 }}><Mail size={19} color={STAMP} /></span>
                   <span>
@@ -272,8 +325,15 @@ export default function PhotoSorter({ files, clips = [], stamps = [], shared = f
                 </span>
               </button>
             )}
-            {!files.length && clips.length ? (
-              <p style={{ color: INK3, fontSize: fs(12), lineHeight: 1.4, marginTop: 10, textAlign: "center" }}>For now, a clip goes to City Boards.</p>
+            {/* A shared clip as a video postcard (2026-11-03): the first clip, its 20 seconds, a note. */}
+            {clips.length ? (
+              <button type="button" onClick={() => { setPostcardClip(clips[0]); setPhase("postcard"); }} className="w-full text-left flex items-center gap-3 rounded-2xl mt-2" style={{ padding: 14, background: "#fff", border: `1px solid ${RULE}` }}>
+                <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 12, background: IVORY_2, display: "grid", placeItems: "center", flexShrink: 0 }}><Mail size={19} color={STAMP} /></span>
+                <span>
+                  <span style={{ display: "block", fontSize: fs(15), fontWeight: 700, color: INK }}>Send as a video postcard</span>
+                  <span style={{ display: "block", fontSize: fs(12), color: INK3, marginTop: 2, lineHeight: 1.35 }}>{clips.length === 1 ? "This clip, 20 seconds of it, and a note to the people you choose." : "The first clip, 20 seconds of it, and a note to the people you choose."}</span>
+                </span>
+              </button>
             ) : null}
             <button onClick={onClose} className="w-full rounded-xl py-2.5 font-semibold mt-3" style={{ background: "transparent", color: INK3, fontSize: fs(14) }}>Not now</button>
           </>
@@ -285,7 +345,7 @@ export default function PhotoSorter({ files, clips = [], stamps = [], shared = f
 
         {phase === "reading" && (
           <div className="flex flex-col items-center text-center py-6">
-            <Thumbs srcs={srcs(files)} size={56} max={5} />
+            <Thumbs srcs={srcs(allFiles)} size={56} max={5} />
             <p className="mt-4 flex items-center gap-2" style={{ fontSize: fs(15), fontWeight: 600, color: INK }}>
               <Loader2 size={16} className="animate-spin" color={STAMP} /> Reading your photos…
             </p>

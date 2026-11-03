@@ -19,7 +19,7 @@ import { TINK, TINK3, TYPE } from "@/components/telegram/TelegramPaper";
 import { inkColor } from "@/lib/telegram";
 import { hideAllSent, hideSent, recallSealed, sentMail } from "@/lib/sentMail";
 import { sealLabel } from "@/components/mail/SealUntil";
-import { clipFilterCss } from "@/lib/clipFilters";
+import ClipPlayer from "@/components/passport/ClipPlayer";
 import { deleteBoardPostcard } from "@/lib/boardPostcards";
 import { blotterReadMail } from "@/lib/passport";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
@@ -94,9 +94,9 @@ function Front({ it, big = false }) {
   // A video postcard (2026-11-03): opened, the clip plays here, wearing its look; folded, its poster.
   if (big && it.video) {
     return (
-      <div style={{ width: "100%", aspectRatio: "3 / 2", borderRadius: 10, overflow: "hidden", background: "#000" }}>
-        <video src={it.video} poster={it.photo || undefined} controls playsInline preload="metadata" aria-label={it.place ? `Your video postcard from ${it.place}` : "Your video postcard"}
-          style={{ display: "block", width: "100%", height: "100%", objectFit: "contain", filter: clipFilterCss(it.filter) }} />
+      <div style={{ width: "100%" }}>
+        <ClipPlayer keyId={it.ids?.[0]} src={it.video} poster={it.photo} filter={it.filter} marks={it.marks} city={it.place || null} date={it.at || null} caption={null}
+          ariaLabel={it.place ? `Your video postcard from ${it.place}` : "Your video postcard"} maxHeight="60vh" radius={10} />
       </div>
     );
   }

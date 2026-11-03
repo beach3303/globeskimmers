@@ -74,6 +74,24 @@ export async function readClipLocation(file) {
   return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0) ? { lat, lng, taken_at } : { lat: null, lng: null, taken_at };
 }
 
+// A clip as a stamp memory (founder, 2026-11-03: "i like a clip to earn a stamp"): its poster goes up
+// as the stamp's photo — the same proof checks a photo gets, from the clip's own location and date —
+// then the clip's bytes follow to PUT /passport/video/<id>. → the photo route's answer, or { error }.
+export async function uploadStampClip({ stamp_id, file, exif, filter = null, marks = null, visited_on = undefined }) {
+  const { uploadStampPhoto } = await import("@/lib/passport");
+  const meta = await probeClip(file);
+  if (!meta || !Number.isFinite(meta.duration) || meta.duration <= 0) return { data: null, error: "Couldn’t read this clip" };
+  if (meta.duration > CLIP_SECONDS + 0.5) return { data: null, error: `Clips are up to ${CLIP_SECONDS} seconds — trim it first` };
+  if (file.size > CLIP_BYTES) return { data: null, error: "That clip is too big — 25 MB at most" };
+  let stills;
+  try { stills = await clipStills(file, meta.duration); } catch { return { data: null, error: "Couldn’t read this clip" }; }
+  const { data, error } = await uploadStampPhoto({ stamp_id, image: stills.poster, visited_on, exif: exif || undefined, kind: "video", duration: Math.round(meta.duration * 10) / 10, filter, marks });
+  if (error || !data?.upload) return { data, error: error || (data ? null : "Couldn’t add the clip") };
+  const up = await workerUpload(data.upload, file, "video/mp4", { timeoutMs: 180000 });
+  if (up.error || !up.data?.ok) return { data, error: up.data?.error || up.error || "The clip didn’t upload — try again" };
+  return { data: { ...data, video: up.data.url || null }, error: null };
+}
+
 // The whole send. → the worker's answer ({ ok, id, url, video, board, progress, reward }) or
 // { ok: false, code, error }. onStep: 'stills' | 'check' | 'upload'. `filter` is the look the member
 // picked (src/lib/clipFilters.js), stored by name and drawn by CSS; the stills stay unfiltered, so the

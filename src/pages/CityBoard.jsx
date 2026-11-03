@@ -19,13 +19,13 @@
 // Unfollow, Block); cards from people you blocked never show.
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { BookOpen, ChevronLeft, ChevronRight, ImageUp, Mail, Pencil, Play, Stamp, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, Headphones, ImageUp, Mail, Pencil, Play, Stamp, X } from "lucide-react";
 import { clipLength } from "@/lib/clips";
 import { clipFilterCss } from "@/lib/clipFilters";
-import { frameOf, outroOf } from "@/lib/clipMarks";
-import ClipFrame from "@/components/passport/ClipFrame";
-import StampOutro, { useOutro } from "@/components/passport/StampOutro";
+import ClipPlayer from "@/components/passport/ClipPlayer";
 import SameSpotStrip from "@/components/passport/SameSpotStrip";
+import ThenNow from "@/components/passport/ThenNow";
+import ListenBar from "@/components/passport/ListenBar";
 import { useDismissable } from "@/lib/dismissStack";
 import { captionContribution, contributeOpen } from "@/lib/boardContrib";
 import { BoardContributeSheet } from "@/components/passport/ContributeAlbum";
@@ -93,7 +93,7 @@ const PLATES = [
 const plateOf = (name) => { let h = 0; for (const c of String(name || "")) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PLATES[h % PLATES.length]; };
 const RAYS = Array.from({ length: 16 }, (_, k) => { const a = (k - 16) * 0.19635, b = (k - 15) * 0.19635; return `<polygon points="201,160 ${201 + 260 * Math.cos(a)},${160 + 260 * Math.sin(a)} ${201 + 260 * Math.cos(b)},${160 + 260 * Math.sin(b)}" fill="${k % 2 ? "#FFFFFF" : "#000000"}" opacity="${k % 2 ? 0.08 : 0.06}"/>`; }).join("");
 
-function Billboard({ name, kind = "city", country = "", region = "", kit = null, counts = null, onBack, onPost = undefined, guestbookCount = null, onGuestbook = undefined }) {
+function Billboard({ name, kind = "city", country = "", region = "", kit = null, counts = null, onBack, onPost = undefined, guestbookCount = null, onGuestbook = undefined, onListen = undefined, listenCount = 0 }) {
   const kindLower = kind === "state" ? "state" : kind === "country" ? "country" : "city";
   const fallback = plateOf(name);
   const plate = kit?.palette?.plate || fallback.plate;
@@ -167,6 +167,14 @@ function Billboard({ name, kind = "city", country = "", region = "", kit = null,
             {name}&rsquo;s guestbook{guestbookCount ? ` · ${guestbookCount} tip${guestbookCount === 1 ? "" : "s"} & doodle${guestbookCount === 1 ? "" : "s"}` : " · tips & doodles"}
           </button>
         ) : null}
+        {/* Listen to the city (founder, 2026-11-03): the board's clips, played for their sound. */}
+        {onListen && listenCount ? (
+          <button type="button" onClick={onListen}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", minHeight: 44, marginTop: 8, padding: "0 14px", borderRadius: 12, background: "transparent", border: `1.5px solid ${accent}`, fontFamily: "inherit", fontSize: fs(13.5), fontWeight: 600, color: accent, cursor: "pointer" }}>
+            <Headphones size={16} strokeWidth={2} aria-hidden="true" focusable="false" />
+            Listen to {name} · {listenCount} clip{listenCount === 1 ? "" : "s"}
+          </button>
+        ) : null}
         {icons.length ? (
           <div aria-hidden="true" style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 10 }}>
             {icons.map((src) => (
@@ -187,22 +195,7 @@ function Billboard({ name, kind = "city", country = "", region = "", kit = null,
 // swiped or arrowed through, each with its sticker tray and comments (board rules: anyone
 // adult may react, the owner hears of it in the Mailbox).
 // onCaption (2026-11-02): the owner of an upload writes or changes its caption right here on the board.
-// The clip itself, with the verified stamp outro over its last two seconds when its owner asked for
-// it (2026-11-03): the city and the day come from where and when the clip was shot.
-function ClipStage({ row, onPlay }) {
-  const ref = useRef(null);
-  const on = useOutro(ref, outroOf(row.marks));
-  return (
-    <div style={{ position: "relative" }}>
-      <video ref={ref} key={row.id} src={row.video} poster={row.photo} controls playsInline preload="metadata" onPlay={onPlay}
-        aria-label={row.caption || `Clip from ${row.place || ""}`}
-        style={{ display: "block", width: "100%", maxHeight: "54vh", borderRadius: frameOf(row.marks) ? 0 : 6, background: "#000", filter: clipFilterCss(row.filter) }} />
-      <StampOutro on={on} city={row.city || row.place || null} region={row.region || null} country={row.country || null} date={row.taken_at || row.created_at || null} />
-    </div>
-  );
-}
-
-function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, onReport, onDelete = undefined, readOnly = false, onCaption = undefined }) {
+function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, onReport, onDelete = undefined, readOnly = false, onCaption = undefined, then = null }) {
   const [editCap, setEditCap] = useState(null);   // the caption being written, while the field is open
   const [capBusy, setCapBusy] = useState(false);
   const row = rows[index];
@@ -294,9 +287,8 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
             {row.video ? (
               // A clip (2026-10-30): the poster until play; the view counts when it starts. Its frame and the
               // verified stamp outro (2026-11-03) are drawn around and over it from its own city and date.
-              <ClipFrame frame={frameOf(row.marks)} city={row.city || row.place || null} region={row.region || null} country={row.country || null} date={row.taken_at || row.created_at || null} caption={row.caption || null}>
-                <ClipStage row={row} onPlay={() => countView(row)} />
-              </ClipFrame>
+              <ClipPlayer keyId={row.id} src={row.video} poster={row.photo} filter={row.filter} marks={row.marks} city={row.city || row.place || null} region={row.region || null} country={row.country || null}
+                date={row.taken_at || row.created_at || null} caption={row.caption || null} onPlay={() => countView(row)} ariaLabel={row.caption || `Clip from ${row.place || ""}`} />
             ) : (
               // Pinch to zoom, pan while zoomed, double tap in or out (founder, 2026-10-29); a zoomed photo keeps its touches, so a swipe pages only at 1×.
               <ZoomableImage key={row.id} src={row.photo} alt={row.caption || `Photo from ${row.place || ""}`} style={{ width: "100%" }}
@@ -341,6 +333,8 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
         {row.type !== "photo" && row.id ? (
           <div style={{ maxWidth: 420, margin: "8px auto 0", fontFamily: MONO, fontSize: fs(10), letterSpacing: ".1em", textTransform: "uppercase", color: NEUTRAL.goldPale }}>{viewsLabel}</div>
         ) : null}
+        {/* Then and now (founder, 2026-11-03): the board's archive photo of the place, when one was curated. */}
+        {row.type === "photo" && row.contrib && then ? <ThenNow then={then} nowDate={row.taken_at || row.created_at || null} /> : null}
         {/* The same-spot strip (founder, 2026-11-03): everything shot within fifty metres of this upload, over time. */}
         {row.type === "photo" && row.contrib && row.id ? <SameSpotStrip row={row} onOpen={openSpot} /> : null}
         {row.id ? (
@@ -443,6 +437,7 @@ function Board({ kind, city, region, country, onBack, open = "" }) {
   const [addPhotos, setAddPhotos] = useState(false); // the photos sheet, for this board
   const [view, setView] = useState(null);     // the viewer's index into rows, or null
   const [gbOpen, setGbOpen] = useState(false);
+  const [listen, setListen] = useState(null);   // Listen to the city (2026-11-03): { i } while the bar plays the board's clips
   const [gbCount, setGbCount] = useState(null);
   // The cards' likes and comments (the guestbook, 2026-10-14), read for every card shown.
   const [book, setBook] = useState(null);
@@ -491,6 +486,10 @@ function Board({ kind, city, region, country, onBack, open = "" }) {
 
   const blocked = circle.blockedHandles || new Set();
   const rows = board && !board.error && !board.held && !board.unavailable ? (board.rows || []).filter((r) => !blocked.has(lc(r?.by?.handle))) : [];
+  // Listen to the city (2026-11-03): the board's clips; a play from the bar counts once, as in the viewer.
+  const clipRows = rows.filter((r) => r.type === "photo" && r.video);
+  const listened = useRef(new Set());
+  const listenPlayed = (r) => { if (!r?.id || listened.current.has(r.id)) return; listened.current.add(r.id); boardView(`${r.contrib ? "bcp" : "bph"}:${r.id}`).catch(() => {}); };
   // A Mailbox line opens the item it names (founder, 2026-10-30): ?open=bcp:<id> | bph:<id> | pc:<id>.
   // On this page → the viewer; older → the next pages, a few; gone → a line.
   const openId = String(open || "").replace(/^(bcp|bph|pc):/i, "").toLowerCase();
@@ -604,7 +603,8 @@ function Board({ kind, city, region, country, onBack, open = "" }) {
     <div>
       <Billboard name={name} kind={kind} country={country} region={kind === "city" ? board?.board?.region || region : ""} kit={board?.kit || null} counts={board?.counts || null} onBack={onBack} onPost={canPostCard || canAddPhotos ? () => setChoose(true) : undefined}
         guestbookCount={gbCount ?? board?.guestbook?.count ?? null}
-        onGuestbook={board?.guestbook?.id && !board.held && !board.unavailable && !board.error ? () => setGbOpen(true) : undefined} />
+        onGuestbook={board?.guestbook?.id && !board.held && !board.unavailable && !board.error ? () => setGbOpen(true) : undefined}
+        listenCount={clipRows.length} onListen={clipRows.length ? () => setListen({ i: 0 }) : undefined} />
       <div className={COLUMN}>
         {/* Same name, another state (founder, 2026-10-16): Portland, Oregon offers Portland, Maine. */}
         {kind === "city" && (board?.alternates || []).length ? (
@@ -635,12 +635,16 @@ function Board({ kind, city, region, country, onBack, open = "" }) {
           <div className={COLUMN}>{body}</div>
         </div>
       ) : null}
+      {listen && clipRows.length ? (
+        <ListenBar city={name} rows={clipRows} index={Math.min(listen.i, clipRows.length - 1)} onIndex={(i) => setListen({ i })}
+          onOpen={(row) => { const i = rows.indexOf(row); if (i >= 0) setView(i); }} onPlay={listenPlayed} onClose={() => setListen(null)} />
+      ) : null}
       {gbOpen && board?.guestbook?.id ? (
         <BoardGuestbookSheet name={name} gb={board.guestbook} onClose={() => setGbOpen(false)} onCount={setGbCount}
           signBoard={{ kind, city: board?.board?.city || city, region: board?.board?.region || region || null, country: board?.board?.country || country }} />
       ) : null}
       {view !== null && rows[view] ? (
-        <BoardViewer rows={rows} index={view} onIndex={setView} onClose={() => setView(null)} book={book} onBook={() => readBook(board?.rows)} readOnly={board?.read_only === true}
+        <BoardViewer rows={rows} index={view} onIndex={setView} onClose={() => setView(null)} book={book} onBook={() => readBook(board?.rows)} readOnly={board?.read_only === true} then={board?.kit?.then || null}
           onCaption={(id, caption) => setBoard((b) => (b && Array.isArray(b.rows) ? { ...b, rows: b.rows.map((r) => (r.type === "photo" && r.id === id ? { ...r, caption: caption || null } : r)) } : b))}
           me={me.handle} meName={me.name || profile?.first_name || null} onReport={(row) => { setView(null); report(row); }} onDelete={async (row) => { const ok = await removeCard(row); if (ok) setView(null); return ok; }} />
       ) : null}

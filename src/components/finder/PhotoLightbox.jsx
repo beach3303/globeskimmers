@@ -27,6 +27,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import ZoomableImage from "@/components/ZoomableImage";
+import ClipPlayer from "@/components/passport/ClipPlayer";
 import { useDismissable } from "@/lib/dismissStack";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
@@ -190,6 +191,14 @@ export default function PhotoLightbox({ photos, index, onClose, onIndexChange, t
         <div className="gs-lb-img flex-1 min-h-0 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
           <div className="uppercase tracking-[0.08em]" style={{ fontFamily: MONO, fontSize: fs(11), color: DIM }}>
             Photo unavailable
+          </div>
+        </div>
+      ) : photo.video ? (
+        // A clip memory (2026-11-03): plays here with its look, frame and marks; the poster until play.
+        <div className="gs-lb-img w-full flex-1 min-h-0 flex items-center justify-center" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, margin: "0 auto" }}>
+          <div style={{ width: "100%" }}>
+            <ClipPlayer keyId={photo.id || showSrc} src={photo.video} poster={showSrc} filter={photo.look || null} marks={photo.marks || null} city={photo.city || title || null} region={photo.region || null} country={photo.country || null}
+              date={photo.date || null} caption={null} ariaLabel={photo.caption || title || "A clip"} maxHeight="64vh" radius={10} />
           </div>
         </div>
       ) : (

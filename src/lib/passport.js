@@ -100,9 +100,11 @@ export async function photoPlace(lat, lng) {
 // exif: { lat, lng, taken_at } read from the ORIGINAL file (src/lib/photoExif.js)
 // — the worker's photo-location proof; never stored. Resolves data.proof =
 // 'photo_loc' | 'photo_ai' | null and data.verified = the stamp's new status.
-export async function uploadStampPhoto({ stamp_id, image, caption, visited_on, content_type, exif }) {
+// kind 'video' (2026-11-03): `image` is the clip's poster; `duration`, `filter` and `marks` ride along and
+// the answer carries `id` and `upload`, where the clip's bytes go next (uploadStampClip in clips.js).
+export async function uploadStampPhoto({ stamp_id, image, caption, visited_on, content_type, exif, kind, duration, filter, marks }) {
   if (!(await requirePassport())) return { data: null, error: 'finish_passport' };
-  const { data, error } = await callWorker('passport/photo', { stamp_id, image, caption, visited_on, content_type, exif: exif || undefined });
+  const { data, error } = await callWorker('passport/photo', { stamp_id, image, caption, visited_on, content_type, exif: exif || undefined, ...(kind === 'video' ? { kind: 'video', duration, ...(filter ? { filter } : {}), ...(marks && typeof marks === 'object' ? { marks } : {}) } : {}) });
   const waiting = awaitingProof.get(stamp_id);
   if (waiting && !error && data?.proof && VERIFIED.has(data.verified)) {
     awaitingProof.delete(stamp_id);
@@ -443,14 +445,14 @@ export async function getAgeInfo() {
 export const deviceTimezone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
 // kind 'video' (2026-11-03): `image` is the clip's poster, `frames` its stills, `duration` its
 // seconds, `filter` its look; the answer carries `upload`, where the clip's bytes go next.
-export async function sendPostcard({ image, message, place_name, city, country, region, meta, to_handle, to_user_id, to_email, to_user_ids, to_handles, to_emails, mode, to_city, anon, reply_to, reply_all, opens_on, kind, frames, duration, filter }) {
+export async function sendPostcard({ image, message, place_name, city, country, region, meta, to_handle, to_user_id, to_email, to_user_ids, to_handles, to_emails, mode, to_city, anon, reply_to, reply_all, opens_on, kind, frames, duration, filter, marks, exif }) {
   if (!(await requirePassport())) return { data: null, error: 'finish_passport' };
   const list = (v) => (Array.isArray(v) ? v.filter(Boolean) : []);
   const { data, error } = await callWorker('postcards/send', {
     image, message, place_name, city, country, ...(region ? { region } : {}), meta, to_handle,
     // Sealed until a date (2026-11-03): "YYYY-MM-DD" and the phone's timezone.
     ...(opens_on ? { opens_on, tz: deviceTimezone() } : {}),
-    ...(kind === 'video' ? { kind: 'video', frames, duration, ...(filter ? { filter } : {}) } : {}),
+    ...(kind === 'video' ? { kind: 'video', frames, duration, ...(filter ? { filter } : {}), ...(marks && typeof marks === 'object' ? { marks } : {}), ...(exif && typeof exif === 'object' ? { exif } : {}) } : {}),
     ...(to_user_id ? { to_user_id } : {}), ...(to_email ? { to_email } : {}),
     ...(list(to_user_ids).length ? { to_user_ids: list(to_user_ids) } : {}),
     ...(list(to_handles).length ? { to_handles: list(to_handles) } : {}),

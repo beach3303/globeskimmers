@@ -15272,10 +15272,12 @@ async function ppLoad(env, userId) {
     // mod_status must ride along or the public serializer's ok-filter sees
     // undefined and hides every photo (found 2026-09-30 — reviewed photos were
     // invisible on public passports).
-    let pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption,mod_status,food_subject,board_hidden`, {});
-    // The seconds between a worker deploy and its migration (2026-10-16): read without the new column.
+    let pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption,mod_status,food_subject,board_hidden,kind,video_ready,duration,filter,marks,video_key`, {});
+    // The seconds between a worker deploy and its migration (2026-10-16, again 2026-11-03): read without the new columns.
+    if (pq.status === 400) pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption,mod_status,food_subject,board_hidden`, {});
     if (pq.status === 400) pq = await gbRest(env, `passport_stamp_photos?stamp_id=in.(${ids})&order=created_at.asc&select=id,stamp_id,photo_url,caption,mod_status,food_subject`, {});
-    photos = pq.ok ? await pq.json() : [];
+    // A clip memory shows once its bytes landed (2026-11-03).
+    photos = (pq.ok ? await pq.json() : []).filter((p) => !(p.kind === 'video' && p.video_ready === false));
   }
   const byStamp = {};
   for (const p of photos) (byStamp[p.stamp_id] = byStamp[p.stamp_id] || []).push(p);
@@ -15543,7 +15545,12 @@ async function ppShareStamps(env, stamps, origin, withPhotos = true, lvl = null,
       // each by its id, never by its key (gbRowMedia).
       // The owner (level 3) keeps their key links; everyone else gets a signed one.
       // An album set narrower than its stamp (photos_tier) keeps its photos from this level.
-      photos: withPhotos && ppPhotosVisible({ photos_tier }, level) ? await Promise.all((rest.photos || []).filter((p) => p.mod_status === 'ok').map(async (p) => ({ ...p, photo_url: level >= 3 && p.photo_url ? p.photo_url : await ppPhotoUrl(env, origin, p.id, sign) }))) : [],
+      photos: withPhotos && ppPhotosVisible({ photos_tier }, level) ? await Promise.all((rest.photos || []).filter((p) => p.mod_status === 'ok').map(async ({ video_key: vk, ...p }) => ({
+        ...p, photo_url: level >= 3 && p.photo_url ? p.photo_url : await ppPhotoUrl(env, origin, p.id, sign),
+        // A clip memory (2026-11-03): the owner reads it by its key (as their photos), everyone else by the
+        // same signed link their poster gets. The key itself never goes to anyone but the owner.
+        ...(p.kind === 'video' ? { video: level >= 3 && vk ? `${origin}/pp-video/${vk}` : await ppVideoUrl(env, origin, p.id, sign) } : {}),
+      }))) : [],
     })));
 }
 
@@ -15900,7 +15907,19 @@ async function handlePassportPhotoUpload(request, env, ctx) {
     const photoUrl = `${origin}/pp-photo/${key}`;
     let upCaption = b.caption ? String(b.caption).replace(/\s+/g, ' ').trim().slice(0, 200) || null : null;
     if (upCaption && !(await gbModerate(env, upCaption)).allow) upCaption = null;
-    await gbRest(env, 'passport_stamp_photos', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ stamp_id: stampId, user_id: user.id, photo_key: key, photo_url: photoUrl, caption: upCaption }) });
+    // A clip memory (2026-11-03): the poster is the photo; the clip's bytes follow to PUT /passport/video/<id>.
+    const isClip = b.kind === 'video';
+    const clipSecs = isClip ? Number(b.duration) : 0;
+    if (isClip && (!Number.isFinite(clipSecs) || clipSecs < 1 || clipSecs > BC_CLIP_SECONDS + 0.5)) { await env.MEDIA.delete(key).catch(() => {}); return jsonResponse({ error: `Clips are up to ${BC_CLIP_SECONDS} seconds — trim it first`, code: 'too_long' }, 400); }
+    const clipFilter = isClip && typeof b.filter === 'string' && BC_CLIP_FILTERS.has(b.filter) ? b.filter : null;
+    const clipExif = b.exif && typeof b.exif === 'object' ? b.exif : {};
+    const clipMarks = isClip ? await bcComputeMarks(env, user.id, b.marks, Number(clipExif.lat), Number(clipExif.lng), clipExif.taken_at) : null;
+    const baseRow = { stamp_id: stampId, user_id: user.id, photo_key: key, photo_url: photoUrl, caption: upCaption };
+    const clipRow = isClip ? { kind: 'video', video_key: `vid/${user.id}/pp-${crypto.randomUUID()}.mp4`, video_ready: false, duration: Math.round(clipSecs * 10) / 10, ...(clipFilter ? { filter: clipFilter } : {}), ...(clipMarks ? { marks: clipMarks } : {}) } : {};
+    let ins = await gbRest(env, 'passport_stamp_photos', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ ...baseRow, ...clipRow }) });
+    if (!ins.ok && ins.status === 400 && isClip) { await env.MEDIA.delete(key).catch(() => {}); return jsonResponse({ error: 'Clip memories open with the next update — try again shortly' }, 503); }
+    if (!ins.ok && ins.status === 400) ins = await gbRest(env, 'passport_stamp_photos', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(baseRow) });
+    const photoRow = ins.ok ? (await ins.json().catch(() => []))[0] || null : null;
     // Review this photo now (async): only a reviewed photo shows to anyone else. A private
     // passport is seen by its inner circle (mutual follows, 2026-10-05), so an adult's photo
     // is reviewed public or not; it used to wait for a public booklet, and friends saw no
@@ -15941,7 +15960,7 @@ async function handlePassportPhotoUpload(request, env, ctx) {
       await gbRest(env, `passport_stamps?id=eq.${stampId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) });
     }
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_photo', { bytes: bytes.length, has_gps: !!(exif && Number.isFinite(+exif.lat)), has_time: !!(exif && exif.taken_at), proof, ai_match: ai?.match || null, ai_confidence: ai?.confidence ?? null }));
-    return jsonResponse({ key, url: photoUrl, verified: patch.verified || stamp.verified, proof, ai: ai ? { match: ai.match, confidence: ai.confidence } : null });
+    return jsonResponse({ key, url: photoUrl, id: photoRow?.id || null, ...(isClip && photoRow?.id ? { upload: `/passport/video/${photoRow.id}` } : {}), verified: patch.verified || stamp.verified, proof, ai: ai ? { match: ai.match, confidence: ai.confidence } : null });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -17335,6 +17354,79 @@ async function handlePassportPhotoServe(request, env) {
   } catch { return new Response('Error', { status: 500 }); }
 }
 
+// PUT /passport/video/<id> — a clip memory's bytes (2026-11-03), once its poster passed /passport/photo:
+// the owner's own row, under vid/<user>/pp-…mp4, then the memory is listed and plays.
+async function handlePassportVideoPut(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    if (!env.MEDIA) return jsonResponse({ error: 'Video storage not configured' }, 500);
+    const m = /^\/passport\/video\/([0-9a-f-]{36})$/i.exec(new URL(request.url).pathname);
+    if (!m || !BL_UUID.test(m[1])) return jsonResponse({ error: 'Not found' }, 404);
+    const q = await gbRest(env, `passport_stamp_photos?id=eq.${m[1]}&user_id=eq.${user.id}&kind=eq.video&select=id,video_key,video_ready,duration`, {});
+    const row = (q.ok ? await q.json() : [])[0];
+    if (!row || !String(row.video_key || '').startsWith(`vid/${user.id}/`)) return jsonResponse({ error: 'Not found' }, 404);
+    if (row.video_ready) return jsonResponse({ ok: true, already: true });
+    const len = Number(request.headers.get('content-length') || 0);
+    if (len > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 25 MB at most', code: 'too_big' }, 413);
+    const bytes = new Uint8Array(await request.arrayBuffer());
+    if (bytes.byteLength > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 25 MB at most', code: 'too_big' }, 413);
+    if (bytes.byteLength < 2000 || String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7]) !== 'ftyp') return jsonResponse({ error: 'Please send an MP4 clip' }, 400);
+    const secs = mp4Duration(bytes);
+    if (secs != null && secs > BC_CLIP_SECONDS + 0.5) return jsonResponse({ error: `Clips are up to ${BC_CLIP_SECONDS} seconds — trim it first`, code: 'too_long' }, 400);
+    await env.MEDIA.put(row.video_key, bytes, { httpMetadata: { contentType: 'video/mp4', cacheControl: 'private, max-age=31536000, immutable' } });
+    const w = await gbRest(env, `passport_stamp_photos?id=eq.${row.id}&user_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ video_ready: true, ...(secs != null ? { duration: Math.round(secs * 10) / 10 } : {}) }) });
+    if (!w.ok) { await env.MEDIA.delete(row.video_key).catch(() => {}); return jsonResponse({ error: 'Could not save — try again' }, 502); }
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_clip', { secs: Math.round(secs || row.duration || 0) }));
+    return jsonResponse({ ok: true, url: `${new URL(request.url).origin}/pp-video/p/${row.id}` });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+// GET /pp-video/p/<id>?l&e&s — a clip memory, by the same signed link its poster gets (ppPhotoUrl's
+// signature; the level and the album's visibility are checked the same way), with Range requests.
+async function handlePassportVideoServe(request, env) {
+  try {
+    if (!env.MEDIA) return new Response('Not found', { status: 404 });
+    const u = new URL(request.url);
+    const m = /^\/pp-video\/p\/([0-9a-f-]{36})$/i.exec(u.pathname);
+    let key = '';
+    if (m) {
+      const id = m[1].toLowerCase(), lvl = u.searchParams.get('l') || '', exp = Number(u.searchParams.get('e')), sig = u.searchParams.get('s') || '';
+      const now = Date.now() / 1000;
+      if (!PP_PHOTO_LEVELS.has(lvl) || !Number.isFinite(exp) || exp < now || exp > now + PP_PHOTO_TTL + 3600 || sig !== await ppPhotoSig(env, id, lvl, exp)) return new Response('Not found', { status: 404 });
+      if (!(await ppPhotoOpenable(env, id, lvl))) return new Response('Not found', { status: 404 });
+      const q = await gbRest(env, `passport_stamp_photos?id=eq.${id}&kind=eq.video&select=video_key,video_ready`, {});
+      const row = (q.ok ? await q.json() : [])[0];
+      key = row && row.video_ready ? String(row.video_key || '') : '';
+    } else {
+      // The owner's own link, by key (as /pp-photo/<key>): a clip memory's key is unguessable and only ever handed to its owner.
+      key = decodeURIComponent(u.pathname.replace(/^\/pp-video\//, ''));
+      if (!/^vid\/[0-9a-f-]{36}\/pp-[0-9a-f-]{36}\.mp4$/i.test(key)) return new Response('Not found', { status: 404 });
+    }
+    if (!key.startsWith('vid/') || key.includes('..')) return new Response('Not found', { status: 404 });
+    const rangeH = request.headers.get('range') || '';
+    const rm = /^bytes=(\d*)-(\d*)$/.exec(rangeH.trim());
+    const head = await env.MEDIA.head(key);
+    if (!head) return new Response('Not found', { status: 404 });
+    const size = head.size;
+    const headers = new Headers({ 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, max-age=600', 'Access-Control-Allow-Origin': '*', 'X-Content-Type-Options': 'nosniff' });
+    if (rm && (rm[1] || rm[2])) {
+      const start = rm[1] ? Number(rm[1]) : Math.max(0, size - Number(rm[2]));
+      const end = rm[1] && rm[2] ? Math.min(Number(rm[2]), size - 1) : size - 1;
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= size) return new Response('Range not satisfiable', { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+      const obj = await env.MEDIA.get(key, { range: { offset: start, length: end - start + 1 } });
+      if (!obj) return new Response('Not found', { status: 404 });
+      headers.set('Content-Range', `bytes ${start}-${end}/${size}`);
+      headers.set('Content-Length', String(end - start + 1));
+      return new Response(request.method === 'HEAD' ? null : obj.body, { status: 206, headers });
+    }
+    const obj = await env.MEDIA.get(key);
+    if (!obj) return new Response('Not found', { status: 404 });
+    headers.set('Content-Length', String(size));
+    return new Response(request.method === 'HEAD' ? null : obj.body, { status: 200, headers });
+  } catch { return new Response('Error', { status: 500 }); }
+}
+const ppVideoUrl = async (env, origin, id, lvl) => { const exp = Math.ceil(Date.now() / 3600e3) * 3600 + PP_PHOTO_TTL; return `${origin}/pp-video/p/${id}?l=${lvl}&e=${exp}&s=${await ppPhotoSig(env, id, String(lvl), exp)}`; };
+
 // Edit the visit DATE (photo-proof / self stamps — "I actually went in 2019").
 async function handlePassportStampDate(request, env) {
   try {
@@ -17466,11 +17558,14 @@ async function handlePassportPhotoDelete(request, env, ctx) {
     const b = await request.json().catch(() => ({}));
     const photoId = String(b.photo_id || '');
     if (!photoId) return jsonResponse({ error: 'photo_id required' }, 400);
-    const pq = await gbRest(env, `passport_stamp_photos?id=eq.${photoId}&user_id=eq.${user.id}&select=photo_key`, {});
+    // A clip memory's clip goes with its poster (2026-11-03); before the column exists, the poster alone.
+    let pq = await gbRest(env, `passport_stamp_photos?id=eq.${photoId}&user_id=eq.${user.id}&select=photo_key,video_key`, {});
+    if (!pq.ok && pq.status === 400) pq = await gbRest(env, `passport_stamp_photos?id=eq.${photoId}&user_id=eq.${user.id}&select=photo_key`, {});
     const row = (pq.ok ? await pq.json() : [])[0];
     if (!row) return jsonResponse({ error: 'not found' }, 404);
     await gbRest(env, `passport_stamp_photos?id=eq.${photoId}&user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
     if (row.photo_key && env.MEDIA && ctx) ctx.waitUntil(env.MEDIA.delete(row.photo_key).catch(() => {}));
+    if (row.video_key && env.MEDIA && ctx) ctx.waitUntil(env.MEDIA.delete(row.video_key).catch(() => {}));
     await blPurgeTargets(env, user.id, [`ph:${photoId}`], ctx);
     return jsonResponse({ ok: true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
@@ -18811,7 +18906,7 @@ async function pcKit(env, board, origin) {
   if (!env.MEDIA) return null;
   const slug = pcKitSlug(board);
   const kv = env.GLOBESKIMMERS_KV;
-  const ck = `kit:v2:${slug}`;
+  const ck = `kit:v3:${slug}`;
   if (kv) { try { const c = await kv.get(ck); if (c) return c === 'none' ? null : JSON.parse(c); } catch { /* read it fresh */ } }
   let kit = null;
   try {
@@ -18828,6 +18923,17 @@ async function pcKit(env, board, origin) {
         ? { slug, name: m.name || board.name, header: null, banner: `${origin}/kit/${slug}/header.png`, icons: [], palette }
         : { slug, name: m.name || board.name, header: `${origin}/kit/${slug}/header.png`, icons: Array.from({ length: n }, (_, i) => `${origin}/kit/${slug}/icon-${i + 1}.png`), palette };
     }
+    // Then and now (founder, 2026-11-03): a public-domain archive photo of the place, curated by hand —
+    // kits/<slug>/then.jpg plus then.json { year, caption, credit, source } — shown under a clip or photo
+    // from that board ("See it then · 1925"). A board without the pair simply has no THEN.
+    const tj = await env.MEDIA.get(`kits/${slug}/then.json`).catch(() => null);
+    if (tj) {
+      const t = await tj.json().catch(() => null);
+      if (t && typeof t === 'object') {
+        kit = kit || { slug, name: board.name, header: null, banner: null, icons: [], palette: null };
+        kit.then = { image: `${origin}/kit/${slug}/then.jpg`, year: t.year == null ? null : String(t.year).slice(0, 12), caption: t.caption ? String(t.caption).slice(0, 200) : null, credit: t.credit ? String(t.credit).slice(0, 120) : null, source: typeof t.source === 'string' && /^https?:\/\//.test(t.source) ? t.source.slice(0, 300) : null };
+      }
+    }
   } catch { kit = null; }
   if (kv) await kv.put(ck, kit ? JSON.stringify(kit) : 'none', { expirationTtl: 3600 }).catch(() => {});
   return kit;
@@ -18835,10 +18941,10 @@ async function pcKit(env, board, origin) {
 async function handleKitServe(request, env) {
   if (!env.MEDIA) return new Response('Not found', { status: 404 });
   const path = decodeURIComponent(new URL(request.url).pathname.replace(/^\/kit\//, ''));
-  if (!/^(city|state|country)\/[a-z0-9-]+\/(header\.png|icon-(?:[1-9]|1[0-2])\.png)$/.test(path)) return new Response('Not found', { status: 404 });
+  if (!/^(city|state|country)\/[a-z0-9-]+\/(header\.png|icon-(?:[1-9]|1[0-2])\.png|then\.jpg)$/.test(path)) return new Response('Not found', { status: 404 });
   const obj = await env.MEDIA.get(`kits/${path}`);
   if (!obj) return new Response('Not found', { status: 404 });
-  return new Response(obj.body, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400, immutable' } });
+  return new Response(obj.body, { headers: { 'Content-Type': path.endsWith('.jpg') ? 'image/jpeg' : 'image/png', 'Cache-Control': 'public, max-age=86400, immutable' } });
 }
 // The photos a board hangs: every reviewed photo of a 🌍 public stamp taken there,
 // not yet taken down (board_hidden), never from anyone the viewer blocked. `before`
@@ -19758,6 +19864,9 @@ async function handlePostcardSend(request, env, ctx) {
     const meta = cardMeta || anonLabel ? { meta: { ...(cardMeta || {}), ...(anonLabel ? { anon: anonLabel } : {}) } } : {};
     // One clip object for every row of a video send (2026-11-03), under the sender's clip prefix.
     const videoKey = isVideo ? `vid/${user.id}/pc-${crypto.randomUUID()}.mp4` : null;
+    // Its marks (frame, stamp, flight, home, light), from the clip's own spot and time when the sheet sent them.
+    const pcExif = b.exif && typeof b.exif === 'object' ? b.exif : {};
+    const pcMarks = isVideo ? await bcComputeMarks(env, user.id, b.marks, Number(pcExif.lat), Number(pcExif.lng), pcExif.taken_at) : null;
     const targets = direct ? deliver : [null];
     const rows = [];
     for (const mb of targets) {
@@ -19765,7 +19874,7 @@ async function handlePostcardSend(request, env, ctx) {
         ...base, to_user_id: mb ? mb.user_id : null, photo_key: await put(), ...meta,
         // Sealed until a day (2026-11-03): their own midnight.
         ...(seal && mb ? { opens_at: await sealOpensAtFor(env, seal, mb.user_id), opens_on: seal.opens_on } : {}),
-        ...(isVideo ? { kind: 'video', video_key: videoKey, video_ready: false, duration: Math.round(clipSecs * 10) / 10, ...(clipFilter ? { filter: clipFilter } : {}) } : {}),
+        ...(isVideo ? { kind: 'video', video_key: videoKey, video_ready: false, duration: Math.round(clipSecs * 10) / 10, ...(clipFilter ? { filter: clipFilter } : {}), ...(pcMarks ? { marks: pcMarks } : {}) } : {}),
         // A board card carries the board's city and country.
         ...(toCity ? { to_city: toCity, city: boardCity, country: boardCountry, region: boardRegion } : {}),
         ...(groupId ? { group_id: groupId, cc: deliver.filter((x) => x !== mb).map((x) => x.user_id) } : {}),
@@ -21576,7 +21685,7 @@ async function handleSocialFeed(request, env) {
       from_new: p.to_user_id === user.id && !ids.includes(p.sender_id),
       ...(p.to_user_id === null && keptSet ? { kept: keptSet.has(p.id) } : {}),
       // A video postcard (2026-11-03): the poster is `photo`; the card plays `video`, wearing its look.
-      ...(p.kind === 'video' ? { video: pcVideoUrl(origin, p.id), duration: p.duration || null, filter: p.filter || null } : {}),
+      ...(p.kind === 'video' ? { video: pcVideoUrl(origin, p.id), duration: p.duration || null, filter: p.filter || null, marks: p.marks || null } : {}),
       by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
       // Sealed until a day (2026-11-03): the envelope, the sender and the day — no photo, no words yet.
       ...(sealed(p) ? { photo: null, video: null, message: null, place: null, city: null, region: null, country: null, dish: null, from_place: null, food_verdict: null, sealed_until: p.opens_at, opens_on: p.opens_on || null } : {}),
@@ -21643,7 +21752,7 @@ async function handleMailSent(request, env) {
     const before = typeof b.before === 'string' && !Number.isNaN(Date.parse(b.before)) ? new Date(b.before).toISOString() : null;
     const win = `sender_id=eq.${user.id}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${SENT_SCAN}`;
     const [pcs, tgs, ppc, ptg, links] = await Promise.all([
-      mailSentRows(env, 'postcards', `${win}&select=id,to_user_id,to_city,group_id,cc,photo_key,message,place_name,city,country,meta,created_at,opens_at,opens_on,kind,video_ready,duration,filter`),
+      mailSentRows(env, 'postcards', `${win}&select=id,to_user_id,to_city,group_id,cc,photo_key,message,place_name,city,country,meta,created_at,opens_at,opens_on,kind,video_ready,duration,filter,marks`),
       mailSentRows(env, 'telegrams', `${win}&select=id,to_user_id,group_id,cc,body,ink,reply_to,created_at,received_at,opens_at,opens_on`),
       mailSentRows(env, 'pending_postcards', `${win}&delivered_at=is.null&select=id,photo_key,message,place_name,city,created_at`),
       mailSentRows(env, 'pending_telegrams', `${win}&delivered_at=is.null&select=id,body,ink,created_at`),
@@ -21688,7 +21797,7 @@ async function handleMailSent(request, env) {
         // Sealed until a day (2026-11-03): says so and names the day until it opens.
         ...(r.opens_on ? { opens_on: r.opens_on, opens_at: r.opens_at } : {}),
         // A video postcard (2026-11-03): its clip, once landed; 'uploading' while it hasn't.
-        ...(r.kind === 'video' ? { video: r.video_ready ? pcVideoUrl(origin, r.id) : null, duration: r.duration || null, filter: r.filter || null } : {}),
+        ...(r.kind === 'video' ? { video: r.video_ready ? pcVideoUrl(origin, r.id) : null, duration: r.duration || null, filter: r.filter || null, marks: r.marks || null } : {}),
         status: pcLeaked(r) ? 'undelivered' : r.kind === 'video' && r.video_ready === false ? 'uploading' : sealed(r) ? 'sealed' : 'delivered',
       });
     }
@@ -21825,7 +21934,7 @@ async function handlePostcardBox(request, env) {
       to_me: p.to_user_id === user.id,
       ...(p.to_user_id === user.id && Array.isArray(p.cc) && p.cc.length ? { also_to: p.cc.map((id) => ccHandle[id]).filter(Boolean) } : {}),
       ...(p.to_user_id === null ? { kept: true } : {}),
-      ...(p.kind === 'video' ? { video: pcVideoUrl(origin, p.id), duration: p.duration || null, filter: p.filter || null } : {}),
+      ...(p.kind === 'video' ? { video: pcVideoUrl(origin, p.id), duration: p.duration || null, filter: p.filter || null, marks: p.marks || null } : {}),
       by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
       ...(sealed(p) ? { photo: null, video: null, message: null, place: null, city: null, region: null, country: null, dish: null, from_place: null, food_verdict: null, sealed_until: p.opens_at, opens_on: p.opens_on || null } : {}),
     }));
@@ -22186,6 +22295,55 @@ const BC_CLIP_FILTERS = new Set(['warm', 'cool', 'vivid', 'faded', 'mono', 'noir
 // { frame, outro } and drawn at playback from the clip's own city and date. Unknown names are dropped.
 const BC_CLIP_FRAMES = new Set(['airmail', 'postmark', 'passport', 'print']);
 const bcMarksOf = (m) => { if (!m || typeof m !== 'object') return null; const out = {}; if (typeof m.frame === 'string' && BC_CLIP_FRAMES.has(m.frame)) out.frame = m.frame; if (m.outro === true) out.outro = true; return Object.keys(out).length ? out : null; };
+// The sun's height above the horizon (degrees) at a spot and a UTC instant — the usual low-precision
+// almanac, good to a degree, which is all the light mark needs.
+function bcSunElevation(lat, lng, utcMs) {
+  const rad = Math.PI / 180;
+  const d = utcMs / 864e5 - 10957.5;                                   // days since J2000.0
+  const g = (((357.529 + 0.98560028 * d) % 360) + 360) % 360;          // mean anomaly
+  const q = (((280.459 + 0.98564736 * d) % 360) + 360) % 360;          // mean longitude
+  const L = q + 1.915 * Math.sin(g * rad) + 0.020 * Math.sin(2 * g * rad);
+  const e = 23.439 - 0.00000036 * d;
+  const ra = Math.atan2(Math.cos(e * rad) * Math.sin(L * rad), Math.cos(L * rad)) / rad;
+  const dec = Math.asin(Math.sin(e * rad) * Math.sin(L * rad));
+  const gmst = (((18.697374558 + 24.06570982441908 * d) % 24) + 24) % 24;
+  const lst = (gmst * 15 + lng + 720) % 360;
+  const ha = ((((lst - ((ra % 360) + 360) % 360) % 360) + 540) % 360) - 180;
+  return Math.asin(Math.sin(lat * rad) * Math.sin(dec) + Math.cos(lat * rad) * Math.cos(dec) * Math.cos(ha * rad)) / rad;
+}
+const bcLightOf = (el) => (el > 6 ? 'day' : el > 0 ? 'golden' : el >= -6 ? 'blue' : 'night');
+// The light mark (founder, 2026-11-03): golden hour, blue hour, after dark or day, plus the wall-clock
+// time, from the clip's own taken_at. That time carries no zone, so the zone comes from the longitude,
+// and the light is kept only when every offset within ±1.5 h (borders, summer time) agrees.
+function bcLight(lat, lng, takenAtWall) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(takenAtWall || ''));
+  if (!m) return null;
+  const wallMs = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+  const cats = new Set();
+  for (const off of [-1.5, -1, -0.5, 0, 0.5, 1, 1.5]) cats.add(bcLightOf(bcSunElevation(lat, lng, wallMs - (lng / 15 + off) * 3600e3)));
+  const h = +m[4], mi = +m[5];
+  return { light: cats.size === 1 ? [...cats][0] : null, local: `${((h + 11) % 12) + 1}:${String(mi).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}` };
+}
+// The marks a clip asked for, with what only the worker can add — how far the spot is from the
+// sender's home (miles, never the home itself) and the light at the shot — as { frame?, outro?,
+// flight?, home_mi?, light?, local? }; null when nothing is on.
+async function bcComputeMarks(env, userId, req, lat, lng, takenAtWall) {
+  const r = req && typeof req === 'object' ? req : {};
+  const out = { ...(bcMarksOf(r) || {}) };
+  if ((r.home === true || r.flight === true) && Number.isFinite(lat) && Number.isFinite(lng)) {
+    const pr = await gbRest(env, `profiles?id=eq.${userId}&select=home_lat,home_lng`, { headers: { 'Accept-Profile': 'public' } }).catch(() => null);
+    const h = pr && pr.ok ? (await pr.json().catch(() => []))[0] : null;
+    if (h && Number.isFinite(+h.home_lat) && Number.isFinite(+h.home_lng)) {
+      out.home_mi = Math.round(bcMetres(+h.home_lat, +h.home_lng, lat, lng) / 1609.344);
+      if (r.flight === true) out.flight = true;
+    }
+  }
+  if (r.light === true && Number.isFinite(lat) && Number.isFinite(lng)) {
+    const l = bcLight(lat, lng, takenAtWall);
+    if (l) { out.local = l.local; if (l.light) out.light = l.light; }
+  }
+  return Object.keys(out).length ? out : null;
+}
 // The city a photo was taken in: Google's reverse geocode, kept 30 days for its ~1 km square
 // (the coarse names only, as /reverse-geocode keeps them). { city, region, country } or null.
 async function bcPlaceAt(env, lat, lng) {
@@ -22310,7 +22468,7 @@ async function handleBoardContribute(request, env, ctx) {
     await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' } });
     const takenAt = typeof exif.taken_at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(exif.taken_at) ? `${exif.taken_at}Z` : null;
     const filter = isVideo && typeof b.filter === 'string' && BC_CLIP_FILTERS.has(b.filter) ? b.filter : null;
-    const marks = isVideo ? bcMarksOf(b.marks) : null;
+    const marks = isVideo ? await bcComputeMarks(env, user.id, b.marks, lat, lng, exif.taken_at) : null;
     const row = { user_id: user.id, board_key: board.key, city: board.city, region: board.region || null, country: board.country, taken_at: takenAt, caption: caption || null, photo_key: key, mod_status: 'ok',
       ...(isVideo ? { kind: 'video', duration: Math.round(duration * 10) / 10, video_key: `vid/${user.id}/${stem}.mp4`, video_ready: false, ...(filter ? { filter } : {}), ...(marks ? { marks } : {}) } : {}) };
     // Where it was shot (the same-spot strip, 2026-11-03), to about a metre; before the columns exist, without it.
@@ -30787,6 +30945,8 @@ export default {
 
       // Passport (personal, private)
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
+      if (pathname.startsWith('/pp-video/') && (request.method === 'GET' || request.method === 'HEAD')) return await handlePassportVideoServe(request, env);
+      if (pathname.startsWith('/passport/video/') && request.method === 'PUT') return await handlePassportVideoPut(request, env, ctx);
       if (pathname.startsWith('/dish-photo/') && request.method === 'GET') return await handleDishPhotoServe(request, env);
       if (pathname.startsWith('/board-photo/') && request.method === 'GET') return await handleBoardPhotoServe(request, env);
       if (pathname.startsWith('/board-video/') && (request.method === 'GET' || request.method === 'HEAD')) return await handleBoardVideoServe(request, env);
