@@ -21835,6 +21835,8 @@ async function handleCityBoard(request, env) {
       // names are hidden as contributors") — a contribution (2026-10-27) and a 🌍 Everyone album print alike.
       // Friends still learn who added it from their own Friends' news; the board itself never says.
       ...(p.contrib ? { contrib: true } : {}), by: { handle: null, name: null },
+      // mine (2026-11-02): the board names nobody, so the owner's own controls (caption, delete) need this flag.
+      mine: !!user?.id && p.user_id === user.id,
     }));
     // One page from two sources: it ends at the newer of the two sources' last items, and
     // anything older waits for the next page — nothing is skipped, nothing repeats.

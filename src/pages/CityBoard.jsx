@@ -19,10 +19,10 @@
 // Unfollow, Block); cards from people you blocked never show.
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { BookOpen, ChevronLeft, ChevronRight, ImageUp, Mail, Play, Stamp, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, ImageUp, Mail, Pencil, Play, Stamp, X } from "lucide-react";
 import { clipLength } from "@/lib/clips";
 import { useDismissable } from "@/lib/dismissStack";
-import { contributeOpen } from "@/lib/boardContrib";
+import { captionContribution, contributeOpen } from "@/lib/boardContrib";
 import { BoardContributeSheet } from "@/components/passport/ContributeAlbum";
 import { deleteBoardPostcard } from "@/lib/boardPostcards";
 import { showToast } from "@/components/Toast";
@@ -181,7 +181,10 @@ function Billboard({ name, kind = "city", country = "", region = "", kit = null,
 // next, collapse so everything goes back to board"). One item at a time over the wall's rows,
 // swiped or arrowed through, each with its sticker tray and comments (board rules: anyone
 // adult may react, the owner hears of it in the Mailbox).
-function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, onReport, onDelete = undefined, readOnly = false }) {
+// onCaption (2026-11-02): the owner of an upload writes or changes its caption right here on the board.
+function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, onReport, onDelete = undefined, readOnly = false, onCaption = undefined }) {
+  const [editCap, setEditCap] = useState(null);   // the caption being written, while the field is open
+  const [capBusy, setCapBusy] = useState(false);
   const row = rows[index];
   const touch = useRef(null);
   const go = (d) => { const n = index + d; if (n >= 0 && n < rows.length) onIndex(n); };
@@ -206,7 +209,20 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
   const nViews = views[row.id] ?? (Number(row.views) || 0);
   const viewsLabel = `${nViews.toLocaleString()} ${nViews === 1 ? "view" : "views"}`;
   const handle = lc(row?.by?.handle);
-  const ownerView = !!me && !!handle && lc(me) === handle;
+  // The board names nobody (2026-11-01), so an upload is known as mine by the worker's flag; a card by its handle.
+  const ownerView = row.mine === true || (!!me && !!handle && lc(me) === handle);
+  const canCaption = row.type === "photo" && row.contrib && row.mine === true && !readOnly && typeof onCaption === "function";
+  const saveCaption = async () => {
+    if (capBusy) return;
+    const text = String(editCap || "").trim().slice(0, 200);
+    setCapBusy(true);
+    const r = await captionContribution(row.id, text);
+    setCapBusy(false);
+    if (r.error) { showToast(r.error, "error"); return; }
+    onCaption(row.id, r.caption ?? text);
+    setEditCap(null);
+    showToast(text ? "Caption saved" : "Caption removed", "success");
+  };
   const onTouchStart = (e) => {
     // A finger on a drawing pad or a text field is never a swipe (founder, 2026-10-16).
     if (e.target.closest?.("canvas, input, textarea, select")) { touch.current = null; return; }
@@ -253,7 +269,28 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
                 imgStyle={{ display: "block", width: "100%", maxHeight: "54vh", objectFit: "contain", borderRadius: 6 }} />
             )}
             <div style={{ color: NEUTRAL.ivory, padding: "10px 4px 0" }}>
-              {row.caption ? <p style={{ margin: 0, fontFamily: SERIF, fontStyle: "italic", fontSize: fs(16), lineHeight: 1.35 }}>&ldquo;{row.caption}&rdquo;</p> : null}
+              {editCap != null ? (
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input value={editCap} onChange={(e) => setEditCap(e.target.value.slice(0, 200))} maxLength={200} placeholder="Add a caption" aria-label="Caption" autoFocus
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveCaption(); } }}
+                    style={{ flex: 1, minWidth: 0, minHeight: 40, padding: "0 12px", borderRadius: 10, border: "1px solid rgba(255,252,247,.35)", background: "rgba(255,255,255,.08)", color: NEUTRAL.ivory, font: "inherit", fontSize: fs(15) }} />
+                  <button type="button" onClick={saveCaption} disabled={capBusy} aria-busy={capBusy || undefined}
+                    style={{ flex: "none", minHeight: 40, padding: "0 14px", borderRadius: 10, border: 0, background: NEUTRAL.goldPale, color: "#16110D", font: "inherit", fontSize: fs(14), fontWeight: 650, cursor: capBusy ? "progress" : "pointer" }}>Save</button>
+                  <button type="button" onClick={() => setEditCap(null)} aria-label="Cancel"
+                    style={{ flex: "none", width: 40, height: 40, borderRadius: 999, border: 0, background: "transparent", color: NEUTRAL.ivory, cursor: "pointer" }}><X size={18} strokeWidth={2} aria-hidden="true" focusable="false" /></button>
+                </div>
+              ) : (
+                <>
+                  {row.caption ? <p style={{ margin: 0, fontFamily: SERIF, fontStyle: "italic", fontSize: fs(16), lineHeight: 1.35 }}>&ldquo;{row.caption}&rdquo;</p> : null}
+                  {canCaption ? (
+                    // Your own upload: write or change its caption right here (founder, 2026-11-02).
+                    <button type="button" onClick={() => setEditCap(row.caption || "")}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36, marginTop: row.caption ? 2 : 0, padding: 0, background: "transparent", border: 0, color: NEUTRAL.goldPale, font: "inherit", fontSize: fs(13), fontWeight: 600, cursor: "pointer" }}>
+                      <Pencil size={14} strokeWidth={2} aria-hidden="true" focusable="false" />{row.caption ? "Edit caption" : "Add a caption"}
+                    </button>
+                  ) : null}
+                </>
+              )}
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 10px", marginTop: row.caption ? 8 : 0, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".1em", textTransform: "uppercase", color: NEUTRAL.goldPale }}>
                 <span>{handle ? `From @${handle}` : "From a traveler"}</span>
                 {row.place ? <span>· {row.place}</span> : null}
@@ -565,6 +602,7 @@ function Board({ kind, city, region, country, onBack, open = "" }) {
       ) : null}
       {view !== null && rows[view] ? (
         <BoardViewer rows={rows} index={view} onIndex={setView} onClose={() => setView(null)} book={book} onBook={() => readBook(board?.rows)} readOnly={board?.read_only === true}
+          onCaption={(id, caption) => setBoard((b) => (b && Array.isArray(b.rows) ? { ...b, rows: b.rows.map((r) => (r.type === "photo" && r.id === id ? { ...r, caption: caption || null } : r)) } : b))}
           me={me.handle} meName={me.name || profile?.first_name || null} onReport={(row) => { setView(null); report(row); }} onDelete={async (row) => { const ok = await removeCard(row); if (ok) setView(null); return ok; }} />
       ) : null}
       {traveler ? (

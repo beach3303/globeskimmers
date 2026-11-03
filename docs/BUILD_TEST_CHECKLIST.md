@@ -4245,3 +4245,11 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   was pushed (founder: "can we just have uploads have only photos uploaded to the city board?"). The album lists
   `board_contributions` only; the 🌍 Everyone prints keep living in their passport albums. Her main account has no
   uploads yet (no member's upload reached a board on 11-01/11-02), which is why the album reads "none yet".
+
+## 2026-11-02 late — Captions on your own uploads, right on the board (COMMITTED, not pushed)
+
+- Captions existed only in the My uploads album's big view. Now the board viewer shows "Add a caption" / "Edit
+  caption" under your own upload (photo or clip), saving through `/board/contributions/caption`; the row updates
+  in place. Since boards name nobody, the worker marks the viewer's own photos `mine: true`, and the viewer's owner
+  check uses it (it had relied on a handle match, which the anonymous boards no longer give). Gates: eslint, build,
+  boot-check. Needs push (worker) + OTA (app).
