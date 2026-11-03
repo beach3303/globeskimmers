@@ -4540,3 +4540,11 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - **Rig:** `scripts/shots/cdp-shot.mjs` gained `{"files":{"selector","paths"}}` (DOM.setFileInputFiles), which is how
   the composer was driven through its hidden clip input on the web path.
 - Needs push (worker: the door) + OTA; the native half rides with the next store builds.
+
+## 2026-11-03 — PUSHED + ON PHONES: the 40 MB clip door + vertical postcards (main 5dfbd25, OTA 1.0.2611032027)
+
+  Deploy Cloudflare Workers run 41712648894 green (no migration in this push); the founder's `npm run ota` put
+  bundle 1.0.2611032027 (built 12:27 PT, after every edit) on the production channel. **Still open:** the native
+  half of the clip fix (iOS `fileLengthLimit` + 540/480 presets) rides with the next store builds, both platforms.
+  **To try (founder):** send the 20 s clip of Rocky again as a video postcard — the client door is 40 MB and the
+  worker accepts it; a portrait clip now shows as a portrait card in the composer, the Mailbox and Sent.
