@@ -4293,3 +4293,11 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   status otherwise. `prepareNative` logs `clip_shrunk` { bytes, seconds, src_bytes, src_seconds } to D1 so the
   720p output's size can be watched against the worker's 25 MB door. Gates: eslint (no-undef), build, boot-check.
   Needs OTA only — no worker change, no store build.
+- Measured on the Mac with the same `AVAssetExportPreset1280x720` (scratchpad `clip/preset720.swift`): a busy
+  20-second 1080p pattern shrinks to 17.5 MB (7.3 Mbps), pure noise to 21.7 MB (9.1 Mbps) — both under the 25 MB
+  door, with little margin for the worst case. The `clip_shrunk` events will show real iPhone clips.
+
+## 2026-11-03 — PUSHED: the iPhone clip read fix (main 617ef1a)
+
+- App + docs only: no worker, site or migration workflow runs. **Open (founder):** `npm run ota`, then pick the
+  same .mov again on the iPhone — it should shrink, upload and hang on its city's board.
