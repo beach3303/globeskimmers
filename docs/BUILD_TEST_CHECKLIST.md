@@ -4272,3 +4272,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - The public note shows in full the first time the sheet opens on a phone (`gs_contribute_note_seen_v1`); from
   the second time it folds to its bold line with Show / Hide, and the intro line folds with it (founder:
   "automatically collapse the second time … allow user to expand"). Gates: eslint, build, boot-check. OTA.
+
+## 2026-11-03 — PUSHED: on-board captions, shorter upload wording, folding note, clip diagnostics (main 3e49f3b)
+
+- Worker deploy carries `mine` on board photo rows. **Open (founder):** `npm run ota`; then retry the clip and
+  report the toast's words (or Claude reads the `clip_prepare_failed` event in D1).
