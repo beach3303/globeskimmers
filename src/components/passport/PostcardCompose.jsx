@@ -553,8 +553,8 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
             <input
               value={dish}
               onChange={(e) => setDish(e.target.value.slice(0, 60))}
-              placeholder="Dish or topic (optional)"
-              aria-label="Dish or topic"
+              placeholder="Topic (optional)"
+              aria-label="Topic"
               className="placeholder:text-[color:var(--gs-ph)]"
               style={css({ ...FIELD, flex: "1 1 calc(150px * var(--fs, 1))", width: "auto", minWidth: 0, "--gs-ph": NEUTRAL.ink3 })}
             />
