@@ -4200,3 +4200,15 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   the push as denied, yet the push landed and the worker deployed (03:05 UTC). She then withdrew the request; the
   revert 9b25748 is pushed and deployed. Nobody else's stamps were ever affected. Lesson: a gate "denied" message is
   not proof the push didn't happen — check origin/main.
+
+## 2026-11-02 — The founder's two logins are one member (worker alias)
+
+- Founder: her full account (friends, @maiza, mail) is maizasimeon@gmail.com; founder@globeskimmers.io is a
+  separate Supabase user (signed up on the S10 on 10-30, handle @maiza_ chosen today when the video upload asked).
+  Same email on two phones was never the issue — two emails, two users. She asked for one person behind both.
+- Built: `gbAliasFor` in the worker — a session whose email is founder@globeskimmers.io acts as the member holding
+  @maiza (id looked up once per isolate from `passport_shares`) everywhere the worker reads or writes by user id.
+  Migration 20261103040000 moves `board_contributions` from @maiza_'s user to @maiza's. Supabase keeps two users,
+  so the `profiles` row (first name, home city, settings) stays per login; `requireAdmin` is by email and unchanged.
+- **Founder:** on the S10, force-close and reopen the app (the alias applies to every API call); the passport,
+  friends and mail of the gmail account appear. The @maiza_ handle stays reserved by the idle account.
