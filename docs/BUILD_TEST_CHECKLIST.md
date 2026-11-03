@@ -4333,3 +4333,29 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   to `video`/`duration` in that row (worker syntax-checked) — **COMMITTED, NOT PUSHED: the permission gate denied
   Claude's push twice. Founder:** `cd ~/Developer/globeskimmers && git push origin stamping-v2:main` (deploys the
   worker; no migration). Until then a look shows in My uploads and Friends' news but not on the board itself.
+
+## 2026-11-03 — Sealed mail: postcards and telegrams that open on a day the sender picks (founder decisions 2026-11-03) (COMMITTED, not pushed)
+
+- Decisions (PLANS.md, clips section): the recipient sees the sealed envelope at once WITH the sender's name and the
+  day; up to a year ahead; the sender can take it back until it opens and can't open it early; minors' rails
+  unchanged, judged on the recipient's age on the open day (an 18th-birthday card may be sealed to a 17-year-old).
+- Data: migration `20261103170000_sealed_mail.sql` — `opens_at` (the recipient's midnight), `opens_on` (the calendar
+  day the sender chose), `opened_at` (the sweep's mark) on `postcards` and `telegrams`, partial indexes.
+- Worker: `sealFromBody` (YYYY-MM-DD + the phone's timezone; after today, ≤ 366 days), `sealMidnight` /
+  `sealOpensAtFor` (midnight in the recipient's `home_timezone`, else the sender's), `sealReachable` (a teen who is
+  18 on the open day), rows carry opens_at/opens_on, a sealed send never falls back to an unsealed insert (503 until
+  the column exists), the send-time knock says "sealed a postcard for you · opens Nov 20"; `/social/feed` and
+  `/postcards/box` strip a sealed row to `sealed_until` + `opens_on` (no photo, words or place) and don't mark it
+  read; `/social/unread` doesn't count it until it opens; `/telegrams/open` refuses with code `sealed` (423);
+  `/mail/sent` carries `opens_on` and status `sealed`; NEW `/mail/recall` erases a sender's sealed rows (photos
+  too) before they open; `sealedMailSweep` on the hourly cron marks `opened_at` and sends "A sealed postcard from
+  Maiza just opened" (quiet hours hold it to 8 in the member's morning). Members only: never a board, never an
+  email that waits.
+- App: `SealUntil` (one control for both compose sheets: checkbox + date, min tomorrow, max a year, the promise in
+  one sentence); `sendPostcard` / `sendTelegram` pass `opens_on` + the phone's timezone; the Mailbox shows a
+  `SealedRow` (lock, "Maiza sealed a postcard for you · OPENS NOV 20"), excludes sealed ones from the tab counts and
+  says "sealed until …" on folded rows; Sent shows "Sealed · opens Nov 20" and a Take back confirm
+  (`recallSealed`), no sticker strip on a sealed card.
+- Gates: node --check worker; eslint (no-undef) on SealUntil / SentList / PostcardCompose / TelegramCompose /
+  Mailbox; libs clean; build; boot-check. Needs push (worker + migration) + OTA. Not yet built: video postcards
+  (the vehicle for "sealed clips"), next.
