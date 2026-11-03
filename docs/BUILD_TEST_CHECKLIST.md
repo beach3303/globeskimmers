@@ -4548,3 +4548,15 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   half of the clip fix (iOS `fileLengthLimit` + 540/480 presets) rides with the next store builds, both platforms.
   **To try (founder):** send the 20 s clip of Rocky again as a video postcard — the client door is 40 MB and the
   worker accepts it; a portrait clip now shows as a portrait card in the composer, the Mailbox and Sent.
+
+## 2026-11-03 — Then and now: the real kit slug + a put script (correction to the 11-03 entry above)
+
+  The slug is the worker's `pcKitSlug`, NOT `city/yosemite-valley`: a US city is
+  `city/<city>--<state>--united-states` (e.g. `city/yosemite-valley--california--united-states`), any other city is
+  `city/<city>--<country>` (`city/paris--france`), a country board is `country/<country>` (`country/japan`); words are
+  accent-stripped, lower-case, hyphenated. `scripts/then-now/put.mjs` works the slug out and uploads both objects
+  (`--dry-run` prints the slug and the JSON without uploading):
+  `node scripts/then-now/put.mjs --city "Yosemite Valley" --region California --country "United States" --photo
+  ~/Desktop/yosemite-1902.jpg --year 1902 --caption "…" --credit "Library of Congress, public domain" --source "https://…"`.
+  The kit is cached in KV for an hour (`kit:v3:<slug>`), so "See it then" appears within the hour. Public-domain or
+  licensed photos only; the credit line prints on the card.

@@ -1367,6 +1367,18 @@ monthly report by hand until it's built.
 - **2026-11-24** — start **Passport Wrapped** (founder 2026-11-03: "we can do passport wrapped before the end of the
   year and remind us"); ship by 2026-12-15 so it lands before holiday travel. Spec in the clips section (2026-11-03).
 
+- **Now (2026-11-03)** — **Greylock Edge** takes applications on a rolling basis (pre-idea → seed, 3-month program,
+  capital optional and unstandardised; apply via greylock.com/edge). Speedrun (submitted 10-25) and YC W27 (submitted
+  by 11-02) are in; Edge is the one credible door open today.
+
+- **2027-01-15** — the early-2027 application windows, checked 2026-11-03: **Sequoia Arc** spring cohort (twice a
+  year; fall 2026 closed Aug 17; spring windows have opened ~February; $500K–$1M; sequoiacap.com/arc/apply),
+  **Neo Accelerator** (2026 deadline was May 15; applications have opened in January; ~$750K uncapped SAFE reported —
+  verify on neo.com), **PearX** (year-round; $500K–$2M for ~7%; W = Jan–Apr, S = Jul–Oct, SF), **South Park Commons**
+  Spring 2027 (spring deadlines have fallen on ~Feb 1–2; $400K for 7% + $600K in the next round), **Berkeley SkyDeck**
+  Batch 24 (B23 closed Aug 21; ~$200K SAFE). Not a fit: HF0 (repeat founders), Snap Yellow (dormant since 2020).
+  Only one in-person program fits a calendar: Speedrun Feb–Apr, YC Jan–Mar, PearX W Jan–Apr, Arc spring ~Mar–Apr.
+
 - **~2027-01-15** — alert previews: re-decide postcard (then telegram) previews (decided 2026-10-19: none for now).
 
 - ~2026-12-09: regenerate the Sign in with Apple client secret (M3, 6-month limit).
