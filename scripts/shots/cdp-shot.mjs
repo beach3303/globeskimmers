@@ -89,6 +89,15 @@ for (const a of ACTIONS) {
     if (!(await hasText(a.untilText))) console.error(`untilText NOT found: ${a.untilText}`);
   } else if (a.swipe) { await swipe(...a.swipe); await sleep(a.after ?? 1100); }
   else if (a.eval) await S('Runtime.evaluate', { expression: a.eval });
+  else if (a.files) {
+    // {"files":{"selector":"input[type=file]","paths":["/abs/clip.mp4"]}} — hands real files to a file
+    // input (its change event fires like a pick), for flows the rig can't reach through a picker.
+    const doc = await S('DOM.getDocument', { depth: 1 });
+    const { nodeId } = await S('DOM.querySelector', { nodeId: doc.root.nodeId, selector: a.files.selector });
+    if (!nodeId) console.error(`files: nothing matches ${a.files.selector}`);
+    else await S('DOM.setFileInputFiles', { nodeId, files: a.files.paths });
+    await sleep(a.after ?? 1200);
+  }
 }
 
 const shot = await S('Page.captureScreenshot', { format: 'png' });
