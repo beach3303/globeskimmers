@@ -19,6 +19,7 @@ import { TINK, TINK3, TYPE } from "@/components/telegram/TelegramPaper";
 import { inkColor } from "@/lib/telegram";
 import { hideAllSent, hideSent, recallSealed, sentMail } from "@/lib/sentMail";
 import { sealLabel } from "@/components/mail/SealUntil";
+import { clipFilterCss } from "@/lib/clipFilters";
 import { deleteBoardPostcard } from "@/lib/boardPostcards";
 import { blotterReadMail } from "@/lib/passport";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
@@ -50,6 +51,8 @@ function statusOf(it) {
   if (it.status === "waiting") return { tone: "wait", icon: Clock, text: "Waiting for them to join · invite emailed" };
   // Sealed until a day (2026-11-03): they see the envelope and the day; it opens that morning.
   if (it.status === "sealed") return { tone: "wait", icon: Clock, text: `Sealed · opens ${sealLabel(it.opens_on) || "later"}` };
+  // A video postcard whose clip never finished uploading (2026-11-03): it isn't shown to anyone yet.
+  if (it.status === "uploading") return { tone: "wait", icon: Clock, text: "The clip didn’t finish uploading · send it again" };
   // The 2026-10-24 leak: the card never reached who was picked (and no longer shows to anyone).
   if (it.status === "undelivered") return { tone: "wait", icon: Clock, text: "Didn’t reach who you picked · please send it again" };
   if (it.status === "expired") return { tone: "plain", icon: Link2, text: "Link expired" };
@@ -85,6 +88,15 @@ function Front({ it, big = false }) {
       <div aria-hidden="true" style={{ flex: "none", width: big ? "100%" : 64, minHeight: big ? 0 : 46, padding: big ? "14px 16px" : "5px 6px", boxSizing: "border-box", background: SLIP, boxShadow: "inset 0 0 0 1px rgba(120,85,25,.18), 0 3px 6px -4px rgba(70,45,10,.4)", color: TINK }}>
         <div style={{ fontFamily: "'Inter Tight', system-ui, sans-serif", fontWeight: 800, fontSize: big ? fs(13) : 7, letterSpacing: ".14em" }}>TELEGRAM</div>
         <div style={{ marginTop: big ? 8 : 3, fontFamily: TYPE, fontSize: big ? fs(18) : 8.5, lineHeight: 1.25, letterSpacing: ".03em", color: inkColor(it.ink) || TINK, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: big ? 6 : 2, WebkitBoxOrient: "vertical", textTransform: "uppercase", overflowWrap: "anywhere" }}>{it.body || ""}</div>
+      </div>
+    );
+  }
+  // A video postcard (2026-11-03): opened, the clip plays here, wearing its look; folded, its poster.
+  if (big && it.video) {
+    return (
+      <div style={{ width: "100%", aspectRatio: "3 / 2", borderRadius: 10, overflow: "hidden", background: "#000" }}>
+        <video src={it.video} poster={it.photo || undefined} controls playsInline preload="metadata" aria-label={it.place ? `Your video postcard from ${it.place}` : "Your video postcard"}
+          style={{ display: "block", width: "100%", height: "100%", objectFit: "contain", filter: clipFilterCss(it.filter) }} />
       </div>
     );
   }

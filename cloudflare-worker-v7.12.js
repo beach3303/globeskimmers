@@ -19531,7 +19531,17 @@ async function handleMailRecall(request, env, ctx) {
     if (!w.ok) return jsonResponse({ error: 'That didn’t go through — try again' }, 503);
     const gone = await w.json().catch(() => []);
     if (!gone.length) return jsonResponse({ error: 'It has opened already, so it can’t be taken back', code: 'opened' }, 409);
-    if (table === 'postcards' && env.MEDIA) { const del = Promise.all(gone.map((r) => (r.photo_key ? env.MEDIA.delete(r.photo_key).catch(() => {}) : null))); if (ctx) ctx.waitUntil(del); else await del; }
+    if (table === 'postcards' && env.MEDIA) {
+      const del = (async () => {
+        await Promise.all(gone.map((r) => (r.photo_key ? env.MEDIA.delete(r.photo_key).catch(() => {}) : null)));
+        // A video postcard's clip (2026-11-03) is shared by its send's rows: it goes when none is left.
+        for (const k of [...new Set(gone.map((r) => r.video_key).filter(Boolean))]) {
+          const left = await gbRest(env, `postcards?video_key=eq.${encodeURIComponent(k)}&select=id&limit=1`, {}).catch(() => null);
+          if (left && left.ok && !(await left.json().catch(() => [1])).length) await env.MEDIA.delete(k).catch(() => {});
+        }
+      })();
+      if (ctx) ctx.waitUntil(del); else await del;
+    }
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'seal_recalled', { kind: table, n: gone.length }));
     return jsonResponse({ ok: true, removed: gone.length });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
@@ -19552,6 +19562,15 @@ async function handlePostcardSend(request, env, ctx) {
     // Sealed until a day (2026-11-03): members only, never a board, never an email that waits.
     const seal = sealFromBody(b);
     if (seal?.error) return jsonResponse({ error: seal.error }, 400);
+    // A video postcard (2026-11-03): `image` is the poster, `frames` its stills, `duration` its seconds,
+    // `filter` the look; the clip's bytes follow in PUT /postcards/video/<id>.
+    const isVideo = b.kind === 'video';
+    const clipFilter = isVideo && typeof b.filter === 'string' && BC_CLIP_FILTERS.has(b.filter) ? b.filter : null;
+    let clipSecs = 0;
+    if (isVideo) {
+      clipSecs = Number(b.duration);
+      if (!Number.isFinite(clipSecs) || clipSecs < 1 || clipSecs > BC_CLIP_SECONDS + 0.5) return jsonResponse({ error: `Clips are up to ${BC_CLIP_SECONDS} seconds — trim it first`, code: 'too_long' }, 400);
+    }
 
     // Address it. The members' rails run only after the photo is checked (below).
     let members = [];        // [{ user_id, handle }]
@@ -19649,6 +19668,8 @@ async function handlePostcardSend(request, env, ctx) {
     const direct = asked > 0;
     if (seal && toCity) return jsonResponse({ error: 'A City Board card can’t be sealed' }, 400);
     if (seal && waitingEmails.length) return jsonResponse({ error: 'A sealed postcard goes to members only — add them by @username' }, 400);
+    if (isVideo && toCity) return jsonResponse({ error: 'A video postcard goes to people — a board takes clips from its Upload door' }, 400);
+    if (isVideo && waitingEmails.length) return jsonResponse({ error: 'A video postcard goes to members only — add them by @username' }, 400);
 
     // The front photo.
     let data = String(b.image || ''); let mediaType = 'image/jpeg';
@@ -19664,6 +19685,15 @@ async function handlePostcardSend(request, env, ctx) {
     if (!verdict || !verdict.allow) {
       if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_photo_refused', { reason: verdict?.reason || 'not_allowed', bytes: bytes.length }));
       return jsonResponse({ error: verdict?.reason ? "We couldn't check this photo right now — try again in a moment" : "This photo can't go on a postcard" }, 422);
+    }
+    // A clip's stills go through the same check as its poster (2026-11-03); a clip that never
+    // landed after an hour is cleared first, poster and all.
+    if (isVideo) {
+      const frames = (Array.isArray(b.frames) ? b.frames : []).slice(0, 4).map((s) => { const mm = String(s || '').match(/^data:image\/(?:jpeg|jpg);base64,(.*)$/i); const d = (mm ? mm[1] : String(s || '')).replace(/\s/g, ''); return d.length > 600 && d.length < 6 * 1024 * 1024 ? d : null; });
+      if (frames.length < 2 || frames.some((f) => !f)) return jsonResponse({ error: 'The clip’s frames didn’t come through — try again' }, 400);
+      const fv = await Promise.all(frames.map((f) => gbModeratePhoto(env, f, 'image/jpeg', 'memory')));
+      if (fv.some((x) => !x?.allow)) return jsonResponse({ error: "This clip can't go on a postcard" }, 422);
+      await pcVideoStraysPrune(env, user.id).catch(() => {});
     }
 
     // Each member's rails, AFTER the photo (go-live round 3: answered first, a card with no
@@ -19726,6 +19756,8 @@ async function handlePostcardSend(request, env, ctx) {
     // The cards themselves: one per member (or one broadcast / board card).
     const groupId = direct && groupAsked && deliver.length > 1 ? crypto.randomUUID() : null;
     const meta = cardMeta || anonLabel ? { meta: { ...(cardMeta || {}), ...(anonLabel ? { anon: anonLabel } : {}) } } : {};
+    // One clip object for every row of a video send (2026-11-03), under the sender's clip prefix.
+    const videoKey = isVideo ? `vid/${user.id}/pc-${crypto.randomUUID()}.mp4` : null;
     const targets = direct ? deliver : [null];
     const rows = [];
     for (const mb of targets) {
@@ -19733,6 +19765,7 @@ async function handlePostcardSend(request, env, ctx) {
         ...base, to_user_id: mb ? mb.user_id : null, photo_key: await put(), ...meta,
         // Sealed until a day (2026-11-03): their own midnight.
         ...(seal && mb ? { opens_at: await sealOpensAtFor(env, seal, mb.user_id), opens_on: seal.opens_on } : {}),
+        ...(isVideo ? { kind: 'video', video_key: videoKey, video_ready: false, duration: Math.round(clipSecs * 10) / 10, ...(clipFilter ? { filter: clipFilter } : {}) } : {}),
         // A board card carries the board's city and country.
         ...(toCity ? { to_city: toCity, city: boardCity, country: boardCountry, region: boardRegion } : {}),
         ...(groupId ? { group_id: groupId, cc: deliver.filter((x) => x !== mb).map((x) => x.user_id) } : {}),
@@ -19742,14 +19775,16 @@ async function handlePostcardSend(request, env, ctx) {
     let w = await insert(rows);
     // A sealed card must never go out open: before its columns exist, say so instead.
     if (!w.ok && w.status === 400 && seal) { drop(rows.map((r) => r.photo_key)); return jsonResponse({ error: 'Sealed mail opens with the next update — try again shortly' }, 503); }
+    if (!w.ok && w.status === 400 && isVideo) { drop(rows.map((r) => r.photo_key)); return jsonResponse({ error: 'Video postcards open with the next update — try again shortly' }, 503); }
     // The seconds before a newer column exists (region 2026-10-16, group_id/cc 2026-10-24): send without it.
     if (!w.ok && w.status === 400) w = await insert(rows.map(({ group_id: _g, cc: _c, ...r }) => r));
     if (!w.ok && w.status === 400) w = await insert(rows.map(({ group_id: _g, cc: _c, region: _r, ...r }) => r));
     if (!w.ok) { drop(rows.map((r) => r.photo_key)); return jsonResponse({ error: 'Could not send' }, 502); }
     const made = await w.json().catch(() => []);
     // The knock on each recipient's phone (push, 2026-10-19): the sender's first name and the
-    // place; several within six hours fold into one. Never for a board card.
-    if (direct && ctx) {
+    // place; several within six hours fold into one. Never for a board card; a video postcard
+    // knocks when its clip lands (handlePostcardVideoPut).
+    if (direct && ctx && !isVideo) {
       const senderName = await ppHolder(env, user.id);
       const place = base.place_name || base.city || null;
       for (const r of (Array.isArray(made) ? made : [])) {
@@ -19769,7 +19804,7 @@ async function handlePostcardSend(request, env, ctx) {
       ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => (boardLabel ? `📮 ${who} posted a postcard on ${boardLabel}`
         : `💌 ${who} sent ${groupId ? 'a group postcard' : 'a postcard'} to ${gbPeople(k)}`), request));
     }
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct, city: !!toCity, has_dish: !!cardMeta?.dish, anon: anonLabel || undefined, to: direct ? deliver.length + waitingEmails.length : undefined, group: !!groupId || undefined, sealed: !!seal || undefined }));
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct, city: !!toCity, has_dish: !!cardMeta?.dish, anon: anonLabel || undefined, to: direct ? deliver.length + waitingEmails.length : undefined, group: !!groupId || undefined, sealed: !!seal || undefined, video: isVideo || undefined }));
     // A new board card shows in the City Boards list at once, not after its five minutes.
     if (toCity && env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.delete('cityboards:v1').catch(() => {});
     // The pin ask (founder, 2026-10-15): a direct card from a city the sender
@@ -19793,6 +19828,8 @@ async function handlePostcardSend(request, env, ctx) {
     }
     return jsonResponse({
       ok: true, ...(toCity ? { board: toCity } : {}), ...(pin ? { pin } : {}), ...(seal ? { sealed: seal.opens_on } : {}),
+      // A video postcard (2026-11-03): where the clip's bytes go next, and where it will play.
+      ...(isVideo && made?.[0]?.id ? { upload: `/postcards/video/${made[0].id}`, video: pcVideoUrl(new URL(request.url).origin, made[0].id) } : {}),
       ...(direct ? { count: deliver.length + waitingEmails.length, group: !!groupId } : {}),
       ...(waitingEmails.length ? { waiting: true, emailed } : {}),
       ...(notReadyHandles.length ? { not_ready: notReadyHandles } : {}),
@@ -19813,6 +19850,97 @@ async function handlePostcardPhotoServe(request, env) {
     headers.set('Access-Control-Allow-Origin', '*');
     return new Response(obj.body, { headers });
   } catch { return new Response('Error', { status: 500 }); }
+}
+
+// ── Video postcards (planned 2026-10-30, built 2026-11-03) ───────────────────────────────
+// A private postcard whose front is a clip: the poster frame rides as the card's photo (so every
+// photo path keeps working) and the four stills go through the same check; the clip's bytes land
+// in a second call (PUT /postcards/video/<id>) under vid/<sender>/pc-<stem>.mp4 — the account
+// purge's clip sweep — as ONE object shared by every row of the send. A card shows only once its
+// clip has landed (video_ready), and the knock goes out then. Served by the card's id at
+// /pc-video/<id>, as unguessable as a photo's key; a sealed card's clip stays closed with it.
+const pcVideoUrl = (origin, id) => `${origin}/pc-video/${id}`;
+async function handlePostcardVideoPut(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    if (!env.MEDIA) return jsonResponse({ error: 'Video storage not configured' }, 500);
+    const m = /^\/postcards\/video\/([0-9a-f-]{36})$/i.exec(new URL(request.url).pathname);
+    if (!m || !BL_UUID.test(m[1])) return jsonResponse({ error: 'Not found' }, 404);
+    const q = await gbRest(env, `postcards?id=eq.${m[1]}&sender_id=eq.${user.id}&kind=eq.video&select=id,video_key,video_ready,duration`, {});
+    const row = (q.ok ? await q.json() : [])[0];
+    if (!row || !String(row.video_key || '').startsWith(`vid/${user.id}/`)) return jsonResponse({ error: 'Not found' }, 404);
+    const origin = new URL(request.url).origin;
+    if (row.video_ready) return jsonResponse({ ok: true, url: pcVideoUrl(origin, row.id), already: true });
+    const len = Number(request.headers.get('content-length') || 0);
+    if (len > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 25 MB at most', code: 'too_big' }, 413);
+    const bytes = new Uint8Array(await request.arrayBuffer());
+    if (bytes.byteLength > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 25 MB at most', code: 'too_big' }, 413);
+    if (bytes.byteLength < 2000 || String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7]) !== 'ftyp') return jsonResponse({ error: 'Please send an MP4 clip' }, 400);
+    const secs = mp4Duration(bytes);
+    if (secs != null && secs > BC_CLIP_SECONDS + 0.5) return jsonResponse({ error: `Clips are up to ${BC_CLIP_SECONDS} seconds — trim it first`, code: 'too_long' }, 400);
+    await env.MEDIA.put(row.video_key, bytes, { httpMetadata: { contentType: 'video/mp4', cacheControl: 'private, max-age=31536000, immutable' } });
+    const patch = { video_ready: true, ...(secs != null ? { duration: Math.round(secs * 10) / 10 } : {}) };
+    // Every row of the send shares the object: all of them open together.
+    const w = await gbRest(env, `postcards?video_key=eq.${encodeURIComponent(row.video_key)}&sender_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch) });
+    if (!w.ok) { await env.MEDIA.delete(row.video_key).catch(() => {}); return jsonResponse({ error: 'Could not save — try again' }, 502); }
+    const made = await w.json().catch(() => []);
+    if (ctx) {
+      // The knock, now that there is something to open; a sealed one says the day instead.
+      const senderName = await ppHolder(env, user.id);
+      for (const r of (Array.isArray(made) ? made : [])) {
+        if (!r.to_user_id) continue;
+        if (sealed(r)) ctx.waitUntil(pushNotify(env, r.to_user_id, 'postcards', { title: `${senderName} sealed a video postcard for you`, body: `It opens on ${sealLabel(r.opens_on)}`, route: '/Postcards', collapse: `seal-${r.id}` }, { each: true }));
+        else ctx.waitUntil(pushNotify(env, r.to_user_id, 'postcards', (n) => (n > 1
+          ? { title: `${n} new postcards`, body: `${senderName} and others sent you postcards`, route: '/Postcards' }
+          : { title: `${senderName} sent you ${r.group_id ? 'a group video postcard' : 'a video postcard'}${r.place_name ? ` from ${r.place_name}` : ''}`, body: 'Open it in your Mailbox', route: `/Postcards?pc=${r.id}` })));
+      }
+      ctx.waitUntil(gbLogEvent(env, 'postcard_clip', { secs: Math.round(secs || row.duration || 0), to: Array.isArray(made) ? made.length : 0 }));
+    }
+    return jsonResponse({ ok: true, url: pcVideoUrl(origin, row.id) });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+// GET /pc-video/<id> — the clip once it has landed and the card is open; Range requests so a phone can scrub.
+async function handlePostcardVideoServe(request, env) {
+  try {
+    const m = /^\/pc-video\/([0-9a-f-]{36})$/i.exec(new URL(request.url).pathname);
+    if (!m || !env.MEDIA) return new Response('Not found', { status: 404 });
+    const q = await gbRest(env, `postcards?id=eq.${m[1]}&kind=eq.video&select=id,video_key,video_ready,opens_at`, {});
+    const row = (q.ok ? await q.json() : [])[0];
+    const key = row && row.video_ready && !sealed(row) ? String(row.video_key || '') : '';
+    if (!key.startsWith('vid/') || key.includes('..')) return new Response('Not found', { status: 404 });
+    const rangeH = request.headers.get('range') || '';
+    const rm = /^bytes=(\d*)-(\d*)$/.exec(rangeH.trim());
+    const head = await env.MEDIA.head(key);
+    if (!head) return new Response('Not found', { status: 404 });
+    const size = head.size;
+    const headers = new Headers({ 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, max-age=86400', 'Access-Control-Allow-Origin': '*', 'X-Content-Type-Options': 'nosniff' });
+    if (rm && (rm[1] || rm[2])) {
+      const start = rm[1] ? Number(rm[1]) : Math.max(0, size - Number(rm[2]));
+      const end = rm[1] && rm[2] ? Math.min(Number(rm[2]), size - 1) : size - 1;
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= size) return new Response('Range not satisfiable', { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+      const obj = await env.MEDIA.get(key, { range: { offset: start, length: end - start + 1 } });
+      if (!obj) return new Response('Not found', { status: 404 });
+      headers.set('Content-Range', `bytes ${start}-${end}/${size}`);
+      headers.set('Content-Length', String(end - start + 1));
+      return new Response(request.method === 'HEAD' ? null : obj.body, { status: 206, headers });
+    }
+    const obj = await env.MEDIA.get(key);
+    if (!obj) return new Response('Not found', { status: 404 });
+    headers.set('Content-Length', String(size));
+    return new Response(request.method === 'HEAD' ? null : obj.body, { status: 200, headers });
+  } catch { return new Response('Error', { status: 500 }); }
+}
+// Video postcards whose clip never landed (an hour, as on boards): their posters, objects and rows
+// go — one member's at send time, everyone's in the daily cron.
+async function pcVideoStraysPrune(env, userId = null) {
+  const cut = encodeURIComponent(new Date(Date.now() - 3600e3).toISOString());
+  const q = await gbRest(env, `postcards?kind=eq.video&video_ready=eq.false&created_at=lt.${cut}${userId ? `&sender_id=eq.${userId}` : ''}&select=id,photo_key,video_key&limit=200`, {}).catch(() => null);
+  if (!q || !q.ok) return;
+  const rows = await q.json().catch(() => []);
+  if (!rows.length) return;
+  if (env.MEDIA) for (const r of rows) { if (r.photo_key) await env.MEDIA.delete(r.photo_key).catch(() => {}); if (r.video_key) await env.MEDIA.delete(r.video_key).catch(() => {}); }
+  await gbRest(env, `postcards?id=in.(${rows.map((r) => r.id).join(',')})`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => {});
 }
 
 // ── Virtual Luggage (2026-09-30): six trunks, five faces, placed stickers ───
@@ -21381,6 +21509,8 @@ async function handleSocialFeed(request, env) {
     let pcs = [...(pcTo.ok ? (await pcTo.json()).filter((p) => !p.recipient_deleted_at) : []), ...(pcBroadcast.ok ? await pcBroadcast.json() : [])];
     // A card to a city's board belongs to the board, not to followers' feeds.
     pcs = pcs.filter((p) => !p.to_city);
+    // A video postcard shows once its clip has landed (2026-11-03).
+    pcs = pcs.filter((p) => !(p.kind === 'video' && p.video_ready === false));
     // A minor reads no postcards at all (founder, 2026-10-16).
     if (teenMe) pcs = [];
     // Senders I don't follow: their handle, name and age (a card from an
@@ -21445,9 +21575,11 @@ async function handleSocialFeed(request, env) {
       // From someone I don't follow (Step A, 2026-10-18): the Mailbox shelves it apart.
       from_new: p.to_user_id === user.id && !ids.includes(p.sender_id),
       ...(p.to_user_id === null && keptSet ? { kept: keptSet.has(p.id) } : {}),
+      // A video postcard (2026-11-03): the poster is `photo`; the card plays `video`, wearing its look.
+      ...(p.kind === 'video' ? { video: pcVideoUrl(origin, p.id), duration: p.duration || null, filter: p.filter || null } : {}),
       by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
       // Sealed until a day (2026-11-03): the envelope, the sender and the day — no photo, no words yet.
-      ...(sealed(p) ? { photo: null, message: null, place: null, city: null, region: null, country: null, dish: null, from_place: null, food_verdict: null, sealed_until: p.opens_at, opens_on: p.opens_on || null } : {}),
+      ...(sealed(p) ? { photo: null, video: null, message: null, place: null, city: null, region: null, country: null, dish: null, from_place: null, food_verdict: null, sealed_until: p.opens_at, opens_on: p.opens_on || null } : {}),
     }));
     const dayAgo = Date.now() - 24 * 3600 * 1000;
     const stampRows = ((sq && sq.ok) ? await sq.json() : [])
@@ -21511,7 +21643,7 @@ async function handleMailSent(request, env) {
     const before = typeof b.before === 'string' && !Number.isNaN(Date.parse(b.before)) ? new Date(b.before).toISOString() : null;
     const win = `sender_id=eq.${user.id}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${SENT_SCAN}`;
     const [pcs, tgs, ppc, ptg, links] = await Promise.all([
-      mailSentRows(env, 'postcards', `${win}&select=id,to_user_id,to_city,group_id,cc,photo_key,message,place_name,city,country,meta,created_at,opens_at,opens_on`),
+      mailSentRows(env, 'postcards', `${win}&select=id,to_user_id,to_city,group_id,cc,photo_key,message,place_name,city,country,meta,created_at,opens_at,opens_on,kind,video_ready,duration,filter`),
       mailSentRows(env, 'telegrams', `${win}&select=id,to_user_id,group_id,cc,body,ink,reply_to,created_at,received_at,opens_at,opens_on`),
       mailSentRows(env, 'pending_postcards', `${win}&delivered_at=is.null&select=id,photo_key,message,place_name,city,created_at`),
       mailSentRows(env, 'pending_telegrams', `${win}&delivered_at=is.null&select=id,body,ink,created_at`),
@@ -21555,7 +21687,9 @@ async function handleMailSent(request, env) {
         // A card caught by the 2026-10-24 leak never reached who was picked: say so, and to send it again.
         // Sealed until a day (2026-11-03): says so and names the day until it opens.
         ...(r.opens_on ? { opens_on: r.opens_on, opens_at: r.opens_at } : {}),
-        status: pcLeaked(r) ? 'undelivered' : sealed(r) ? 'sealed' : 'delivered',
+        // A video postcard (2026-11-03): its clip, once landed; 'uploading' while it hasn't.
+        ...(r.kind === 'video' ? { video: r.video_ready ? pcVideoUrl(origin, r.id) : null, duration: r.duration || null, filter: r.filter || null } : {}),
+        status: pcLeaked(r) ? 'undelivered' : r.kind === 'video' && r.video_ready === false ? 'uploading' : sealed(r) ? 'sealed' : 'delivered',
       });
     }
     for (const g of fold(tgs, (r) => (r.group_id ? `g:${r.group_id}` : `e:${r.created_at}|${r.body}`))) {
@@ -21636,7 +21770,7 @@ async function handlePostcardBox(request, env) {
     if (q.status === 404) q = await gbRest(env, `postcards?to_user_id=eq.${user.id}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {});
     if (!q.ok) return jsonResponse({ rows: [], error: 'Couldn’t load right now — try again' }, 503);
     // A card I deleted (2026-10-19) leaves my box; a kept broadcast is let go through /postcards/keep.
-    const got = (await q.json()).filter((p) => !(p.to_user_id === user.id && p.recipient_deleted_at) && !pcBroadcast(p));
+    const got = (await q.json()).filter((p) => !(p.to_user_id === user.id && p.recipient_deleted_at) && !pcBroadcast(p) && !(p.kind === 'video' && p.video_ready === false));
     // Telegrams live in the box too (founder, 2026-10-19), newest first with the postcards, a page
     // at a time on the same `before`; none before their table exists.
     const tq = await gbRest(env, `telegrams?to_user_id=eq.${user.id}&recipient_deleted_at=is.null${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${PC_BOX_PAGE + 1}&select=*`, {}).catch(() => null);
@@ -21691,8 +21825,9 @@ async function handlePostcardBox(request, env) {
       to_me: p.to_user_id === user.id,
       ...(p.to_user_id === user.id && Array.isArray(p.cc) && p.cc.length ? { also_to: p.cc.map((id) => ccHandle[id]).filter(Boolean) } : {}),
       ...(p.to_user_id === null ? { kept: true } : {}),
+      ...(p.kind === 'video' ? { video: pcVideoUrl(origin, p.id), duration: p.duration || null, filter: p.filter || null } : {}),
       by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
-      ...(sealed(p) ? { photo: null, message: null, place: null, city: null, region: null, country: null, dish: null, from_place: null, food_verdict: null, sealed_until: p.opens_at, opens_on: p.opens_on || null } : {}),
+      ...(sealed(p) ? { photo: null, video: null, message: null, place: null, city: null, region: null, country: null, dish: null, from_place: null, food_verdict: null, sealed_until: p.opens_at, opens_on: p.opens_on || null } : {}),
     }));
     const tgRows = keptTg.map((t) => ({
       type: 'telegram', id: t.id, created_at: t.created_at, received_at: t.received_at || null, body: t.body, to_me: true, reply: !!t.reply_to,
@@ -24186,7 +24321,7 @@ async function handleSocialUnread(request, env) {
     const [follows, following, direct, wires, marks, entries, tags, notices] = await Promise.all([
       gbRest(env, `user_follows?followee_id=eq.${me}&created_at=gte.${floor}&select=follower_id,status,created_at&order=created_at.desc&limit=50`, {}).then(j),
       gbRest(env, `user_follows?follower_id=eq.${me}&status=eq.accepted&select=followee_id&limit=200`, {}).then(j),
-      gbRest(env, `postcards?to_user_id=eq.${me}&created_at=gte.${floor}&select=*&order=created_at.desc&limit=50`, {}).then(j).then((rows) => rows.filter((r) => !r.recipient_deleted_at)),
+      gbRest(env, `postcards?to_user_id=eq.${me}&created_at=gte.${floor}&select=*&order=created_at.desc&limit=50`, {}).then(j).then((rows) => rows.filter((r) => !r.recipient_deleted_at && !(r.kind === 'video' && r.video_ready === false))),
       // Telegrams to me (2026-10-19); none before the table exists.
       gbRest(env, `telegrams?to_user_id=eq.${me}&recipient_deleted_at=is.null&created_at=gte.${floor}&select=id,sender_id,created_at,received_at,opens_at&order=created_at.desc&limit=50`, {}).then(j).catch(() => []),
       gbRest(env, `blotter_marks?owner_user_id=eq.${me}&user_id=neq.${me}&created_at=gte.${floor}&select=target,user_id,kind,created_at&order=created_at.desc&limit=150`, {}).then(j),
@@ -30611,6 +30746,8 @@ export default {
       if (pathname.startsWith('/board-photo/') && request.method === 'GET') return await handleBoardPhotoServe(request, env);
       if (pathname.startsWith('/board-video/') && (request.method === 'GET' || request.method === 'HEAD')) return await handleBoardVideoServe(request, env);
       if (pathname.startsWith('/board/video/') && request.method === 'PUT') return await handleBoardVideoPut(request, env, ctx);
+      if (pathname.startsWith('/postcards/video/') && request.method === 'PUT') return await handlePostcardVideoPut(request, env, ctx);
+      if (pathname.startsWith('/pc-video/') && (request.method === 'GET' || request.method === 'HEAD')) return await handlePostcardVideoServe(request, env);
       if (pathname.startsWith('/ps-photo/') && request.method === 'GET') return await handlePlaceSuggestPhotoServe(request, env);
       if (pathname === '/attractions/visit-info' && request.method === 'POST') return await handleAttractionVisitInfo(request, env, ctx);
       if (pathname === '/attractions/before-you-go' && request.method === 'POST') return await handleAttractionBeforeYouGo(request, env, ctx);
@@ -30828,6 +30965,8 @@ export default {
     // Postcards that waited 90 days for an email that never joined go, photos included.
     try { await pcPendingPrune(benv); } catch (_e) { /* tomorrow's cron tries again */ }
     try { await tgPendingPrune(benv); } catch (_e) { /* tomorrow's cron tries again */ }
+    // Video postcards whose clip never landed (2026-11-03): posters, objects and rows go.
+    try { await pcVideoStraysPrune(benv); } catch (_e) { /* tomorrow's cron tries again */ }
     try { await linkPrune(benv); } catch (_e) { /* tomorrow's cron tries again */ }
     // Under-age freeze: delete content of accounts frozen past the window.
     try { await freezeSweep(benv); } catch (_e) { /* tomorrow's cron tries again */ }

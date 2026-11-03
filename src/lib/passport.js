@@ -441,13 +441,16 @@ export async function getAgeInfo() {
 // The phone's own timezone, for a seal's date (2026-11-03): the worker turns the day into the
 // recipient's midnight when it knows their home timezone, else this one.
 export const deviceTimezone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
-export async function sendPostcard({ image, message, place_name, city, country, region, meta, to_handle, to_user_id, to_email, to_user_ids, to_handles, to_emails, mode, to_city, anon, reply_to, reply_all, opens_on }) {
+// kind 'video' (2026-11-03): `image` is the clip's poster, `frames` its stills, `duration` its
+// seconds, `filter` its look; the answer carries `upload`, where the clip's bytes go next.
+export async function sendPostcard({ image, message, place_name, city, country, region, meta, to_handle, to_user_id, to_email, to_user_ids, to_handles, to_emails, mode, to_city, anon, reply_to, reply_all, opens_on, kind, frames, duration, filter }) {
   if (!(await requirePassport())) return { data: null, error: 'finish_passport' };
   const list = (v) => (Array.isArray(v) ? v.filter(Boolean) : []);
   const { data, error } = await callWorker('postcards/send', {
     image, message, place_name, city, country, ...(region ? { region } : {}), meta, to_handle,
     // Sealed until a date (2026-11-03): "YYYY-MM-DD" and the phone's timezone.
     ...(opens_on ? { opens_on, tz: deviceTimezone() } : {}),
+    ...(kind === 'video' ? { kind: 'video', frames, duration, ...(filter ? { filter } : {}) } : {}),
     ...(to_user_id ? { to_user_id } : {}), ...(to_email ? { to_email } : {}),
     ...(list(to_user_ids).length ? { to_user_ids: list(to_user_ids) } : {}),
     ...(list(to_handles).length ? { to_handles: list(to_handles) } : {}),

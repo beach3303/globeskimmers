@@ -35,6 +35,7 @@ import OfficialSeal from "@/components/passport/OfficialSeal";
 import { feedStamp } from "@/lib/stampKind";
 import FollowSender from "@/components/social/FollowSender";
 import DeleteConfirm, { TrashButton } from "@/components/social/DeleteConfirm";
+import { clipFilterCss } from "@/lib/clipFilters";
 
 const SERIF = "'Instrument Serif', Georgia, serif";
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
@@ -84,7 +85,11 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
       style={{ position: "relative", background: NEUTRAL.cream, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 14, overflow: "hidden", boxShadow: `0 10px 22px -18px ${rgba(NEUTRAL.ink, 0.45)}`, ...style }}>
       <div style={{ margin: "8px 8px 0", borderRadius: 8, overflow: "hidden", aspectRatio: "3 / 2", background: NEUTRAL.airmailHair }}>
         {/* A photo that can't load leaves the plain airmail panel, never a broken-image icon. */}
-        {broken ? null : (
+        {row.video ? (
+          // A video postcard (2026-11-03): the poster until play, wearing the look its sender picked.
+          <video src={row.video} poster={row.photo || undefined} controls playsInline preload="metadata" aria-label={place ? `Video postcard from ${place}` : "A video postcard"}
+            style={{ display: "block", width: "100%", height: "100%", objectFit: "contain", background: "#000", filter: clipFilterCss(row.filter) }} />
+        ) : broken ? null : (
           <button type="button" onClick={() => setBig(true)} aria-label={`See the photo big${place ? `: ${place}` : ""}`} className="active:opacity-90"
             style={{ display: "block", width: "100%", height: "100%", padding: 0, border: 0, background: "transparent", cursor: "zoom-in" }}>
             <img src={row.photo} alt={place ? `Postcard from ${place}` : "A postcard"} loading="lazy" decoding="async"

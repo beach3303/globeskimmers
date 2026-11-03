@@ -22,7 +22,7 @@
 //                  The sheet reads 'A postcard to *Lisbon*', the address is the board alone,
 //                  and a line says who can see it. The worker checks you were really there.
 import React, { useEffect, useId, useRef, useState } from "react";
-import { ImagePlus, Info, Loader2, MessageCircle, RefreshCw, Send, SlidersHorizontal, X } from "lucide-react";
+import { Clapperboard, ImagePlus, Info, Loader2, MessageCircle, RefreshCw, Send, SlidersHorizontal, X } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { sendPostcard } from "@/lib/passport";
@@ -33,6 +33,11 @@ import { workerMessage } from "@/components/social/FollowByHandle";
 import SendToField, { chipLabel } from "@/components/social/SendToField";
 import SealUntil, { sealLabel } from "@/components/mail/SealUntil";
 import PhotoEditor from "@/components/passport/PhotoEditor";
+import ClipTrimmer from "@/components/passport/ClipTrimmer";
+import { clipFilterCss } from "@/lib/clipFilters";
+import { available as shrinkAvailable, pickMedia, isClipFile, probe, shrink, fileAt, previewUrl } from "@/lib/videoShrink";
+import { probeClip, clipStills, CLIP_SECONDS } from "@/lib/clips";
+import { sendVideoPostcard } from "@/lib/videoPostcards";
 import { askForAlerts } from "@/lib/pushAlerts";
 import { createLink, shareText } from "@/lib/messageLinks";
 
@@ -163,6 +168,11 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   const [mode, setMode] = useState("group");       // group | each, for two people or more
   const [replyAll, setReplyAll] = useState(() => !!replyTo?.all);   // a reply to a group card: everyone on it
   const [sealOn, setSealOn] = useState("");   // "YYYY-MM-DD": sealed until that day (founder, 2026-11-03)
+  // A clip on the front (video postcards, 2026-11-03): { file, src, filter, duration }; `image` holds its poster.
+  const [clip, setClip] = useState(/** @type {any} */ (null));
+  const [clipBusy, setClipBusy] = useState(false);
+  const [edit, setEdit] = useState(/** @type {any} */ (null));   // the clip editor (its seconds and its look) while it's up
+  const clipRef = useRef(/** @type {HTMLInputElement|null} */ (null));
   const [editing, setEditing] = useState(false);   // our looks on the front (PhotoEditor, 2026-10-19)
   const [busy, setBusy] = useState(false);
   // Board cards sign with your name, or with none at all (founder, 2026-10-15):
@@ -176,8 +186,8 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   // Cancel (founder, 2026-10-19: "place an X if user wants to cancel composing"): with nothing on
   // the card it just closes; with a photo or words it asks once, so nothing is lost by a stray tap.
   const [discarding, setDiscarding] = useState(false);
-  const started = (!!image && image !== (preset?.image || null)) || !!message.trim() || !!dish.trim();
-  const discard = () => { setDiscarding(false); setImage(preset?.image || null); setMessage(""); setDish(""); setPlace(preset?.place_name || ""); close(); };
+  const started = (!!image && image !== (preset?.image || null)) || !!clip || !!message.trim() || !!dish.trim();
+  const discard = () => { setDiscarding(false); clearClip(); setImage(preset?.image || null); setMessage(""); setDish(""); setPlace(preset?.place_name || ""); close(); };
   const cancel = () => { if (pinOffer || !started) { setDiscarding(false); close(); } else setDiscarding(true); };
   useDismissable(open, cancel);
   // Text or share it (founder, 2026-10-24): the card as a link the sender's own phone texts or
@@ -224,8 +234,51 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
+    clearClip();
     try { setImage(await resizePhoto(f)); } catch (err) { showToast(err?.message || "Couldn't read that photo", "error"); }
   };
+
+  // The clip on the front (video postcards, 2026-11-03). On the phone the native picker, the probe,
+  // the editor (its 20 seconds and its look) and the shrink; on the web a file that already fits.
+  // Its poster becomes the card's front (`image`), so everything a photo card does still works.
+  function clearClip() { setClip((c) => { if (c?.src) { try { URL.revokeObjectURL(c.src); } catch { /* fine */ } } return null; }); }
+  const askEdit = (src, duration, trim) => new Promise((resolve) => setEdit({ src, duration, trim, resolve }));
+  const setClipFront = async (file, src, filter, duration) => {
+    let poster = null;
+    try { poster = (await clipStills(file, duration)).poster; } catch { /* the send makes the stills again */ }
+    setClip((c) => { if (c?.src && c.src !== src) { try { URL.revokeObjectURL(c.src); } catch { /* fine */ } } return { file, src, filter: filter || null, duration }; });
+    if (poster) setImage(poster);
+  };
+  const pickClip = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    const meta = await probeClip(f);
+    if (!meta || !Number.isFinite(meta.duration) || meta.duration <= 0) { showToast("Couldn’t read that clip", "error"); return; }
+    if (meta.duration > CLIP_SECONDS + 0.5) { showToast(`Clips are up to ${CLIP_SECONDS} seconds — trim it first`, "error"); return; }
+    const src = URL.createObjectURL(f);
+    const chosen = await askEdit(src, meta.duration, false);
+    if (!chosen) { URL.revokeObjectURL(src); return; }
+    await setClipFront(f, src, chosen.filter, meta.duration);
+  };
+  const pickClipNative = async () => {
+    let found;
+    try { found = await pickMedia(1); } catch { return; }   // cancelled
+    const f = (found || []).find(isClipFile);
+    if (!f) { showToast("Pick a clip from your camera roll", "error"); return; }
+    setClipBusy(true);
+    try {
+      const info = await probe(f.path);
+      const chosen = await askEdit(previewUrl(f.path), info.duration, info.duration > CLIP_SECONDS + 0.5);
+      if (!chosen) return;
+      const out = await shrink(f.path, chosen.start || 0, Math.min(CLIP_SECONDS, info.duration));
+      const file = await fileAt(out.path, "clip.mp4", "video/mp4");
+      await setClipFront(file, URL.createObjectURL(file), chosen.filter, out.duration || Math.min(CLIP_SECONDS, info.duration));
+    } catch (err) {
+      showToast(`Couldn’t read that clip — ${String(err?.message || err || "").slice(0, 120)}`, "error");
+    } finally { setClipBusy(false); }
+  };
+  const openClipPicker = () => { if (clipBusy) return; if (shrinkAvailable()) pickClipNative(); else clipRef.current?.click(); };
 
   const send = async () => {
     if (busy) return;
@@ -238,7 +291,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     const byId = picked.filter((p) => p.user_id).map((p) => p.user_id);
     const byHandle = picked.filter((p) => !p.user_id && p.handle).map((p) => lc(p.handle));
     const byEmail = picked.filter((p) => !p.user_id && !p.handle && p.email).map((p) => p.email);
-    const { data, error } = await sendPostcard({
+    const card = {
       image, message,
       place_name: place || preset?.place_name, city: board?.city || preset?.city, country: board?.country || preset?.country,
       region: board?.region || preset?.region || undefined,
@@ -253,24 +306,27 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
       reply_to: reply ? reply.postcard_id : undefined,
       reply_all: toAllOnIt ? true : undefined,
       opens_on: !board && sealOn ? sealOn : undefined,
-    });
+    };
+    // A clip on the front (2026-11-03): its poster and stills go first, then the clip's bytes.
+    const { data, error } = clip ? await sendVideoPostcard({ file: clip.file, filter: clip.filter, ...card }) : await sendPostcard(card);
     setBusy(false);
     if (error === "age_required") { showToast("Set your birth year in Settings first (one time)", "error"); return; }
     if (error) { showToast(workerMessage(error, "Couldn't send the postcard. Try again."), "error"); return; }
     const one = picked.length === 1 ? picked[0] : null;
     const waiting = Array.isArray(data?.not_ready) && data.not_ready.length ? ` · ${data.not_ready.map((h) => `@${h}`).join(", ")} hasn’t finished their passport yet` : "";
     const sealTail = data?.sealed ? `, sealed until ${sealLabel(data.sealed)}` : "";
+    const kindWord = clip ? "Video postcard" : "Postcard";
     showToast(board
       ? (sign === "anon" ? `Posted to ${boardWord}, no name on it` : `Posted to ${boardWord}`)
       : reply ? (toAllOnIt ? `Reply sent to all ${replyOthers.length + 1} on it${sealTail}` : `Reply sent to ${reply.name || "them"}${sealTail}`)
-      : address ? `Postcard sent to @${address}${sealTail}`
+      : address ? `${kindWord} sent to @${address}${sealTail}`
         // An email address reads the same whether or not a member logs in with it.
-        : one ? `Postcard sent to ${chipLabel(one)}${sealTail}${waiting}`
-            : `${group ? "Group postcard" : "Postcard"} sent to ${picked.length} people${sealTail}${waiting}`, "success");
+        : one ? `${kindWord} sent to ${chipLabel(one)}${sealTail}${waiting}`
+            : `${group ? `Group ${kindWord.toLowerCase()}` : kindWord} sent to ${picked.length} people${sealTail}${waiting}`, "success");
     // The pin ask (founder, 2026-10-15): a direct card from a city the sender
     // verifiably stamped may hang on that city's board too — their choice,
     // asked now, while the card is in hand. The mail itself is already away.
-    const offer = !board && (address || picked.length) && data?.pin && data.pin.city
+    const offer = !board && !clip && (address || picked.length) && data?.pin && data.pin.city
       ? { city: String(data.pin.city), country: String(data.pin.country || ""), region: data.pin.region ? String(data.pin.region) : null, label: data.pin.label === "local" ? "local" : "traveler", image, message, place: place || preset?.place_name || "", dish,
         sentTo: address ? `@${address}` : one ? chipLabel(one) : `${picked.length} people` }
       : null;
@@ -281,6 +337,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     setDish("");
     setList([]);
     setSealOn("");
+    clearClip();
     // The moment to ask for alerts (push, 2026-10-19): a card just went to someone.
     if (!board) askForAlerts();
     if (typeof onSent === "function") onSent();
@@ -309,6 +366,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   const textIt = async () => {
     if (linking || busy) return;
     if (!image) { showToast("A postcard needs its photo", "error"); return; }
+    if (clip) { showToast("A video postcard goes to a @username for now — links carry photos", "error"); return; }
     setLinking(true);
     let link = made;
     if (!link) {
@@ -415,7 +473,14 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
               : board ? <>A postcard to <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>{board.name}</em></> : <>Send a <em style={{ fontStyle: "italic", color: NEUTRAL.airmailBlue }}>postcard</em></>}
           </h3>
 
-          {/* the front */}
+          {/* the front: a clip (video postcards, 2026-11-03), or the photo */}
+          {clip ? (
+            <div style={{ position: "relative", width: "100%", marginTop: 12, overflow: "hidden", borderRadius: 14, border: `1px solid ${NEUTRAL.airmailLine}`, background: "#000", aspectRatio: "3 / 2" }}>
+              <video src={clip.src} poster={image || undefined} controls playsInline preload="metadata" aria-label="The clip on the front"
+                style={{ display: "block", width: "100%", height: "100%", objectFit: "contain", filter: clipFilterCss(clip.filter) }} />
+              <span aria-hidden="true" style={{ position: "absolute", left: 8, top: 8, padding: "3px 8px", borderRadius: 999, background: rgba(NEUTRAL.ink, 0.62), color: NEUTRAL.white, fontFamily: MONO, fontSize: fs(9), letterSpacing: ".08em", textTransform: "uppercase" }}>Clip · {Math.round(clip.duration || 0)} s</span>
+            </div>
+          ) : (
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
@@ -437,8 +502,24 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
               </span>
             )}
           </button>
+          )}
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pick} />
-          {image ? (
+          <input ref={clipRef} type="file" accept="video/mp4,video/quicktime" className="hidden" onChange={pickClip} />
+          {/* A clip instead of a photo (video postcards, 2026-11-03): to people, never a board. */}
+          {!board ? (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+              <button type="button" onClick={openClipPicker} aria-busy={clipBusy || undefined}
+                style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 40, padding: "0 12px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(12.5), fontWeight: 600, cursor: "pointer" }}>
+                {clipBusy ? <Loader2 size={15} strokeWidth={2} className="animate-spin motion-reduce:animate-none" aria-hidden="true" focusable="false" /> : <Clapperboard size={15} strokeWidth={2} aria-hidden="true" focusable="false" />}
+                {clipBusy ? "Getting your clip…" : clip ? "Change the clip" : image ? "Use a clip instead" : "Or send a clip"}
+              </button>
+              {clip ? (
+                <button type="button" onClick={() => { clearClip(); setImage(preset?.image || null); }}
+                  style={{ minHeight: 40, padding: "0 12px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.ink2, fontSize: fs(12.5), fontWeight: 600, cursor: "pointer" }}>Use a photo instead</button>
+              ) : null}
+            </div>
+          ) : null}
+          {image && !clip ? (
             <button type="button" onClick={() => setEditing(true)}
               style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, minHeight: 40, padding: "0 12px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, color: NEUTRAL.airmailBlue, fontSize: fs(12.5), fontWeight: 600 }}>
               <SlidersHorizontal size={15} strokeWidth={2} aria-hidden="true" focusable="false" />
@@ -446,6 +527,9 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
             </button>
           ) : null}
           <PhotoEditor open={editing} image={image} aspect="3:2" onDone={(u) => { setImage(u); setEditing(false); }} onClose={() => setEditing(false)} />
+          {edit ? <ClipTrimmer src={edit.src} duration={edit.duration} seconds={CLIP_SECONDS} trim={edit.trim}
+            onPick={(chosen) => { const { resolve } = edit; setEdit(null); resolve(chosen); }}
+            onClose={() => { const { resolve } = edit; setEdit(null); resolve(null); }} /> : null}
 
           {/* the back */}
           <textarea
