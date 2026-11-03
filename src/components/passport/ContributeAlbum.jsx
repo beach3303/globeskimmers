@@ -236,6 +236,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
         setRun({ done: 0, total: picked.length, place: null, stage: "Shrinking your clip" });
         const out = await shrink(f.path, start, Math.min(CLIP_SECONDS, info.duration));
         const file = await fileAt(out.path, "clip.mp4", "video/mp4");
+        logEvent("clip_shrunk", { bytes: file.size, seconds: Math.round((out.duration || 0) * 10) / 10, src_bytes: info.size || null, src_seconds: Math.round((info.duration || 0) * 10) / 10 }, "Contribute");   // the 720p output against the 25 MB door (2026-11-03)
         file.gsExif = Number.isFinite(info.lat) && Number.isFinite(info.lng) ? { lat: info.lat, lng: info.lng, taken_at: info.takenAt || null } : { lat: null, lng: null, taken_at: info.takenAt || null };
         files.push(file);
       } catch (err) {

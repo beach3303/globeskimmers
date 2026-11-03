@@ -27,10 +27,16 @@ export async function probe(path) { return plugin.probe({ path }); }
 // The seconds from `start`, shrunk → { path, duration, size }
 export async function shrink(path, start = 0, seconds = CLIP_SECONDS) { return plugin.shrink({ path, start, duration: seconds, maxHeight: 720 }); }
 
-// A native file as a File the web code can read, through the app's own file URL.
+// A native file as a File the web code can read, through the app's own file URL. iOS answers a clip
+// (.mp4/.mov, and audio) with a plain URLResponse so <video> can stream it, and WebKit's fetch reports
+// that as status 0 with the whole body attached — photos answer 200 (measured 2026-11-03; it is why
+// every iPhone clip came back "Couldn’t read the file"). So 0 with bytes is a read; only an HTTP
+// refusal (Android's 404 for a missing file) or an empty body is not.
 export async function fileAt(path, name, type) {
   const res = await fetch(Capacitor.convertFileSrc(path));
-  if (!res.ok) throw new Error("Couldn’t read the file");
-  return new File([await res.blob()], name, { type });
+  if (!res.ok && res.status !== 0) throw new Error(`Couldn’t read the file (${res.status})`);
+  const blob = await res.blob();
+  if (!blob.size) throw new Error("Couldn’t read the file (empty)");
+  return new File([blob], name, { type });
 }
 export const previewUrl = (path) => Capacitor.convertFileSrc(path);
