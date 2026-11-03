@@ -1485,7 +1485,8 @@ the same road: stored with the clip, drawn at playback, OTA, nothing re-encoded.
 - Distance from home — "6,012 miles from home" from the member's home city; a public board shows the miles, never the city.
 - Golden hour and local time — sunrise/sunset from the coordinates (no API); "golden hour, 7:42 PM"; the viewer may
   show the city's time right now.
-- Nth traveler — "You're the 14th traveler to film this spot this year."
+- Nth traveler — "You're the 14th traveler to film this spot this year." **ON HOLD (founder, 2026-11-03: "hold off
+  on the Nth traveler mark").**
 - House frames — Airmail, Postmark, Passport page, Print; founder "curious", wants to see them first: mock-up canvas
   https://claude.ai/artifact/9T8zBNUdS8RNQYoF2n27Rr (2026-11-03).
 
@@ -1518,4 +1519,6 @@ nine 20-second loops ≈ $900–2,700 commissioned, voice lines $100–300).
 **Build order (Claude's proposal, founder to confirm):** 1 verified stamp outro + house frames (2 d) → 2 same spot
 strip + Nth traveler (2 d) → 3 sealed clips / postcards / telegrams (3 d) → 4 distance from home + golden hour / local
 time (1 d) → 5 Listen to the city + flight path (2 d) → 6 then and now (curation first) → Passport Wrapped (4 d, late
-November).
+November). **2026-11-03 later:** sealed mail and video postcards shipped first (see above); founder: "The verified
+stamp outro and the House frames come first — build both" (all four frames); Nth traveler on hold; the same-spot
+strip waits for a mock-up she asked to see (added to the frames canvas, 2026-11-03).
