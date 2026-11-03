@@ -4277,3 +4277,19 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
 - Worker deploy carries `mine` on board photo rows. **Open (founder):** `npm run ota`; then retry the clip and
   report the toast's words (or Claude reads the `clip_prepare_failed` event in D1).
+
+## 2026-11-03 — Every iPhone clip was refused: Capacitor's iOS file server answers media with status 0 (COMMITTED, not pushed)
+
+- D1 had the answer after the OTA (1.0.2611031223): two `clip_prepare_failed` events from the iPhone app at
+  12:34 UTC, reason "Couldn’t read the file", kind clip — so the picker, the probe and the 720p shrink all worked,
+  and the page failed reading the shrunk .mp4 back through `Capacitor.convertFileSrc`. Cause: Capacitor iOS's
+  `WebViewAssetHandler` answers the media extensions (mp4, mov, m4v, audio) with a plain `URLResponse` so `<video>`
+  can stream them, and WebKit's fetch() reports a non-HTTP response as status 0 / ok false while still delivering
+  the bytes; a .jpg gets an HTTPURLResponse 200. Reproduced on the Mac with a WKWebView + WKURLSchemeHandler
+  probe (`scratchpad/wkfetch`: mp4 → status 0, ok false, all bytes; jpg → 200). So no clip of any format could
+  ever upload from an iPhone while photos could — ".mov is not being accepted" was every video. Android's
+  local server answers real HTTP statuses, so this is iOS-only.
+- Fix (JS only): `fileAt` in `src/lib/videoShrink.js` accepts status 0 with a non-empty body and throws with the
+  status otherwise. `prepareNative` logs `clip_shrunk` { bytes, seconds, src_bytes, src_seconds } to D1 so the
+  720p output's size can be watched against the worker's 25 MB door. Gates: eslint (no-undef), build, boot-check.
+  Needs OTA only — no worker change, no store build.
