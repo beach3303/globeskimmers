@@ -4238,3 +4238,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
 - Worker deploy with `likesFor` on `/board/contributions`. **Open (founder):** `npm run ota` for the app half (the
   envelope's album-first sheet), then on the S10: Passport → Photos → the My uploads envelope.
+
+## 2026-11-02 late — My uploads stays uploads only (founder)
+
+- A commit that also listed the passport prints hanging on boards in the My uploads album was dropped before it
+  was pushed (founder: "can we just have uploads have only photos uploaded to the city board?"). The album lists
+  `board_contributions` only; the 🌍 Everyone prints keep living in their passport albums. Her main account has no
+  uploads yet (no member's upload reached a board on 11-01/11-02), which is why the album reads "none yet".
