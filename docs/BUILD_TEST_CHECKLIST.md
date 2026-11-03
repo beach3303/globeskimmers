@@ -4429,3 +4429,21 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   PostcardCompose / CityBoard; libs clean; build; boot-check. Needs push (worker + migration) + OTA.
 - Parked the same morning (founder): the Nth-traveler mark ("hold off"); the same-spot strip waits on her read of
   its mock-up (fifth artboard on the House frames canvas, https://claude.ai/artifact/9T8zBNUdS8RNQYoF2n27Rr).
+
+## 2026-11-03 — The same-spot strip (founder: "i love same spot strip") (COMMITTED, not pushed)
+
+- Boards never kept where an upload was shot, only its city. Migration `20261103230000_board_contribution_spot.sql`
+  adds `lat`/`lng` (double precision) + a partial index on (board_key, lat, lng); `/board/contribute` stores the
+  EXIF spot it already reads, rounded to 1e-5° (about a metre), with a no-column fallback. Uploads from before
+  this build have no spot, so the strip grows from the first OTA on; nothing is backfilled.
+- Worker: NEW `POST /board/same-spot { id }` — the item's spot → a 50 m bounding box on its board → haversine ≤ 50 m
+  → blocks (both ways) and `bcOwners` as on the wall → up to 20 items oldest first `{ id, kind, photo, video?,
+  duration?, filter, marks, when (taken_at else created_at), current }` + `travelers` (distinct owners). The
+  spots never leave the worker.
+- App: `src/lib/sameSpot.js`; `SameSpotStrip` under a contribution in the board viewer (cream card: "SAME SPOT ·
+  WITHIN 50 M · N TRAVELERS", "The same spot, N times", 76×101 tiles with the look applied and a play badge on
+  clips, a dot on a timeline rule and "FEB 2025 / PHOTO" under each, the open one ringed in airmail blue and
+  "THIS CLIP"); shows only with two or more; a tap opens the item on this page or by `?open=bcp:<id>` (the
+  page's open-by-id effect now restarts when the id changes).
+- Gates: node --check worker; eslint (no-undef) on SameSpotStrip / CityBoard; lib clean; build; boot-check. Needs
+  push (worker + migration) + OTA.
