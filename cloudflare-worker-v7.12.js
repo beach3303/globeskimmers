@@ -14819,6 +14819,10 @@ async function handlePassportStamp(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in to stamp your passport' }, 401);
+    // FOUNDER DEMO ALLOWANCE (2026-11-02, the YC demo video; founder's decision): her own account may take
+    // a stamp as if standing at the place. Expires 2026-11-03 05:00 UTC on its own and is removed from the
+    // code right after the demo. Nobody else is affected.
+    const demoAllow = String(user.email || '').toLowerCase() === 'founder@globeskimmers.io' && Date.now() < Date.parse('2026-11-03T05:00:00Z');
     // Kept for the report's age check and the founder's alert below. An age
     // that can't be checked refuses the stamp (fail closed, 2026-10-13).
     const stamperSp = await gbSocialProfile(env, user.id).catch(() => undefined);
@@ -14869,7 +14873,7 @@ async function handlePassportStamp(request, env, ctx) {
           if (last && last.lat != null && last.lng != null) {
             const miles = haversineMilesLoc(+last.lat, +last.lng, lat, lng);
             const hrs = (Date.now() - Date.parse(last.created_at || 0)) / 3.6e6;
-            if (hrs > 0 && miles / hrs > 620) verified = 'self';
+            if (!demoAllow && hrs > 0 && miles / hrs > 620) verified = 'self';
           }
         } catch { /* best-effort */ }
       }
@@ -14959,7 +14963,7 @@ async function handlePassportStamp(request, env, ctx) {
       else {
         const slack = truth.shape?.inside_only ? 0 : Number.isFinite(fix.acc) && fix.acc >= 0 ? Math.min(fix.acc, 100) : 50;
         // A shaped place measures to its nearest line; everything else to its pin.
-        meters = truth.shape ? ppMetersToShape(truth.shape, fix.lat, fix.lng) : haversineMilesLoc(truth.lat, truth.lng, fix.lat, fix.lng) * 1609.34;
+        meters = demoAllow ? 0 : truth.shape ? ppMetersToShape(truth.shape, fix.lat, fix.lng) : haversineMilesLoc(truth.lat, truth.lng, fix.lat, fix.lng) * 1609.34;
         reach = truth.shape ? truth.shape.buffer_m : truth.radius;
         if (meters > reach + slack) refusal = 'not_here';
         // One parent can hold several parks or rims (a Grand Canyon footprint
