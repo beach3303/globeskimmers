@@ -21,6 +21,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { BookOpen, ChevronLeft, ChevronRight, ImageUp, Mail, Pencil, Play, Stamp, X } from "lucide-react";
 import { clipLength } from "@/lib/clips";
+import { clipFilterCss } from "@/lib/clipFilters";
 import { useDismissable } from "@/lib/dismissStack";
 import { captionContribution, contributeOpen } from "@/lib/boardContrib";
 import { BoardContributeSheet } from "@/components/passport/ContributeAlbum";
@@ -262,7 +263,7 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
               // A clip (2026-10-30): the poster until play; the view counts when it starts.
               <video key={row.id} src={row.video} poster={row.photo} controls playsInline preload="metadata" onPlay={() => countView(row)}
                 aria-label={row.caption || `Clip from ${row.place || ""}`}
-                style={{ display: "block", width: "100%", maxHeight: "54vh", borderRadius: 6, background: "#000" }} />
+                style={{ display: "block", width: "100%", maxHeight: "54vh", borderRadius: 6, background: "#000", filter: clipFilterCss(row.filter) }} />
             ) : (
               // Pinch to zoom, pan while zoomed, double tap in or out (founder, 2026-10-29); a zoomed photo keeps its touches, so a swipe pages only at 1×.
               <ZoomableImage key={row.id} src={row.photo} alt={row.caption || `Photo from ${row.place || ""}`} style={{ width: "100%" }}
@@ -379,7 +380,7 @@ function PhotoTile({ row, onOpen, index = 0 }) {
       {pinned ? <Pin /> : null}
       <span style={{ position: "relative", display: "block", width: "100%", aspectRatio: "1 / 1", overflow: "hidden", borderRadius: pinned ? 2 : 8, background: NEUTRAL.airmailHair }}>
         <img src={row.photo} alt="" loading="lazy" decoding="async" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block", filter: clipFilterCss(row.filter) }} />
         {/* A clip wears its length and a play mark (2026-10-30). */}
         {row.video ? (
           <span style={{ position: "absolute", right: 5, top: 5, display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 6px", borderRadius: 999, background: "rgba(22,17,13,.55)", color: NEUTRAL.white, fontFamily: MONO, fontSize: fs(9), letterSpacing: ".06em" }}>

@@ -14,6 +14,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { UserPlus } from "lucide-react";
 import { createPageUrl } from "@/utils";
+import { clipFilterCss } from "@/lib/clipFilters";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
@@ -55,7 +56,8 @@ function addedRow(r) {
   const h = r.by?.handle ? `h=${encodeURIComponent(r.by.handle)}` : "";
   if (r.kind === "card") return { art: artFor(r.stamp?.category, r.stamp?.design), text: <><b style={{ fontWeight: 650 }}>{who}</b> stamped {r.stamp?.name} on the {r.card?.city} {r.card?.year} card</>, to: `${createPageUrl("Traveler")}?${h}&card=${r.card?.id}&stamp=${r.stamp?.id}` };
   if (r.kind === "album") return { thumb: r.photo?.url, text: <><b style={{ fontWeight: 650 }}>{who}</b> added a photo to {r.stamp?.name}{r.stamp?.city ? `, ${r.stamp.city}` : ""}</>, to: `${createPageUrl("Traveler")}?${h}&photo=${r.photo?.id}` };
-  return { thumb: r.item?.photo, text: <><b style={{ fontWeight: 650 }}>{who}</b> added a {r.item?.video ? "clip" : "photo"} to {r.board_at?.city}’s city board</>, to: `${cityBoardUrl(r.board_at?.city, r.board_at?.country, r.board_at?.region)}&open=bcp:${r.item?.id}` };
+  // A clip's poster wears the look its owner picked (2026-11-03), as it does on the board.
+  return { thumb: r.item?.photo, thumbFilter: clipFilterCss(r.item?.filter), text: <><b style={{ fontWeight: 650 }}>{who}</b> added a {r.item?.video ? "clip" : "photo"} to {r.board_at?.city}’s city board</>, to: `${cityBoardUrl(r.board_at?.city, r.board_at?.country, r.board_at?.region)}&open=bcp:${r.item?.id}` };
 }
 
 // A cream sheet with a mono tab on its top-left (the lists below share it).
@@ -174,13 +176,13 @@ export default function FriendsNewsBody({ wide = false }) {
         <Sheet tab="What your friends added" label="What your friends added">
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {finds.rows.slice(0, 12).map((r) => {
-              const { thumb, art, text, to } = addedRow(r);
+              const { thumb, thumbFilter, art, text, to } = addedRow(r);
               return (
                 <li key={`${r.kind}-${r.at}-${r.by?.user_id}`} style={{ borderBottom: `1px solid ${NEUTRAL.rule}` }}>
                   <button type="button" onClick={() => navigate(to)}
                     style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", minHeight: 56, padding: "6px 0", border: 0, background: "transparent", textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit" }}>
                     <span aria-hidden="true" style={{ flex: "none", width: 40, height: 40, borderRadius: 8, overflow: "hidden", background: NEUTRAL.airmailHair, display: "grid", placeItems: "center" }}>
-                      {thumb ? <img src={thumb} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : art ? <img src={art} alt="" style={{ width: 34, height: 34, objectFit: "contain", mixBlendMode: "multiply" }} /> : null}
+                      {thumb ? <img src={thumb} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", filter: thumbFilter }} /> : art ? <img src={art} alt="" style={{ width: 34, height: 34, objectFit: "contain", mixBlendMode: "multiply" }} /> : null}
                     </span>
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: "block", fontSize: fs(14), lineHeight: 1.3, color: NEUTRAL.ink }}>{text}</span>

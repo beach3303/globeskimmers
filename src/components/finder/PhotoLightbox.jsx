@@ -200,6 +200,7 @@ export default function PhotoLightbox({ photos, index, onClose, onIndexChange, t
           alt={photo.caption || title || ""}
           className="gs-lb-img w-full flex-1 min-h-0 flex items-center justify-center"
           imgClassName="max-w-full max-h-full object-contain"
+          imgStyle={photo.filter ? { filter: photo.filter } : undefined}   /* a clip's poster wears its look (2026-11-03) */
           onCapture={dropDrag}
           onClick={(e) => e.stopPropagation()}
           onError={() => {

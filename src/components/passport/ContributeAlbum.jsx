@@ -14,7 +14,8 @@ import { showToast } from "@/components/Toast";
 import { logEvent } from "@/lib/analytics";
 import { readPhotoExif } from "@/lib/photoExif";
 import { resizePhoto } from "@/lib/resizePhoto";
-import { isClip, readClipLocation, contributeClip, clipLength, CLIP_SECONDS } from "@/lib/clips";
+import { isClip, readClipLocation, contributeClip, clipLength, probeClip, CLIP_SECONDS } from "@/lib/clips";
+import { clipFilterCss } from "@/lib/clipFilters";
 import { available as shrinkAvailable, pickMedia, isClipFile, probe, shrink, fileAt, previewUrl } from "@/lib/videoShrink";
 import ClipTrimmer from "@/components/passport/ClipTrimmer";
 import { useDismissable } from "@/lib/dismissStack";
@@ -218,9 +219,19 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
   };
   // On the phone (2026-10-30): the native picker gives paths, so a clip is read and shrunk by the
   // phone before it goes up — the chosen 20 seconds as 720p — and a clip over 20 seconds asks for
-  // its 20 seconds first (ClipTrimmer). Photos take the same road as the web picker's.
-  const [trim, setTrim] = useState(null);   // { src, duration, resolve } while the trimmer is up
-  const askTrim = (src, duration) => new Promise((resolve) => setTrim({ src, duration, resolve }));
+  // its 20 seconds first, and every clip picks its look (ClipTrimmer: trim + look, 2026-11-03). Photos
+  // take the same road as the web picker's.
+  const [edit, setEdit] = useState(null);   // { src, duration, trim, resolve } while the clip editor is up
+  const askEdit = (src, duration, trim) => new Promise((resolve) => setEdit({ src, duration, trim, resolve }));
+  // The web picker's clip (no plugin) meets the editor for its look only — the web can't trim, so a
+  // long one is refused later as today. → a look id ("none" for the original), or null when closed.
+  const askWebLook = async (file) => {
+    const meta = await probeClip(file);
+    if (!meta || !Number.isFinite(meta.duration) || meta.duration > CLIP_SECONDS + 0.5) return "none";
+    const url = URL.createObjectURL(file);
+    try { const pick = await askEdit(url, meta.duration, false); return pick ? (pick.filter || "none") : null; }
+    finally { URL.revokeObjectURL(url); }
+  };
   // Picked or shared files by path → Files to send: a photo as it is; a clip probed, trimmed to
   // its 20 seconds when longer, shrunk by the phone, carrying the location the probe read.
   const prepareNative = async (picked) => {
@@ -231,12 +242,15 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
       try {
         if (!isClipFile(f)) { files.push(await fileAt(f.path, f.name || "photo.jpg", f.mimeType || "image/jpeg")); continue; }
         const info = await probe(f.path);
-        let start = 0;
-        if (info.duration > CLIP_SECONDS + 0.5) { start = await askTrim(previewUrl(f.path), info.duration); if (start == null) continue; }
+        // Every clip stops at the editor: its 20 seconds when it's longer, and its look.
+        const pick = await askEdit(previewUrl(f.path), info.duration, info.duration > CLIP_SECONDS + 0.5);
+        if (!pick) continue;
+        const start = pick.start || 0;
         setRun({ done: 0, total: picked.length, place: null, stage: "Shrinking your clip" });
         const out = await shrink(f.path, start, Math.min(CLIP_SECONDS, info.duration));
         const file = await fileAt(out.path, "clip.mp4", "video/mp4");
-        logEvent("clip_shrunk", { bytes: file.size, seconds: Math.round((out.duration || 0) * 10) / 10, src_bytes: info.size || null, src_seconds: Math.round((info.duration || 0) * 10) / 10 }, "Contribute");   // the 720p output against the 25 MB door (2026-11-03)
+        logEvent("clip_shrunk", { bytes: file.size, seconds: Math.round((out.duration || 0) * 10) / 10, src_bytes: info.size || null, src_seconds: Math.round((info.duration || 0) * 10) / 10, filter: pick.filter || null }, "Contribute");   // the 720p output against the 25 MB door (2026-11-03)
+        file.gsFilter = pick.filter || null;
         file.gsExif = Number.isFinite(info.lat) && Number.isFinite(info.lng) ? { lat: info.lat, lng: info.lng, taken_at: info.takenAt || null } : { lat: null, lng: null, taken_at: info.takenAt || null };
         files.push(file);
       } catch (err) {
@@ -297,7 +311,9 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
         const clip = isClip(files[i]);
         const exif = files[i].gsExif || (clip ? await readClipLocation(files[i]) : await readPhotoExif(files[i]));   // before resizing strips it; a phone-shrunk clip carries its own
         if (!Number.isFinite(exif?.lat) || !Number.isFinite(exif?.lng)) { tally.noLocation += 1; continue; }
-        const r = clip ? await contributeClip({ file: files[i], exif }) : await contributePhoto({ image: await resizePhoto(files[i]), exif });
+        // A clip from the web picker hasn't met the editor yet: it picks its look here (or is closed).
+        if (clip && files[i].gsFilter === undefined) { const pick = await askWebLook(files[i]); if (pick === null) continue; files[i].gsFilter = pick === "none" ? null : pick; }
+        const r = clip ? await contributeClip({ file: files[i], exif, filter: files[i].gsFilter || null }) : await contributePhoto({ image: await resizePhoto(files[i]), exif });
         if (r.ok) {
           const name = r.board ? [r.board.city, r.board.country].filter(Boolean).join(", ") : "a City Board";
           // From a board: a photo taken somewhere else hangs there instead, and the summary says so.
@@ -425,7 +441,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
                 {list.map((p) => (
                   <button key={p.id} type="button" onClick={() => setView(shown.indexOf(p))} aria-label={`Open your photo from ${place}${p.hidden ? ", taken down" : ""}`}
                     style={{ position: "relative", aspectRatio: "1 / 1", padding: 0, border: 0, borderRadius: 8, overflow: "hidden", background: "#E4DCC8", cursor: "pointer" }}>
-                    <img src={p.url} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: p.hidden ? 0.35 : 1 }} />
+                    <img src={p.url} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: p.hidden ? 0.35 : 1, filter: clipFilterCss(p.filter) }} />
                     {/* How often it was opened on the boards (2026-10-30): counts only, never who. */}
                     {p.views > 0 && !p.hidden ? <span style={{ position: "absolute", left: 4, top: 4, fontFamily: MONO, fontSize: fs(8), letterSpacing: ".08em", color: "#fff", background: "rgba(22,17,13,.55)", padding: "2px 6px", borderRadius: 999 }}>{p.views} {p.views === 1 ? "VIEW" : "VIEWS"}</span> : null}
                     {p.video ? <span style={{ position: "absolute", right: 4, top: 4, display: "inline-flex", alignItems: "center", gap: 3, fontFamily: MONO, fontSize: fs(8), letterSpacing: ".06em", color: "#fff", background: "rgba(22,17,13,.55)", padding: "2px 6px", borderRadius: 999 }}><Play size={9} strokeWidth={2.5} fill="currentColor" aria-hidden="true" focusable="false" />{clipLength(p.duration)}</span> : null}
@@ -445,14 +461,14 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
       {reward ? <CollectibleReward key={reward.id} item={reward} fresh onClose={() => setReward(null)} onSaved={loadCol} /> : null}
       {manage ? <CollectibleReward key={manage.id} item={manage} fresh={false} onClose={() => setManage(null)} onSaved={loadCol} /> : null}
       {nudge ? <CollectibleNudge progress={nudge} onClose={() => setNudge(null)} onUpload={isOpen ? () => { setNudge(null); openPicker(); } : undefined} /> : null}
-      {trim ? <ClipTrimmer src={trim.src} duration={trim.duration} seconds={CLIP_SECONDS}
-        onPick={(start) => { const { resolve } = trim; setTrim(null); resolve(start); }}
-        onClose={() => { const { resolve } = trim; setTrim(null); resolve(null); }} /> : null}
+      {edit ? <ClipTrimmer src={edit.src} duration={edit.duration} seconds={CLIP_SECONDS} trim={edit.trim}
+        onPick={(pick) => { const { resolve } = edit; setEdit(null); resolve(pick); }}
+        onClose={() => { const { resolve } = edit; setEdit(null); resolve(null); }} /> : null}
 
       {view != null && shown[view] && (
         <div onClick={(e) => e.stopPropagation()}>
           <PhotoLightbox
-            photos={shown.map((p) => ({ id: p.id, src: p.url, caption: p.caption || undefined }))}
+            photos={shown.map((p) => ({ id: p.id, src: p.url, caption: p.caption || undefined, filter: clipFilterCss(p.filter) }))}
             index={view}
             onClose={() => setView(null)}
             onIndexChange={setView}

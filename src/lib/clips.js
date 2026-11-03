@@ -75,8 +75,10 @@ export async function readClipLocation(file) {
 }
 
 // The whole send. → the worker's answer ({ ok, id, url, video, board, progress, reward }) or
-// { ok: false, code, error }. onStep: 'stills' | 'check' | 'upload'.
-export async function contributeClip({ file, exif, caption = "", onStep = undefined }) {
+// { ok: false, code, error }. onStep: 'stills' | 'check' | 'upload'. `filter` is the look the member
+// picked (src/lib/clipFilters.js), stored by name and drawn by CSS; the stills stay unfiltered, so the
+// check sees the clip as shot.
+export async function contributeClip({ file, exif, caption = "", filter = null, onStep = undefined }) {
   const meta = await probeClip(file);
   if (!meta || !Number.isFinite(meta.duration) || meta.duration <= 0) return { ok: false, code: "unreadable", error: "Couldn’t read this clip" };
   if (meta.duration > CLIP_SECONDS + 0.5) return { ok: false, code: "too_long", error: `Clips are up to ${CLIP_SECONDS} seconds — trim it first` };
@@ -85,7 +87,7 @@ export async function contributeClip({ file, exif, caption = "", onStep = undefi
   let stills;
   try { stills = await clipStills(file, meta.duration); } catch { return { ok: false, code: "unreadable", error: "Couldn’t read this clip" }; }
   onStep?.("check");
-  const { data, error } = await callWorker("board/contribute", { kind: "video", image: stills.poster, frames: stills.frames, exif: exif || {}, caption, duration: Math.round(meta.duration * 10) / 10 }, { timeoutMs: 90000 });
+  const { data, error } = await callWorker("board/contribute", { kind: "video", image: stills.poster, frames: stills.frames, exif: exif || {}, caption, duration: Math.round(meta.duration * 10) / 10, ...(filter && filter !== "none" ? { filter } : {}) }, { timeoutMs: 90000 });
   if (error || !data?.ok || !data.upload) return { ok: false, code: data?.code || null, error: data?.error || error || "Upload failed" };
   onStep?.("upload");
   const up = await workerUpload(data.upload, file, "video/mp4", { timeoutMs: 180000 });
