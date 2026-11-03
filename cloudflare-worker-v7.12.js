@@ -22313,7 +22313,10 @@ async function handleBoardContribute(request, env, ctx) {
     const marks = isVideo ? bcMarksOf(b.marks) : null;
     const row = { user_id: user.id, board_key: board.key, city: board.city, region: board.region || null, country: board.country, taken_at: takenAt, caption: caption || null, photo_key: key, mod_status: 'ok',
       ...(isVideo ? { kind: 'video', duration: Math.round(duration * 10) / 10, video_key: `vid/${user.id}/${stem}.mp4`, video_ready: false, ...(filter ? { filter } : {}), ...(marks ? { marks } : {}) } : {}) };
-    const ins = await gbRest(env, 'board_contributions', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
+    // Where it was shot (the same-spot strip, 2026-11-03), to about a metre; before the columns exist, without it.
+    const spot = { lat: Math.round(lat * 1e5) / 1e5, lng: Math.round(lng * 1e5) / 1e5 };
+    let ins = await gbRest(env, 'board_contributions', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ ...row, ...spot }) });
+    if (!ins.ok && ins.status === 400) ins = await gbRest(env, 'board_contributions', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
     if (!ins.ok) { await env.MEDIA.delete(key).catch(() => {}); return jsonResponse({ error: ins.status === 404 ? 'City Board photos open in a few minutes — try again shortly' : isVideo && ins.status === 400 ? 'Clips open with the next update — try again shortly' : 'Could not save — try again' }, 502); }
     const saved = (await ins.json())[0] || {};
     if (ctx) {
@@ -22349,6 +22352,43 @@ async function handleBoardContribute(request, env, ctx) {
 
 // POST /board/contributions → { photos: [{ id, url, caption, city, region, country, created_at, hidden }], open_until }
 // The member's own, newest first (taken-down ones too, marked, so they can delete them).
+// POST /board/same-spot { id } — the same-spot strip (founder, 2026-11-03: "i love same spot strip"):
+// everything on this board shot within fifty metres of that upload, oldest first, the way the viewer
+// shows it. Spots (lat/lng, kept since 2026-11-03) never leave the worker: the answer is items only,
+// blocks and the owners' rails applied as on the wall.
+const BC_SPOT_M = 50;
+const bcMetres = (lat1, lng1, lat2, lng2) => { const R = 6371000, k = Math.PI / 180; const dLat = (lat2 - lat1) * k, dLng = (lng2 - lng1) * k; const s = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * k) * Math.cos(lat2 * k) * Math.sin(dLng / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(s)); };
+async function handleBoardSameSpot(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const id = BL_UUID.test(String(b.id || '')) ? String(b.id).toLowerCase() : null;
+    if (!id) return jsonResponse({ error: 'Which one?' }, 400);
+    const q = await gbRest(env, `board_contributions?id=eq.${id}&mod_status=eq.ok&hidden=eq.false&select=id,board_key,lat,lng`, {});
+    const it = (q.ok ? await q.json() : [])[0];
+    if (!it || !Number.isFinite(it.lat) || !Number.isFinite(it.lng)) return jsonResponse({ rows: [], travelers: 0 });
+    const dLat = BC_SPOT_M / 111320;
+    const dLng = dLat / Math.max(0.2, Math.cos(it.lat * Math.PI / 180));
+    const nq = await gbRest(env, `board_contributions?board_key=eq.${encodeURIComponent(it.board_key)}&mod_status=eq.ok&hidden=eq.false&video_ready=eq.true&lat=gte.${it.lat - dLat}&lat=lte.${it.lat + dLat}&lng=gte.${it.lng - dLng}&lng=lte.${it.lng + dLng}&select=id,user_id,kind,duration,taken_at,created_at,filter,marks,lat,lng&order=taken_at.asc.nullslast&limit=60`, {});
+    if (!nq.ok) return jsonResponse({ rows: [], travelers: 0, error: 'Couldn’t load right now — try again' }, 503);
+    const near = (await nq.json()).filter((r) => Number.isFinite(r.lat) && Number.isFinite(r.lng) && bcMetres(it.lat, it.lng, r.lat, r.lng) <= BC_SPOT_M);
+    const blocked = await gbBlockSet(env, user.id);
+    if (!blocked) return jsonResponse({ rows: [], travelers: 0, error: 'Couldn’t load right now — try again' }, 503);
+    const ok = await bcOwners(env, near.map((r) => r.user_id));
+    if (!ok) return jsonResponse({ rows: [], travelers: 0, error: 'Couldn’t load right now — try again' }, 503);
+    const kept = near.filter((r) => !blocked.has(r.user_id) && ok.has(r.user_id));
+    const origin = new URL(request.url).origin;
+    const when = (r) => r.taken_at || r.created_at;
+    const rows = kept.sort((a, c) => String(when(a)).localeCompare(String(when(c)))).slice(0, 20).map((r) => ({
+      id: r.id, kind: r.kind === 'video' ? 'video' : 'photo', photo: bcPhotoUrl(origin, r.id),
+      ...(r.kind === 'video' ? { video: bcVideoUrl(origin, r.id), duration: r.duration || null } : {}),
+      filter: r.filter || null, marks: r.marks || null, when: when(r), current: r.id === it.id,
+    }));
+    return jsonResponse({ rows, travelers: new Set(kept.map((r) => r.user_id)).size, radius_m: BC_SPOT_M });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handleBoardContributions(request, env) {
   try {
     const user = await gbUser(request, env);
@@ -30825,6 +30865,7 @@ export default {
       if (pathname === '/social/world' && request.method === 'POST') return await handleSocialWorld(request, env, ctx);
       if (pathname === '/city/board' && request.method === 'POST') return await handleCityBoard(request, env);
       if (pathname === '/board/view' && request.method === 'POST') return await handleBoardView(request, env, ctx);
+      if (pathname === '/board/same-spot' && request.method === 'POST') return await handleBoardSameSpot(request, env);
       if (pathname === '/board/contribute' && request.method === 'POST') return await handleBoardContribute(request, env, ctx);
       if (pathname === '/board/contributions' && request.method === 'POST') return await handleBoardContributions(request, env);
       if (pathname === '/board/contributions/delete' && request.method === 'POST') return await handleBoardContributionDelete(request, env, ctx);

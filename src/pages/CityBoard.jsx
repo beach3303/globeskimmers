@@ -25,6 +25,7 @@ import { clipFilterCss } from "@/lib/clipFilters";
 import { frameOf, outroOf } from "@/lib/clipMarks";
 import ClipFrame from "@/components/passport/ClipFrame";
 import StampOutro, { useOutro } from "@/components/passport/StampOutro";
+import SameSpotStrip from "@/components/passport/SameSpotStrip";
 import { useDismissable } from "@/lib/dismissStack";
 import { captionContribution, contributeOpen } from "@/lib/boardContrib";
 import { BoardContributeSheet } from "@/components/passport/ContributeAlbum";
@@ -224,6 +225,19 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
     boardView(target).then((x) => { if (x && typeof x.views === "number") setViews((m) => ({ ...m, [r.id]: x.views })); });
   };
   useEffect(() => { if (row?.id && !row.video) countView(row); }, [row?.id]);
+  // A tile in the same-spot strip (2026-11-03) opens that item: here when it's on this page, else by its
+  // id in the address, which the page answers by digging older pages.
+  const openSpot = (item) => {
+    const want = String(item?.id || "").toLowerCase();
+    const i = rows.findIndex((r) => String(r.id || "").toLowerCase() === want);
+    if (i >= 0) { onIndex(i); return; }
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("open", `bcp:${want}`);
+      window.history.pushState({}, "", u.toString());
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    } catch { /* stays on this one */ }
+  };
   if (!row) return null;
   const nViews = views[row.id] ?? (Number(row.views) || 0);
   const viewsLabel = `${nViews.toLocaleString()} ${nViews === 1 ? "view" : "views"}`;
@@ -327,6 +341,8 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
         {row.type !== "photo" && row.id ? (
           <div style={{ maxWidth: 420, margin: "8px auto 0", fontFamily: MONO, fontSize: fs(10), letterSpacing: ".1em", textTransform: "uppercase", color: NEUTRAL.goldPale }}>{viewsLabel}</div>
         ) : null}
+        {/* The same-spot strip (founder, 2026-11-03): everything shot within fifty metres of this upload, over time. */}
+        {row.type === "photo" && row.contrib && row.id ? <SameSpotStrip row={row} onOpen={openSpot} /> : null}
         {row.id ? (
           <div style={{ marginTop: 12 }}>
             <BlotterStrip {...(row.type === "photo" ? (row.contrib ? { contribId: row.id } : { boardPhotoId: row.id }) : { postcardId: row.id })} blotter={book} food={!!row.dish} ownerView={ownerView} onChanged={onBook} readOnly={readOnly} />
@@ -480,7 +496,10 @@ function Board({ kind, city, region, country, onBack, open = "" }) {
   const openId = String(open || "").replace(/^(bcp|bph|pc):/i, "").toLowerCase();
   const opened = useRef(false);
   const dug = useRef(0);
+  const lastOpen = useRef(null);
   useEffect(() => {
+    // A new id in the address (the same-spot strip, 2026-11-03) starts the search over.
+    if (lastOpen.current !== openId) { lastOpen.current = openId; opened.current = false; dug.current = 0; }
     if (!openId || opened.current || !board || board.error || board.held || board.unavailable) return;
     const i = rows.findIndex((r) => String(r.id || "").toLowerCase() === openId);
     if (i >= 0) { opened.current = true; setView(i); return; }
