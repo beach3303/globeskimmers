@@ -1357,6 +1357,9 @@ monthly report by hand until it's built.
   `npx wrangler secret list` and watches D1 `bell_failed`. Also ask: the API worker has a secret NAMED
   `4faab4c13339b216d82d032b37fbc09c` (a value pasted as a name?) — delete only if the founder confirms.
 
+- **2026-11-24** — start **Passport Wrapped** (founder 2026-11-03: "we can do passport wrapped before the end of the
+  year and remind us"); ship by 2026-12-15 so it lands before holiday travel. Spec in the clips section (2026-11-03).
+
 - **~2027-01-15** — alert previews: re-decide postcard (then telegram) previews (decided 2026-10-19: none for now).
 
 - ~2026-12-09: regenerate the Sign in with Apple client secret (M3, 6-month limit).
@@ -1467,3 +1470,45 @@ Profile): follow requests → On your passport → Where your friends have been 
 `/Mailbox?tab=news` links and the news notifications open it (the worker's friend-stamp and follow-accepted pushes
 route to `/Mailbox?tab=news`, which the new build redirects and an old build shows as its News tab). **Open:** (7)
 optional — the cold-start chooser default; the founder's stamp render files; push + OTA.
+
+## Clips: the marks, the house frames, sealed mail and the rest — founder, 2026-11-03 (DIRECTION AGREED, decisions open)
+
+The founder asked what a clip could do "that is cool that Instagram, Facebook, TikTok, and most social media doesn't
+have". The answer: everything that comes from what we know and they don't — the clip was shot where it says, when it
+says, by a member with a passport, a home city, a circle and a year of stamps. Same day, she said yes to all of this.
+(Context: clips got looks the same morning — eight CSS filters stored by name, main 950c7ab — so every mark below rides
+the same road: stored with the clip, drawn at playback, OTA, nothing re-encoded.)
+
+**Marks only we can put on a clip** (founder: "i like all the marks"):
+- Verified stamp outro — in the last two seconds the city's stamp slams onto the frame in ink red with the date; it
+  comes from the clip's own metadata, so it can't be faked the way a location sticker can.
+- Distance from home — "6,012 miles from home" from the member's home city; a public board shows the miles, never the city.
+- Golden hour and local time — sunrise/sunset from the coordinates (no API); "golden hour, 7:42 PM"; the viewer may
+  show the city's time right now.
+- Nth traveler — "You're the 14th traveler to film this spot this year."
+- House frames — Airmail, Postmark, Passport page, Print; founder "curious", wants to see them first: mock-up canvas
+  https://claude.ai/artifact/9T8zBNUdS8RNQYoF2n27Rr (2026-11-03).
+
+**Sealed mail to a future date** (founder: "I Love Sealed Clips… also sealed postcard… birthday greetings… sealed
+telegram for future would be good too"): a clip, a postcard or a telegram sealed until a date the sender picks; it opens
+that morning in the recipient's local time with a notification; the sender's Sent shows "Opens Nov 20". **Open
+decisions:** (1) does the recipient see a sealed envelope before the date (anticipation) or nothing until it opens —
+Claude recommends the envelope with the date and no sender name until it opens; (2) the farthest date (a year?);
+(3) can the sender unseal early or recall; (4) minors: sealed mail follows today's mail rails unchanged.
+
+**Also agreed:** a clip earns a stamp (film the landmark → the passport stamps it; already in the video plan);
+**Passport Wrapped** (a member's clips city by city with title cards in the passport style, sequenced in the viewer,
+nothing re-encoded) — "before the end of the year and remind us" → dated reminder below; **Listen to the city** (an
+audio-only mode for board clips, posters on screen, the member's own sound — no music licence); **Flight path** (an arc
+from home to the spot over the map tiles we already use; the 10-13 OSM caution stands); **Then and now** (pair a clip
+with a public-domain archive photo of the same place — the boards' then-and-now kit; per-city curation); **Same spot
+across time** (clips filmed within ~50 m link into a strip, winter to summer, year to year).
+
+**Parked:** background music or an inspirational voice bed — only with a licence we own (commissioned buyout or CC0;
+never unlicensed songs; Pixabay needs a licence read for app use); sourcing decision pending (the 2026-11-03 answer:
+nine 20-second loops ≈ $900–2,700 commissioned, voice lines $100–300).
+
+**Build order (Claude's proposal, founder to confirm):** 1 verified stamp outro + house frames (2 d) → 2 same spot
+strip + Nth traveler (2 d) → 3 sealed clips / postcards / telegrams (3 d) → 4 distance from home + golden hour / local
+time (1 d) → 5 Listen to the city + flight path (2 d) → 6 then and now (curation first) → Passport Wrapped (4 d, late
+November).
