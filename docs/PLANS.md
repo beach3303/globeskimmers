@@ -1491,10 +1491,16 @@ the same road: stored with the clip, drawn at playback, OTA, nothing re-encoded.
 
 **Sealed mail to a future date** (founder: "I Love Sealed Clips… also sealed postcard… birthday greetings… sealed
 telegram for future would be good too"): a clip, a postcard or a telegram sealed until a date the sender picks; it opens
-that morning in the recipient's local time with a notification; the sender's Sent shows "Opens Nov 20". **Open
-decisions:** (1) does the recipient see a sealed envelope before the date (anticipation) or nothing until it opens —
-Claude recommends the envelope with the date and no sender name until it opens; (2) the farthest date (a year?);
-(3) can the sender unseal early or recall; (4) minors: sealed mail follows today's mail rails unchanged.
+that morning in the recipient's local time with a notification; the sender's Sent shows "Opens Nov 20".
+**DECIDED 2026-11-03 (founder):** (1) the recipient sees the sealed envelope before the date, **with the sender's
+name** and the open date ("Yes and Yes with Sender Name"); (2) a seal goes **up to a year** ahead; (3) the sender
+**can take it back** before it opens, but **cannot unseal it early**; (4) minors: today's rails unchanged, and a
+minor **may receive sealed mail that opens on or after the day they turn 18** — the age rails are judged against the
+recipient's age on the open date, so an 18th-birthday postcard can be sealed to a 17-year-old (the envelope shows
+before the day; the content opens at 18). Build: sealing for postcards and telegrams first (`opens_at`, the compose
+sheets' "Seal until" date, the Mailbox's sealed-until envelope, Sent's "Opens … · Take back", the morning
+notification), then **video postcards** (a clip in a private postcard, the 10-30 plan's next item) so a sealed clip
+is a sealed video postcard.
 
 **Also agreed:** a clip earns a stamp (film the landmark → the passport stamps it; already in the video plan);
 **Passport Wrapped** (a member's clips city by city with title cards in the passport style, sequenced in the viewer,
