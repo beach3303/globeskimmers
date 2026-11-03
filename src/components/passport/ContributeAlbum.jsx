@@ -72,7 +72,7 @@ function AirmailEnvelope({ count, peek, onOpen }) {
         {count ? "See everything you uploaded" : "Your uploads will show here"}
       </span>
       <span aria-hidden="true" className="block text-center" style={{ marginTop: 1, color: INK3, fontSize: fs(10.5), lineHeight: 1.3 }}>
-        Photos and clips on City Boards, by city
+        By city
       </span>
     </button>
   );
@@ -90,7 +90,7 @@ function UploadButton({ onClick }) {
       </span>
       <span style={{ minWidth: 0 }}>
         <span style={{ display: "block", fontFamily: "inherit", fontSize: fs(15), fontWeight: 700, lineHeight: 1.2 }}>Upload to City Boards</span>
-        <span style={{ display: "block", fontSize: fs(11.5), lineHeight: 1.3, opacity: 0.9, marginTop: 2 }}>Public photos and clips. Each goes to the board of the city where it was taken.</span>
+        <span style={{ display: "block", fontSize: fs(11.5), lineHeight: 1.3, opacity: 0.9, marginTop: 2 }}>Public. Each goes to its city’s board.</span>
       </span>
     </button>
   );
@@ -336,8 +336,8 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
               {album
                 ? <>Your photos and clips on City Boards, by city. Tap one to open it, see its stickers and views, change its caption, or take it down.</>
                 : board
-                ? <>Photos you took in {board.name} go up on this board: streets, food, sights, festivals. A photo from somewhere else goes to its own city’s board.</>
-                : <>Share your travel and city photos: streets, food, sights, festivals. Each one goes up on the board of the city where you took it.</>}
+                ? <>Photos you took in {board.name} go up on this board.</>
+                : <>Each one goes up on the board of the city where you took it.</>}
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close"
@@ -352,14 +352,9 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
             <Globe2 size={18} color={AIR_BLUE} strokeWidth={2} aria-hidden="true" style={{ flex: "none", marginTop: 1 }} />
             Contributions to City Boards are public.
           </p>
-          <ul style={{ margin: "6px 0 0", paddingLeft: 44, listStyle: "disc", fontSize: fs(13), lineHeight: 1.5, color: INK2 }}>
-            <li>Each photo goes to the board of the city where it was taken, from “a traveler”. Your name isn’t shown.</li>
-            <li>You can delete any photo, any time.</li>
-            <li>We don’t accept photos where a child is clearly recognizable.</li>
-            <li>Everyone in your photo should be OK with it being public.</li>
-          </ul>
-          <p style={{ margin: "8px 0 0", fontSize: fs(12), lineHeight: 1.45, color: INK3 }}>
-            The photo’s own location tells us the city, so screenshots and saved photos can’t be used. {isOpen ? "Open until June 30, 2027." : "Contributions closed on June 30, 2027. You can still delete your photos."}
+          {/* Three things, no more (founder, 2026-11-02: "what else would we need to tell them except that it is public"). */}
+          <p style={{ margin: "4px 0 0 26px", fontSize: fs(13), lineHeight: 1.5, color: INK2 }}>
+            From “a traveler”, no name. Delete any of them any time. No photos where a child is clearly recognizable.{isOpen ? "" : " Contributions closed on June 30, 2027; you can still delete yours."}
           </p>
         </div>
 

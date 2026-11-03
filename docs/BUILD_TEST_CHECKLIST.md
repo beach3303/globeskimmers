@@ -4253,3 +4253,12 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   in place. Since boards name nobody, the worker marks the viewer's own photos `mine: true`, and the viewer's owner
   check uses it (it had relied on a handle match, which the anonymous boards no longer give). Gates: eslint, build,
   boot-check. Needs push (worker) + OTA (app).
+
+## 2026-11-02 late — Less wording on City Board uploads (founder: "what else would we need to tell them except that it is public")
+
+- The upload sheet's intro is one line ("Each one goes up on the board of the city where you took it"); the public
+  note keeps its bold line and one sentence (from “a traveler”, no name · delete any time · no photos where a child
+  is clearly recognizable) instead of four bullets plus the location/screenshot sentence and the open-until date;
+  the Upload button's subtitle is "Public. Each goes to its city’s board."; the envelope's second line is "By city";
+  the Photos tab's City Boards line is "Public, whatever your passport setting. Delete any of it any time." The
+  posting summary still explains a photo without a location. Gates: eslint, build, boot-check. OTA.
