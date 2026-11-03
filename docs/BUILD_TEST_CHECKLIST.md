@@ -4328,3 +4328,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - Deploy Cloudflare Workers run 41665189239 green; Apply Supabase Migrations run 41665189324 green (the `filter`
   column is live). **Open (founder):** `npm run ota` — the editor, the looks on boards and in My uploads, and this
   morning's iPhone clip read fix all ride in the same bundle.
+- Live probe after the deploy (demo account, `/city/board` Los Angeles: 7 contributions) showed NO `filter` key on
+  the rows: `handleCityBoard` builds its photo rows field by field and dropped it. Fix c80ee00 adds `filter` next
+  to `video`/`duration` in that row (worker syntax-checked) — **COMMITTED, NOT PUSHED: the permission gate denied
+  Claude's push twice. Founder:** `cd ~/Developer/globeskimmers && git push origin stamping-v2:main` (deploys the
+  worker; no migration). Until then a look shows in My uploads and Friends' news but not on the board itself.
