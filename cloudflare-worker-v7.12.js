@@ -19459,6 +19459,84 @@ const PC_BROADCAST_END = '2026-10-24T00:00:00Z';
 const pcBroadcast = (p) => !!p && p.to_user_id == null && !p.to_city;
 // Caught by the leak (after the option left the app): the sender's Sent says it didn't reach who was picked.
 const pcLeaked = (p) => pcBroadcast(p) && String(p.created_at || '') >= PC_BROADCAST_END;
+// ── Sealed mail (founder, 2026-11-03) ─────────────────────────────────────────────────
+// A postcard or telegram sealed until a date the sender picks, up to a year ahead: the envelope
+// shows at once with the sender's name and the date; the words and the photo open at midnight of
+// that day in the recipient's home timezone (the knock follows at 8, through pushHourly's quiet
+// hours). The sender can take it back until then (POST /mail/recall) and can't open it early. A
+// minor may receive one that opens on or after the day they turn 18: the rails are judged on the
+// open date. Members only — never a board, never an email that waits.
+const SEAL_MAX_DAYS = 366;
+const sealTzOk = (tz) => { if (!tz || typeof tz !== 'string' || tz.length > 64) return false; try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; } catch { return false; } };
+const sealYmd = (d, tz) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+// What the send asked for: null (no seal), { opens_on, tz } or { error }.
+function sealFromBody(b) {
+  if (b?.opens_on == null || b.opens_on === '') return null;
+  const on = typeof b.opens_on === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.opens_on) && !Number.isNaN(Date.parse(`${b.opens_on}T00:00:00Z`)) ? b.opens_on : null;
+  if (!on) return { error: 'Pick a day for the seal' };
+  const tz = sealTzOk(b.tz) ? b.tz : 'UTC';
+  const today = sealYmd(new Date(), tz);
+  if (on <= today) return { error: 'A seal needs a day after today' };
+  if ((Date.parse(`${on}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 864e5 > SEAL_MAX_DAYS) return { error: 'A seal can wait a year at most' };
+  return { opens_on: on, tz };
+}
+// Midnight of `ymd` in `tz`, as an instant (the zone's offset at that moment, by Intl).
+function sealMidnight(ymd, tz) {
+  const zone = sealTzOk(tz) ? tz : 'UTC';
+  const [y, m, d] = ymd.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d);
+  const p = {};
+  for (const x of new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(guess))) if (x.type !== 'literal') p[x.type] = Number(x.value);
+  const asIf = Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second);
+  return new Date(guess - (asIf - guess)).toISOString();
+}
+// The recipient's own midnight when their home timezone is known, else the sender's.
+async function sealOpensAtFor(env, seal, uid) { return sealMidnight(seal.opens_on, (await pushTimezone(env, uid).catch(() => null)) || seal.tz); }
+const sealLabel = (ymd) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || '')); return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' }) : ''; };
+const sealed = (r) => !!r?.opens_at && Date.parse(r.opens_at) > Date.now();
+// Adult on the open day? The teen rails, judged on that date (founder, 2026-11-03).
+const sealAdultOn = (rsp, ymd) => !!rsp?.birth_year && socialTierFor(rsp.birth_year, rsp.country_at_gate, rsp.birth_md, new Date(`${ymd}T12:00:00Z`)) === 'adult';
+// A teen who will be 18 on the open day is reachable by sealed mail; a frozen, unconfirmed or
+// revoked account never is.
+const sealReachable = (rsp, seal) => !!seal && rsp?.social_tier === 'teen' && !gbUnderAge(rsp) && !gbNeedsConfirm(rsp) && !gbConsentRevoked(rsp) && sealAdultOn(rsp, seal.opens_on);
+// The hourly sweep: whatever opened since the last hour gets its knock, once (opened_at).
+async function sealedMailSweep(env) {
+  const now = new Date().toISOString();
+  const floor = new Date(Date.now() - 7 * 864e5).toISOString();
+  const names = {};
+  const nameOf = async (id) => { if (!names[id]) names[id] = await ppHolder(env, id); return names[id]; };
+  for (const [table, kind, route, word] of [['postcards', 'postcards', (id) => `/Postcards?pc=${id}`, 'postcard'], ['telegrams', 'telegrams', (id) => `/Mailbox?tg=${id}`, 'telegram']]) {
+    const q = await gbRest(env, `${table}?opens_at=lte.${encodeURIComponent(now)}&opens_at=gte.${encodeURIComponent(floor)}&opened_at=is.null&select=id,sender_id,to_user_id&limit=200`, {}).catch(() => null);
+    if (!q || !q.ok) continue;
+    for (const r of await q.json().catch(() => [])) {
+      const w = await gbRest(env, `${table}?id=eq.${r.id}&opened_at=is.null`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ opened_at: now }) });
+      if (!w.ok || !(await w.json().catch(() => [])).length) continue;   // another run took it
+      if (!r.to_user_id) continue;
+      await pushNotify(env, r.to_user_id, kind, { title: `A sealed ${word} from ${await nameOf(r.sender_id)} just opened`, body: 'Open it in your Mailbox', route: route(r.id), collapse: `seal-${r.id}` }, { each: true });
+    }
+  }
+}
+// POST /mail/recall { from: 'postcards'|'telegrams', ids } — the sender takes a sealed one back
+// before it opens: erased, photo and all; the recipient's sealed envelope goes with it.
+async function handleMailRecall(request, env, ctx) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const b = await request.json().catch(() => ({}));
+    const table = b.from === 'telegrams' ? 'telegrams' : b.from === 'postcards' ? 'postcards' : null;
+    const ids = (Array.isArray(b.ids) ? b.ids : []).map((v) => String(v || '').toLowerCase()).filter((v) => BL_UUID.test(v)).slice(0, 20);
+    if (!table || !ids.length) return jsonResponse({ error: 'Which one?' }, 400);
+    const now = encodeURIComponent(new Date().toISOString());
+    const w = await gbRest(env, `${table}?id=in.(${ids.join(',')})&sender_id=eq.${user.id}&opens_at=gt.${now}`, { method: 'DELETE', headers: { Prefer: 'return=representation' } });
+    if (!w.ok) return jsonResponse({ error: 'That didn’t go through — try again' }, 503);
+    const gone = await w.json().catch(() => []);
+    if (!gone.length) return jsonResponse({ error: 'It has opened already, so it can’t be taken back', code: 'opened' }, 409);
+    if (table === 'postcards' && env.MEDIA) { const del = Promise.all(gone.map((r) => (r.photo_key ? env.MEDIA.delete(r.photo_key).catch(() => {}) : null))); if (ctx) ctx.waitUntil(del); else await del; }
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'seal_recalled', { kind: table, n: gone.length }));
+    return jsonResponse({ ok: true, removed: gone.length });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 async function handlePostcardSend(request, env, ctx) {
   try {
     const user = await gbUser(request, env);
@@ -19471,6 +19549,9 @@ async function handlePostcardSend(request, env, ctx) {
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Postcards aren\'t available on this account' }, 403);
     if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
     if (sp.social_tier === 'teen') return jsonResponse({ error: 'Postcards open at age 18', code: 'teen_hold' }, 403);
+    // Sealed until a day (2026-11-03): members only, never a board, never an email that waits.
+    const seal = sealFromBody(b);
+    if (seal?.error) return jsonResponse({ error: seal.error }, 400);
 
     // Address it. The members' rails run only after the photo is checked (below).
     let members = [];        // [{ user_id, handle }]
@@ -19566,6 +19647,8 @@ async function handlePostcardSend(request, env, ctx) {
       return jsonResponse({ error: 'Who is it for? Add someone in Send to.' }, 400);
     }
     const direct = asked > 0;
+    if (seal && toCity) return jsonResponse({ error: 'A City Board card can’t be sealed' }, 400);
+    if (seal && waitingEmails.length) return jsonResponse({ error: 'A sealed postcard goes to members only — add them by @username' }, 400);
 
     // The front photo.
     let data = String(b.image || ''); let mediaType = 'image/jpeg';
@@ -19595,7 +19678,8 @@ async function handlePostcardSend(request, env, ctx) {
       if (rsp === undefined) return jsonResponse({ error: 'Couldn’t send right now — try again' }, 503);
       // No social profile = an account that never finished its passport: no known age, no mail.
       if (rsp === null) { notReady.push(mb); continue; }
-      if (rsp.social_tier === 'blocked' || rsp.social_tier === 'teen' || gbAgeHeld(rsp)) continue;
+      // A teen who will be 18 on a seal's open day may receive it (2026-11-03); otherwise as before.
+      if (!sealReachable(rsp, seal) && (rsp.social_tier === 'blocked' || rsp.social_tier === 'teen' || gbAgeHeld(rsp))) continue;
       deliver.push(mb);
     }
     if (direct && !deliver.length && !waitingEmails.length) {
@@ -19647,6 +19731,8 @@ async function handlePostcardSend(request, env, ctx) {
     for (const mb of targets) {
       rows.push({
         ...base, to_user_id: mb ? mb.user_id : null, photo_key: await put(), ...meta,
+        // Sealed until a day (2026-11-03): their own midnight.
+        ...(seal && mb ? { opens_at: await sealOpensAtFor(env, seal, mb.user_id), opens_on: seal.opens_on } : {}),
         // A board card carries the board's city and country.
         ...(toCity ? { to_city: toCity, city: boardCity, country: boardCountry, region: boardRegion } : {}),
         ...(groupId ? { group_id: groupId, cc: deliver.filter((x) => x !== mb).map((x) => x.user_id) } : {}),
@@ -19654,6 +19740,8 @@ async function handlePostcardSend(request, env, ctx) {
     }
     const insert = (rs) => gbRest(env, 'postcards', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(rs) });
     let w = await insert(rows);
+    // A sealed card must never go out open: before its columns exist, say so instead.
+    if (!w.ok && w.status === 400 && seal) { drop(rows.map((r) => r.photo_key)); return jsonResponse({ error: 'Sealed mail opens with the next update — try again shortly' }, 503); }
     // The seconds before a newer column exists (region 2026-10-16, group_id/cc 2026-10-24): send without it.
     if (!w.ok && w.status === 400) w = await insert(rows.map(({ group_id: _g, cc: _c, ...r }) => r));
     if (!w.ok && w.status === 400) w = await insert(rows.map(({ group_id: _g, cc: _c, region: _r, ...r }) => r));
@@ -19666,7 +19754,9 @@ async function handlePostcardSend(request, env, ctx) {
       const place = base.place_name || base.city || null;
       for (const r of (Array.isArray(made) ? made : [])) {
         if (!r || !r.to_user_id) continue;
-        ctx.waitUntil(pushNotify(env, r.to_user_id, 'postcards', (n) => (n > 1
+        // A sealed card (2026-11-03) knocks once now, naming the day; the sweep knocks again when it opens.
+        if (seal) ctx.waitUntil(pushNotify(env, r.to_user_id, 'postcards', { title: `${senderName} sealed a postcard for you`, body: `It opens on ${sealLabel(seal.opens_on)}`, route: '/Postcards', collapse: `seal-${r.id}` }, { each: true }));
+        else ctx.waitUntil(pushNotify(env, r.to_user_id, 'postcards', (n) => (n > 1
           ? { title: `${n} new postcards`, body: `${senderName} and others sent you postcards`, route: '/Postcards' }
           : { title: `${senderName} sent you ${r.group_id ? 'a group postcard' : 'a postcard'}${place ? ` from ${place}` : ''}`, body: 'Open it in your Mailbox', route: r.id ? `/Postcards?pc=${r.id}` : '/Postcards' })));
       }
@@ -19679,7 +19769,7 @@ async function handlePostcardSend(request, env, ctx) {
       ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => (boardLabel ? `📮 ${who} posted a postcard on ${boardLabel}`
         : `💌 ${who} sent ${groupId ? 'a group postcard' : 'a postcard'} to ${gbPeople(k)}`), request));
     }
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct, city: !!toCity, has_dish: !!cardMeta?.dish, anon: anonLabel || undefined, to: direct ? deliver.length + waitingEmails.length : undefined, group: !!groupId || undefined }));
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'postcard_send', { direct, city: !!toCity, has_dish: !!cardMeta?.dish, anon: anonLabel || undefined, to: direct ? deliver.length + waitingEmails.length : undefined, group: !!groupId || undefined, sealed: !!seal || undefined }));
     // A new board card shows in the City Boards list at once, not after its five minutes.
     if (toCity && env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.delete('cityboards:v1').catch(() => {});
     // The pin ask (founder, 2026-10-15): a direct card from a city the sender
@@ -19702,7 +19792,7 @@ async function handlePostcardSend(request, env, ctx) {
       notReadyHandles = [...notReadyHandles, ...(hq.ok ? (await hq.json()).map((r) => r.handle).filter(Boolean) : [])];
     }
     return jsonResponse({
-      ok: true, ...(toCity ? { board: toCity } : {}), ...(pin ? { pin } : {}),
+      ok: true, ...(toCity ? { board: toCity } : {}), ...(pin ? { pin } : {}), ...(seal ? { sealed: seal.opens_on } : {}),
       ...(direct ? { count: deliver.length + waitingEmails.length, group: !!groupId } : {}),
       ...(waitingEmails.length ? { waiting: true, emailed } : {}),
       ...(notReadyHandles.length ? { not_ready: notReadyHandles } : {}),
@@ -21310,7 +21400,8 @@ async function handleSocialFeed(request, env) {
     // sender in followers' feeds would unmask it (founder, 2026-10-15).
     pcs = pcs.filter((p) => !p.meta?.anon && !blocked.has(p.sender_id) && (ids.includes(p.sender_id) ? profOk : pcProfOk) && !minor(p.sender_id));
     tgs = tgs.filter((t) => !blocked.has(t.sender_id) && (ids.includes(t.sender_id) ? profOk : pcProfOk) && !minor(t.sender_id));
-    const firstSeen = pcs.filter((p) => p.to_user_id === user.id && !p.read_at && 'read_at' in p).map((p) => p.id);
+    // A sealed card (2026-11-03) isn't read by being shown: it reads the morning it opens.
+    const firstSeen = pcs.filter((p) => p.to_user_id === user.id && !p.read_at && 'read_at' in p && !sealed(p)).map((p) => p.id);
     if (firstSeen.length) await gbRest(env, `postcards?id=in.(${firstSeen.join(',')})&to_user_id=eq.${user.id}&read_at=is.null`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ read_at: new Date().toISOString() }) }).catch(() => {});
     // Which cards sent to everyone I kept in my postcard box (2026-10-14). Unreadable keeps
     // (the table not there yet) leave `kept` off, and the app shows no Keep.
@@ -21339,6 +21430,8 @@ async function handleSocialFeed(request, env) {
       ...(t.ink === 'red' || t.ink === 'green' ? { ink: t.ink } : {}),
       from_new: !ids.includes(t.sender_id),
       by: { handle: share[t.sender_id]?.handle || null, name: nameOf(t.sender_id), ...(faces[t.sender_id] || {}) },
+      // Sealed until a day (2026-11-03): the envelope, the sender and the day — no words yet.
+      ...(sealed(t) ? { body: null, received_at: null, sealed_until: t.opens_at, opens_on: t.opens_on || null } : {}),
     }));
     const cardRows = pcs.map((p) => ({
       type: 'postcard', id: p.id, created_at: p.created_at,
@@ -21353,6 +21446,8 @@ async function handleSocialFeed(request, env) {
       from_new: p.to_user_id === user.id && !ids.includes(p.sender_id),
       ...(p.to_user_id === null && keptSet ? { kept: keptSet.has(p.id) } : {}),
       by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
+      // Sealed until a day (2026-11-03): the envelope, the sender and the day — no photo, no words yet.
+      ...(sealed(p) ? { photo: null, message: null, place: null, city: null, region: null, country: null, dish: null, from_place: null, food_verdict: null, sealed_until: p.opens_at, opens_on: p.opens_on || null } : {}),
     }));
     const dayAgo = Date.now() - 24 * 3600 * 1000;
     const stampRows = ((sq && sq.ok) ? await sq.json() : [])
@@ -21416,8 +21511,8 @@ async function handleMailSent(request, env) {
     const before = typeof b.before === 'string' && !Number.isNaN(Date.parse(b.before)) ? new Date(b.before).toISOString() : null;
     const win = `sender_id=eq.${user.id}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&limit=${SENT_SCAN}`;
     const [pcs, tgs, ppc, ptg, links] = await Promise.all([
-      mailSentRows(env, 'postcards', `${win}&select=id,to_user_id,to_city,group_id,cc,photo_key,message,place_name,city,country,meta,created_at`),
-      mailSentRows(env, 'telegrams', `${win}&select=id,to_user_id,group_id,cc,body,ink,reply_to,created_at,received_at`),
+      mailSentRows(env, 'postcards', `${win}&select=id,to_user_id,to_city,group_id,cc,photo_key,message,place_name,city,country,meta,created_at,opens_at,opens_on`),
+      mailSentRows(env, 'telegrams', `${win}&select=id,to_user_id,group_id,cc,body,ink,reply_to,created_at,received_at,opens_at,opens_on`),
       mailSentRows(env, 'pending_postcards', `${win}&delivered_at=is.null&select=id,photo_key,message,place_name,city,created_at`),
       mailSentRows(env, 'pending_telegrams', `${win}&delivered_at=is.null&select=id,body,ink,created_at`),
       mailSentRows(env, 'message_links', `${win}&select=id,kind,photo_key,message,place_name,body,ink,claims,created_at,expires_at`),
@@ -21458,7 +21553,9 @@ async function handleMailSent(request, env) {
         ...(board ? { board: { kind: /^state:/.test(r.to_city) ? 'state' : /^country:/.test(r.to_city) ? 'country' : 'city', city: r.city || null, region: r.region || null, country: r.country || null, anon: !!r.meta?.anon } } : {}),
         to: board || !r.to_user_id ? [] : g.map((x) => who(x.to_user_id)),
         // A card caught by the 2026-10-24 leak never reached who was picked: say so, and to send it again.
-        status: pcLeaked(r) ? 'undelivered' : 'delivered',
+        // Sealed until a day (2026-11-03): says so and names the day until it opens.
+        ...(r.opens_on ? { opens_on: r.opens_on, opens_at: r.opens_at } : {}),
+        status: pcLeaked(r) ? 'undelivered' : sealed(r) ? 'sealed' : 'delivered',
       });
     }
     for (const g of fold(tgs, (r) => (r.group_id ? `g:${r.group_id}` : `e:${r.created_at}|${r.body}`))) {
@@ -21469,7 +21566,8 @@ async function handleMailSent(request, env) {
         body: r.body, ink: r.ink || null, reply: !!r.reply_to,
         mode: r.group_id ? 'group' : g.length > 1 ? 'each' : 'one',
         to, opened: to.filter((x) => x.opened).length,
-        status: to.some((x) => x.opened) ? 'opened' : 'delivered',
+        ...(r.opens_on ? { opens_on: r.opens_on, opens_at: r.opens_at } : {}),
+        status: sealed(r) ? 'sealed' : to.some((x) => x.opened) ? 'opened' : 'delivered',
       });
     }
     for (const r of (ppc || [])) items.push({ kind: 'postcard', from: 'pending_postcards', ids: [r.id], at: r.created_at, photo: photo(r.photo_key), message: r.message || null, place: r.place_name || r.city || null, mode: 'email', to: [], status: 'waiting' });
@@ -21594,12 +21692,14 @@ async function handlePostcardBox(request, env) {
       ...(p.to_user_id === user.id && Array.isArray(p.cc) && p.cc.length ? { also_to: p.cc.map((id) => ccHandle[id]).filter(Boolean) } : {}),
       ...(p.to_user_id === null ? { kept: true } : {}),
       by: { handle: share[p.sender_id]?.handle || null, name: nameOf(p.sender_id), ...(faces[p.sender_id] || {}) },
+      ...(sealed(p) ? { photo: null, message: null, place: null, city: null, region: null, country: null, dish: null, from_place: null, food_verdict: null, sealed_until: p.opens_at, opens_on: p.opens_on || null } : {}),
     }));
     const tgRows = keptTg.map((t) => ({
       type: 'telegram', id: t.id, created_at: t.created_at, received_at: t.received_at || null, body: t.body, to_me: true, reply: !!t.reply_to,
       ...(Array.isArray(t.cc) && t.cc.length ? { group: t.cc.map((id) => ccHandle[id]).filter(Boolean) } : {}),
       ...(t.ink === 'red' || t.ink === 'green' ? { ink: t.ink } : {}),
       by: { handle: share[t.sender_id]?.handle || null, name: nameOf(t.sender_id), ...(faces[t.sender_id] || {}) },
+      ...(sealed(t) ? { body: null, received_at: null, sealed_until: t.opens_at, opens_on: t.opens_on || null } : {}),
     }));
     const all = [...rows, ...tgRows].sort((a, c) => String(c.created_at).localeCompare(String(a.created_at)));
     return jsonResponse({ rows: all, next });
@@ -22898,6 +22998,9 @@ async function handleTelegramSend(request, env, ctx) {
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'Telegrams aren’t available on this account' }, 403);
     if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
     if (sp.social_tier === 'teen') return jsonResponse({ error: 'Telegrams open at age 18', code: 'teen_hold' }, 403);
+    // Sealed until a day (2026-11-03): members only, never an email that waits.
+    const seal = sealFromBody(b);
+    if (seal?.error) return jsonResponse({ error: seal.error }, 400);
 
     // The addresses. A reply goes back to whoever sent me that telegram or postcard; reply_all
     // also reaches the rest of that telegram's group.
@@ -22946,6 +23049,7 @@ async function handleTelegramSend(request, env, ctx) {
     }
     targets = [...new Set(targets.map((id) => String(id).toLowerCase()))].filter((id) => id !== user.id);
     if (!targets.length && !waitingEmails.length) return jsonResponse({ error: 'A telegram to yourself? 🙂' }, 400);
+    if (seal && waitingEmails.length) return jsonResponse({ error: 'A sealed telegram goes to members only — add them by @username' }, 400);
     if (!(await gbModerate(env, body)).allow) return jsonResponse({ error: 'Let’s keep it kind. Try different words.' }, 422);
 
     // Each recipient's rails, after the words.
@@ -22956,7 +23060,8 @@ async function handleTelegramSend(request, env, ctx) {
       const rsp = await gbSocialProfile(env, id).catch(() => undefined);
       if (rsp === undefined) return jsonResponse({ error: 'Couldn’t send right now — try again' }, 503);
       if (rsp === null) { notReady.push(id); continue; }
-      if (rsp.social_tier === 'blocked' || rsp.social_tier === 'teen' || gbAgeHeld(rsp)) continue;
+      // A teen who will be 18 on a seal's open day may receive it (2026-11-03); otherwise as before.
+      if (!sealReachable(rsp, seal) && (rsp.social_tier === 'blocked' || rsp.social_tier === 'teen' || gbAgeHeld(rsp))) continue;
       deliver.push(id);
     }
     if (!deliver.length && notReady.length && !waitingEmails.length) {
@@ -22998,8 +23103,12 @@ async function handleTelegramSend(request, env, ctx) {
     }
 
     const groupId = group && deliver.length > 1 ? crypto.randomUUID() : null;
-    const rows = deliver.map((id) => ({ sender_id: user.id, to_user_id: id, body, reply_to: replyTo, ...(ink ? { ink } : {}), ...(groupId ? { group_id: groupId, cc: deliver.filter((x) => x !== id) } : {}) }));
+    const rows = await Promise.all(deliver.map(async (id) => ({ sender_id: user.id, to_user_id: id, body, reply_to: replyTo, ...(ink ? { ink } : {}), ...(groupId ? { group_id: groupId, cc: deliver.filter((x) => x !== id) } : {}),
+      // Sealed until a day (2026-11-03): their own midnight.
+      ...(seal ? { opens_at: await sealOpensAtFor(env, seal, id), opens_on: seal.opens_on } : {}) })));
     let w = await gbRest(env, 'telegrams', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(rows) });
+    // A sealed telegram must never go out open: before its columns exist, say so instead.
+    if (!w.ok && w.status === 400 && seal) return jsonResponse({ error: 'Sealed mail opens with the next update — try again shortly' }, 503);
     // The seconds before a newer column exists: send it plain (each its own, black ink).
     if (!w.ok && w.status === 400 && (groupId || ink)) w = await gbRest(env, 'telegrams', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(rows.map(({ group_id: _g, cc: _c, ink: _i, ...r }) => r)) });
     if (!w.ok) return jsonResponse({ error: w.status === 404 ? 'Telegrams open with the next update' : 'Could not send' }, w.status === 404 ? 503 : 502);
@@ -23007,15 +23116,18 @@ async function handleTelegramSend(request, env, ctx) {
     if (ctx) {
       const senderName = await ppHolder(env, user.id);
       for (const r of (Array.isArray(made) ? made : [])) {
-        ctx.waitUntil(pushNotify(env, r.to_user_id, 'telegrams', {
-          title: r.group_id ? `Group telegram from ${senderName}` : `Telegram from ${senderName}`, body: 'Open it in your Mailbox to read it',
-          route: `/Mailbox?tg=${r.id}`, collapse: `tg-${r.id}`,
-        }, { each: true }));
+        // A sealed telegram (2026-11-03) knocks once now, naming the day; the sweep knocks again when it opens.
+        ctx.waitUntil(pushNotify(env, r.to_user_id, 'telegrams', seal
+          ? { title: `${senderName} sealed a telegram for you`, body: `It opens on ${sealLabel(seal.opens_on)}`, route: '/Mailbox?tab=telegrams', collapse: `seal-${r.id}` }
+          : {
+            title: r.group_id ? `Group telegram from ${senderName}` : `Telegram from ${senderName}`, body: 'Open it in your Mailbox to read it',
+            route: `/Mailbox?tg=${r.id}`, collapse: `tg-${r.id}`,
+          }, { each: true }));
       }
       ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => `⚡ ${who} ${replyTo ? 'replied with' : 'sent'} ${groupId ? 'a group telegram' : 'a telegram'} to ${gbPeople(deliver.length + waited)}`, request));
       ctx.waitUntil(gbLogEvent(env, 'telegram_send', { reply: !!replyTo, words, to: deliver.length + waited, group: !!groupId || undefined, reply_all: (replyTo && group) || undefined, waiting: waited || undefined }));
     }
-    return jsonResponse({ ok: true, id: made?.[0]?.id || null, count: targets.length - notReady.length + waited, not_ready: notReadyHandles });
+    return jsonResponse({ ok: true, id: made?.[0]?.id || null, count: targets.length - notReady.length + waited, not_ready: notReadyHandles, ...(seal ? { sealed: seal.opens_on } : {}) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -23027,13 +23139,16 @@ async function handleTelegramOpen(request, env) {
     const body = await request.json().catch(() => ({}));
     const id = BL_UUID.test(String(body.telegram_id || '')) ? String(body.telegram_id).toLowerCase() : null;
     if (!id) return jsonResponse({ error: 'Which telegram?' }, 400);
-    const w = await gbRest(env, `telegrams?id=eq.${id}&to_user_id=eq.${user.id}&received_at=is.null`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ received_at: new Date().toISOString() }) });
+    // A telegram sealed until a day (2026-11-03) can't be opened before it: the seal holds.
+    const nowIso = encodeURIComponent(new Date().toISOString());
+    const w = await gbRest(env, `telegrams?id=eq.${id}&to_user_id=eq.${user.id}&received_at=is.null&or=(opens_at.is.null,opens_at.lte.${nowIso})`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ received_at: new Date().toISOString() }) });
     if (!w.ok) return jsonResponse({ error: 'That didn’t go through — try again' }, 503);
     const made = (await w.json())[0];
     if (made) return jsonResponse({ ok: true, received_at: made.received_at });
-    const q = await gbRest(env, `telegrams?id=eq.${id}&to_user_id=eq.${user.id}&select=received_at`, {});
+    const q = await gbRest(env, `telegrams?id=eq.${id}&to_user_id=eq.${user.id}&select=received_at,opens_at,opens_on`, {});
     const row = q.ok ? (await q.json())[0] : null;
     if (!row) return jsonResponse({ error: 'That telegram isn’t here any more' }, 404);
+    if (sealed(row)) return jsonResponse({ error: `It’s sealed until ${sealLabel(row.opens_on)}`, code: 'sealed', opens_on: row.opens_on || null }, 423);
     return jsonResponse({ ok: true, received_at: row.received_at });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -24073,7 +24188,7 @@ async function handleSocialUnread(request, env) {
       gbRest(env, `user_follows?follower_id=eq.${me}&status=eq.accepted&select=followee_id&limit=200`, {}).then(j),
       gbRest(env, `postcards?to_user_id=eq.${me}&created_at=gte.${floor}&select=*&order=created_at.desc&limit=50`, {}).then(j).then((rows) => rows.filter((r) => !r.recipient_deleted_at)),
       // Telegrams to me (2026-10-19); none before the table exists.
-      gbRest(env, `telegrams?to_user_id=eq.${me}&recipient_deleted_at=is.null&created_at=gte.${floor}&select=id,sender_id,created_at,received_at&order=created_at.desc&limit=50`, {}).then(j).catch(() => []),
+      gbRest(env, `telegrams?to_user_id=eq.${me}&recipient_deleted_at=is.null&created_at=gte.${floor}&select=id,sender_id,created_at,received_at,opens_at&order=created_at.desc&limit=50`, {}).then(j).catch(() => []),
       gbRest(env, `blotter_marks?owner_user_id=eq.${me}&user_id=neq.${me}&created_at=gte.${floor}&select=target,user_id,kind,created_at&order=created_at.desc&limit=150`, {}).then(j),
       gbRest(env, `blotter_entries?owner_user_id=eq.${me}&author_user_id=neq.${me}&created_at=gte.${floor}&select=id,target,author_user_id,body,doodle_key,created_at&order=created_at.desc&limit=50`, {}).then(j),
       gbRest(env, `passport_tags?to_user_id=eq.${me}&status=eq.pending&created_at=gte.${floor}&select=from_user_id,name,created_at&order=created_at.desc&limit=50`, {}).then(j),
@@ -24110,9 +24225,10 @@ async function handleSocialUnread(request, env) {
     // A muted follow (see /social/follow) is never news to its target.
     for (const r of follows) if (r.status !== 'muted') items.push({ type: r.status === 'pending' ? 'follow_request' : 'follow', uid: r.follower_id, at: r.created_at });
     // `mail`: still unread — a postcard the Mailbox hasn't shown yet, a telegram still sealed (2026-10-19).
-    for (const r of direct) items.push({ type: 'postcard', uid: r.sender_id, pc_id: r.id, place: r.place_name || null, at: r.created_at, to_me: true, mail: !r.read_at });
+    // A card or telegram still sealed until its day (2026-11-03) is no news yet: it counts the morning it opens.
+    for (const r of direct) if (!sealed(r)) items.push({ type: 'postcard', uid: r.sender_id, pc_id: r.id, place: r.place_name || null, at: r.created_at, to_me: true, mail: !r.read_at });
     for (const r of broadcasts) items.push({ type: 'postcard', uid: r.sender_id, place: r.place_name || null, at: r.created_at });
-    for (const r of (Array.isArray(wires) ? wires : [])) items.push({ type: 'telegram', uid: r.sender_id, tg_id: r.id, at: r.created_at, to_me: true, mail: !r.received_at });
+    for (const r of (Array.isArray(wires) ? wires : [])) if (!sealed(r)) items.push({ type: 'telegram', uid: r.sender_id, tg_id: r.id, at: r.created_at, to_me: true, mail: !r.received_at });
     // One row per person per page, however many stamps they pressed.
     const grouped = new Map();
     for (const r of marks) {
@@ -30554,6 +30670,7 @@ export default {
       if (pathname === '/postcards/box' && request.method === 'POST') return await handlePostcardBox(request, env);
       if (pathname === '/mail/sent' && request.method === 'POST') return await handleMailSent(request, env);
       if (pathname === '/mail/sent/hide' && request.method === 'POST') return await handleMailSentHide(request, env);
+      if (pathname === '/mail/recall' && request.method === 'POST') return await handleMailRecall(request, env, ctx);
       if (pathname === '/postcards/keep' && request.method === 'POST') return await handlePostcardKeep(request, env);
       if (pathname === '/postcards/delete' && request.method === 'POST') return await handlePostcardDelete(request, env);
       if (pathname === '/postcards/board-mine' && request.method === 'POST') return await handleBoardPostcardsMine(request, env);
@@ -30700,6 +30817,8 @@ export default {
     // the member's morning, the inner circle's stamps at 9. Nothing else runs on it.
     if (event && event.cron === '0 * * * *') {
       try { await pushHourly(env); } catch (_e) { /* next hour tries again */ }
+      // Sealed mail that has opened since the last hour gets its knock (2026-11-03).
+      try { await sealedMailSweep(env); } catch (_e) { /* next hour tries again */ }
       // The admin alerts ntfy refused this hour, in one roundup (2026-10-20).
       try { await gbBellFlush(env); } catch (_e) { /* next hour tries again */ }
       return;

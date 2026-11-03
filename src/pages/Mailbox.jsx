@@ -40,6 +40,7 @@ import ReplyWays from "@/components/telegram/ReplyWays";
 import { deleteTelegram } from "@/lib/telegram";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
 import SentList from "@/components/mail/SentList";
+import { sealLabel } from "@/components/mail/SealUntil";
 import { TINK, TYPE } from "@/components/telegram/TelegramPaper";
 
 const SERIF = "'Instrument Serif', Georgia, serif";
@@ -122,6 +123,26 @@ function MailTabs({ tab, onTab, counts }) {
   );
 }
 
+// A message sealed until a day (founder, 2026-11-03): the envelope, who it's from and the day it
+// opens — the words and the photo wait. Nothing on it opens early.
+function SealedRow({ r }) {
+  const tg = r.type === "telegram";
+  const from = r.by?.name || (r.by?.handle ? `@${r.by.handle}` : "Someone");
+  const day = sealLabel(r.opens_on) || whenLabel(r.sealed_until);
+  return (
+    <div role="group" aria-label={`Sealed ${tg ? "telegram" : "postcard"} from ${from}, opens ${day}`}
+      style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 72, boxSizing: "border-box", padding: "10px 12px", background: NEUTRAL.white, border: `1px dashed ${NEUTRAL.airmailBlue}`, borderRadius: 14 }}>
+      <span aria-hidden="true" style={{ flex: "none", width: 56, height: 40, display: "grid", placeItems: "center", borderRadius: 4, background: tg ? "linear-gradient(180deg, #F6ECCF, #EFE1BC)" : NEUTRAL.ivory2, border: `1px solid ${NEUTRAL.airmailLine}` }}>
+        <Lock size={18} strokeWidth={2} color={NEUTRAL.stamp} aria-hidden="true" focusable="false" />
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: fs(14), lineHeight: 1.3, color: NEUTRAL.ink }}><b style={{ fontWeight: 650 }}>{from}</b> sealed a {tg ? "telegram" : "postcard"} for you</span>
+        <span style={{ display: "block", marginTop: 2, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", textTransform: "uppercase", color: NEUTRAL.stamp }}>Opens {day}</span>
+      </span>
+    </div>
+  );
+}
+
 // A message I've read, folded to one line (its front, who sent it, the start of it, when); a tap
 // opens the full card, and "Fold it away" closes it again.
 function ReadRow({ r, open, onToggle, children }) {
@@ -155,7 +176,7 @@ function ReadRow({ r, open, onToggle, children }) {
               <b style={{ fontWeight: 650 }}>{from}</b>{what ? <span style={{ color: NEUTRAL.ink2 }}> · {tg ? String(what).toUpperCase() : what}</span> : null}
             </span>
             <span style={{ display: "block", marginTop: 2, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".04em", color: NEUTRAL.ink3 }}>
-              {when}{others.length ? ` · group, ${others.length + 1} people` : ""}{r.kept ? " · kept" : ""}{tg && !r.received_at ? " · sealed" : ""}
+              {when}{others.length ? ` · group, ${others.length + 1} people` : ""}{r.kept ? " · kept" : ""}{r.sealed_until ? ` · sealed until ${sealLabel(r.opens_on) || whenLabel(r.sealed_until)}` : tg && !r.received_at ? " · sealed" : ""}
             </span>
           </span>
           <ChevronRight size={18} strokeWidth={2} color={BLUE} aria-hidden="true" focusable="false" style={{ flexShrink: 0 }} />
@@ -454,11 +475,14 @@ function MailboxBody() {
   const newTg = mailRows.filter((r) => r.type === "telegram");
   const readPc = boxRows.filter((r) => r.type !== "telegram");
   const readTg = boxRows.filter((r) => r.type === "telegram");
-  const tabCounts = { postcards: newPc.length, telegrams: newTg.filter((r) => !r.received_at).length };
+  // A message still sealed until its day (2026-11-03) is in the list but counts the morning it opens.
+  const tabCounts = { postcards: newPc.filter((r) => !r.sealed_until).length, telegrams: newTg.filter((r) => !r.received_at && !r.sealed_until).length };
 
   const isNew = (r) => (r.type === "postcard" || r.type === "telegram") && r.from_new;
   // One message or stamp, in full. `fresh`: from someone you don't follow.
   const card = (r, i, fromNew) => {
+    // Sealed until a day (2026-11-03): the envelope only, until that morning.
+    if (r.sealed_until) return <SealedRow key={`seal-${r.id || i}`} r={r} />;
     if (r.type === "telegram") {
       return (
         <div key={`tg-${r.id}`} data-tg={r.id} style={{ borderRadius: 4 }}>

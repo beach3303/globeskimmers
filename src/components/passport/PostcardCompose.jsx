@@ -31,6 +31,7 @@ import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
 import { AirmailChevron } from "@/components/redesign/ornaments";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import SendToField, { chipLabel } from "@/components/social/SendToField";
+import SealUntil, { sealLabel } from "@/components/mail/SealUntil";
 import PhotoEditor from "@/components/passport/PhotoEditor";
 import { askForAlerts } from "@/lib/pushAlerts";
 import { createLink, shareText } from "@/lib/messageLinks";
@@ -161,6 +162,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   const [list, setList] = useState(/** @type {any[]} */ ([]));
   const [mode, setMode] = useState("group");       // group | each, for two people or more
   const [replyAll, setReplyAll] = useState(() => !!replyTo?.all);   // a reply to a group card: everyone on it
+  const [sealOn, setSealOn] = useState("");   // "YYYY-MM-DD": sealed until that day (founder, 2026-11-03)
   const [editing, setEditing] = useState(false);   // our looks on the front (PhotoEditor, 2026-10-19)
   const [busy, setBusy] = useState(false);
   // Board cards sign with your name, or with none at all (founder, 2026-10-15):
@@ -250,19 +252,21 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
       anon: board && sign === "anon" ? true : undefined,
       reply_to: reply ? reply.postcard_id : undefined,
       reply_all: toAllOnIt ? true : undefined,
+      opens_on: !board && sealOn ? sealOn : undefined,
     });
     setBusy(false);
     if (error === "age_required") { showToast("Set your birth year in Settings first (one time)", "error"); return; }
     if (error) { showToast(workerMessage(error, "Couldn't send the postcard. Try again."), "error"); return; }
     const one = picked.length === 1 ? picked[0] : null;
     const waiting = Array.isArray(data?.not_ready) && data.not_ready.length ? ` · ${data.not_ready.map((h) => `@${h}`).join(", ")} hasn’t finished their passport yet` : "";
+    const sealTail = data?.sealed ? `, sealed until ${sealLabel(data.sealed)}` : "";
     showToast(board
       ? (sign === "anon" ? `Posted to ${boardWord}, no name on it` : `Posted to ${boardWord}`)
-      : reply ? (toAllOnIt ? `Reply sent to all ${replyOthers.length + 1} on it` : `Reply sent to ${reply.name || "them"}`)
-      : address ? `Postcard sent to @${address}`
+      : reply ? (toAllOnIt ? `Reply sent to all ${replyOthers.length + 1} on it${sealTail}` : `Reply sent to ${reply.name || "them"}${sealTail}`)
+      : address ? `Postcard sent to @${address}${sealTail}`
         // An email address reads the same whether or not a member logs in with it.
-        : one ? `Postcard sent to ${chipLabel(one)}${waiting}`
-            : `${group ? "Group postcard" : "Postcard"} sent to ${picked.length} people${waiting}`, "success");
+        : one ? `Postcard sent to ${chipLabel(one)}${sealTail}${waiting}`
+            : `${group ? "Group postcard" : "Postcard"} sent to ${picked.length} people${sealTail}${waiting}`, "success");
     // The pin ask (founder, 2026-10-15): a direct card from a city the sender
     // verifiably stamped may hang on that city's board too — their choice,
     // asked now, while the card is in hand. The mail itself is already away.
@@ -276,6 +280,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     setMessage("");
     setDish("");
     setList([]);
+    setSealOn("");
     // The moment to ask for alerts (push, 2026-10-19): a card just went to someone.
     if (!board) askForAlerts();
     if (typeof onSent === "function") onSent();
@@ -528,6 +533,9 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
               ) : null}
             </div>
           )}
+
+          {/* Sealed until a day (founder, 2026-11-03): a birthday, an anniversary, the day they land. Never a board card. */}
+          {!board ? <SealUntil value={sealOn} onChange={setSealOn} /> : null}
 
           {fixedBlocked ? (
             <p style={{ display: "flex", alignItems: "flex-start", gap: 6, margin: "8px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink2 }}>

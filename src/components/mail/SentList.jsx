@@ -17,7 +17,8 @@ import { showToast } from "@/components/Toast";
 import { workerMessage } from "@/components/social/FollowByHandle";
 import { TINK, TINK3, TYPE } from "@/components/telegram/TelegramPaper";
 import { inkColor } from "@/lib/telegram";
-import { hideAllSent, hideSent, sentMail } from "@/lib/sentMail";
+import { hideAllSent, hideSent, recallSealed, sentMail } from "@/lib/sentMail";
+import { sealLabel } from "@/components/mail/SealUntil";
 import { deleteBoardPostcard } from "@/lib/boardPostcards";
 import { blotterReadMail } from "@/lib/passport";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
@@ -47,6 +48,8 @@ const MODE = { one: "", each: "Private copies", group: "Group", board: "City Boa
 function statusOf(it) {
   const tg = it.kind === "telegram";
   if (it.status === "waiting") return { tone: "wait", icon: Clock, text: "Waiting for them to join · invite emailed" };
+  // Sealed until a day (2026-11-03): they see the envelope and the day; it opens that morning.
+  if (it.status === "sealed") return { tone: "wait", icon: Clock, text: `Sealed · opens ${sealLabel(it.opens_on) || "later"}` };
   // The 2026-10-24 leak: the card never reached who was picked (and no longer shows to anyone).
   if (it.status === "undelivered") return { tone: "wait", icon: Clock, text: "Didn’t reach who you picked · please send it again" };
   if (it.status === "expired") return { tone: "plain", icon: Link2, text: "Link expired" };
@@ -105,6 +108,41 @@ function Front({ it, big = false }) {
 }
 
 // book / onBook (2026-10-30): the stickers and comments on the private cards here, read once per list.
+// Take back a sealed message before it opens (founder, 2026-11-03: the sender can, and can't open
+// it early): it is erased, photo and all, and the sealed envelope leaves their Mailbox.
+function TakeBack({ it, onRemoved }) {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const tg = it.kind === "telegram";
+  const take = async () => {
+    if (busy) return;
+    setBusy(true);
+    const r = await recallSealed(it);
+    setBusy(false);
+    if (!r.ok) { showToast(workerMessage(r.error, "Couldn’t take it back. Try again."), "error"); return; }
+    showToast(`Taken back — the ${tg ? "telegram" : "postcard"} is gone`, "success");
+    onRemoved(it);
+  };
+  return (
+    <div style={{ marginTop: 10 }}>
+      {asking ? (
+        <div role="group" aria-label="Take it back" style={{ padding: 10, borderRadius: 12, background: NEUTRAL.airmail, border: `1px solid ${NEUTRAL.airmailLine}` }}>
+          <p style={{ margin: 0, fontSize: fs(13), lineHeight: 1.4, color: NEUTRAL.ink2 }}><b style={{ color: NEUTRAL.ink }}>Take it back?</b> It’s erased before it opens; they never see it.</p>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button type="button" onClick={take} disabled={busy} aria-busy={busy || undefined}
+              style={{ minHeight: 40, padding: "0 16px", borderRadius: 12, border: 0, background: NEUTRAL.stamp, color: NEUTRAL.white, font: "inherit", fontSize: fs(13.5), fontWeight: 600, cursor: "pointer" }}>{busy ? "Taking back…" : "Take it back"}</button>
+            <button type="button" onClick={() => setAsking(false)}
+              style={{ minHeight: 40, padding: "0 14px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, font: "inherit", fontSize: fs(13.5), fontWeight: 600, color: NEUTRAL.ink2, cursor: "pointer" }}>Keep it sealed</button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setAsking(true)}
+          style={{ minHeight: 40, padding: "0 14px", borderRadius: 12, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, font: "inherit", fontSize: fs(13.5), fontWeight: 600, color: NEUTRAL.stamp, cursor: "pointer" }}>Take it back</button>
+      )}
+    </div>
+  );
+}
+
 function SentItem({ it, onRemoved, book = null, onBook = undefined }) {
   const [open, setOpen] = useState(false);
   const [asking, setAsking] = useState(false);
@@ -183,7 +221,8 @@ function SentItem({ it, onRemoved, book = null, onBook = undefined }) {
             </div>
           ) : null}
           {/* The card's thread (founder, 2026-10-30): stickers and comments, for the people on it only. */}
-          {!tg && (it.mode === "group" || it.mode === "one") && it.ids?.[0] ? (
+          {it.status === "sealed" ? <TakeBack it={it} onRemoved={onRemoved} /> : null}
+          {!tg && (it.mode === "group" || it.mode === "one") && it.ids?.[0] && it.status !== "sealed" ? (
             <div style={{ marginTop: 10 }}><BlotterStrip mailId={it.group || it.ids[0]} blotter={book} ownerView={false} onChanged={onBook} /></div>
           ) : null}
           {(it.to || []).length ? (

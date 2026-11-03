@@ -26,3 +26,10 @@ export async function hideSent(item) {
   const { data, error } = await callWorker("mail/sent/hide", { items: [{ from: item?.from, ids: Array.isArray(item?.ids) ? item.ids : [] }] });
   return { ok: !error && data?.ok === true, error: error || data?.error || null };
 }
+
+// Take back a sealed postcard or telegram before it opens (2026-11-03): it is erased, photo and
+// all — the recipient's sealed envelope goes with it. Only while status is 'sealed'.
+export async function recallSealed(item) {
+  const { data, error } = await callWorker("mail/recall", { from: item?.from, ids: Array.isArray(item?.ids) ? item.ids : [] });
+  return { ok: !error && data?.ok === true, error: error || data?.error || null };
+}

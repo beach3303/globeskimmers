@@ -68,11 +68,13 @@ export function telegramNumber(id) {
 }
 
 // to_emails (2026-10-24): login emails; one nobody uses waits for them with an invitation email.
-export async function sendTelegram({ to_handle, to_handles, to_emails, mode, reply_to, reply_all, body, ink }) {
+// opens_on (2026-11-03): sealed until that day ("YYYY-MM-DD"), sent with the phone's timezone.
+export async function sendTelegram({ to_handle, to_handles, to_emails, mode, reply_to, reply_all, body, ink, opens_on }) {
   if (!(await requirePassport())) return { data: null, error: 'finish_passport' };
   const to = Array.isArray(to_handles) ? to_handles : to_handle ? [to_handle] : [];
   const emails = Array.isArray(to_emails) ? to_emails.filter(Boolean) : [];
-  const { data, error } = await callWorker('telegrams/send', { body, ...(ink === 'red' || ink === 'green' ? { ink } : {}), ...(reply_to ? { reply_to, ...(reply_all ? { reply_all: true } : {}) } : { to_handles: to, ...(emails.length ? { to_emails: emails } : {}), mode: mode === 'group' ? 'group' : 'each' }) });
+  const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } })();
+  const { data, error } = await callWorker('telegrams/send', { body, ...(ink === 'red' || ink === 'green' ? { ink } : {}), ...(opens_on ? { opens_on, tz } : {}), ...(reply_to ? { reply_to, ...(reply_all ? { reply_all: true } : {}) } : { to_handles: to, ...(emails.length ? { to_emails: emails } : {}), mode: mode === 'group' ? 'group' : 'each' }) });
   return { data, error: error || data?.error || null };
 }
 

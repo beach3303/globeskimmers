@@ -438,11 +438,16 @@ export async function getAgeInfo() {
 // The Send-to list (2026-10-24) — to_user_ids, to_handles, to_emails, mode — and reply_all (2026-10-25)
 // travel too. Until 2026-10-25 they were dropped here, so the worker saw no address and sent the card to
 // every follower (the 2026-10-24 leak); the worker now refuses a card with no address.
-export async function sendPostcard({ image, message, place_name, city, country, region, meta, to_handle, to_user_id, to_email, to_user_ids, to_handles, to_emails, mode, to_city, anon, reply_to, reply_all }) {
+// The phone's own timezone, for a seal's date (2026-11-03): the worker turns the day into the
+// recipient's midnight when it knows their home timezone, else this one.
+export const deviceTimezone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
+export async function sendPostcard({ image, message, place_name, city, country, region, meta, to_handle, to_user_id, to_email, to_user_ids, to_handles, to_emails, mode, to_city, anon, reply_to, reply_all, opens_on }) {
   if (!(await requirePassport())) return { data: null, error: 'finish_passport' };
   const list = (v) => (Array.isArray(v) ? v.filter(Boolean) : []);
   const { data, error } = await callWorker('postcards/send', {
     image, message, place_name, city, country, ...(region ? { region } : {}), meta, to_handle,
+    // Sealed until a date (2026-11-03): "YYYY-MM-DD" and the phone's timezone.
+    ...(opens_on ? { opens_on, tz: deviceTimezone() } : {}),
     ...(to_user_id ? { to_user_id } : {}), ...(to_email ? { to_email } : {}),
     ...(list(to_user_ids).length ? { to_user_ids: list(to_user_ids) } : {}),
     ...(list(to_handles).length ? { to_handles: list(to_handles) } : {}),

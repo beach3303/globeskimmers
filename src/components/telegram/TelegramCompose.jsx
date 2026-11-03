@@ -27,6 +27,7 @@ import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
 import { TELEGRAM_INKS, TELEGRAM_WORDS, inkColor, sendTelegram, telegramFit, telegramText, telegramWords } from "@/lib/telegram";
 import TelegramPaper, { TINK3, TRED, TYPE } from "@/components/telegram/TelegramPaper";
 import SendToField from "@/components/social/SendToField";
+import SealUntil, { sealLabel } from "@/components/mail/SealUntil";
 import { createLink, shareText } from "@/lib/messageLinks";
 
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
@@ -77,6 +78,7 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
   const [mode, setMode] = useState(() => DRAFTS.get(key)?.mode || "group");   // group | each
   const [toAll, setToAll] = useState(() => !!replyTo?.all);   // a reply to a group message: everyone on it
   const [ink, setInk] = useState(() => DRAFTS.get(key)?.ink || "black");   // black | red | green
+  const [sealOn, setSealOn] = useState("");   // "YYYY-MM-DD": sealed until that day (founder, 2026-11-03)
   const [busy, setBusy] = useState(false);
   const [full, setFull] = useState(false);       // a fourth word was refused just now
   const type = (v) => {
@@ -126,7 +128,7 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
     }
     setBusy(true);
     const group = !reply && total > 1 && mode === "group";
-    const { data, error } = await sendTelegram({ body: raw, ink, ...(reply ? { reply_to: reply.reply_to, ...(toAll && others.length ? { reply_all: true } : {}) } : { to_handles: recipients, to_emails: emailsTo, mode: group ? "group" : "each" }) });
+    const { data, error } = await sendTelegram({ body: raw, ink, ...(sealOn ? { opens_on: sealOn } : {}), ...(reply ? { reply_to: reply.reply_to, ...(toAll && others.length ? { reply_all: true } : {}) } : { to_handles: recipients, to_emails: emailsTo, mode: group ? "group" : "each" }) });
     setBusy(false);
     if (error === "age_required") { showToast("Set your birth year in Settings first (one time)", "error"); return; }
     if (error === "finish_passport") return;
@@ -135,8 +137,9 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
     // An email address reads the same whether or not a member logs in with it.
     const who = reply ? (many > 1 ? `everyone on it` : reply.name || "them") : many > 1 ? `${many} people` : recipients[0] ? `@${recipients[0]}` : emailsTo[0];
     const waiting = Array.isArray(data?.not_ready) && data.not_ready.length ? ` · ${data.not_ready.map((h) => `@${h}`).join(", ")} hasn’t finished their passport yet` : "";
-    showToast(`${group || (reply && many > 1) ? "Group telegram" : "Telegram"} sent to ${who}${waiting}`, "success");
+    showToast(`${group || (reply && many > 1) ? "Group telegram" : "Telegram"} sent to ${who}${data?.sealed ? `, sealed until ${sealLabel(data.sealed)}` : ""}${waiting}`, "success");
     setRaw("");
+    setSealOn("");
     DRAFTS.delete(key);
     askForAlerts();
     if (typeof onSent === "function") onSent();
@@ -212,6 +215,9 @@ export default function TelegramCompose({ open = false, onClose = undefined, onS
               ) : null}
             </>
           )}
+
+          {/* Sealed until a day (founder, 2026-11-03): it opens that morning; nobody can open it early. */}
+          <SealUntil value={sealOn} onChange={setSealOn} dark />
 
           {/* the blank, typed on directly */}
           <TelegramPaper mode="blank" to={toLine} from={{ name: meName, handle: meHandle }} number="NEW" words={words} maxWords={TELEGRAM_WORDS} style={{ marginTop: 14 }}>
