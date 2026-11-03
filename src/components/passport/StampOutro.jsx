@@ -30,13 +30,14 @@ export function useOutro(videoRef, enabled = true, endAt = null) {
   return on;
 }
 
-export default function StampOutro({ on = false, city = null, region = null, country = null, date = null }) {
+// `width`: the stamp's width in px — 200 on a landscape clip, a little less on a portrait one.
+export default function StampOutro({ on = false, city = null, region = null, country = null, date = null, width = 200 }) {
   if (!on || !city) return null;
   return (
     <div aria-hidden="true" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none", overflow: "hidden" }}>
       <style>{"@keyframes gs-stamp-slam { 0% { opacity: 0; transform: scale(1.8) rotate(-14deg); } 55% { opacity: 1; transform: scale(.94) rotate(-8deg); } 75% { transform: scale(1.03) rotate(-8deg); } 100% { opacity: 1; transform: scale(1) rotate(-8deg); } }"}</style>
-      <div style={{ animation: "gs-stamp-slam 320ms cubic-bezier(.2,.9,.3,1.15) both", color: RED, filter: "drop-shadow(0 6px 10px rgba(0,0,0,.4))", width: 200 }}>
-        <TypographicStamp name={city} city={region || ""} country={country || ""} date={date} width={200} strength={2} ink={RED} />
+      <div style={{ animation: "gs-stamp-slam 320ms cubic-bezier(.2,.9,.3,1.15) both", color: RED, filter: "drop-shadow(0 6px 10px rgba(0,0,0,.4))", width }}>
+        <TypographicStamp name={city} city={region || ""} country={country || ""} date={date} width={width} strength={2} ink={RED} />
       </div>
     </div>
   );

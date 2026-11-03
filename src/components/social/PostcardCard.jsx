@@ -83,7 +83,7 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
   return (
     <article aria-label={`Postcard from ${from === "You" ? "you" : from}${place ? `, ${place}` : ""}`} className={className}
       style={{ position: "relative", background: NEUTRAL.cream, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 14, overflow: "hidden", boxShadow: `0 10px 22px -18px ${rgba(NEUTRAL.ink, 0.45)}`, ...style }}>
-      <div style={{ margin: "8px 8px 0", borderRadius: 8, overflow: "hidden", ...(row.video ? {} : { aspectRatio: "3 / 2" }), background: NEUTRAL.airmailHair }}>
+      <div style={{ margin: "8px 8px 0", borderRadius: 8, overflow: "hidden", ...(row.video ? {} : { aspectRatio: "3 / 2", background: NEUTRAL.airmailHair }) }}>
         {/* A photo that can't load leaves the plain airmail panel, never a broken-image icon. */}
         {row.video ? (
           // A video postcard (2026-11-03): the poster until play, wearing its look, frame and marks.

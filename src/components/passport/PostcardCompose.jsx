@@ -255,10 +255,11 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   // Its poster becomes the card's front (`image`), so everything a photo card does still works.
   function clearClip() { setClip((c) => { if (c?.src) { try { URL.revokeObjectURL(c.src); } catch { /* fine */ } } return null; }); }
   const askEdit = (src, duration, trim) => new Promise((resolve) => setEdit({ src, duration, trim, resolve }));
-  const setClipFront = async (file, src, filter, duration, exif = null, marks = null) => {
+  // `shape` ({ w, h }, from the probe): a portrait clip makes a portrait card.
+  const setClipFront = async (file, src, filter, duration, exif = null, marks = null, shape = null) => {
     let poster = null;
     try { poster = (await clipStills(file, duration)).poster; } catch { /* the send makes the stills again */ }
-    setClip((c) => { if (c?.src && c.src !== src) { try { URL.revokeObjectURL(c.src); } catch { /* fine */ } } return { file, src, filter: filter || null, duration, exif, marks }; });
+    setClip((c) => { if (c?.src && c.src !== src) { try { URL.revokeObjectURL(c.src); } catch { /* fine */ } } return { file, src, filter: filter || null, duration, exif, marks, shape }; });
     if (poster) setImage(poster);
   };
   const pickClip = async (e) => {
@@ -273,7 +274,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     if (!chosen) { URL.revokeObjectURL(src); return; }
     // Where and when it was shot, from the clip's own metadata: the marks and the stamp come from it.
     const exif = await readClipLocation(f).catch(() => null);
-    await setClipFront(f, src, chosen.filter, meta.duration, exif, chosen.marks || null);
+    await setClipFront(f, src, chosen.filter, meta.duration, exif, chosen.marks || null, meta.width > 0 && meta.height > 0 ? { w: meta.width, h: meta.height } : null);
   };
   const pickClipNative = async () => {
     let found;
@@ -292,7 +293,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
       const out = await shrink(f.path, chosen.start || 0, Math.min(CLIP_SECONDS, info.duration));
       const file = await fileAt(out.path, "clip.mp4", "video/mp4");
       const exif = Number.isFinite(info.lat) && Number.isFinite(info.lng) ? { lat: info.lat, lng: info.lng, taken_at: info.takenAt || null } : { lat: null, lng: null, taken_at: info.takenAt || null };
-      await setClipFront(file, URL.createObjectURL(file), chosen.filter, out.duration || Math.min(CLIP_SECONDS, info.duration), exif, chosen.marks || null);
+      await setClipFront(file, URL.createObjectURL(file), chosen.filter, out.duration || Math.min(CLIP_SECONDS, info.duration), exif, chosen.marks || null, info.width > 0 && info.height > 0 ? { w: info.width, h: info.height } : null);
     } catch (err) {
       showToast(`Couldn’t read that clip — ${String(err?.message || err || "").slice(0, 120)}`, "error");
     } finally { setClipBusy(false); }
@@ -494,7 +495,9 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
 
           {/* the front: a clip (video postcards, 2026-11-03), or the photo */}
           {clip ? (
-            <div style={{ position: "relative", width: "100%", marginTop: 12, overflow: "hidden", borderRadius: 14, border: `1px solid ${NEUTRAL.airmailLine}`, background: "#000", aspectRatio: "3 / 2" }}>
+            // A portrait clip makes a portrait card (founder, 2026-11-03): the front takes the clip's own
+            // shape — as tall as the screen allows, only as wide as the clip — instead of letterboxing it.
+            <div style={{ position: "relative", marginTop: 12, overflow: "hidden", borderRadius: 14, border: `1px solid ${NEUTRAL.airmailLine}`, background: "#000", ...(clip.shape && clip.shape.h > clip.shape.w * 1.05 ? { height: "min(58vh, 560px)", width: "auto", aspectRatio: `${clip.shape.w} / ${clip.shape.h}`, marginLeft: "auto", marginRight: "auto" } : { width: "100%", aspectRatio: "3 / 2" }) }}>
               <video src={clip.src} poster={image || undefined} controls playsInline preload="metadata" aria-label="The clip on the front"
                 style={{ display: "block", width: "100%", height: "100%", objectFit: "contain", filter: clipFilterCss(clip.filter) }} />
               <span aria-hidden="true" style={{ position: "absolute", left: 8, top: 8, padding: "3px 8px", borderRadius: 999, background: rgba(NEUTRAL.ink, 0.62), color: NEUTRAL.white, fontFamily: MONO, fontSize: fs(9), letterSpacing: ".08em", textTransform: "uppercase" }}>Clip · {Math.round(clip.duration || 0)} s</span>

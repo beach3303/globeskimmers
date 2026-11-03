@@ -45,6 +45,7 @@ export default function ClipTrimmer({ src, duration, seconds = 20, trim = true, 
   const [home, setHome] = useState(false);     // miles from home: a choice, since it says something about you
   const [flight, setFlight] = useState(false); // the flight path when it ends: a choice too
   const [still, setStill] = useState(null);     // one still of the clip, behind the look thumbnails
+  const [portrait, setPortrait] = useState(false); // the clip's own shape: a portrait clip previews upright, the frame hugging it
   const ref = useRef(null);
   const max = trim ? Math.max(0, (Number(duration) || 0) - seconds) : 0;
   const end = Math.min(Number(duration) || 0, start + seconds);
@@ -106,11 +107,12 @@ export default function ClipTrimmer({ src, duration, seconds = 20, trim = true, 
 
         {/* The preview, wearing the look, the frame and (in its last two seconds) the stamp. */}
         <div style={{ marginTop: 12 }}>
-          <ClipFrame frame={marks && frame !== "none" ? frame : null} city={previewCity} country={null} date={previewDate} caption={null}>
-            <div style={{ position: "relative" }}>
+          <ClipFrame frame={marks && frame !== "none" ? frame : null} fit={portrait} city={previewCity} country={null} date={previewDate} caption={null}>
+            <div style={{ position: "relative", ...(portrait ? { width: "fit-content", maxWidth: "100%", marginLeft: "auto", marginRight: "auto" } : {}) }}>
               <video ref={ref} src={src} controls playsInline preload="auto"
-                style={{ display: "block", width: "100%", maxHeight: trim ? "36vh" : "42vh", borderRadius: marks && frame !== "none" ? 0 : 12, background: "#000", filter: clipFilterCss(look) }} />
-              <StampOutro on={stampOn} city={previewCity} date={previewDate} />
+                onLoadedMetadata={(e) => setPortrait(e.currentTarget.videoHeight > e.currentTarget.videoWidth * 1.05)}
+                style={{ display: "block", ...(portrait ? { height: trim ? "36vh" : "42vh", width: "auto", maxWidth: "100%" } : { width: "100%", maxHeight: trim ? "36vh" : "42vh" }), borderRadius: marks && frame !== "none" ? 0 : 12, background: "#000", filter: clipFilterCss(look) }} />
+              <StampOutro on={stampOn} city={previewCity} date={previewDate} width={portrait ? 160 : 200} />
             </div>
           </ClipFrame>
         </div>
