@@ -7,7 +7,9 @@
 import { callWorker, workerUpload } from "@/lib/callWorker";
 
 export const CLIP_SECONDS = 20;
-export const CLIP_BYTES = 25 * 1024 * 1024;
+// 40 MB (was 25 until 2026-11-03): an iPhone 720p export runs ~10 Mbps, so 20 seconds is ~26 MB; the native
+// shrink aims under 22 MB (fileLengthLimit) from the next store build — this is the ceiling, not the target.
+export const CLIP_BYTES = 40 * 1024 * 1024;
 export const isClip = (file) => /^video\//i.test(file?.type || "") || /\.(mp4|mov|m4v)$/i.test(file?.name || "");
 // "0:06"
 export const clipLength = (s) => { const n = Math.max(0, Math.round(Number(s) || 0)); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`; };
@@ -82,7 +84,7 @@ export async function uploadStampClip({ stamp_id, file, exif, filter = null, mar
   const meta = await probeClip(file);
   if (!meta || !Number.isFinite(meta.duration) || meta.duration <= 0) return { data: null, error: "Couldn’t read this clip" };
   if (meta.duration > CLIP_SECONDS + 0.5) return { data: null, error: `Clips are up to ${CLIP_SECONDS} seconds — trim it first` };
-  if (file.size > CLIP_BYTES) return { data: null, error: "That clip is too big — 25 MB at most" };
+  if (file.size > CLIP_BYTES) return { data: null, error: "That clip is too big — 40 MB at most" };
   let stills;
   try { stills = await clipStills(file, meta.duration); } catch { return { data: null, error: "Couldn’t read this clip" }; }
   const { data, error } = await uploadStampPhoto({ stamp_id, image: stills.poster, visited_on, exif: exif || undefined, kind: "video", duration: Math.round(meta.duration * 10) / 10, filter, marks });
@@ -101,7 +103,7 @@ export async function contributeClip({ file, exif, caption = "", filter = null, 
   const meta = await probeClip(file);
   if (!meta || !Number.isFinite(meta.duration) || meta.duration <= 0) return { ok: false, code: "unreadable", error: "Couldn’t read this clip" };
   if (meta.duration > CLIP_SECONDS + 0.5) return { ok: false, code: "too_long", error: `Clips are up to ${CLIP_SECONDS} seconds — trim it first` };
-  if (file.size > CLIP_BYTES) return { ok: false, code: "too_big", error: "That clip is too big — 25 MB at most" };
+  if (file.size > CLIP_BYTES) return { ok: false, code: "too_big", error: "That clip is too big — 40 MB at most" };
   onStep?.("stills");
   let stills;
   try { stills = await clipStills(file, meta.duration); } catch { return { ok: false, code: "unreadable", error: "Couldn’t read this clip" }; }

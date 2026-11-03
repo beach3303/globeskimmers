@@ -93,7 +93,15 @@ public class VideoShrinkPlugin: CAPPlugin, CAPBridgedPlugin {
         let total = try await asset.load(.duration).seconds
         let s = max(0, min(start, max(0, total - 0.5)))
         let len = max(0.5, min(maxSeconds, total - s))
-        let preset = maxHeight > 720 ? AVAssetExportPreset1920x1080 : AVAssetExportPreset1280x720
+        // The preset follows maxHeight (a second pass at 540 or 480 is the app's answer to a file that
+        // came out too big), and the file is held under maxBytes: Apple's 720p preset runs ~10 Mbps, so
+        // 20 seconds landed at ~26 MB and the 25 MB door refused it (founder, 2026-11-03). With a length
+        // limit the encoder lowers its bitrate to fit and the picture stays 720p.
+        let preset = maxHeight > 720 ? AVAssetExportPreset1920x1080
+          : maxHeight > 540 ? AVAssetExportPreset1280x720
+          : maxHeight > 480 ? AVAssetExportPreset960x540
+          : AVAssetExportPreset640x480
+        let maxBytes = call.getInt("maxBytes") ?? (22 * 1024 * 1024)
         guard let export = AVAssetExportSession(asset: asset, presetName: preset) else {
           call.reject("Couldn’t prepare the export")
           return
@@ -102,6 +110,7 @@ public class VideoShrinkPlugin: CAPPlugin, CAPBridgedPlugin {
         export.outputURL = out
         export.outputFileType = .mp4
         export.shouldOptimizeForNetworkUse = true
+        if maxBytes > 0 { export.fileLengthLimit = Int64(maxBytes) }
         export.timeRange = CMTimeRange(start: CMTime(seconds: s, preferredTimescale: 600), duration: CMTime(seconds: len, preferredTimescale: 600))
         await export.export()
         if export.status == .completed {

@@ -14,7 +14,7 @@ export async function sendVideoPostcard({ file, filter = null, marks = null, exi
   const meta = await probeClip(file);
   if (!meta || !Number.isFinite(meta.duration) || meta.duration <= 0) return { data: null, error: "Couldn’t read this clip" };
   if (meta.duration > CLIP_SECONDS + 0.5) return { data: null, error: `Clips are up to ${CLIP_SECONDS} seconds — trim it first` };
-  if (file.size > CLIP_BYTES) return { data: null, error: "That clip is too big — 25 MB at most" };
+  if (file.size > CLIP_BYTES) return { data: null, error: "That clip is too big — 40 MB at most" };
   let stills;
   try { stills = await clipStills(file, meta.duration); } catch { return { data: null, error: "Couldn’t read this clip" }; }
   const { data, error } = await sendPostcard({ ...card, image: stills.poster, kind: "video", frames: stills.frames, duration: Math.round(meta.duration * 10) / 10, filter, marks, exif });

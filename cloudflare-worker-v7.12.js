@@ -17368,9 +17368,9 @@ async function handlePassportVideoPut(request, env, ctx) {
     if (!row || !String(row.video_key || '').startsWith(`vid/${user.id}/`)) return jsonResponse({ error: 'Not found' }, 404);
     if (row.video_ready) return jsonResponse({ ok: true, already: true });
     const len = Number(request.headers.get('content-length') || 0);
-    if (len > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 25 MB at most', code: 'too_big' }, 413);
+    if (len > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 40 MB at most', code: 'too_big' }, 413);
     const bytes = new Uint8Array(await request.arrayBuffer());
-    if (bytes.byteLength > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 25 MB at most', code: 'too_big' }, 413);
+    if (bytes.byteLength > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 40 MB at most', code: 'too_big' }, 413);
     if (bytes.byteLength < 2000 || String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7]) !== 'ftyp') return jsonResponse({ error: 'Please send an MP4 clip' }, 400);
     const secs = mp4Duration(bytes);
     if (secs != null && secs > BC_CLIP_SECONDS + 0.5) return jsonResponse({ error: `Clips are up to ${BC_CLIP_SECONDS} seconds — trim it first`, code: 'too_long' }, 400);
@@ -19982,9 +19982,9 @@ async function handlePostcardVideoPut(request, env, ctx) {
     const origin = new URL(request.url).origin;
     if (row.video_ready) return jsonResponse({ ok: true, url: pcVideoUrl(origin, row.id), already: true });
     const len = Number(request.headers.get('content-length') || 0);
-    if (len > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 25 MB at most', code: 'too_big' }, 413);
+    if (len > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 40 MB at most', code: 'too_big' }, 413);
     const bytes = new Uint8Array(await request.arrayBuffer());
-    if (bytes.byteLength > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 25 MB at most', code: 'too_big' }, 413);
+    if (bytes.byteLength > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 40 MB at most', code: 'too_big' }, 413);
     if (bytes.byteLength < 2000 || String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7]) !== 'ftyp') return jsonResponse({ error: 'Please send an MP4 clip' }, 400);
     const secs = mp4Duration(bytes);
     if (secs != null && secs > BC_CLIP_SECONDS + 0.5) return jsonResponse({ error: `Clips are up to ${BC_CLIP_SECONDS} seconds — trim it first`, code: 'too_long' }, 400);
@@ -22285,9 +22285,11 @@ const BC_PER_DAY = 1000;
 const BC_DAY_ALERT = 300;
 const bcPhotoUrl = (origin, id) => `${origin}/board-photo/${id}`;
 const bcVideoUrl = (origin, id) => `${origin}/board-video/${id}`;
-// Clips (founder, 2026-10-30): 20 seconds, 25 MB after the phone shrinks them.
+// Clips (founder, 2026-10-30): 20 seconds; 40 MB at most (was 25 until 2026-11-03: an iPhone 720p export runs
+// ~10 Mbps, so 20 seconds landed at ~26 MB and the door refused the founder's own clip). The phone's shrink
+// aims well under this; the ceiling is a ceiling, not a target.
 const BC_CLIP_SECONDS = 20;
-const BC_CLIP_BYTES = 25 * 1024 * 1024;
+const BC_CLIP_BYTES = 40 * 1024 * 1024;
 // A clip's look (founder, 2026-11-03): a name the app draws with CSS wherever the clip shows; the file
 // is as shot. The same list as src/lib/clipFilters.js; anything else is dropped, never refused.
 const BC_CLIP_FILTERS = new Set(['warm', 'cool', 'vivid', 'faded', 'mono', 'noir', 'vintage']);
@@ -23058,7 +23060,7 @@ async function handleCityCardVisibility(request, env) {
 }
 
 // PUT /board/video/<id> — the clip's bytes, after its poster and frames passed (2026-10-30). Raw
-// MP4 body, 25 MB at most, 20 seconds at most (read from the file's own header when it can be);
+// MP4 body, 40 MB at most, 20 seconds at most (read from the file's own header when it can be);
 // the row's video_key names the R2 object; then the row is ready and the board shows it.
 function mp4Duration(bytes) {
   // moov → mvhd: timescale + duration. Returns null when the header isn't where it's looked for.
@@ -23097,9 +23099,9 @@ async function handleBoardVideoPut(request, env, ctx) {
     if (!row || !String(row.video_key || '').startsWith('vid/')) return jsonResponse({ error: 'Not found' }, 404);
     if (row.video_ready) return jsonResponse({ ok: true, url: bcVideoUrl(new URL(request.url).origin, row.id), already: true });
     const len = Number(request.headers.get('content-length') || 0);
-    if (len > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 25 MB at most', code: 'too_big' }, 413);
+    if (len > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 40 MB at most', code: 'too_big' }, 413);
     const bytes = new Uint8Array(await request.arrayBuffer());
-    if (bytes.byteLength > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 25 MB at most', code: 'too_big' }, 413);
+    if (bytes.byteLength > BC_CLIP_BYTES) return jsonResponse({ error: 'That clip is too big — 40 MB at most', code: 'too_big' }, 413);
     if (bytes.byteLength < 2000 || String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7]) !== 'ftyp') return jsonResponse({ error: 'Please send an MP4 clip' }, 400);
     const secs = mp4Duration(bytes);
     if (secs != null && secs > BC_CLIP_SECONDS + 0.5) return jsonResponse({ error: `Clips are up to ${BC_CLIP_SECONDS} seconds — trim it first`, code: 'too_long' }, 400);
