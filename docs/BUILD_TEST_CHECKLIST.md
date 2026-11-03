@@ -4402,3 +4402,7 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   `/pc-video/<unknown>` 404; `PUT /postcards/video/<unknown>` 404. **Open (founder):** `npm run ota`.
 - Same morning (founder, mid-push: "instead of Dish or Topic, just do Topic (optional)"): the postcard sheet's
   third field reads "Topic (optional)" (its label "Topic"); the worker still stores it as `meta.dish`, unchanged.
+  Pushed as main ba1754a (app + docs only, no workflow).
+- **OTA 1.0.2611031630 LIVE 2026-11-03 16:30 UTC** (founder: "did the ota"; `channel list` shows production on it):
+  on phones now — the iPhone clip read fix, clip looks (editor + board), sealed postcards and telegrams, video
+  postcards, "Topic (optional)". Nothing from today is still waiting on an OTA.
