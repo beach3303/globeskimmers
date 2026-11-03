@@ -14280,6 +14280,25 @@ function gbRest(env, path, opts = {}) {
     headers: { apikey: GB_KEY(env), Authorization: `Bearer ${GB_KEY(env)}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
   });
 }
+// The founder's two logins are one person (founder's decision, 2026-11-02): a session signed in
+// as GB_ALIAS_EMAIL acts as the member who holds GB_ALIAS_HANDLE — her passport, friends, mail,
+// boards and uploads — everywhere the worker reads or writes by user id. Supabase itself keeps
+// them as two users (one email each), so only what the app reads straight from Supabase (the
+// profiles row: first name, home city, settings) stays per login. Nobody else is aliased.
+const GB_ALIAS_EMAIL = 'founder@globeskimmers.io';
+const GB_ALIAS_HANDLE = 'maiza';
+let gbAliasTarget = null;   // the main account's id, looked up once per isolate
+async function gbAliasFor(env, u) {
+  if (String(u?.email || '').toLowerCase() !== GB_ALIAS_EMAIL) return u;
+  try {
+    if (!gbAliasTarget) {
+      const q = await gbRest(env, `passport_shares?handle=eq.${GB_ALIAS_HANDLE}&select=user_id&limit=1`, {});
+      const row = (q.ok ? await q.json() : [])[0];
+      if (row?.user_id && row.user_id !== u.id) gbAliasTarget = row.user_id;
+    }
+    return gbAliasTarget ? { ...u, id: gbAliasTarget, alias_from: u.id } : u;
+  } catch { return u; }
+}
 async function gbUser(request, env) {
   const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
   if (!token) return null;
@@ -14289,7 +14308,7 @@ async function gbUser(request, env) {
     const u = await r.json();
     if (!(u && u.id)) return null;
     gbBellNewMember(request, env, u);   // in-memory checks, then waitUntil; never awaited, never throws
-    return u;
+    return await gbAliasFor(env, u);
   } catch { return null; }
 }
 // Server-side events. events.session_id is NOT NULL with no default, and this
