@@ -4447,3 +4447,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   page's open-by-id effect now restarts when the id changes).
 - Gates: node --check worker; eslint (no-undef) on SameSpotStrip / CityBoard; lib clean; build; boot-check. Needs
   push (worker + migration) + OTA.
+
+## 2026-11-03 — PUSHED: stamp outro + House frames + same-spot strip (main b52a859)
+
+- Apply Supabase Migrations run 41687527467 green (`board_contributions.marks`, `lat`, `lng` + the spot index live);
+  Deploy Cloudflare Workers run 41687527529 green. **Open (founder):** `npm run ota` — then upload a clip from a
+  board: the editor shows LOOK, FRAME and "Stamp it at the end"; the board viewer draws the frame and the stamp.
+  The strip appears once two uploads from after this OTA share a spot.
