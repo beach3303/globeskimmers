@@ -4212,3 +4212,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   so the `profiles` row (first name, home city, settings) stays per login; `requireAdmin` is by email and unchanged.
 - **Founder:** on the S10, force-close and reopen the app (the alias applies to every API call); the passport,
   friends and mail of the gmail account appear. The @maiza_ handle stays reserved by the idle account.
+
+## 2026-11-02 late — PUSHED: founder alias live (main 2bbdc94); CI migrations fixed for the new Supabase CLI
+
+- Worker deploy green with `gbAliasFor` (founder@ sessions act as @maiza's member). The migration moving her
+  @maiza_ uploads first failed twice before any SQL ran: `supabase/setup-cli@v1` with `version: latest` pulled a CLI
+  that (1) targets a local stack unless `--remote` is passed and (2) asks to confirm a production apply unless
+  `--yes` is passed. `deploy-migrations.yml` now runs `db push --remote --dry-run` and `db push --remote --yes`;
+  run 41590828865 green, migration 20261103040000 applied.
+- **Founder:** force-close and reopen the app on the S10; the gmail account's passport, friends and mail show
+  under the founder@ login. Profile fields (first name, home city, settings) are per login.
