@@ -22064,7 +22064,7 @@ async function handleCityBoard(request, env) {
     const photoRows = shownPhotos.map((p) => ({
       type: 'photo', id: p.id, created_at: p.created_at, photo: p.photo, caption: p.caption || null,
       // A clip (2026-10-30): the poster is `photo`; the viewer plays `video`, wearing its look (2026-11-03).
-      ...(p.video ? { video: p.video, duration: p.duration || null, filter: p.filter || null } : {}),
+      ...(p.video ? { video: p.video, duration: p.duration || null, filter: p.filter || null, marks: p.marks || null, taken_at: p.taken_at || null } : {}),
       place: p.stamp.name, stamp_kind: p.stamp.kind || null, city: p.stamp.city || null, region: p.stamp.region || null, country: p.stamp.country || null,
       // Every photo on a board comes from "a traveler" (founder, 2026-11-01: "people like it that their
       // names are hidden as contributors") — a contribution (2026-10-27) and a 🌍 Everyone album print alike.
@@ -22182,6 +22182,10 @@ const BC_CLIP_BYTES = 25 * 1024 * 1024;
 // A clip's look (founder, 2026-11-03): a name the app draws with CSS wherever the clip shows; the file
 // is as shot. The same list as src/lib/clipFilters.js; anything else is dropped, never refused.
 const BC_CLIP_FILTERS = new Set(['warm', 'cool', 'vivid', 'faded', 'mono', 'noir', 'vintage']);
+// A clip's marks (founder, 2026-11-03): a house frame and the verified stamp outro, stored by name as
+// { frame, outro } and drawn at playback from the clip's own city and date. Unknown names are dropped.
+const BC_CLIP_FRAMES = new Set(['airmail', 'postmark', 'passport', 'print']);
+const bcMarksOf = (m) => { if (!m || typeof m !== 'object') return null; const out = {}; if (typeof m.frame === 'string' && BC_CLIP_FRAMES.has(m.frame)) out.frame = m.frame; if (m.outro === true) out.outro = true; return Object.keys(out).length ? out : null; };
 // The city a photo was taken in: Google's reverse geocode, kept 30 days for its ~1 km square
 // (the coarse names only, as /reverse-geocode keeps them). { city, region, country } or null.
 async function bcPlaceAt(env, lat, lng) {
@@ -22306,8 +22310,9 @@ async function handleBoardContribute(request, env, ctx) {
     await env.MEDIA.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' } });
     const takenAt = typeof exif.taken_at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(exif.taken_at) ? `${exif.taken_at}Z` : null;
     const filter = isVideo && typeof b.filter === 'string' && BC_CLIP_FILTERS.has(b.filter) ? b.filter : null;
+    const marks = isVideo ? bcMarksOf(b.marks) : null;
     const row = { user_id: user.id, board_key: board.key, city: board.city, region: board.region || null, country: board.country, taken_at: takenAt, caption: caption || null, photo_key: key, mod_status: 'ok',
-      ...(isVideo ? { kind: 'video', duration: Math.round(duration * 10) / 10, video_key: `vid/${user.id}/${stem}.mp4`, video_ready: false, ...(filter ? { filter } : {}) } : {}) };
+      ...(isVideo ? { kind: 'video', duration: Math.round(duration * 10) / 10, video_key: `vid/${user.id}/${stem}.mp4`, video_ready: false, ...(filter ? { filter } : {}), ...(marks ? { marks } : {}) } : {}) };
     const ins = await gbRest(env, 'board_contributions', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
     if (!ins.ok) { await env.MEDIA.delete(key).catch(() => {}); return jsonResponse({ error: ins.status === 404 ? 'City Board photos open in a few minutes — try again shortly' : isVideo && ins.status === 400 ? 'Clips open with the next update — try again shortly' : 'Could not save — try again' }, 502); }
     const saved = (await ins.json())[0] || {};
@@ -22349,12 +22354,12 @@ async function handleBoardContributions(request, env) {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     // Clips too (2026-10-30), once their bytes landed; a clip still uploading isn't listed.
-    let q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&mod_status=eq.ok&video_ready=eq.true&order=created_at.desc&limit=1000&select=id,caption,city,region,country,taken_at,created_at,hidden,kind,duration,filter`, {});
+    let q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&mod_status=eq.ok&video_ready=eq.true&order=created_at.desc&limit=1000&select=id,caption,city,region,country,taken_at,created_at,hidden,kind,duration,filter,marks`, {});
     if (q.status === 400) q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&mod_status=eq.ok&order=created_at.desc&limit=1000&select=id,caption,city,region,country,taken_at,created_at,hidden`, {});
     if (q.status === 404) return jsonResponse({ photos: [], open_until: '2027-06-30', unavailable: true });
     if (!q.ok) return jsonResponse({ error: 'Couldn’t load your photos — try again', photos: [] }, 502);
     const origin = new URL(request.url).origin;
-    const photos = (await q.json()).map((r) => ({ ...r, url: bcPhotoUrl(origin, r.id), ...(r.kind === 'video' ? { video: bcVideoUrl(origin, r.id), duration: r.duration || null, filter: r.filter || null } : {}) }));
+    const photos = (await q.json()).map((r) => ({ ...r, url: bcPhotoUrl(origin, r.id), ...(r.kind === 'video' ? { video: bcVideoUrl(origin, r.id), duration: r.duration || null, filter: r.filter || null, marks: r.marks || null } : {}) }));
     // The owner sees how often each of their photos was opened on the boards (2026-10-30).
     const vm = await viewsFor(env, photos.map((p) => `bcp:${p.id}`));
     for (const p of photos) p.views = vm[`bcp:${p.id}`] || 0;
@@ -22777,7 +22782,7 @@ async function handleFriendsAdded(request, env) {
     const [stamps, photos, boards, shares, profs] = await Promise.all([
       gbRest(env, `city_card_stamps?user_id=in.(${ids.join(',')})&created_at=gte.${since}&order=created_at.desc&limit=40&select=id,card_id,user_id,slot,place_id,name,category,design,visited_on,visits,last_visited_on,created_at`, {}).then(j),
       gbRest(env, `passport_stamp_photos?user_id=in.(${ids.join(',')})&mod_status=eq.ok&created_at=gte.${since}&order=created_at.desc&limit=40&select=id,user_id,stamp_id,caption,created_at`, {}).then(j),
-      gbRest(env, `board_contributions?user_id=in.(${ids.join(',')})&mod_status=eq.ok&hidden=eq.false&video_ready=eq.true&created_at=gte.${since}&order=created_at.desc&limit=40&select=id,user_id,city,region,country,kind,duration,caption,created_at,filter`, {}).then(j),
+      gbRest(env, `board_contributions?user_id=in.(${ids.join(',')})&mod_status=eq.ok&hidden=eq.false&video_ready=eq.true&created_at=gte.${since}&order=created_at.desc&limit=40&select=id,user_id,city,region,country,kind,duration,caption,created_at,filter,marks`, {}).then(j),
       gbRest(env, `passport_shares?user_id=in.(${ids.join(',')})&select=user_id,handle,is_public,visibility`, {}).then(j),
       gbRest(env, `social_profiles?user_id=in.(${ids.join(',')})&select=*`, {}).then(j),
     ]);
@@ -22816,7 +22821,7 @@ async function handleFriendsAdded(request, env) {
     // A board photo or clip is public by design: any adult I follow, whatever their passport's word.
     for (const b of boards) {
       if (!adultOf[b.user_id]) continue;
-      rows.push({ kind: 'board', at: b.created_at, by: by(b.user_id), item: { id: b.id, photo: bcPhotoUrl(origin, b.id), ...(b.kind === 'video' ? { video: bcVideoUrl(origin, b.id), duration: b.duration || null, filter: b.filter || null } : {}), caption: b.caption || null }, board_at: { city: b.city, region: b.region || null, country: b.country } });
+      rows.push({ kind: 'board', at: b.created_at, by: by(b.user_id), item: { id: b.id, photo: bcPhotoUrl(origin, b.id), ...(b.kind === 'video' ? { video: bcVideoUrl(origin, b.id), duration: b.duration || null, filter: b.filter || null, marks: b.marks || null } : {}), caption: b.caption || null }, board_at: { city: b.city, region: b.region || null, country: b.country } });
     }
     rows.sort((a, c) => String(c.at).localeCompare(String(a.at)));
     return jsonResponse({ rows: rows.slice(0, 40) });
@@ -22958,7 +22963,7 @@ async function bcBoardPhotos(env, board, before, blocked, origin) {
     const base = `board_contributions?${bcWhere(board)}&mod_status=eq.ok&hidden=eq.false&video_ready=eq.true`;
     const pageQ = (cols) => gbRest(env, `${base}${before ? `&created_at=lt.${encodeURIComponent(before)}` : ''}&order=created_at.desc&select=${cols}&limit=${PC_WALL_PAGE + 1}`, {});
     let [pq, cq] = await Promise.all([
-      pageQ('id,user_id,caption,city,region,country,created_at,kind,duration,filter'),
+      pageQ('id,user_id,caption,city,region,country,created_at,taken_at,kind,duration,filter,marks'),
       gbRest(env, `${base}&select=id`, { headers: { Prefer: 'count=exact', Range: '0-0' } }),
     ]);
     // Until the clip-look migration (2026-11-03) has applied, the column isn't there: ask without it.

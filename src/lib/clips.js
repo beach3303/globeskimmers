@@ -78,7 +78,8 @@ export async function readClipLocation(file) {
 // { ok: false, code, error }. onStep: 'stills' | 'check' | 'upload'. `filter` is the look the member
 // picked (src/lib/clipFilters.js), stored by name and drawn by CSS; the stills stay unfiltered, so the
 // check sees the clip as shot.
-export async function contributeClip({ file, exif, caption = "", filter = null, onStep = undefined }) {
+// `marks` (2026-11-03): { frame?, outro? } — a house frame and the verified stamp outro, drawn at playback.
+export async function contributeClip({ file, exif, caption = "", filter = null, marks = null, onStep = undefined }) {
   const meta = await probeClip(file);
   if (!meta || !Number.isFinite(meta.duration) || meta.duration <= 0) return { ok: false, code: "unreadable", error: "Couldn’t read this clip" };
   if (meta.duration > CLIP_SECONDS + 0.5) return { ok: false, code: "too_long", error: `Clips are up to ${CLIP_SECONDS} seconds — trim it first` };
@@ -87,7 +88,7 @@ export async function contributeClip({ file, exif, caption = "", filter = null, 
   let stills;
   try { stills = await clipStills(file, meta.duration); } catch { return { ok: false, code: "unreadable", error: "Couldn’t read this clip" }; }
   onStep?.("check");
-  const { data, error } = await callWorker("board/contribute", { kind: "video", image: stills.poster, frames: stills.frames, exif: exif || {}, caption, duration: Math.round(meta.duration * 10) / 10, ...(filter && filter !== "none" ? { filter } : {}) }, { timeoutMs: 90000 });
+  const { data, error } = await callWorker("board/contribute", { kind: "video", image: stills.poster, frames: stills.frames, exif: exif || {}, caption, duration: Math.round(meta.duration * 10) / 10, ...(filter && filter !== "none" ? { filter } : {}), ...(marks && typeof marks === "object" ? { marks } : {}) }, { timeoutMs: 90000 });
   if (error || !data?.ok || !data.upload) return { ok: false, code: data?.code || null, error: data?.error || error || "Upload failed" };
   onStep?.("upload");
   const up = await workerUpload(data.upload, file, "video/mp4", { timeoutMs: 180000 });

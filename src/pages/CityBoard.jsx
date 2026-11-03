@@ -22,6 +22,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { BookOpen, ChevronLeft, ChevronRight, ImageUp, Mail, Pencil, Play, Stamp, X } from "lucide-react";
 import { clipLength } from "@/lib/clips";
 import { clipFilterCss } from "@/lib/clipFilters";
+import { frameOf, outroOf } from "@/lib/clipMarks";
+import ClipFrame from "@/components/passport/ClipFrame";
+import StampOutro, { useOutro } from "@/components/passport/StampOutro";
 import { useDismissable } from "@/lib/dismissStack";
 import { captionContribution, contributeOpen } from "@/lib/boardContrib";
 import { BoardContributeSheet } from "@/components/passport/ContributeAlbum";
@@ -183,6 +186,21 @@ function Billboard({ name, kind = "city", country = "", region = "", kit = null,
 // swiped or arrowed through, each with its sticker tray and comments (board rules: anyone
 // adult may react, the owner hears of it in the Mailbox).
 // onCaption (2026-11-02): the owner of an upload writes or changes its caption right here on the board.
+// The clip itself, with the verified stamp outro over its last two seconds when its owner asked for
+// it (2026-11-03): the city and the day come from where and when the clip was shot.
+function ClipStage({ row, onPlay }) {
+  const ref = useRef(null);
+  const on = useOutro(ref, outroOf(row.marks));
+  return (
+    <div style={{ position: "relative" }}>
+      <video ref={ref} key={row.id} src={row.video} poster={row.photo} controls playsInline preload="metadata" onPlay={onPlay}
+        aria-label={row.caption || `Clip from ${row.place || ""}`}
+        style={{ display: "block", width: "100%", maxHeight: "54vh", borderRadius: frameOf(row.marks) ? 0 : 6, background: "#000", filter: clipFilterCss(row.filter) }} />
+      <StampOutro on={on} city={row.city || row.place || null} region={row.region || null} country={row.country || null} date={row.taken_at || row.created_at || null} />
+    </div>
+  );
+}
+
 function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, onReport, onDelete = undefined, readOnly = false, onCaption = undefined }) {
   const [editCap, setEditCap] = useState(null);   // the caption being written, while the field is open
   const [capBusy, setCapBusy] = useState(false);
@@ -260,10 +278,11 @@ function BoardViewer({ rows, index, onIndex, onClose, book, onBook, me, meName, 
         {row.type === "photo" ? (
           <>
             {row.video ? (
-              // A clip (2026-10-30): the poster until play; the view counts when it starts.
-              <video key={row.id} src={row.video} poster={row.photo} controls playsInline preload="metadata" onPlay={() => countView(row)}
-                aria-label={row.caption || `Clip from ${row.place || ""}`}
-                style={{ display: "block", width: "100%", maxHeight: "54vh", borderRadius: 6, background: "#000", filter: clipFilterCss(row.filter) }} />
+              // A clip (2026-10-30): the poster until play; the view counts when it starts. Its frame and the
+              // verified stamp outro (2026-11-03) are drawn around and over it from its own city and date.
+              <ClipFrame frame={frameOf(row.marks)} city={row.city || row.place || null} region={row.region || null} country={row.country || null} date={row.taken_at || row.created_at || null} caption={row.caption || null}>
+                <ClipStage row={row} onPlay={() => countView(row)} />
+              </ClipFrame>
             ) : (
               // Pinch to zoom, pan while zoomed, double tap in or out (founder, 2026-10-29); a zoomed photo keeps its touches, so a swipe pages only at 1×.
               <ZoomableImage key={row.id} src={row.photo} alt={row.caption || `Photo from ${row.place || ""}`} style={{ width: "100%" }}

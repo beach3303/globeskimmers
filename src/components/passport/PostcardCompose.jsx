@@ -527,7 +527,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
             </button>
           ) : null}
           <PhotoEditor open={editing} image={image} aspect="3:2" onDone={(u) => { setImage(u); setEditing(false); }} onClose={() => setEditing(false)} />
-          {edit ? <ClipTrimmer src={edit.src} duration={edit.duration} seconds={CLIP_SECONDS} trim={edit.trim}
+          {edit ? <ClipTrimmer src={edit.src} duration={edit.duration} seconds={CLIP_SECONDS} trim={edit.trim} marks={false}
             onPick={(chosen) => { const { resolve } = edit; setEdit(null); resolve(chosen); }}
             onClose={() => { const { resolve } = edit; setEdit(null); resolve(null); }} /> : null}
 

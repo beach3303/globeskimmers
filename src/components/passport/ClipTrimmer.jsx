@@ -1,17 +1,22 @@
-// ClipTrimmer — the clip editor before a clip goes up. Two jobs on one sheet: a clip longer than 20
-// seconds slides to the 20 seconds you want (founder, 2026-10-30: "can we give them a way to trim it or
-// select from video to trim?"), and every clip picks its look (founder, 2026-11-03: "allow user to place
-// filter on their clip/videos"). The preview plays your window from its start and stops at its end,
-// wearing the look; the button hands back { start, filter }. A look is a name the app draws with CSS
-// wherever the clip shows (src/lib/clipFilters.js) — the file itself is never re-encoded.
+// ClipTrimmer — the clip editor before a clip goes up. On one sheet: a clip longer than 20 seconds slides
+// to the 20 seconds you want (founder, 2026-10-30: "can we give them a way to trim it or select from
+// video to trim?"), every clip picks its look (founder, 2026-11-03: "allow user to place filter on their
+// clip/videos"), and — with `marks` on — its frame and the verified stamp outro (founder, 2026-11-03:
+// "the marks only we can put on a clip … build both"). The preview plays your window from its start and
+// stops at its end, wearing the look, the frame and the stamp; the button hands back
+// { start, filter, marks }. A look, a frame and the stamp are names the app draws at playback
+// (src/lib/clipFilters.js, src/lib/clipMarks.js) — the file itself is never re-encoded.
 //
-//   <ClipTrimmer src duration seconds trim onPick({ start, filter }) onClose />
+//   <ClipTrimmer src duration seconds trim marks city date onPick({ start, filter, marks }) onClose />
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Scissors, X } from "lucide-react";
+import { Check, Scissors, Stamp, X } from "lucide-react";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { useDismissable } from "@/lib/dismissStack";
 import { CLIP_FILTERS, clipFilterCss } from "@/lib/clipFilters";
+import { CLIP_FRAMES, packMarks } from "@/lib/clipMarks";
+import ClipFrame from "@/components/passport/ClipFrame";
+import StampOutro, { useOutro } from "@/components/passport/StampOutro";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -20,11 +25,23 @@ const mmss = (s) => { const n = Math.max(0, Math.round(Number(s) || 0)); return 
 // What a look does to colours while no still of the clip is ready: a warm-to-blue swatch.
 const SWATCH = "linear-gradient(135deg, #E8B04B 0%, #D9643A 45%, #2F6CB5 100%)";
 
-export default function ClipTrimmer({ src, duration, seconds = 20, trim = true, onPick, onClose }) {
+// A frame's miniature for its chip: the signature of each, drawn in CSS.
+function FrameMini({ id }) {
+  const base = { position: "absolute", inset: 0 };
+  if (id === "airmail") return <span style={{ ...base, background: "#fff", border: "4px solid transparent", borderImage: `repeating-linear-gradient(45deg, ${RED} 0 4px, #fff 4px 8px, ${BLUE} 8px 12px, #fff 12px 16px) 4` }}><span style={{ position: "absolute", inset: "4px 4px 12px", background: "#BFAE93" }} /></span>;
+  if (id === "postmark") return <span style={{ ...base, background: "#BFAE93" }}><span style={{ position: "absolute", right: 4, top: 4, width: 16, height: 16, borderRadius: 999, border: `2px solid ${RED}`, background: "rgba(255,255,255,.6)" }} /></span>;
+  if (id === "passport") return <span style={{ ...base, background: "#FBF6EC", border: "1px solid #EADFC9" }}><span style={{ position: "absolute", inset: "12px 6px 8px", background: "#BFAE93", border: "2px solid #fff" }} /><span style={{ position: "absolute", left: 2, top: 16, width: 20, height: 10, border: "2px double #2F5F3F", borderRadius: 2, transform: "rotate(-8deg)" }} /></span>;
+  if (id === "print") return <span style={{ ...base, background: "#fff", boxShadow: "inset 0 0 0 1px rgba(22,17,13,.1)" }}><span style={{ position: "absolute", inset: "4px 4px 14px", background: "#BFAE93" }} /><span style={{ position: "absolute", left: 6, right: 10, bottom: 6, height: 3, borderRadius: 2, background: "#3A3128", opacity: 0.6 }} /></span>;
+  return <span style={{ ...base, border: "1.5px dashed rgba(22,17,13,.3)", borderRadius: 8 }} />;
+}
+
+export default function ClipTrimmer({ src, duration, seconds = 20, trim = true, marks = true, city = null, date = null, onPick, onClose }) {
   useDismissable(true, onClose);
   const [start, setStart] = useState(0);
   const [look, setLook] = useState("none");
-  const [frame, setFrame] = useState(null);   // one still of the clip, behind the look thumbnails
+  const [frame, setFrame] = useState("none");
+  const [outro, setOutro] = useState(marks);   // the stamp at the end: on unless switched off
+  const [still, setStill] = useState(null);     // one still of the clip, behind the look thumbnails
   const ref = useRef(null);
   const max = trim ? Math.max(0, (Number(duration) || 0) - seconds) : 0;
   const end = Math.min(Number(duration) || 0, start + seconds);
@@ -52,7 +69,7 @@ export default function ClipTrimmer({ src, duration, seconds = 20, trim = true, 
         const scale = Math.max(s / el.videoWidth, s / el.videoHeight);
         const w = el.videoWidth * scale, h = el.videoHeight * scale;
         c.getContext("2d").drawImage(el, (s - w) / 2, (s - h) / 2, w, h);
-        setFrame(c.toDataURL("image/jpeg", 0.8));
+        setStill(c.toDataURL("image/jpeg", 0.8));
       } catch { /* tainted or not drawable: the swatch stays */ }
       done = true;
     };
@@ -62,6 +79,9 @@ export default function ClipTrimmer({ src, duration, seconds = 20, trim = true, 
     return () => { el.removeEventListener("loadeddata", grab); el.removeEventListener("seeked", grab); };
   }, [src]);
   const current = CLIP_FILTERS.find((f) => f.id === look) || CLIP_FILTERS[0];
+  const stampOn = useOutro(ref, marks && outro, end);
+  const previewCity = city || "Your city";
+  const previewDate = date || new Date().toISOString();
 
   return createPortal(
     <div className="fixed inset-0 flex items-end justify-center" style={{ zIndex: 9998, background: "rgba(22,17,13,.55)" }} onClick={onClose}>
@@ -81,8 +101,16 @@ export default function ClipTrimmer({ src, duration, seconds = 20, trim = true, 
           </button>
         </div>
 
-        <video ref={ref} src={src} controls playsInline preload="auto"
-          style={{ display: "block", width: "100%", maxHeight: trim ? "40vh" : "46vh", borderRadius: 12, background: "#000", marginTop: 12, filter: clipFilterCss(look) }} />
+        {/* The preview, wearing the look, the frame and (in its last two seconds) the stamp. */}
+        <div style={{ marginTop: 12 }}>
+          <ClipFrame frame={marks && frame !== "none" ? frame : null} city={previewCity} country={null} date={previewDate} caption={null}>
+            <div style={{ position: "relative" }}>
+              <video ref={ref} src={src} controls playsInline preload="auto"
+                style={{ display: "block", width: "100%", maxHeight: trim ? "36vh" : "42vh", borderRadius: marks && frame !== "none" ? 0 : 12, background: "#000", filter: clipFilterCss(look) }} />
+              <StampOutro on={stampOn} city={previewCity} date={previewDate} />
+            </div>
+          </ClipFrame>
+        </div>
 
         {trim ? (
           <div style={{ marginTop: 12, padding: "10px 12px 12px", borderRadius: 14, background: "#fff", border: "1px solid rgba(22,17,13,.1)" }}>
@@ -108,8 +136,8 @@ export default function ClipTrimmer({ src, duration, seconds = 20, trim = true, 
                   style={{ flex: "none", width: 66, padding: "2px 0 0", border: 0, background: "transparent", cursor: "pointer", font: "inherit" }}>
                   {/* The ring sits outside the filtered tile, so a grey look can't grey it. */}
                   <span aria-hidden="true" style={{ display: "block", width: 56, height: 56, margin: "0 auto", borderRadius: 12, boxShadow: on ? `0 0 0 2px #fff, 0 0 0 4px ${BLUE}` : "0 0 0 1px rgba(22,17,13,.12)" }}>
-                    <span style={{ display: "block", width: "100%", height: "100%", borderRadius: 12, overflow: "hidden", background: frame ? "#000" : SWATCH, filter: clipFilterCss(f.id) }}>
-                      {frame ? <img src={frame} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : null}
+                    <span style={{ display: "block", width: "100%", height: "100%", borderRadius: 12, overflow: "hidden", background: still ? "#000" : SWATCH, filter: clipFilterCss(f.id) }}>
+                      {still ? <img src={still} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : null}
                     </span>
                   </span>
                   <span style={{ display: "block", marginTop: 6, fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".1em", textTransform: "uppercase", color: on ? BLUE : NEUTRAL.ink2, fontWeight: on ? 700 : 500 }}>{f.name}</span>
@@ -119,7 +147,42 @@ export default function ClipTrimmer({ src, duration, seconds = 20, trim = true, 
           </div>
         </div>
 
-        <button type="button" onClick={() => onPick({ start, filter: look === "none" ? null : look })}
+        {marks ? (
+          <>
+            {/* The frames (2026-11-03): each chip is the frame's own signature. */}
+            <div style={{ marginTop: 12, padding: "10px 12px 10px", borderRadius: 14, background: "#fff", border: "1px solid rgba(22,17,13,.1)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontFamily: MONO, fontSize: fs(10), letterSpacing: ".1em", color: NEUTRAL.ink3 }}>
+                <span>FRAME</span><span style={{ color: frame === "none" ? NEUTRAL.ink3 : BLUE }}>{(CLIP_FRAMES.find((f) => f.id === frame) || CLIP_FRAMES[0]).name.toUpperCase()}</span>
+              </div>
+              <div role="radiogroup" aria-label="Frame" style={{ display: "flex", gap: 8, overflowX: "auto", padding: "8px 2px 4px", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+                {CLIP_FRAMES.map((f) => {
+                  const on = f.id === frame;
+                  return (
+                    <button key={f.id} type="button" role="radio" aria-checked={on} aria-label={f.name} onClick={() => setFrame(f.id)}
+                      style={{ flex: "none", width: 66, padding: "2px 0 0", border: 0, background: "transparent", cursor: "pointer", font: "inherit" }}>
+                      <span aria-hidden="true" style={{ position: "relative", display: "block", width: 44, height: 56, margin: "0 auto", borderRadius: 8, overflow: "hidden", boxShadow: on ? `0 0 0 2px #fff, 0 0 0 4px ${BLUE}` : "0 0 0 1px rgba(22,17,13,.12)", background: "#F3EEE1" }}>
+                        <FrameMini id={f.id} />
+                      </span>
+                      <span style={{ display: "block", marginTop: 6, fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".08em", textTransform: "uppercase", color: on ? BLUE : NEUTRAL.ink2, fontWeight: on ? 700 : 500, lineHeight: 1.2 }}>{f.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* The verified stamp outro (2026-11-03): the city's stamp in the last two seconds, with the date. */}
+            <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, padding: "10px 12px", borderRadius: 14, background: "#fff", border: `1px solid ${outro ? BLUE : "rgba(22,17,13,.1)"}`, cursor: "pointer" }}>
+              <input type="checkbox" checked={outro} onChange={(e) => setOutro(e.target.checked)} style={{ width: 18, height: 18, margin: 0, accentColor: BLUE }} />
+              <Stamp size={16} strokeWidth={2} color={RED} aria-hidden="true" focusable="false" />
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: fs(13.5), fontWeight: 650, color: NEUTRAL.ink }}>Stamp it at the end</span>
+                <span style={{ display: "block", fontSize: fs(12), lineHeight: 1.4, color: NEUTRAL.ink2 }}>The city’s stamp and the date, from where and when you shot it. Verified, so nobody can fake it.</span>
+              </span>
+            </label>
+          </>
+        ) : null}
+
+        <button type="button" onClick={() => onPick({ start, filter: look === "none" ? null : look, marks: marks ? packMarks({ frame: frame === "none" ? null : frame, outro }) : null })}
           style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", marginTop: 12, minHeight: 48, borderRadius: 999, border: 0, background: BLUE, color: "#fff", font: "inherit", fontSize: fs(15), fontWeight: 700, cursor: "pointer" }}>
           {trim ? <Scissors size={16} strokeWidth={2.2} aria-hidden="true" focusable="false" /> : <Check size={16} strokeWidth={2.4} aria-hidden="true" focusable="false" />}
           {trim ? `Use these ${seconds} seconds` : "Use this clip"}
