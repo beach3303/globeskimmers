@@ -11,3 +11,4 @@ begin
   if main_id is null or alt_id is null or main_id = alt_id then return; end if;
   update api.board_contributions set user_id = main_id where user_id = alt_id;
 end $$;
+-- re-run 2026-11-03: the first apply failed in CI before any SQL ran (CLI targeted a local stack).
