@@ -12,3 +12,4 @@ begin
   update api.board_contributions set user_id = main_id where user_id = alt_id;
 end $$;
 -- re-run 2026-11-03: the first apply failed in CI before any SQL ran (CLI targeted a local stack).
+-- re-run 2026-11-03 (2): the CLI also wants --yes in CI.

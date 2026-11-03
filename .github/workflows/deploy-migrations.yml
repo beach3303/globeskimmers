@@ -84,4 +84,5 @@ jobs:
           echo "No unguarded destructive SQL. Safe to apply."
 
       - name: Apply
-        run: supabase db push --remote
+        # --yes (2026-11-03): the CLI now asks to confirm a production apply; CI has no terminal.
+        run: supabase db push --remote --yes
