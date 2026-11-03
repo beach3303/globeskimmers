@@ -4393,3 +4393,12 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   boot-check. Needs push (worker + migration) + OTA. Open: the share sheet's "Send as a postcard" door doesn't take
   clips yet (PhotoSorter hands clips to City Boards only); board video postcards stay out (boards take clips from
   their Upload door).
+
+## 2026-11-03 — PUSHED: video postcards (main 975ce8b)
+
+- Apply Supabase Migrations run 41681004856 green (`kind`/`video_key`/`duration`/`video_ready`/`filter` live); Deploy
+  Cloudflare Workers run 41681004854 green. Live probe (demo account, nothing written): `/mail/sent` 200; a 45 s
+  video send refused "Clips are up to 20 seconds"; a video send without a poster refused before anything is stored;
+  `/pc-video/<unknown>` 404; `PUT /postcards/video/<unknown>` 404. **Open (founder):** `npm run ota`.
+- Same morning (founder, mid-push: "instead of Dish or Topic, just do Topic (optional)"): the postcard sheet's
+  third field reads "Topic (optional)" (its label "Topic"); the worker still stores it as `meta.dish`, unchanged.
