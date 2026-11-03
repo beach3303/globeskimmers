@@ -4321,3 +4321,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   text column — deliberately NO check constraint (the blotter_marks kind list broke stickers twice).
 - Gates: node --check worker, eslint (no-undef) on ClipTrimmer / ContributeAlbum / CityBoard / FriendsNewsBody /
   PhotoLightbox, libs clean, build, boot-check. Needs push (worker + migration) + OTA (app).
+- Follow-up 950c7ab: the chosen look's ring sits on an unfiltered wrapper (Mono/Noir had turned it black).
+
+## 2026-11-03 — PUSHED: clip looks (main 950c7ab)
+
+- Deploy Cloudflare Workers run 41665189239 green; Apply Supabase Migrations run 41665189324 green (the `filter`
+  column is live). **Open (founder):** `npm run ota` — the editor, the looks on boards and in My uploads, and this
+  morning's iPhone clip read fix all ride in the same bundle.
