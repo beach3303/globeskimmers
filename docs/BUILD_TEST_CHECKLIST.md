@@ -4233,3 +4233,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   item, where the stickers and comments are). The Upload button, shares and board sheets keep the upload-first order.
 - Worker: `/board/contributions` adds `likes` and `comments` per item (`likesFor`, counts only, from blotter_marks
   and blotter_entries by `bcp:` target). Gates: eslint, build, boot-check. Needs push (worker) + OTA (app).
+
+## 2026-11-02 — PUSHED: My uploads album first (main 69dc146)
+
+- Worker deploy with `likesFor` on `/board/contributions`. **Open (founder):** `npm run ota` for the app half (the
+  envelope's album-first sheet), then on the S10: Passport → Photos → the My uploads envelope.
