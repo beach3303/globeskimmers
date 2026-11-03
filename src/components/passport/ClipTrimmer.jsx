@@ -106,9 +106,11 @@ export default function ClipTrimmer({ src, duration, seconds = 20, trim = true, 
               return (
                 <button key={f.id} type="button" role="radio" aria-checked={on} aria-label={f.name} onClick={() => setLook(f.id)}
                   style={{ flex: "none", width: 66, padding: "2px 0 0", border: 0, background: "transparent", cursor: "pointer", font: "inherit" }}>
-                  <span aria-hidden="true" style={{ display: "block", width: 56, height: 56, margin: "0 auto", borderRadius: 12, overflow: "hidden", background: frame ? "#000" : SWATCH,
-                    boxShadow: on ? `0 0 0 2px #fff, 0 0 0 4px ${BLUE}` : "0 0 0 1px rgba(22,17,13,.12)", filter: clipFilterCss(f.id) }}>
-                    {frame ? <img src={frame} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : null}
+                  {/* The ring sits outside the filtered tile, so a grey look can't grey it. */}
+                  <span aria-hidden="true" style={{ display: "block", width: 56, height: 56, margin: "0 auto", borderRadius: 12, boxShadow: on ? `0 0 0 2px #fff, 0 0 0 4px ${BLUE}` : "0 0 0 1px rgba(22,17,13,.12)" }}>
+                    <span style={{ display: "block", width: "100%", height: "100%", borderRadius: 12, overflow: "hidden", background: frame ? "#000" : SWATCH, filter: clipFilterCss(f.id) }}>
+                      {frame ? <img src={frame} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : null}
+                    </span>
                   </span>
                   <span style={{ display: "block", marginTop: 6, fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".1em", textTransform: "uppercase", color: on ? BLUE : NEUTRAL.ink2, fontWeight: on ? 700 : 500 }}>{f.name}</span>
                 </button>
