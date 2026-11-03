@@ -21828,8 +21828,8 @@ async function handleCityBoard(request, env) {
     }));
     const photoRows = shownPhotos.map((p) => ({
       type: 'photo', id: p.id, created_at: p.created_at, photo: p.photo, caption: p.caption || null,
-      // A clip (2026-10-30): the poster is `photo`; the viewer plays `video`.
-      ...(p.video ? { video: p.video, duration: p.duration || null } : {}),
+      // A clip (2026-10-30): the poster is `photo`; the viewer plays `video`, wearing its look (2026-11-03).
+      ...(p.video ? { video: p.video, duration: p.duration || null, filter: p.filter || null } : {}),
       place: p.stamp.name, stamp_kind: p.stamp.kind || null, city: p.stamp.city || null, region: p.stamp.region || null, country: p.stamp.country || null,
       // Every photo on a board comes from "a traveler" (founder, 2026-11-01: "people like it that their
       // names are hidden as contributors") — a contribution (2026-10-27) and a 🌍 Everyone album print alike.
