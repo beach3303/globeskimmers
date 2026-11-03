@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { cityBoardUrl } from "@/lib/boardLinks";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import { showToast } from "@/components/Toast";
+import { logEvent } from "@/lib/analytics";
 import { readPhotoExif } from "@/lib/photoExif";
 import { resizePhoto } from "@/lib/resizePhoto";
 import { isClip, readClipLocation, contributeClip, clipLength, CLIP_SECONDS } from "@/lib/clips";
@@ -186,7 +187,15 @@ const kindWord = (board) => (board?.kind === "state" ? "state" : board?.kind ===
 // album (founder, 2026-11-02: "the envelope is a folder that opens all of your photos"): the same sheet,
 // photos first — by city, each with its stickers, clip badge and views — then the collectible, then
 // "Upload more", then the public note. The Upload button and shares keep the upload-first order.
+// The public note shows in full the first time the sheet opens on this phone; from the second time it is
+// folded to its one bold line with "Show" (founder, 2026-11-02: "automatically collapse the second time").
+const NOTE_SEEN_KEY = "gs_contribute_note_seen_v1";
+const noteSeen = () => { try { return localStorage.getItem(NOTE_SEEN_KEY) === "1"; } catch { return false; } };
+const markNoteSeen = () => { try { localStorage.setItem(NOTE_SEEN_KEY, "1"); } catch { /* storage off */ } };
+
 function ContributeSheet({ photos, onChanged, onClose, board = null, initialFiles = null, initialClips = null, autoPick = false, album = false }) {
+  const [noteOpen, setNoteOpen] = useState(() => !noteSeen());
+  useEffect(() => { markNoteSeen(); }, []);
   useDismissable(true, onClose);
   const fileRef = useRef(null);
   const startedRef = useRef(false);   // files handed in with the sheet (a share) are sent once
@@ -217,6 +226,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
   const prepareNative = async (picked) => {
     const files = [];
     let bad = 0;
+    let lastErr = null;   // the plugin's own words for the last clip it refused (2026-11-03: shown, and logged)
     for (const f of picked) {
       try {
         if (!isClipFile(f)) { files.push(await fileAt(f.path, f.name || "photo.jpg", f.mimeType || "image/jpeg")); continue; }
@@ -228,17 +238,21 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
         const file = await fileAt(out.path, "clip.mp4", "video/mp4");
         file.gsExif = Number.isFinite(info.lat) && Number.isFinite(info.lng) ? { lat: info.lat, lng: info.lng, taken_at: info.takenAt || null } : { lat: null, lng: null, taken_at: info.takenAt || null };
         files.push(file);
-      } catch { bad += 1; }
+      } catch (err) {
+        bad += 1;
+        lastErr = String(err?.message || err || "").replace(/\s+/g, " ").trim().slice(0, 140) || null;
+        logEvent("clip_prepare_failed", { reason: lastErr || "unknown", kind: isClipFile(f) ? "clip" : "photo" }, "Contribute");
+      }
     }
     setRun(null);
-    return { files, bad };
+    return { files, bad, lastErr };
   };
   const pickNative = async () => {
     let picked;
     try { picked = await pickMedia(CONTRIBUTE_PICK); } catch { return; }   // cancelled
     if (!picked.length || run) return;
-    const { files, bad } = await prepareNative(picked);
-    if (bad && !files.length) { showToast("Couldn’t read that — try another photo or clip", "error"); return; }
+    const { files, bad, lastErr } = await prepareNative(picked);
+    if (bad && !files.length) { showToast(lastErr ? `Couldn’t read that — ${lastErr}` : "Couldn’t read that — try another photo or clip", "error"); return; }
     await sendFiles(files);
   };
   // Shared clips (paths from the phone's share sheet): the phone shrinks them when it can; an
@@ -332,7 +346,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
           <div>
             <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: AIR_RED }}>{album ? "My uploads · City Boards · Public" : board ? `${kindWord(board)} board · Public` : "City Boards · Public"}</div>
             <h2 style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(26), fontWeight: 400, lineHeight: 1.1, color: INK }}>{album ? <>My <em style={{ fontStyle: "italic", color: AIR_BLUE }}>uploads</em></> : board ? <>Add photos to <em style={{ fontStyle: "italic", color: AIR_BLUE }}>{board.name}</em></> : "Contribute to City Boards"}</h2>
-            <p style={{ margin: "4px 0 0", fontSize: fs(14), lineHeight: 1.4, color: INK2 }}>
+            <p style={{ margin: "4px 0 0", fontSize: fs(14), lineHeight: 1.4, color: INK2, display: noteOpen || album ? undefined : "none" }}>
               {album
                 ? <>Your photos and clips on City Boards, by city. Tap one to open it, see its stickers and views, change its caption, or take it down.</>
                 : board
@@ -348,12 +362,16 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
 
         {/* The note the founder asked for (2026-10-27): public, delete any time, no children. */}
         <div style={{ marginTop: 10, padding: "12px 14px", borderRadius: 14, background: "#fff", border: `1px solid ${RULE}`, order: album ? 4 : undefined }}>
-          <p className="flex items-start gap-2" style={{ margin: 0, fontSize: fs(14), lineHeight: 1.45, color: INK, fontWeight: 600 }}>
+          <div className="flex items-start gap-2" style={{ fontSize: fs(14), lineHeight: 1.45, color: INK, fontWeight: 600 }}>
             <Globe2 size={18} color={AIR_BLUE} strokeWidth={2} aria-hidden="true" style={{ flex: "none", marginTop: 1 }} />
-            Contributions to City Boards are public.
-          </p>
+            <span style={{ flex: 1, minWidth: 0 }}>Contributions to City Boards are public.</span>
+            <button type="button" onClick={() => setNoteOpen((v) => !v)} aria-expanded={noteOpen} aria-controls="gs-contribute-note"
+              style={{ flex: "none", minHeight: 28, margin: "-4px -4px -4px 0", padding: "0 6px", background: "transparent", border: 0, color: AIR_BLUE, font: "inherit", fontSize: fs(12.5), fontWeight: 600, cursor: "pointer" }}>
+              {noteOpen ? "Hide" : "Show"}
+            </button>
+          </div>
           {/* Three things, no more (founder, 2026-11-02: "what else would we need to tell them except that it is public"). */}
-          <p style={{ margin: "4px 0 0 26px", fontSize: fs(13), lineHeight: 1.5, color: INK2 }}>
+          <p id="gs-contribute-note" style={{ margin: "4px 0 0 26px", fontSize: fs(13), lineHeight: 1.5, color: INK2, display: noteOpen ? undefined : "none" }}>
             From “a traveler”, no name. Delete any of them any time. No photos where a child is clearly recognizable.{isOpen ? "" : " Contributions closed on June 30, 2027; you can still delete yours."}
           </p>
         </div>

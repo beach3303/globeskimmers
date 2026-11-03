@@ -4262,3 +4262,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   the Upload button's subtitle is "Public. Each goes to its city’s board."; the envelope's second line is "By city";
   the Photos tab's City Boards line is "Public, whatever your passport setting. Delete any of it any time." The
   posting summary still explains a photo without a location. Gates: eslint, build, boot-check. OTA.
+
+## 2026-11-03 — Clip upload refused on the founder's iPhone ("Couldn’t read that") + the public note folds (COMMITTED, not pushed)
+
+- The toast hid the cause: `prepareNative` swallowed the plugin's rejection. Now the toast carries the plugin's own
+  words ("Couldn’t read that — <reason>") and a `clip_prepare_failed` event logs the reason to D1, so the next try
+  tells us whether probe, shrink or the file read failed. Candidates on iOS: the picker's `skipTranscoding: true`
+  handing back an iCloud-only or HEVC/Dolby Vision original, or an export the 1280x720 preset refuses.
+- The public note shows in full the first time the sheet opens on a phone (`gs_contribute_note_seen_v1`); from
+  the second time it folds to its bold line with Show / Hide, and the intro line folds with it (founder:
+  "automatically collapse the second time … allow user to expand"). Gates: eslint, build, boot-check. OTA.
