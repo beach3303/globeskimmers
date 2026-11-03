@@ -4512,3 +4512,31 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   city on the profile); play a marked clip to the end for the flight card; tap "Listen to <city>" on a board with
   clips; share a clip from Photos → "Get a stamp" / "Send as a video postcard". Then and now appears under a
   board's uploads only once `kits/<slug>/then.jpg` + `then.json` are on R2 (one-liners in the entry above).
+
+## 2026-11-03 — the 40 MB clip door + vertical postcards and vertical frames (commits dc86c27, 92c2ddd, 64936c6)
+
+- **The founder's first video postcard was refused** ("That clip is too big — 25 MB at most") after a 52 s .mov was
+  trimmed to 20 s. Cause: `ios/App/App/VideoShrinkPlugin.swift` exported with `AVAssetExportPreset1280x720` and no
+  size cap; Apple's 720p preset runs ~10 Mbps, so 20 s lands at ~26 MB. Android (Media3 Transformer) exports far
+  smaller and was never affected. **By OTA:** `BC_CLIP_BYTES` / `CLIP_BYTES` = 40 MB (all six worker messages and the
+  three app ones say 40; a ceiling, not a target), and `shrink()` in `src/lib/videoShrink.js` makes a second pass at
+  540p when the first result is over the door, keeping it only if smaller (an older build only knows 720p, so the
+  door has the last word). **Native, next store build (iOS + Android together):** the plugin maps maxHeight ≤ 480 →
+  640x480, ≤ 540 → 960x540, ≤ 720 → 1280x720, and sets `fileLengthLimit` from `maxBytes` (22 MB default), so the
+  encoder lowers its bitrate to fit and the picture stays 720p. Gates: node --check worker; eslint (no-undef) clean
+  on every touched component + the three libs (`TextDecoder` is a browser global, pre-existing); build; boot-check ✅.
+- **Vertical postcards + vertical frames** (founder: "if vertical video from iphone, can we create a vertical post
+  card?" and "vertical frames would be nice too"): `ClipPlayer` reads the clip's shape from the poster the moment it
+  loads and from the video's metadata (nothing stored — every clip already sent gets it); a portrait clip stands as
+  tall as the player may be (`maxHeight`) and only as wide as itself, centred; landscape unchanged. `ClipFrame` takes
+  `fit`: the frame hugs the clip (`width: fit-content`), captions wrap inside that width (`width: 0; min-width: 100%`),
+  the postmark and the Airmail stamp are a little smaller, the Print city label ellipsises; `StampOutro` takes
+  `width` (160 on portrait). The editor (`ClipTrimmer`) previews a portrait clip upright with the frame around it;
+  the composer's front takes the clip's shape (`height: min(58vh, 560px)` + its aspect ratio) instead of a 3:2 box
+  (`PostcardCompose` keeps `clip.shape` from the probe); `PostcardCard` drops the hair background behind a clip.
+  Photographed on the web build with a 540×960 test clip: the four frames in the board viewer, the editor, the
+  composer (scratchpad shots `v-*.png`). Mailbox rows, board tiles and the share card still crop the poster to their
+  landscape thumbs — only the player itself goes vertical.
+- **Rig:** `scripts/shots/cdp-shot.mjs` gained `{"files":{"selector","paths"}}` (DOM.setFileInputFiles), which is how
+  the composer was driven through its hidden clip input on the web path.
+- Needs push (worker: the door) + OTA; the native half rides with the next store builds.

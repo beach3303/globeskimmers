@@ -1533,4 +1533,13 @@ strip" (built, pushed main b52a859) and "finish building everything except nth t
 morning (BUILD_TEST_CHECKLIST 2026-11-03): distance from home, golden hour + local time, the flight path, Listen
 to the city, then and now (the mechanism; the archive photos are the founder's curation), a clip earns a stamp
 (stamp memories), marks on video postcards, the share sheet's video-postcard door. Only Passport Wrapped (11-24)
-and the Nth-traveler mark (on hold) remain.**
+and the Nth-traveler mark (on hold) remain.** PUSHED by the founder: main fe29dc1 (2026-11-03 ~10:35 PT, workers +
+migrations green). **2026-11-03 afternoon — two things from the founder's first video postcard:** (1) her 52 s .mov,
+trimmed to 20 s, was refused "too big — 25 MB at most": Apple's 1280×720 export preset runs ~10 Mbps with no size
+cap, so 20 s is ~26 MB. The door is now 40 MB (worker + app, a ceiling not a target) and the shrink makes a second
+pass at 540p when a result is over it; the iOS plugin sets `fileLengthLimit` (22 MB) and honours 540/480 from the
+**next store build** (native change, not OTA). (2) "if vertical video from iphone, can we create a vertical post
+card?" + "vertical frames would be nice too" → DECIDED and BUILT: a portrait clip makes a portrait card everywhere a
+clip plays (the shape is read at playback from the poster/metadata, nothing stored), the four frames hug it, the
+editor previews it upright, the composer's front takes its shape. Committed on stamping-v2; needs push (worker) +
+OTA.
