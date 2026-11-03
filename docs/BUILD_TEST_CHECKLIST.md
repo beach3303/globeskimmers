@@ -4359,3 +4359,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - Gates: node --check worker; eslint (no-undef) on SealUntil / SentList / PostcardCompose / TelegramCompose /
   Mailbox; libs clean; build; boot-check. Needs push (worker + migration) + OTA. Not yet built: video postcards
   (the vehicle for "sealed clips"), next.
+
+## 2026-11-03 — PUSHED: sealed mail + the board-row look fix (main ad600d1)
+
+- The founder had pushed c80ee00/612f5a1 herself (workers run for 612f5a1 green: a clip's look now reaches the board
+  page). Then main ad600d1: Apply Supabase Migrations run 41674432999 green (`opens_at`/`opens_on`/`opened_at` live),
+  Deploy Cloudflare Workers run 41674432953 green. **Open (founder):** `npm run ota`, then seal a telegram to a friend
+  for tomorrow and look at Sent and their Mailbox.
