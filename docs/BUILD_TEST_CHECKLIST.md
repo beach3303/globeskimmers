@@ -4301,3 +4301,23 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
 - App + docs only: no worker, site or migration workflow runs. **Open (founder):** `npm run ota`, then pick the
   same .mov again on the iPhone — it should shrink, upload and hang on its city's board.
+
+## 2026-11-03 — Clip looks: a filter picked before a clip goes up (founder: "allow user to place filter on their clip/videos") (COMMITTED, not pushed)
+
+- Shape: a look is a NAME stored with the clip (`board_contributions.filter`) and drawn by CSS `filter` wherever the
+  clip or its poster shows — the board tile and viewer (`CityBoard.jsx`), My uploads tiles + lightbox
+  (`ContributeAlbum.jsx`, `PhotoLightbox` takes a per-photo `filter`), Friends' news thumbnails. Nothing is
+  re-encoded: the file keeps its quality, the AI check saw the original stills, and the whole thing reaches both
+  platforms by OTA (a baked-in filter would need the native export + store builds on both). Eight looks in
+  `src/lib/clipFilters.js`: Original, Warm, Cool, Vivid, Faded, Mono, Noir, Vintage.
+- Editor: `ClipTrimmer.jsx` now opens for EVERY clip (trim slider only when it's over 20 s; `trim` prop) with a LOOK
+  strip — the clip's own still under each look (grabbed from the preview; a warm-to-blue swatch until it's ready),
+  the chosen one ringed in airmail blue, the preview wearing it; "Use these 20 seconds" / "Use this clip" hands back
+  `{ start, filter }`. Native path: `prepareNative` → `askEdit` → `file.gsFilter`; `clip_shrunk` logs the look.
+  Web path (no plugin): `askWebLook` in `sendFiles` after the location check (no trimming on the web, as before).
+- Worker: `BC_CLIP_FILTERS` allowlist; `/board/contribute` kind video stores `filter` (anything else dropped, never
+  refused); `filter` added to the wall, My uploads and friends-feed selects and rows; the wall query retries
+  without the column until the migration lands. Migration `20261103130000_board_clip_filters.sql` adds the nullable
+  text column — deliberately NO check constraint (the blotter_marks kind list broke stickers twice).
+- Gates: node --check worker, eslint (no-undef) on ClipTrimmer / ContributeAlbum / CityBoard / FriendsNewsBody /
+  PhotoLightbox, libs clean, build, boot-check. Needs push (worker + migration) + OTA (app).
