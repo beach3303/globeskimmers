@@ -4222,3 +4222,14 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   run 41590828865 green, migration 20261103040000 applied.
 - **Founder:** force-close and reopen the app on the S10; the gmail account's passport, friends and mail show
   under the founder@ login. Profile fields (first name, home city, settings) are per login.
+
+## 2026-11-02 — My uploads: the envelope opens an album first (founder: "it just takes me to the upload")
+
+- The envelope and the Upload button opened the same sheet with the upload section on top and the grid of
+  uploads below it, so on a phone the envelope read as "upload" (and under the founder@ login, before the alias, the
+  grid was empty). Now `ContributeSheet album`: photos first, by city, each tile with its stickers (Heart + count),
+  clip badge and views; then the collectible card; then "Upload more photos or clips"; the public note last. The
+  big view's footer says "N stickers · N comments · N views" and has "On the board ›" (the board opened on that
+  item, where the stickers and comments are). The Upload button, shares and board sheets keep the upload-first order.
+- Worker: `/board/contributions` adds `likes` and `comments` per item (`likesFor`, counts only, from blotter_marks
+  and blotter_entries by `bcp:` target). Gates: eslint, build, boot-check. Needs push (worker) + OTA (app).

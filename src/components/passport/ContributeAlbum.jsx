@@ -6,7 +6,9 @@
 // until June 30, 2027; after that the album stays so members can still delete their photos.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Globe2, ImageUp, Images, Loader2, Play, Trash2, X } from "lucide-react";
+import { Globe2, Heart, ImageUp, Images, Loader2, Play, Trash2, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { cityBoardUrl } from "@/lib/boardLinks";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import { showToast } from "@/components/Toast";
 import { readPhotoExif } from "@/lib/photoExif";
@@ -133,8 +135,8 @@ export default function ContributeAlbum() {
     <>
       {isOpen ? <UploadButton onClick={startUpload} /> : null}
       <input ref={fileRef} type="file" accept="image/*,video/mp4,video/quicktime" multiple className="hidden" onChange={picked} />
-      <AirmailEnvelope count={count} peek={photos?.find((p) => !p.hidden)?.url || null} onOpen={() => setOpen({})} />
-      {open ? <ContributeSheet photos={photos || []} initialFiles={open.files || null} autoPick={!!open.autoPick} onChanged={load} onClose={() => setOpen(null)} /> : null}
+      <AirmailEnvelope count={count} peek={photos?.find((p) => !p.hidden)?.url || null} onOpen={() => setOpen({ album: true })} />
+      {open ? <ContributeSheet photos={photos || []} initialFiles={open.files || null} autoPick={!!open.autoPick} album={!!open.album} onChanged={load} onClose={() => setOpen(null)} /> : null}
     </>
   );
 }
@@ -181,7 +183,10 @@ const kindWord = (board) => (board?.kind === "state" ? "state" : board?.kind ===
 
 // initialClips: shared videos by path ({ path, name, mimeType }, 2026-10-30) — shrunk on the phone
 // when it can, else read whole under the web rules — posted with the initialFiles.
-function ContributeSheet({ photos, onChanged, onClose, board = null, initialFiles = null, initialClips = null, autoPick = false }) {
+// album (founder, 2026-11-02: "the envelope is a folder that opens all of your photos"): the same sheet,
+// photos first — by city, each with its stickers, clip badge and views — then the collectible, then
+// "Upload more", then the public note. The Upload button and shares keep the upload-first order.
+function ContributeSheet({ photos, onChanged, onClose, board = null, initialFiles = null, initialClips = null, autoPick = false, album = false }) {
   useDismissable(true, onClose);
   const fileRef = useRef(null);
   const startedRef = useRef(false);   // files handed in with the sheet (a share) are sent once
@@ -320,15 +325,17 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
 
   return createPortal(
     <div className="fixed inset-0 flex items-end justify-center" style={{ zIndex: 9997, background: "rgba(22,17,13,.5)" }} onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={board ? `Add photos to ${board.name}` : "Contribute to City Boards"} onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md md:max-w-2xl overflow-y-auto" style={{ maxHeight: "92vh", background: "#F3EEE1", borderRadius: "22px 22px 0 0", padding: "14px 18px calc(24px + env(safe-area-inset-bottom))" }}>
+      <div role="dialog" aria-modal="true" aria-label={album ? "My uploads on City Boards" : board ? `Add photos to ${board.name}` : "Contribute to City Boards"} onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md md:max-w-2xl overflow-y-auto" style={{ maxHeight: "92vh", background: "#F3EEE1", borderRadius: "22px 22px 0 0", padding: "14px 18px calc(24px + env(safe-area-inset-bottom))", display: "flex", flexDirection: "column" }}>
         <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: "rgba(22,17,13,.18)" }} />
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
           <div>
-            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: AIR_RED }}>{board ? `${kindWord(board)} board · Public` : "City Boards · Public"}</div>
-            <h2 style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(26), fontWeight: 400, lineHeight: 1.1, color: INK }}>{board ? <>Add photos to <em style={{ fontStyle: "italic", color: AIR_BLUE }}>{board.name}</em></> : "Contribute to City Boards"}</h2>
+            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: AIR_RED }}>{album ? "My uploads · City Boards · Public" : board ? `${kindWord(board)} board · Public` : "City Boards · Public"}</div>
+            <h2 style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(26), fontWeight: 400, lineHeight: 1.1, color: INK }}>{album ? <>My <em style={{ fontStyle: "italic", color: AIR_BLUE }}>uploads</em></> : board ? <>Add photos to <em style={{ fontStyle: "italic", color: AIR_BLUE }}>{board.name}</em></> : "Contribute to City Boards"}</h2>
             <p style={{ margin: "4px 0 0", fontSize: fs(14), lineHeight: 1.4, color: INK2 }}>
-              {board
+              {album
+                ? <>Your photos and clips on City Boards, by city. Tap one to open it, see its stickers and views, change its caption, or take it down.</>
+                : board
                 ? <>Photos you took in {board.name} go up on this board: streets, food, sights, festivals. A photo from somewhere else goes to its own city’s board.</>
                 : <>Share your travel and city photos: streets, food, sights, festivals. Each one goes up on the board of the city where you took it.</>}
             </p>
@@ -340,7 +347,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
         </div>
 
         {/* The note the founder asked for (2026-10-27): public, delete any time, no children. */}
-        <div style={{ marginTop: 10, padding: "12px 14px", borderRadius: 14, background: "#fff", border: `1px solid ${RULE}` }}>
+        <div style={{ marginTop: 10, padding: "12px 14px", borderRadius: 14, background: "#fff", border: `1px solid ${RULE}`, order: album ? 4 : undefined }}>
           <p className="flex items-start gap-2" style={{ margin: 0, fontSize: fs(14), lineHeight: 1.45, color: INK, fontWeight: 600 }}>
             <Globe2 size={18} color={AIR_BLUE} strokeWidth={2} aria-hidden="true" style={{ flex: "none", marginTop: 1 }} />
             Contributions to City Boards are public.
@@ -356,16 +363,16 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
           </p>
         </div>
 
-        {col ? <CollectiblesCard col={col} onOpen={setManage} /> : null}
+        {col ? <div style={{ order: album ? 2 : undefined }}><CollectiblesCard col={col} onOpen={setManage} /></div> : null}
 
         {isOpen && (
-          <>
+          <div style={{ order: album ? 3 : undefined }}>
             <input ref={fileRef} type="file" accept="image/*,video/mp4,video/quicktime" multiple className="hidden" onChange={send} />
             <button type="button" onClick={openPicker} disabled={!!run}
               className="w-full flex items-center justify-center gap-2 disabled:opacity-70"
               style={{ marginTop: 12, minHeight: 52, borderRadius: 14, border: 0, background: AIR_BLUE, color: "#fff", fontFamily: "inherit", fontSize: fs(15), fontWeight: 650, cursor: run ? "progress" : "pointer" }}>
               {run ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <ImageUp size={18} strokeWidth={2} aria-hidden="true" />}
-              {run ? (run.stage ? `${run.stage}…` : `Posting ${Math.min(run.done + 1, run.total)} of ${run.total}${run.place ? ` · ${run.place}` : ""}…`) : `Upload photos or clips (up to ${CONTRIBUTE_PICK} at a time)`}
+              {run ? (run.stage ? `${run.stage}…` : `Posting ${Math.min(run.done + 1, run.total)} of ${run.total}${run.place ? ` · ${run.place}` : ""}…`) : album ? "Upload more photos or clips" : `Upload photos or clips (up to ${CONTRIBUTE_PICK} at a time)`}
             </button>
             {run ? (
               <div aria-hidden="true" style={{ marginTop: 8, height: 4, borderRadius: 999, background: "rgba(31,78,140,.15)", overflow: "hidden" }}>
@@ -373,11 +380,11 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
               </div>
             ) : null}
             <PostageBox sent={summary ? postedCount : 0} />
-          </>
+          </div>
         )}
 
         {summary && (
-          <div role="status" style={{ marginTop: 12, padding: "12px 14px", borderRadius: 14, background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(13), lineHeight: 1.5, color: INK2 }}>
+          <div role="status" style={{ marginTop: 12, padding: "12px 14px", borderRadius: 14, background: "#fff", border: `1px solid ${RULE}`, fontSize: fs(13), lineHeight: 1.5, color: INK2, order: album ? 3 : undefined }}>
             {postedCount ? (
               <p style={{ margin: 0, color: INK, fontWeight: 600 }}>
                 {board ? `${plural(postedCount, "photo", "photos")} posted to ${board.name}` : `${plural(postedCount, "photo", "photos")} posted: ${posted.map(([place, n]) => `${place} (${n})`).join(" · ")}`}
@@ -395,7 +402,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
 
         {groups.length ? (
           groups.map(([place, list]) => (
-            <section key={place} aria-label={`${place}, ${plural(list.length, "photo", "photos")}`} style={{ marginTop: 16 }}>
+            <section key={place} aria-label={`${place}, ${plural(list.length, "photo", "photos")}`} style={{ marginTop: 16, order: album ? 1 : undefined }}>
               <div className="flex items-baseline gap-2">
                 <span style={{ fontFamily: SERIF, fontSize: fs(18), color: INK }}>{place}</span>
                 <span className="uppercase" style={{ fontFamily: MONO, fontSize: fs(8.5), letterSpacing: ".14em", color: INK3 }}>{plural(list.length, "photo", "photos")}</span>
@@ -408,6 +415,8 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
                     {/* How often it was opened on the boards (2026-10-30): counts only, never who. */}
                     {p.views > 0 && !p.hidden ? <span style={{ position: "absolute", left: 4, top: 4, fontFamily: MONO, fontSize: fs(8), letterSpacing: ".08em", color: "#fff", background: "rgba(22,17,13,.55)", padding: "2px 6px", borderRadius: 999 }}>{p.views} {p.views === 1 ? "VIEW" : "VIEWS"}</span> : null}
                     {p.video ? <span style={{ position: "absolute", right: 4, top: 4, display: "inline-flex", alignItems: "center", gap: 3, fontFamily: MONO, fontSize: fs(8), letterSpacing: ".06em", color: "#fff", background: "rgba(22,17,13,.55)", padding: "2px 6px", borderRadius: 999 }}><Play size={9} strokeWidth={2.5} fill="currentColor" aria-hidden="true" focusable="false" />{clipLength(p.duration)}</span> : null}
+                    {/* Stickers it collected on the board (2026-11-02): counts only, never who. */}
+                    {p.likes > 0 && !p.hidden ? <span style={{ position: "absolute", right: 4, bottom: 4, display: "inline-flex", alignItems: "center", gap: 3, fontFamily: MONO, fontSize: fs(8), letterSpacing: ".06em", color: "#fff", background: "rgba(22,17,13,.55)", borderRadius: 4, padding: "1px 4px" }}><Heart size={9} strokeWidth={2.5} aria-hidden="true" focusable="false" />{p.likes}</span> : null}
                     {p.hidden ? <span style={{ position: "absolute", inset: "auto 4px 4px 4px", fontFamily: MONO, fontSize: fs(8), letterSpacing: ".08em", color: INK, background: "rgba(255,255,255,.85)", borderRadius: 4, padding: "1px 3px" }}>TAKEN DOWN</span> : null}
                   </button>
                 ))}
@@ -415,7 +424,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
             </section>
           ))
         ) : (
-          <p style={{ marginTop: 16, fontSize: fs(13), lineHeight: 1.5, color: INK3, textAlign: "center" }}>{board ? `Your photos on ${board.name}’s board will show here.` : "Your photos will show here, by city."}</p>
+          <p style={{ marginTop: 16, fontSize: fs(13), lineHeight: 1.5, color: INK3, textAlign: "center", order: album ? 1 : undefined }}>{board ? `Your photos on ${board.name}’s board will show here.` : album ? "Nothing here yet. Your photos and clips on City Boards will show here, by city." : "Your photos will show here, by city."}</p>
         )}
       </div>
 
@@ -496,6 +505,7 @@ function OwnPhotoFooter({ photo, onChanged, onGone }) {
   const [caption, setCaption] = useState(photo?.caption || "");
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const navigate = useNavigate();
   if (!photo) return null;
   const light = "rgba(255,252,247,0.9)";
   const saveCaption = async () => {
@@ -518,6 +528,14 @@ function OwnPhotoFooter({ photo, onChanged, onGone }) {
   };
   return (
     <div style={{ width: "100%", maxWidth: 420, margin: "0 auto" }}>
+      {/* How it is doing on the board (2026-11-02): counts only; the stickers and comments themselves are on the board. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", textTransform: "uppercase", color: light }}>
+        <span>{plural(photo.likes || 0, "sticker", "stickers")} · {plural(photo.comments || 0, "comment", "comments")} · {plural(photo.views || 0, "view", "views")}</span>
+        {photo.city && !photo.hidden ? (
+          <button type="button" onClick={() => navigate(`${cityBoardUrl(photo.city, photo.country, photo.region)}&open=bcp:${photo.id}`)}
+            style={{ flex: "none", background: "transparent", border: 0, padding: 0, color: light, font: "inherit", fontSize: fs(10), letterSpacing: ".08em", textTransform: "uppercase", textDecoration: "underline", cursor: "pointer" }}>On the board ›</button>
+        ) : null}
+      </div>
       <div className="flex gap-2">
         <input value={caption} onChange={(e) => setCaption(e.target.value.slice(0, 200))} maxLength={200} placeholder="Add a caption (optional)" aria-label="Caption"
           onKeyDown={(e) => { if (e.key === "Enter") saveCaption(); }}

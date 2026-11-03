@@ -21627,6 +21627,23 @@ async function itemViewsReady(env) {
   return true;
 }
 // { target: views } for the targets given; {} when the counts can't be read (the board still loads).
+// Stickers and comments per target, counts only, never who (the album of one's own uploads).
+async function likesFor(env, targets) {
+  const out = {};
+  try {
+    const list = [...new Set((targets || []).filter(Boolean))];
+    for (let i = 0; i < list.length; i += 60) {
+      const chunk = list.slice(i, i + 60);
+      const [m, e] = await Promise.all([
+        gbRest(env, `blotter_marks?target=in.(${chunk.join(',')})&select=target&limit=5000`, {}).then((r) => (r.ok ? r.json() : [])),
+        gbRest(env, `blotter_entries?target=in.(${chunk.join(',')})&select=target&limit=5000`, {}).then((r) => (r.ok ? r.json() : [])),
+      ]);
+      for (const r of m) (out[r.target] = out[r.target] || { likes: 0, comments: 0 }).likes += 1;
+      for (const r of e) (out[r.target] = out[r.target] || { likes: 0, comments: 0 }).comments += 1;
+    }
+  } catch { /* counts are decoration */ }
+  return out;
+}
 async function viewsFor(env, targets) {
   const out = {};
   try {
@@ -22100,6 +22117,9 @@ async function handleBoardContributions(request, env) {
     // The owner sees how often each of their photos was opened on the boards (2026-10-30).
     const vm = await viewsFor(env, photos.map((p) => `bcp:${p.id}`));
     for (const p of photos) p.views = vm[`bcp:${p.id}`] || 0;
+    // Stickers and comments on each upload (founder, 2026-11-02: the album shows whether people liked it).
+    const lm = await likesFor(env, photos.map((p) => `bcp:${p.id}`));
+    for (const p of photos) { p.likes = lm[`bcp:${p.id}`]?.likes || 0; p.comments = lm[`bcp:${p.id}`]?.comments || 0; }
     return jsonResponse({ photos, open_until: '2027-06-30', open: Date.now() < BC_OPEN_UNTIL });
   } catch (e) { return jsonResponse({ error: e.message, photos: [] }, 500); }
 }
