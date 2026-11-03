@@ -1357,6 +1357,13 @@ monthly report by hand until it's built.
   `npx wrangler secret list` and watches D1 `bell_failed`. Also ask: the API worker has a secret NAMED
   `4faab4c13339b216d82d032b37fbc09c` (a value pasted as a name?) — delete only if the founder confirms.
 
+- **2026-11-04 (founder: "add to do for tomorrow")** — Google Cloud OAuth clients: Google's "[Action Advised] Manage
+  your inactive OAuth clients" email (2026-11-03 7:43 AM) says the project **globeskimmers102125** has OAuth clients
+  inactive for 5+ months, to be **deleted around 2026-12-03** unless used. Steps: Google Cloud Console → that
+  project → APIs & Services → Credentials, see which clients are flagged; if any is the one Supabase's Google
+  sign-in (or anything live) uses, keep it by running one Sign in with Google flow / a refresh-token exchange;
+  if they are leftovers from the Base44 days, let them go (restorable for 30 days after deletion).
+
 - **2026-11-24** — start **Passport Wrapped** (founder 2026-11-03: "we can do passport wrapped before the end of the
   year and remind us"); ship by 2026-12-15 so it lands before holiday travel. Spec in the clips section (2026-11-03).
 
@@ -1521,4 +1528,9 @@ strip + Nth traveler (2 d) → 3 sealed clips / postcards / telegrams (3 d) → 
 time (1 d) → 5 Listen to the city + flight path (2 d) → 6 then and now (curation first) → Passport Wrapped (4 d, late
 November). **2026-11-03 later:** sealed mail and video postcards shipped first (see above); founder: "The verified
 stamp outro and the House frames come first — build both" (all four frames); Nth traveler on hold; the same-spot
-strip waits for a mock-up she asked to see (added to the frames canvas, 2026-11-03).
+strip waits for a mock-up she asked to see (added to the frames canvas, 2026-11-03). **Then "i love same spot
+strip" (built, pushed main b52a859) and "finish building everything except nth traveler mark" → BUILT the same
+morning (BUILD_TEST_CHECKLIST 2026-11-03): distance from home, golden hour + local time, the flight path, Listen
+to the city, then and now (the mechanism; the archive photos are the founder's curation), a clip earns a stamp
+(stamp memories), marks on video postcards, the share sheet's video-postcard door. Only Passport Wrapped (11-24)
+and the Nth-traveler mark (on hold) remain.**

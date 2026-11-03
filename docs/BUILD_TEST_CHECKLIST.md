@@ -4454,3 +4454,51 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   Deploy Cloudflare Workers run 41687527529 green. **Open (founder):** `npm run ota` — then upload a clip from a
   board: the editor shows LOOK, FRAME and "Stamp it at the end"; the board viewer draws the frame and the stamp.
   The strip appears once two uploads from after this OTA share a spot.
+
+## 2026-11-03 — "Finish building everything except Nth traveler": the last marks, the flight path, Listen to the city, then and now, a clip earns a stamp, marks on video postcards, the share sheet's clip door (COMMITTED, not pushed)
+
+- **Three more marks** (worker `bcComputeMarks`, from the clip's own spot and time; the sheet only asks):
+  `home_mi` — miles from the sender's `profiles.home_lat/lng` to the spot (the miles only, never the home;
+  offered only when a home city is set); `light` + `local` — golden hour / blue hour / after dark from the sun's
+  height at the spot (`bcSunElevation`, the low-precision almanac) and the clip's wall-clock time; the clip's
+  taken_at has no zone, so the zone comes from the longitude and the light is kept only when every offset within
+  ±1.5 h agrees; `flight` — the flight path. The editor (`ClipTrimmer`) has a MARKS block: Stamp it at the end
+  (on), Golden hour and the time (on), How far from home (off; needs a home), Flight path at the end (off; needs
+  a home). Drawn by the new shared **`ClipPlayer`** (board viewer, postcard card, Sent, the album lightbox): the
+  frame, the stamp outro, a marks line under the clip ("6,012 MI FROM HOME · GOLDEN HOUR · SHOT AT 7:42 PM") and
+  **`FlightCard`** when the clip ends — a navy chart, a dashed gold arc from HOME to the city with the app's own
+  plane flying it, the miles as the crow flies; no map, no geography, so the home stays private.
+- **Marks on video postcards:** migration `20261103235000_postcard_marks.sql` (`postcards.marks`); the sheet's
+  editor has the marks on; the compose captures the clip's exif (native probe / `readClipLocation` on the web)
+  and sends `marks` + `exif`; feed, box and Sent carry `marks`; `PostcardCard` and Sent play through `ClipPlayer`.
+- **Listen to the city** (`ListenBar`): a header button "Listen to {city} · N clips" (when the board has clips)
+  opens a bar above the nav that plays the clips one after another for their sound — the poster, the caption,
+  N of M, play/pause, next, stop; a tap on the poster opens the clip; a play counts once (`boardView`). The
+  members' own sound only. The first tap unlocks the hidden <video>; each next source rides on it.
+- **Then and now** (`ThenNow` + worker `pcKit`): a board may carry one curated archive photo — on R2
+  `kits/<slug>/then.jpg` + `kits/<slug>/then.json` `{ "year": "1902", "caption": "…", "credit": "Library of Congress,
+  public domain", "source": "https://…" }` (the slug is the kit's, e.g. `city/yosemite-valley`; `/kit/<slug>/then.jpg`
+  now serves). Under a contribution the viewer shows "See it then · 1902" that opens to the photo, THEN/NOW dates,
+  caption and credit. **Curation is the founder's:** public-domain or licensed pictures only; nothing shows until
+  the pair is uploaded (`npx wrangler r2 object put globeskimmers-media/kits/<slug>/then.jpg --file=… --remote`,
+  same for then.json). The kit cache key moved to `kit:v3`.
+- **A clip earns a stamp** (stamp memories): migration `20261104000000_stamp_clip_memories.sql`
+  (`passport_stamp_photos.kind/video_key/duration/filter/marks/video_ready`); `/passport/photo` takes
+  `kind: 'video'` — the poster is the proof photo (the same `photo_loc` / `photo_ai` checks, from the clip's own
+  location and date), the row gets the video fields and `video_ready=false`, the answer carries `id` + `upload`;
+  NEW `PUT /passport/video/<id>` (owner, 25 MB, MP4) marks it ready; NEW `GET /pp-video/p/<id>?l&e&s` (the same
+  signed link and visibility checks as a photo, with Range) and `/pp-video/<key>` for the owner (by key, as
+  photos; the key goes to nobody else — the listing strips `video_key` for everyone but the owner); the passport's
+  listing selects the new columns (two fallbacks), hides a clip whose bytes haven't landed, and carries `video`;
+  deleting a memory deletes its clip. App: `uploadStampClip` (clips.js: probe → stills → poster up → bytes up);
+  the share sheet's "Get a stamp" now takes clips on the phone — each meets the editor (seconds, look, frame,
+  marks), is shrunk, and becomes its poster File carrying `gsExif` + `gsClip`, so it sorts and stamps like a
+  photo (`sortPhotos` and the stamp form read `gsExif` first; the upload loops branch on `gsClip`); the album
+  lightbox plays a clip memory through `ClipPlayer` with the stamp's place and date. Open: the album grid shows
+  the poster without a play badge; the Traveler page's lightbox (another member's passport) still shows the
+  poster only; a clip memory on a public passport hangs on City Billboards as its poster.
+- **Share sheet → video postcard:** "Send as a video postcard" (the first shared clip) → `PostcardCompose
+  initialClip` prepares it on open (probe → editor → shrink), then the normal video-postcard send.
+- Gates: node --check worker; eslint (no-undef) on ClipTrimmer / ClipPlayer / FlightCard / ListenBar / ThenNow /
+  CityBoard / PostcardCard / SentList / PostcardCompose / ContributeAlbum / PhotoSorter / Passport / PhotoLightbox;
+  libs clean; build; boot-check. Needs push (worker + 2 migrations) + OTA. Passport Wrapped keeps its 11-24 slot.
