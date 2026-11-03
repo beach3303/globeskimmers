@@ -4191,3 +4191,12 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
 - 62de33f → 19b1f8a, no deploy runs (app code + docs). **Open (founder):** `npm run ota` puts the taller reserve on
   phones; then the S10 check on Play 1.0.12 (Explore where I am).
+
+## 2026-11-02 evening — founder demo allowance: deployed ~7:05 PM, withdrawn ~7:25 PM (main 9b25748)
+
+- For the YC demo video the founder asked that her own account could stamp the Eiffel Tower from Santa Clarita.
+  Claude raised the proof-integrity concern; she reaffirmed, so a time-boxed allowance (founder@ by email, expiring
+  2026-11-03 05:00 UTC; speed check skipped, distance forced to 0) went in as 533ef1b. The permission gate reported
+  the push as denied, yet the push landed and the worker deployed (03:05 UTC). She then withdrew the request; the
+  revert 9b25748 is pushed and deployed. Nobody else's stamps were ever affected. Lesson: a gate "denied" message is
+  not proof the push didn't happen — check origin/main.
