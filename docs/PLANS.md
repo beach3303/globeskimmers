@@ -1371,6 +1371,13 @@ monthly report by hand until it's built.
   capital optional and unstandardised; apply via greylock.com/edge). Speedrun (submitted 10-25) and YC W27 (submitted
   by 11-02) are in; Edge is the one credible door open today.
 
+- **2026-11-03 — Border grace, PROPOSED (decisions open):** the founder drove I-10 into Arizona and never got the
+  crossing prompt (Home-only, live-fix-only, 8-hour baseline, and one failed lookup at the river consumes the
+  crossing for good). Proposal in `docs/plans/border-grace.md`: a 48-hour grace window on any page with a pending
+  card in the passport (Phase 1, OTA), named ports of entry + "the line ahead" countdown (Phase 2), opt-in Border
+  Watch notifications with background location (Phase 3, native + review). Flights stay airport-to-airport; ships
+  get a ports table later. Five decisions listed at the end of the doc.
+
 - **2027-01-15** — the early-2027 application windows, checked 2026-11-03: **Sequoia Arc** spring cohort (twice a
   year; fall 2026 closed Aug 17; spring windows have opened ~February; $500K–$1M; sequoiacap.com/arc/apply),
   **Neo Accelerator** (2026 deadline was May 15; applications have opened in January; ~$750K uncapped SAFE reported —
