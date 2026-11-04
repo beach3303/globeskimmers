@@ -27,11 +27,16 @@ const countryFlag = (cc) => (/^[a-z]{2}$/i.test(cc || "") ? String.fromCodePoint
 
 const INKS = ["#274268", "#7E1C28", "#2E5A3A", "#24316B", "#5A3A1E", "#232323"];
 const hash = (s) => { let h = 0; for (const c of String(s || "")) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
+// One ink for Entry, one for Exit (founder, 2026-11-04): the post's entry pad is forest green, its exit
+// pad oxblood red, on every state line and checkpoint. A stamp with no direction (the pre-October look)
+// keeps the ink its name always had.
+export const ENTRY_INK = "#2E5A3A", EXIT_INK = "#7E1C28";
+export const inkFor = (direction, fallback) => (direction === "arrival" ? ENTRY_INK : direction === "departure" ? EXIT_INK : fallback);
 export default function LandStamp({ template = "country", name, sub = null, countryCode: cc = "", date, direction = null, via = null, code = null, width = 320 }) {
   const raw = useId();
   const uid = String(raw).replace(/[:]/g, "");
   const serif = "Georgia, 'Times New Roman', serif";
-  const ink = INKS[hash(`${template}:${name}`) % INKS.length];
+  const ink = inkFor(direction, INKS[hash(`${template}:${name}`) % INKS.length]);
   const dep = direction === "departure";
   const air = via === "air" && template === "country";
   const WORD = direction ? (air ? (dep ? "DEPARTURE" : "ARRIVAL") : (dep ? "EXIT" : "ENTRY")) : null;
