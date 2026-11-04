@@ -4560,3 +4560,11 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   ~/Desktop/yosemite-1902.jpg --year 1902 --caption "…" --credit "Library of Congress, public domain" --source "https://…"`.
   The kit is cached in KV for an hour (`kit:v3:<slug>`), so "See it then" appears within the hour. Public-domain or
   licensed photos only; the credit line prints on the card.
+
+## 2026-11-04 — Crossing stamps: one ink for Entry, one for Exit (founder: "i like one ink for Entry and one ink for Exit")
+
+  `src/components/passport/LandStamp.jsx`: `inkFor(direction, fallback)` — arrival → forest green `#2E5A3A`,
+  departure → oxblood `#7E1C28`; no direction keeps the name-hashed ink (older stamps unchanged). Applies to state
+  lines, checkpoints and the by-air country stamp; airport stamps keep their country ink (`src/lib/airportStamp.js`).
+  Rendered side by side through a temporary Vite harness (`scratchpad/shots/inks-entry-exit.png`). Gates: eslint
+  (no-undef) clean; build; boot-check ✅. App-only: needs push + OTA (rides with the next push).
