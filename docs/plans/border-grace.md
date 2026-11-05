@@ -97,6 +97,54 @@ state or country. Everything else is grace. Nothing is stamped until you tap.
 - **Ship:** the checkpoint stamp with the ship glyph (exists); a ports table (cruise ports, ferry terminals) as
   fences like airports is a later item, so a docking becomes "Port of departure / Port of arrival".
 
+## Mapped out — 2026-11-05 (founder: "i do want the 48 hour window plan. can you map it out to me and also mock up?")
+
+Mock-up canvas: https://claude.ai/artifact/7eFVCpHRPYwmWYwvJiMAJN (six artboards: the crossing caught; the crossing
+later; entry waiting in the passport; the airport window; the line ahead; Border Watch).
+
+**The state the app keeps (on the phone, `pp_crossings_v1`):**
+- `baseline` — the last CONFIRMED region `{ cc, region, lat, lng, at }`, any age. It moves the moment a new region is
+  confirmed, never because a window closed.
+- `windows[]` — pending offers, each `{ kind: 'region'|'country'|'airport', key, name, firstSeen: { at, lat, lng, near },
+  crossing?: { at, lat, lng, post }, modeGuess, expiresAt: firstSeen.at + 48 h, status: 'open'|'later' }`, oldest first.
+- `unconfirmed?` — a live fix whose precise lookup failed; retried on the next tick/open; never promoted to the baseline.
+
+**Sensing (any page — the watcher mounts in `src/Layout.jsx`, not Home):**
+1. Every fresh live fix (open, foreground, the 5-minute tick, a stamp fix) is compared with `baseline`. Same region →
+   `baseline` updates its spot/time. Different → the precise lookup confirms both ends; failure → `unconfirmed`, retry.
+2. Confirmed different → a window opens (`firstSeen` = this fix; `crossing` = this fix + the previous one when they are
+   < 1 h and < 80 km apart, the post named from the ports-of-entry table in Phase 2, else "first seen near <town>").
+   `modeGuess`: plane if an airport fence was seen since the previous fix or the implied speed > 300 km/h; ship if
+   both ends are ports (later); train/car from speed with car the default. `baseline` = the new region.
+3. The planning pick never blocks sensing: it only decides what Nearby shows.
+
+**Offering:**
+- A window is offered as a sheet on the next render after it opens, and again on every open/foreground while it is
+  open, at most once per app session unless the member tapped Later. The sheet: kicker (post or "first seen near"),
+  "You crossed into <State>" / "You're in <State>", the mode row (Car · Train · Ship · Plane, guess pre-picked), Entry and
+  Exit as the stamp itself in the ink drawn for this window, "Later — it waits 48 hours", "Not this one" (closes the
+  window), "Turn off crossing pop-ups" (`pp_city_prompt`).
+- Plane → no land stamp; the sheet says "flights are airport to airport" and closes the window.
+- The passport page shows every open window as an ENTRY WAITING card above the book (stamp preview, "first seen near…",
+  the hours left, Stamp it / Not this one); more than one → the first big, the rest as "Next · New Mexico · 44 h" rows.
+- Stamping sends `visited_on` = the day of `firstSeen` (or `crossing`), `lat/lng` = that spot (rough), `verified: gps`,
+  `mode`, `direction`, `ink`; the worker already keys directed stamps per visit and keeps mode/ink in meta.
+- A window closes on stamp, Not this one, expiry, or when its region is left again without a stamp? No — it stays until
+  expiry (a day trip across and back still deserves its entry).
+
+**The airport window (same model, kind 'airport'):**
+- Any live fix inside an airport fence opens a 48 h window for that airport (today it prompts once, only while inside).
+  The sheet offers Arriving / Departing (the round stamp), and at an international airport the country stamp beside it,
+  exactly as now; verified, because the app saw you there.
+- A flight the app only inferred (no fence fix; the next fix hundreds of km away at an implied speed > 300 km/h):
+  a smaller "Looks like you flew today" card — pick the departure and arrival airports from the nearest candidates,
+  "Stamp both" / "I didn't fly". These print WITHOUT the ✓ (sensed, not seen at the gate) and never grant a state or
+  country entry stamp. **Founder's call whether to keep this half.**
+
+**Build order / estimate:** Phase 1 (window state, Layout watcher, sheet, passport card, airport window, mode question):
+about a day and a half, OTA, no worker change. Phase 2 (ports-of-entry table from OSM, the line ahead with on-device
+boundaries): two to three days, OTA. Phase 3 (Border Watch): native plugin both platforms, store builds and review.
+
 ## Founder's decisions
 
 **Decided 2026-11-04:** the window is **48 hours** ("I do like the grace. It's 48 hours"). The inks: one per

@@ -1376,7 +1376,10 @@ monthly report by hand until it's built.
   crossing for good). Proposal in `docs/plans/border-grace.md`: a 48-hour grace window on any page with a pending
   card in the passport (Phase 1, OTA), named ports of entry + "the line ahead" countdown (Phase 2), opt-in Border
   Watch notifications with background location (Phase 3, native + review). Flights stay airport-to-airport; ships
-  get a ports table later. Five decisions listed at the end of the doc.
+  get a ports table later. Five decisions listed at the end of the doc. **2026-11-05: DECIDED — 48 h window, random
+  inks (built), "i do want the 48 hour window plan" → mapped in the doc ("Mapped out — 2026-11-05") and mocked up on
+  https://claude.ai/artifact/7eFVCpHRPYwmWYwvJiMAJN (six artboards). Airports get the same window. Open: whether to
+  keep the "flight sensed, no gate seen" half (stamps without the ✓), and the go for Phase 1 (≈1.5 days, OTA).**
 
 - **2027-01-15** — the early-2027 application windows, checked 2026-11-03: **Sequoia Arc** spring cohort (twice a
   year; fall 2026 closed Aug 17; spring windows have opened ~February; $500K–$1M; sequoiacap.com/arc/apply),
