@@ -24,6 +24,7 @@ import LocalFavoriteStamp, { isLocalFavorite, localFavoriteLine } from "@/compon
 import { useLocation, isLiveFix } from "@/components/location/LocationContext";
 import { useDistanceUnit } from "@/components/location/distanceUnit";
 import PassportBook, { packBookPages, readFontScale, fitsTogether } from "@/components/passport/PassportBook";
+import CrossingsWaiting from "@/components/passport/CrossingsWaiting";
 import BlotterStrip from "@/components/passport/Blotter";
 import { isAdminEmail } from "@/lib/admins";
 import { localISODate } from "@/lib/localDate";
@@ -1679,6 +1680,8 @@ function PassportInner({ embedded = false }) {
               </div>
             )}
             {(readOnly || preview || tab === "stamps" || stamps.length === 0) && (<>
+            {/* Entry waiting (border grace, 2026-11-05): open crossing and airport windows, above the book. */}
+            {!readOnly && !preview && <CrossingsWaiting />}
             {/* The book stands alone (founder, 2026-10-19): the page order folds into one small
                 "Page order" control above it. */}
             {!readOnly && !preview && stampsView.length > 1 && (

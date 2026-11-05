@@ -24,8 +24,6 @@ import { extractFirstName } from "@/lib/extractFirstName";
 import { isLocationPermissionGranted } from "@/lib/geolocation";
 import { callWorker } from "@/lib/callWorker";
 import { listPassport } from "@/lib/passport";
-import AirportArrivalPrompt from "@/components/AirportArrivalPrompt";
-import BorderCrossingPrompt from "@/components/BorderCrossingPrompt";
 import { ROUTE } from "@/lib/workerRoutes";
 import { countryCode } from "@/lib/countries";
 import { distanceUnit } from "@/lib/units";
@@ -648,11 +646,9 @@ export default function HomePage() {
       />
 
 
-      {/* Arrival stamps — airport (domestic + international) + land/boat border crossings */}
-      {profile?.onboarding_completed && <AirportArrivalPrompt />}
+      {/* The arrival and crossing sheets moved to Layout (border grace, 2026-11-05): any page, not just Home. */}
       {/* Once a day, a phone on an older store build is asked to update (2026-10-25). */}
       {profile?.onboarding_completed && !showLocationPicker && <UpdateSheet />}
-      {profile?.onboarding_completed && <BorderCrossingPrompt />}
     </div>
   );
 }

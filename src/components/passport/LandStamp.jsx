@@ -26,15 +26,11 @@ const STATE_FLAGS = Object.fromEntries(Object.entries(import.meta.glob("/src/ass
 const NATION_FLAGS = { England: "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}", Scotland: "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}", Wales: "\u{1F3F4}\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}" };
 const countryFlag = (cc) => (/^[a-z]{2}$/i.test(cc || "") ? String.fromCodePoint(...[...String(cc).toUpperCase()].map((c) => 0x1f1a5 + c.charCodeAt(0))) : null);
 
-// Eight stamp-pad inks: navy, oxblood, forest, indigo, sepia, black, violet, teal. The ink is DRAWN AT
-// RANDOM when the stamp is pressed (founder, 2026-11-05: "when 6 friends are driving … they always check
-// each other's stamp and it would be nice if random colors are stamped") and kept with the stamp
-// (meta.ink), so a passport shows the same ink forever; a stamp pressed before this keeps the ink its
-// name always had.
-export const INKS = ["#274268", "#7E1C28", "#2E5A3A", "#24316B", "#5A3A1E", "#232323", "#4B2E62", "#1E5556"];
+// The eight stamp-pad inks live in src/lib/stampInks.js (drawn at random when a crossing is offered,
+// kept with the stamp as meta.ink); a stamp pressed before 2026-11-05 keeps the ink its name always had.
+import { INKS, pickInk, validInk } from "@/lib/stampInks";
+export { INKS, pickInk };
 const hash = (s) => { let h = 0; for (const c of String(s || "")) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
-export const pickInk = () => INKS[Math.floor(Math.random() * INKS.length)];
-const validInk = (v) => (/^#[0-9a-f]{6}$/i.test(String(v || "")) ? String(v).toUpperCase() : null);
 export default function LandStamp({ template = "country", name, sub = null, countryCode: cc = "", date, direction = null, via = null, code = null, ink: inkProp = null, width = 320 }) {
   const raw = useId();
   const uid = String(raw).replace(/[:]/g, "");

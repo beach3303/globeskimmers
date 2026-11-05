@@ -9,6 +9,8 @@ import LocationMismatchSheet from "@/components/location/LocationMismatchSheet";
 import LocationAutoFollowOffer from "@/components/location/LocationAutoFollowOffer";
 import BrandBanner from "@/components/redesign/BrandBanner";
 import FloatingNav from "@/components/redesign/FloatingNav";
+import AirportArrivalPrompt from "@/components/AirportArrivalPrompt";
+import BorderCrossingPrompt from "@/components/BorderCrossingPrompt";
 import StampSheet from "@/components/passport/StampSheet";
 import { ContributeStandaloneSheet } from "@/components/passport/ContributeAlbum";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
@@ -168,7 +170,7 @@ export default function Layout({ children, currentPageName }) {
       <PWASetup />
       <LocationProvider>
         <PageGroundProvider fallback={PAGE_GROUND.get(currentPageName) || IVORY}>
-          <PageShell currentPageName={currentPageName} isOnboarding={isOnboarding}>
+          <PageShell currentPageName={currentPageName} isOnboarding={isOnboarding} stampPrompts={isAuthenticated && profile?.onboarding_completed === true && !isOnboarding}>
             {children}
           </PageShell>
         </PageGroundProvider>
@@ -179,7 +181,7 @@ export default function Layout({ children, currentPageName }) {
 
 // The chrome around every page, painted in the page's ground. A child of the
 // PageGroundProvider so it sees a page's usePageGround override.
-function PageShell({ currentPageName, isOnboarding, children }) {
+function PageShell({ currentPageName, isOnboarding, stampPrompts = false, children }) {
   // The bar's Stamp button (navigation redesign, 2026-10-31): the sheet with Upload photos ·
   // Stamp where I am · post to a City Board, and the Contribute sheet the last one opens.
   const [stampOpen, setStampOpen] = useState(false);
@@ -259,6 +261,9 @@ function PageShell({ currentPageName, isOnboarding, children }) {
           <city>" travel nudge, and the one-time "auto-follow?" offer. */}
       <LocationMismatchSheet />
       <LocationAutoFollowOffer />
+      {/* Arrival stamps — the airport and land-border windows (border grace, 2026-11-05): mounted here,
+          not on Home, so a crossing is offered on whatever page the app opens to. */}
+      {stampPrompts ? <><AirportArrivalPrompt /><BorderCrossingPrompt /></> : null}
 
       {/* After a verified stamp in a city: 'Send a postcard to Lisbon's board' (City Boards). */}
       {!isOnboarding && <BoardNudge />}

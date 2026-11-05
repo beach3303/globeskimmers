@@ -6,7 +6,8 @@ import { showToast } from "@/components/Toast";
 import { airportAt, markAirportVisit } from "@/lib/airports";
 import { localISODate } from "@/lib/localDate";
 import AirportStamp from "@/components/passport/AirportStamp";
-import LandStamp, { pickInk } from "@/components/passport/LandStamp";
+import LandStamp from "@/components/passport/LandStamp";
+import { useCrossings, openWindow, closeWindow, deferWindow, isDeferred, hoursLeft, seenLabel, windowById, OPEN_EVENT } from "@/lib/crossings";
 
 // ============================================================================
 // ✈️ Airport stamp — when a signed-in user opens the app while physically
@@ -16,15 +17,14 @@ import LandStamp, { pickInk } from "@/components/passport/LandStamp";
 // comes back on a later day at the same airport (one ask per airport per day).
 // Consent-gated (never auto-stamp), foreground only — no background tracking.
 // ============================================================================
-// v2 (2026-10-05): entries are "IATA:YYYY-MM-DD" so a return visit re-asks; the
-// old per-airport-forever key is retired so everyone gets the new ask.
-const KEY = "pp_prompted_airport_v2";
-const dayKey = (iata) => `${iata}:${localISODate()}`;   // the traveler's own day, not UTC's
+// BORDER GRACE (founder, 2026-11-05; src/lib/crossings.js): a fix inside the fence opens a 48-hour
+// WINDOW for that airport — this sheet on every open (any page: mounted in Layout), an "airport stamp
+// waiting" card on the passport page, dated the day the app saw you there. One window per airport per
+// day, so a return visit re-asks; stamped or declined, it never reopens. The old "asked today" set
+// (pp_prompted_airport_v2) is retired.
 const regionName = (cc) => {
   try { return new Intl.DisplayNames(["en"], { type: "region" }).of(cc) || cc; } catch { return cc; }
 };
-const getSet = () => { try { return new Set(JSON.parse(localStorage.getItem(KEY) || "[]")); } catch { return new Set(); } };
-const saveSet = (s) => { try { localStorage.setItem(KEY, JSON.stringify([...s])); } catch { /* ignore */ } };
 // User can turn arrival suggestions off in Settings (default ON).
 const suggestOn = () => { try { return localStorage.getItem("pp_suggest_arrivals") !== "0"; } catch { return true; } };
 const flagFor = (cc) => (/^[a-z]{2}$/i.test(cc || "") ? String.fromCodePoint(...[...String(cc).toUpperCase()].map((c) => 0x1f1a5 + c.charCodeAt(0))) : "");
@@ -44,9 +44,16 @@ const isIntl = (ap) => INTL_NAME.test(String(ap.name || "")) || INTL_HUBS.has(St
 export default function AirportArrivalPrompt() {
   const { currentGpsLocation } = useLocation();
   const { isAuthenticated } = useAuth();
-  const [pending, setPending] = useState(null); // { iata, city, countryCode, lat, lng }
+  const open = useCrossings();
+  const [forced, setForced] = useState(null);   // a window the passport card asked to stamp now
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const on = (e) => setForced(e.detail?.id || null);
+    window.addEventListener(OPEN_EVENT, on);
+    return () => window.removeEventListener(OPEN_EVENT, on);
+  }, []);
 
+  // Sensing: a live fix inside the fence opens the airport's 48-hour window.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -58,21 +65,31 @@ export default function AirportArrivalPrompt() {
       if (!isLiveFix(currentGpsLocation)) return;
       const c = currentGpsLocation.coordinates;
       if (!c || !Number.isFinite(c.latitude) || !Number.isFinite(c.longitude)) return;
-      // Only prompt when GPS is INSIDE the airport perimeter (terminals/runways/
+      // Only when GPS is INSIDE the airport perimeter (terminals/runways/
       // planes) — not drive-bys or people waiting outside. Any airport, domestic
-      // or international; consent-gated; one prompt per airport (localStorage).
+      // or international; consent-gated.
       const ap = await airportAt(c.latitude, c.longitude, c.accuracy);
       if (cancelled || !ap || !ap.iata) return;
       markAirportVisit();   // a flight, for the border-crossing prompt
-      if (getSet().has(dayKey(ap.iata))) return; // already asked here today
-      setPending({ iata: ap.iata, city: ap.city || ap.name, countryCode: ap.cc, lat: ap.lat, lng: ap.lng, intl: isIntl(ap) });
+      const at = Number(currentGpsLocation.fixedAt) || Date.now();
+      openWindow({
+        kind: "airport", key: `airport:${ap.iata}:${localISODate(new Date(at))}`,
+        iata: ap.iata, city: ap.city || ap.name, cc: ap.cc, name: `${ap.city || ap.name} (${ap.iata})`,
+        lat: ap.lat, lng: ap.lng, intl: isIntl(ap), firstSeen: { at, lat: ap.lat, lng: ap.lng, near: ap.city || ap.name },
+      });
     })();
     return () => { cancelled = true; };
   }, [currentGpsLocation, isAuthenticated]);
 
-  const close = (markHandled) => {
-    if (markHandled && pending) { const s = getSet(); s.add(dayKey(pending.iata)); saveSet(s); }
-    setPending(null);
+  // The sheet: the window asked for, else the oldest open airport window not deferred this run.
+  const asked = forced ? windowById(forced) : null;
+  const win = (asked && asked.kind === "airport" && asked.status === "open" ? asked : null)
+    || open.find((x) => x.kind === "airport" && !isDeferred(x.id)) || null;
+  const pending = win ? { winId: win.id, iata: win.iata, city: win.city, countryCode: win.cc, lat: win.lat, lng: win.lng, intl: win.intl, seenAt: Number(win.firstSeen?.at) || Date.now(), ink: win.ink, left: hoursLeft(win) } : null;
+  // Later keeps the window for the next open; Not this one closes it for good.
+  const close = (forGood) => {
+    if (pending) { if (forGood) closeWindow(pending.winId, "declined"); else deferWindow(pending.winId); }
+    setForced(null);
   };
   // After the stamp: "what was this trip for?" — private by default.
   const [noteFor, setNoteFor] = useState(null); // { id, city }
@@ -98,8 +115,8 @@ export default function AirportArrivalPrompt() {
       const { data, error } = await addStamp({
         kind: "country", tier: "page", entity_type: "border", entity_id: c.cc,
         name: `${c.country} · ${c.iata}`, city: c.city, country: c.country, cc: c.cc,
-        lat: c.lat, lng: c.lng, visited_on: localISODate(), verified: "gps",
-        local_hour: new Date().getHours(), direction: c.direction, mode: "air", ink: c.ink,
+        lat: c.lat, lng: c.lng, visited_on: localISODate(new Date(c.seenAt || Date.now())), verified: "gps",
+        local_hour: new Date(c.seenAt || Date.now()).getHours(), direction: c.direction, mode: "air", ink: c.ink,
       });
       setCountryBusy(false);
       if (error) showToast(error, "error");
@@ -111,22 +128,23 @@ export default function AirportArrivalPrompt() {
   const add = async (direction) => {
     if (!pending || busy) return;
     setBusy(direction);
-    const today = localISODate();
+    const seen = new Date(pending.seenAt);
+    const today = localISODate(seen);   // the day the app saw you at the airport, even if you tap tomorrow
     const { data, error } = await addStamp({
       kind: "airport", tier: "page", entity_type: "airport", entity_id: pending.iata,
       name: `${pending.city} (${pending.iata})`, city: pending.city, country: pending.countryCode,
       cc: pending.countryCode, lat: pending.lat, lng: pending.lng, visited_on: today, verified: "gps",
-      local_hour: new Date().getHours(), direction,
+      local_hour: seen.getHours(), direction,
     });
     setBusy(false);
     const city = pending.city;
-    close(true);
-    if (error) { showToast(error, "error"); return; }
+    if (error) { close(false); showToast(error, "error"); return; }
+    closeWindow(pending.winId, "stamped"); setForced(null);
     // Reflect the server's verdict: show the ✓ only if the GPS claim was corroborated.
     showToast(`✈️ ${city} (${pending.iata}) ${direction} stamped 🛂${data?.verified === "gps" ? " ✓" : ""}`, "success");
     // An international airport: the country's stamp next, then the trip note.
     if (pending.intl && pending.countryCode) {
-      setCountryFor({ direction, iata: pending.iata, city, cc: pending.countryCode, country: regionName(pending.countryCode), lat: pending.lat, lng: pending.lng, noteId: data?.id || null, ink: pickInk() });
+      setCountryFor({ direction, iata: pending.iata, city, cc: pending.countryCode, country: regionName(pending.countryCode), lat: pending.lat, lng: pending.lng, noteId: data?.id || null, ink: pending.ink, seenAt: pending.seenAt });
       return;
     }
     if (data?.id) setNoteFor({ id: data.id, city });
@@ -143,7 +161,7 @@ export default function AirportArrivalPrompt() {
             International flight? Add {withThe(c.country).startsWith("the ") ? "" : "the "}{withThe(c.country)} {arriving ? "arrival" : "departure"} stamp too, like the one at immigration.
           </p>
           <div style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
-            <LandStamp template="country" via="air" name={c.country} countryCode={c.cc} code={c.iata} date={localISODate()} direction={c.direction} ink={c.ink} width={210} />
+            <LandStamp template="country" via="air" name={c.country} countryCode={c.cc} code={c.iata} date={localISODate(new Date(c.seenAt || Date.now()))} direction={c.direction} ink={c.ink} width={210} />
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
             <button onClick={() => stampCountry(false)} disabled={countryBusy} style={{ flex: 1, borderRadius: 12, padding: "12px", fontWeight: 600, background: "#fff", color: "#3A3128", border: "1px solid rgba(22,17,13,.12)", fontSize: 14 }}>Just the airport</button>
@@ -171,8 +189,9 @@ export default function AirportArrivalPrompt() {
     );
   }
   if (!pending) return null;
-  const today = localISODate();
+  const today = localISODate(new Date(pending.seenAt));
   const country = regionName(pending.countryCode);
+  const later = Date.now() - pending.seenAt > 30 * 60 * 1000;   // not at the airport any more: the window's words
   const choice = (direction, label, sub) => (
     <button onClick={() => add(direction)} disabled={!!busy}
       style={{ flex: 1, minWidth: 0, borderRadius: 16, padding: "10px 6px 9px", background: "#fff", border: "1.5px solid rgba(22,17,13,.16)", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, opacity: busy && busy !== direction ? 0.55 : 1 }}>
@@ -182,16 +201,18 @@ export default function AirportArrivalPrompt() {
     </button>
   );
   return (
-    <div onClick={() => close(true)} style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div onClick={() => close(false)} style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "#f3eee1", borderRadius: 22, maxWidth: 380, width: "100%", padding: 22, textAlign: "center", boxShadow: "0 24px 60px -20px rgba(0,0,0,.45)" }}>
-        <p style={{ fontFamily: '"Instrument Serif",Georgia,serif', fontSize: 24, color: "#16110D", margin: "0 0 2px" }}>You&rsquo;re at {pending.city} ({pending.iata})</p>
-        <p style={{ color: "#3A3128", fontSize: 14, lineHeight: 1.5, margin: 0 }}>Stamp your passport? Tell us which way you&rsquo;re flying — it goes on the stamp. {country}.</p>
+        {later ? <p style={{ fontFamily: '"JetBrains Mono",ui-monospace,monospace', fontSize: 9.5, letterSpacing: ".18em", textTransform: "uppercase", color: "#B0472F", margin: "0 0 6px" }}>{pending.iata} · seen {seenLabel(pending.seenAt)} · {pending.left} h left</p> : null}
+        <p style={{ fontFamily: '"Instrument Serif",Georgia,serif', fontSize: 24, color: "#16110D", margin: "0 0 2px" }}>{later ? "You were at" : "You’re at"} {pending.city} ({pending.iata})</p>
+        <p style={{ color: "#3A3128", fontSize: 14, lineHeight: 1.5, margin: 0 }}>{later ? "The stamp has been waiting. Which way were you flying? It goes on the stamp." : "Stamp your passport? Tell us which way you’re flying — it goes on the stamp."} {country}.</p>
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
           {choice("arrival", "Arriving", "Just landed")}
           {choice("departure", "Departing", "Flying out")}
         </div>
-        <button onClick={() => close(true)} disabled={!!busy} style={{ width: "100%", marginTop: 10, borderRadius: 12, padding: "10px", fontWeight: 600, background: "none", color: "#3A3128", border: "none", fontSize: 14 }}>Not now</button>
+        <button onClick={() => close(false)} disabled={!!busy} style={{ width: "100%", marginTop: 10, borderRadius: 12, padding: "10px", fontWeight: 600, background: "none", color: "#3A3128", border: "none", fontSize: 14 }}>Later — it waits {pending.left} hours</button>
         <p style={{ color: "#736657", fontSize: 11, lineHeight: 1.4, marginTop: 2 }}>Nothing is stamped until you tap. Round trip? You&rsquo;ll be asked again on the way home.</p>
+        <button onClick={() => close(true)} disabled={!!busy} style={{ marginTop: 6, color: "#736657", fontSize: 11.5, textDecoration: "underline", background: "none", border: "none" }}>Not this one</button>
       </div>
     </div>
   );
