@@ -4583,3 +4583,27 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   checkpoint layout closes up to fit the line. Rendered through a temporary Vite harness
   (`scratchpad/shots/inks-random.png`). Gates: eslint (no-undef) clean on 6 components + the lib; node --check
   worker; build; boot-check ✅. Needs push (worker: meta.ink) + OTA.
+
+## 2026-11-05 — Border grace, phase 1 BUILT (founder: "okay are we built?" → built the same morning)
+
+  `src/lib/crossings.js` — the phone's store `pp_crossings_v1`: `baseline` (last confirmed place, any age; the old
+  `pp_live_region_v2` is read as a fallback and kept in sync), `windows[]` (open offers, 48 h from `firstSeen.at`;
+  closed ones stay until they expire so nothing reopens), `openWindow` (dedupes by key: `region:US-AZ`,
+  `country:MX`, `airport:LAX:<day>`; draws the ink), `closeWindow`, `deferWindow` (per app run), `askToStamp` (the
+  passport card → the sheet), `useCrossings`. `BorderCrossingPrompt` rewritten: sensing on every live fix against
+  the baseline; airport fence / flight sensed (fence since the last fix, or faster than 300 km/h under an hour,
+  160 state / 250 country over it) → baseline moves, no window; precise lookups fail → nothing moves, retried on
+  the next fix; confirmed → window (`crossing` when both sides were seen within the hour and 80 km, else "first
+  seen near <town>"). The sheet: kicker, "You crossed into / You're in", How did you get here? (Car · Train · Ship ·
+  Plane), Entry/Exit `LandStamp` previews in the window's ink, Later (defer), Not this one (close), Turn off; plane
+  → no land stamp. One sheet at a time (an airport window has the screen first). `AirportArrivalPrompt`: a fence
+  fix opens an airport window (one per airport per day); the sheet reads from the store ("You were at LAX · seen …
+  · N h left" when older than 30 min), Later / Not this one; stamps dated the day seen; the by-air country stamp
+  follows as before with the window's ink. `CrossingsWaiting` on the Passport page (stamps tab, own passport
+  only): the oldest window big with Stamp it / Not this one, the rest as Next rows. Both prompts moved from Home
+  to `Layout` (`stampPrompts` = signed in + onboarded + not onboarding). Stamps send `visited_on` = the day of the
+  first fix (worker allows back to 2021), `lat/lng` = that spot (rough), `verified: gps`, `mode`, `ink`.
+  Not built (founder's call): the "flight sensed, no gate seen" half. Photographed on the web build with a mock
+  store (`scratchpad/shots/grace-airport.png`, `grace-land.png`, `grace-passport.png`). Gates: eslint (no-undef)
+  clean on 7 components + 2 libs; build; boot-check ✅. App-only: needs push + OTA. Old installs' `pp_live_region_v2`
+  baseline carries over, so the first crossing after the OTA is sensed from where the app last saw them.

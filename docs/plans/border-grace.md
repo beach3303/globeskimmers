@@ -1,6 +1,8 @@
 # Border grace — the entry stamp you can't miss (proposal, 2026-11-03)
 
-**Status:** PROPOSED, nothing built. Founder's decisions at the end.
+**Status:** Phase 1 BUILT 2026-11-05 (commit on stamping-v2; BUILD_TEST_CHECKLIST 2026-11-05), awaiting push + OTA —
+the 48-hour window for crossings and airports, the sheet on any page with the mode question, the Entry waiting
+card. Left out, the founder's call: the "flight sensed, no gate seen" half. Phases 2 and 3 as proposed below.
 
 ## What happened (founder, 2026-11-03, I-10 Los Angeles → Scottsdale)
 
