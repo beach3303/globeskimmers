@@ -4568,3 +4568,18 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   lines, checkpoints and the by-air country stamp; airport stamps keep their country ink (`src/lib/airportStamp.js`).
   Rendered side by side through a temporary Vite harness (`scratchpad/shots/inks-entry-exit.png`). Gates: eslint
   (no-undef) clean; build; boot-check ✅. App-only: needs push + OTA (rides with the next push).
+
+## 2026-11-05 — Crossing stamps: eight random inks, bigger flags, a line for every country (supersedes the 11-04 entry/exit inks)
+
+  Founder: "keep the 6 inks maybe add more inks and randomize the color for entry and exit … when 6 friends are
+  driving … they always check each other's stamp"; "i do want the flag to be bigger"; country lines "prideful and
+  great … slogan wise". `LandStamp`: `INKS` = 8 pads (+ violet `#4B2E62`, teal `#1E5556`), `pickInk()`, an `ink`
+  prop (validated hex) that beats the name-hashed fallback. `BorderCrossingPrompt` / `AirportArrivalPrompt` draw
+  the ink when the crossing (or the by-air country stamp) is offered, show it on both choices and send `ink`;
+  the worker keeps it as `meta.ink` for `kind=state` and `kind=country + entity_type=border` (hex-validated);
+  PassportBook / Passport / StampThumb pass `meta.ink` back. Flags: state 48×32 (was 36×24), country emoji 34
+  (was 28). `src/lib/countryClaims.js`: ~110 countries' own lines (motto / anthem / self-name; original language
+  first; nothing invented or political — RU, UA, IL, VE, IR and a few others deliberately absent → no line); the
+  checkpoint layout closes up to fit the line. Rendered through a temporary Vite harness
+  (`scratchpad/shots/inks-random.png`). Gates: eslint (no-undef) clean on 6 components + the lib; node --check
+  worker; build; boot-check ✅. Needs push (worker: meta.ink) + OTA.
