@@ -14,6 +14,7 @@
 //              <code> (the airport), and ARRIVAL / DEPARTURE in place of ENTRY / EXIT.
 import React, { useId } from "react";
 import { stateInfo } from "@/lib/stateNicknames";
+import { countryClaim } from "@/lib/countryClaims";
 
 // Flags (founder, 2026-10-24: "put on state flag when border state to state crossing, for example
 // entering california put the enter with california state flag"). The 50 states and DC are bundled
@@ -25,18 +26,20 @@ const STATE_FLAGS = Object.fromEntries(Object.entries(import.meta.glob("/src/ass
 const NATION_FLAGS = { England: "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}", Scotland: "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}", Wales: "\u{1F3F4}\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}" };
 const countryFlag = (cc) => (/^[a-z]{2}$/i.test(cc || "") ? String.fromCodePoint(...[...String(cc).toUpperCase()].map((c) => 0x1f1a5 + c.charCodeAt(0))) : null);
 
-const INKS = ["#274268", "#7E1C28", "#2E5A3A", "#24316B", "#5A3A1E", "#232323"];
+// Eight stamp-pad inks: navy, oxblood, forest, indigo, sepia, black, violet, teal. The ink is DRAWN AT
+// RANDOM when the stamp is pressed (founder, 2026-11-05: "when 6 friends are driving … they always check
+// each other's stamp and it would be nice if random colors are stamped") and kept with the stamp
+// (meta.ink), so a passport shows the same ink forever; a stamp pressed before this keeps the ink its
+// name always had.
+export const INKS = ["#274268", "#7E1C28", "#2E5A3A", "#24316B", "#5A3A1E", "#232323", "#4B2E62", "#1E5556"];
 const hash = (s) => { let h = 0; for (const c of String(s || "")) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
-// One ink for Entry, one for Exit (founder, 2026-11-04): the post's entry pad is forest green, its exit
-// pad oxblood red, on every state line and checkpoint. A stamp with no direction (the pre-October look)
-// keeps the ink its name always had.
-export const ENTRY_INK = "#2E5A3A", EXIT_INK = "#7E1C28";
-export const inkFor = (direction, fallback) => (direction === "arrival" ? ENTRY_INK : direction === "departure" ? EXIT_INK : fallback);
-export default function LandStamp({ template = "country", name, sub = null, countryCode: cc = "", date, direction = null, via = null, code = null, width = 320 }) {
+export const pickInk = () => INKS[Math.floor(Math.random() * INKS.length)];
+const validInk = (v) => (/^#[0-9a-f]{6}$/i.test(String(v || "")) ? String(v).toUpperCase() : null);
+export default function LandStamp({ template = "country", name, sub = null, countryCode: cc = "", date, direction = null, via = null, code = null, ink: inkProp = null, width = 320 }) {
   const raw = useId();
   const uid = String(raw).replace(/[:]/g, "");
   const serif = "Georgia, 'Times New Roman', serif";
-  const ink = inkFor(direction, INKS[hash(`${template}:${name}`) % INKS.length]);
+  const ink = validInk(inkProp) || INKS[hash(`${template}:${name}`) % INKS.length];
   const dep = direction === "departure";
   const air = via === "air" && template === "country";
   const WORD = direction ? (air ? (dep ? "DEPARTURE" : "ARRIVAL") : (dep ? "EXIT" : "ENTRY")) : null;
@@ -49,7 +52,8 @@ export default function LandStamp({ template = "country", name, sub = null, coun
   // Long names step down so they stay inside the frame (MASSACHUSETTS and UNITED STATES ran over).
   const nameSize = NAME.length > 16 ? 20 : NAME.length > 12 ? 26 : NAME.length > 10 ? 32 : 38;
   const info = template === "state" ? stateInfo(name) : null;
-  const claim = sub || info?.nickname || null;
+  // A country's own line (2026-11-05), like a state's nickname: its motto or the name it calls itself by.
+  const claim = sub || info?.nickname || (template === "country" ? countryClaim(cc) : null);
   const flagUrl = info?.abbr ? STATE_FLAGS[info.abbr] || null : null;
   const flagText = template === "state" ? (flagUrl ? null : NATION_FLAGS[String(name || "").trim()] || null) : countryFlag(cc);
   const H = Math.round((width * 224) / 340);
@@ -86,12 +90,13 @@ export default function LandStamp({ template = "country", name, sub = null, coun
             {flagUrl || flagText ? null : <><circle cx="46" cy="52" r="5" fill="currentColor" /><circle cx="294" cy="52" r="5" fill="currentColor" /></>}
           </g>
           {/* The state's flag in the sign's top-left corner, beside ★ ENTRY ★ (2026-10-24). */}
+          {/* Bigger since 2026-11-05 (founder: "i do want the flag to be bigger"); it stops just above the name's top. */}
           {flagUrl ? (
             <g>
-              <image href={flagUrl} x="40" y="42" width="36" height="24" preserveAspectRatio="xMidYMid slice" opacity="0.95" />
-              <rect x="40" y="42" width="36" height="24" fill="none" stroke="currentColor" strokeWidth="1.6" />
+              <image href={flagUrl} x="36" y="39" width="48" height="32" preserveAspectRatio="xMidYMid slice" opacity="0.95" />
+              <rect x="36" y="39" width="48" height="32" fill="none" stroke="currentColor" strokeWidth="1.6" />
             </g>
-          ) : flagText ? <text x="58" y="66" textAnchor="middle" fontSize="24">{flagText}</text> : null}
+          ) : flagText ? <text x="60" y="68" textAnchor="middle" fontSize="30">{flagText}</text> : null}
           <g filter={`url(#${press})`}>
             <text x="170" y="60" textAnchor="middle" fontFamily={serif} fontSize="11" fontWeight="700" letterSpacing="3" fill="currentColor">
               {WORD ? `★ ${WORD} ★` : "★ WELCOME ★"}
@@ -123,15 +128,17 @@ export default function LandStamp({ template = "country", name, sub = null, coun
             <path d="M294,182 L299,187 L307,176" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           </g>
           <g filter={`url(#${press})`}>
-            <text x="170" y={NAME.length > 14 ? 96 : 100} textAnchor="middle" fontFamily={serif} fontSize={nameSize} fontWeight="700" letterSpacing="1" fill="currentColor">{NAME}</text>
-            <text x="170" y="122" textAnchor="middle" fontFamily={serif} fontSize="11" fontWeight="700" letterSpacing="2.5" fill="currentColor">
+            {/* With a claim (2026-11-05) the lines close up: the name, the country's own line in italics, the post, the direction. */}
+            <text x="170" y={claim ? (NAME.length > 14 ? 88 : 92) : NAME.length > 14 ? 96 : 100} textAnchor="middle" fontFamily={serif} fontSize={claim && nameSize > 26 ? nameSize - 6 : nameSize} fontWeight="700" letterSpacing="1" fill="currentColor">{NAME}</text>
+            {claim && <text x="170" y="110" textAnchor="middle" fontFamily={serif} fontStyle="italic" fontSize="13" fill="currentColor">{claim}</text>}
+            <text x="170" y={claim ? 129 : 122} textAnchor="middle" fontFamily={serif} fontSize="11" fontWeight="700" letterSpacing="2.5" fill="currentColor">
               {air ? `IMMIGRATION${CODE ? ` · ${CODE}` : ""}` : `BORDER CROSSING${cc ? ` · ${String(cc).toUpperCase()}` : ""}`}
             </text>
-            {WORD && <text x="170" y="146" textAnchor="middle" fontFamily={serif} fontSize="15" fontWeight="700" letterSpacing="4" fill="currentColor">★ {WORD} ★</text>}
+            {WORD && <text x="170" y={claim ? 150 : 146} textAnchor="middle" fontFamily={serif} fontSize="15" fontWeight="700" letterSpacing="4" fill="currentColor">★ {WORD} ★</text>}
             <text x="196" y="186" textAnchor="middle" fontFamily={serif} fontSize="12" fontWeight="700" letterSpacing="1.5" fill="currentColor">{dateStr}</text>
           </g>
-          {/* The country's flag in the bottom-left corner (2026-10-24). */}
-          {flagText ? <text x="58" y="194" textAnchor="middle" fontSize="28">{flagText}</text> : null}
+          {/* The country's flag in the bottom-left corner (2026-10-24), bigger since 2026-11-05. */}
+          {flagText ? <text x="58" y="196" textAnchor="middle" fontSize="34">{flagText}</text> : null}
         </>
       )}
     </svg>

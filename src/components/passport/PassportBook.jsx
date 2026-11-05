@@ -260,8 +260,8 @@ function StampToken({ stamp, idx, onOpen, pageW, frameW = pageW, compact = false
       ) : isLand ? (
         <div className="flex flex-col items-center">
           {stamp.kind === "state"
-            ? <LandStamp template="state" name={stamp.region || stamp.name} date={stamp.visited_on} direction={stamp.meta?.direction || null} width={airportW} />
-            : <LandStamp template="country" name={String(stamp.name || "").split(" · ")[0]} countryCode={String(stamp.entity_id || "").split(":")[0]} date={stamp.visited_on} direction={stamp.meta?.direction || null}
+            ? <LandStamp template="state" name={stamp.region || stamp.name} date={stamp.visited_on} direction={stamp.meta?.direction || null} ink={stamp.meta?.ink || null} width={airportW} />
+            : <LandStamp template="country" name={String(stamp.name || "").split(" · ")[0]} countryCode={String(stamp.entity_id || "").split(":")[0]} date={stamp.visited_on} direction={stamp.meta?.direction || null} ink={stamp.meta?.ink || null}
                 via={stamp.meta?.mode === "air" ? "air" : null} code={String(stamp.name || "").split(" · ")[1] || null} width={airportW} />}
         </div>
       ) : isLocalFav ? (

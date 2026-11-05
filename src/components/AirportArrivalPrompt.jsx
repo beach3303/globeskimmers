@@ -6,7 +6,7 @@ import { showToast } from "@/components/Toast";
 import { airportAt, markAirportVisit } from "@/lib/airports";
 import { localISODate } from "@/lib/localDate";
 import AirportStamp from "@/components/passport/AirportStamp";
-import LandStamp from "@/components/passport/LandStamp";
+import LandStamp, { pickInk } from "@/components/passport/LandStamp";
 
 // ============================================================================
 // ✈️ Airport stamp — when a signed-in user opens the app while physically
@@ -99,7 +99,7 @@ export default function AirportArrivalPrompt() {
         kind: "country", tier: "page", entity_type: "border", entity_id: c.cc,
         name: `${c.country} · ${c.iata}`, city: c.city, country: c.country, cc: c.cc,
         lat: c.lat, lng: c.lng, visited_on: localISODate(), verified: "gps",
-        local_hour: new Date().getHours(), direction: c.direction, mode: "air",
+        local_hour: new Date().getHours(), direction: c.direction, mode: "air", ink: c.ink,
       });
       setCountryBusy(false);
       if (error) showToast(error, "error");
@@ -126,7 +126,7 @@ export default function AirportArrivalPrompt() {
     showToast(`✈️ ${city} (${pending.iata}) ${direction} stamped 🛂${data?.verified === "gps" ? " ✓" : ""}`, "success");
     // An international airport: the country's stamp next, then the trip note.
     if (pending.intl && pending.countryCode) {
-      setCountryFor({ direction, iata: pending.iata, city, cc: pending.countryCode, country: regionName(pending.countryCode), lat: pending.lat, lng: pending.lng, noteId: data?.id || null });
+      setCountryFor({ direction, iata: pending.iata, city, cc: pending.countryCode, country: regionName(pending.countryCode), lat: pending.lat, lng: pending.lng, noteId: data?.id || null, ink: pickInk() });
       return;
     }
     if (data?.id) setNoteFor({ id: data.id, city });
@@ -143,7 +143,7 @@ export default function AirportArrivalPrompt() {
             International flight? Add {withThe(c.country).startsWith("the ") ? "" : "the "}{withThe(c.country)} {arriving ? "arrival" : "departure"} stamp too, like the one at immigration.
           </p>
           <div style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
-            <LandStamp template="country" via="air" name={c.country} countryCode={c.cc} code={c.iata} date={localISODate()} direction={c.direction} width={210} />
+            <LandStamp template="country" via="air" name={c.country} countryCode={c.cc} code={c.iata} date={localISODate()} direction={c.direction} ink={c.ink} width={210} />
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
             <button onClick={() => stampCountry(false)} disabled={countryBusy} style={{ flex: 1, borderRadius: 12, padding: "12px", fontWeight: 600, background: "#fff", color: "#3A3128", border: "1px solid rgba(22,17,13,.12)", fontSize: 14 }}>Just the airport</button>

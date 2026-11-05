@@ -9,7 +9,7 @@ import { regionInfo } from "@/lib/stateNicknames";
 import { callWorker } from "@/lib/callWorker";
 import { getStampFix } from "@/lib/geolocation";
 import { localISODate } from "@/lib/localDate";
-import LandStamp from "@/components/passport/LandStamp";
+import LandStamp, { pickInk } from "@/components/passport/LandStamp";
 
 // ============================================================================
 // 🛂 Border-crossing stamps on the ground (founder, 2026-10-05). When a
@@ -119,10 +119,11 @@ export default function BorderCrossingPrompt() {
         keep({ cc: is.cc, region: is.region, ...pt });
         const kind = is.cc !== was.cc ? "country" : is.region && was.region && is.region !== was.region ? "region" : null;
         if (!kind || !alive.current) return;
-        if (kind === "country") { setPending({ type: "country", cc: is.cc, country: regionName(is.cc), lat: rough(pt.lat), lng: rough(pt.lng) }); return; }
+        // The ink is drawn now, shown on both choices, and kept with the stamp (2026-11-05).
+        if (kind === "country") { setPending({ type: "country", cc: is.cc, country: regionName(is.cc), lat: rough(pt.lat), lng: rough(pt.lng), ink: pickInk() }); return; }
         // Same country — a new state / nation inside it (US + UK only).
         const info = regionInfo(is.cc, is.region);
-        if (info) setPending({ type: "region", cc: is.cc, country: regionName(is.cc), region: is.region, info, lat: rough(pt.lat), lng: rough(pt.lng) });
+        if (info) setPending({ type: "region", cc: is.cc, country: regionName(is.cc), region: is.region, info, lat: rough(pt.lat), lng: rough(pt.lng), ink: pickInk() });
       } finally { judging = false; }
     })();
   }, [currentGpsLocation, isAuthenticated, pending]);
@@ -140,12 +141,12 @@ export default function BorderCrossingPrompt() {
       kind: "state", tier: "page", entity_type: "border", entity_id: pending.info.abbr,
       name: pending.region, region: pending.region, country: pending.country, cc: pending.cc,
       lat: pending.lat, lng: pending.lng, visited_on: today, verified: "gps",
-      local_hour: new Date().getHours(), direction,
+      local_hour: new Date().getHours(), direction, ink: pending.ink,
     } : {
       kind: "country", tier: "page", entity_type: "border", entity_id: pending.cc,
       name: `${pending.country} · Border Crossing`, city: null, country: pending.country, cc: pending.cc,
       lat: pending.lat, lng: pending.lng, visited_on: today, verified: "gps",
-      local_hour: new Date().getHours(), direction,
+      local_hour: new Date().getHours(), direction, ink: pending.ink,
     });
     setBusy(false);
     const what = isRegion ? pending.region : pending.country;
@@ -159,8 +160,8 @@ export default function BorderCrossingPrompt() {
   const today = localISODate();
   const isRegion = pending.type === "region";
   const stampFor = (direction) => (isRegion
-    ? <LandStamp template="state" name={pending.region} sub={pending.info.nickname} date={today} direction={direction} width={134} />
-    : <LandStamp template="country" name={pending.country} countryCode={pending.cc} date={today} direction={direction} width={134} />);
+    ? <LandStamp template="state" name={pending.region} sub={pending.info.nickname} date={today} direction={direction} ink={pending.ink} width={134} />
+    : <LandStamp template="country" name={pending.country} countryCode={pending.cc} date={today} direction={direction} ink={pending.ink} width={134} />);
   const choice = (direction, label, sub) => (
     <button onClick={() => add(direction)} disabled={!!busy}
       style={{ flex: 1, minWidth: 0, borderRadius: 16, padding: "10px 6px 9px", background: "#fff", border: "1.5px solid rgba(22,17,13,.16)", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, opacity: busy && busy !== direction ? 0.55 : 1 }}>

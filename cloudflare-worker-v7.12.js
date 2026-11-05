@@ -15109,7 +15109,11 @@ async function handlePassportStamp(request, env, ctx) {
     // itself origin:true — the app renders it as the cover page, not a brag.
     // The place's own name in its own alphabet, beside the English one ("東京都").
     const localName = ppLocalName(name, b.local_name);
-    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}), ...(direction ? { direction } : {}), ...(mode ? { mode } : {}), ...(presence ? { presence } : {}),
+    // The stamp-pad ink the app drew when a crossing stamp was pressed (2026-11-05, founder: friends crossing
+    // together should see different colours on their stamps): kept with state lines and checkpoints only,
+    // as a hex colour the app validates against its own pads.
+    const ink = (kind === 'state' || (kind === 'country' && b.entity_type === 'border')) && /^#[0-9A-Fa-f]{6}$/.test(String(b.ink || '')) ? String(b.ink).toUpperCase() : null;
+    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}), ...(direction ? { direction } : {}), ...(mode ? { mode } : {}), ...(ink ? { ink } : {}), ...(presence ? { presence } : {}),
       // A park or rim keeps its parent place, so Verify I'm here measures it the same way.
       ...(variantParent ? { parent_id: variantParent } : {}),
       ...(localFav ? { local_favorite: localFav } : {}),
