@@ -99,9 +99,11 @@ state or country. Everything else is grace. Nothing is stamped until you tap.
 
 ## Founder's decisions
 
-**Decided 2026-11-04:** the window is **48 hours** ("I do like the grace. It's 48 hours"), and the crossing stamps
-take **one ink for Entry (forest green) and one for Exit (oxblood)** — built the same day (LandStamp `inkFor`),
-awaiting push + OTA. She also asked how often location is checked (answered: 1.5 s after open, on every
+**Decided 2026-11-04:** the window is **48 hours** ("I do like the grace. It's 48 hours"). The inks: one per
+direction was built 11-04 and REPLACED on 11-05 by the founder's real wish — **eight inks drawn at random when the
+stamp is pressed and kept with it (meta.ink)**, so friends crossing together see different colours; plus bigger
+flags and a line of the country's own (`src/lib/countryClaims.js`) on the checkpoint stamp. Built 11-05, awaiting
+push (worker) + OTA. She also asked how often location is checked (answered: 1.5 s after open, on every
 foreground, every 5 min while open, geocode only past 10 km; nothing when closed) and what the closed-app answer
 is (Border Watch, Phase 3, or the no-permission timed reminder).
 
