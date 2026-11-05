@@ -4607,3 +4607,9 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   store (`scratchpad/shots/grace-airport.png`, `grace-land.png`, `grace-passport.png`). Gates: eslint (no-undef)
   clean on 7 components + 2 libs; build; boot-check ✅. App-only: needs push + OTA. Old installs' `pp_live_region_v2`
   baseline carries over, so the first crossing after the OTA is sensed from where the app last saw them.
+
+## 2026-11-05 — PUSHED by the founder: main 65e42ed (07:54 PT; Deploy Cloudflare Workers run 42059681807 green)
+
+  Carries the then-and-now put script, the border-grace proposal, and the crossing stamps' eight random inks /
+  bigger flags / country lines (the worker now keeps `meta.ink`). **Phones still run OTA 1.0.2611032027 (Nov 3):**
+  the inks, flags and country lines, and the border-grace window (next push), all wait on one `npm run ota`.
