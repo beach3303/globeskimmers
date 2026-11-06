@@ -4613,3 +4613,24 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   Carries the then-and-now put script, the border-grace proposal, and the crossing stamps' eight random inks /
   bigger flags / country lines (the worker now keeps `meta.ink`). **Phones still run OTA 1.0.2611032027 (Nov 3):**
   the inks, flags and country lines, and the border-grace window (next push), all wait on one `npm run ota`.
+
+## 2026-11-06 — The sensed flight, the one privacy line, one switch (founder: "approve sensed flight")
+
+  - **The line** (founder: "short and sweet … make words matter"): `PRIVACY_LINE` in `src/lib/crossings.js` —
+    "Your location stays on your phone. We only ask so you never miss a stamp." — the footer of every sensed card
+    (crossing, airport, flight) and the passport's waiting card.
+  - **The sensed flight** (`BorderCrossingPrompt`): when a judged crossing is a flight by speed and no airport fence
+    was seen since the last fix, `senseFlight` opens a `flight` window (adults only — `socialTier === "adult"`; ≥ 120
+    km) with up to three candidate airports on each end from `nearestAirports(…, 6, 130)`, the world's busiest /
+    US majors ranked first (`MAJOR`), nearest-first inside each group. The sheet: "Looks like you flew?", "Your
+    readings jumped from A to B — N miles in H", pills → pills, two `AirportStamp` previews, Stamp both (two
+    airport stamps, `verified: "self"` → no ✓, departure dated the day of the first reading, arrival the second),
+    "I didn't fly", the sensed note, Later, the line, Turn off. `CrossingsWaiting` shows it ("Looks like you flew ·
+    N h left", "I didn't fly"). Photographed live: with the mock's Scottsdale baseline, the rig's Los Angeles fix
+    opened a real Scottsdale → Los Angeles window on its own (`grace-flight.png`, `grace-settings.png`).
+  - **One switch**: `suggestionsOn()` / `setSuggestions()` — `pp_suggest_stamps` plus the two older keys
+    (`pp_city_prompt`, `pp_suggest_arrivals`; any "0" = off); Settings' two rows ("Airport arrival stamps",
+    "New-city pop-ups") became one: "Suggest stamps from where I am"; every sheet's link says "Turn off stamp
+    suggestions"; the land sheet's decline reads "I didn't cross".
+  - Gates: eslint (no-undef) clean on BorderCrossingPrompt / AirportArrivalPrompt / CrossingsWaiting / Settings +
+    crossings.js; build; boot-check ✅. App-only: needs push + OTA.

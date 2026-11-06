@@ -1379,9 +1379,11 @@ monthly report by hand until it's built.
   get a ports table later. Five decisions listed at the end of the doc. **2026-11-05: DECIDED — 48 h window, random
   inks (built), "i do want the 48 hour window plan" → mapped in the doc ("Mapped out — 2026-11-05") and mocked up on
   https://claude.ai/artifact/7eFVCpHRPYwmWYwvJiMAJN (six artboards). Airports get the same window. **Phase 1 BUILT
-  2026-11-05 (windows for crossings + airports, sheet on any page, mode question, Entry waiting card) — committed,
-  awaiting push + OTA. Still open: the "flight sensed, no gate seen" half (stamps without the ✓), Phase 2 (ports of
-  entry + the line ahead), Phase 3 (Border Watch).**
+  2026-11-05 (windows for crossings + airports, sheet on any page, mode question, Entry waiting card); 2026-11-06
+  the sensed flight APPROVED ("for growth") and BUILT, with the one privacy line — "Your location stays on your
+  phone. We only ask so you never miss a stamp." — on every sensed card and one Settings switch, "Suggest stamps
+  from where I am". Committed, awaiting push + OTA. Next in this lane: Phase 2 (ports of entry + the line ahead),
+  Phase 3 (Border Watch, native, opt-in per trip).**
 
 - **2027-01-15** — the early-2027 application windows, checked 2026-11-03: **Sequoia Arc** spring cohort (twice a
   year; fall 2026 closed Aug 17; spring windows have opened ~February; $500K–$1M; sequoiacap.com/arc/apply),

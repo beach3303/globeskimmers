@@ -1,8 +1,9 @@
 # Border grace — the entry stamp you can't miss (proposal, 2026-11-03)
 
-**Status:** Phase 1 BUILT 2026-11-05 (commit on stamping-v2; BUILD_TEST_CHECKLIST 2026-11-05), awaiting push + OTA —
-the 48-hour window for crossings and airports, the sheet on any page with the mode question, the Entry waiting
-card. Left out, the founder's call: the "flight sensed, no gate seen" half. Phases 2 and 3 as proposed below.
+**Status:** Phase 1 BUILT 2026-11-05 (the 48-hour window for crossings and airports, the sheet on any page with the
+mode question, the Entry waiting card) and, 2026-11-06, the **sensed flight** (approved "for growth"), the **one
+privacy line** on every sensed card — "Your location stays on your phone. We only ask so you never miss a stamp." —
+and **one switch**, "Suggest stamps from where I am". All on stamping-v2, awaiting push + OTA. Phases 2 and 3 below.
 
 ## What happened (founder, 2026-11-03, I-10 Los Angeles → Scottsdale)
 
