@@ -267,15 +267,16 @@ function CardsRemap() {
     setRes(error || data?.error ? { error: error || data.error } : data);
   };
   return (
-    <Section title="📇 Cards → area cards (one-time remap)" icon={Activity}>
-      <div style={{ fontSize: 12.5, color: COLORS.gray, lineHeight: 1.45 }}>After the 2026-11-06 migration: every old city card (Mesa, Scottsdale…) becomes part of its region\u2019s card (Greater Phoenix), stamps re-slotted twenty to a card in date order, a business once per run of cards. Run once; running again changes nothing.</div>
-      <button type="button" onClick={run} disabled={busy} style={{ marginTop: 10, padding: '8px 14px', borderRadius: 10, border: 'none', background: busy ? '#9A9A9A' : '#0E7C73', color: '#fff', fontWeight: 700, fontSize: 13, cursor: busy ? 'default' : 'pointer' }}>{busy ? 'Folding…' : 'Fold old city cards into area cards'}</button>
+    <div style={{ marginBottom: 14, padding: 16, borderRadius: 14, background: '#E3F1EF', border: '2px solid #0E7C73' }}>
+      <div style={{ fontWeight: 800, fontSize: 16, color: '#16110D' }}>📇 Cards: fold the old city cards into region cards</div>
+      <div style={{ marginTop: 4, fontSize: 12.5, color: '#3A3128', lineHeight: 1.45 }}>One tap, once. Every member\u2019s old city cards (Mesa, Scottsdale…) become their region\u2019s card (Greater Phoenix), stamps re-slotted twenty to a card in date order. Tapping again changes nothing.</div>
+      <button type="button" onClick={run} disabled={busy} style={{ marginTop: 12, width: '100%', minHeight: 48, padding: '10px 14px', borderRadius: 12, border: 'none', background: busy ? '#9A9A9A' : '#0E7C73', color: '#fff', fontWeight: 800, fontSize: 15, cursor: busy ? 'default' : 'pointer' }}>{busy ? 'Folding…' : 'Fold old city cards into region cards'}</button>
       {res ? (
-        <div style={{ marginTop: 10, fontSize: 13, color: res.error ? '#B0472F' : COLORS.dark }}>
+        <div style={{ marginTop: 10, fontSize: 13.5, fontWeight: 600, color: res.error ? '#B0472F' : '#0E7C73' }}>
           {res.error ? res.error : `Done: ${res.members} members · ${res.cards_before} cards before → ${res.cards_after} after · ${res.moved} stamps moved.`}
         </div>
       ) : null}
-    </Section>
+    </div>
   );
 }
 
@@ -1756,6 +1757,9 @@ export default function AdminAnalytics() {
               </>
             )}
 
+            {/* The one-time cards fold (2026-11-06) sits first until it has been run. */}
+            <CardsRemap />
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               <KpiCard
                 icon={Activity}
@@ -2335,7 +2339,6 @@ export default function AdminAnalytics() {
             <CollectiblesReport report={data?.collectibles_report || null} />
 
             <VideoReport />
-            <CardsRemap />
 
             <Section title="🛂 Stamps per month (12m)" icon={Activity} empty={ppByMonth.length === 0 ? 'No stamps in the last year.' : null}>
               {ppByMonth.map((d, i) => (
