@@ -42,7 +42,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Globeskimmers uses your camera so you can take photos for your Virtual Passport stamps, postcards, dish posts and profile picture.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Globeskimmers uses your location only while you are using the app, to show what is near you and to verify Virtual Passport stamps at the places you visit. It never tracks you in the background.</string>
+	<string>Globeskimmers uses your location while you use the app to show what is near you and to verify Virtual Passport stamps. With Border Watch on for a trip (off by default, off by itself after 24 hours) it also checks which state or country you are in at a few points along the way, on your phone, so you never miss a border stamp.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Globeskimmers uses your location to show nearby places to eat, restrooms, ATMs and attractions, and to verify a Virtual Passport stamp when you are at a place.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

@@ -58,6 +58,13 @@
         <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/gs_alert" />
         <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="alerts" />
 
+        <!-- Border Watch (2026-11-06): the trip's foreground service — a reading every few minutes,
+             judged on the phone, with its own notification the whole time (and Stop on it). -->
+        <service
+            android:name=".BorderWatchService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -82,6 +89,10 @@
          pick precision-vs-privacy at runtime on Android 12+. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Border Watch (2026-11-06): a location foreground service for the trip the member turns it on
+         for — off by default, off by itself after 24 hours, visible in its own notification. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
     <!-- Camera — "Take photo" in the app's photo pickers (passport stamps,
          postcards, dish posts, profile picture); the WebView asks for it at

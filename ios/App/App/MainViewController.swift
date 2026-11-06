@@ -8,5 +8,6 @@ class MainViewController: CAPBridgeViewController {
   override open func capacitorDidLoad() {
     bridge?.registerPluginInstance(AgeRangePlugin())
     bridge?.registerPluginInstance(VideoShrinkPlugin())   // clips: probe + shrink on the phone (2026-10-30)
+    bridge?.registerPluginInstance(BorderWatchPlugin())   // Border Watch: state and country lines with the app closed (2026-11-06)
   }
 }

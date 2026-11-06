@@ -7,7 +7,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Border Watch (2026-11-06): while a trip is on, keep watching for state and country lines — on
+        // every launch, and on the launch iOS makes in the background to hand over a significant move
+        // (launchOptions[.location]). Off, this is a no-op.
+        BorderWatchCore.shared.resumeIfOn()
         return true
     }
 

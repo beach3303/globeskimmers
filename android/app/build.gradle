@@ -73,6 +73,9 @@ dependencies {
     implementation "androidx.media3:media3-transformer:1.9.4"
     implementation "androidx.media3:media3-effect:1.9.4"
     implementation "androidx.media3:media3-common:1.9.4"
+    // Border Watch (2026-11-06): the fused provider for the trip's readings (the same library the
+    // Geolocation plugin uses; declared here so the app module can call it).
+    implementation "com.google.android.gms:play-services-location:21.3.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

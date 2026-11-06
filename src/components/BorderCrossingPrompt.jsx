@@ -13,6 +13,8 @@ import { baseline, setBaseline, openWindow, closeWindow, deferWindow, isDeferred
 import LandStamp from "@/components/passport/LandStamp";
 import AirportStamp from "@/components/passport/AirportStamp";
 import { portNearSegment, postLabel } from "@/lib/portsOfEntry";
+import { App } from "@capacitor/app";
+import { drainCrossings, available as watchAvailable, useBorderWatch, untilLabel as watchUntil } from "@/lib/borderWatch";
 
 // ============================================================================
 // 🛂 Border-crossing stamps on the ground (founder, 2026-10-05). When a
@@ -105,6 +107,27 @@ export default function BorderCrossingPrompt() {
   const adult = socialTier === "adult";
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
+  // BORDER WATCH (phase 3, 2026-11-06; src/lib/borderWatch.js): on a phone build, the crossings the phone
+  // caught while the app was closed become windows here — on open and on every return to the app.
+  const watch = useBorderWatch();
+  useEffect(() => {
+    if (!isAuthenticated || !watchAvailable()) return undefined;
+    const pull = () => { drainCrossings().catch(() => {}); };
+    pull();
+    let handle = null;
+    App.addListener("appStateChange", ({ isActive }) => { if (isActive) pull(); }).then((h) => { handle = h; }).catch(() => {});
+    return () => { try { handle?.remove?.(); } catch { /* ignore */ } };
+  }, [isAuthenticated]);
+  // "Turn off stamp suggestions" turns the watch off with them.
+  const offAll = () => { setSuggestions(false); if (watch.available) watch.turnOff().catch(() => {}); };
+  const turnOnWatch = async () => {
+    try {
+      const s = await watch.turnOn();
+      showToast(`Border Watch is on until ${watchUntil(s.until)}${s.permission === "whenInUse" ? " — allow location “Always” in Settings for the app-closed part" : ""}`, "success");
+    } catch (e) {
+      showToast(/location/.test(String(e?.message || e)) ? "Turn on location for GlobeSkimmers first — tap Stamp where I am once, or allow it in Settings" : "Couldn’t start Border Watch — try again", "error");
+    }
+  };
   useEffect(() => {
     const on = (e) => setForced(e.detail?.id || null);
     window.addEventListener(OPEN_EVENT, on);
@@ -252,7 +275,7 @@ export default function BorderCrossingPrompt() {
           <p style={{ color: "#736657", fontSize: 10.5, lineHeight: 1.45, margin: "8px 0 0" }}>Sensed, not seen at the gate: these print without the ✓. Open the app at the gate next time and it&rsquo;s verified.</p>
           <button type="button" onClick={later} disabled={!!busy} style={{ width: "100%", marginTop: 6, borderRadius: 12, padding: "9px", fontWeight: 600, background: "none", color: "#3A3128", border: "none", fontSize: 14, fontFamily: "inherit", cursor: "pointer" }}>Later — it waits {left} hours</button>
           <p style={{ color: "#736657", fontSize: 11, lineHeight: 1.45, margin: 0 }}>{PRIVACY_LINE}</p>
-          <button type="button" onClick={() => { setSuggestions(false); no(); }} disabled={!!busy} style={{ marginTop: 6, color: "#736657", fontSize: 11.5, textDecoration: "underline", background: "none", border: "none", fontFamily: "inherit", cursor: "pointer" }}>Turn off stamp suggestions</button>
+          <button type="button" onClick={() => { offAll(); no(); }} disabled={!!busy} style={{ marginTop: 6, color: "#736657", fontSize: 11.5, textDecoration: "underline", background: "none", border: "none", fontFamily: "inherit", cursor: "pointer" }}>Turn off stamp suggestions</button>
         </div>
       </div>
     );
@@ -263,7 +286,7 @@ export default function BorderCrossingPrompt() {
   const picked = mode || w.modeGuess || "car";
   const settle = () => { deferWindow(w.id); setForced(null); };
   const decline = () => { closeWindow(w.id, "declined"); setForced(null); };
-  const turnOff = () => { setSuggestions(false); decline(); };
+  const turnOff = () => { offAll(); decline(); };
 
   const add = async (direction) => {
     if (busy) return;
@@ -337,6 +360,12 @@ export default function BorderCrossingPrompt() {
           <button type="button" onClick={() => add("arrival")} disabled={!!busy} style={{ width: "100%", marginTop: 10, borderRadius: 12, padding: "11px", fontWeight: 700, background: "#B0472F", color: "#fff", border: "none", fontSize: 14, fontFamily: "inherit", cursor: "pointer" }}>Got it — no land stamp</button>
         ) : null}
         <button type="button" onClick={settle} disabled={!!busy} style={{ width: "100%", marginTop: 8, borderRadius: 12, padding: "10px", fontWeight: 600, background: "none", color: "#3A3128", border: "none", fontSize: 14, fontFamily: "inherit", cursor: "pointer" }}>Later — it waits {left} hours</button>
+        {/* Border Watch (phase 3): the next line, with the app closed — on a phone build only. */}
+        {watch.available && !watch.on ? (
+          <button type="button" onClick={turnOnWatch} disabled={!!busy} style={{ width: "100%", borderRadius: 12, padding: "6px 8px 8px", fontWeight: 600, background: "none", color: "#0E7C73", border: "none", fontSize: 12.5, lineHeight: 1.4, fontFamily: "inherit", cursor: "pointer" }}>Driving on? Watch for borders on this trip — the phone catches the next line even with the app closed. Off by itself in 24 h.</button>
+        ) : watch.available && watch.on ? (
+          <p style={{ color: "#0E7C73", fontSize: 11.5, fontWeight: 600, margin: "0 0 4px" }}>Border Watch is on until {watchUntil(watch.until)}</p>
+        ) : null}
         <p style={{ color: "#736657", fontSize: 11, lineHeight: 1.45, margin: "2px 0 0" }}>{PRIVACY_LINE}</p>
         <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 6 }}>
           <button type="button" onClick={decline} disabled={!!busy} style={{ color: "#736657", fontSize: 11.5, textDecoration: "underline", background: "none", border: "none", fontFamily: "inherit", cursor: "pointer" }}>I didn&rsquo;t cross</button>

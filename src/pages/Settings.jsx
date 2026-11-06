@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { suggestionsOn, setSuggestions } from "@/lib/crossings";
+import { useBorderWatch, untilLabel as watchUntil } from "@/lib/borderWatch";
 import { useAuth } from "@/lib/AuthContext";
 import { searchHomeCities, resolveHomePlace } from "@/lib/homePlace";
 import { searchCountries, countryCode } from "@/lib/countries";
@@ -431,6 +432,7 @@ export default function SettingsPage() {
   const [openBehavior, setOpenBehaviorState] = useState(() => readOpenBehavior()); // 'ask' | 'current' | 'continue'
   // One switch for crossings, airports and flights (border grace, 2026-11-06); it writes the two older keys too.
   const [suggestStamps, setSuggestStamps] = useState(() => suggestionsOn());
+  const watch = useBorderWatch();   // Border Watch (phase 3, 2026-11-06): a phone build only
   const [showHotels, setShowHotels] = useState(() => { try { return localStorage.getItem("pp_show_hotel_names") === "1"; } catch { return false; } });
   // Nearby-stamp sensing on the Passport page (default ON; the page has its own small switch too).
   const [suggestNearby, setSuggestNearby] = useState(() => { try { return localStorage.getItem("pp_suggest_nearby") !== "0"; } catch { return true; } });
@@ -1065,9 +1067,26 @@ export default function SettingsPage() {
 
           {/* Virtual Passport group */}
           <EdGroup kicker="Virtual Passport" isTablet={isTablet}>
-            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Suggest stamps from where I am" desc="Offer a stamp when the app sees you cross a state or country line, land at an airport, or take a flight — only while it's open, never in the background. Your location stays on your phone. Turn off to never be asked (you can still add stamps yourself)."
-              control={{ node: <EdToggle on={suggestStamps} onClick={() => { const next = !suggestStamps; setSuggestStamps(next); setSuggestions(next); }} label="Toggle stamp suggestions" /> }}
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Suggest stamps from where I am" desc="Offer a stamp when the app sees you cross a state or country line, land at an airport, or take a flight — while it's open, or along the way with Border Watch on for a trip. Your location stays on your phone. Turn off to never be asked (you can still add stamps yourself)."
+              control={{ node: <EdToggle on={suggestStamps} onClick={() => { const next = !suggestStamps; setSuggestStamps(next); setSuggestions(next); if (!next && watch.on) watch.turnOff().catch(() => {}); }} label="Toggle stamp suggestions" /> }}
             />
+            {watch.available ? (
+              <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Watch for borders on this trip"
+                desc={watch.on
+                  ? `On until ${watchUntil(watch.until)}. ${watch.permission === "whenInUse" ? "For the app-closed part, allow location “Always” for GlobeSkimmers in iPhone Settings. " : ""}Your location stays on your phone; only a crossing you stamp leaves it.`
+                  : "For a road trip: the phone checks which state or country you’re in at a few points along the way, even with the app closed, and tells you when you cross a line. Off by itself after 24 hours. Your location stays on your phone."}
+                control={{ node: <EdToggle on={watch.on} onClick={async () => {
+                  try {
+                    if (watch.on) { await watch.turnOff(); showToast("Border Watch is off", "info"); return; }
+                    if (!suggestStamps) { setSuggestStamps(true); setSuggestions(true); }
+                    const s = await watch.turnOn();
+                    showToast(`Border Watch is on until ${watchUntil(s.until)}`, "success");
+                  } catch (e) {
+                    showToast(/location/.test(String(e?.message || e)) ? "Turn on location for GlobeSkimmers first — tap Stamp where I am once, or allow it in Settings" : "Couldn’t start Border Watch — try again", "error");
+                  }
+                }} label="Toggle Border Watch" /> }}
+              />
+            ) : null}
             <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Show my hotel names by default" desc="A stay on your card reads “Accommodation · city” to everyone else unless you show the hotel’s name. On: new stays show it; you can still hide any one stamp."
               control={{ node: <EdToggle on={showHotels} onClick={() => { const next = !showHotels; setShowHotels(next); try { localStorage.setItem("pp_show_hotel_names", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle showing hotel names by default" /> }}
             />

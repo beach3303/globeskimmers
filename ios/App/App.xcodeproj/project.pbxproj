@@ -18,6 +18,7 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		BAB63653306D3B690083F3D5 /* AgeRangePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAB63652306D3B690083F3D5 /* AgeRangePlugin.swift */; };
 		C11D0002306D3B690083F3D5 /* VideoShrinkPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11D0001306D3B690083F3D5 /* VideoShrinkPlugin.swift */; };
+		C11D0004306D3B690083F3D5 /* BorderWatchPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11D0003306D3B690083F3D5 /* BorderWatchPlugin.swift */; };
 		BAB63655306D3B690083F3D5 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAB63654306D3B690083F3D5 /* MainViewController.swift */; };
 		5CE11B022EA5F00100D1E001 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CE11B012EA5F00100D1E001 /* ShareViewController.swift */; };
 		5CE11B062EA5F00100D1E001 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5CE11B052EA5F00100D1E001 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -62,6 +63,7 @@
 		BAB63651306D3AF90083F3D5 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		BAB63652306D3B690083F3D5 /* AgeRangePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgeRangePlugin.swift; sourceTree = "<group>"; };
 		C11D0001306D3B690083F3D5 /* VideoShrinkPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoShrinkPlugin.swift; sourceTree = "<group>"; };
+		C11D0003306D3B690083F3D5 /* BorderWatchPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorderWatchPlugin.swift; sourceTree = "<group>"; };
 		BAB63654306D3B690083F3D5 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		5CE11B012EA5F00100D1E001 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		5CE11B032EA5F00100D1E001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -116,6 +118,7 @@
 				5CE11A0B2EA5F00100D1E001 /* SceneDelegate.swift */,
 				BAB63652306D3B690083F3D5 /* AgeRangePlugin.swift */,
 				C11D0001306D3B690083F3D5 /* VideoShrinkPlugin.swift */,
+				C11D0003306D3B690083F3D5 /* BorderWatchPlugin.swift */,
 				BAB63654306D3B690083F3D5 /* MainViewController.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
@@ -251,6 +254,7 @@
 			files = (
 				BAB63653306D3B690083F3D5 /* AgeRangePlugin.swift in Sources */,
 				C11D0002306D3B690083F3D5 /* VideoShrinkPlugin.swift in Sources */,
+				C11D0004306D3B690083F3D5 /* BorderWatchPlugin.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				5CE11A0A2EA5F00100D1E001 /* SceneDelegate.swift in Sources */,
 				BAB63655306D3B690083F3D5 /* MainViewController.swift in Sources */,

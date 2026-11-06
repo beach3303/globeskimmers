@@ -15,6 +15,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(AgeSignalsPlugin.class);
         registerPlugin(VideoShrinkPlugin.class);   // clips: probe + shrink on the phone (2026-10-30)
+        registerPlugin(BorderWatchPlugin.class);   // Border Watch: state and country lines with the app closed (2026-11-06)
         super.onCreate(savedInstanceState);
 
         // If the WebView's renderer dies (out of memory, a GPU driver fault), Capacitor answers
