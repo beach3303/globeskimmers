@@ -4634,3 +4634,5 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
     suggestions"; the land sheet's decline reads "I didn't cross".
   - Gates: eslint (no-undef) clean on BorderCrossingPrompt / AirportArrivalPrompt / CrossingsWaiting / Settings +
     crossings.js; build; boot-check ✅. App-only: needs push + OTA.
+  - 11-06 later (founder): the flight sheet's two previews are choices of their own — "Departure only" / "Arrival
+    only" — with "Stamp both" and "I didn't fly" below (`stampFlight(which)`); one of two landing still closes the window.
