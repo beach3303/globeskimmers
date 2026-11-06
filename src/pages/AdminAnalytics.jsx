@@ -253,6 +253,32 @@ function TicketTapsReport() {
   );
 }
 
+// Area cards remap (2026-11-06, docs/plans/cards-and-passport.md): once, after the migration that made cards
+// regional, fold every member's old city cards into their metro's cards (twenty to a card, a business once).
+// Safe to run again: cards already on an area key stay where they are.
+function CardsRemap() {
+  const [busy, setBusy] = React.useState(false);
+  const [res, setRes] = React.useState(null);
+  const run = async () => {
+    if (busy || !window.confirm('Fold every member\u2019s old city cards into area cards now? This re-slots stamps twenty to a card.')) return;
+    setBusy(true);
+    const { data, error } = await callWorker('admin/city-cards/remap', {}, { timeoutMs: 180000 });
+    setBusy(false);
+    setRes(error || data?.error ? { error: error || data.error } : data);
+  };
+  return (
+    <Section title="📇 Cards → area cards (one-time remap)" icon={Activity}>
+      <div style={{ fontSize: 12.5, color: COLORS.gray, lineHeight: 1.45 }}>After the 2026-11-06 migration: every old city card (Mesa, Scottsdale…) becomes part of its region\u2019s card (Greater Phoenix), stamps re-slotted twenty to a card in date order, a business once per run of cards. Run once; running again changes nothing.</div>
+      <button type="button" onClick={run} disabled={busy} style={{ marginTop: 10, padding: '8px 14px', borderRadius: 10, border: 'none', background: busy ? '#9A9A9A' : '#0E7C73', color: '#fff', fontWeight: 700, fontSize: 13, cursor: busy ? 'default' : 'pointer' }}>{busy ? 'Folding…' : 'Fold old city cards into area cards'}</button>
+      {res ? (
+        <div style={{ marginTop: 10, fontSize: 13, color: res.error ? '#B0472F' : COLORS.dark }}>
+          {res.error ? res.error : `Done: ${res.members} members · ${res.cards_before} cards before → ${res.cards_after} after · ${res.moved} stamps moved.`}
+        </div>
+      ) : null}
+    </Section>
+  );
+}
+
 // Clips report (founder, 2026-10-30): how many clips in all, uploads per day and per month, plays per day
 // and per month (a play = a counted view in the board viewer, once per member per clip per day).
 function VideoReport() {
@@ -2309,6 +2335,7 @@ export default function AdminAnalytics() {
             <CollectiblesReport report={data?.collectibles_report || null} />
 
             <VideoReport />
+            <CardsRemap />
 
             <Section title="🛂 Stamps per month (12m)" icon={Activity} empty={ppByMonth.length === 0 ? 'No stamps in the last year.' : null}>
               {ppByMonth.map((d, i) => (
