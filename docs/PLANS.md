@@ -1382,8 +1382,10 @@ monthly report by hand until it's built.
   2026-11-05 (windows for crossings + airports, sheet on any page, mode question, Entry waiting card); 2026-11-06
   the sensed flight APPROVED ("for growth") and BUILT, with the one privacy line — "Your location stays on your
   phone. We only ask so you never miss a stamp." — on every sensed card and one Settings switch, "Suggest stamps
-  from where I am". Committed, awaiting push + OTA. Next in this lane: Phase 2 (ports of entry + the line ahead),
-  Phase 3 (Border Watch, native, opt-in per trip).**
+  from where I am". LIVE 11-06 (main 6644758 + OTA 1.0.2611061726). **Phase 2 BUILT 11-06 ("go"): ports of entry (interstate
+  crossings named both sides + major US–MX/US–CA posts; stamps read "Ehrenberg · I-10") and the line ahead
+  (offer → live count → slam at the line) — awaiting push (worker: meta.post) + OTA. Next: Phase 3 (Border
+  Watch, native, opt-in per trip) with the next store builds; US-highway crossings (v2 of the ports table).**
 
 - **2027-01-15** — the early-2027 application windows, checked 2026-11-03: **Sequoia Arc** spring cohort (twice a
   year; fall 2026 closed Aug 17; spring windows have opened ~February; $500K–$1M; sequoiacap.com/arc/apply),

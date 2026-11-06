@@ -4643,3 +4643,36 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   — the first bundle since 1.0.2611032027 (Nov 3); it carries the random inks, bigger flags, country lines, the
   48-hour window for crossings and airports, the sensed flight, the privacy line and the Settings switch.
   **ON PHONES:** founder's OTA 1.0.2611061726 (2026-11-06 10:26 PT) on the production channel — the first bundle since Nov 3.
+
+## 2026-11-06 — Border grace, phase 2: ports of entry + the line ahead (founder: "go")
+
+  - **Ports of entry.** `scratchpad/ports-tools/build-ports.mjs` intersects the Census TIGER 2023 primary roads
+    (RTTYP I/U — interstates and the limited-access US routes; the rest of the US highways are "secondary roads",
+    a per-state download, left for v2) with the Census 1:5M state shapes: 284 raw hits → 213 crossings after
+    merging co-signed routes (I-10 with US-60/US-95 at Blythe) and both carriageways. `name-ports.mjs` asks
+    Nominatim (1 req/s, cached) for the nearest named place on EACH side (five points: the crossing and 4 km
+    N/S/E/W), so "Ehrenberg" enters Arizona and "Blythe" enters California; a side with no town takes its county.
+    `intl-posts.mjs`: ~50 major US–Mexico / US–Canada ports by their official names, placed by Nominatim search
+    and kept only within 3 km of the national border, twin city curated, roads only where certain. Output:
+    `src/data/ports-of-entry.json` ({ id, pair, road, refs, lat, lng, near }). `src/lib/portsOfEntry.js`: `portFor`,
+    `portNearSegment`, `postLabel` → "Ehrenberg · I-10". A CAUGHT crossing (both fixes within the hour and 80 km)
+    is named by the port nearest the line between them (`BorderCrossingPrompt`); the window carries `post`, the
+    sheet's kicker says "Entered at Ehrenberg · I-10", the stamp sends `post` and the worker keeps `meta.post`
+    (≤ 60 chars; state + checkpoint stamps). `LandStamp post` prints it under the sign between its legs (state)
+    or in the band above the date (checkpoint); PassportBook / Passport / StampThumb pass `meta.post`.
+  - **The line ahead.** `public/data/us-states.json` (526 KB, Census 1:5M simplified 0.005°, {abbr,name}) ships
+    with the app and is fetched only when needed; `src/lib/stateLines.js`: `loadStates`, `stateAt` (ray casting),
+    `lineAhead` (the first boundary edge along a heading, flat local projection), `bearing`, `kmBetween`.
+    `src/components/LineAhead.jsx` (mounted in Layout with the prompts): when two live fixes ≥ 2 km apart within
+    20 min point at a state line within 80 km, an OfferTile ("Arizona line ahead · 12 mi · I-10 · Watch the
+    line"); watching = `watchPosition` once a second ONLY while the strip shows (stops on Stop, on leaving the
+    screen, after 2 h, or at the line); LiveStrip counts "12.4 mi to the Arizona line" with a gold bar; at the line
+    (`stateAt` changes) the SlamOverlay presses the state's stamp (2.4 s) with a vibration and a WebAudio thump
+    (the AudioContext is created on the tap, as iOS requires), the baseline moves, and the 48 h window opens with
+    `crossing` + `post` behind it. US state lines only in v1; the national border stays with the checkpoint sheet.
+    Three faces exported (OfferTile, LiveStrip, SlamOverlay) and photographed through a harness
+    (`scratchpad/shots/line-ahead.png`).
+  - **Directions (founder, same day):** `MapAppSelector` no longer passes our coordinates as the start when the
+    start is "current": Apple Maps then offers GO/turn-by-turn instead of "Steps"; Google Maps likewise "Start".
+  - Gates: eslint (no-undef) clean on every touched component + 3 libs; node --check worker; build; boot-check ✅.
+    Needs push (worker: meta.post) + OTA.
