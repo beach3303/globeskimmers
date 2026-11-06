@@ -147,6 +147,28 @@ later; entry waiting in the passport; the airport window; the line ahead; Border
 about a day and a half, OTA, no worker change. Phase 2 (ports-of-entry table from OSM, the line ahead with on-device
 boundaries): two to three days, OTA. Phase 3 (Border Watch): native plugin both platforms, store builds and review.
 
+## Privacy rules for sensing (founder, 2026-11-06: "will people think we are stalking them?")
+
+The line between delight and creepiness is whether the person already expected the app to know, and whether they
+can see how it knew. Every sensed card — a crossing, an airport, a flight — follows these:
+
+1. **Say how, in one line, on the card itself:** "From where your phone was this morning and now, only while you had
+   the app open. It never watches in the background."
+2. **Ask, never announce.** "Looks like you flew?" with "I didn't fly" as a real button. The app offers; the person decides.
+3. **Nothing leaves the phone until they tap.** Sensing, windows and the baseline live in the app's own storage; the
+   server learns of a crossing or flight only when a stamp is pressed. Say so.
+4. **Keep almost nothing:** the last place the app saw you plus open windows, which die after 48 h. No trail, no history.
+5. **Nobody else ever sees a sensed trip.** No feed item, no friend notification, nothing on a board, until it is a
+   stamp the person chose.
+6. **One switch, easy to find:** "Suggest stamps from where I am" (crossings, airports, flights together), on by default,
+   with the same turn-off link on every card. Today only "Turn off crossing pop-ups" (`pp_city_prompt`) exists.
+7. **Explain once, early:** the first sensed card opens a three-sentence "How the app knows" sheet with the switch on it.
+8. **Minors: no sensed flights at all** (the teen rails).
+9. **Words:** never "detected", "tracked", "we noticed you traveled" — only what the phone did ("your readings jumped
+   from Los Angeles to Scottsdale").
+10. **Border Watch (Phase 3) is the real escalation** — background location: opt-in per trip, its own plain
+    explanation, never on by default.
+
 ## Founder's decisions
 
 **Decided 2026-11-04:** the window is **48 hours** ("I do like the grace. It's 48 hours"). The inks: one per
