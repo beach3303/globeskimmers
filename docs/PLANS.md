@@ -1393,7 +1393,7 @@ monthly report by hand until it's built.
   MSA → county; the city abroad + a curated world-metro list), 20 stamps, numbered and never expiring, Stay and
   Do categories (stays private by default with a per-stamp name switch and a private note), the passport-or-card
   rule "brag → passport, remember → card" with the table, and the card ledger as the quiet counts-only
-  monetization. Seven decisions at the end of the doc. ≈ 3–4 days, one migration.
+  monetization. DECIDED 2026-11-06: yes to all six; the cards rebuild goes next; Passport Wrapped WAITS; Border Watch rides with the next store builds. Stays privacy spec written (name hidden by default, per-stamp switch, private note, no feed/board/share leak, minors never shown, night sensing in-app only, counts-only ledger). ≈ 3–4 days, one migration.
 
 - **2027-01-15** — the early-2027 application windows, checked 2026-11-03: **Sequoia Arc** spring cohort (twice a
   year; fall 2026 closed Aug 17; spring windows have opened ~February; $500K–$1M; sequoiacap.com/arc/apply),

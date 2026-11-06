@@ -93,6 +93,43 @@ sensing apply. Later: a partner's own stamp art on its card slot (the "official 
   Do stamping doors on the place pages and in sensing, the privacy switch and the note.
 - Three to four days, one push with a migration, one OTA.
 
+## Stays: the privacy spec (founder, 2026-11-06: "privacy by not posting the name of the accommodation, and an
+optional way to post the name of the hotel if they want to")
+
+**Two promises.** The hotel's name is yours: stored for you, shown to others only when you say so, stamp by
+stamp. Nobody is told where you sleep: by default a stay reads as a kind and a place, never a name.
+
+1. **What others see by default:** "A stay · Scottsdale · Nov 3" on the card, with the Stay art. The city shows
+   (the card is a metro, and the same card already says which city you ate in that day); the name never.
+2. **What you see:** the hotel's name on your own card, with a small lock glyph meaning "hidden from others".
+   Tap the stamp → the switch.
+3. **The switch, per stamp:** "Show the hotel's name" — Off: others see "A stay in Scottsdale". On: they see
+   "Hilton Scottsdale". Off by default. In Settings, under Virtual Passport: "Show my hotel names by default"
+   (off), for the founder's kind of traveler who never minds.
+4. **A private note** on any card stamp — "here for Mom's birthday" — never shown to anyone, ever.
+5. **Where a stay never appears, switch or no switch:** City Boards and Billboards (no photo, no card), the
+   friends' feed "What your friends added" (restaurants and cafés do appear there; stays do not), the card's
+   share preview page beyond "A stay in Scottsdale", Arrivals, postcards. The card's own visibility (Only me ·
+   Friends · Friends & followers · Everyone) still gates the card as a whole.
+6. **Minors:** a minor's stay is never shown to others regardless of the switch, and there is no night sensing for
+   minors (the teen rails).
+7. **Sensing a stay** (in the app only, under the privacy line): between 9 PM and 7 AM local, a live fix inside or
+   within 60 m of a lodging place offers "Staying nearby? Add the Hilton Scottsdale to your Greater Phoenix card
+   — others see 'A stay in Scottsdale' unless you show the name." Once per place per night; "Not this one";
+   the one switch covers it. Never an auto-stamp.
+8. **The ledger:** every stay stamp keeps the lodging's stable id, the metro and the date, hidden or not; counts
+   per hotel are aggregate and anonymous, the same promise as the sensing rules — "counts only, never who". The
+   privacy policy says so in one sentence.
+9. **Deleting the stamp deletes the name** (and the row); there is no partial "forget the hotel", since the name
+   is private already and a stamp without its place is not a stamp.
+10. **Data:** `city_card_stamps.category` gains 'stay' and 'do'; `name_hidden boolean not null default true`
+    (meaningful for stays; false for the rest); `note text` (private, owner-only in every read). The card read
+    returns `name` for the owner always, and for others only when `name_hidden` is false; the share renderer
+    follows the same rule. A Settings flag `pp_show_hotel_names` seeds `name_hidden` at stamping time.
+
+**Decided 2026-11-06:** 1–6 yes ("yes to all"); the cards rebuild goes next; Passport Wrapped waits ("except
+Passport wrap"); Border Watch rides with the next store builds.
+
 ## Founder's decisions
 
 1. The unit: a "Greater" card by metro (CSA → MSA → county; city abroad with a curated metro list) — yes?
