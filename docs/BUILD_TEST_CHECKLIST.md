@@ -4680,3 +4680,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
     (Nominatim zoom 14, then 10, then the county kept whole — "San Bernardino County · I-40" at Needles) + 51
     US–Mexico / US–Canada posts (2 Blaine posts placed on the 49th parallel by hand). Table: 264 rows, 40 KB.
     Build + boot-check ✅ with the final table. Ready to push (worker: meta.post) + OTA.
+
+## 2026-11-06 — PUSHED + ON PHONES: border grace phase 2 + directions fix (main efbf783, OTA 1.0.2611061907)
+
+  Deploy Cloudflare Workers run 42276811806 green (the worker now keeps `meta.post`); the founder's OTA
+  1.0.2611061907 (built after the final ports table) on the production channel. Live: ports of entry (264 rows),
+  the line ahead, Apple/Google Maps from My Location. Open: US-highway crossings (ports v2); Phase 3 Border Watch
+  (native); the cards-and-passport decisions (docs/plans/cards-and-passport.md).
