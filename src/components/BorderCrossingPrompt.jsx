@@ -190,21 +190,33 @@ export default function BorderCrossingPrompt() {
     const left = hoursLeft(w);
     const later = () => { deferWindow(w.id); setForced(null); };
     const no = () => { closeWindow(w.id, "declined"); setForced(null); };
-    const stampBoth = async () => {
+    // Departure only, arrival only, or both (founder, 2026-11-06).
+    const stampFlight = async (which) => {
       if (busy) return;
-      setBusy("flight");
+      setBusy(which);
       const one = (a, at, direction) => addStamp({
         kind: "airport", tier: "page", entity_type: "airport", entity_id: a.iata, name: `${a.city} (${a.iata})`, city: a.city,
         country: a.cc, cc: a.cc, lat: a.lat, lng: a.lng, visited_on: localISODate(new Date(at)), verified: "self",
         local_hour: new Date(at).getHours(), direction,
       });
-      const dep = await one(f, w.from.at, "departure");
-      const arr = await one(t, w.to.at, "arrival");
+      const dep = which !== "arr" ? await one(f, w.from.at, "departure") : null;
+      const arr = which !== "dep" ? await one(t, w.to.at, "arrival") : null;
       setBusy(false);
-      if (dep.error && arr.error) { showToast(dep.error, "error"); return; }
+      const failed = [dep, arr].filter((r) => r && r.error);
+      const done = [dep, arr].filter((r) => r && !r.error).length;
+      if (!done) { showToast(failed[0]?.error || "Couldn’t stamp — try again", "error"); return; }
       closeWindow(w.id, "stamped"); setForced(null);
-      showToast(`✈️ ${f.iata} → ${t.iata} stamped — sensed, not seen at the gate`, "success");
+      const what = which === "dep" ? `${f.iata} departure` : which === "arr" ? `${t.iata} arrival` : `${f.iata} → ${t.iata}`;
+      showToast(`✈️ ${what} stamped — sensed, not seen at the gate`, "success");
     };
+    const pick = (which, label, sub, stamp) => (
+      <button type="button" onClick={() => stampFlight(which)} disabled={!!busy}
+        style={{ flex: 1, minWidth: 0, borderRadius: 16, padding: "10px 6px 9px", background: "#fff", border: "1.5px solid rgba(22,17,13,.16)", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, opacity: busy && busy !== which ? 0.55 : 1, fontFamily: "inherit", cursor: "pointer" }}>
+        {stamp}
+        <span style={{ fontWeight: 700, fontSize: 15, color: "#16110D" }}>{busy === which ? "Stamping…" : label}</span>
+        <span style={{ fontFamily: MONO, fontSize: 10, color: "#736657" }}>{sub}</span>
+      </button>
+    );
     const pill = (a, on, set) => (
       <button key={a.iata} type="button" onClick={() => set(a.iata)} disabled={!!busy} aria-pressed={on}
         style={{ height: 32, padding: "0 12px", borderRadius: 999, border: on ? "none" : "1px solid #E6DFD2", background: on ? "#0E7C73" : "#fff", color: on ? "#fff" : "#3A3128", fontSize: 12.5, fontWeight: on ? 700 : 600, fontFamily: "inherit", cursor: "pointer" }}>{a.iata}</button>
@@ -220,12 +232,12 @@ export default function BorderCrossingPrompt() {
             <span aria-hidden="true" style={{ color: "#736657", fontSize: 14 }}>→</span>
             {w.to.airports.map((a) => pill(a, a.iata === t.iata, setToIata))}
           </div>
-          <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 12 }}>
-            <AirportStamp iata={f.iata} city={f.city} countryCode={f.cc} date={localISODate(new Date(w.from.at))} direction="departure" width={128} />
-            <AirportStamp iata={t.iata} city={t.city} countryCode={t.cc} date={localISODate(new Date(w.to.at))} direction="arrival" width={128} />
-          </div>
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button type="button" onClick={stampBoth} disabled={!!busy} style={{ flex: 1, minHeight: 44, borderRadius: 999, border: "none", background: "#B0472F", color: "#fff", fontFamily: "inherit", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>{busy ? "Stamping…" : "Stamp both"}</button>
+            {pick("dep", "Departure only", `${f.iata} · ${seenLabel(w.from.at)}`, <AirportStamp iata={f.iata} city={f.city} countryCode={f.cc} date={localISODate(new Date(w.from.at))} direction="departure" width={124} />)}
+            {pick("arr", "Arrival only", `${t.iata} · ${seenLabel(w.to.at)}`, <AirportStamp iata={t.iata} city={t.city} countryCode={t.cc} date={localISODate(new Date(w.to.at))} direction="arrival" width={124} />)}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button type="button" onClick={() => stampFlight("both")} disabled={!!busy} style={{ flex: 1, minHeight: 44, borderRadius: 999, border: "none", background: "#B0472F", color: "#fff", fontFamily: "inherit", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>{busy === "both" ? "Stamping…" : "Stamp both"}</button>
             <button type="button" onClick={no} disabled={!!busy} style={{ minHeight: 44, padding: "0 14px", borderRadius: 999, border: "1px solid #E6DFD2", background: "#fff", color: "#3A3128", fontFamily: "inherit", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>I didn&rsquo;t fly</button>
           </div>
           <p style={{ color: "#736657", fontSize: 10.5, lineHeight: 1.45, margin: "8px 0 0" }}>Sensed, not seen at the gate: these print without the ✓. Open the app at the gate next time and it&rsquo;s verified.</p>
