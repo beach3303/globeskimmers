@@ -5,14 +5,15 @@ import html2canvas from "html2canvas";
 import { showToast } from "@/components/Toast";
 import { logEvent } from "@/lib/analytics";
 
+import { cardTitle } from "@/lib/cityCards";
 const slug = (s) => String(s || "").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "city";
 
 export async function shareCardElement(el, card) {
   if (!el || !card) return false;
   return shareElement(el, {
-    what: "card", title: "My City Card",
-    text: `My ${card.city} ${card.year} city card on GlobeSkimmers: ${card.count || 0} of ${card.slots || 10} local finds stamped 📇 https://globeskimmers.io/get?src=share-citycard`,
-    filename: `globeskimmers-${slug(card.city)}-${card.year}-card.jpg`,
+    what: "card", title: "My Card",
+    text: `My ${cardTitle(card)} card on GlobeSkimmers: ${card.count || 0} of ${card.slots || 20} local finds stamped 📇 https://globeskimmers.io/get?src=share-citycard`,
+    filename: `globeskimmers-${slug(cardTitle(card))}-no${card.no || 1}-card.jpg`,
   });
 }
 
@@ -22,7 +23,7 @@ export async function shareStampElement(el, card, stamp) {
   const n = Math.max(1, Number(stamp.visits) || 1);
   return shareElement(el, {
     what: "stamp", title: "My stamp",
-    text: `I was here: ${stamp.name}, ${card.city} — on my ${card.year} city card${n > 1 ? ` (${n} visits)` : ""} on GlobeSkimmers 📇 https://globeskimmers.io/get?src=share-citystamp`,
+    text: `I was here: ${stamp.name}, ${stamp.city || card.city} — on my ${cardTitle(card)} card${n > 1 ? ` (${n} visits)` : ""} on GlobeSkimmers 📇 https://globeskimmers.io/get?src=share-citystamp`,
     filename: `globeskimmers-${slug(stamp.name)}-stamp.jpg`,
   });
 }

@@ -23,7 +23,7 @@ import { getStampFix } from "@/lib/geolocation";
 import { localISODate } from "@/lib/localDate";
 import { countryCode } from "@/lib/countries";
 import { logEvent } from "@/lib/analytics";
-import { stampCityCard, artFor, inkFor, stampDate, cardLeft, myCardStamps, forgetMyCardStamps, placeKey } from "@/lib/cityCards";
+import { stampCityCard, artFor, inkFor, stampDate, cardLeft, myCardStamps, forgetMyCardStamps, placeKey, cardTitle, showHotelNamesByDefault } from "@/lib/cityCards";
 import CityCardSheet from "@/components/citycards/CityCardSheet";
 import CityCardComplete from "@/components/citycards/CityCardComplete";
 
@@ -67,19 +67,20 @@ export default function CityCardStampButton({ finder, place, formatDistance = un
       finder, place: { id: place.id, name, types: place.types || [] },
       city: cityWord, region: parts.region || null, country,
       cc: countryCode(country) || (/^[A-Za-z]{2}$/.test(country || "") ? country.toUpperCase() : undefined),
+      ...(finder === "stay" ? { name_hidden: !showHotelNamesByDefault() } : {}),
       visited_on: localISODate(),
       fix: { lat: fix.lat, lng: fix.lng, ...(Number.isFinite(fix.acc) ? { acc: fix.acc } : {}) },
     });
     setBusy(false);
     if (error === "finish_passport") return;   // the passport gate opened its own sheet
     if (REFUSALS.includes(data?.code)) { setRefused({ why: data.code, meters: Number.isFinite(data.distance_m) ? data.distance_m : null, message: data.error || null }); return; }
-    if (error || !data?.ok) { showToast(/sign in/i.test(error || "") ? "Sign in to stamp your city card" : (error || data?.error || "Couldn’t stamp your card — try again"), "error"); return; }
+    if (error || !data?.ok) { showToast(/sign in/i.test(error || "") ? "Sign in to stamp your card" : (error || data?.error || "Couldn’t stamp your card — try again"), "error"); return; }
     setResult(data);
     forgetMyCardStamps();
     logEvent("citycard_stamp", { finder, slot: data.stamp?.slot, completed: !!data.completed, already: !!data.already, repeat: !!data.repeat, visits: data.visits || 1 }, "CityCards");
-    if (data.already) showToast(`Already stamped today — on your ${data.card.city} ${data.card.year} card`, "success");
-    else if (data.repeat) showToast(`Visit ${data.visits} at ${data.stamp?.name || name} — on your ${data.card.city} ${data.card.year} card`, "success");
-    else showToast(data.completed ? `${data.card.city} ${data.card.year} card complete! 📇` : `Stamped on your ${data.card.city} ${data.card.year} card`, "success");
+    if (data.already) showToast(`Already stamped today — on your ${cardTitle(data.card)} card`, "success");
+    else if (data.repeat) showToast(`Visit ${data.visits} at ${data.stamp?.name || name} — on your ${cardTitle(data.card)} card`, "success");
+    else showToast(data.completed ? `${cardTitle(data.card)} card complete! 📇` : `Stamped on your ${cardTitle(data.card)} card`, "success");
     if (data.completed && !data.already && !data.repeat) setComplete(true);
   };
 
@@ -89,7 +90,7 @@ export default function CityCardStampButton({ finder, place, formatDistance = un
       : r.why === "unlocatable" ? "We can’t place this business on our map yet."
       : r.why === "unconfirmed" ? "We couldn’t confirm your GPS reading — a VPN can cause this."
       : r.why === "no_city" ? "We couldn’t tell which city this place is in — open it again and try once more."
-      : r.why === "unavailable" ? "City cards open in a few minutes — try again shortly."
+      : r.why === "unavailable" ? "Cards open in a few minutes — try again shortly."
       : r.why === "slow_down" || r.why === "day_full" ? (r.message || "That’s a lot at once — give it a minute.")
       : Number.isFinite(r.meters) ? `Your GPS puts you about ${away(r.meters)} from ${name}. Stamps open when you’re there.`
       : r.message || "Your GPS doesn’t show you at this place yet."
@@ -110,7 +111,7 @@ export default function CityCardStampButton({ finder, place, formatDistance = un
           ) : mine ? (
             <p style={{ marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink2, textAlign: "center" }}>
               <img src={artFor(mine.stamp.category, mine.stamp.design)} alt="" style={{ width: 22, height: 22, display: "block", mixBlendMode: "multiply", transform: "rotate(-7deg)", flex: "none" }} />
-              <span>On your <b style={{ color: BLUE }}>{mine.card.city} {mine.card.year}</b> card · stamped {stampDate(mine.stamp.visited_on)}{(mine.stamp.visits || 1) > 1 ? ` · ${mine.stamp.visits} visits` : ""}</span>
+              <span>On your <b style={{ color: BLUE }}>{cardTitle(mine.card)}</b> card · stamped {stampDate(mine.stamp.visited_on)}{(mine.stamp.visits || 1) > 1 ? ` · ${mine.stamp.visits} visits` : ""}</span>
             </p>
           ) : (
             <p style={{ marginTop: 6, fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink3, textAlign: "center" }}>
@@ -128,9 +129,9 @@ export default function CityCardStampButton({ finder, place, formatDistance = un
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: MONO, fontSize: fs(9), letterSpacing: ".18em", color: RED }}>{result.already ? "ALREADY STAMPED TODAY" : result.repeat ? `VISIT ${result.visits}` : "STAMPED"}</div>
             <div style={{ fontFamily: SERIF, fontSize: fs(17), lineHeight: 1.15, marginTop: 2, color: NEUTRAL.ink }}>
-              {result.already ? <>On your <em style={{ fontStyle: "italic", color: BLUE }}>{card.city} {card.year}</em> card since {stampDate(st?.visited_on)}</>
-                : result.repeat ? <>Back again — on your <em style={{ fontStyle: "italic", color: BLUE }}>{card.city} {card.year}</em> card since {stampDate(st?.visited_on)}</>
-                : <>On your <em style={{ fontStyle: "italic", color: BLUE }}>{card.city} {card.year}</em> card</>}
+              {result.already ? <>On your <em style={{ fontStyle: "italic", color: BLUE }}>{cardTitle(card)}</em> card since {stampDate(st?.visited_on)}</>
+                : result.repeat ? <>Back again — on your <em style={{ fontStyle: "italic", color: BLUE }}>{cardTitle(card)}</em> card since {stampDate(st?.visited_on)}</>
+                : <>On your <em style={{ fontStyle: "italic", color: BLUE }}>{cardTitle(card)}</em> card</>}
             </div>
             <div aria-hidden="true" style={{ marginTop: 8, height: 6, borderRadius: 999, background: "rgba(176,71,47,.14)", overflow: "hidden" }}>
               <div style={{ width: `${Math.round(((card.count || 0) / (card.slots || 10)) * 100)}%`, height: "100%", borderRadius: 999, background: card.completed_at ? "#2E6B4E" : RED, transition: "width .4s" }} />
@@ -140,7 +141,7 @@ export default function CityCardStampButton({ finder, place, formatDistance = un
             </div>
             <button type="button" onClick={() => setOpen(true)}
               style={{ display: "inline-flex", alignItems: "center", gap: 4, minHeight: 32, marginTop: 4, padding: 0, background: "transparent", border: 0, fontSize: fs(12.5), fontWeight: 650, color: BLUE, cursor: "pointer" }}>
-              <Stamp size={13} strokeWidth={2.2} aria-hidden="true" focusable="false" />See my {card.city} {card.year} card ›
+              <Stamp size={13} strokeWidth={2.2} aria-hidden="true" focusable="false" />See my {cardTitle(card)} card ›
             </button>
           </div>
         </div>

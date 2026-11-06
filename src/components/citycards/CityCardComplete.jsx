@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import { Share2, X } from "lucide-react";
 import CityCard, { cardWords } from "@/components/citycards/CityCard";
+import { cardTitle } from "@/lib/cityCards";
 import { showToast } from "@/components/Toast";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { AirmailChevron } from "@/components/redesign/ornaments";
@@ -55,10 +56,10 @@ export default function CityCardComplete({ card, onClose, onChanged = undefined 
           <X size={20} strokeWidth={2} aria-hidden="true" />
         </button>
         <div style={{ padding: "14px 16px calc(16px + env(safe-area-inset-bottom))", textAlign: "center" }}>
-          <div style={{ fontFamily: MONO, fontSize: fs(9.5), fontWeight: 600, letterSpacing: ".18em", textTransform: "uppercase", color: RED, padding: "0 28px", textWrap: "balance" }}>Ten local spots, all with you there</div>
-          <h2 id="cc-complete-h" style={{ margin: "6px 0 0", fontFamily: SERIF, fontSize: fs(29), fontWeight: 400, lineHeight: 1.05, color: NEUTRAL.ink }}>Your <em style={{ fontStyle: "italic", color: BLUE }}>{card.city} {card.year}</em> card is complete!</h2>
+          <div style={{ fontFamily: MONO, fontSize: fs(9.5), fontWeight: 600, letterSpacing: ".18em", textTransform: "uppercase", color: RED, padding: "0 28px", textWrap: "balance" }}>Twenty local spots, all with you there</div>
+          <h2 id="cc-complete-h" style={{ margin: "6px 0 0", fontFamily: SERIF, fontSize: fs(29), fontWeight: 400, lineHeight: 1.05, color: NEUTRAL.ink }}>Your <em style={{ fontStyle: "italic", color: BLUE }}>{cardTitle(card)}</em> card is complete!</h2>
           <p style={{ margin: "8px auto 0", maxWidth: 320, fontSize: fs(14), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
-            Ten local finds, each stamped where you stood. Card No. {card.no} stays in your City Cards, every name and date on it. Your next {card.city} find starts card No. {card.no + 1}.
+            Twenty local finds, each stamped where you stood. Card No. {card.no} stays in your cards, every name and date on it. Your next {cardTitle(card)} find starts card No. {card.no + 1}.
           </p>
           <div ref={ref} style={{ margin: "12px auto 0", transform: reduce ? "none" : "rotate(-1.5deg)" }}><CityCard card={card} size="full" /></div>
 

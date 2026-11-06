@@ -18,7 +18,7 @@ import { showToast } from "@/components/Toast";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { useDismissable } from "@/lib/dismissStack";
 import { capTo, usePassportAudience } from "@/lib/audience";
-import { setCityCardVisibility, cardLeft } from "@/lib/cityCards";
+import { setCityCardVisibility, cardLeft, cardTitle } from "@/lib/cityCards";
 import { shareCardElement } from "@/components/citycards/shareCard";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
@@ -54,14 +54,14 @@ export default function CityCardSheet({ card, owner = false, onClose, onChanged 
 
   return createPortal(
     <div className="fixed inset-0 flex items-end justify-center" style={{ zIndex: 9997, background: "rgba(22,17,13,.5)" }} onClick={close}>
-      <div role="dialog" aria-modal="true" aria-label={`${cardWords(card)} city card`} onClick={(e) => e.stopPropagation()}
+      <div role="dialog" aria-modal="true" aria-label={`${cardWords(card)} card`} onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md md:max-w-2xl overflow-y-auto" style={{ maxHeight: "92vh", background: "#F3EEE1", borderRadius: "22px 22px 0 0", padding: "12px 16px calc(24px + env(safe-area-inset-bottom))" }}>
         <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: "rgba(22,17,13,.18)" }} />
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
           <div>
-            <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", textTransform: "uppercase", color: RED }}>City card · {card.city} · {card.year}</div>
+            <div style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", textTransform: "uppercase", color: RED }}>Card · {cardTitle(card)} · No. {card.no}</div>
             <h2 style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(24), fontWeight: 400, lineHeight: 1.1, color: NEUTRAL.ink }}>
-              {done ? <>Ten local finds, <em style={{ fontStyle: "italic", color: "#2E6B4E" }}>complete</em></> : <>Ten local finds, <em style={{ fontStyle: "italic", color: BLUE }}>one city</em></>}
+              {done ? <>Twenty local finds, <em style={{ fontStyle: "italic", color: "#2E6B4E" }}>complete</em></> : <>Twenty local finds, <em style={{ fontStyle: "italic", color: BLUE }}>one place</em></>}
             </h2>
           </div>
           <button type="button" onClick={close} aria-label="Close"
@@ -88,7 +88,7 @@ export default function CityCardSheet({ card, owner = false, onClose, onChanged 
               </button>
             </div>
             <p style={{ margin: "10px 0 0", fontSize: fs(12), lineHeight: 1.45, color: NEUTRAL.ink3, textAlign: "center" }}>
-              {done ? `Card No. ${card.no} is complete and stays here. Your next ${card.city} find starts No. ${card.no + 1}.` : `${left === 1 ? "One more find" : `${left} more finds`} complete this card. Then your next ${card.city} find starts No. ${card.no + 1}.`} Your Virtual Passport isn’t stamped.
+              {done ? `Card No. ${card.no} is complete and stays here. Your next ${cardTitle(card)} find starts No. ${card.no + 1}.` : `${left === 1 ? "One more find" : `${left} more finds`} complete this card. Then your next ${cardTitle(card)} find starts No. ${card.no + 1}.`} Your Virtual Passport isn’t stamped.
             </p>
           </>
         ) : null}
@@ -99,7 +99,7 @@ export default function CityCardSheet({ card, owner = false, onClose, onChanged 
             note="A card can’t reach more people than your passport does." />
         )}
         {passportSheet && <PassportAudienceSheet onClose={() => setPassportSheet(false)} />}
-        {stamp && <CityStampDetail card={card} stamp={stamp} owner={owner} onClose={() => setStamp(null)} />}
+        {stamp && <CityStampDetail card={card} stamp={stamp} owner={owner} onClose={() => setStamp(null)} onChanged={(s) => onChanged?.({ ...card, stamps: (card.stamps || []).map((x) => (x.id === s.id ? { ...x, ...s } : x)) })} />}
       </div>
     </div>,
     document.body,

@@ -431,6 +431,7 @@ export default function SettingsPage() {
   const [openBehavior, setOpenBehaviorState] = useState(() => readOpenBehavior()); // 'ask' | 'current' | 'continue'
   // One switch for crossings, airports and flights (border grace, 2026-11-06); it writes the two older keys too.
   const [suggestStamps, setSuggestStamps] = useState(() => suggestionsOn());
+  const [showHotels, setShowHotels] = useState(() => { try { return localStorage.getItem("pp_show_hotel_names") === "1"; } catch { return false; } });
   // Nearby-stamp sensing on the Passport page (default ON; the page has its own small switch too).
   const [suggestNearby, setSuggestNearby] = useState(() => { try { return localStorage.getItem("pp_suggest_nearby") !== "0"; } catch { return true; } });
   // Username (Social P0, 2026-09-29): claimed through the worker, 5 changes a
@@ -1066,6 +1067,9 @@ export default function SettingsPage() {
           <EdGroup kicker="Virtual Passport" isTablet={isTablet}>
             <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Suggest stamps from where I am" desc="Offer a stamp when the app sees you cross a state or country line, land at an airport, or take a flight — only while it's open, never in the background. Your location stays on your phone. Turn off to never be asked (you can still add stamps yourself)."
               control={{ node: <EdToggle on={suggestStamps} onClick={() => { const next = !suggestStamps; setSuggestStamps(next); setSuggestions(next); }} label="Toggle stamp suggestions" /> }}
+            />
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Show my hotel names by default" desc="A stay on your card reads “Accommodation · city” to everyone else unless you show the hotel’s name. On: new stays show it; you can still hide any one stamp."
+              control={{ node: <EdToggle on={showHotels} onClick={() => { const next = !showHotels; setShowHotels(next); try { localStorage.setItem("pp_show_hotel_names", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle showing hotel names by default" /> }}
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Sense nearby stamps" desc="When you open your Passport, offer the attraction or airport you're standing in. Turn off to never see that pop-up (the Passport page has the same switch)."
               control={{ node: <EdToggle on={suggestNearby} onClick={() => { const next = !suggestNearby; setSuggestNearby(next); try { localStorage.setItem("pp_suggest_nearby", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle nearby stamp sensing" /> }}

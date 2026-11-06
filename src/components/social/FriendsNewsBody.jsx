@@ -54,7 +54,7 @@ const withThe = (name) => (/^(United |Czech Republic|Dominican Republic|Central 
 function addedRow(r) {
   const who = r.by?.handle ? `@${r.by.handle}` : (r.by?.name || "A friend");
   const h = r.by?.handle ? `h=${encodeURIComponent(r.by.handle)}` : "";
-  if (r.kind === "card") return { art: artFor(r.stamp?.category, r.stamp?.design), text: <><b style={{ fontWeight: 650 }}>{who}</b> stamped {r.stamp?.name} on the {r.card?.city} {r.card?.year} card</>, to: `${createPageUrl("Traveler")}?${h}&card=${r.card?.id}&stamp=${r.stamp?.id}` };
+  if (r.kind === "card") return { art: artFor(r.stamp?.category, r.stamp?.design), text: <><b style={{ fontWeight: 650 }}>{who}</b> stamped {r.stamp?.name} on the {r.card?.area_name || r.card?.city} card</>, to: `${createPageUrl("Traveler")}?${h}&card=${r.card?.id}&stamp=${r.stamp?.id}` };
   if (r.kind === "album") return { thumb: r.photo?.url, text: <><b style={{ fontWeight: 650 }}>{who}</b> added a photo to {r.stamp?.name}{r.stamp?.city ? `, ${r.stamp.city}` : ""}</>, to: `${createPageUrl("Traveler")}?${h}&photo=${r.photo?.id}` };
   // A clip's poster wears the look its owner picked (2026-11-03), as it does on the board.
   return { thumb: r.item?.photo, thumbFilter: clipFilterCss(r.item?.filter), text: <><b style={{ fontWeight: 650 }}>{who}</b> added a {r.item?.video ? "clip" : "photo"} to {r.board_at?.city}’s city board</>, to: `${cityBoardUrl(r.board_at?.city, r.board_at?.country, r.board_at?.region)}&open=bcp:${r.item?.id}` };

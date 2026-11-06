@@ -13,6 +13,7 @@ import PhotoGalleryModal from "@/components/coffee/PhotoGalleryModal";
 import MapAppSelector from "@/components/MapAppSelector";
 import AttractionAIDetails from "@/components/AttractionAIDetails";
 import AttractionExtras, { HereStamp } from "@/components/attraction/AttractionExtras";
+import CityCardStampButton from "@/components/citycards/CityCardStampButton";
 import { stampRadiusFor } from "@/lib/stampRadius";
 import { metersBetween, listPassport } from "@/lib/passport";
 import NameLanguageHelp from "@/components/NameLanguageHelp";
@@ -531,6 +532,8 @@ function FullCard({a,n,photos,mark,isLocal,fmt,onOpen,onMap,onDirections,onPhoto
           </QuietPanel>
         </QuietRows>
         <div style={{marginTop:14}}><HereStamp place={{id:pid,name,lat:a.lat??a.location?.latitude,lng:a.lng??a.location?.longitude,types:a.types,formattedAddress:a.formattedAddress}} stamp={a.stamp||null} formatDistance={fmt}/></div>
+        {/* Not in the stampable catalog (no passport stamp): a Do find for the card instead (cards-and-passport, 2026-11-06). */}
+        {!mark&&!a.stamp?<div style={{marginTop:10}}><CityCardStampButton finder="do" place={{id:pid,name,lat:a.lat??a.location?.latitude,lng:a.lng??a.location?.longitude,types:a.types,formattedAddress:a.formattedAddress}} formatDistance={fmt}/></div>:null}
         <ActionRow world="todo" name={name} onDirections={onDirections} onMap={onMap} onMore={onOpen} moreIcon style={{marginTop:4}}/>
       </div>
       {children}

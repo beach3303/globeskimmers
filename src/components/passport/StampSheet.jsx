@@ -7,14 +7,15 @@
 // blocks a file input clicked after a navigation). Picked files are queued the way gallery shares
 // arrive (src/lib/sharedPhotos.js), and the Passport opens with its sorter — straight to the
 // places, no ask, since the member chose "Upload photos" here.
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, ImagePlus, MapPin, X } from "lucide-react";
+import { BedDouble, ChevronRight, ImagePlus, MapPin, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { useDismissable } from "@/lib/dismissStack";
 import { queueSharedPhotos } from "@/lib/sharedPhotos";
 import { fs } from "@/components/redesign/constants";
+import StayPicker from "@/components/citycards/StayPicker";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657";
@@ -24,6 +25,7 @@ export default function StampSheet({ onClose, onContribute = undefined }) {
   useDismissable(true, onClose);
   const navigate = useNavigate();
   const fileRef = useRef(null);
+  const [stay, setStay] = useState(false);
 
   const picked = (e) => {
     const files = [...(e.target.files || [])];
@@ -72,6 +74,15 @@ export default function StampSheet({ onClose, onContribute = undefined }) {
             <span style={{ display: "block", fontSize: fs(12.5), lineHeight: 1.4, color: INK2, marginTop: 2 }}>At a place right now? Your phone’s location proves it.</span>
           </span>
         </button>
+        {/* A stay on the card (cards-and-passport, 2026-11-06): private by default. */}
+        <button type="button" onClick={() => setStay(true)} style={{ ...card("#fff", "#E5DDC8"), marginTop: 10 }}>
+          <span aria-hidden="true" style={chip("#EEF0F8")}><BedDouble size={24} strokeWidth={2} color="#24316B" /></span>
+          <span style={{ minWidth: 0 }}>
+            <span style={{ display: "block", fontSize: fs(16), fontWeight: 700, color: INK }}>Where I’m staying</span>
+            <span style={{ display: "block", fontSize: fs(12.5), lineHeight: 1.4, color: INK2, marginTop: 2 }}>A stay goes on your card, not your passport. Others see “Accommodation” and the city unless you show the name.</span>
+          </span>
+        </button>
+        {stay ? <StayPicker onClose={() => setStay(false)} /> : null}
         <button type="button" onClick={boards} className="inline-flex items-center gap-1"
           style={{ marginTop: 14, minHeight: 44, padding: "0 4px", background: "transparent", border: 0, color: AIR_BLUE, font: "inherit", fontSize: fs(14), fontWeight: 600, cursor: "pointer" }}>
           Just sharing photos? Post them to a City Board <ChevronRight size={16} strokeWidth={2.2} aria-hidden="true" focusable="false" />
