@@ -1372,3 +1372,26 @@ if (location.hostname === 'www.' + CFG.apex) {
 } else {
   start();
 }
+
+// ─── Cards: the one-time fold (2026-11-06) ──────────────────────────────────
+// Folds every member's old city cards into their region's cards on the worker
+// (POST /admin/city-cards/remap, admins only). Safe to tap again.
+(function foldCards() {
+  const wire = () => {
+    const btn = document.getElementById('fold-cards');
+    const out = document.getElementById('fold-cards-out');
+    if (!btn || !out) return;
+    btn.addEventListener('click', async () => {
+      if (!confirm('Fold every member’s old city cards into region cards now? This re-slots stamps twenty to a card.')) return;
+      btn.disabled = true; out.style.color = ''; out.textContent = 'Folding…';
+      let r;
+      try { r = await worker('admin/city-cards/remap', {}); } catch (e) { r = { ok: false, message: e?.message || 'Signed out.' }; }
+      btn.disabled = false;
+      if (!r.ok) { out.style.color = '#B0472F'; out.textContent = r.message || (r.kind === 'denied' ? 'This account isn’t an admin.' : r.kind === 'missing' ? 'The server doesn’t have this yet — deploy first.' : 'Couldn’t reach the server. Try again.'); return; }
+      const d = r.data || {};
+      out.style.color = '#0E7C73';
+      out.textContent = `Done: ${d.members ?? 0} members · ${d.cards_before ?? 0} cards before → ${d.cards_after ?? 0} after · ${d.moved ?? 0} stamps moved.`;
+    });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
+})();
