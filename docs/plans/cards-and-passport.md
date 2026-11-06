@@ -99,7 +99,7 @@ optional way to post the name of the hotel if they want to")
 **Two promises.** The hotel's name is yours: stored for you, shown to others only when you say so, stamp by
 stamp. Nobody is told where you sleep: by default a stay reads as a kind and a place, never a name.
 
-1. **What others see by default:** "A stay · Scottsdale · Nov 3" on the card, with the Stay art. The city shows
+1. **What others see by default:** "Accommodation · Scottsdale · Nov 3" on the card, with the Stay art (founder, 2026-11-06: "people can disclose the name of their hotel if they'd like or just make it Accommodation - city"). The city shows
    (the card is a metro, and the same card already says which city you ate in that day); the name never.
 2. **What you see:** the hotel's name on your own card, with a small lock glyph meaning "hidden from others".
    Tap the stamp → the switch.
@@ -109,13 +109,13 @@ stamp. Nobody is told where you sleep: by default a stay reads as a kind and a p
 4. **A private note** on any card stamp — "here for Mom's birthday" — never shown to anyone, ever.
 5. **Where a stay never appears, switch or no switch:** City Boards and Billboards (no photo, no card), the
    friends' feed "What your friends added" (restaurants and cafés do appear there; stays do not), the card's
-   share preview page beyond "A stay in Scottsdale", Arrivals, postcards. The card's own visibility (Only me ·
+   share preview page beyond "Accommodation · Scottsdale", Arrivals, postcards. The card's own visibility (Only me ·
    Friends · Friends & followers · Everyone) still gates the card as a whole.
 6. **Minors:** a minor's stay is never shown to others regardless of the switch, and there is no night sensing for
    minors (the teen rails).
 7. **Sensing a stay** (in the app only, under the privacy line): between 9 PM and 7 AM local, a live fix inside or
    within 60 m of a lodging place offers "Staying nearby? Add the Hilton Scottsdale to your Greater Phoenix card
-   — others see 'A stay in Scottsdale' unless you show the name." Once per place per night; "Not this one";
+   — others see 'Accommodation · Scottsdale' unless you show the name." Once per place per night; "Not this one";
    the one switch covers it. Never an auto-stamp.
 8. **The ledger:** every stay stamp keeps the lodging's stable id, the metro and the date, hidden or not; counts
    per hotel are aggregate and anonymous, the same promise as the sensing rules — "counts only, never who". The
