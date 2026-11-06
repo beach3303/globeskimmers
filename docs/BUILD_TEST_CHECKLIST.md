@@ -4676,3 +4676,7 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
     start is "current": Apple Maps then offers GO/turn-by-turn instead of "Steps"; Google Maps likewise "Start".
   - Gates: eslint (no-undef) clean on every touched component + 3 libs; node --check worker; build; boot-check ✅.
     Needs push (worker: meta.post) + OTA.
+  - 12:05 PT: the names landed (commit 4f8362c): 213 state-line crossings named at village level on both sides
+    (Nominatim zoom 14, then 10, then the county kept whole — "San Bernardino County · I-40" at Needles) + 51
+    US–Mexico / US–Canada posts (2 Blaine posts placed on the 49th parallel by hand). Table: 264 rows, 40 KB.
+    Build + boot-check ✅ with the final table. Ready to push (worker: meta.post) + OTA.
