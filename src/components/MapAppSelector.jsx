@@ -82,9 +82,13 @@ export default function MapAppSelector({ isOpen = false, onClose = undefined, de
 
   const launch = (app) => {
     if (blocked) return;
+    // From here: NO start point in the link (founder, 2026-11-06). Given our coordinates as the start, Apple
+    // Maps plans a route between two pins and offers "Steps"; left to its own "My Location" it offers GO and
+    // turn-by-turn, like Waze. Google Maps does the same with "Start". A typed start stays a planned route.
+    const fromHere = originMode === 'current';
     const urls = {
-      google: `https://www.google.com/maps/dir/?api=1&destination=${D}${O ? `&origin=${O}` : ''}&travelmode=driving`,
-      apple:  `http://maps.apple.com/?daddr=${D}${O ? `&saddr=${O}` : ''}&dirflg=d`,
+      google: `https://www.google.com/maps/dir/?api=1&destination=${D}${O && !fromHere ? `&origin=${O}` : ''}&travelmode=driving`,
+      apple:  `http://maps.apple.com/?daddr=${D}${O && !fromHere ? `&saddr=${O}` : ''}&dirflg=d`,
       // Waze always routes from the device's current location (URL can't set origin).
       waze:   `https://waze.com/ul?q=${D}&navigate=yes`,
     };
