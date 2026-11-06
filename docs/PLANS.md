@@ -1387,6 +1387,14 @@ monthly report by hand until it's built.
   (offer → live count → slam at the line) — awaiting push (worker: meta.post) + OTA. Next: Phase 3 (Border
   Watch, native, opt-in per trip) with the next store builds; US-highway crossings (v2 of the ports table).**
 
+- **2026-11-06 — Cards and the passport, PROPOSED (decisions open):** the founder: one card per city per year is
+  unrealistic for a traveler (a "Mesa 2026" card for one Waffle House; Manhattan vs Brooklyn; Arcadia vs Santa
+  Clarita vs Van Nuys). Proposal in `docs/plans/cards-and-passport.md`: "Greater" cards by metro (Census CSA →
+  MSA → county; the city abroad + a curated world-metro list), 20 stamps, numbered and never expiring, Stay and
+  Do categories (stays private by default with a per-stamp name switch and a private note), the passport-or-card
+  rule "brag → passport, remember → card" with the table, and the card ledger as the quiet counts-only
+  monetization. Seven decisions at the end of the doc. ≈ 3–4 days, one migration.
+
 - **2027-01-15** — the early-2027 application windows, checked 2026-11-03: **Sequoia Arc** spring cohort (twice a
   year; fall 2026 closed Aug 17; spring windows have opened ~February; $500K–$1M; sequoiacap.com/arc/apply),
   **Neo Accelerator** (2026 deadline was May 15; applications have opened in January; ~$750K uncapped SAFE reported —
