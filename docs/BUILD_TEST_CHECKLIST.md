@@ -4642,3 +4642,4 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   Nothing in this push touches the worker, a migration or the site, so no Action ran. **Open (founder):** `npm run ota`
   — the first bundle since 1.0.2611032027 (Nov 3); it carries the random inks, bigger flags, country lines, the
   48-hour window for crossings and airports, the sensed flight, the privacy line and the Settings switch.
+  **ON PHONES:** founder's OTA 1.0.2611061726 (2026-11-06 10:26 PT) on the production channel — the first bundle since Nov 3.
