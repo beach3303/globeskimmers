@@ -75,7 +75,7 @@ export function openWindow(w) {
     return same;
   }
   const at = w.firstSeen?.at || now;
-  const win = { ...w, id: `${w.key}:${at.toString(36)}`, status: "open", ink: pickInk(), openedAt: now, expiresAt: at + WINDOW_MS };
+  const win = { ...w, id: `${w.key}:${at.toString(36)}`, status: "open", ink: w.ink || pickInk(), openedAt: now, expiresAt: at + WINDOW_MS };
   s.windows.push(win);
   write(s);
   return win;

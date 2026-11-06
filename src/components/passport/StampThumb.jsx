@@ -134,7 +134,7 @@ export default function StampThumb({
     );
   } else if (kind === 'land') {
     body = stamp.kind === 'state'
-      ? <LandStamp template="state" name={stamp.region || stamp.name} date={date} direction={direction} ink={stamp.meta?.ink || null} width={w} />
+      ? <LandStamp template="state" name={stamp.region || stamp.name} date={date} direction={direction} ink={stamp.meta?.ink || null} post={stamp.meta?.post || null} width={w} />
       : (
         <LandStamp template="country" name={clean(stamp.name).split(' · ')[0]}
           countryCode={String(stamp.entity_id || '').split(':')[0]} date={date} direction={direction} ink={stamp.meta?.ink || null}

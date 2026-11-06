@@ -11,6 +11,7 @@ import BrandBanner from "@/components/redesign/BrandBanner";
 import FloatingNav from "@/components/redesign/FloatingNav";
 import AirportArrivalPrompt from "@/components/AirportArrivalPrompt";
 import BorderCrossingPrompt from "@/components/BorderCrossingPrompt";
+import LineAhead from "@/components/LineAhead";
 import StampSheet from "@/components/passport/StampSheet";
 import { ContributeStandaloneSheet } from "@/components/passport/ContributeAlbum";
 import FontScaleButton from "@/components/a11y/FontScaleButton";
@@ -263,7 +264,7 @@ function PageShell({ currentPageName, isOnboarding, stampPrompts = false, childr
       <LocationAutoFollowOffer />
       {/* Arrival stamps — the airport and land-border windows (border grace, 2026-11-05): mounted here,
           not on Home, so a crossing is offered on whatever page the app opens to. */}
-      {stampPrompts ? <><AirportArrivalPrompt /><BorderCrossingPrompt /></> : null}
+      {stampPrompts ? <><AirportArrivalPrompt /><BorderCrossingPrompt /><LineAhead /></> : null}
 
       {/* After a verified stamp in a city: 'Send a postcard to Lisbon's board' (City Boards). */}
       {!isOnboarding && <BoardNudge />}

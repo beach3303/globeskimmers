@@ -12,6 +12,7 @@ import { localISODate } from "@/lib/localDate";
 import { baseline, setBaseline, openWindow, closeWindow, deferWindow, isDeferred, hoursLeft, seenLabel, useCrossings, windowById, OPEN_EVENT, PRIVACY_LINE, suggestionsOn, setSuggestions } from "@/lib/crossings";
 import LandStamp from "@/components/passport/LandStamp";
 import AirportStamp from "@/components/passport/AirportStamp";
+import { portNearSegment, postLabel } from "@/lib/portsOfEntry";
 
 // ============================================================================
 // 🛂 Border-crossing stamps on the ground (founder, 2026-10-05). When a
@@ -161,10 +162,18 @@ export default function BorderCrossingPrompt() {
         const caught = hours < 1 && km < 80;
         const spot = { at: pt.at, lat: rough(pt.lat), lng: rough(pt.lng), near: here };
         const base = { firstSeen: spot, crossing: caught ? spot : null, modeGuess: "car", cc: is.cc, country: regionName(is.cc) };
-        if (kind === "country") { openWindow({ ...base, kind: "country", key: `country:${is.cc}`, name: regionName(is.cc) }); return; }
+        // A caught crossing is named by its port of entry — the one on the line between the two fixes (phase 2).
+        const seg = [{ lat: prev.lat, lng: prev.lng }, { lat: pt.lat, lng: pt.lng }];
+        if (kind === "country") {
+          const post = caught ? postLabel(portNearSegment(was.cc, is.cc, seg[0], seg[1]), is.cc) : null;
+          openWindow({ ...base, kind: "country", key: `country:${is.cc}`, name: regionName(is.cc), post });
+          return;
+        }
         // Same country — a new state / nation inside it (US + UK only).
         const info = regionInfo(is.cc, is.region);
-        if (info) openWindow({ ...base, kind: "region", key: `region:${is.cc}-${info.abbr}`, name: is.region, region: is.region, info });
+        const wasInfo = regionInfo(was.cc, was.region);
+        const post = caught && info && wasInfo ? postLabel(portNearSegment(wasInfo.abbr, info.abbr, seg[0], seg[1]), info.abbr) : null;
+        if (info) openWindow({ ...base, kind: "region", key: `region:${is.cc}-${info.abbr}`, name: is.region, region: is.region, info, post });
       } finally { judging = false; }
     })();
   }, [currentGpsLocation, isAuthenticated, adult]);
@@ -268,12 +277,12 @@ export default function BorderCrossingPrompt() {
       kind: "state", tier: "page", entity_type: "border", entity_id: w.info.abbr,
       name: w.region, region: w.region, country: w.country, cc: w.cc,
       lat: spot.lat, lng: spot.lng, visited_on: date, verified: "gps",
-      local_hour: new Date(spot.at).getHours(), direction, mode: picked, ink: w.ink,
+      local_hour: new Date(spot.at).getHours(), direction, mode: picked, ink: w.ink, post: w.post || undefined,
     } : {
       kind: "country", tier: "page", entity_type: "border", entity_id: w.cc,
       name: `${w.country} · Border Crossing`, city: null, country: w.country, cc: w.cc,
       lat: spot.lat, lng: spot.lng, visited_on: date, verified: "gps",
-      local_hour: new Date(spot.at).getHours(), direction, mode: picked, ink: w.ink,
+      local_hour: new Date(spot.at).getHours(), direction, mode: picked, ink: w.ink, post: w.post || undefined,
     });
     setBusy(false);
     if (error) { showToast(error, "error"); return; }
@@ -284,8 +293,8 @@ export default function BorderCrossingPrompt() {
   };
 
   const stampFor = (direction) => (isRegion
-    ? <LandStamp template="state" name={w.region} sub={w.info?.nickname} date={date} direction={direction} ink={w.ink} width={134} />
-    : <LandStamp template="country" name={w.country} countryCode={w.cc} date={date} direction={direction} ink={w.ink} width={134} />);
+    ? <LandStamp template="state" name={w.region} sub={w.info?.nickname} date={date} direction={direction} ink={w.ink} post={w.post || null} width={134} />
+    : <LandStamp template="country" name={w.country} countryCode={w.cc} date={date} direction={direction} ink={w.ink} post={w.post || null} width={134} />);
   const choice = (direction, label, sub) => (
     <button type="button" onClick={() => add(direction)} disabled={!!busy}
       style={{ flex: 1, minWidth: 0, borderRadius: 16, padding: "10px 6px 9px", background: "#fff", border: "1.5px solid rgba(22,17,13,.16)", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, opacity: busy && busy !== direction ? 0.55 : 1, fontFamily: "inherit", cursor: "pointer" }}>
@@ -297,7 +306,7 @@ export default function BorderCrossingPrompt() {
   const name = isRegion ? w.region : withThe(w.country);
   const left = hoursLeft(w);
   const kicker = w.crossing
-    ? `${isRegion ? "State line" : "Checkpoint"}${spot.near ? ` · ${spot.near}` : ""} · ${seenLabel(spot.at)}`
+    ? `${w.post ? `Entered at ${w.post}` : `${isRegion ? "State line" : "Checkpoint"}${spot.near ? ` · ${spot.near}` : ""}`} · ${seenLabel(spot.at)}`
     : `${isRegion ? w.region : w.country} · first seen${spot.near ? ` near ${spot.near}` : ""} · ${seenLabel(spot.at)}`;
   return (
     <div onClick={settle} style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>

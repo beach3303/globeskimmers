@@ -31,7 +31,10 @@ const countryFlag = (cc) => (/^[a-z]{2}$/i.test(cc || "") ? String.fromCodePoint
 import { INKS, pickInk, validInk } from "@/lib/stampInks";
 export { INKS, pickInk };
 const hash = (s) => { let h = 0; for (const c of String(s || "")) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
-export default function LandStamp({ template = "country", name, sub = null, countryCode: cc = "", date, direction = null, via = null, code = null, ink: inkProp = null, width = 320 }) {
+// `post` (ports of entry, 2026-11-06): where the line was crossed — "Ehrenberg · I-10" — printed small under
+// the sign between its legs, or in the checkpoint's band above the date. Only a crossing the app caught has one.
+export default function LandStamp({ template = "country", name, sub = null, countryCode: cc = "", date, direction = null, via = null, code = null, ink: inkProp = null, post = null, width = 320 }) {
+  const POST = String(post || "").toUpperCase().slice(0, 30);
   const raw = useId();
   const uid = String(raw).replace(/[:]/g, "");
   const serif = "Georgia, 'Times New Roman', serif";
@@ -101,6 +104,7 @@ export default function LandStamp({ template = "country", name, sub = null, coun
             {claim && <text x="170" y="126" textAnchor="middle" fontFamily={serif} fontStyle="italic" fontSize="14.5" fill="currentColor">{claim}</text>}
             <text x="170" y={claim ? 150 : 140} textAnchor="middle" fontFamily={serif} fontSize="11.5" fontWeight="700" letterSpacing="1.5" fill="currentColor">{dateStr}</text>
             <text x="170" y={claim ? 164 : 158} textAnchor="middle" fontFamily={serif} fontStyle="italic" fontSize="11" fill="currentColor">I was here!</text>
+            {POST ? <text x="170" y="197" textAnchor="middle" fontFamily={serif} fontSize="8" fontWeight="700" letterSpacing="1.5" fill="currentColor">{POST}</text> : null}
           </g>
         </>
       ) : (
@@ -132,6 +136,7 @@ export default function LandStamp({ template = "country", name, sub = null, coun
             </text>
             {WORD && <text x="170" y={claim ? 150 : 146} textAnchor="middle" fontFamily={serif} fontSize="15" fontWeight="700" letterSpacing="4" fill="currentColor">★ {WORD} ★</text>}
             <text x="196" y="186" textAnchor="middle" fontFamily={serif} fontSize="12" fontWeight="700" letterSpacing="1.5" fill="currentColor">{dateStr}</text>
+            {POST ? <text x="196" y="172" textAnchor="middle" fontFamily={serif} fontSize="7.5" fontWeight="700" letterSpacing="1.2" fill="currentColor">{POST}</text> : null}
           </g>
           {/* The country's flag in the bottom-left corner (2026-10-24), bigger since 2026-11-05. */}
           {flagText ? <text x="58" y="196" textAnchor="middle" fontSize="34">{flagText}</text> : null}

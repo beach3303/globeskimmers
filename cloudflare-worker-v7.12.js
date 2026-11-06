@@ -15113,7 +15113,9 @@ async function handlePassportStamp(request, env, ctx) {
     // together should see different colours on their stamps): kept with state lines and checkpoints only,
     // as a hex colour the app validates against its own pads.
     const ink = (kind === 'state' || (kind === 'country' && b.entity_type === 'border')) && /^#[0-9A-Fa-f]{6}$/.test(String(b.ink || '')) ? String(b.ink).toUpperCase() : null;
-    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}), ...(direction ? { direction } : {}), ...(mode ? { mode } : {}), ...(ink ? { ink } : {}), ...(presence ? { presence } : {}),
+    // The port of entry a caught crossing was named with (2026-11-06): "Ehrenberg · I-10", kept with the stamp.
+    const post = (kind === 'state' || (kind === 'country' && b.entity_type === 'border')) && b.post ? String(b.post).replace(/\s+/g, ' ').trim().slice(0, 60) : null;
+    const meta = { ...(film ? { film } : {}), ...(b.origin === true ? { origin: true } : {}), ...(b.birthday === true ? { birthday: true } : {}), ...(direction ? { direction } : {}), ...(mode ? { mode } : {}), ...(ink ? { ink } : {}), ...(post ? { post } : {}), ...(presence ? { presence } : {}),
       // A park or rim keeps its parent place, so Verify I'm here measures it the same way.
       ...(variantParent ? { parent_id: variantParent } : {}),
       ...(localFav ? { local_favorite: localFav } : {}),

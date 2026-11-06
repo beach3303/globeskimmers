@@ -231,8 +231,8 @@ function StampCard({ stamp, onChanged, onEnlarge, fromName, homeCity, readOnly }
     return (
       <div className="bg-white rounded-[20px] p-3 flex flex-col items-center" style={{ boxShadow: SHADOW_CARD_SOFT, border: `1px solid ${RULE}` }}>
         {stamp.kind === "state"
-          ? <LandStamp template="state" name={stamp.region || stamp.name} date={stamp.visited_on} direction={stamp.meta?.direction || null} ink={stamp.meta?.ink || null} width={264} />
-          : <LandStamp template="country" name={String(stamp.name || "").split(" · ")[0]} countryCode={String(stamp.entity_id || "").split(":")[0]} date={stamp.visited_on} direction={stamp.meta?.direction || null} ink={stamp.meta?.ink || null} width={264} />}
+          ? <LandStamp template="state" name={stamp.region || stamp.name} date={stamp.visited_on} direction={stamp.meta?.direction || null} ink={stamp.meta?.ink || null} post={stamp.meta?.post || null} width={264} />
+          : <LandStamp template="country" name={String(stamp.name || "").split(" · ")[0]} countryCode={String(stamp.entity_id || "").split(":")[0]} date={stamp.visited_on} direction={stamp.meta?.direction || null} ink={stamp.meta?.ink || null} post={stamp.meta?.post || null} width={264} />}
         <div className="flex items-center gap-2 mt-1.5">
           <VerifiedBadge verified={stamp.verified} />
           {!readOnly && (
