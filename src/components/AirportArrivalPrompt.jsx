@@ -7,7 +7,7 @@ import { airportAt, markAirportVisit } from "@/lib/airports";
 import { localISODate } from "@/lib/localDate";
 import AirportStamp from "@/components/passport/AirportStamp";
 import LandStamp from "@/components/passport/LandStamp";
-import { useCrossings, openWindow, closeWindow, deferWindow, isDeferred, hoursLeft, seenLabel, windowById, OPEN_EVENT } from "@/lib/crossings";
+import { useCrossings, openWindow, closeWindow, deferWindow, isDeferred, hoursLeft, seenLabel, windowById, OPEN_EVENT, PRIVACY_LINE, suggestionsOn, setSuggestions } from "@/lib/crossings";
 
 // ============================================================================
 // ✈️ Airport stamp — when a signed-in user opens the app while physically
@@ -57,7 +57,7 @@ export default function AirportArrivalPrompt() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!isAuthenticated || !suggestOn()) return;
+      if (!isAuthenticated || !suggestionsOn()) return;
       // LIVE GPS only (founder, 2026-10-11): a fix the phone took in this app
       // run, in the last 30 minutes — never a picked destination (switching
       // back from a picked airport) or a restored last location (yesterday's
@@ -211,8 +211,11 @@ export default function AirportArrivalPrompt() {
           {choice("departure", "Departing", "Flying out")}
         </div>
         <button onClick={() => close(false)} disabled={!!busy} style={{ width: "100%", marginTop: 10, borderRadius: 12, padding: "10px", fontWeight: 600, background: "none", color: "#3A3128", border: "none", fontSize: 14 }}>Later — it waits {pending.left} hours</button>
-        <p style={{ color: "#736657", fontSize: 11, lineHeight: 1.4, marginTop: 2 }}>Nothing is stamped until you tap. Round trip? You&rsquo;ll be asked again on the way home.</p>
-        <button onClick={() => close(true)} disabled={!!busy} style={{ marginTop: 6, color: "#736657", fontSize: 11.5, textDecoration: "underline", background: "none", border: "none" }}>Not this one</button>
+        <p style={{ color: "#736657", fontSize: 11, lineHeight: 1.45, marginTop: 2 }}>{PRIVACY_LINE}</p>
+        <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 6 }}>
+          <button onClick={() => close(true)} disabled={!!busy} style={{ color: "#736657", fontSize: 11.5, textDecoration: "underline", background: "none", border: "none" }}>Not this one</button>
+          <button onClick={() => { setSuggestions(false); close(true); }} disabled={!!busy} style={{ color: "#736657", fontSize: 11.5, textDecoration: "underline", background: "none", border: "none" }}>Turn off stamp suggestions</button>
+        </div>
       </div>
     </div>
   );

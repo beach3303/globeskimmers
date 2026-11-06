@@ -3,14 +3,15 @@ import { useLocation, isLiveFix } from "@/components/location/LocationContext";
 import { useAuth } from "@/lib/AuthContext";
 import { addStamp, metersBetween } from "@/lib/passport";
 import { showToast } from "@/components/Toast";
-import { airportAt, markAirportVisit, lastAirportVisit } from "@/lib/airports";
+import { airportAt, markAirportVisit, lastAirportVisit, nearestAirports } from "@/lib/airports";
 import { countryCode } from "@/lib/countries";
 import { regionInfo } from "@/lib/stateNicknames";
 import { callWorker } from "@/lib/callWorker";
 import { getStampFix } from "@/lib/geolocation";
 import { localISODate } from "@/lib/localDate";
-import { baseline, setBaseline, openWindow, closeWindow, deferWindow, isDeferred, hoursLeft, seenLabel, useCrossings, windowById, OPEN_EVENT } from "@/lib/crossings";
+import { baseline, setBaseline, openWindow, closeWindow, deferWindow, isDeferred, hoursLeft, seenLabel, useCrossings, windowById, OPEN_EVENT, PRIVACY_LINE, suggestionsOn, setSuggestions } from "@/lib/crossings";
 import LandStamp from "@/components/passport/LandStamp";
+import AirportStamp from "@/components/passport/AirportStamp";
 
 // ============================================================================
 // 🛂 Border-crossing stamps on the ground (founder, 2026-10-05). When a
@@ -42,11 +43,35 @@ import LandStamp from "@/components/passport/LandStamp";
 // Still LIVE GPS ONLY (founder, 2026-10-11): a fix the phone took in this app
 // run, ≤ 30 min — never a picked destination or a restored last location — and
 // both ends confirmed at street-block resolution before anything is offered.
-const suggestOn = () => { try { return localStorage.getItem("pp_city_prompt") !== "0"; } catch { return true; } };
-const writeLS = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
 // A border stamp keeps about a city block, never the exact spot (founder, 2026-10-10).
 const rough = (v) => Math.round(v * 1000) / 1000;
 let judging = false;   // one crossing judged at a time, app-wide
+
+// THE SENSED FLIGHT (founder, 2026-11-06, for growth: "approve sensed flight"). The app's own readings
+// jumped from one city to another faster than anything on the ground, and it never saw an airport
+// fence: a flight happened, but which airports is the traveler's word. The window offers the nearest
+// candidates on each end; the stamps print as 'self' (no ✓). Adults only (the teen rails).
+const toAp = (a) => ({ iata: a.iata, city: a.city, cc: a.countryCode, lat: a.lat, lng: a.lng });
+// The big airports come first among the candidates (LAX before Burbank, PHX before Scottsdale's field),
+// each group nearest-first; the pre-picked one is the first. The world's busiest and the US majors.
+const MAJOR = new Set(("ATL LAX ORD DFW DEN JFK SFO SEA LAS MCO EWR CLT PHX IAH MIA BOS MSP FLL DTW PHL LGA BWI SLC DCA IAD SAN TPA AUS BNA MDW HNL PDX STL RDU SMF SJC MSY OAK SNA DAL HOU SAT MCI CLE IND PIT CMH CVG MKE RSW JAX RNO ABQ OKC OMA BUF ANC OGG BUR ONT LGB ELP TUS BOI " +
+  "YYZ YVR YUL YYC MEX CUN GDL GRU GIG EZE SCL BOG LIM PTY SJO LHR LGW STN MAN EDI DUB CDG ORY AMS FRA MUC BER ZRH GVA VIE BRU CPH ARN OSL HEL MAD BCN LIS OPO FCO MXP VCE ATH IST WAW PRG BUD " +
+  "DXB DOH AUH JED RUH CAI JNB CPT NBO ADD LOS CMN " +
+  "NRT HND KIX ICN PEK PVG CAN HKG TPE SIN KUL BKK DMK HAN SGN MNL CEB CGK DPS DEL BOM BLR SYD MEL BNE PER AKL CHC NAN").split(" "));
+const rankAirports = (list) => [...list].sort((a, b) => (MAJOR.has(b.iata) ? 1 : 0) - (MAJOR.has(a.iata) ? 1 : 0) || a.km - b.km).slice(0, 3);
+async function senseFlight(prev, fix, km, hours) {
+  const [from, to] = await Promise.all([nearestAirports(prev.lat, prev.lng, 6, 130).then(rankAirports), nearestAirports(fix.lat, fix.lng, 6, 130).then(rankAirports)]);
+  if (!from.length || !to.length || from[0].iata === to[0].iata) return;
+  const day = localISODate(new Date(fix.at));
+  openWindow({
+    kind: "flight", key: `flight:${day}:${from[0].iata}-${to[0].iata}`, name: `${from[0].city} → ${to[0].city}`, cc: fix.cc,
+    from: { at: prev.at, near: prev.near || from[0].city, airports: from.map(toAp) },
+    to: { at: fix.at, near: fix.near || to[0].city, airports: to.map(toAp) },
+    firstSeen: { at: fix.at, lat: rough(fix.lat), lng: rough(fix.lng), near: fix.near || to[0].city },
+    miles: Math.round(km * 0.621371), hours: Math.round(hours * 10) / 10,
+  });
+}
+const hoursWord = (h) => (h < 1 ? `${Math.max(5, Math.round(h * 60))} minutes` : h < 1.5 ? "an hour" : `${Math.round(h)} hours`);
 
 // The country and state/nation at a point, from the precise (~110 m) lookup.
 async function placeAt(lat, lng) {
@@ -69,11 +94,14 @@ const MONO = '"JetBrains Mono",ui-monospace,monospace';
 
 export default function BorderCrossingPrompt() {
   const { currentGpsLocation } = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, socialTier } = useAuth();
   const open = useCrossings();
   const [forced, setForced] = useState(null);   // a window the passport card asked to stamp now
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState(null);
+  const [fromIata, setFromIata] = useState(null);   // the sensed flight's two picks
+  const [toIata, setToIata] = useState(null);
+  const adult = socialTier === "adult";
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
   useEffect(() => {
@@ -85,7 +113,7 @@ export default function BorderCrossingPrompt() {
   // ── Sensing: every live fix is compared with the baseline ────────────────
   useEffect(() => {
     (async () => {
-      if (!isAuthenticated || !suggestOn() || judging) return;
+      if (!isAuthenticated || !suggestionsOn() || judging) return;
       const g = currentGpsLocation;
       if (!isLiveFix(g)) return;   // never a picked place, never an old fix
       const at = g.fixedAt;
@@ -115,7 +143,12 @@ export default function BorderCrossingPrompt() {
         const hours = (fix.at - Number(prev.at || 0)) / 3.6e6;
         const km = metersBetween(prev.lat, prev.lng, fix.lat, fix.lng) / 1000;
         const cap = hours < 1 ? 300 : prev.cc === fix.cc ? 160 : 250;
-        if (hours > 0 && km / hours > cap) { keep(fix); return; }
+        if (hours > 0 && km / hours > cap) {
+          keep(fix);
+          // A flight the app only sensed: offer the airports (adults), never a land stamp.
+          if (adult && km >= 120) await senseFlight(prev, fix, km, hours).catch(() => {});
+          return;
+        }
         const now = await getStampFix().catch(() => null);
         const pt = now ? { lat: now.lat, lng: now.lng, at: Date.now() } : { lat: fix.lat, lng: fix.lng, at };
         const [was, is] = await Promise.all([placeAt(prev.lat, prev.lng), placeAt(pt.lat, pt.lng)]);
@@ -134,26 +167,82 @@ export default function BorderCrossingPrompt() {
         if (info) openWindow({ ...base, kind: "region", key: `region:${is.cc}-${info.abbr}`, name: is.region, region: is.region, info });
       } finally { judging = false; }
     })();
-  }, [currentGpsLocation, isAuthenticated]);
+  }, [currentGpsLocation, isAuthenticated, adult]);
 
-  // ── The sheet: the window asked for, else the oldest open land window not deferred this run ──
+  // ── The sheet: the window asked for, else the oldest open land or flight window not deferred this run ──
   const askedFor = forced ? windowById(forced) : null;
   // An airport window that is still up has the screen (one sheet at a time); this one waits its turn.
   const airportUp = !askedFor && open.some((x) => x.kind === "airport" && !isDeferred(x.id));
   const w = airportUp ? null : (askedFor && askedFor.status === "open" && askedFor.kind !== "airport" ? askedFor : null)
-    || open.find((x) => (x.kind === "region" || x.kind === "country") && !isDeferred(x.id)) || null;
+    || open.find((x) => (x.kind === "region" || x.kind === "country" || x.kind === "flight") && !isDeferred(x.id)) || null;
   const wid = w?.id || null;
-  // A new window resets the mode to its guess (keyed on the id, not the object: the store re-reads).
-  useEffect(() => { setMode(windowById(wid)?.modeGuess || "car"); setBusy(false); }, [wid]);
+  // A new window resets the picks to its guesses (keyed on the id, not the object: the store re-reads).
+  useEffect(() => {
+    const x = windowById(wid);
+    setMode(x?.modeGuess || "car"); setBusy(false);
+    setFromIata(x?.from?.airports?.[0]?.iata || null); setToIata(x?.to?.airports?.[0]?.iata || null);
+  }, [wid]);
 
   if (!w) return null;
+  if (w.kind === "flight") {
+    const f = w.from.airports.find((a) => a.iata === fromIata) || w.from.airports[0];
+    const t = w.to.airports.find((a) => a.iata === toIata) || w.to.airports[0];
+    const left = hoursLeft(w);
+    const later = () => { deferWindow(w.id); setForced(null); };
+    const no = () => { closeWindow(w.id, "declined"); setForced(null); };
+    const stampBoth = async () => {
+      if (busy) return;
+      setBusy("flight");
+      const one = (a, at, direction) => addStamp({
+        kind: "airport", tier: "page", entity_type: "airport", entity_id: a.iata, name: `${a.city} (${a.iata})`, city: a.city,
+        country: a.cc, cc: a.cc, lat: a.lat, lng: a.lng, visited_on: localISODate(new Date(at)), verified: "self",
+        local_hour: new Date(at).getHours(), direction,
+      });
+      const dep = await one(f, w.from.at, "departure");
+      const arr = await one(t, w.to.at, "arrival");
+      setBusy(false);
+      if (dep.error && arr.error) { showToast(dep.error, "error"); return; }
+      closeWindow(w.id, "stamped"); setForced(null);
+      showToast(`✈️ ${f.iata} → ${t.iata} stamped — sensed, not seen at the gate`, "success");
+    };
+    const pill = (a, on, set) => (
+      <button key={a.iata} type="button" onClick={() => set(a.iata)} disabled={!!busy} aria-pressed={on}
+        style={{ height: 32, padding: "0 12px", borderRadius: 999, border: on ? "none" : "1px solid #E6DFD2", background: on ? "#0E7C73" : "#fff", color: on ? "#fff" : "#3A3128", fontSize: 12.5, fontWeight: on ? 700 : 600, fontFamily: "inherit", cursor: "pointer" }}>{a.iata}</button>
+    );
+    return (
+      <div onClick={later} style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(22,17,13,.55)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ background: "#f3eee1", borderRadius: 22, maxWidth: 380, width: "100%", padding: 20, textAlign: "center", boxShadow: "0 24px 60px -20px rgba(0,0,0,.45)" }}>
+          <p style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: ".18em", textTransform: "uppercase", color: "#B0472F", margin: "0 0 6px" }}>Flight · {w.from.near} → {w.to.near} · {seenLabel(w.to.at)} · {left} h left</p>
+          <p style={{ fontFamily: '"Instrument Serif",Georgia,serif', fontSize: 24, color: "#16110D", margin: "0 0 2px" }}>Looks like you flew?</p>
+          <p style={{ color: "#3A3128", fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>Your readings jumped from {w.from.near} to {w.to.near} — {w.miles} miles in {hoursWord(w.hours)}. Which airports?</p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
+            {w.from.airports.map((a) => pill(a, a.iata === f.iata, setFromIata))}
+            <span aria-hidden="true" style={{ color: "#736657", fontSize: 14 }}>→</span>
+            {w.to.airports.map((a) => pill(a, a.iata === t.iata, setToIata))}
+          </div>
+          <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 12 }}>
+            <AirportStamp iata={f.iata} city={f.city} countryCode={f.cc} date={localISODate(new Date(w.from.at))} direction="departure" width={128} />
+            <AirportStamp iata={t.iata} city={t.city} countryCode={t.cc} date={localISODate(new Date(w.to.at))} direction="arrival" width={128} />
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button type="button" onClick={stampBoth} disabled={!!busy} style={{ flex: 1, minHeight: 44, borderRadius: 999, border: "none", background: "#B0472F", color: "#fff", fontFamily: "inherit", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>{busy ? "Stamping…" : "Stamp both"}</button>
+            <button type="button" onClick={no} disabled={!!busy} style={{ minHeight: 44, padding: "0 14px", borderRadius: 999, border: "1px solid #E6DFD2", background: "#fff", color: "#3A3128", fontFamily: "inherit", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>I didn&rsquo;t fly</button>
+          </div>
+          <p style={{ color: "#736657", fontSize: 10.5, lineHeight: 1.45, margin: "8px 0 0" }}>Sensed, not seen at the gate: these print without the ✓. Open the app at the gate next time and it&rsquo;s verified.</p>
+          <button type="button" onClick={later} disabled={!!busy} style={{ width: "100%", marginTop: 6, borderRadius: 12, padding: "9px", fontWeight: 600, background: "none", color: "#3A3128", border: "none", fontSize: 14, fontFamily: "inherit", cursor: "pointer" }}>Later — it waits {left} hours</button>
+          <p style={{ color: "#736657", fontSize: 11, lineHeight: 1.45, margin: 0 }}>{PRIVACY_LINE}</p>
+          <button type="button" onClick={() => { setSuggestions(false); no(); }} disabled={!!busy} style={{ marginTop: 6, color: "#736657", fontSize: 11.5, textDecoration: "underline", background: "none", border: "none", fontFamily: "inherit", cursor: "pointer" }}>Turn off stamp suggestions</button>
+        </div>
+      </div>
+    );
+  }
   const isRegion = w.kind === "region";
   const spot = w.crossing || w.firstSeen;
   const date = localISODate(new Date(spot.at));
   const picked = mode || w.modeGuess || "car";
   const settle = () => { deferWindow(w.id); setForced(null); };
   const decline = () => { closeWindow(w.id, "declined"); setForced(null); };
-  const turnOff = () => { writeLS("pp_city_prompt", "0"); decline(); };
+  const turnOff = () => { setSuggestions(false); decline(); };
 
   const add = async (direction) => {
     if (busy) return;
@@ -227,10 +316,10 @@ export default function BorderCrossingPrompt() {
           <button type="button" onClick={() => add("arrival")} disabled={!!busy} style={{ width: "100%", marginTop: 10, borderRadius: 12, padding: "11px", fontWeight: 700, background: "#B0472F", color: "#fff", border: "none", fontSize: 14, fontFamily: "inherit", cursor: "pointer" }}>Got it — no land stamp</button>
         ) : null}
         <button type="button" onClick={settle} disabled={!!busy} style={{ width: "100%", marginTop: 8, borderRadius: 12, padding: "10px", fontWeight: 600, background: "none", color: "#3A3128", border: "none", fontSize: 14, fontFamily: "inherit", cursor: "pointer" }}>Later — it waits {left} hours</button>
-        <p style={{ color: "#736657", fontSize: 10.5, lineHeight: 1.4, margin: "2px 0 0" }}>Nothing is stamped until you tap — and only after you&rsquo;ve crossed.</p>
+        <p style={{ color: "#736657", fontSize: 11, lineHeight: 1.45, margin: "2px 0 0" }}>{PRIVACY_LINE}</p>
         <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 6 }}>
-          <button type="button" onClick={decline} disabled={!!busy} style={{ color: "#736657", fontSize: 11.5, textDecoration: "underline", background: "none", border: "none", fontFamily: "inherit", cursor: "pointer" }}>Not this one</button>
-          <button type="button" onClick={turnOff} disabled={!!busy} style={{ color: "#736657", fontSize: 11.5, textDecoration: "underline", background: "none", border: "none", fontFamily: "inherit", cursor: "pointer" }}>Turn off crossing pop-ups</button>
+          <button type="button" onClick={decline} disabled={!!busy} style={{ color: "#736657", fontSize: 11.5, textDecoration: "underline", background: "none", border: "none", fontFamily: "inherit", cursor: "pointer" }}>I didn&rsquo;t cross</button>
+          <button type="button" onClick={turnOff} disabled={!!busy} style={{ color: "#736657", fontSize: 11.5, textDecoration: "underline", background: "none", border: "none", fontFamily: "inherit", cursor: "pointer" }}>Turn off stamp suggestions</button>
         </div>
       </div>
     </div>

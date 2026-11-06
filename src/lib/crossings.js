@@ -14,6 +14,15 @@
 import { useEffect, useState } from "react";
 import { pickInk } from "@/lib/stampInks";
 
+// The one line every sensed card carries (founder, 2026-11-06: "short and sweet … tell them their location is
+// private and the app only wants to offer the opportunity to get a stamp … make words matter").
+export const PRIVACY_LINE = "Your location stays on your phone. We only ask so you never miss a stamp.";
+// One switch for every suggestion — crossings, airports, flights. The two older keys still count as "off"
+// (Settings wrote them until 2026-11-06), and the switch writes all three so older bundles agree.
+const SWITCH_KEYS = ["pp_suggest_stamps", "pp_city_prompt", "pp_suggest_arrivals"];
+export const suggestionsOn = () => { try { return SWITCH_KEYS.every((k) => localStorage.getItem(k) !== "0"); } catch { return true; } };
+export const setSuggestions = (on) => { try { for (const k of SWITCH_KEYS) localStorage.setItem(k, on ? "1" : "0"); } catch { /* ignore */ } };
+
 const KEY = "pp_crossings_v1";
 const LEGACY_BASE = "pp_live_region_v2";   // BorderCrossingPrompt's old baseline; AirportArrivalPrompt still reads it
 export const WINDOW_MS = 48 * 3600 * 1000;

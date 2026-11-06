@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { suggestionsOn, setSuggestions } from "@/lib/crossings";
 import { useAuth } from "@/lib/AuthContext";
 import { searchHomeCities, resolveHomePlace } from "@/lib/homePlace";
 import { searchCountries, countryCode } from "@/lib/countries";
@@ -428,8 +429,8 @@ export default function SettingsPage() {
   const { step: fontStep } = useFontScale(); // larger steps → rows stack value below
   const { autoFollow, setAutoFollow } = useLocation(); // silent auto-follow toggle (localStorage-backed)
   const [openBehavior, setOpenBehaviorState] = useState(() => readOpenBehavior()); // 'ask' | 'current' | 'continue'
-  const [suggestArrivals, setSuggestArrivals] = useState(() => { try { return localStorage.getItem("pp_suggest_arrivals") !== "0"; } catch { return true; } });
-  const [cityPrompt, setCityPrompt] = useState(() => { try { return localStorage.getItem("pp_city_prompt") !== "0"; } catch { return true; } });
+  // One switch for crossings, airports and flights (border grace, 2026-11-06); it writes the two older keys too.
+  const [suggestStamps, setSuggestStamps] = useState(() => suggestionsOn());
   // Nearby-stamp sensing on the Passport page (default ON; the page has its own small switch too).
   const [suggestNearby, setSuggestNearby] = useState(() => { try { return localStorage.getItem("pp_suggest_nearby") !== "0"; } catch { return true; } });
   // Username (Social P0, 2026-09-29): claimed through the worker, 5 changes a
@@ -1063,11 +1064,8 @@ export default function SettingsPage() {
 
           {/* Virtual Passport group */}
           <EdGroup kicker="Virtual Passport" isTablet={isTablet}>
-            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Airport arrival stamps" desc="Offer a passport stamp when you land at an airport. It starts where new stamps start (Privacy, below)."
-              control={{ node: <EdToggle on={suggestArrivals} onClick={() => { const next = !suggestArrivals; setSuggestArrivals(next); try { localStorage.setItem("pp_suggest_arrivals", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle airport arrival stamps" /> }}
-            />
-            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="New-city pop-ups" desc="Offer a stamp when you arrive in — or open the app in — a new city or country. Turn off to never be prompted (you can still add stamps yourself)."
-              control={{ node: <EdToggle on={cityPrompt} onClick={() => { const next = !cityPrompt; setCityPrompt(next); try { localStorage.setItem("pp_city_prompt", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle new-city pop-ups" /> }}
+            <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Suggest stamps from where I am" desc="Offer a stamp when the app sees you cross a state or country line, land at an airport, or take a flight — only while it's open, never in the background. Your location stays on your phone. Turn off to never be asked (you can still add stamps yourself)."
+              control={{ node: <EdToggle on={suggestStamps} onClick={() => { const next = !suggestStamps; setSuggestStamps(next); setSuggestions(next); }} label="Toggle stamp suggestions" /> }}
             />
             <EdRow isTablet={isTablet} step={fontStep} icon={MapPin} iconBg={CAT.transit.ink} title="Sense nearby stamps" desc="When you open your Passport, offer the attraction or airport you're standing in. Turn off to never see that pop-up (the Passport page has the same switch)."
               control={{ node: <EdToggle on={suggestNearby} onClick={() => { const next = !suggestNearby; setSuggestNearby(next); try { localStorage.setItem("pp_suggest_nearby", next ? "1" : "0"); } catch { /* ignore */ } }} label="Toggle nearby stamp sensing" /> }}
