@@ -31,6 +31,32 @@ docs/research/ and folded into one page — https://claude.ai/artifact/6q3WsLiBQ
 (the sized build queue, the ten founder decisions, first five partnership deals, LA28
 timeline, the first-party data rules). It supersedes the raw list below as the working plan.
 
+## Cards are regional, twenty stamps, with stays — founder decision 2026-11-06 (amends the City Cards section below)
+
+**Decided (founder, 2026-11-06, "yes to all except Passport wrap"; docs/plans/cards-and-passport.md):** a card
+covers a METRO AREA, not a city — "Greater Phoenix", not Mesa and Scottsdale apart (US: the Census combined
+area, else the metro area, by county; abroad: 73 curated metro circles, else the city) — holds TWENTY stamps,
+is numbered (No. 1, No. 2 …) and never expires: no card per year. Stay (where you slept) and Do (activities,
+tours, local museums — the brag-worthy places stay in the passport) join Eat · Coffee · Shop · Market ·
+Convenience. A stay is PRIVATE by default: everyone else reads "Accommodation · city · date"; the owner can
+show the hotel's name stamp by stamp (and set a default in Settings) and keep a private note; stays never
+reach a feed, a board or a share. Passport Wrapped WAITS (her call). Built 2026-11-06 (stamping-v2 7ce51ee +
+2dc428a): after the push, the founder runs the one-time remap (`POST /admin/city-cards/remap`, admin
+session) that folds the old city cards into the area cards, then the OTA. Open: the Stay and Do stamp art
+(word stamps until drawn), night lodging sensing (not built).
+
+## Border grace and Border Watch — founder decisions 2026-11-03 → 06
+
+A crossing is a 48-hour WINDOW, not a line (docs/plans/border-grace.md): the sheet on any page, the Entry
+waiting card, eight random inks, bigger flags, the countries' own lines, airport windows, the sensed flight
+(adults; Departure only / Arrival only / Stamp both / I didn't fly), one privacy line ("Your location stays on
+your phone. We only ask so you never miss a stamp."), one switch — LIVE 2026-11-06 (main 6644758 + efbf783,
+OTA 1.0.2611061907), with the ports of entry (264 named posts) and the line ahead. **Border Watch** (built
+2026-11-06 PM, "include border watch with this build"): per trip, off by default, off by itself after 24 hours;
+the phone checks its state or country with the app closed (iOS significant-change + Always; Android a visible
+foreground service with Stop) and notifies once per line; the window does the rest. Ships with the next store
+builds on both platforms (Play needs the foreground-service declaration). Open: ports v2 (US highways).
+
 ## What stamps the Virtual Passport — founder decision 2026-10-28 (City Cards)
 
 **Decided (founder, 2026-10-28):** the Virtual Passport takes ONLY these stamps: Things to Do

@@ -6,7 +6,9 @@ privacy line** on every sensed card — "Your location stays on your phone. We o
 and **one switch**, "Suggest stamps from where I am" — LIVE (main 6644758, OTA 1.0.2611061726). **Phase 2 BUILT
 2026-11-06** ("go"): ports of entry (213 interstate crossings named on both sides + the major US–MX/US–CA
 posts; a caught crossing's stamp reads "Ehrenberg · I-10") and the line ahead (offer tile → live count → slam
-at the line, US state lines). Awaiting push (worker: meta.post) + OTA. Phase 3 below.
+at the line, US state lines) — LIVE (main efbf783, OTA 1.0.2611061907). **Phase 3 BUILT 2026-11-06 PM** ("include
+border watch with this build"): the native Border Watch on both platforms, riding with the cards rebuild into the
+next store builds — see the phase below.
 
 ## What happened (founder, 2026-11-03, I-10 Los Angeles → Scottsdale)
 
@@ -94,6 +96,30 @@ state or country. Everything else is grace. Nothing is stamped until you tap.
 - Risk: App Review and Play policy scrutiny of background location; a rejection costs a cycle. Worth it only
   after Phase 1 has removed the pain, since Phase 1 alone makes the stamp impossible to miss for anyone who opens
   the app within two days.
+
+**Built 2026-11-06 (as decided: per trip, off by default, off by itself after 24 hours):**
+- **iOS** `ios/App/App/BorderWatchPlugin.swift`: `BorderWatchCore` (a singleton, resumed from `AppDelegate` on
+  every launch — including the background relaunch iOS makes for a significant move) asks `requestAlwaysAuthorization`
+  and `startMonitoringSignificantLocationChanges` (about every 500 m, minutes apart, no `UIBackgroundModes` needed),
+  judges every reading on the phone — the state by ray casting over the bundled `public/data/us-states.json`, the
+  country abroad from `CLGeocoder` at most once per 2 km — with a "well inside by the reading's radius" guard, keeps
+  only the last state/country and the crossings (UserDefaults, 20 at most), and posts one local notification per
+  line: "You crossed into Arizona · Your border stamp is ready in GlobeSkimmers — it waits 48 hours."
+- **Android** `BorderWatchService` (a foreground service of type location — its own LOW notification the whole time
+  with **Stop** — fused balanced-power readings every 5 min / 400 m, ends at the deadline), `BorderWatchCore` (the
+  same judging; the states from the web assets; the phone's `Geocoder` abroad), `BorderWatchPlugin`; manifest
+  `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_LOCATION` + the service; `play-services-location:21.3.0` in
+  `app/build.gradle`. No `ACCESS_BACKGROUND_LOCATION`: a foreground service needs none.
+- **App** `src/lib/borderWatch.js`: `status / start / stop / drain`, `drainCrossings()` turns the phone's crossings
+  into the same windows the live sensing opens (same keys, so nothing doubles; the baseline moves), `useBorderWatch`.
+  `BorderCrossingPrompt` drains on open and on every return; the land sheet offers "Driving on? Watch for borders on
+  this trip"; Settings → Virtual Passport → "Watch for borders on this trip" (shows "On until Fri 3:05 PM"; on iOS
+  with only when-in-use it says to allow "Always"); "Turn off stamp suggestions" stops the watch too.
+- **Words**: Info.plist's Always string now says what Border Watch does; the privacy policy has a Border Watch
+  paragraph (Last updated November 6, 2026).
+- **To ship**: store builds on both platforms; Play Console → App content → "Foreground service permissions"
+  declaration for `FOREGROUND_SERVICE_LOCATION` (a short video of the switch and the notification); App Review
+  notes naming the feature. Verify on a real drive: the iOS "Always" prompt, the notification, the window on open.
 
 ### Flights and ships (unchanged, stated)
 

@@ -4687,3 +4687,37 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   1.0.2611061907 (built after the final ports table) on the production channel. Live: ports of entry (264 rows),
   the line ahead, Apple/Google Maps from My Location. Open: US-highway crossings (ports v2); Phase 3 Border Watch
   (native); the cards-and-passport decisions (docs/plans/cards-and-passport.md).
+
+## 2026-11-06 PM — COMMITTED, NOT PUSHED: the cards rebuild (region cards, 20 stamps, stays) + Border Watch (native)
+
+  Founder: "yes to all except Passport wrap … people can disclose the name of their hotel if they'd like or just
+  make it 'Accommodation - city' … include border watch with this build." (docs/plans/cards-and-passport.md,
+  docs/plans/border-grace.md phase 3.)
+  - **Migration** `supabase/migrations/20261106220000_area_cards.sql` (applies itself ~20 s after the push; marked
+    allow-destructive for the dropped unique/checks, no rows dropped): `city_cards.area_key/area_name`, `year`
+    nullable, unique (user, area_key, no); `city_card_stamps` slot 1–20, categories + stay/do, `city`, `name_hidden`
+    (default false; the worker writes true for a stay), `note`.
+  - **Worker** (7ce51ee): `CC_US_METROS` (1,915 counties → `csa:`/`cbsa:` + name; Census July 2023; the names
+    checked against the Census titles — 184 is Cleveland, 466 Rockford; Baltimore + Providence carved out),
+    `CC_WORLD_METROS` (73 circles), `ccCountyAt` (Nominatim zoom 10 → county + ISO3166-2 state, KV `cc_county:` 30 d),
+    `ccAreaFor`, `CC_SLOTS = 20`, Stay/Do categories, `ccStampRow(r, mine)` (a hidden stay reads "Accommodation",
+    `place_id: null`, note owner-only), stays skipped in both friends feeds, `POST /city-cards/stamp/privacy`,
+    `POST /admin/city-cards/remap` (admin; folds old city cards into area cards once). node --check ✅.
+  - **App** (2dc428a): `src/lib/cityCards.js` (SLOTS 20, Stay/Do, `cardTitle`, `stampName`, `setCardStampPrivacy`,
+    `showHotelNamesByDefault`), `CityCard` (20 slots, STAY/DO word stamps until art, lock on a hidden stay, each
+    stamp's city), `CityStampDetail` ("Show the hotel's name" + private note), `StayPicker` ("Where I'm staying" on
+    the Stamp sheet: lodging ≤ 400 m, nearest first), `CityCardStampButton finder="stay"|"do"` (ThingsToDo gets it),
+    `CityCardsPage` "one card a region", Settings "Show my hotel names by default"; feeds/share/activity say the
+    area. Shots: scratchpad/shots/cards1-3.png (Greater Phoenix No. 1, 7/20, the hidden Hilton with its note).
+  - **Border Watch** (native, both platforms): iOS `BorderWatchPlugin.swift` (+ pbxproj, MainViewController,
+    AppDelegate resume, Info.plist Always string), Android `BorderWatchCore/Service/Plugin.java` (+ manifest
+    FOREGROUND_SERVICE(_LOCATION) + service, `play-services-location:21.3.0`, MainActivity); `src/lib/borderWatch.js`;
+    `BorderCrossingPrompt` drains the phone's crossings on open/return + offers the watch on the land sheet;
+    Settings "Watch for borders on this trip"; privacy policy paragraph + date (site deploys with the push).
+  - Gates: eslint no-undef on every touched component + libs ✅; node --check ✅; build ✅; boot-check ✅; `npx cap sync`
+    ✅; Android `compileDebugJavaWithJavac` ✅; iOS `xcodebuild` simulator build — see the line below.
+  - **Activate:** founder pushes (`git push origin stamping-v2:main` after `git fetch` + merge-base check) → Deploy
+    Cloudflare Workers + Deploy Supabase migrations green → founder, signed in as an admin, runs the remap ONCE
+    (from the app's console or curl with her session token: `POST https://<worker>/admin/city-cards/remap`) →
+    `npm run ota` → store builds BOTH platforms (`npm run cap:all`; iOS 1.0.7, Android 1.0.13) with the Play
+    Console "Foreground service permissions" declaration (location) and App Review notes for Border Watch.

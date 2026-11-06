@@ -1,6 +1,11 @@
 # Cards and the passport — what goes where, and how big a card is (proposal, 2026-11-06)
 
-**Status:** PROPOSED, nothing built. The founder's decisions at the end.
+**Status:** DECIDED 2026-11-06 ("yes to all except Passport wrap") and **BUILT the same day** (stamping-v2 7ce51ee
+worker + migration, 2dc428a app; Border Watch with it): Greater cards by metro (US counties → Census CSA/CBSA,
+73 world metro circles, else the city), twenty numbered never-expiring stamps, Stay + Do, stays private by default
+with "Show the hotel's name" and a private note, `POST /admin/city-cards/remap` to fold the old city cards once.
+Awaiting push (migration + worker) → the remap → OTA → store builds. Open: the Stay and Do stamp art (word stamps
+until then), night lodging sensing, Passport Wrapped (waits).
 
 ## The problem (founder, 2026-11-06)
 
@@ -129,6 +134,17 @@ stamp. Nobody is told where you sleep: by default a stay reads as a kind and a p
 
 **Decided 2026-11-06:** 1–6 yes ("yes to all"); the cards rebuild goes next; Passport Wrapped waits ("except
 Passport wrap"); Border Watch rides with the next store builds.
+
+**Built 2026-11-06 — how the area is found:** the worker asks Nominatim for the county of the stamped place (zoom
+10, cached a month in KV) and looks it up in `CC_US_METROS` ("AZ|maricopa county" → `csa:429` "Greater Phoenix";
+1,915 counties from the Census July 2023 delineations, built by `scratchpad/ports-tools/build-metros.mjs`; names
+checked against the Census titles — Baltimore and Providence keep their own cards; "Bay Area", "Twin Cities",
+"Dallas–Fort Worth", "South Florida", "Raleigh–Durham"). Abroad, `CC_WORLD_METROS` (73 circles: Greater London 35 km,
+Metro Manila 35 km, Bali 60 km, Cancún & the Riviera Maya 70 km …); outside every circle the city stays the area.
+The card row carries `area_key` + `area_name`; stamps carry their own `city`. Stays: `name_hidden` (default true;
+Settings "Show my hotel names by default" seeds it), masked to "Accommodation" with `place_id: null` for everyone
+but the owner, never in the friends' feeds, `note` owner-only (≤ 280 chars). "Where I'm staying" on the Stamp sheet
+lists lodging within 400 m of the phone (`places/nearby?types=lodging`).
 
 ## Founder's decisions
 
