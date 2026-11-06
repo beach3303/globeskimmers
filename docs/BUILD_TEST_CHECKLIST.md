@@ -4636,3 +4636,9 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
     crossings.js; build; boot-check ✅. App-only: needs push + OTA.
   - 11-06 later (founder): the flight sheet's two previews are choices of their own — "Departure only" / "Arrival
     only" — with "Stamp both" and "I didn't fly" below (`stampFlight(which)`); one of two landing still closes the window.
+
+## 2026-11-06 — PUSHED: border grace + sensed flight + the line + one switch (main 6644758, app-only, no deploy run)
+
+  Nothing in this push touches the worker, a migration or the site, so no Action ran. **Open (founder):** `npm run ota`
+  — the first bundle since 1.0.2611032027 (Nov 3); it carries the random inks, bigger flags, country lines, the
+  48-hour window for crossings and airports, the sensed flight, the privacy line and the Settings switch.
