@@ -19,3 +19,6 @@
   Cache-Control: public, max-age=300
   Content-Type: application/json; charset=utf-8
   Access-Control-Allow-Origin: *
+/review/*
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Cache-Control: public, max-age=3600
