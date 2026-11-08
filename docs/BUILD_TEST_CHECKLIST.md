@@ -4732,3 +4732,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   by the regular sensing on resume. **Fix (9141c24, committed, needs OTA):** the Wake Lock API holds the screen
   while the strip shows and lets go with the watch. Gates: lint ✅ build ✅ boot-check ✅. Not yet proven on a
   drive; Border Watch (store builds) covers the locked-phone case for good.
+
+## 2026-11-08 — ON PHONES: OTA 1.0.2611082204 (line-ahead wake lock + pause/resume, admin button first)
+
+  The founder's OTA carries 9141c24 (screen held awake while the strip shows) and 71557df (a hidden page
+  pauses the watch, unlocking resumes it and judges the next reading) plus the admin fold button at the top of
+  the Admin page. Branch still 5 commits ahead of main (admin top, site fold button, two docs, the two
+  line-ahead fixes) — push pending, nothing in them needs the server. Next: store builds 1.0.7 / 1.0.13.
