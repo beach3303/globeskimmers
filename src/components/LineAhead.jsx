@@ -125,7 +125,20 @@ export default function LineAhead() {
   }, [currentGpsLocation, isAuthenticated, live, slam, dismissed]);
 
   // ── Watching: GPS once a second while the strip shows ──────────────────────────────────────────
-  const stop = () => { if (stopRef.current) { stopRef.current(); stopRef.current = null; } trail.current = []; setLive(null); };
+  // The screen stays awake while the strip shows (the Wake Lock API, iOS 16.4+): a phone in the cradle
+  // auto-locks in under a minute, a locked screen hides the page, and a hidden page ends the watch — the
+  // founder's drive of 2026-11-06 counted down to the Colorado River, then the slam never came, and the
+  // sheet arrived five to ten minutes past Blythe on the next fix. The lock is released with the watch.
+  const wake = useRef(null);
+  const holdScreen = async () => {
+    try {
+      if (!navigator.wakeLock?.request) return;
+      wake.current = await navigator.wakeLock.request("screen");
+      wake.current.addEventListener?.("release", () => { wake.current = null; });
+    } catch { wake.current = null; }
+  };
+  const freeScreen = () => { try { wake.current?.release?.(); } catch { /* released already */ } wake.current = null; };
+  const stop = () => { if (stopRef.current) { stopRef.current(); stopRef.current = null; } trail.current = []; freeScreen(); setLive(null); };
   useEffect(() => () => { if (stopRef.current) stopRef.current(); }, []);
   useEffect(() => {
     const onHide = () => { if (document.visibilityState !== "visible") stop(); };
@@ -141,6 +154,7 @@ export default function LineAhead() {
     const o = offer;
     setOffer(null);
     setLive({ into: o.into, from: o.from, name: o.name, km: o.km, startKm: o.km, road: o.road });
+    await holdScreen();
     const started = Date.now();
     let crossed = false;
     stopRef.current = await startWatch((pos) => {
