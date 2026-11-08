@@ -4771,3 +4771,9 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   Foreground service permissions → Location → Geofencing, video link https://globeskimmers.io/review/border-watch/
   (the site page, deployed f852ce0). On publish: `site/app-version.json` android → 1.0.13. iOS 1.0.7 (19): the
   founder archives next.
+
+## 2026-11-08 3:31 PM PT — iOS 1.0.7 (19) SUBMITTED → Waiting for Review (Play 1.0.13 (16) In review since 3:14 PM)
+
+  Both store builds of the Border Watch + region cards release are in. The duplicate upload of build 19 was
+  rejected by App Store Connect as expected (the first went through). On approval: `site/app-version.json` →
+  ios 1.0.7 / android 1.0.13. Then the founder's first drive with "Watch for borders on this trip" on is the iOS test.
