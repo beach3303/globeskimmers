@@ -4777,3 +4777,15 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   Both store builds of the Border Watch + region cards release are in. The duplicate upload of build 19 was
   rejected by App Store Connect as expected (the first went through). On approval: `site/app-version.json` →
   ios 1.0.7 / android 1.0.13. Then the founder's first drive with "Watch for borders on this trip" on is the iOS test.
+
+## 2026-11-08 PM — COMMITTED, NOT PUSHED: the admin audit pull shows the whole passport, the cards, the board uploads
+
+  Founder: "give admin access to all of passports of users even if they are in private only me, and their cards, and
+  how many photos have each user uploaded to city board and what city". Built into the existing on-demand pull
+  (`POST /admin/user-activity`, 1355da0): `passport[]` (every stamp regardless of visibility/hidden: date, kind, name,
+  where, who sees it, photo count, direction/post), `cards[]` (area, No., n/20, every stamp with name — a hidden stay
+  marked 🔒), `boards` (total, photos, clips, by city with first/last dates and hidden counts); totals gain cards +
+  board_uploads. Admin page (3b8b400): Members → tap a member → the record shows the three sections. Scope stays
+  per member on demand, as privacy policy §2 states ("our team opens one member's activity only for support, safety
+  or a legal request"); no browse-everyone feed. Gates: node --check, lint, build, boot-check ✅. Needs push (worker)
+  + OTA (page). Also committed since the last push: the no-curfew stay-sensing decision (docs).
