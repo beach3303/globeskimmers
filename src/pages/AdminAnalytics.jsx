@@ -513,6 +513,65 @@ function TravelerRecord({ res, title, style }) {
           {(res.virtual_items.buddies || []).length > 0 && <span>🐾 {res.virtual_items.buddies.map((bd) => `${bd.breed || bd.species}${bd.coat ? ` (${bd.coat})` : ''}`).join(', ')}</span>}
         </div>
       )}
+      {/* The whole passport, private stamps included; the cards with every name; the City Board uploads by city
+          (founder, 2026-11-08). The team's view, for support, safety or a legal request (privacy policy §2). */}
+      {Array.isArray(res.passport) && res.passport.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>Passport · {res.passport.length} stamps, every privacy level</div>
+          <div style={{ maxHeight: 320, overflowY: 'auto', border: '1px solid #EEE', borderRadius: 8, marginTop: 4 }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+              <thead><tr style={{ position: 'sticky', top: 0, background: '#FAFAF7' }}>{['Date', 'Stamp', 'Where', 'Who sees it', 'Photos'].map((h) => <th key={h} style={{ textAlign: 'left', padding: '4px 8px', color: COLORS.gray, fontWeight: 600 }}>{h}</th>)}</tr></thead>
+              <tbody>
+                {[...res.passport].reverse().map((p, i) => (
+                  <tr key={i} style={{ borderTop: '1px solid #F1F1F1' }}>
+                    <td style={{ padding: '3px 8px', whiteSpace: 'nowrap' }}>{p.date}</td>
+                    <td style={{ padding: '3px 8px' }}>{p.name}{p.kind && p.kind !== 'attraction' ? <span style={{ color: COLORS.gray }}> · {p.kind}{p.direction ? ` ${p.direction}` : ''}{p.post ? ` · ${p.post}` : ''}</span> : null}{p.verified === 'gps' ? ' ✓' : ''}</td>
+                    <td style={{ padding: '3px 8px', color: COLORS.gray }}>{[p.city, p.region, p.country].filter(Boolean).join(', ')}</td>
+                    <td style={{ padding: '3px 8px', color: p.visibility === 'hidden' || p.visibility === 'me' ? '#B0472F' : COLORS.gray }}>{p.visibility === 'hidden' ? 'hidden' : p.visibility === 'me' ? 'only me' : p.visibility}</td>
+                    <td style={{ padding: '3px 8px', textAlign: 'right' }}>{p.photos || ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {Array.isArray(res.cards) && res.cards.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>Cards · {res.cards.length}</div>
+          {res.cards.map((c) => (
+            <div key={c.id} style={{ marginTop: 6, fontSize: 12.5 }}>
+              <div><b>{c.area} · No. {c.no}</b> <span style={{ color: COLORS.gray }}>· {c.count}/20{c.complete ? ' · complete' : ''}{c.visibility ? ` · ${c.visibility}` : ''}</span></div>
+              <div style={{ color: COLORS.dark, lineHeight: 1.6 }}>
+                {c.stamps.map((x) => (
+                  <span key={x.slot} style={{ display: 'inline-block', marginRight: 10 }}>
+                    <span style={{ color: COLORS.gray }}>{x.slot}.</span> {x.name}{x.hidden ? ' 🔒' : ''} <span style={{ color: COLORS.gray }}>({x.category}{x.city ? `, ${x.city}` : ''}, {x.date}{x.visits > 1 ? `, ×${x.visits}` : ''})</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: COLORS.gray, marginTop: 4 }}>🔒 = a stay whose name other members don’t see.</div>
+        </div>
+      )}
+      {res.boards && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>City Board uploads · {res.boards.total} ({res.boards.photos} photos, {res.boards.clips} clips)</div>
+          {res.boards.by_city.length ? (
+            <table style={{ marginTop: 4, borderCollapse: 'collapse', fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>
+              <tbody>
+                {res.boards.by_city.map((b, i) => (
+                  <tr key={i} style={{ borderTop: '1px solid #F1F1F1' }}>
+                    <td style={{ padding: '3px 14px 3px 0' }}>{[b.city || '—', b.country].filter(Boolean).join(', ')}</td>
+                    <td style={{ padding: '3px 14px 3px 0', textAlign: 'right' }}>{b.photos} photo{b.photos === 1 ? '' : 's'}{b.clips ? `, ${b.clips} clip${b.clips === 1 ? '' : 's'}` : ''}{b.hidden ? <span style={{ color: '#B0472F' }}> · {b.hidden} hidden</span> : null}</td>
+                    <td style={{ padding: '3px 0', color: COLORS.gray, whiteSpace: 'nowrap' }}>{String(b.first || '').slice(0, 10)}{b.last && b.last.slice(0, 10) !== String(b.first || '').slice(0, 10) ? ` → ${b.last.slice(0, 10)}` : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : <div style={{ fontSize: 12.5, color: COLORS.gray, marginTop: 2 }}>None.</div>}
+        </div>
+      )}
       {res.airport_sequence?.length > 0 && (
         <div style={{ marginTop: 8 }}>
           <div style={{ fontWeight: 700, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', color: COLORS.gray }}>Airport sequence</div>
