@@ -4721,3 +4721,14 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
     (from the app's console or curl with her session token: `POST https://<worker>/admin/city-cards/remap`) →
     `npm run ota` → store builds BOTH platforms (`npm run cap:all`; iOS 1.0.7, Android 1.0.13) with the Play
     Console "Foreground service permissions" declaration (location) and App Review notes for Border Watch.
+
+## 2026-11-08 — the first real drive with the line ahead (founder, I-10 Arizona → California, 2026-11-06) + fix
+
+  The strip came up and counted the miles down to the Colorado River; the slam at the line never came; the
+  "You crossed into California" sheet arrived five to ten minutes past the line at freeway speed, on the next
+  fix after she looked at the phone. The stamp is right — ENTRY · CALIFORNIA · NOV 06 2026 · BLYTHE · I-10 — so
+  the grace window and the port naming did their job. Cause: a phone in the cradle auto-locks, a locked screen
+  hides the page, and `LineAhead` ends the watch on a hidden page (by design), so the crossing was only seen
+  by the regular sensing on resume. **Fix (9141c24, committed, needs OTA):** the Wake Lock API holds the screen
+  while the strip shows and lets go with the watch. Gates: lint ✅ build ✅ boot-check ✅. Not yet proven on a
+  drive; Border Watch (store builds) covers the locked-phone case for good.
