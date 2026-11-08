@@ -4751,3 +4751,17 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
     note; Play Console Production release with the AAB + the "Foreground service permissions · Location" declaration
     (short screen recording of the switch + notification). Release notes, review note and declaration text are in
     the chat of 2026-11-08. First real test: a drive with the switch on.
+
+## 2026-11-08 — Border Watch PROVEN END TO END on Android (emulator "s10", API 31, release APK 1.0.13 (16))
+
+  Signed in as @appreview on the sideloaded release APK (R8 on): Settings → Virtual Passport → "Watch for
+  borders on this trip" ON → "On until Mon 2:45 PM"; BorderWatchService running in the foreground with its LOW
+  notification "Border Watch is on · Until Mon 2:45 PM · your location stays on your phone" + Stop. GPS moved
+  Los Angeles → Phoenix (`adb emu geo fix`): within 15 s of the Arizona readings the DEFAULT-channel notification
+  "You crossed into Arizona — Your border stamp is ready in GlobeSkimmers — it waits 48 hours." Backgrounded and
+  reopened the app: `drainCrossings()` opened the window and the sheet read "ENTERED AT EHRENBERG · I-10 · NOV 8,
+  2:49 PM — You crossed into Arizona! — The Grand Canyon State", Entry/Exit stamps with the post, "Border Watch is
+  on until Mon 2:45 PM" under Later. Screen recording for the Play declaration: `Desktop/GlobeSkimmers-border-
+  watch-android.mp4` (1080×2280, ~39 s: the switch going on + the shade with the notification). Shots:
+  scratchpad/shots… emu-r1/r2/x2/x3.png. iOS: untested on a device (the simulator cannot show the Always prompt
+  or the background relaunch) — the founder's first drive is the test.
