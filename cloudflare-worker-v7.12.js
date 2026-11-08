@@ -30184,14 +30184,46 @@ async function handleAdminUserActivity(request, env) {
       for (const r of rows) { const y = yr(r[key]); by[y] = (by[y] || 0) + 1; }
       return by;
     };
-    const [stq, gbq, dq, onq, gq] = await Promise.all([
-      gbRest(env, `passport_stamps?user_id=eq.${userId}&order=created_at.asc&limit=2000&select=kind,entity_id,name,visited_on,created_at,verified,meta`, {}),
+    const [stq, gbq, dq, onq, gq, ccq, csq, bcq] = await Promise.all([
+      gbRest(env, `passport_stamps?user_id=eq.${userId}&order=created_at.asc&limit=2000&select=*`, {}),
       gbRest(env, `guestbook_entries?user_id=eq.${userId}&order=created_at.asc&limit=2000&select=created_at,entity_name,is_doodle`, {}),
       gbRest(env, `place_dishes?user_id=eq.${userId}&order=created_at.asc&limit=2000&select=created_at,place_name,dish`, {}),
       gbRest(env, `owner_notes?user_id=eq.${userId}&order=created_at.asc&limit=2000&select=created_at,entity_name,status`, {}),
       gbRest(env, `profile_gear?user_id=eq.${userId}&select=gear,buddies,updated_at`, {}),
+      // The audit pull (founder, 2026-11-08: "access to all of passports … even if they are in private only me, and
+      // their cards, and how many photos … to city board and what city"): the whole passport whatever its privacy,
+      // the cards with every name (a hidden stay too — this is the team's view, never a member's), and the City
+      // Board uploads by city. Privacy policy §2: "our team opens one member's activity only for support, safety or
+      // a legal request".
+      gbRest(env, `city_cards?user_id=eq.${userId}&order=created_at.asc&limit=500&select=id,area_key,area_name,city,region,country,no,stamps,completed_at,visibility,created_at`, {}),
+      gbRest(env, `city_card_stamps?user_id=eq.${userId}&order=visited_on.asc&limit=5000&select=card_id,slot,name,category,city,visited_on,visits,name_hidden`, {}),
+      gbRest(env, `board_contributions?user_id=eq.${userId}&order=created_at.asc&limit=5000&select=city,region,country,kind,created_at,hidden,mod_status`, {}),
     ]);
     const stamps = stq.ok ? await stq.json() : [];
+    const cardRows = ccq.ok ? await ccq.json() : [];
+    const cardStamps = csq.ok ? await csq.json() : [];
+    const boardRows = bcq.ok ? await bcq.json() : [];
+    // Every stamp, private ones included: what it is, where, when, who may see it, how many photos sit on it.
+    const passport = stamps.map((r) => ({
+      date: r.visited_on || String(r.created_at || '').slice(0, 10), kind: r.kind || 'attraction', name: r.name || String(r.entity_id || '').split(':')[0],
+      city: r.city || null, region: r.region || null, country: r.country || null, verified: r.verified || null,
+      visibility: r.hidden ? 'hidden' : (r.visibility || 'friends'), photos: Array.isArray(r.photos) ? r.photos.length : 0,
+      direction: (r.meta && r.meta.direction) || null, post: (r.meta && r.meta.post) || null,
+    }));
+    const cards = cardRows.map((c) => ({
+      id: c.id, area: c.area_name || c.city, no: c.no, count: Number(c.stamps) || 0, complete: !!c.completed_at, visibility: c.visibility || null, city: c.city, country: c.country,
+      stamps: cardStamps.filter((x) => x.card_id === c.id).sort((a, b) => a.slot - b.slot).map((x) => ({ slot: x.slot, name: x.name, category: x.category, city: x.city || null, date: x.visited_on, visits: Number(x.visits) || 1, hidden: x.category === 'stay' && x.name_hidden !== false })),
+    }));
+    const byCity = {};
+    for (const r of boardRows) {
+      const k = [r.city || '—', r.country || ''].filter(Boolean).join(', ');
+      const e = byCity[k] || (byCity[k] = { city: r.city || null, country: r.country || null, photos: 0, clips: 0, hidden: 0, first: r.created_at, last: r.created_at });
+      if (r.kind === 'clip') e.clips++; else e.photos++;
+      if (r.hidden || (r.mod_status && r.mod_status !== 'ok')) e.hidden++;
+      if (r.created_at < e.first) e.first = r.created_at;
+      if (r.created_at > e.last) e.last = r.created_at;
+    }
+    const boards = { total: boardRows.length, photos: boardRows.filter((r) => r.kind !== 'clip').length, clips: boardRows.filter((r) => r.kind === 'clip').length, by_city: Object.values(byCity).sort((a, b) => (b.photos + b.clips) - (a.photos + a.clips)) };
     const notes = gbq.ok ? await gbq.json() : [];
     const dishes = dq.ok ? await dq.json() : [];
     const ownerNotes = onq.ok ? await onq.json() : [];
@@ -30222,9 +30254,10 @@ async function handleAdminUserActivity(request, env) {
     return jsonResponse({
       user_id: userId, handle,
       byYear: { stamps: tally(stamps, 'created_at'), guestbook_notes: tally(notes, 'created_at'), dish_photos: tally(dishes, 'created_at'), owner_messages: tally(ownerNotes, 'created_at') },
-      totals: { stamps: stamps.length, airports: airports.length, guestbook_notes: notes.length, dish_photos: dishes.length, owner_messages: ownerNotes.length },
+      totals: { stamps: stamps.length, airports: airports.length, guestbook_notes: notes.length, dish_photos: dishes.length, owner_messages: ownerNotes.length, cards: cards.length, board_uploads: boards.total },
       airport_sequence: airports,
       virtual_items: virtualItems,
+      passport, cards, boards,
       timeline,
     });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
