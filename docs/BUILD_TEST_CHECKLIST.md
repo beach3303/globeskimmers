@@ -4765,3 +4765,9 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   watch-android.mp4` (1080×2280, ~39 s: the switch going on + the shade with the notification). Shots:
   scratchpad/shots… emu-r1/r2/x2/x3.png. iOS: untested on a device (the simulator cannot show the Always prompt
   or the background relaunch) — the founder's first drive is the test.
+
+## 2026-11-08 3:14 PM PT — Play 1.0.13 (16) SUBMITTED (submission 12, In review) with the Border Watch declaration
+
+  Foreground service permissions → Location → Geofencing, video link https://globeskimmers.io/review/border-watch/
+  (the site page, deployed f852ce0). On publish: `site/app-version.json` android → 1.0.13. iOS 1.0.7 (19): the
+  founder archives next.
