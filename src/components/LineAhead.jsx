@@ -126,7 +126,7 @@ export default function LineAhead() {
 
   // ── Watching: GPS once a second while the strip shows ──────────────────────────────────────────
   // The screen stays awake while the strip shows (the Wake Lock API, iOS 16.4+): a phone in the cradle
-  // auto-locks in under a minute, a locked screen hides the page, and a hidden page ends the watch — the
+  // auto-locks in under a minute, a locked screen hides the page, and a hidden page cannot watch — the
   // founder's drive of 2026-11-06 counted down to the Colorado River, then the slam never came, and the
   // sheet arrived five to ten minutes past Blythe on the next fix. The lock is released with the watch.
   const wake = useRef(null);
@@ -138,24 +138,16 @@ export default function LineAhead() {
     } catch { wake.current = null; }
   };
   const freeScreen = () => { try { wake.current?.release?.(); } catch { /* released already */ } wake.current = null; };
-  const stop = () => { if (stopRef.current) { stopRef.current(); stopRef.current = null; } trail.current = []; freeScreen(); setLive(null); };
-  useEffect(() => () => { if (stopRef.current) stopRef.current(); }, []);
-  useEffect(() => {
-    const onHide = () => { if (document.visibilityState !== "visible") stop(); };
-    document.addEventListener("visibilitychange", onHide);
-    return () => document.removeEventListener("visibilitychange", onHide);
-  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+  const runRef = useRef(null);     // the live watch's context { o, S, started }
+  const paused = useRef(null);     // the same, while the page is hidden mid-watch
+  const stop = () => { if (stopRef.current) { stopRef.current(); stopRef.current = null; } trail.current = []; freeScreen(); runRef.current = null; paused.current = null; setLive(null); };
+  useEffect(() => () => { if (stopRef.current) stopRef.current(); freeScreen(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  const watch = async () => {
-    if (!offer) return;
-    try { audioRef.current = audioRef.current || new (window.AudioContext || window.webkitAudioContext)(); } catch { audioRef.current = null; }
-    const S = await loadStates().catch(() => null);
-    if (!S) return;
-    const o = offer;
-    setOffer(null);
-    setLive({ into: o.into, from: o.from, name: o.name, km: o.km, startKm: o.km, road: o.road });
+  // The watch itself: every reading is judged — across the line, the slam; else the count along the heading.
+  const run = async (o, S, started) => {
+    if (stopRef.current) { stopRef.current(); stopRef.current = null; }
+    runRef.current = { o, S, started };
     await holdScreen();
-    const started = Date.now();
     let crossed = false;
     stopRef.current = await startWatch((pos) => {
       if (crossed) return;
@@ -190,6 +182,35 @@ export default function LineAhead() {
       setLive((l) => (l ? { ...l, km: ahead && ahead.into === o.into ? ahead.km : l.km, name: ahead && ahead.into && ahead.into !== o.into ? stateName(S, ahead.into) : l.name } : l));
       if (Date.now() - started > 2 * 3600 * 1000) stop();
     }, () => { /* a reading failed: keep the last count */ });
+  };
+  const runNow = useRef(run);
+  runNow.current = run;
+
+  // A hidden page (the screen locked anyway, another app in front) pauses the watch; back on screen it
+  // resumes at once and judges the very next reading — already across the line, the stamp slams then and
+  // there, named by its port, instead of waiting for the regular sensing minutes later.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== "visible") {
+        if (runRef.current) { paused.current = runRef.current; if (stopRef.current) { stopRef.current(); stopRef.current = null; } freeScreen(); }
+        return;
+      }
+      const p = paused.current;
+      if (p) { paused.current = null; runNow.current(p.o, p.S, p.started); }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const watch = async () => {
+    if (!offer) return;
+    try { audioRef.current = audioRef.current || new (window.AudioContext || window.webkitAudioContext)(); } catch { audioRef.current = null; }
+    const S = await loadStates().catch(() => null);
+    if (!S) return;
+    const o = offer;
+    setOffer(null);
+    setLive({ into: o.into, from: o.from, name: o.name, km: o.km, startKm: o.km, road: o.road });
+    await run(o, S, Date.now());
   };
 
   if (slam) return <SlamOverlay slam={slam} />;
