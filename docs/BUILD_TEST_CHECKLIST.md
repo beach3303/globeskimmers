@@ -4739,3 +4739,15 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   pauses the watch, unlocking resumes it and judges the next reading) plus the admin fold button at the top of
   the Admin page. Branch still 5 commits ahead of main (admin top, site fold button, two docs, the two
   line-ahead fixes) — push pending, nothing in them needs the server. Next: store builds 1.0.7 / 1.0.13.
+
+## 2026-11-08 — STORE BUILD PREP DONE (iOS 1.0.7 (19), Android 1.0.13 (16)): Border Watch + region cards
+
+  - `npx cap sync` with the final web build (OTA 1.0.2611082204's bundle + nothing newer).
+  - `scripts/ios-launch-check.sh` on iOS 27.2: iPad Air 11-inch (M4) ✅ running after 20 s, iPhone 18 Pro ✅.
+  - `./gradlew :app:bundleRelease` → `Desktop/GlobeSkimmers-1.0.13-build16.aab` (12.7 MB), jar verified, same upload
+    key as every release (SHA1 86:31:4D…); the bundle's manifest carries BorderWatchService + FOREGROUND_SERVICE +
+    FOREGROUND_SERVICE_LOCATION and NO ACCESS_BACKGROUND_LOCATION.
+  - Founder's part: Xcode archive + upload (1.0.7, build 19), App Store Connect submit with the Border Watch review
+    note; Play Console Production release with the AAB + the "Foreground service permissions · Location" declaration
+    (short screen recording of the switch + notification). Release notes, review note and declaration text are in
+    the chat of 2026-11-08. First real test: a drive with the switch on.
