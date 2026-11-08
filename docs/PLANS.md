@@ -43,7 +43,8 @@ show the hotel's name stamp by stamp (and set a default in Settings) and keep a 
 reach a feed, a board or a share. Passport Wrapped WAITS (her call). Built 2026-11-06 (stamping-v2 7ce51ee +
 2dc428a): after the push, the founder runs the one-time remap (`POST /admin/city-cards/remap`, admin
 session) that folds the old city cards into the area cards, then the OTA. Open: the Stay and Do stamp art
-(word stamps until drawn), night lodging sensing (not built).
+(word stamps until drawn), stay sensing (not built; founder 2026-11-08: at ANY hour — "remove the 9pm to 7am
+curfew" — the dwell test replaces the clock: held at the lodging, not passing through, once per place per day).
 
 ## Border grace and Border Watch — founder decisions 2026-11-03 → 06
 
