@@ -4809,3 +4809,11 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
   Admin → Members → tap a member → "Open their passport as admin ›" opens the book at the owner's level under the
   red ribbon. Both store builds still in review.
+
+## 2026-11-08 PM — COMMITTED: the cold-open "Where would you like to explore?" asked twice (a849982)
+
+  Founder: "it always pops up twice." Cause (src/pages/Home.jsx): the module flag `coldOpenAsked` (one ask per app
+  run) was set only on the returning-with-a-location branch; the first-run / no-location-yet branch opened the
+  chooser without setting it, so after the choice — once a location existed — the next Home mount (a tab away and
+  back) asked again under the default 'ask' setting. Fix: that branch marks the run asked too. Gates: lint, build,
+  boot-check ✅. Needs OTA (app only; push to keep main in step).
