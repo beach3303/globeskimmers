@@ -157,9 +157,11 @@ export default function AuthGate() {
   return (
     <div className="min-h-screen font-sans flex flex-col px-6 py-10" style={{ background: IVORY }}>
       <div className="w-full max-w-sm mx-auto flex-1 flex flex-col justify-center">
-        {brand('Globeskimmers', isSignup ? 'Create your account' : 'Sign in to keep exploring')}
+        {brand('Globeskimmers', isSignup ? 'Your email and a password, and you’re in' : 'Sign in to keep exploring')}
 
-        {/* The phone's own sign-in first: one tap, nothing to type. */}
+        {/* The phone's own sign-in first: one tap, nothing to type. Sign-up is email and password alone
+            (founder, 2026-11-08: "a different page without google and apple"). */}
+        {!isSignup && (<>
         <div className="space-y-3">
           <button type="button" onClick={() => runProvider('google')} disabled={disabled}
             className={`${socialCls} bg-white border border-black/10 gap-3 text-[#0F1419]`}>
@@ -180,6 +182,7 @@ export default function AuthGate() {
           <span className="text-xs font-medium text-black/40 uppercase tracking-wide">or</span>
           <div className="h-px flex-1 bg-black/10" />
         </div>
+        </>)}
 
         {/* Email + password. Create account signs you straight in (no email step). */}
         <form onSubmit={submitPassword} className="space-y-3">
