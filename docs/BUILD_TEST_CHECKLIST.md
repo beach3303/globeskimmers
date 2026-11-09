@@ -4931,3 +4931,25 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   matches the row's name, so it already showed. Net: all 63 parks have a stampable row; the six aliases (d07e0ee)
   are on phones via the OTA; workers run green. Lesson for DB audits: `country` is 'US', 'United States' or a
   territory label — filter by name first, then look at country.
+
+## 2026-11-08 ~22:30 PT — FOUND + FIXED (committed, not pushed): 25 world icons had NO official stamp since 2026-10-10
+
+  While building the founder's stamp-art inventory (Desktop/Globeskimmers-stamp-art-places.xlsx), the live worker
+  answered `{stamp: null}` for the Eiffel Tower, the Colosseum and the Taj Mahal (POST /attractions/link with the
+  Google place id), while the Grand Canyon and Acadia resolved. Cause: the 2026-10-10 dedup marked EVERY row of
+  46 qids `class_ban='duplicate'` (curated + wikidata twins; the icon rows the pass expected to survive were never
+  inserted), and `ttdStampFor` v4 skips duplicates, so they resolved to no stamp and 'none' was cached 30 days.
+  Members stamping them since got the "I was here" typographic stamp (entity_type local), never the official art.
+  - 46 orphaned qids → 32 with a world/national/regional row → 7 already covered by another stampable row nearby
+    (Louvre, Dolmabahçe, Windsor, St. Stephen's, HK Disneyland, Joker Stairs, Magellan's Cross) → **25 to revive**:
+    `scripts/stamp-art/d1-revive-icons.sql` (UPDATE … SET class_ban = NULL WHERE id IN …; curated row preferred).
+    FOUNDER RUNS IT: `npx wrangler d1 execute globeskimmers-attractions --remote --file=scripts/stamp-art/d1-revive-icons.sql`
+  - Worker: the link cache moves `gid2d1v4` → `gid2d1v5` (write + read chain) so the cached misses are recomputed.
+  - App: `ONLY_ALSO` in src/lib/stampArt.js lets the revived curated Arc de Triomphe row wear its art (ART_ONLY only
+    knew a never-inserted icon row). 14 of the 25 have art (13 + the Arc); 11 (Rodeo Drive, Corfe Castle, Camp Nou,
+    Basilica Cistern, AMNH, National Palace Museum, Tokyo Skytree, Westminster Abbey, Tokyo/Shanghai Disneyland,
+    Galata Tower) become stampable with the typographic stamp until their art is drawn.
+  - Gates: node --check, lint, build, boot-check ✅. Needs: founder's SQL → push (worker) → OTA (app).
+  - The inventory spreadsheet (4 sheets: Summary · Stampable with art · Art waiting for a place · List places
+    without art) counts the 25 as "after the revive SQL". LibreOffice isn't on this Mac, so its six COUNT formulas
+    were not recalculated here; Numbers/Excel compute them on open.
