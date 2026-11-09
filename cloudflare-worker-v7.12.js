@@ -17426,7 +17426,9 @@ async function handleYahooCallback(request, env) {
     const link = lr && lr.ok ? await lr.json().catch(() => null) : null;
     const hashed = link?.properties?.hashed_token || link?.hashed_token;
     if (!hashed) return yahooFail('token');
-    return Response.redirect(`https://globeskimmers.io/open/signin?token_hash=${encodeURIComponent(hashed)}&type=magiclink`, 302);
+    // type=email: the verify accepts the token whether it sits as a confirmation or a recovery token, so
+    // this never depends on which kind generate_link minted for this account.
+    return Response.redirect(`https://globeskimmers.io/open/signin?token_hash=${encodeURIComponent(hashed)}&type=email`, 302);
   } catch (e) {
     return yahooFail('server');
   }
