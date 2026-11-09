@@ -4828,3 +4828,15 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   word); the Traveler page's `person.name` takes the same fallback. App (715f77d): `getAdminPassport(userId)`;
   `/Passport?view_uid=<id>&admin=1` loads through it, red banner "Admin view — <Name>'s Virtual Passport …"; the
   Traveler door in admin view goes there. Gates: node --check, lint, build, boot-check ✅. Needs push (worker) + OTA.
+
+## 2026-11-08 ~17:10 PT — ON PHONES (OTA 1.0.2611090055, main 715f77d): admin book view + owner names on covers.
+## COMMITTED (476fd55), NOT SHIPPED: pinch-to-zoom a passport page + memory photos open full screen from a page tap
+
+  Founder: "pinch in and out to zoom a passport page"; "when a user taps a memory photo … enlarge the photo full
+  screen … swipe right or left … not the stamp card". `PassportBook.jsx`: `ZoomStage` wraps the open page (two
+  fingers 1–3× about the pinch, one-finger pan while zoomed, snap back under 1.05×, touch-action none while
+  zoomed; the book's swipe reads `zoomRef` and stands down during a pinch or while zoomed); `onOpenPhoto(stampId,
+  i)` threads PassportBook → StampPage → StampToken / PhotoFirstToken (memory thumbnails and the photo-first
+  photo are buttons that stop propagation); Passport.jsx passes `enlargeStampPhotos` (the shared PhotoLightbox:
+  swipe between the stamp's photos, pinch, ×) for own and visited books alike. Gates: lint, build, boot-check ✅.
+  Not photographed (needs a real pinch). Needs OTA (+ push to keep main in step).
