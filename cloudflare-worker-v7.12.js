@@ -4292,7 +4292,7 @@ async function resolveStampGid(env, id) {
   } catch { gid = null; }
   if (kv) await kv.put(key, gid || 'none', { expirationTtl: (gid ? 180 : 30) * 86400 }).catch(() => {});
   const stampable = (row.tier === 'secret' || ['world', 'national', 'regional'].includes(row.founder_scope || row.scope)) && row.class_ban !== 'duplicate';
-  if (kv && gid && stampable) await kv.put(`gid2d1v4:${gid}`, JSON.stringify(ttdStampSummary(row)), { expirationTtl: 30 * 86400 }).catch(() => {});
+  if (kv && gid && stampable) await kv.put(`gid2d1v5:${gid}`, JSON.stringify(ttdStampSummary(row)), { expirationTtl: 30 * 86400 }).catch(() => {});
   return gid;
 }
 
@@ -7304,7 +7304,10 @@ async function ttdStampFor(env, gid, name, lat, lng, { write = true } = {}) {
   // v3 (2026-10-04): the art review made 182 more Top-1,000 places stampable and
   // re-pinned 46 rows — every cached link (and 'none') is recomputed.
   // v4 (2026-10-10): duplicate rows (class_ban 'duplicate') are no longer matched.
-  const kv = env.GLOBESKIMMERS_KV, key = gid ? `gid2d1v4:${gid}` : null;
+  // v5 (2026-11-08): the dedup had banned EVERY row of ~30 world icons (Eiffel Tower, Colosseum, Taj Mahal,
+  // Tower Bridge …) so they resolved to no stamp and 'none' was cached for 30 days; the rows are revived
+  // (scripts/stamp-art/d1-revive-icons.sql) and every link is recomputed.
+  const kv = env.GLOBESKIMMERS_KV, key = gid ? `gid2d1v5:${gid}` : null;
   const goodInput = Number.isFinite(lat) && Number.isFinite(lng) && !!name;
   // A shaped place names its own official stamp: its Google pins can sit far
   // from our pin (the Walk of Fame's are 1.3 km apart), so no distance match.
@@ -29816,7 +29819,7 @@ async function gbEntityIds(env, raw) {
     all.add(`places:${canon}`);
     // Older link versions (v3, v2) still name the right row for older entries.
     const kvl = env.GLOBESKIMMERS_KV;
-    const linked = kvl ? (await kvl.get(`gid2d1v4:${canon}`).catch(() => null)) || (await kvl.get(`gid2d1v3:${canon}`).catch(() => null)) || (await kvl.get(`gid2d1v2:${canon}`).catch(() => null)) : null;
+    const linked = kvl ? (await kvl.get(`gid2d1v5:${canon}`).catch(() => null)) || (await kvl.get(`gid2d1v4:${canon}`).catch(() => null)) || (await kvl.get(`gid2d1v3:${canon}`).catch(() => null)) || (await kvl.get(`gid2d1v2:${canon}`).catch(() => null)) : null;
     if (linked && linked !== 'none') { try { const l = JSON.parse(linked); if (l?.id) all.add(String(l.id)); } catch { /* fine */ } }
   }
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(id)) all.add(`owned:${id}`);
