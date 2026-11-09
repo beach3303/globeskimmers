@@ -46,6 +46,12 @@ const ALIAS = {
   "new-river-gorge-bridge": "new-river-gorge-national-park",
   "wrangell-st-elias-national-park-and-preserve": "wrangell-st-elias",
 };
+// Rows the generated ART_ONLY guard doesn't know but that ARE the place (2026-11-08): the index was
+// built expecting icon rows that were never inserted, and the dedup had banned the curated rows it
+// would have listed; the revive (scripts/stamp-art/d1-revive-icons.sql) brings those rows back.
+const ONLY_ALSO = {
+  "arc-de-triomphe": ["curated:france-paris-arc-de-triomphe"],
+};
 
 const ccOf = (c) => {
   const v = String(c || "").trim();
@@ -67,7 +73,7 @@ export function stampArtSlug(name, { entityId, country } = {}) {
   // A row that merely shares the name (Notre-Dame in Lausanne, the Parthenon in
   // Nashville) never borrows the art.
   const only = ART_ONLY[art];
-  if (only && isRowId(id) && !only.includes(id)) return null;
+  if (only && isRowId(id) && !only.includes(id) && !(ONLY_ALSO[art] || []).includes(id)) return null;
   const ccs = ART_CC[art], cc = ccOf(country);
   if (ccs && cc && !ccs.includes(cc)) return null;
   return art;
