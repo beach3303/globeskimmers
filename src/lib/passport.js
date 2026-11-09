@@ -541,6 +541,12 @@ export async function getPublicPassport(slug) {
   const { data, error } = await callWorker('passport/public', { slug });
   return { data, error };
 }
+// The admin view of one member's book (2026-11-08): by id, at the owner's level; the worker answers
+// private to anyone who is not an admin.
+export async function getAdminPassport(userId) {
+  const { data, error } = await callWorker('passport/public', { user_id: userId, admin: true });
+  return { data, error };
+}
 
 // ── The Blotter (2026-09-30): reaction stamps + guestbook AROUND a page ─────
 // One read per booklet: { targets: {'st:<id>': {marks:{wow:2,…}, mine:['wow']}},

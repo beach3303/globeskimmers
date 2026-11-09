@@ -294,7 +294,8 @@ function TravelerWorld() {
         {world.stamps ? (
           <PassportFolder mode="visit" cloth={cloth.key} ownerFirst={first} stamps={orderedStamps} slug={worldSlug}
             blotter={blotter} onBlotterChanged={refreshBlotter}
-            onOpenDoor={worldSlug ? () => navigate(`${createPageUrl("Passport")}?view_slug=${encodeURIComponent(worldSlug)}`) : undefined}
+            onOpenDoor={world.admin_view && person?.user_id ? () => navigate(`${createPageUrl("Passport")}?view_uid=${encodeURIComponent(person.user_id)}&admin=1`)
+              : worldSlug ? () => navigate(`${createPageUrl("Passport")}?view_slug=${encodeURIComponent(worldSlug)}`) : undefined}
             style={{ marginTop: GAP }} />
         ) : null}
         {/* Their City Cards at my level (2026-10-28): the cards the worker sent, none when none. */}

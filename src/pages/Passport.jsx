@@ -9,7 +9,7 @@ import { cityBoardUrl, hasBoard } from "@/lib/boardLinks";
 import { showToast } from "@/components/Toast";
 import { PassportPrivacyChip, PassportAudienceSheet } from "@/components/privacy/PassportPrivacy";
 import { usePassportAudience, audWord } from "@/lib/audience";
-import { addStamp, metersBetween, proofToast, listPassport, STAMP_EARLIEST, photoOptions, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead, socialFollow, photoPlace, sortStamps, mintShareLink, listShareLinks, revokeShareLink, setBookletOrder } from "@/lib/passport";
+import { addStamp, metersBetween, proofToast, listPassport, STAMP_EARLIEST, photoOptions, uploadStampPhoto, setStampDate, deleteStamp, deleteStampPhoto, createTagInvite, getTagByToken, claimTag, blockTagger, reportShared, listTags, respondTag, getShareLink, getPublicPassport, getAdminPassport, getAgeInfo, setAgeGate, setBirthday, listCitySets, blotterRead, socialFollow, photoPlace, sortStamps, mintShareLink, listShareLinks, revokeShareLink, setBookletOrder } from "@/lib/passport";
 import { placeSearch } from "@/lib/placeSearch";
 import { stampArtUrl } from "@/lib/stampArt";
 import { TAGGING_ENABLED } from "@/lib/flags";
@@ -1057,7 +1057,14 @@ function PassportInner({ embedded = false }) {
     try { return sessionStorage.getItem("pp_view_slug") || new URLSearchParams(window.location.search).get("view_slug") || null; }
     catch { return null; }
   });
-  const readOnly = !!viewSlug;
+  // The admin view (2026-11-08): /Passport?view_uid=<id>&admin=1 from a member's Traveler page opens
+  // their book at the owner's level; the worker answers private to anyone who is not an admin.
+  const [viewUid] = useState(() => {
+    try { const p = new URLSearchParams(window.location.search); return p.get("admin") === "1" ? p.get("view_uid") : null; } catch { return null; }
+  });
+  const [adminView, setAdminView] = useState(false);
+  const [adminSlug, setAdminSlug] = useState(null);
+  const readOnly = !!viewSlug || !!viewUid;
   const [viewHolder, setViewHolder] = useState(null);
   // Who owns the viewed passport, when the worker says (owner_id; today's
   // /passport/public sends only the holder's first name).
@@ -1067,16 +1074,17 @@ function PassportInner({ embedded = false }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    if (viewSlug) {
-      const { data } = await getPublicPassport(viewSlug);
+    if (viewSlug || viewUid) {
+      const { data } = viewUid ? await getAdminPassport(viewUid) : await getPublicPassport(viewSlug);
       if (data && !data.private) { setStamps(data.stamps || []); setStats(data.stats || {}); setBooklet(data.booklet || null); setViewHolder(data.holder || "A traveler"); setCollectibles(data.collectibles || []); }
       else { setStamps([]); setStats({}); setViewHolder(null); setCollectibles([]); }
       setViewOwner(data?.owner_id || data?.user_id || null);
+      setAdminView(data?.admin_view === true); setAdminSlug(data?.slug || null);
       setTags([]); setLoading(false); return;
     }
     const [pp, tg] = await Promise.all([listPassport(), listTags()]);
     setStamps(pp.stamps); setStats(pp.stats); setBooklet(pp.booklet || null); setCollectibles(pp.collectibles || []); setTags(tg.tags || []); setLoading(false);
-  }, [viewSlug]);
+  }, [viewSlug, viewUid]);
   useEffect(() => { load(); }, [load]);
 
   // A shared invite link (globeskimmers://passport/claim?token=…) drops the token
@@ -1109,7 +1117,7 @@ function PassportInner({ embedded = false }) {
 
   // The Blotter (2026-09-30) — reaction stamps + guestbook AROUND each page.
   // One read per booklet; the strip under the open page aggregates its stamps.
-  const blSlug = readOnly ? viewSlug : (share?.slug || null);
+  const blSlug = readOnly ? (viewSlug || adminSlug) : (share?.slug || null);
   const [blotter, setBlotter] = useState(null);
   const refreshBlotter = useCallback(async () => {
     if (!blSlug) return;
@@ -1294,7 +1302,7 @@ function PassportInner({ embedded = false }) {
     (async () => { const { data } = await socialFollow("list"); if (!gone) setViewList(data || null); })();
     return () => { gone = true; };
   }, [readOnly, isAuthenticated]);
-  const viewPerson = readOnly ? { user_id: viewOwner, slug: viewSlug, name: viewHolder } : null;
+  const viewPerson = readOnly ? { user_id: viewOwner, slug: viewSlug || adminSlug, name: viewHolder } : null;
   const canBlockView = !!(viewPerson && viewList && blockTarget(viewPerson, viewList));
 
   // Booklet view: one swipeable page per country (like a real passport).
@@ -1450,8 +1458,10 @@ function PassportInner({ embedded = false }) {
           {audOpen && <PassportAudienceSheet onClose={() => setAudOpen(false)} />}
         </div>
         {readOnly && (
-          <div className="mb-4 rounded-[16px] px-3.5 py-2.5 flex items-center justify-between gap-2" style={{ background: "#F3E2C7", border: "1px solid #E5CA98" }}>
-            <span style={{ color: "#7E601F", fontSize: fs(12.5), lineHeight: 1.4 }}>👀 You&rsquo;re viewing {viewHolder && viewHolder !== "A traveler" ? `${viewHolder}’s Virtual Passport` : "a shared passport"}.</span>
+          <div className="mb-4 rounded-[16px] px-3.5 py-2.5 flex items-center justify-between gap-2" style={adminView ? { background: "#B0472F", border: "1px solid #B0472F" } : { background: "#F3E2C7", border: "1px solid #E5CA98" }}>
+            <span style={{ color: adminView ? "#fff" : "#7E601F", fontSize: fs(12.5), lineHeight: 1.4 }}>{adminView
+              ? <>Admin view — {viewHolder && viewHolder !== "A traveler" ? `${viewHolder}’s` : "this member’s"} Virtual Passport, every stamp and photo whatever its privacy. Support, safety or a legal request only.</>
+              : <>👀 You&rsquo;re viewing {viewHolder && viewHolder !== "A traveler" ? `${viewHolder}’s Virtual Passport` : "a shared passport"}.</>}</span>
             <button onClick={exitView} className="shrink-0 rounded-lg px-3 py-1.5 font-semibold" style={{ background: STAMP, color: "#fff", fontSize: fs(12) }}>My passport</button>
           </div>
         )}
