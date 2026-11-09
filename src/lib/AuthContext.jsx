@@ -25,6 +25,7 @@ import {
   signInWithApple,
   signInWithEmail as emailSignIn,
   sendSignInLink as emailSendLink,
+  startYahooSignIn,
   signUpWithEmail as emailSignUp,
   resendConfirmation,
   verifyEmailOtp as authVerifyOtp,
@@ -273,6 +274,13 @@ export const AuthProvider = ({ children }) => {
     catch (e) { setAuthError({ type: 'email', message: e?.message || 'Sign-in failed' }); throw e; }
   }, []);
 
+  const signInYahoo = useCallback(async () => {
+    setAuthError(null);
+    markPendingSignIn();
+    try { await startYahooSignIn(); }
+    catch (e) { setAuthError({ type: 'oauth', message: e?.message || 'Yahoo sign-in failed' }); throw e; }
+  }, []);
+
   // The email sign-in link (2026-11-08): sends it; the session arrives when the link opens the app.
   const sendSignInLink = useCallback(async (email) => {
     setAuthError(null);
@@ -434,6 +442,7 @@ export const AuthProvider = ({ children }) => {
     signInWithProvider,
     signInWithApple: signInApple,
     signInWithEmail,
+    signInYahoo,
     sendSignInLink,
     signUpWithEmail,
     resendConfirmation,
@@ -449,7 +458,7 @@ export const AuthProvider = ({ children }) => {
     navigateToLogin: () => {}, // gate is rendered by App.jsx now; no redirect
   }), [
     session, user, profile, isLoadingAuth, authError, canRefresh, signInTick, socialTier, socialTierReady, refreshSocialTier,
-    signInWithProvider, signInApple, signInWithEmail, sendSignInLink, signUpWithEmail,
+    signInWithProvider, signInApple, signInWithEmail, signInYahoo, sendSignInLink, signUpWithEmail,
     verifyEmailOtp, refreshProfile, bumpWelcomeSplashCount, logout, deleteAccount,
   ]);
 

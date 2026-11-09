@@ -39,10 +39,15 @@ function AppleLogo() {
   return <img src={siwaLogo} alt="" aria-hidden="true" width={31} height={44} className="h-11 w-auto shrink-0" />;
 }
 
+// Yahoo's mark: the brand purple with a white "Y!" (no official vector is published for third parties).
+function YahooMark() {
+  return <span aria-hidden="true" className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-white text-[#6001D2] font-black text-[15px] leading-none shrink-0">Y!</span>;
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function AuthGate() {
-  const { signInWithProvider, signInWithApple, signInWithEmail, signUpWithEmail, sendSignInLink, authError } = useAuth();
+  const { signInWithProvider, signInWithApple, signInYahoo, signInWithEmail, signUpWithEmail, sendSignInLink, authError } = useAuth();
   const [mode, setMode] = useState('signin');   // 'signin' | 'signup' | 'sent' (the one-tap email is on its way)
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -58,6 +63,7 @@ export default function AuthGate() {
     setInfo(null); setLocalError(null); setBusy(provider);
     try {
       if (provider === 'apple') await signInWithApple();
+      else if (provider === 'yahoo') await signInYahoo();
       else await signInWithProvider(provider);
     } catch {
       // authError is surfaced by the context; just clear the spinner.
@@ -174,6 +180,11 @@ export default function AuthGate() {
               ? <span className="w-[31px] h-11 shrink-0 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin" /></span>
               : <AppleLogo />}
             Continue with Apple
+          </button>
+          <button type="button" onClick={() => runProvider('yahoo')} disabled={disabled}
+            className={`${socialCls} gap-3 text-white`} style={{ background: '#6001D2' }}>
+            {busy === 'yahoo' ? <Loader2 className="w-5 h-5 animate-spin" /> : <YahooMark />}
+            Continue with Yahoo
           </button>
         </div>
 

@@ -90,6 +90,16 @@ export async function signInWithApple() {
   return startProviderSignIn('apple');
 }
 
+// --- Sign in with Yahoo (founder, 2026-11-08) --------------------------------
+// The worker is the OAuth client (/auth/yahoo/start → Yahoo → /auth/yahoo/callback); it ends on
+// globeskimmers.io/open/signin with a one-time token, which opens the app the way the email button does.
+const WORKER_ORIGIN = 'https://globeskimmers-api.maizasimeon.workers.dev';
+export async function startYahooSignIn() {
+  const url = `${WORKER_ORIGIN}/auth/yahoo/start`;
+  if (isNative()) { await Browser.open({ url }); return; }
+  window.location.assign(url);
+}
+
 // --- Email sign-in link (founder, 2026-11-08: "as simple as possible: email, birthday, handle, and
 // they're in … remove the passcode") -------------------------------------------------------------
 // One email; the account is created if it doesn't exist. The link in it goes to
