@@ -23785,6 +23785,11 @@ async function handleSocialWorld(request, env, ctx) {
     if (mySp === undefined) return jsonResponse({ error: 'Couldn’t check your account — try again', code: 'age_unknown' }, 503);
     if (gbOffSocial(mySp)) return jsonResponse({ error: 'Not available', code: 'teen_hold' }, 403);
     const b = await request.json().catch(() => ({}));
+    // ADMIN VIEW (founder, 2026-11-08: "as Admin I would be able to view each user's virtual passport"): an
+    // admin asking with admin: true reads the page at the OWNER's level — every stamp whatever its privacy,
+    // every photo, every card with every name — one member at a time, on demand (privacy policy §2: support,
+    // safety or a legal request). The page is told (admin_view) so it says so. Minors included, for safety.
+    const adminView = b.admin === true && ADMIN_EMAILS_WORKER.includes(String(user.email || '').trim().toLowerCase());
     const origin = new URL(request.url).origin;
     const retry = () => jsonResponse({ error: 'Couldn’t load right now — try again' }, 503);
     const noPerson = () => jsonResponse({ error: 'no_person' }, 404);
@@ -23806,9 +23811,11 @@ async function handleSocialWorld(request, env, ctx) {
       if (!q.ok) return retry();
       share = (await q.json())[0] || null;
     } else if (uid) {
-      const e = await gbRest(env, `user_follows?or=(and(follower_id.eq.${me},followee_id.eq.${uid}),and(follower_id.eq.${uid},followee_id.eq.${me}))&status=eq.accepted&select=follower_id&limit=1`, {});
-      if (!e.ok) return retry();
-      if (!(await e.json()).length) return noPerson();
+      if (!adminView) {
+        const e = await gbRest(env, `user_follows?or=(and(follower_id.eq.${me},followee_id.eq.${uid}),and(follower_id.eq.${uid},followee_id.eq.${me}))&status=eq.accepted&select=follower_id&limit=1`, {});
+        if (!e.ok) return retry();
+        if (!(await e.json()).length) return noPerson();
+      }
       const q = await gbRest(env, `passport_shares?user_id=eq.${uid}&select=${SHARE}&limit=1`, {});
       if (!q.ok) return retry();
       share = (await q.json())[0] || null;
@@ -23817,9 +23824,9 @@ async function handleSocialWorld(request, env, ctx) {
     sid = share?.user_id || sid;
     if (!sid) return noPerson();
     if (sid === me) return jsonResponse({ person: { user_id: me, handle: share?.handle || null }, relation: { self: true, i_follow: null, follows_me: false, inner: false }, private: false });
-    if (await gbBlockedEither(env, me, sid, { failClosed: true })) return noPerson();
+    if (!adminView && await gbBlockedEither(env, me, sid, { failClosed: true })) return noPerson();
     const ownerSp = await gbSocialProfile(env, sid).catch(() => undefined);
-    if (gbOffSocial(ownerSp)) return jsonResponse({ unavailable: true });
+    if (!adminView && gbOffSocial(ownerSp)) return jsonResponse({ unavailable: true });
 
     // Their home: the country always, the city only if they turned it on (founder,
     // 2026-10-14: "A plus a switch to turn on city"). Before that column exists
@@ -23862,8 +23869,8 @@ async function handleSocialWorld(request, env, ctx) {
     // …and under the passport's ceiling (founder, 2026-10-26): a follower of a Friends passport,
     // or anyone at all on Only me, gets the card alone — name, face, @username — and can still
     // write to them; no stamps, photos, map, luggage or circle.
-    const lvl = ppUnder(ppAud(share), accepted && followsMe ? 2 : accepted ? 1 : 0);
-    const visible = !!share && lvl >= 0;
+    const lvl = adminView ? 3 : ppUnder(ppAud(share), accepted && followsMe ? 2 : accepted ? 1 : 0);
+    const visible = adminView || (!!share && lvl >= 0);
     if (!visible) return jsonResponse({ person, relation, private: true, audience: share ? ppAud(share) : 'inner' });
     const withPhotos = ppAlbumsAllowedAt(ownerSp, lvl);
     if (withPhotos) await ppSweepPhotos(env, ctx, sid, lvl);
@@ -23877,7 +23884,7 @@ async function handleSocialWorld(request, env, ctx) {
       gbRest(env, `user_follows?follower_id=eq.${sid}&status=eq.accepted&select=followee_id&limit=2000`, { headers: { Prefer: 'count=exact' } }),
       gbRest(env, `user_follows?followee_id=eq.${sid}&status=eq.accepted&select=follower_id&limit=2000`, { headers: { Prefer: 'count=exact' } }),
     ]);
-    const shared = await ppShareStamps(env, stamps, origin, withPhotos, lvl, share.is_public ? 'public' : 'inner');
+    const shared = await ppShareStamps(env, stamps, origin, withPhotos, lvl, share?.is_public ? 'public' : 'inner');
     // Their City Cards at my level (2026-10-28).
     const ccCards = (await ccCardsFor(env, sid, lvl).catch(() => null))?.cards || [];
     const lug = (lq.ok ? await lq.json() : [])[0];
@@ -23922,7 +23929,8 @@ async function handleSocialWorld(request, env, ctx) {
     }
     return jsonResponse({
       person, relation, private: false,
-      slug: share.slug,
+      slug: share?.slug || null,
+      ...(adminView ? { admin_view: true, minor: gbUnderAge(ownerSp) === true } : {}),
       stamps: shared, stats: ppStats(shared), city_cards: ccCards,
       booklet: { order: ownerSp?.booklet_order || 'newest', seed: ownerSp?.shuffle_seed ?? null, custom: Array.isArray(ownerSp?.custom_order) ? ownerSp.custom_order : null },
       luggage: { active: lug?.active || 'classic', placements: lug?.placements || {} },
