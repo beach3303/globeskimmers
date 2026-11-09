@@ -24,6 +24,7 @@ import {
   startProviderSignIn,
   signInWithApple,
   signInWithEmail as emailSignIn,
+  sendSignInLink as emailSendLink,
   signUpWithEmail as emailSignUp,
   resendConfirmation,
   verifyEmailOtp as authVerifyOtp,
@@ -272,6 +273,14 @@ export const AuthProvider = ({ children }) => {
     catch (e) { setAuthError({ type: 'email', message: e?.message || 'Sign-in failed' }); throw e; }
   }, []);
 
+  // The email sign-in link (2026-11-08): sends it; the session arrives when the link opens the app.
+  const sendSignInLink = useCallback(async (email) => {
+    setAuthError(null);
+    markPendingSignIn();
+    try { return await emailSendLink(email); }
+    catch (e) { setAuthError({ type: 'email', message: e?.message || 'Couldn’t send the link' }); throw e; }
+  }, []);
+
   const signUpWithEmail = useCallback(async (args) => {
     setAuthError(null);
     markPendingSignIn();
@@ -425,6 +434,7 @@ export const AuthProvider = ({ children }) => {
     signInWithProvider,
     signInWithApple: signInApple,
     signInWithEmail,
+    sendSignInLink,
     signUpWithEmail,
     resendConfirmation,
     verifyEmailOtp,
@@ -439,7 +449,7 @@ export const AuthProvider = ({ children }) => {
     navigateToLogin: () => {}, // gate is rendered by App.jsx now; no redirect
   }), [
     session, user, profile, isLoadingAuth, authError, canRefresh, signInTick, socialTier, socialTierReady, refreshSocialTier,
-    signInWithProvider, signInApple, signInWithEmail, signUpWithEmail,
+    signInWithProvider, signInApple, signInWithEmail, sendSignInLink, signUpWithEmail,
     verifyEmailOtp, refreshProfile, bumpWelcomeSplashCount, logout, deleteAccount,
   ]);
 

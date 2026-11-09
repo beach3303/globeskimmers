@@ -1,13 +1,15 @@
 // src/components/auth/AuthGate.jsx
 //
 // Forced sign-in gate. Rendered by App.jsx whenever there is no Supabase
-// session — no app features are reachable until the user signs in or signs up.
-// Four methods: Google, Facebook, Apple (always visible — App Store requires it
-// when other social logins are offered), and email + password (with a first-name
-// field on sign-up). On native, the OAuth buttons open the in-app browser and
-// the session completes via the deep-link callback handled in AuthContext.
+// session — no app features are reachable until the user signs in.
+// Three ways in (founder, 2026-11-08: "as simple as possible … remove the passcode; drop Facebook"):
+// Google, Apple (always visible — App Store requires it when other social logins are offered), and
+// EMAIL BY LINK: one address, one email, tap the link and you're in — no password, no code. The
+// account is created on the first link. Anyone who still has a password can use it ("I have a
+// password"). On native, the social buttons open the in-app browser and the session completes via the
+// deep-link callback handled in AuthContext; the email link lands the same way (globeskimmers.io/open/signin).
 import React, { useState } from 'react';
-import { Globe, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Globe, Loader2, Eye, EyeOff, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 import { IVORY, TEAL_DEEP, TEAL_GRADIENT } from '@/components/redesign/constants';
@@ -16,7 +18,7 @@ import siwaLogo from './siwa-logo-left-white-medium.svg';
 function GoogleIcon() {
   return (
     <svg className="w-5 h-5" viewBox="0 0 48 48" aria-hidden="true">
-      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 4.5 29.5 2.5 24 2.5 12.1 2.5 2.5 12.1 2.5 24S12.1 45.5 24 45.5 45.5 35.9 45.5 24c0-1.2-.1-2.3-.3-3.5z"/>
+      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 4.5 29.5 2.5 24 2.5 12.1 2.5 2.5 12.1 2.5 24S12.1 45.5 24 45.5 45.5 35.9 45.5 24c0-1.2-.1-2.3-.4-3.5z"/>
       <path fill="#FF3D00" d="M5.3 14.7l6.6 4.8C13.7 15.1 18.5 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 4.5 29.5 2.5 24 2.5 16 2.5 9.1 7 5.3 14.7z"/>
       <path fill="#4CAF50" d="M24 45.5c5.4 0 10.3-2 14-5.3l-6.5-5.5C29.6 36 26.9 37 24 37c-5.2 0-9.6-3.3-11.2-8l-6.6 5.1C9 41 15.9 45.5 24 45.5z"/>
       <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4 5.4l6.5 5.5c-.5.4 7-5.1 7-14.9 0-1.2-.1-2.3-.2-3.5z"/>
@@ -30,32 +32,25 @@ function GoogleIcon() {
 // the logo file's height equals the button height (44pt is this file's native
 // size), white logo and white title on black, and a title 43% of the button
 // height (44px button → 19px title). The file carries its own padding, so the
-// Apple button's gap is smaller to line its logo up with Google and Facebook.
+// Apple button's gap is smaller to line its logo up with Google.
 function AppleLogo() {
   return <img src={siwaLogo} alt="" aria-hidden="true" width={31} height={44} className="h-11 w-auto shrink-0" />;
 }
-function FacebookIcon() {
-  return (
-    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2" aria-hidden="true">
-      <path d="M24 12c0-6.63-5.37-12-12-12S0 5.37 0 12c0 5.99 4.39 10.95 10.13 11.85v-8.38H7.08V12h3.05V9.36c0-3.01 1.79-4.67 4.53-4.67 1.31 0 2.69.23 2.69.23v2.96h-1.52c-1.49 0-1.96.93-1.96 1.88V12h3.33l-.53 3.47h-2.8v8.38C19.61 22.95 24 17.99 24 12z"/>
-    </svg>
-  );
-}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function AuthGate() {
-  const { signInWithProvider, signInWithApple, signInWithEmail, signUpWithEmail, resendConfirmation, verifyEmailOtp, authError } = useAuth();
-  const [mode, setMode] = useState('signin'); // 'signin' | 'signup' | 'verify'
+  const { signInWithProvider, signInWithApple, signInWithEmail, sendSignInLink, authError } = useAuth();
+  const [mode, setMode] = useState('link');   // 'link' (email → sign-in link) | 'sent' (check your inbox) | 'password'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [code, setCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [busy, setBusy] = useState(null); // 'google' | 'facebook' | 'apple' | 'email' | 'resend' | null
+  const [busy, setBusy] = useState(null);     // 'google' | 'apple' | 'link' | 'password' | null
   const [info, setInfo] = useState(null);
   const [localError, setLocalError] = useState(null);
 
   const disabled = busy !== null;
-  const isSignup = mode === 'signup';
+  const address = email.trim().toLowerCase();
 
   const runProvider = async (provider) => {
     setInfo(null); setLocalError(null); setBusy(provider);
@@ -69,23 +64,14 @@ export default function AuthGate() {
     }
   };
 
-  const submitEmail = async (e) => {
-    e.preventDefault();
+  const sendLink = async (e) => {
+    if (e) e.preventDefault();
     setInfo(null); setLocalError(null);
-    if (!email || !password) { setLocalError('Enter your email and password.'); return; }
-    if (isSignup && !firstName.trim()) { setLocalError('Enter your first name.'); return; }
-    setBusy('email');
+    if (!EMAIL_RE.test(address)) { setLocalError('Enter your email address.'); return; }
+    setBusy('link');
     try {
-      if (isSignup) {
-        const { needsConfirmation } = await signUpWithEmail({ email, password, firstName: firstName.trim() });
-        if (needsConfirmation) {
-          setInfo("You're almost there — enter the 6-digit code we just emailed you.");
-          setCode('');
-          setMode('verify');
-        }
-      } else {
-        await signInWithEmail(email, password);
-      }
+      await sendSignInLink(address);
+      setMode('sent');
     } catch {
       // authError surfaced by context
     } finally {
@@ -93,32 +79,15 @@ export default function AuthGate() {
     }
   };
 
-  const submitOtp = async (e) => {
+  const submitPassword = async (e) => {
     e.preventDefault();
     setInfo(null); setLocalError(null);
-    if (code.length !== 6) { setLocalError('Enter the 6-digit code from your email.'); return; }
-    setBusy('verify');
+    if (!EMAIL_RE.test(address) || !password) { setLocalError('Enter your email and password.'); return; }
+    setBusy('password');
     try {
-      await verifyEmailOtp(email, code);
-      // success → session set → AuthContext flips isAuthenticated → the gate unmounts
+      await signInWithEmail(address, password);
     } catch {
       // authError surfaced by context
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const resend = async () => {
-    setInfo(null); setLocalError(null);
-    if (!email) { setLocalError('Enter your email above, then tap resend.'); return; }
-    setBusy('resend');
-    try {
-      await resendConfirmation(email);
-      setCode('');
-      setMode('verify'); // land on the code screen so the user can enter it
-      setInfo('New code sent — enter it below (check your spam folder too).');
-    } catch (err) {
-      setLocalError(err?.message || 'Could not resend just now. Try again in a moment.');
     } finally {
       setBusy(null);
     }
@@ -126,117 +95,69 @@ export default function AuthGate() {
 
   const errorMsg = localError || authError?.message;
 
-  // The three sign-in buttons share Apple's proportions (see AppleLogo): 44px
-  // tall, a 19px system-font title, so none is smaller than the Apple button.
+  // The sign-in buttons share Apple's proportions (see AppleLogo): 44px tall, a 19px
+  // system-font title, so none is smaller than the Apple button.
   const socialCls =
     'w-full h-11 rounded-xl flex items-center justify-center overflow-hidden ' +
     'font-semibold text-[19px] [font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif] ' +
     'disabled:opacity-50 active:scale-[.99] transition';
   const inputCls =
-    'w-full h-12 px-4 rounded-xl border border-black/10 bg-white text-[15px] text-[#0F1419] ' +
+    'w-full h-12 px-4 rounded-xl border border-black/10 bg-white text-[16px] text-[#0F1419] ' +
     'placeholder:text-black/35 outline-none focus:border-[#0E7C73] focus:ring-2 focus:ring-[#0E7C73]/20 transition';
+  const linkCls = 'block mx-auto text-[13px] text-black/50 hover:text-[#0E7C73] underline underline-offset-2 disabled:opacity-50 transition';
 
-  // Email-confirmation code screen (shown right after a successful sign-up). The
-  // user types the 6-digit code from their email; verifyEmailOtp creates the
-  // session and the gate unmounts. Codes avoid the Gmail link-prefetch problem.
-  if (mode === 'verify') {
+  const brand = (title, sub) => (
+    <div className="flex flex-col items-center text-center mb-8">
+      <div className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg mb-4" style={{ background: TEAL_GRADIENT }}>
+        <Globe className="w-8 h-8 text-white" />
+      </div>
+      <h1 className="text-2xl font-bold text-[#0F1419]">{title}</h1>
+      <p className="text-[15px] text-black/50 mt-1">{sub}</p>
+    </div>
+  );
+
+  // "Check your email": the link is on its way. Tapping it on this phone opens the app signed in.
+  if (mode === 'sent') {
     return (
       <div className="min-h-screen font-sans flex flex-col px-6 py-10" style={{ background: IVORY }}>
         <div className="w-full max-w-sm mx-auto flex-1 flex flex-col justify-center">
-          <div className="flex flex-col items-center text-center mb-8">
-            <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg mb-4"
-              style={{ background: TEAL_GRADIENT }}
-            >
-              <Globe className="w-8 h-8 text-white" />
+          {brand('Check your email', 'Your sign-in link is on its way to')}
+          <p className="text-center font-semibold text-[#0F1419] -mt-6 mb-6 break-all">{address}</p>
+          <div className="rounded-2xl p-4" style={{ background: '#fff', border: '1px solid rgba(0,0,0,.08)' }}>
+            <div className="flex items-start gap-3">
+              <Mail className="w-6 h-6 shrink-0" style={{ color: TEAL_DEEP }} />
+              <p className="text-[15px] leading-snug text-[#0F1419] m-0">Open the email on this phone and tap <b>Sign in to Globeskimmers</b>. That’s it — no password, no code.</p>
             </div>
-            <h1 className="text-2xl font-bold text-[#0F1419]">Check your email</h1>
-            <p className="text-[15px] text-black/50 mt-1">
-              We sent a 6-digit code to<br />
-              <span className="font-semibold text-[#0F1419]">{email}</span>
-            </p>
           </div>
-
-          <form onSubmit={submitOtp} className="space-y-3">
-            <input
-              className={inputCls + ' text-center text-lg tracking-[0.4em] font-semibold'}
-              type="text" inputMode="numeric" autoComplete="one-time-code"
-              maxLength={6} placeholder="••••••" autoFocus
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              disabled={disabled}
-            />
-
-            {info && <p className="text-[13px] text-[#0E7C73] font-medium px-1">{info}</p>}
-            {errorMsg && <p className="text-[13px] text-red-600 font-medium px-1">{errorMsg}</p>}
-
-            <Button
-              type="submit" disabled={disabled || code.length !== 6}
-              className="w-full h-12 text-white text-[15px] font-semibold rounded-xl shadow-md hover:opacity-95 disabled:opacity-50"
-              style={{ background: TEAL_DEEP }}
-            >
-              {busy === 'verify' ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Verify & continue'}
-            </Button>
-
-            <button
-              type="button" onClick={resend} disabled={disabled}
-              className="block mx-auto text-[12.5px] text-black/45 hover:text-[#0E7C73] underline underline-offset-2 disabled:opacity-50 transition"
-            >
-              {busy === 'resend' ? 'Sending…' : 'Resend code'}
-            </button>
-          </form>
-
-          <p className="text-center text-[14px] text-black/55 mt-6">
-            <button
-              type="button" disabled={disabled}
-              onClick={() => { setMode('signin'); setCode(''); setInfo(null); setLocalError(null); }}
-              className="font-semibold text-[#0E7C73] disabled:opacity-50"
-            >
-              ← Back to sign in
-            </button>
-          </p>
+          <p className="text-[13px] text-black/50 text-center mt-4 leading-snug">Nothing there after a minute? Check Spam or Junk, or search your mail for Globeskimmers.</p>
+          {info && <p className="text-[13px] text-[#0E7C73] font-medium text-center mt-3">{info}</p>}
+          {errorMsg && <p className="text-[13px] text-red-600 font-medium text-center mt-3">{errorMsg}</p>}
+          <button type="button" onClick={async () => { await sendLink(); if (!authError) setInfo('A new link is on its way.'); }} disabled={disabled} className={linkCls + ' mt-6'}>
+            {busy === 'link' ? 'Sending…' : 'Send the link again'}
+          </button>
+          <button type="button" onClick={() => { setMode('link'); setInfo(null); setLocalError(null); }} disabled={disabled} className={linkCls + ' mt-3'}>
+            Use a different email
+          </button>
         </div>
       </div>
     );
   }
 
+  const passwordMode = mode === 'password';
   return (
     <div className="min-h-screen font-sans flex flex-col px-6 py-10" style={{ background: IVORY }}>
       <div className="w-full max-w-sm mx-auto flex-1 flex flex-col justify-center">
-        {/* Brand lockup */}
-        <div className="flex flex-col items-center text-center mb-8">
-          <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg mb-4"
-            style={{ background: TEAL_GRADIENT }}
-          >
-            <Globe className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-[#0F1419]">Globeskimmers</h1>
-          <p className="text-[15px] text-black/50 mt-1">
-            {isSignup ? 'Create your account to get started' : 'Sign in to keep exploring'}
-          </p>
-        </div>
+        {brand('Globeskimmers', passwordMode ? 'Sign in with your password' : 'Sign in, or join, with your email')}
 
-        {/* OAuth buttons */}
+        {/* Social sign-in */}
         <div className="space-y-3">
-          <button
-            type="button" onClick={() => runProvider('google')} disabled={disabled}
-            className={`${socialCls} bg-white border border-black/10 gap-3 text-[#0F1419]`}
-          >
+          <button type="button" onClick={() => runProvider('google')} disabled={disabled}
+            className={`${socialCls} bg-white border border-black/10 gap-3 text-[#0F1419]`}>
             {busy === 'google' ? <Loader2 className="w-5 h-5 animate-spin" /> : <GoogleIcon />}
             Continue with Google
           </button>
-          <button
-            type="button" onClick={() => runProvider('facebook')} disabled={disabled}
-            className={`${socialCls} bg-white border border-black/10 gap-3 text-[#0F1419]`}
-          >
-            {busy === 'facebook' ? <Loader2 className="w-5 h-5 animate-spin" /> : <FacebookIcon />}
-            Continue with Facebook
-          </button>
-          <button
-            type="button" onClick={() => runProvider('apple')} disabled={disabled}
-            className={`${socialCls} bg-black gap-1 text-white`}
-          >
+          <button type="button" onClick={() => runProvider('apple')} disabled={disabled}
+            className={`${socialCls} bg-black gap-1 text-white`}>
             {busy === 'apple'
               ? <span className="w-[31px] h-11 shrink-0 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin" /></span>
               : <AppleLogo />}
@@ -244,72 +165,48 @@ export default function AuthGate() {
           </button>
         </div>
 
-        {/* Divider */}
         <div className="flex items-center gap-3 my-6">
           <div className="h-px flex-1 bg-black/10" />
           <span className="text-xs font-medium text-black/40 uppercase tracking-wide">or</span>
           <div className="h-px flex-1 bg-black/10" />
         </div>
 
-        {/* Email form */}
-        <form onSubmit={submitEmail} className="space-y-3">
-          {isSignup && (
-            <input
-              className={inputCls} type="text" autoComplete="given-name" placeholder="First name"
-              value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={disabled}
-            />
+        {/* Email: the link (default), or a password for the accounts that have one */}
+        <form onSubmit={passwordMode ? submitPassword : sendLink} className="space-y-3">
+          <input className={inputCls} type="email" autoComplete="email" inputMode="email" autoCapitalize="none" placeholder="Email"
+            value={email} onChange={(e) => setEmail(e.target.value)} disabled={disabled} />
+          {passwordMode && (
+            <div className="relative">
+              <input className={inputCls + ' pr-12'} type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Password"
+                value={password} onChange={(e) => setPassword(e.target.value)} disabled={disabled} />
+              <button type="button" onClick={() => setShowPassword((s) => !s)} disabled={disabled}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70 disabled:opacity-50 transition">
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
           )}
-          <input
-            className={inputCls} type="email" autoComplete="email" placeholder="Email"
-            value={email} onChange={(e) => setEmail(e.target.value)} disabled={disabled}
-          />
-          <div className="relative">
-            <input
-              className={inputCls + ' pr-12'} type={showPassword ? 'text' : 'password'}
-              autoComplete={isSignup ? 'new-password' : 'current-password'} placeholder="Password"
-              value={password} onChange={(e) => setPassword(e.target.value)} disabled={disabled}
-            />
-            <button
-              type="button" onClick={() => setShowPassword((s) => !s)} disabled={disabled}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70 disabled:opacity-50 transition"
-            >
-              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-            </button>
-          </div>
 
           {info && <p className="text-[13px] text-[#0E7C73] font-medium px-1">{info}</p>}
           {errorMsg && <p className="text-[13px] text-red-600 font-medium px-1">{errorMsg}</p>}
 
-          <Button
-            type="submit" disabled={disabled}
+          <Button type="submit" disabled={disabled}
             className="w-full h-12 text-white text-[15px] font-semibold rounded-xl shadow-md hover:opacity-95"
-            style={{ background: TEAL_DEEP }}
-          >
-            {busy === 'email'
+            style={{ background: TEAL_DEEP }}>
+            {busy === 'link' || busy === 'password'
               ? <Loader2 className="w-5 h-5 animate-spin" />
-              : (isSignup ? 'Create account' : 'Sign in')}
+              : (passwordMode ? 'Sign in' : 'Email me a sign-in link')}
           </Button>
-
-          {!isSignup && (
-            <button
-              type="button" onClick={resend} disabled={disabled}
-              className="block mx-auto text-[12.5px] text-black/45 hover:text-[#0E7C73] underline underline-offset-2 disabled:opacity-50 transition"
-            >
-              {busy === 'resend' ? 'Resending…' : 'Resend confirmation email'}
-            </button>
+          {!passwordMode && (
+            <p className="text-center text-[12.5px] text-black/50 m-0">New here? The same link creates your account.</p>
           )}
         </form>
 
-        {/* Mode toggle */}
         <p className="text-center text-[14px] text-black/55 mt-6">
-          {isSignup ? 'Already have an account?' : "Don't have an account?"}{' '}
-          <button
-            type="button" disabled={disabled}
-            onClick={() => { setMode(isSignup ? 'signin' : 'signup'); setInfo(null); setLocalError(null); }}
-            className="font-semibold text-[#0E7C73] disabled:opacity-50"
-          >
-            {isSignup ? 'Sign in' : 'Sign up'}
+          <button type="button" disabled={disabled}
+            onClick={() => { setMode(passwordMode ? 'link' : 'password'); setInfo(null); setLocalError(null); }}
+            className="font-semibold text-[#0E7C73] disabled:opacity-50">
+            {passwordMode ? 'Email me a sign-in link instead' : 'I have a password'}
           </button>
         </p>
 

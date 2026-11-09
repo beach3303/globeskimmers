@@ -6,12 +6,11 @@ import { useAuth } from "@/lib/AuthContext";
 import { extractFirstName } from "@/lib/extractFirstName";
 import { inferProfileDefaults } from "@/lib/inferProfileDefaults";
 
-// Essential steps only — the rest is inferred or deferred.
-import LocationStep from "../components/onboarding/LocationStep";
-import HomeCountryStep from "../components/onboarding/HomeCountryStep";
-import PassportStep from "../components/onboarding/PassportStep";
-import FirstNameStep from "../components/onboarding/FirstNameStep";
-import HeardFromStep from "../components/onboarding/HeardFromStep";
+// ONE screen (founder, 2026-11-08: "as simple as possible: email, birthday, handle, and they're in"):
+// first name, birthday, @username. Home country, "where did you hear about us", the passport intro and
+// the location ask are gone from here — home lives in Settings, location is asked by Nearby when it is
+// first needed, the Passport tab is a tap away. The step components stay in the repo for Settings.
+import WelcomeStep from "../components/onboarding/WelcomeStep";
 import { logEvent } from "@/lib/analytics";
 
 // Account-tied onboarding. The user is ALWAYS authenticated here (App.jsx's
@@ -43,30 +42,11 @@ export default function OnboardingPage() {
     [profile, user]
   );
 
-  // A home already on the profile (set in Settings, or by an earlier run) isn't asked again
-  // (2026-10-30: an old install answered it in Settings, then met the whole first run).
-  const hasHome = !!(profile?.home_city || profile?.home_country);
-  const steps = useMemo(() => {
-    const list = [];
-    if (!initialFirstName) list.push("first_name");
-    // v2 order (founder queue #1, 2026-09-29): the city first so page one can
-    // render, then the passport explainer, then the location ask — by then the
-    // traveler knows exactly why the app wants it (stamps are earned by being
-    // there), which is the honest frame for the permission.
-    // "Where did you hear about us?" (2026-10-19): one optional tap, the honest install source.
-    if (!hasHome) list.push("home_country");
-    list.push("heard_from", "passport", "location");
-    return list;
-  }, [initialFirstName, hasHome]);
+  const steps = useMemo(() => ["welcome"], []);
 
   const [stepIndex, setStepIndex] = useState(0);
   const [data, setData] = useState({});
   const [saving, setSaving] = useState(false);
-
-  // Step back to revise an earlier answer. Answers persist in `data`, and each
-  // step re-seeds its local state from its `value` prop, so the previous
-  // selection is preserved when the user returns.
-  const backward = () => setStepIndex((i) => Math.max(0, i - 1));
 
   const finish = async (collected) => {
     if (saving) return;
@@ -147,40 +127,10 @@ export default function OnboardingPage() {
   };
 
   const key = steps[stepIndex];
-  // Back is available on every step except the very first.
-  const onBack = stepIndex > 0 ? backward : undefined;
   let content = null;
   switch (key) {
-    case "first_name":
-      content = <FirstNameStep defaultValue={initialFirstName} onNext={(d) => advance(d)} onBack={onBack} />;
-      break;
-    case "location":
-      content = (
-        <LocationStep
-          onNext={() => advance()}
-          onLocationGranted={() => {}}
-          onExit={() => advance()}
-          onBack={onBack}
-        />
-      );
-      break;
-    case "home_country":
-      content = <HomeCountryStep onNext={(d) => advance(d)} onSkip={() => advance()} onBack={onBack} value={data.home_country} />;
-      break;
-    case "heard_from":
-      content = <HeardFromStep value={data.heard_from || null} onNext={(d) => advance(d)} onBack={onBack} />;
-      break;
-    case "passport":
-      content = (
-        <PassportStep
-          homeCity={data.home_city}
-          homeCountry={data.home_country}
-          firstName={data.first_name || initialFirstName}
-          onNext={() => advance({ passport_skipped: false })}
-          onSkip={() => advance({ passport_skipped: true })}
-          onBack={onBack}
-        />
-      );
+    case "welcome":
+      content = <WelcomeStep firstName={initialFirstName} onDone={(d) => advance(d)} />;
       break;
     default:
       content = null;

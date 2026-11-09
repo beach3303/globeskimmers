@@ -62,6 +62,18 @@ export async function completeOAuthFromUrl(url) {
   const errDesc =
     parsed.searchParams.get('error_description') || parsed.searchParams.get('error');
   if (errDesc) throw new Error(errDesc);
+  // The email sign-in link (2026-11-08): globeskimmers://auth/callback?token_hash=…&type=… from the
+  // globeskimmers.io/open/signin page. Verified here, on whichever device opens it — no password, no
+  // code, no PKCE verifier needed. Mail scanners that pre-click links only ever fetch our static page;
+  // the token is spent only when the app verifies it.
+  const tokenHash = parsed.searchParams.get('token_hash');
+  if (tokenHash) {
+    const t = parsed.searchParams.get('type') || 'email';
+    const type = ['signup', 'magiclink', 'recovery', 'invite', 'email_change', 'email'].includes(t) ? t : 'email';
+    const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+    if (error) throw error;
+    return data.session;
+  }
   const code = parsed.searchParams.get('code');
   if (!code) throw new Error('No "code" in callback URL');
   // exchangeCodeForSession wants the CODE STRING (not the full URL). The
@@ -78,7 +90,16 @@ export async function signInWithApple() {
   return startProviderSignIn('apple');
 }
 
-// --- Email + password -------------------------------------------------------
+// --- Email sign-in link (founder, 2026-11-08: "as simple as possible: email, birthday, handle, and
+// they're in … remove the passcode") -------------------------------------------------------------
+// One email; the account is created if it doesn't exist. The link in it goes to
+// globeskimmers.io/open/signin?token_hash=…&type=…, which hands the token to the app (completeOAuthFromUrl).
+export async function sendSignInLink(email) {
+  const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+  if (error) throw error;
+}
+
+// --- Email + password (kept for the accounts that have one) -----------------
 export async function signInWithEmail(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
