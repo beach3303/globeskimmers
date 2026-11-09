@@ -48,6 +48,15 @@ p { font-size: 15.5px; line-height: 1.5; color: var(--ink-3); margin: 0 0 8px; }
   if (!/^[A-Za-z0-9_-]{10,400}$/.test(token)) token = "";
   if (!/^(signup|magiclink|recovery|invite|email_change|email)$/.test(type)) type = "email";
   var a = document.getElementById("open");
+  var err = /[?&]error=([^&#]*)/.exec(q);
+  if (err) {
+    var why = decodeURIComponent(err[1]);
+    document.getElementById("h").textContent = why.indexOf("yahoo") === 0 ? "Yahoo sign-in didn’t go through" : "Sign-in didn’t go through";
+    document.getElementById("lead").textContent = why === "yahoo_unverified" ? "Yahoo says that address isn’t verified yet. Verify it with Yahoo, or create an account with your email and a password in the app." : "Open the Globeskimmers app and try again, or create an account with your email and a password.";
+    a.setAttribute("href", "globeskimmers://auth/callback");
+    a.textContent = "Back to Globeskimmers";
+    return;
+  }
   if (!token) {
     document.getElementById("h").textContent = "This sign-in link isn’t complete";
     document.getElementById("lead").textContent = "Open the Globeskimmers app and ask for a new link.";
