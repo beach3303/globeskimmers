@@ -4909,3 +4909,16 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   email — hardening, not a fix) rides with the next push. Account merge: an existing account with the same
   email (password, Google or Apple) gets 422 "already registered" from the admin create, then a one-time
   sign-in token for THAT account — never a second account. Not yet exercised with a real Yahoo login.
+
+## 2026-11-08 night — the 63 US national parks: art vs database audit (d07e0ee + the American Samoa SQL)
+
+  Founder asked whether the parks are on the 1,000 list and whether the uploaded art is usable. Counted R2
+  (`stamp-art/` top level = 1,053 pieces; 62 of the 63 parks have art — only Arches has none of its own, it uses
+  Delicate Arch) against the attractions DB (country is 'US' for most rows, 'United States' for the stamp_art
+  rows — query both). Result: 56 parks stampable with their art showing; 6 had a stampable row and an art file
+  under names that didn't line up (Black Canyon of the Gunnison, Gates of the Arctic, Great Basin, Lake Clark,
+  New River Gorge, Wrangell–St. Elias) → six hand aliases in `src/lib/stampArt.js` (d07e0ee; app-only, needs OTA);
+  1 has no row at all (National Park of American Samoa) → `scripts/stamp-art/d1-american-samoa.sql` (INSERT OR
+  IGNORE, icon:Q843075, world scope, 20 km footprint). The D1 write is the founder's:
+  `npx wrangler d1 execute globeskimmers-attractions --remote --file=scripts/stamp-art/d1-american-samoa.sql`.
+  Tooling: R2 listing via the Cloudflare REST API with the wrangler oauth token (scratchpad/r2-list.json).
