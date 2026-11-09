@@ -4840,3 +4840,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   photo are buttons that stop propagation); Passport.jsx passes `enlargeStampPhotos` (the shared PhotoLightbox:
   swipe between the stamp's photos, pinch, ×) for own and visited books alike. Gates: lint, build, boot-check ✅.
   Not photographed (needs a real pinch). Needs OTA (+ push to keep main in step).
+
+## 2026-11-08 PM — COMMITTED (0ba4eb3): a username claimed from Settings is never asked for again
+
+  Founder signed a coworker up, claimed @lily from Settings right after the first name, then the passport's
+  "Pick your @username" (FinishPassport's required step) came anyway and retyping lily read as taken. Causes:
+  `FinishPassport.check()` computed "handle missing" once at mount and `registerPassportGate` armed the screen
+  from that stale answer; `UsernameStepRequired` read only `minor`, never `mine`. Fixes: the gate re-reads
+  (`check()`) before arming; `setHandle` dispatches `gs:handle` on success and the gate listens; the required
+  screen calls `onDone(mine)` the moment the hook finds a handle; `useUsernameClaim.submit` treats a draft equal
+  to `mine` as done without a round trip. Gates: lint, build, boot-check ✅. App-only: needs OTA.
