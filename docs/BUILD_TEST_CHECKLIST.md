@@ -4897,3 +4897,15 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
     Email + Profile; (2) `npx wrangler secret put YAHOO_CLIENT_ID` and `npx wrangler secret put YAHOO_CLIENT_SECRET`
     (permission gate: she runs them); (3) push (worker + site deploy) + `npm run ota`. Until the secrets exist the
     button answers "Yahoo sign-in isn’t set up yet".
+
+## 2026-11-08 ~19:55 PT — LIVE: password-first sign-in, one welcome screen, Facebook gone, Sign in with Yahoo (main 6ea1a53, OTA 1.0.2611090355)
+
+  Founder did the whole activation: Supabase "Confirm email" OFF via the management API (`mailer_autoconfirm: true`,
+  the dashboard panel no longer shows the toggle) and the Magic Link + Confirm signup templates set the same way
+  (green button → /open/signin?token_hash=…); Yahoo app created (Confidential Client, OpenID Connect Email +
+  Profile, redirect URI = worker /auth/yahoo/callback); `YAHOO_CLIENT_ID` + `YAHOO_CLIENT_SECRET` uploaded; push
+  (workers + website runs green) + OTA. Verified from here: /open/signin serves; /auth/yahoo/start answers 302 to
+  api.login.yahoo.com with the client id. One commit after her push (3ec5f44, verify the Yahoo token as type
+  email — hardening, not a fix) rides with the next push. Account merge: an existing account with the same
+  email (password, Google or Apple) gets 422 "already registered" from the admin create, then a one-time
+  sign-in token for THAT account — never a second account. Not yet exercised with a real Yahoo login.
