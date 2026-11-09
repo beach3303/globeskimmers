@@ -37,6 +37,14 @@ const ALIAS = {
   "ayers-rock": "uluru",
   "giza-pyramids": "pyramids-of-giza", "the-pyramids-of-giza": "pyramids-of-giza",
   "statue-of-liberty-national-monument": "statue-of-liberty",
+  // US national parks whose row name and art file name differ (audit of all 63, 2026-11-08):
+  // the art was uploaded under the short name, the stampable row carries the long one, or the reverse.
+  "black-canyon-of-the-gunnison-national-park": "black-canyon-of-the-gunnison",
+  "gates-of-the-arctic-national-park-and-preserve": "gates-of-the-arctic",
+  "great-basin": "great-basin-national-park",
+  "lake-clark": "lake-clark-national-park",
+  "new-river-gorge-bridge": "new-river-gorge-national-park",
+  "wrangell-st-elias-national-park-and-preserve": "wrangell-st-elias",
 };
 
 const ccOf = (c) => {
