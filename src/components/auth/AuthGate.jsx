@@ -2,12 +2,14 @@
 //
 // Forced sign-in gate. Rendered by App.jsx whenever there is no Supabase
 // session — no app features are reachable until the user signs in.
-// Three ways in (founder, 2026-11-08: "as simple as possible … remove the passcode; drop Facebook"):
-// Google, Apple (always visible — App Store requires it when other social logins are offered), and
-// EMAIL BY LINK: one address, one email, tap the link and you're in — no password, no code. The
-// account is created on the first link. Anyone who still has a password can use it ("I have a
-// password"). On native, the social buttons open the in-app browser and the session completes via the
-// deep-link callback handled in AuthContext; the email link lands the same way (globeskimmers.io/open/signin).
+// Three ways in (founder, 2026-11-08: "as simple as possible … drop Facebook … I hate having to go to
+// email; password instead"): Google, Apple (always visible — App Store requires it when other social
+// logins are offered), and EMAIL + PASSWORD with no email step — with Supabase's "Confirm email" off, Create
+// account signs you straight in (the welcome screen asks name, birthday and @username). The inbox is only
+// for a forgotten password: "Email me a sign-in button" sends the one-tap sign-in email
+// (globeskimmers.io/open/signin hands its token to the app). If confirmation is still on, a new account
+// gets that same email instead of a code. On native, the social buttons open the in-app browser and the
+// session completes via the deep-link callback handled in AuthContext.
 import React, { useState } from 'react';
 import { Globe, Loader2, Eye, EyeOff, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -40,8 +42,8 @@ function AppleLogo() {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function AuthGate() {
-  const { signInWithProvider, signInWithApple, signInWithEmail, sendSignInLink, authError } = useAuth();
-  const [mode, setMode] = useState('link');   // 'link' (email → sign-in link) | 'sent' (check your inbox) | 'password'
+  const { signInWithProvider, signInWithApple, signInWithEmail, signUpWithEmail, sendSignInLink, authError } = useAuth();
+  const [mode, setMode] = useState('signin');   // 'signin' | 'signup' | 'sent' (the one-tap email is on its way)
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -83,9 +85,17 @@ export default function AuthGate() {
     e.preventDefault();
     setInfo(null); setLocalError(null);
     if (!EMAIL_RE.test(address) || !password) { setLocalError('Enter your email and password.'); return; }
+    if (mode === 'signup' && password.length < 8) { setLocalError('Pick a password of at least 8 characters.'); return; }
     setBusy('password');
     try {
-      await signInWithEmail(address, password);
+      if (mode === 'signup') {
+        // With "Confirm email" off this returns a session and the welcome screen takes over. If it is
+        // still on, Supabase sent the one-tap email instead; say so.
+        const { needsConfirmation } = await signUpWithEmail({ email: address, password });
+        if (needsConfirmation) setMode('sent');
+      } else {
+        await signInWithEmail(address, password);
+      }
     } catch {
       // authError surfaced by context
     } finally {
@@ -121,35 +131,35 @@ export default function AuthGate() {
     return (
       <div className="min-h-screen font-sans flex flex-col px-6 py-10" style={{ background: IVORY }}>
         <div className="w-full max-w-sm mx-auto flex-1 flex flex-col justify-center">
-          {brand('Check your email', 'Your sign-in link is on its way to')}
+          {brand('Check your email', 'We just sent a green button to')}
           <p className="text-center font-semibold text-[#0F1419] -mt-6 mb-6 break-all">{address}</p>
           <div className="rounded-2xl p-4" style={{ background: '#fff', border: '1px solid rgba(0,0,0,.08)' }}>
             <div className="flex items-start gap-3">
               <Mail className="w-6 h-6 shrink-0" style={{ color: TEAL_DEEP }} />
-              <p className="text-[15px] leading-snug text-[#0F1419] m-0">Open the email on this phone and tap <b>Sign in to Globeskimmers</b>. That’s it — no password, no code.</p>
+              <p className="text-[15px] leading-snug text-[#0F1419] m-0">Open that email on this phone and tap the green button. It signs you in — nothing to type.</p>
             </div>
           </div>
           <p className="text-[13px] text-black/50 text-center mt-4 leading-snug">Nothing there after a minute? Check Spam or Junk, or search your mail for Globeskimmers.</p>
           {info && <p className="text-[13px] text-[#0E7C73] font-medium text-center mt-3">{info}</p>}
           {errorMsg && <p className="text-[13px] text-red-600 font-medium text-center mt-3">{errorMsg}</p>}
-          <button type="button" onClick={async () => { await sendLink(); if (!authError) setInfo('A new link is on its way.'); }} disabled={disabled} className={linkCls + ' mt-6'}>
-            {busy === 'link' ? 'Sending…' : 'Send the link again'}
+          <button type="button" onClick={async () => { await sendLink(); if (!authError) setInfo('A new email is on its way.'); }} disabled={disabled} className={linkCls + ' mt-6'}>
+            {busy === 'link' ? 'Sending…' : 'Send it again'}
           </button>
-          <button type="button" onClick={() => { setMode('link'); setInfo(null); setLocalError(null); }} disabled={disabled} className={linkCls + ' mt-3'}>
-            Use a different email
+          <button type="button" onClick={() => { setMode('signin'); setInfo(null); setLocalError(null); }} disabled={disabled} className={linkCls + ' mt-3'}>
+            Back to sign in
           </button>
         </div>
       </div>
     );
   }
 
-  const passwordMode = mode === 'password';
+  const isSignup = mode === 'signup';
   return (
     <div className="min-h-screen font-sans flex flex-col px-6 py-10" style={{ background: IVORY }}>
       <div className="w-full max-w-sm mx-auto flex-1 flex flex-col justify-center">
-        {brand('Globeskimmers', passwordMode ? 'Sign in with your password' : 'Sign in, or join, with your email')}
+        {brand('Globeskimmers', isSignup ? 'Create your account' : 'Sign in to keep exploring')}
 
-        {/* Social sign-in */}
+        {/* The phone's own sign-in first: one tap, nothing to type. */}
         <div className="space-y-3">
           <button type="button" onClick={() => runProvider('google')} disabled={disabled}
             className={`${socialCls} bg-white border border-black/10 gap-3 text-[#0F1419]`}>
@@ -171,21 +181,20 @@ export default function AuthGate() {
           <div className="h-px flex-1 bg-black/10" />
         </div>
 
-        {/* Email: the link (default), or a password for the accounts that have one */}
-        <form onSubmit={passwordMode ? submitPassword : sendLink} className="space-y-3">
+        {/* Email + password. Create account signs you straight in (no email step). */}
+        <form onSubmit={submitPassword} className="space-y-3">
           <input className={inputCls} type="email" autoComplete="email" inputMode="email" autoCapitalize="none" placeholder="Email"
             value={email} onChange={(e) => setEmail(e.target.value)} disabled={disabled} />
-          {passwordMode && (
-            <div className="relative">
-              <input className={inputCls + ' pr-12'} type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Password"
-                value={password} onChange={(e) => setPassword(e.target.value)} disabled={disabled} />
-              <button type="button" onClick={() => setShowPassword((s) => !s)} disabled={disabled}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70 disabled:opacity-50 transition">
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-          )}
+          <div className="relative">
+            <input className={inputCls + ' pr-12'} type={showPassword ? 'text' : 'password'}
+              autoComplete={isSignup ? 'new-password' : 'current-password'} placeholder={isSignup ? 'Choose a password (8+ characters)' : 'Password'}
+              value={password} onChange={(e) => setPassword(e.target.value)} disabled={disabled} />
+            <button type="button" onClick={() => setShowPassword((s) => !s)} disabled={disabled}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70 disabled:opacity-50 transition">
+              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
+          </div>
 
           {info && <p className="text-[13px] text-[#0E7C73] font-medium px-1">{info}</p>}
           {errorMsg && <p className="text-[13px] text-red-600 font-medium px-1">{errorMsg}</p>}
@@ -193,20 +202,22 @@ export default function AuthGate() {
           <Button type="submit" disabled={disabled}
             className="w-full h-12 text-white text-[15px] font-semibold rounded-xl shadow-md hover:opacity-95"
             style={{ background: TEAL_DEEP }}>
-            {busy === 'link' || busy === 'password'
-              ? <Loader2 className="w-5 h-5 animate-spin" />
-              : (passwordMode ? 'Sign in' : 'Email me a sign-in link')}
+            {busy === 'password' ? <Loader2 className="w-5 h-5 animate-spin" /> : (isSignup ? 'Create account' : 'Sign in')}
           </Button>
-          {!passwordMode && (
-            <p className="text-center text-[12.5px] text-black/50 m-0">New here? The same link creates your account.</p>
+
+          {!isSignup && (
+            <button type="button" onClick={sendLink} disabled={disabled} className={linkCls}>
+              {busy === 'link' ? 'Sending…' : 'Forgot your password? Email me a sign-in button'}
+            </button>
           )}
         </form>
 
         <p className="text-center text-[14px] text-black/55 mt-6">
+          {isSignup ? 'Already have an account?' : 'New here?'}{' '}
           <button type="button" disabled={disabled}
-            onClick={() => { setMode(passwordMode ? 'link' : 'password'); setInfo(null); setLocalError(null); }}
+            onClick={() => { setMode(isSignup ? 'signin' : 'signup'); setInfo(null); setLocalError(null); }}
             className="font-semibold text-[#0E7C73] disabled:opacity-50">
-            {passwordMode ? 'Email me a sign-in link instead' : 'I have a password'}
+            {isSignup ? 'Sign in' : 'Create an account'}
           </button>
         </p>
 

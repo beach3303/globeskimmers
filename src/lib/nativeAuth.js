@@ -112,6 +112,7 @@ export async function signUpWithEmail({ email, password, firstName }) {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
+    // With "Confirm email" off (2026-11-08) a session comes back at once; the welcome screen asks the name.
     options: { data: firstName ? { first_name: firstName } : {} },
   });
   if (error) throw error;
