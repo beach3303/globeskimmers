@@ -4922,3 +4922,12 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   IGNORE, icon:Q843075, world scope, 20 km footprint). The D1 write is the founder's:
   `npx wrangler d1 execute globeskimmers-attractions --remote --file=scripts/stamp-art/d1-american-samoa.sql`.
   Tooling: R2 listing via the Cloudflare REST API with the wrangler oauth token (scratchpad/r2-list.json).
+
+## 2026-11-08 ~21:20 PT — correction + LIVE: the parks fixes (main cb56f6e, OTA 1.0.2611090511)
+
+  The National Park of American Samoa WAS in the database all along (icon:Q843075, founder_scope national, country
+  "American Samoa (United States)" — the audit's country filter hid it). The founder's run of
+  d1-american-samoa.sql was a no-op (INSERT OR IGNORE on an existing id) and the file is removed. Its art slug
+  matches the row's name, so it already showed. Net: all 63 parks have a stampable row; the six aliases (d07e0ee)
+  are on phones via the OTA; workers run green. Lesson for DB audits: `country` is 'US', 'United States' or a
+  territory label — filter by name first, then look at country.
