@@ -15347,14 +15347,26 @@ async function handlePassportList(request, env) {
   } catch (e) { return jsonResponse({ error: e.message, stamps: [], stats: {} }, 500); }
 }
 
-// Passport holder's display name (profiles is in the public schema).
-async function ppHolder(env, userId) {
+// Passport holder's name, or null: the profile's first name, else its display name, else the
+// social display name, else "@handle" (founder, 2026-11-08: a friend's cover read "A traveler" when
+// the profile had no first name — the cover should carry the owner's name).
+async function ppHolderName(env, userId) {
   try {
     const pr = await gbRest(env, `profiles?id=eq.${userId}&select=first_name,display_name`, { headers: { 'Accept-Profile': 'public' } });
     const p = (pr.ok ? await pr.json() : [])[0] || {};
-    return p.first_name || p.display_name || 'A traveler';
-  } catch { return 'A traveler'; }
+    if (p.first_name || p.display_name) return p.first_name || p.display_name;
+    const [sq, hq] = await Promise.all([
+      gbRest(env, `social_profiles?user_id=eq.${userId}&select=display_name`, {}),
+      gbRest(env, `passport_shares?user_id=eq.${userId}&select=handle`, {}),
+    ]);
+    const sp = (sq.ok ? await sq.json() : [])[0] || {};
+    if (sp.display_name) return sp.display_name;
+    const h = (hq.ok ? await hq.json() : [])[0]?.handle;
+    return h ? `@${h}` : null;
+  } catch { return null; }
 }
+// The same, with the old fallback word for the pages that print it.
+async function ppHolder(env, userId) { return (await ppHolderName(env, userId)) || 'A traveler'; }
 
 // Faces (B2, 2026-10-14): the cloth each traveler's world is bound in
 // (public.profiles.cloth, B1) and their photo (social_profiles.avatar_key),
@@ -15615,6 +15627,22 @@ async function ppSweepPhotos(env, ctx, ownerId, lvl = 3) {
 async function handlePassportPublic(request, env, ctx) {
   try {
     const b = await request.json().catch(() => ({}));
+    // ADMIN VIEW (founder, 2026-11-08: "open the member's virtual passport book and flip the pages"): an admin
+    // asking by member id with admin: true gets the book at the owner's level — every stamp, every photo, the
+    // owner's booklet order — one member at a time, on demand (privacy policy §2). Anyone else asking this way
+    // reads private, like an unknown link.
+    const adminUid = typeof b.user_id === 'string' && /^[0-9a-f-]{36}$/i.test(b.user_id) ? b.user_id.toLowerCase() : null;
+    if (b.admin === true && adminUid) {
+      const viewer = await gbUser(request, env).catch(() => null);
+      if (!viewer || !ADMIN_EMAILS_WORKER.includes(String(viewer.email || '').trim().toLowerCase())) return jsonResponse({ private: true });
+      const origin = new URL(request.url).origin;
+      const ownerSp = await gbSocialProfile(env, adminUid).catch(() => null);
+      const sq = await gbRest(env, `passport_shares?user_id=eq.${adminUid}&select=user_id,slug,is_public,visibility`, {});
+      const shareRow = (sq.ok ? await sq.json() : [])[0] || null;
+      const [holder, { stamps }, collectibles, faces] = await Promise.all([ppHolder(env, adminUid), ppLoad(env, adminUid), cbPlaced(env, adminUid), gbFaces(env, [adminUid], origin)]);
+      const shared = await ppShareStamps(env, stamps, origin, true, 3, shareRow?.is_public ? 'public' : 'inner');
+      return jsonResponse({ admin_view: true, owner_id: adminUid, slug: shareRow?.slug || null, minor: gbUnderAge(ownerSp) === true, holder, holder_cloth: faces[adminUid]?.cloth || null, stamps: shared, collectibles, stats: ppStats(shared), booklet: { order: ownerSp?.booklet_order || 'newest', seed: ownerSp?.shuffle_seed ?? null, custom: Array.isArray(ownerSp?.custom_order) ? ownerSp.custom_order : null } });
+    }
     const slug = String(b.slug || '').replace(/[^a-z0-9]/gi, '');
     if (!slug) return jsonResponse({ private: true });
     const q = await gbRest(env, `passport_shares?slug=eq.${slug}&select=user_id,is_public,visibility`, {});
@@ -23853,7 +23881,7 @@ async function handleSocialWorld(request, env, ctx) {
     const person = {
       user_id: sid,
       handle: share?.handle || null,
-      name: ownerSp?.display_name || null,
+      name: ownerSp?.display_name || await ppHolderName(env, sid),
       avatar: faceMap[sid]?.avatar || null,
       cloth: faceMap[sid]?.cloth || null,
       verified: share?.verified === true,
