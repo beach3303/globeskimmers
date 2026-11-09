@@ -4850,3 +4850,25 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   (`check()`) before arming; `setHandle` dispatches `gs:handle` on success and the gate listens; the required
   screen calls `onDone(mine)` the moment the hook finds a handle; `useUsernameClaim.submit` treats a draft equal
   to `mine` as done without a round trip. Gates: lint, build, boot-check ✅. App-only: needs OTA.
+
+## 2026-11-08 evening — COMMITTED, NOT PUSHED: sign-in by email link, ONE welcome screen, Facebook gone (2638ee3 app, 9b7c9f9 site)
+
+  Founder: "as simple as possible: email, birthday, handle, and they're in … remove passcode for email sign up …
+  drop the facebook sign up button"; her coworker Lily (elderly) struggled with password + 6-digit code, and
+  Facebook sign-in failed (likely an FB account without a verified email).
+  - **Email by link:** `sendSignInLink(email)` → `supabase.auth.signInWithOtp` (creates the account on the first
+    link); the email's link goes to `https://globeskimmers.io/open/signin?token_hash={{ .TokenHash }}&type=…`
+    (site page, static — a mail scanner pre-opening it spends nothing), which opens
+    `globeskimmers://auth/callback?token_hash=…&type=…`; `completeOAuthFromUrl` now verifies a `token_hash` with
+    `verifyOtp` (works on any device, no PKCE verifier). "I have a password" keeps the password path for the
+    accounts that have one. The 6-digit code screen and the sign-up mode are gone.
+  - **One welcome screen** (`WelcomeStep`, the only onboarding step): first name (prefilled from the provider),
+    @username (prefilled from the first name), birthday — `useUsernameClaim` does the saving, so nothing is asked
+    again later; a minor goes on without a username; an account that already has one keeps it. Home country,
+    heard-from, the passport intro and the location ask are out of the first run (components kept for Settings).
+  - **Facebook** button and icon removed; privacy policy no longer names it.
+  - Shots: scratchpad/shots/signin.png, welcome.png. Gates: lint, build, boot-check ✅.
+  - **Activate (founder, Supabase dashboard → Authentication → Email Templates):** put the link in BOTH templates —
+    "Confirm signup" (new accounts, `type=signup`) and "Magic Link" (existing accounts, `type=magiclink`) — see the
+    chat of 2026-11-08 for the exact HTML. Then push (site page deploys itself) + `npm run ota`. First real test:
+    a fresh email on a phone.
