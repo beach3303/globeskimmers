@@ -497,6 +497,12 @@ function TravelerRecord({ res, title, style }) {
   return (
     <div style={{ marginTop: 10, fontSize: 13, color: COLORS.dark, ...style }}>
       {title && <div style={{ fontWeight: 700 }}>{title}</div>}
+      {res.user_id && (
+        <div style={{ marginTop: 4, fontSize: 12.5 }}>
+          <Link to={`${createPageUrl('Traveler')}?uid=${encodeURIComponent(res.user_id)}&admin=1`} style={{ color: '#0E7C73', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 2 }}>Open their passport as admin ›</Link>
+          <span style={{ color: COLORS.gray }}> &nbsp;the book itself, every stamp, photo and card whatever its privacy — support, safety or a legal request only</span>
+        </div>
+      )}
       <table style={{ marginTop: 6, borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums' }}>
         <thead><tr><th style={{ textAlign: 'left', paddingRight: 14 }}></th>{years.map((y) => <th key={y} style={{ textAlign: 'right', paddingRight: 14 }}>{y}</th>)}<th style={{ textAlign: 'right' }}>All</th></tr></thead>
         <tbody>

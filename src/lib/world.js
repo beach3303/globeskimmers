@@ -95,11 +95,14 @@ async function fromPublic(slug) {
 /**
  * @param {{ handle?: string|null, slug?: string|null }} who
  */
-export async function getWorld({ handle = null, slug = null } = {}) {
+export async function getWorld({ handle = null, slug = null, userId = null, admin = false } = {}) {
   const h = lc(handle);
   const s = cleanSlug(slug);
-  if (!h && !s) return { state: 'gone' };
-  const { data, error } = await callWorker(ROUTE, h ? { handle: h } : { slug: s });
+  // By id (2026-11-08): the admin view opens a member from the Admin page's record; the worker answers an
+  // id only for someone in the viewer's circle, or for an admin asking with admin: true.
+  const uid = typeof userId === 'string' && /^[0-9a-f-]{36}$/i.test(userId) ? userId.toLowerCase() : null;
+  if (!h && !s && !uid) return { state: 'gone' };
+  const { data, error } = await callWorker(ROUTE, { ...(h ? { handle: h } : s ? { slug: s } : { user_id: uid }), ...(admin ? { admin: true } : {}) });
 
   // The old worker: no such route.
   if (data && data.path === `/${ROUTE}`) return s ? fromPublic(s) : { state: 'nothing' };
@@ -115,6 +118,8 @@ export async function getWorld({ handle = null, slug = null } = {}) {
   return {
     state: 'world',
     fallback: false,
+    admin_view: data.admin_view === true,
+    minor: data.minor === true,
     private: data.private === true,
     // Who the passport is for when it's closed to this viewer (2026-10-26): 'me' | 'inner' | 'followers'.
     audience: data.private === true && ['me', 'inner', 'followers'].includes(data.audience) ? data.audience : null,

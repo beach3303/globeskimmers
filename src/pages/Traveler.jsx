@@ -147,6 +147,9 @@ function TravelerWorld() {
   const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const h = lc(params.get("h"));
   const slug = cleanSlug(params.get("slug"));
+  // The admin view (2026-11-08): /Traveler?uid=<id>&admin=1 from the Admin page's member record.
+  const uid = params.get("uid") || null;
+  const admin = params.get("admin") === "1";
 
   const [res, setRes] = useState(null); // null while loading
   const [tick, setTick] = useState(0);
@@ -171,18 +174,18 @@ function TravelerWorld() {
         if (n !== live.current) return;
         if (data?.slug && cleanSlug(data.slug) === slug) { toProfile(); return; }
       }
-      const r = await getWorld({ handle: h, slug });
+      const r = await getWorld({ handle: h, slug, userId: uid, admin });
       if (n !== live.current) return;
       if (r.state === "world" && r.relation?.self) { toProfile(); return; }
       setRes(r);
     })();
     return () => { live.current += 1; };
-  }, [h, slug, tick, toProfile]);
+  }, [h, slug, uid, admin, tick, toProfile]);
 
   // Read the world again after an action, without blanking the page.
   const reread = async () => {
     const n = ++live.current;
-    const r = await getWorld({ handle: h, slug });
+    const r = await getWorld({ handle: h, slug, userId: uid, admin });
     if (n === live.current) setRes(r);
   };
   const onChanged = (what) => {
@@ -250,6 +253,11 @@ function TravelerWorld() {
     const firstCard = { marginTop: -72, position: "relative", zIndex: 1 };
     body = (
       <>
+        {world.admin_view ? (
+          <div style={{ position: "relative", zIndex: 2, margin: "0 0 12px", padding: "10px 14px", borderRadius: 12, background: "#B0472F", color: "#fff", fontSize: 12.5, lineHeight: 1.45, fontWeight: 600 }}>
+            Admin view — every stamp, photo and card, whatever its privacy{world.minor ? ". A minor’s passport" : ""}. For support, safety or a legal request only (privacy policy §2).
+          </div>
+        ) : null}
         {SHOW_LUGGAGE && world.luggage ? (
           <Luggage variant="card" readOnly cloth={cloth.key} stamps={orderedStamps} luggage={world.luggage}
             ownerFlags={world.flags || {}} ownerFirst={first} style={firstCard} />
