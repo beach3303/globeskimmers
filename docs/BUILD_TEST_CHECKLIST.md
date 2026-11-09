@@ -4804,3 +4804,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   admin })`, the Traveler page takes `?uid=<id>&admin=1` and wears a red ribbon "Admin view — every stamp, photo and
   card, whatever its privacy … support, safety or a legal request only (privacy policy §2)"; the Admin member record
   links "Open their passport as admin ›". Gates: node --check, lint, build, boot-check ✅. Needs push (worker) + OTA.
+
+## 2026-11-08 ~16:40 PT — PUSHED + ON PHONES: the admin passport view (main 8148f5c, workers run green, OTA 1.0.2611090036)
+
+  Admin → Members → tap a member → "Open their passport as admin ›" opens the book at the owner's level under the
+  red ribbon. Both store builds still in review.
