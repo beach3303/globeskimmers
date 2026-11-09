@@ -4817,3 +4817,14 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   chooser without setting it, so after the choice — once a location existed — the next Home mount (a tab away and
   back) asked again under the default 'ask' setting. Fix: that branch marks the run asked too. Gates: lint, build,
   boot-check ✅. Needs OTA (app only; push to keep main in step).
+
+## 2026-11-08 PM — COMMITTED: the admin opens a member's actual passport BOOK; shared covers carry the owner's name
+
+  Founder: the admin door led to "Nothing to show" (the Passport page loads a shared book by slug through
+  /passport/public, which keeps privacy), and a friend's cover read "A traveler". Worker (edd4433):
+  `POST /passport/public { user_id, admin: true }` from an admin login answers the book at the owner's level (every
+  stamp, every photo, the owner's booklet order; `admin_view`, `owner_id`, `slug`, `minor`); `ppHolderName` falls
+  back first name → profile display name → social display name → @handle (`ppHolder` keeps "A traveler" as the last
+  word); the Traveler page's `person.name` takes the same fallback. App (715f77d): `getAdminPassport(userId)`;
+  `/Passport?view_uid=<id>&admin=1` loads through it, red banner "Admin view — <Name>'s Virtual Passport …"; the
+  Traveler door in admin view goes there. Gates: node --check, lint, build, boot-check ✅. Needs push (worker) + OTA.
