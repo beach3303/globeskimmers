@@ -52,6 +52,8 @@ export default function useUsernameClaim(onDone, enabled = true) {
     if (busy || checking) return;
     setError(null);
     if (!HANDLE_RE.test(want)) { setError("Use 3–20 letters, numbers or _"); return; }
+    // The name this account already has: done, no round trip (it can never read as taken).
+    if (mine && want === String(mine).toLowerCase()) { onDone?.(mine); return; }
     const born = askBirthday ? splitDob(dob) : null;
     if (askBirthday && !born) { setError("Enter your full birthday"); return; }
     setBusy(true);

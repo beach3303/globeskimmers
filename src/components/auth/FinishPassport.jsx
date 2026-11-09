@@ -56,7 +56,16 @@ export default function FinishPassport() {
     if (!user?.id || !onboarded) { setNeed(null); needRef.current = null; setClear(false); setArmed(false); return undefined; }
     check();
     // The trigger: a save or a share needs the passport. Nothing missing → it goes on at once.
-    return registerPassportGate(() => { if (needRef.current) setArmed(true); else passportGateDone(true); });
+    // Re-read before asking (2026-11-08): a username claimed from Settings after this mounted — the
+    // founder did exactly that — must not be asked for again.
+    return registerPassportGate(() => { check().then(() => { if (needRef.current) setArmed(true); else passportGateDone(true); }).catch(() => { if (needRef.current) setArmed(true); else passportGateDone(true); }); });
+  }, [user?.id, onboarded, check]);
+  // A username saved anywhere in the app (setHandle) refreshes what is still missing.
+  useEffect(() => {
+    if (!user?.id || !onboarded) return undefined;
+    const on = () => { check(); };
+    window.addEventListener("gs:handle", on);
+    return () => window.removeEventListener("gs:handle", on);
   }, [user?.id, onboarded, check]);
 
   if (!need || !armed) return <><ConfirmBirthday /><PrivacyCheckup enabled={clear} /></>;
@@ -86,8 +95,9 @@ export default function FinishPassport() {
 // The @username, full screen and required: the same fields and checks as sign-up's step.
 function UsernameStepRequired({ firstName, stepLabel, onDone, onSignOut }) {
   const claim = useUsernameClaim((h) => onDone(h, false), true);
-  const { checking, minor, ready, busy, submit } = claim;
+  const { checking, mine, minor, ready, busy, submit } = claim;
   useEffect(() => { if (minor) onDone(null, true); }, [minor]);   // a teen's birthday: no username yet
+  useEffect(() => { if (mine) onDone(mine, false); }, [mine]);    // already has one (claimed elsewhere): nothing to ask
   return (
     <div className="fixed inset-0 z-[10040] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="gs-finish-h"
       style={{ background: IVORY, padding: "calc(28px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))" }}>

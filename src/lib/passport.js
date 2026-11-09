@@ -515,6 +515,9 @@ export async function reportShared({ slug, kind, ref, reason, note }) {
 }
 export async function setHandle(handle, heldToken) {
   const { data, error } = await callWorker('social/handle', heldToken ? { handle, held_token: heldToken } : { handle });
+  // A saved username announces itself (2026-11-08): the sign-up gate re-reads instead of asking for one
+  // again — the founder claimed @lily from Settings, then the passport's "Pick your @username" still came.
+  if (data?.handle && !error) { try { window.dispatchEvent(new CustomEvent('gs:handle', { detail: { handle: data.handle } })); } catch { /* ignore */ } }
   return { handle: data?.handle || null, suggestions: data?.suggestions || [], heldClaim: data?.held_claim === true, heldName: data?.held_name || null, code: data?.code || null, error: error || data?.error || null };
 }
 // My incoming pending tags (the passive "Tagged you" inbox — email path).
