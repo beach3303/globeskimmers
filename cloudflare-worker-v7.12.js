@@ -17359,6 +17359,79 @@ async function handleDishPhotoServe(request, env) {
   } catch { return new Response('Error', { status: 500 }); }
 }
 
+
+// ── Sign in with Yahoo (founder, 2026-11-08: "i do want to do the yahoo") ──────────────────────────────
+// Supabase has no Yahoo provider, so the worker is the OAuth client: /auth/yahoo/start sends the browser to
+// Yahoo (OpenID Connect, scope openid email profile); /auth/yahoo/callback trades the code for the verified
+// email, makes sure the Supabase account exists (admin API), mints a one-time sign-in token (admin
+// generate_link, magiclink) and sends the browser to globeskimmers.io/open/signin — the page the email button
+// uses — which opens the app, and the app verifies the token (verifyOtp). Only the email, the first name and
+// the verified flag are read; no Yahoo token is kept. The state lives in KV for ten minutes.
+// Secrets: YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET (wrangler secret put). The redirect URI registered at Yahoo is
+// <this worker's origin>/auth/yahoo/callback.
+const YAHOO_AUTH = 'https://api.login.yahoo.com/oauth2/request_auth';
+const YAHOO_TOKEN = 'https://api.login.yahoo.com/oauth2/get_token';
+const YAHOO_USERINFO = 'https://api.login.yahoo.com/openid/v1/userinfo';
+const yahooFail = (why) => Response.redirect(`https://globeskimmers.io/open/signin?error=${encodeURIComponent(why)}`, 302);
+async function handleYahooStart(request, env) {
+  if (!env.YAHOO_CLIENT_ID || !env.YAHOO_CLIENT_SECRET) return jsonResponse({ error: 'Yahoo sign-in isn’t set up yet' }, 503);
+  const origin = new URL(request.url).origin;
+  const state = crypto.randomUUID().replace(/-/g, '');
+  const nonce = crypto.randomUUID().replace(/-/g, '');
+  if (env.GLOBESKIMMERS_KV) await env.GLOBESKIMMERS_KV.put(`yahoo_state:${state}`, nonce, { expirationTtl: 600 });
+  const u = new URL(YAHOO_AUTH);
+  u.searchParams.set('client_id', env.YAHOO_CLIENT_ID);
+  u.searchParams.set('redirect_uri', `${origin}/auth/yahoo/callback`);
+  u.searchParams.set('response_type', 'code');
+  u.searchParams.set('scope', 'openid email profile');
+  u.searchParams.set('state', state);
+  u.searchParams.set('nonce', nonce);
+  return Response.redirect(u.toString(), 302);
+}
+async function handleYahooCallback(request, env) {
+  try {
+    const url = new URL(request.url);
+    const origin = url.origin;
+    const q = url.searchParams;
+    if (q.get('error')) return yahooFail('yahoo_declined');
+    const code = q.get('code');
+    const state = q.get('state') || '';
+    if (!code || !/^[a-f0-9]{32}$/.test(state)) return yahooFail('yahoo_state');
+    const kv = env.GLOBESKIMMERS_KV;
+    const nonce = kv ? await kv.get(`yahoo_state:${state}`) : null;
+    if (!nonce) return yahooFail('yahoo_state');
+    await kv.delete(`yahoo_state:${state}`).catch(() => {});
+    const basic = btoa(`${env.YAHOO_CLIENT_ID}:${env.YAHOO_CLIENT_SECRET}`);
+    const tr = await fetch(YAHOO_TOKEN, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: `${origin}/auth/yahoo/callback` }).toString(),
+    }).catch(() => null);
+    const tok = tr && tr.ok ? await tr.json().catch(() => null) : null;
+    if (!tok?.access_token) return yahooFail('yahoo_token');
+    const ur = await fetch(YAHOO_USERINFO, { headers: { Authorization: `Bearer ${tok.access_token}` } }).catch(() => null);
+    const info = ur && ur.ok ? await ur.json().catch(() => null) : null;
+    const email = String(info?.email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return yahooFail('yahoo_email');
+    if (info.email_verified === false) return yahooFail('yahoo_unverified');
+    const key = GB_KEY(env);
+    if (!key) return yahooFail('server');
+    const auth = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+    const first = String(info.given_name || String(info.name || '').split(' ')[0] || '').trim().slice(0, 60);
+    // The account: created with the email confirmed (Yahoo verified it); an existing one is left as it is.
+    const cr = await fetch(`${GB_URL(env)}/auth/v1/admin/users`, { method: 'POST', headers: auth, body: JSON.stringify({ email, email_confirm: true, user_metadata: { ...(first ? { first_name: first } : {}), signin_provider: 'yahoo' } }) }).catch(() => null);
+    if (!cr || (!cr.ok && cr.status !== 422)) return yahooFail('account');   // 422: already registered
+    // A one-time sign-in token, the same kind the email button carries.
+    const lr = await fetch(`${GB_URL(env)}/auth/v1/admin/generate_link`, { method: 'POST', headers: auth, body: JSON.stringify({ type: 'magiclink', email }) }).catch(() => null);
+    const link = lr && lr.ok ? await lr.json().catch(() => null) : null;
+    const hashed = link?.properties?.hashed_token || link?.hashed_token;
+    if (!hashed) return yahooFail('token');
+    return Response.redirect(`https://globeskimmers.io/open/signin?token_hash=${encodeURIComponent(hashed)}&type=magiclink`, 302);
+  } catch (e) {
+    return yahooFail('server');
+  }
+}
+
 // Serve a stamp photo from R2 (unguessable key). Private-by-obscurity.
 // /pp-photo/p/<photo id>: by the photo, only one that passed review — what a
 // shared passport shows anyone but its owner.
@@ -31157,6 +31230,8 @@ export default {
       if (pathname === '/places/owner-note' && request.method === 'POST') return await handleOwnerNote(request, env, ctx);
 
       // Passport (personal, private)
+      if (pathname === '/auth/yahoo/start' && request.method === 'GET') return await handleYahooStart(request, env);
+      if (pathname === '/auth/yahoo/callback' && request.method === 'GET') return await handleYahooCallback(request, env);
       if (pathname.startsWith('/pp-photo/') && request.method === 'GET') return await handlePassportPhotoServe(request, env);
       if (pathname.startsWith('/pp-video/') && (request.method === 'GET' || request.method === 'HEAD')) return await handlePassportVideoServe(request, env);
       if (pathname.startsWith('/passport/video/') && request.method === 'PUT') return await handlePassportVideoPut(request, env, ctx);
