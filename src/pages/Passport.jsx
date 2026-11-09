@@ -1728,6 +1728,7 @@ function PassportInner({ embedded = false }) {
               countries={statsView.countries || 0}
               totalStamps={stampsView.length}
               onOpenStamp={(id) => ((readOnly || preview) ? setOpenStampId(id) : setActionsId(id))}
+              onOpenPhoto={(id, i) => { const st = stampsView.find((s) => s.id === id) || stamps.find((s) => s.id === id); if (st) enlargeStampPhotos(st, i); }}
               renderUnderPage={!preview && blSlug ? (pgStamps) => (
                 <BlotterStrip slug={blSlug} stamps={pgStamps} blotter={blotter} ownerView={!readOnly} onChanged={refreshBlotter} />
               ) : null}

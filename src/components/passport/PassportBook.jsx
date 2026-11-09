@@ -188,7 +188,7 @@ export function packBookPages(stamps, pageW, fsScale = 1) {
 // constant fraction across phones (lets pagination fit each page with no scroll).
 // Airport ≈ ⅓ page; iconic ≈ ½ page with "I was here!", a big ink date, and up
 // to 4 memory photos in a 2×2 grid.
-function StampToken({ stamp, idx, onOpen, pageW, frameW = pageW, compact = false, tierMark = false }) {
+function StampToken({ stamp, idx, onOpen, pageW, frameW = pageW, compact = false, tierMark = false, onPhoto = null }) {
   const [artFail, setArtFail] = useState(false);
   // In the booklet each stamp keeps its own tilt (its half of the page places
   // it); on a shared page the tilt and nudge follow its order on the page.
@@ -373,9 +373,11 @@ function StampToken({ stamp, idx, onOpen, pageW, frameW = pageW, compact = false
         <div style={compact
           ? { display: "grid", gridTemplateColumns: `repeat(${photos.length}, ${thumbW}px)`, gap: 6, marginTop: 8, justifyContent: "center" }
           : { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12, width: thumbW * 2 + 8, marginLeft: "auto", marginRight: "auto" }}>
-          {photos.map((p) => (
-            <span key={p.id} role="img" aria-label="Memory photo"
-              style={{ display: "block", width: thumbW, height: thumbW, borderRadius: compact ? 7 : 10, border: `1px solid ${PAPER_EDGE}`, ...coverBg(p.photo_url) }} />
+          {photos.map((p, i) => (
+            // A tap on a memory photo opens the photo itself, full screen (founder, 2026-11-08), not the stamp's card.
+            <span key={p.id} role={onPhoto ? "button" : "img"} aria-label={onPhoto ? "Open memory photo" : "Memory photo"}
+              onClick={onPhoto ? (e) => { e.stopPropagation(); onPhoto(i); } : undefined}
+              style={{ display: "block", width: thumbW, height: thumbW, borderRadius: compact ? 7 : 10, border: `1px solid ${PAPER_EDGE}`, cursor: onPhoto ? "zoom-in" : undefined, ...coverBg(p.photo_url) }} />
           ))}
         </div>
       )}
@@ -393,7 +395,7 @@ function StampToken({ stamp, idx, onOpen, pageW, frameW = pageW, compact = false
 // the calmer edge of the open photo (calmEdge), unless the traveller pinned it
 // above or below from the stamp options (meta.stamp_pos). The scene and the
 // two leads print underneath. Always a page of its own.
-function PhotoFirstToken({ stamp, onOpen, pageW }) {
+function PhotoFirstToken({ stamp, onOpen, pageW, onPhoto = null }) {
   const photos = (stamp.photos || []).filter((p) => p && p.photo_url).slice(0, 4);
   const [cur, setCur] = useState(0);
   const main = photos[cur % photos.length] || photos[0];
@@ -418,7 +420,9 @@ function PhotoFirstToken({ stamp, onOpen, pageW }) {
   const open = () => onOpen(stamp);
   const photo = (
     <div style={{ position: "relative", width: "100%", flex: "1 1 auto", minHeight: photoH, maxHeight: Math.round(1.05 * pageW), borderRadius: Math.round(0.035 * pageW), overflow: "hidden", background: "#E9E1D2" }}>
-      <div role="img" aria-label={`My photo at ${stamp.name}`} style={{ position: "absolute", inset: 0, ...coverBg(main.photo_url) }} />
+      <div role={onPhoto ? "button" : "img"} aria-label={onPhoto ? `Open my photo at ${stamp.name}` : `My photo at ${stamp.name}`}
+        onClick={onPhoto ? (e) => { e.stopPropagation(); onPhoto(cur % photos.length); } : undefined}
+        style={{ position: "absolute", inset: 0, cursor: onPhoto ? "zoom-in" : undefined, ...coverBg(main.photo_url) }} />
       {next && (
         <button type="button" aria-label={`Show photo ${((cur + 1) % photos.length) + 1} of ${photos.length}`}
           onClick={(e) => { e.stopPropagation(); setCur((c) => (c + 1) % photos.length); }}
@@ -494,6 +498,64 @@ function CoverName({ url, owner }) {
 // ✈️/🌍 watermark and a page number in the lower outer (right) corner. running: someone
 // else's passport names its owner in a faint line across the top of every page
 // (founder, 2026-10-25: "so we don't get confused that it isn't ours").
+// Pinch to zoom an open page (founder, 2026-11-08: "pinch in and out to zoom in and out a passport page
+// so they can see the stamps"). Two fingers scale the page 1–3× about the pinch; one finger pans while
+// zoomed; pinching back under 1.05× snaps to 1×. At 1× nothing changes: taps open stamps and photos, a
+// horizontal swipe turns the page; the book's swipe reads zoomRef and stands down while zoomed. Pure touch
+// math — no library — and nothing to prevent: the viewport is already unscalable, and touch-action: none
+// keeps a zoomed pan from scrolling the page behind.
+function ZoomStage({ children, zoomRef, resetKey }) {
+  const [tf, setTf] = useState({ s: 1, x: 0, y: 0 });
+  const g = useRef(null);      // the live gesture
+  const box = useRef(null);
+  useEffect(() => { setTf({ s: 1, x: 0, y: 0 }); }, [resetKey]);
+  useEffect(() => { if (zoomRef) zoomRef.current = { zoomed: tf.s > 1.02 }; }, [tf.s, zoomRef]);
+  const clamp = (t) => {
+    const el = box.current;
+    if (!el) return t;
+    const w = el.clientWidth, h = el.clientHeight;
+    const s = Math.min(3, Math.max(1, t.s));
+    const minX = w - w * s, minY = h - h * s;   // the page keeps covering its frame
+    return { s, x: Math.min(0, Math.max(minX, t.x)), y: Math.min(0, Math.max(minY, t.y)) };
+  };
+  const pt = (e, i) => { const r = box.current.getBoundingClientRect(); const t = e.touches[i]; return { x: t.clientX - r.left, y: t.clientY - r.top }; };
+  const onStart = (e) => {
+    if (e.touches.length === 2) {
+      const a = pt(e, 0), b = pt(e, 1);
+      g.current = { kind: "pinch", d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, t0: tf };
+    } else if (e.touches.length === 1 && tf.s > 1.02) {
+      g.current = { kind: "pan", p0: pt(e, 0), t0: tf };
+    } else g.current = null;
+  };
+  const onMove = (e) => {
+    const cur = g.current;
+    if (!cur) return;
+    if (cur.kind === "pinch" && e.touches.length === 2) {
+      const a = pt(e, 0), b = pt(e, 1);
+      const s = Math.min(3, Math.max(1, cur.t0.s * (Math.hypot(a.x - b.x, a.y - b.y) / cur.d0)));
+      // Scale about the pinch midpoint: what sits under the fingers stays under them.
+      const m = cur.mid, k = s / cur.t0.s;
+      setTf(clamp({ s, x: m.x - (m.x - cur.t0.x) * k, y: m.y - (m.y - cur.t0.y) * k }));
+    } else if (cur.kind === "pan" && e.touches.length === 1) {
+      const a = pt(e, 0);
+      setTf(clamp({ s: cur.t0.s, x: cur.t0.x + (a.x - cur.p0.x), y: cur.t0.y + (a.y - cur.p0.y) }));
+    }
+  };
+  const onEnd = (e) => {
+    if (e.touches.length > 0) return;
+    g.current = null;
+    setTf((t) => (t.s < 1.05 ? { s: 1, x: 0, y: 0 } : t));
+  };
+  return (
+    <div ref={box} onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd} onTouchCancel={onEnd}
+      style={{ position: "absolute", inset: 0, overflow: "hidden", touchAction: tf.s > 1.02 ? "none" : "pan-y" }}>
+      <div style={{ position: "absolute", inset: 0, transformOrigin: "0 0", transform: `translate(${tf.x}px, ${tf.y}px) scale(${tf.s})`, transition: g.current ? "none" : "transform 160ms ease-out" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function Paper({ children, coverH, pageNo, watermark, grow = false, running = null }) {
   return (
     <div style={{
@@ -588,12 +650,12 @@ function CollectibleOnPage({ item, tiers, onOpen }) {
 // share size, centred, the way pages were shared before (it may grow taller than
 // a page; the share frame scales it to fit).
 const SPOT = ["flex-start", "center", "flex-end"];
-function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW, share = false, tiers = false, running = null }) {
+function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW, share = false, tiers = false, running = null, onOpenPhoto = null }) {
   if (pg.stamps.length === 1 && isPhotoFirst(pg.stamps[0])) {
     return (
       <Paper coverH={coverH} pageNo={pageNo} watermark={watermark} running={running}>
         <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 18 }}>
-          <PhotoFirstToken stamp={pg.stamps[0]} onOpen={() => onOpenStamp(pg.stamps[0].id)} pageW={pageW} />
+          <PhotoFirstToken stamp={pg.stamps[0]} onOpen={() => onOpenStamp(pg.stamps[0].id)} pageW={pageW} onPhoto={onOpenPhoto ? (i) => onOpenPhoto(pg.stamps[0].id, i) : null} />
         </div>
       </Paper>
     );
@@ -622,7 +684,7 @@ function StampPage({ pg, onOpenStamp, coverH, pageNo, watermark, pageW, share = 
       <div style={{ position: "relative", height: "100%", display: "grid", gridTemplateRows: rows, gap: HALF_PAD.gap, paddingTop: HALF_PAD.top, paddingBottom: HALF_PAD.bottom }}>
         {halves.map((s, j) => (
           <div key={s ? s.id : `empty-${j}`} style={{ display: "flex", minHeight: 0, padding: "2px 4px", ...(s ? spot(s) : {}), ...(pg.full ? { justifyContent: "center", alignItems: "center" } : {}) }}>
-            {s && <StampToken stamp={s} idx={j} onOpen={() => onOpenStamp(s.id)} pageW={pageW} compact tierMark={tiers} />}
+            {s && <StampToken stamp={s} idx={j} onOpen={() => onOpenStamp(s.id)} pageW={pageW} compact tierMark={tiers} onPhoto={onOpenPhoto ? (i) => onOpenPhoto(s.id, i) : null} />}
           </div>
         ))}
       </div>
@@ -677,6 +739,7 @@ function EmptyCollectionPage({ coverH, pageNo, watermark, first = false, running
 
 export default function PassportBook({
   stamps, holder, homeCountry, countries, totalStamps, onOpenStamp,
+  onOpenPhoto = null,     // (stampId, photoIndex): a memory photo tapped on a page opens full screen (2026-11-08)
   coverUrl = PASSPORT_COVER_URL,
   renderUnderPage = null, // (pageStamps) => node — the Blotter strip under an open page
   showTiers = false,      // the owner's view: corner marks + tier-aware picture shares
@@ -740,12 +803,16 @@ export default function PassportBook({
   // Swipe via raw touch (reliable in the iOS WebView, unlike framer drag).
   // Vertical scroll is preserved — we only act on a mostly-horizontal swipe.
   const touch = useRef(null);
+  const zoomRef = useRef({ zoomed: false });   // ZoomStage: the open page's pinch state (2026-11-08)
   const onTouchStart = useCallback((e) => {
+    // Two fingers, or a page already zoomed in: the pinch and the pan are the page's, not a turn.
+    if ((e.touches && e.touches.length > 1) || zoomRef.current?.zoomed) { touch.current = null; return; }
     const t = e.changedTouches[0];
     touch.current = { x: t.clientX, y: t.clientY };
   }, []);
   const onTouchEnd = useCallback((e) => {
     if (!touch.current) return;
+    if ((e.touches && e.touches.length > 0) || zoomRef.current?.zoomed) { touch.current = null; return; }
     const t = e.changedTouches[0];
     const dx = t.clientX - touch.current.x;
     const dy = t.clientY - touch.current.y;
@@ -785,7 +852,7 @@ export default function PassportBook({
       collectible={(collectibles || []).find((c) => collectibleOf(c.badge)) || null} tiers={showTiers} onOpenCollectible={onOpenCollectible} />;
     const ci = idx - 1; // 0-based index into the collection (stamp pages, then blanks)
     const running = owner ? bookName : null;
-    if (ci < stampCount) return <StampPage pg={bookPages[ci]} onOpenStamp={onOpenStamp} coverH={coverH} pageNo={pageNo} watermark={watermark} pageW={pageW} tiers={showTiers} running={running} />;
+    if (ci < stampCount) return <StampPage pg={bookPages[ci]} onOpenStamp={onOpenStamp} onOpenPhoto={onOpenPhoto} coverH={coverH} pageNo={pageNo} watermark={watermark} pageW={pageW} tiers={showTiers} running={running} />;
     return <EmptyCollectionPage coverH={coverH} pageNo={pageNo} watermark={watermark} first={ci === stampCount && stampCount === 0} running={running} />;
   };
 
@@ -1069,7 +1136,7 @@ export default function PassportBook({
                 transition={{ duration: pageDur, ease: [0.22, 0.61, 0.36, 1] }}
                 style={{ position: "absolute", inset: 0, transformOrigin: "center" }}
               >
-                {renderPage(page)}
+                <ZoomStage zoomRef={zoomRef} resetKey={page}>{renderPage(page)}</ZoomStage>
               </motion.div>
             </AnimatePresence>
           </div>
