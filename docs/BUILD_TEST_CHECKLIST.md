@@ -4789,3 +4789,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   per member on demand, as privacy policy §2 states ("our team opens one member's activity only for support, safety
   or a legal request"); no browse-everyone feed. Gates: node --check, lint, build, boot-check ✅. Needs push (worker)
   + OTA (page). Also committed since the last push: the no-curfew stay-sensing decision (docs).
+
+## 2026-11-08 — PUSHED + ON PHONES: admin audit pull (main 77f14ce, workers run green) + OTA 1.0.2611090016
+
+  The per-member record (passport at every privacy level, cards with hidden stay names, board uploads by city) is
+  live on the worker and in the Admin page bundle. Both store builds still in review (iOS 1.0.7 (19), Play 1.0.13 (16)).
