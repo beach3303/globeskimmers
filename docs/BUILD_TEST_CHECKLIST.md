@@ -4881,3 +4881,19 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   email is now the forgot-password door ("Forgot your password? Email me a sign-in button"), worded as a green
   button, never "link". Yahoo one-tap: not available from Supabase; would be a hand-built OAuth (~1.5 days +
   her developer.yahoo.com app) — parked until the password flow has been seen. Gates: lint, build, boot-check ✅.
+
+## 2026-11-08 night — COMMITTED, NOT PUSHED: Sign in with Yahoo (worker + app + site)
+
+  Founder: "i do want to do the yahoo." Supabase has no Yahoo provider, so the worker is the OAuth client:
+  `GET /auth/yahoo/start` (state + nonce in KV, 10 min) → Yahoo OpenID Connect (scope openid email profile) →
+  `GET /auth/yahoo/callback` → code → token (Basic client id:secret) → userinfo (email, email_verified,
+  given_name) → Supabase admin `POST /auth/v1/admin/users` (email_confirm true; 422 = exists) → admin
+  `generate_link { type: magiclink }` → `hashed_token` → 302 to `https://globeskimmers.io/open/signin?token_hash=…
+  &type=magiclink` → app `verifyOtp`. App: `startYahooSignIn` (in-app browser to the worker), `signInYahoo`,
+  "Continue with Yahoo" (purple) on the sign-in page only. Site page shows words for `?error=yahoo_*`.
+  Gates: node --check, lint, build, boot-check ✅.
+  - **Activate (founder):** (1) developer.yahoo.com → Create an app (Web Application), redirect URI
+    `https://globeskimmers-api.maizasimeon.workers.dev/auth/yahoo/callback`, API permissions: OpenID Connect →
+    Email + Profile; (2) `npx wrangler secret put YAHOO_CLIENT_ID` and `npx wrangler secret put YAHOO_CLIENT_SECRET`
+    (permission gate: she runs them); (3) push (worker + site deploy) + `npm run ota`. Until the secrets exist the
+    button answers "Yahoo sign-in isn’t set up yet".
