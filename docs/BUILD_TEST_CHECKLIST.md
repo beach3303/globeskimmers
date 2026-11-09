@@ -4794,3 +4794,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 
   The per-member record (passport at every privacy level, cards with hidden stay names, board uploads by city) is
   live on the worker and in the Admin page bundle. Both store builds still in review (iOS 1.0.7 (19), Play 1.0.13 (16)).
+
+## 2026-11-08 PM — COMMITTED, NOT PUSHED: the admin view of a member's passport (the book itself)
+
+  Founder: "I thought that as Admin I would be able to view each user's virtual passport." `POST /social/world`
+  with `admin: true` from an admin login (e131828) answers at the OWNER's level (lvl 3): every stamp whatever its
+  privacy, every photo (owner key links), every card with every name, by @handle, share link or `user_id` (no
+  follow needed), minors included (`minor: true`), `admin_view: true` in the reply. App (6efef19): `getWorld({ userId,
+  admin })`, the Traveler page takes `?uid=<id>&admin=1` and wears a red ribbon "Admin view — every stamp, photo and
+  card, whatever its privacy … support, safety or a legal request only (privacy policy §2)"; the Admin member record
+  links "Open their passport as admin ›". Gates: node --check, lint, build, boot-check ✅. Needs push (worker) + OTA.
