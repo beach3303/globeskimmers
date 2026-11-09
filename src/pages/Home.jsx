@@ -155,7 +155,11 @@ export default function HomePage() {
       const hasLoc = !!getActiveLocation()?.coordinates;
       if (!hasLoc) {
         // First run / no location yet — open the chooser (📍 current vs 🗺️ pick).
+        // This counts as the app run's one ask too (founder, 2026-11-08: "it always pops up twice"): the
+        // flag below used to be set only on the other branch, so after this ask, once a location was set,
+        // the next Home mount — a tab away and back — asked again under the 'ask' setting.
         pickerPrompted.current = true;
+        coldOpenAsked = true;
         setColdOpenChooser(true);
         setShowLocationPicker(true);
       } else if (!coldOpenAsked) {
