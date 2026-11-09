@@ -4872,3 +4872,12 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
     "Confirm signup" (new accounts, `type=signup`) and "Magic Link" (existing accounts, `type=magiclink`) — see the
     chat of 2026-11-08 for the exact HTML. Then push (site page deploys itself) + `npm run ota`. First real test:
     a fresh email on a phone.
+
+## 2026-11-08 later — COMMITTED: password first, no email step (founder: "I hate having to go to email")
+
+  AuthGate: Google · Apple · Email + Password; "Create an account" → `signUp` → with Supabase "Confirm email" OFF
+  (founder's switch: Authentication → Providers → Email) the session comes back at once and the welcome screen
+  takes over; if confirmation is still on, the one-tap email is sent instead and the screen says so. The sign-in
+  email is now the forgot-password door ("Forgot your password? Email me a sign-in button"), worded as a green
+  button, never "link". Yahoo one-tap: not available from Supabase; would be a hand-built OAuth (~1.5 days +
+  her developer.yahoo.com app) — parked until the password flow has been seen. Gates: lint, build, boot-check ✅.
