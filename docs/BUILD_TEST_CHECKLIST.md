@@ -4953,3 +4953,16 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   - The inventory spreadsheet (4 sheets: Summary · Stampable with art · Art waiting for a place · List places
     without art) counts the 25 as "after the revive SQL". LibreOffice isn't on this Mac, so its six COUNT formulas
     were not recalculated here; Numbers/Excel compute them on open.
+
+## 2026-11-09 — COMMITTED (e10d236), NOT PUSHED: My uploads = the photos, one line of words; every upload listed
+
+  Founder (screenshots of the album reading "Nothing here yet" under a 1/10 collectible count): "my upload folder
+  should simply show videos and photos that I have uploaded … when you click Show it doesn't show anything … not a
+  lot of wording." Findings: rows are inserted `mod_status='ok'`, so an empty list means no live rows for that
+  account — the 1/10 is `board_contrib_tally`, which only ever went up (a deleted photo kept counting); the "Show"
+  button only unfolded the public note. Built: album mode shows the grid first (by city, views/likes/clip badges
+  as before), then one line "🏅 Collectible stamp · n/10 photos · n/3 cities" (the full card once earned), the
+  Upload button, and one footer line "Public, from “a traveler”. Delete any one any time." — no paragraph, no
+  postage box, no Show/Hide. Worker: `/board/contributions` lists every row of the owner's whatever `mod_status`
+  (non-ok reads as taken down) and `bcTallyDrop` lowers posted/cities on delete. Shot: scratchpad/shots/uploads.png
+  (mock). Gates: node --check, lint, build, boot-check ✅. Needs push (worker) + OTA (app).
