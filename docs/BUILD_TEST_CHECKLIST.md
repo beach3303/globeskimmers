@@ -4991,3 +4991,13 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   rows to the main id, so a missing photo was deleted or never finished posting; the "1 / 10" is the tally that
   only ever climbed. Added `bcTallySync` (committed): the tally is re-derived from the live rows on every read of
   the list, so the count heals itself. Needs push (worker) + OTA (sheet).
+
+## 2026-11-10 ~03:10 PT — LIVE: push 6ec1c73 (workers + website green, app-version 1.0.7/1.0.13 on the site) + OTA 1.0.2611101041 (the My uploads sheet is on phones now)
+
+  Then the founder drew 9 of the 11 revived places' stamps (1122×1402 RGBA PNGs, ~4 MB each, her engraving
+  style): Galata Tower, Westminster Abbey, Tokyo Skytree, National Palace Museum, American Museum of Natural
+  History, Basilica Cistern, Camp Nou, Corfe Castle, Rodeo Drive → uploaded to R2 `stamp-art/<slug>.png` by
+  wrangler (the gate allowed `r2 object put`). The app draws art in a square box with object-fit contain, so the
+  portrait shape shows letterboxed, no code change. Not drawn: Tokyo Disneyland, Shanghai Disneyland (typographic
+  stamp stays). Also still undrawn from the 1,000 list: Hollywood Sign, Dotonbori, Naoshima, Fenway Park, Walt
+  Disney World, Graceland.
