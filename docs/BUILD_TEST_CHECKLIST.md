@@ -4975,3 +4975,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   + bcTallyDrop) — two commits behind main at the time of writing.
 
 ## 2026-11-10 02:18 PT — PUSHED: the uploads worker half (main a28f0da, workers run green). Nothing unpushed.
+
+## 2026-11-10 02:25 PT — APPROVED: iOS 1.0.7 (19) "Ready for Distribution" + Play 1.0.13 (16) submission 12 "Published"
+
+  Border Watch, region cards, the clip-door fix are in both stores. `site/app-version.json` → ios 1.0.7 /
+  android 1.0.13 (committed; deploys with the next push). Play Console asks for the EU trader-status declaration
+  by February 2027 and shows the dead base44 URL as the account website — see the chat of 2026-11-10 for the
+  advice (declare trader once a business address exists; website → globeskimmers.io via Search Console).
