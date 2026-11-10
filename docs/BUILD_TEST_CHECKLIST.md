@@ -4973,3 +4973,5 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   class_ban NULL; the worker's gid2d1v5 cache is deployed. The OTA carries the Arc de Triomphe allowance, the six
   park aliases and the My uploads sheet. STILL TO PUSH: e10d236's worker half (every upload of the owner's listed
   + bcTallyDrop) — two commits behind main at the time of writing.
+
+## 2026-11-10 02:18 PT — PUSHED: the uploads worker half (main a28f0da, workers run green). Nothing unpushed.
