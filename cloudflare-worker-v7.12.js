@@ -22669,12 +22669,16 @@ async function handleBoardContributions(request, env) {
     // Every row of theirs, whatever its moderation state (2026-11-09, founder: "my upload folder should simply
     // show videos and photos that I have uploaded"): one taken down by a report or by the team shows as taken
     // down, never vanishes on its owner.
-    let q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&video_ready=eq.true&order=created_at.desc&limit=1000&select=id,caption,city,region,country,taken_at,created_at,hidden,mod_status,kind,duration,filter,marks`, {});
-    if (q.status === 400) q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&order=created_at.desc&limit=1000&select=id,caption,city,region,country,taken_at,created_at,hidden,mod_status`, {});
+    let q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&video_ready=eq.true&order=created_at.desc&limit=1000&select=id,board_key,caption,city,region,country,taken_at,created_at,hidden,mod_status,kind,duration,filter,marks`, {});
+    if (q.status === 400) q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&order=created_at.desc&limit=1000&select=id,board_key,caption,city,region,country,taken_at,created_at,hidden,mod_status`, {});
     if (q.status === 404) return jsonResponse({ photos: [], open_until: '2027-06-30', unavailable: true });
     if (!q.ok) return jsonResponse({ error: 'Couldn’t load your photos — try again', photos: [] }, 502);
     const origin = new URL(request.url).origin;
-    const photos = (await q.json()).map((r) => ({ ...r, hidden: !!r.hidden || (r.mod_status != null && r.mod_status !== 'ok'), url: bcPhotoUrl(origin, r.id), ...(r.kind === 'video' ? { video: bcVideoUrl(origin, r.id), duration: r.duration || null, filter: r.filter || null, marks: r.marks || null } : {}) }));
+    const rows = await q.json();
+    // The collectible's count is re-derived from the live rows on every read (2026-11-10): a "1 / 10" that
+    // outlived its photo (the tally only ever climbed before bcTallyDrop) heals itself here.
+    await bcTallySync(env, user.id, rows).catch(() => {});
+    const photos = rows.map((r) => ({ ...r, hidden: !!r.hidden || (r.mod_status != null && r.mod_status !== 'ok'), url: bcPhotoUrl(origin, r.id), ...(r.kind === 'video' ? { video: bcVideoUrl(origin, r.id), duration: r.duration || null, filter: r.filter || null, marks: r.marks || null } : {}) }));
     // The owner sees how often each of their photos was opened on the boards (2026-10-30).
     const vm = await viewsFor(env, photos.map((p) => `bcp:${p.id}`));
     for (const p of photos) p.views = vm[`bcp:${p.id}`] || 0;
@@ -22758,6 +22762,19 @@ async function bcTallyDrop(env, userId, boardKey) {
     const left = await gbRest(env, `board_contributions?user_id=eq.${userId}&board_key=eq.${encodeURIComponent(boardKey)}&select=id&limit=1`, {});
     if (left.ok && !(await left.json()).length) cities = cities.filter((c) => c !== boardKey);
   }
+  await gbRest(env, `board_contrib_tally?user_id=eq.${userId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ posted, cities }) });
+}
+// The tally made to match the live rows (public ones: mod_status ok, not hidden): posted = their count,
+// cities = the distinct board keys. Writes only when something differs; never creates a row from nothing.
+async function bcTallySync(env, userId, rows) {
+  const live = (rows || []).filter((r) => !r.hidden && (r.mod_status == null || r.mod_status === 'ok'));
+  const posted = live.length;
+  const cities = [...new Set(live.map((r) => r.board_key).filter(Boolean))];
+  const r = await gbRest(env, `board_contrib_tally?user_id=eq.${userId}&select=posted,cities`, {});
+  const row = r.ok ? (await r.json())[0] : null;
+  if (!row) return;
+  const had = Array.isArray(row.cities) ? row.cities : [];
+  if (Number(row.posted) === posted && had.length === cities.length && had.every((c) => cities.includes(c))) return;
   await gbRest(env, `board_contrib_tally?user_id=eq.${userId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ posted, cities }) });
 }
 async function bcTally(env, userId) {
