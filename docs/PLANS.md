@@ -31,6 +31,17 @@ docs/research/ and folded into one page — https://claude.ai/artifact/6q3WsLiBQ
 (the sized build queue, the ten founder decisions, first five partnership deals, LA28
 timeline, the first-party data rules). It supersedes the raw list below as the working plan.
 
+## Play Console housekeeping — tabled 2026-11-10 (founder: "let's tab these for another day")
+
+- **EU trader status** — declare by **February 2027** or Play removes the app globally. Globeskimmers is a
+  business → "trader"; a trader's name, address, email and phone show to EU users, and the profile still
+  carries the founder's home address. Order: get a business address (ties to the accelerator / entity
+  decision) → put it on the Play developer profile → declare trader. Remind the founder by **2027-01-15**.
+- **Account website** still reads the dead base44 URL → `https://globeskimmers.io`, which needs Google Search
+  Console ownership first. Founder chose the HTML-file method over DNS: she adds the URL-prefix property in
+  Search Console, downloads the `google….html` file, Claude commits it into `site/`, she pushes, taps Verify,
+  then Play Console → Account details → Website → Send verification request.
+
 ## Cards are regional, twenty stamps, with stays — founder decision 2026-11-06 (amends the City Cards section below)
 
 **Decided (founder, 2026-11-06, "yes to all except Passport wrap"; docs/plans/cards-and-passport.md):** a card
