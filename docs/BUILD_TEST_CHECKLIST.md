@@ -4966,3 +4966,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   postage box, no Show/Hide. Worker: `/board/contributions` lists every row of the owner's whatever `mod_status`
   (non-ok reads as taken down) and `bcTallyDrop` lowers posted/cities on delete. Shot: scratchpad/shots/uploads.png
   (mock). Gates: node --check, lint, build, boot-check ✅. Needs push (worker) + OTA (app).
+
+## 2026-11-09 ~22:50 PT — LIVE: the revived world icons (SQL run by the founder; main ed441d8, workers green) + OTA 1.0.2611100650
+
+  The five spot-checked rows (Eiffel Tower, Colosseum, Taj Mahal, Tower Bridge, Sydney Opera House) read
+  class_ban NULL; the worker's gid2d1v5 cache is deployed. The OTA carries the Arc de Triomphe allowance, the six
+  park aliases and the My uploads sheet. STILL TO PUSH: e10d236's worker half (every upload of the owner's listed
+  + bcTallyDrop) — two commits behind main at the time of writing.
