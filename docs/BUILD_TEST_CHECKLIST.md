@@ -4982,3 +4982,12 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   android 1.0.13 (committed; deploys with the next push). Play Console asks for the EU trader-status declaration
   by February 2027 and shows the dead base44 URL as the account website — see the chat of 2026-11-10 for the
   advice (declare trader once a business address exists; website → globeskimmers.io via Search Console).
+
+## 2026-11-10 02:40 PT — CORRECTION: OTA 1.0.2611100650 does NOT carry the My uploads rework
+
+  The founder's OTA (06:50 UTC) was built before e10d236 (07:41 UTC), so phones still show the old sheet; she
+  needs another `npm run ota`. Her list is empty because the worker (now a28f0da, listing every row of hers)
+  finds no board_contributions under her member id — the alias migration (20261103040000) did move founder@
+  rows to the main id, so a missing photo was deleted or never finished posting; the "1 / 10" is the tally that
+  only ever climbed. Added `bcTallySync` (committed): the tally is re-derived from the live rows on every read of
+  the list, so the count heals itself. Needs push (worker) + OTA (sheet).
