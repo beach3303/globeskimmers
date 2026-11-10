@@ -22666,12 +22666,15 @@ async function handleBoardContributions(request, env) {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     // Clips too (2026-10-30), once their bytes landed; a clip still uploading isn't listed.
-    let q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&mod_status=eq.ok&video_ready=eq.true&order=created_at.desc&limit=1000&select=id,caption,city,region,country,taken_at,created_at,hidden,kind,duration,filter,marks`, {});
-    if (q.status === 400) q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&mod_status=eq.ok&order=created_at.desc&limit=1000&select=id,caption,city,region,country,taken_at,created_at,hidden`, {});
+    // Every row of theirs, whatever its moderation state (2026-11-09, founder: "my upload folder should simply
+    // show videos and photos that I have uploaded"): one taken down by a report or by the team shows as taken
+    // down, never vanishes on its owner.
+    let q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&video_ready=eq.true&order=created_at.desc&limit=1000&select=id,caption,city,region,country,taken_at,created_at,hidden,mod_status,kind,duration,filter,marks`, {});
+    if (q.status === 400) q = await gbRest(env, `board_contributions?user_id=eq.${user.id}&order=created_at.desc&limit=1000&select=id,caption,city,region,country,taken_at,created_at,hidden,mod_status`, {});
     if (q.status === 404) return jsonResponse({ photos: [], open_until: '2027-06-30', unavailable: true });
     if (!q.ok) return jsonResponse({ error: 'Couldn’t load your photos — try again', photos: [] }, 502);
     const origin = new URL(request.url).origin;
-    const photos = (await q.json()).map((r) => ({ ...r, url: bcPhotoUrl(origin, r.id), ...(r.kind === 'video' ? { video: bcVideoUrl(origin, r.id), duration: r.duration || null, filter: r.filter || null, marks: r.marks || null } : {}) }));
+    const photos = (await q.json()).map((r) => ({ ...r, hidden: !!r.hidden || (r.mod_status != null && r.mod_status !== 'ok'), url: bcPhotoUrl(origin, r.id), ...(r.kind === 'video' ? { video: bcVideoUrl(origin, r.id), duration: r.duration || null, filter: r.filter || null, marks: r.marks || null } : {}) }));
     // The owner sees how often each of their photos was opened on the boards (2026-10-30).
     const vm = await viewsFor(env, photos.map((p) => `bcp:${p.id}`));
     for (const p of photos) p.views = vm[`bcp:${p.id}`] || 0;
@@ -22696,6 +22699,8 @@ async function handleBoardContributionDelete(request, env, ctx) {
     if (rows[0].photo_key && env.MEDIA) await env.MEDIA.delete(rows[0].photo_key).catch(() => {});
     // A clip's file goes with its poster (2026-10-30).
     if (rows[0].video_key && env.MEDIA) await env.MEDIA.delete(rows[0].video_key).catch(() => {});
+    // The collectible's count comes down with it (2026-11-09): "1 / 10 photos" used to outlive the photo.
+    await bcTallyDrop(env, user.id, rows[0].board_key).catch(() => {});
     // Its likes, comments and doodles go with it.
     await blPurgeTargets(env, user.id, [`bcp:${id}`], ctx).catch(() => {});
     if (ctx) ctx.waitUntil(pcBoardsCacheBust(env));
@@ -22740,6 +22745,20 @@ async function bcTallyBump(env, userId, cityKey) {
   const row = Array.isArray(v) ? v[0] : v;
   const posted = Number(row?.n_posted), cities = Number(row?.n_cities);
   return Number.isFinite(posted) && Number.isFinite(cities) ? { posted, cities } : null;
+}
+// One photo taken down (2026-11-09): posted − 1, and its city leaves the list when none of theirs is
+// left there. A stamp already earned stays earned (bcAward is once per member).
+async function bcTallyDrop(env, userId, boardKey) {
+  const r = await gbRest(env, `board_contrib_tally?user_id=eq.${userId}&select=posted,cities`, {});
+  const row = r.ok ? (await r.json())[0] : null;
+  if (!row) return;
+  const posted = Math.max(0, (Number(row.posted) || 0) - 1);
+  let cities = Array.isArray(row.cities) ? row.cities : [];
+  if (boardKey && cities.includes(boardKey)) {
+    const left = await gbRest(env, `board_contributions?user_id=eq.${userId}&board_key=eq.${encodeURIComponent(boardKey)}&select=id&limit=1`, {});
+    if (left.ok && !(await left.json()).length) cities = cities.filter((c) => c !== boardKey);
+  }
+  await gbRest(env, `board_contrib_tally?user_id=eq.${userId}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ posted, cities }) });
 }
 async function bcTally(env, userId) {
   const r = await gbRest(env, `board_contrib_tally?user_id=eq.${userId}&select=posted,cities`, {});

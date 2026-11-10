@@ -366,9 +366,9 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
         <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: "rgba(22,17,13,.18)" }} />
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
           <div>
-            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: AIR_RED }}>{album ? "My uploads · City Boards · Public" : board ? `${kindWord(board)} board · Public` : "City Boards · Public"}</div>
+            <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".2em", color: AIR_RED }}>{album ? "My uploads · Public" : board ? `${kindWord(board)} board · Public` : "City Boards · Public"}</div>
             <h2 style={{ margin: "2px 0 0", fontFamily: SERIF, fontSize: fs(26), fontWeight: 400, lineHeight: 1.1, color: INK }}>{album ? <>My <em style={{ fontStyle: "italic", color: AIR_BLUE }}>uploads</em></> : board ? <>Add photos to <em style={{ fontStyle: "italic", color: AIR_BLUE }}>{board.name}</em></> : "Contribute to City Boards"}</h2>
-            <p style={{ margin: "4px 0 0", fontSize: fs(14), lineHeight: 1.4, color: INK2, display: noteOpen || album ? undefined : "none" }}>
+            <p style={{ margin: "4px 0 0", fontSize: fs(14), lineHeight: 1.4, color: INK2, display: noteOpen && !album ? undefined : "none" }}>
               {album
                 ? <>Your photos and clips on City Boards, by city. Tap one to open it, see its stickers and views, change its caption, or take it down.</>
                 : board
@@ -382,6 +382,9 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
           </button>
         </div>
 
+        {album ? (
+          <p style={{ margin: "14px 0 0", fontSize: fs(12), lineHeight: 1.45, color: INK3, textAlign: "center", order: 5 }}>Public, from “a traveler”. Delete any one any time.</p>
+        ) : (<>
         {/* The note the founder asked for (2026-10-27): public, delete any time, no children. */}
         <div style={{ marginTop: 10, padding: "12px 14px", borderRadius: 14, background: "#fff", border: `1px solid ${RULE}`, order: album ? 4 : undefined }}>
           <div className="flex items-start gap-2" style={{ fontSize: fs(14), lineHeight: 1.45, color: INK, fontWeight: 600 }}>
@@ -398,7 +401,8 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
           </p>
         </div>
 
-        {col ? <div style={{ order: album ? 2 : undefined }}><CollectiblesCard col={col} onOpen={setManage} /></div> : null}
+        </>)}
+        {col ? <div style={{ order: album ? 2 : undefined }}><CollectiblesCard col={col} onOpen={setManage} compact={album} /></div> : null}
 
         {isOpen && (
           <div style={{ order: album ? 3 : undefined }}>
@@ -414,7 +418,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
                 <div style={{ width: `${Math.round((run.done / run.total) * 100)}%`, height: "100%", background: AIR_BLUE, transition: "width .3s" }} />
               </div>
             ) : null}
-            <PostageBox sent={summary ? postedCount : 0} />
+            {album ? null : <PostageBox sent={summary ? postedCount : 0} />}
           </div>
         )}
 
@@ -459,7 +463,7 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
             </section>
           ))
         ) : (
-          <p style={{ marginTop: 16, fontSize: fs(13), lineHeight: 1.5, color: INK3, textAlign: "center", order: album ? 1 : undefined }}>{board ? `Your photos on ${board.name}’s board will show here.` : album ? "Nothing here yet. Your photos and clips on City Boards will show here, by city." : "Your photos will show here, by city."}</p>
+          <p style={{ marginTop: 16, fontSize: fs(13), lineHeight: 1.5, color: INK3, textAlign: "center", order: album ? 1 : undefined }}>{board ? `Your photos on ${board.name}’s board will show here.` : album ? "No photos or clips on City Boards yet." : "Your photos will show here, by city."}</p>
         )}
       </div>
 
@@ -491,11 +495,19 @@ function ContributeSheet({ photos, onChanged, onClose, board = null, initialFile
 // The reward, in sight while sharing (founder, 2026-10-28): 10 photos from 3 different cities earn
 // one collectible stamp. Before: what it takes and how far along they are (photos, cities). After:
 // their stamp, a tap away to place it on their passport or change who sees it.
-function CollectiblesCard({ col, onOpen }) {
+function CollectiblesCard({ col, onOpen, compact = false }) {
   const p = col.progress || progressOf(null);
   const mine = col.items?.[0] || null;
   const art = mine ? collectibleOf(mine.badge) : null;
   const gold = "#E8CC86";
+  // The album (founder, 2026-11-09: "not a lot of wording"): one line of progress until the stamp is earned.
+  if (compact && !mine) {
+    return (
+      <p style={{ margin: "12px 0 0", fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", textTransform: "uppercase", color: "#7E601F", textAlign: "center" }}>
+        🏅 Collectible stamp · {Math.min(p.posted, p.needPhotos)}/{p.needPhotos} photos · {Math.min(p.cities, p.needCities)}/{p.needCities} cities
+      </p>
+    );
+  }
   const bar = (label, have, need) => (
     <div style={{ marginTop: 8 }}>
       <div className="flex justify-between" style={{ fontFamily: MONO, fontSize: fs(10), letterSpacing: ".06em", color: gold }}>
