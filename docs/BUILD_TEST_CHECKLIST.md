@@ -5001,3 +5001,19 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   portrait shape shows letterboxed, no code change. Not drawn: Tokyo Disneyland, Shanghai Disneyland (typographic
   stamp stays). Also still undrawn from the 1,000 list: Hollywood Sign, Dotonbori, Naoshima, Fenway Park, Walt
   Disney World, Graceland.
+
+## 2026-11-13 ~PT — COMMITTED, push pending: merge @maiza_ into @maiza (migration 20261113120000)
+
+  The founder asked whether @maiza and @maiza_ are her two admin logins and, if so, to merge them. Checked:
+  the worker's ADMIN_EMAILS_WORKER is exactly maizasimeon@gmail.com + founder@globeskimmers.io; D1
+  member_numbers has #5 = 89cc7046… and #66 = 61f9cb58…; the #66 account signed up 2026-10-30 from
+  android-chrome (203 of its 208 events), last seen 2026-11-02 — the day the worker alias went live — and never
+  stamped, posted or mailed anything (page views, sessions, one Stamp-tab tap, one convenience-store search).
+  The email↔id link itself comes from the 11-02 session (auth.users is only readable with the service key).
+  The migration retires the @maiza_ passport_shares row, moves every other api.*/public.* row that names the
+  second id (any uuid column, plus api text columns named *_id/*_by) to the main id — a duplicate of a row the
+  main account already has is removed instead — deletes any self-follow/self-block that results, and holds
+  @maiza_ for the gmail (unclaimed, so it reads "taken" to everyone else). auth.users (founder@ stays as the
+  S10 admin login, aliased) and public.profiles (per login) are untouched. D1 member #66 stays as history.
+  **Activate:** `git push origin stamping-v2:main` (the migrations Action applies it ~20 s later; it carries
+  gs:allow-destructive). Then sign in on the S10 as founder@ once and confirm the handle reads @maiza.
