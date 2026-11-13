@@ -15378,18 +15378,24 @@ async function ppHolder(env, userId) { return (await ppHolderName(env, userId)) 
 // never shows where a name doesn't. Before the cloth column exists PostgREST
 // answers 400: no cloths, never an error. → { [user_id]: { cloth?, avatar? } }
 const GB_CLOTHS = new Set(['harbour', 'forest', 'saddle', 'plum', 'slate', 'ochre', 'lapis', 'graphite']);
+// Faces (B2): cloth + avatar for a list of members — and, since 2026-11-13, the Seal of the sealed
+// ones ({ verified: true, seal }), so every `by: { …, ...faces[id] }` the mail and feeds build names it.
 async function gbFaces(env, ids, origin) {
   const list = [...new Set((ids || []).filter((id) => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)))].slice(0, 200);
   const out = {};
   if (!list.length) return out;
   const inList = list.join(',');
-  const [cq, aq] = await Promise.all([
+  const [cq, aq, sq] = await Promise.all([
     gbRest(env, `profiles?id=in.(${inList})&select=id,cloth`, { headers: { 'Accept-Profile': 'public' } }).catch(() => null),
     gbRest(env, `social_profiles?user_id=in.(${inList})&select=user_id,avatar_key`, {}).catch(() => null),
+    gbRest(env, `passport_shares?user_id=in.(${inList})&verified=eq.true&select=user_id,seal`, {}).catch(() => null),
   ]);
   const read = async (r) => { try { return r && r.ok ? await r.json() : []; } catch { return []; } };
   for (const r of await read(cq)) if (GB_CLOTHS.has(r.cloth)) (out[r.id] = out[r.id] || {}).cloth = r.cloth;
   for (const r of await read(aq)) if (r.avatar_key) (out[r.user_id] = out[r.user_id] || {}).avatar = `${origin}/av-photo/${r.avatar_key}`;
+  // The Seal rides along with the face (founder, 2026-11-13: the Seal sits on the @username, so a
+  // postcard's or telegram's sender line can show it). Only sealed accounts get the two keys.
+  for (const r of await read(sq)) Object.assign(out[r.user_id] = out[r.user_id] || {}, { verified: true, seal: r.seal || 'burgundy' });
   return out;
 }
 
