@@ -1585,7 +1585,9 @@ export default function AdminAnalytics() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  // The Seal and Seal-request desks sit above the analytics and load on their own (2026-11-13): a slow or
+  // failed analytics pull used to hide them, since every desk waited inside `data && (…)`.
+  useEffect(() => { sealCall({ op: 'list' }); reqCall({ op: 'list' }); load(); }, []);
 
   const totals = data?.totals_7d?.results?.[0] || {};
   const pageViews = data?.page_views_7d?.results || [];
@@ -1757,6 +1759,90 @@ export default function AdminAnalytics() {
         {/* Time-bound (the 7-day clean-up), so it doesn't wait on the analytics either. */}
         {isAdminEmail(authUser?.email) && <AgeAppealDesk />}
 
+        {/* The Seal desk FIRST and never waiting on the analytics (founder, 2026-10-20 "i don't see where the
+            seal granting is" and 2026-11-13 "i can't find where to assign seal"): grant a Seal to a member by
+            @username; their letter goes out with it. The Seal requests desk sits right under it. */}
+        <Section title={`✪ Grant a Seal — ${seals.rows.length} granted`} icon={UserCheck}
+          empty={seals.rows.length === 0 && !seals.error ? 'No seals granted yet. Reserved for official figures, official businesses, and whoever you choose to gift it to. Users never see a checkmark — they see the Seal.' : null}>
+          {seals.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{seals.error}</div>}
+          {sealLetter && (
+            <div style={{ marginBottom: 10, padding: '10px 12px', borderRadius: 10, background: sealLetter.sent ? '#E7F8F0' : '#FFF8E6', border: `1px solid ${COLORS.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: sealLetter.sent ? COLORS.green : COLORS.amber }}>
+                {sealLetter.sent ? '✉️ The letter was sent.' : '✉️ Email isn\u2019t configured — the letter was copied to your clipboard to send yourself:'}
+              </div>
+              {!sealLetter.sent && (
+                <textarea readOnly value={`Subject: ${sealLetter.subject}\n\n${sealLetter.text}`} rows={7}
+                  style={{ width: '100%', fontSize: 12, padding: 8, marginTop: 6, borderRadius: 8, border: `1px solid ${COLORS.border}`, color: COLORS.dark }} />
+              )}
+            </div>
+          )}
+          {seals.rows.map((r) => (
+            <div key={r.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: `1px solid ${COLORS.border}`, fontSize: 13 }}>
+              <span style={{ fontWeight: 700, color: COLORS.dark, display: 'flex', alignItems: 'center' }}>@{r.handle}<OfficialSeal size={14} tier={r.seal || 'burgundy'} /></span>
+              <select value={r.seal || 'burgundy'} aria-label={`Seal color for @${r.handle}`}
+                onChange={async (e) => { const { error } = await sealCall({ op: 'recolor', handle: r.handle, seal: e.target.value }); if (error) setSeals((v) => ({ ...v, error })); else sealCall({ op: 'list' }); }}
+                style={{ padding: '5px 6px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12, background: '#fff', color: COLORS.dark }}>
+                {Object.entries(SEAL_TIER_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+              </select>
+              <button type="button" onClick={() => revokeSeal(r.handle)} style={{ marginLeft: 'auto', padding: '6px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.red, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Revoke</button>
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
+            <input value={sealDraft} onChange={(e) => setSealDraft(e.target.value)} placeholder="@handle to grant the Seal"
+              aria-label="Handle to grant the Seal" style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
+            <select value={sealTierDraft} onChange={(e) => setSealTierDraft(e.target.value)} aria-label="Seal tier"
+              style={{ padding: '7px 8px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff' }}>
+              <option value="gold">Gold — Honored</option>
+              <option value="burgundy">Burgundy — Official</option>
+              <option value="teal">Teal — GlobeSkimmers team</option>
+              <option value="sunshine-heart">Sunshine ♥ — Friends & Family</option>
+              <option value="sunshine-star">Sunshine ★ — Friends & Family</option>
+            </select>
+            {sealTierDraft === 'burgundy' && (
+              <select value={sealKindDraft} onChange={(e) => setSealKindDraft(e.target.value)} aria-label="Business or person"
+                style={{ padding: '7px 8px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff' }}>
+                <option value="person">Person</option>
+                <option value="business">Business (welcome letter)</option>
+              </select>
+            )}
+            <button type="button" onClick={grantSeal} disabled={!sealDraft.trim()}
+              style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: sealDraft.trim() ? 1 : 0.5 }}>Grant</button>
+          </div>
+        </Section>
+
+        <Section title={`📨 Username & Seal requests — ${requests.rows.length} open`} icon={Mail}
+          empty={requests.rows.length === 0 && !requests.error && !reqDone.length ? 'No requests yet. Businesses and people can ask for a username or the Seal from Settings.' : null}>
+          {requests.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{requests.error}</div>}
+          <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>
+            Approving finishes it: a Seal request gets the Seal and its letter; a username request gets the name held and the claim link emailed. Both go to the email they signed in with.
+          </div>
+          {reqDone.map((d) => (
+            <div key={d.at} role="status" style={{ fontSize: 12, fontWeight: 600, color: d.ok ? COLORS.green : COLORS.red, marginBottom: 6 }}>{d.text}</div>
+          ))}
+          {requests.rows.map((r) => (
+            <div key={r.id} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border}` }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', fontSize: 13 }}>
+                <span style={{ fontWeight: 700, color: COLORS.dark }}>{r.kind === 'seal' ? '✪ Seal' : `@${r.handle}`}</span>
+                {r.email && <a href={`mailto:${r.email}`} style={{ color: COLORS.accent }}>{r.email}</a>}
+                <span style={{ color: COLORS.gray, marginLeft: 'auto' }}>{String(r.created_at || '').slice(0, 10)}</span>
+              </div>
+              {r.note && <div style={{ fontSize: 12.5, color: COLORS.dark, whiteSpace: 'pre-wrap', marginTop: 4 }}>{r.note}</div>}
+              <div style={{ fontSize: 12, color: COLORS.gray, marginTop: 4 }}>
+                {r.member_handle ? `Their username now: @${r.member_handle}` : 'No username yet'}{r.member_seal ? ` · has the ${SEAL_TIER_LABEL[r.member_seal] || r.member_seal} Seal` : ''}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                <HeldSealPicker value={reqSeal[r.id] ?? (r.kind === 'seal' ? 'burgundy:person' : '')} label={`Seal for this request`}
+                  onPick={(v) => setReqSeal((m) => ({ ...m, [r.id]: v }))} />
+                <button type="button" onClick={() => approveRequest(r)} disabled={reqBusy === r.id || (r.kind === 'seal' && !(reqSeal[r.id] ?? 'burgundy:person'))}
+                  style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: COLORS.green, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: reqBusy === r.id ? 0.6 : 1 }}>
+                  {reqBusy === r.id ? 'Working…' : r.kind === 'seal' ? 'Approve & send the letter' : 'Approve & send the claim link'}
+                </button>
+                <button type="button" onClick={() => reqCall({ op: 'resolve', id: r.id, status: 'dismissed' })} disabled={reqBusy === r.id} style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.gray, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Dismiss</button>
+              </div>
+            </div>
+          ))}
+        </Section>
+
         {error && (
           <div style={{ padding: 14, background: '#FEF2F2', color: '#B91C1C', borderRadius: 12, marginBottom: 12, fontSize: 13, fontWeight: 600 }}>
             {error}
@@ -1908,56 +1994,6 @@ export default function AdminAnalytics() {
               ))}
             </Section>
 
-            {/* The Seal desk first (founder, 2026-10-20: "i don't see where the seal granting is"):
-                grant a Seal to a member by @username; their letter goes out with it. */}
-            <Section title={`✪ The GlobeSkimmers Seal — ${seals.rows.length} granted`} icon={UserCheck}
-              empty={seals.rows.length === 0 && !seals.error ? 'No seals granted yet. Reserved for official figures, official businesses, and whoever you choose to gift it to. Users never see a checkmark — they see the Seal.' : null}>
-              {seals.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{seals.error}</div>}
-              {sealLetter && (
-                <div style={{ marginBottom: 10, padding: '10px 12px', borderRadius: 10, background: sealLetter.sent ? '#E7F8F0' : '#FFF8E6', border: `1px solid ${COLORS.border}` }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: sealLetter.sent ? COLORS.green : COLORS.amber }}>
-                    {sealLetter.sent ? '✉️ The letter was sent.' : '✉️ Email isn\u2019t configured — the letter was copied to your clipboard to send yourself:'}
-                  </div>
-                  {!sealLetter.sent && (
-                    <textarea readOnly value={`Subject: ${sealLetter.subject}\n\n${sealLetter.text}`} rows={7}
-                      style={{ width: '100%', fontSize: 12, padding: 8, marginTop: 6, borderRadius: 8, border: `1px solid ${COLORS.border}`, color: COLORS.dark }} />
-                  )}
-                </div>
-              )}
-              {seals.rows.map((r) => (
-                <div key={r.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: `1px solid ${COLORS.border}`, fontSize: 13 }}>
-                  <span style={{ fontWeight: 700, color: COLORS.dark, display: 'flex', alignItems: 'center' }}>@{r.handle}<OfficialSeal size={14} tier={r.seal || 'burgundy'} /></span>
-                  <select value={r.seal || 'burgundy'} aria-label={`Seal color for @${r.handle}`}
-                    onChange={async (e) => { const { error } = await sealCall({ op: 'recolor', handle: r.handle, seal: e.target.value }); if (error) setSeals((v) => ({ ...v, error })); else sealCall({ op: 'list' }); }}
-                    style={{ padding: '5px 6px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12, background: '#fff', color: COLORS.dark }}>
-                    {Object.entries(SEAL_TIER_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-                  </select>
-                  <button type="button" onClick={() => revokeSeal(r.handle)} style={{ marginLeft: 'auto', padding: '6px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.red, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Revoke</button>
-                </div>
-              ))}
-              <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
-                <input value={sealDraft} onChange={(e) => setSealDraft(e.target.value)} placeholder="@handle to grant the Seal"
-                  aria-label="Handle to grant the Seal" style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
-                <select value={sealTierDraft} onChange={(e) => setSealTierDraft(e.target.value)} aria-label="Seal tier"
-                  style={{ padding: '7px 8px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff' }}>
-                  <option value="gold">Gold — Honored</option>
-                  <option value="burgundy">Burgundy — Official</option>
-                  <option value="teal">Teal — GlobeSkimmers team</option>
-                  <option value="sunshine-heart">Sunshine ♥ — Friends & Family</option>
-                  <option value="sunshine-star">Sunshine ★ — Friends & Family</option>
-                </select>
-                {sealTierDraft === 'burgundy' && (
-                  <select value={sealKindDraft} onChange={(e) => setSealKindDraft(e.target.value)} aria-label="Business or person"
-                    style={{ padding: '7px 8px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff' }}>
-                    <option value="person">Person</option>
-                    <option value="business">Business (welcome letter)</option>
-                  </select>
-                )}
-                <button type="button" onClick={grantSeal} disabled={!sealDraft.trim()}
-                  style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: sealDraft.trim() ? 1 : 0.5 }}>Grant</button>
-              </div>
-            </Section>
-
             <Section title={`👑 Held usernames — ${famRows.filter(r => r.claimed_at).length} claimed of ${famRows.length}`} icon={UserCheck}
               empty={famRows.length === 0 && !held.error ? 'No names on the hold list yet. Add one below — it instantly reads as "taken" to everyone except the email you attach.' : null}>
               {held.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{held.error}</div>}
@@ -2094,38 +2130,6 @@ export default function AdminAnalytics() {
               ))}
             </Section>
 
-            <Section title={`📨 Username & Seal requests — ${requests.rows.length} open`} icon={Mail}
-              empty={requests.rows.length === 0 && !requests.error && !reqDone.length ? 'No requests yet. Businesses and people can ask for a username or the Seal from Settings.' : null}>
-              {requests.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{requests.error}</div>}
-              <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8 }}>
-                Approving finishes it: a Seal request gets the Seal and its letter; a username request gets the name held and the claim link emailed. Both go to the email they signed in with.
-              </div>
-              {reqDone.map((d) => (
-                <div key={d.at} role="status" style={{ fontSize: 12, fontWeight: 600, color: d.ok ? COLORS.green : COLORS.red, marginBottom: 6 }}>{d.text}</div>
-              ))}
-              {requests.rows.map((r) => (
-                <div key={r.id} style={{ padding: '10px 0', borderTop: `1px solid ${COLORS.border}` }}>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline', fontSize: 13 }}>
-                    <span style={{ fontWeight: 700, color: COLORS.dark }}>{r.kind === 'seal' ? '✪ Seal' : `@${r.handle}`}</span>
-                    {r.email && <a href={`mailto:${r.email}`} style={{ color: COLORS.accent }}>{r.email}</a>}
-                    <span style={{ color: COLORS.gray, marginLeft: 'auto' }}>{String(r.created_at || '').slice(0, 10)}</span>
-                  </div>
-                  {r.note && <div style={{ fontSize: 12.5, color: COLORS.dark, whiteSpace: 'pre-wrap', marginTop: 4 }}>{r.note}</div>}
-                  <div style={{ fontSize: 12, color: COLORS.gray, marginTop: 4 }}>
-                    {r.member_handle ? `Their username now: @${r.member_handle}` : 'No username yet'}{r.member_seal ? ` · has the ${SEAL_TIER_LABEL[r.member_seal] || r.member_seal} Seal` : ''}
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                    <HeldSealPicker value={reqSeal[r.id] ?? (r.kind === 'seal' ? 'burgundy:person' : '')} label={`Seal for this request`}
-                      onPick={(v) => setReqSeal((m) => ({ ...m, [r.id]: v }))} />
-                    <button type="button" onClick={() => approveRequest(r)} disabled={reqBusy === r.id || (r.kind === 'seal' && !(reqSeal[r.id] ?? 'burgundy:person'))}
-                      style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: COLORS.green, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: reqBusy === r.id ? 0.6 : 1 }}>
-                      {reqBusy === r.id ? 'Working…' : r.kind === 'seal' ? 'Approve & send the letter' : 'Approve & send the claim link'}
-                    </button>
-                    <button type="button" onClick={() => reqCall({ op: 'resolve', id: r.id, status: 'dismissed' })} disabled={reqBusy === r.id} style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.gray, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Dismiss</button>
-                  </div>
-                </div>
-              ))}
-            </Section>
 
 
             <Section title="Active users per day (30d)" icon={Eye} empty={activeByDay.length === 0 ? 'No active-user data yet.' : null}>
