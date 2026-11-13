@@ -5051,3 +5051,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   prop replaces its children, and the @handle field / ink picker / Grant button were children — with zero Seals
   granted the desk had no way to grant one (since 10-16). The empty text is now a line above the always-visible
   form. Lint + no-undef clean, build exit 0, boot-check ✅. Reaches phones with the next OTA.
+
+## 2026-11-13 ~13:40 PT — the founder pushed 7cd38cd (worker + migrations green); Grant form fits a phone — COMMITTED 275216e, OTA pending
+
+  Her second screenshot (after her own OTA): the form showed, but the handle field + ink dropdown filled the row and
+  the Grant button sat off the right edge of the card. The row wraps now (handle full width, ink + person/business
+  next, a full-width 44 px "Grant the Seal" button last) and Enter in the handle field grants. Lint + no-undef clean,
+  build exit 0, boot-check ✅. **Activate:** push 275216e, then `npm run ota`.
