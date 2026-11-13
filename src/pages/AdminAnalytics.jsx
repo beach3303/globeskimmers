@@ -1791,11 +1791,15 @@ export default function AdminAnalytics() {
               <button type="button" onClick={() => revokeSeal(r.handle)} style={{ marginLeft: 'auto', padding: '6px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, background: '#fff', color: COLORS.red, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Revoke</button>
             </div>
           ))}
-          <div style={{ display: 'flex', gap: 6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
+          {/* Wraps on a phone (founder's screenshot, 2026-11-13: the Grant button sat off the right edge — the ink
+              dropdown is as wide as its longest label). The handle takes the whole first line, the button the whole
+              last one, and Enter in the handle field grants too. */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` }}>
             <input value={sealDraft} onChange={(e) => setSealDraft(e.target.value)} placeholder="@handle to grant the Seal"
-              aria-label="Handle to grant the Seal" style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13 }} />
+              onKeyDown={(e) => { if (e.key === 'Enter' && sealDraft.trim()) { e.preventDefault(); grantSeal(); } }} enterKeyHint="done"
+              aria-label="Handle to grant the Seal" style={{ flex: '1 1 100%', minWidth: 0, padding: '10px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 14 }} />
             <select value={sealTierDraft} onChange={(e) => setSealTierDraft(e.target.value)} aria-label="Seal tier"
-              style={{ padding: '7px 8px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff' }}>
+              style={{ flex: '1 1 180px', minWidth: 0, maxWidth: '100%', padding: '10px 8px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13, background: '#fff' }}>
               <option value="gold">Gold — Honored</option>
               <option value="burgundy">Burgundy — Official</option>
               <option value="teal">Teal — GlobeSkimmers team</option>
@@ -1804,13 +1808,13 @@ export default function AdminAnalytics() {
             </select>
             {sealTierDraft === 'burgundy' && (
               <select value={sealKindDraft} onChange={(e) => setSealKindDraft(e.target.value)} aria-label="Business or person"
-                style={{ padding: '7px 8px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 12.5, background: '#fff' }}>
+                style={{ flex: '1 1 150px', minWidth: 0, maxWidth: '100%', padding: '10px 8px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13, background: '#fff' }}>
                 <option value="person">Person</option>
                 <option value="business">Business (welcome letter)</option>
               </select>
             )}
             <button type="button" onClick={grantSeal} disabled={!sealDraft.trim()}
-              style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: sealDraft.trim() ? 1 : 0.5 }}>Grant</button>
+              style={{ flex: '1 1 100%', minHeight: 44, padding: '10px 14px', borderRadius: 10, border: 'none', background: COLORS.accent, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: sealDraft.trim() ? 1 : 0.5 }}>Grant the Seal</button>
           </div>
         </Section>
 
