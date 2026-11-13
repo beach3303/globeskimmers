@@ -5044,3 +5044,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   and "📨 Username & Seal requests" to right under Newest members, above the loading/error states; both load in the
   mount effect. Lint + no-undef clean, build exit 0, boot-check ✅. Path for the founder: Profile → Settings →
   Admin Portal → the Seal desk is the third block (after Newest members and Age appeal).
+
+## 2026-11-13 ~13:30 PT — COMMITTED, OTA pending: the Grant-a-Seal form was hidden behind its own empty state
+
+  Founder's screenshot: "✪ The GlobeSkimmers Seal — 0 granted" + the empty text, no input. `Section`'s `empty`
+  prop replaces its children, and the @handle field / ink picker / Grant button were children — with zero Seals
+  granted the desk had no way to grant one (since 10-16). The empty text is now a line above the always-visible
+  form. Lint + no-undef clean, build exit 0, boot-check ✅. Reaches phones with the next OTA.
