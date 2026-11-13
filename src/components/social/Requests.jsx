@@ -164,10 +164,10 @@ export default function Requests({
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: 'block', fontSize: fs(14), fontWeight: 600, lineHeight: 1.3, overflowWrap: 'anywhere', color: NEUTRAL.ink }}>
                     {who}
-                    {r.verified === true ? <OfficialSeal size={12} tier={r.seal || 'burgundy'} style={undefined} /> : null}
+                    {r.verified === true && !(h && String(r.name ?? '').trim()) ? <OfficialSeal size={12} tier={r.seal || 'burgundy'} style={undefined} /> : null}
                   </span>
                   {h && String(r.name ?? '').trim() ? (
-                    <span style={{ display: 'block', fontFamily: MONO, fontSize: fs(10.5), lineHeight: 1.35, overflowWrap: 'anywhere', color: NEUTRAL.ink3 }}>@{h}</span>
+                    <span style={{ display: 'block', fontFamily: MONO, fontSize: fs(10.5), lineHeight: 1.35, overflowWrap: 'anywhere', color: NEUTRAL.ink3 }}><SealedHandle handle={h} seal={r.seal || 'burgundy'} verified={r.verified === true} size={12} /></span>
                   ) : null}
                 </span>
               </span>

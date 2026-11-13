@@ -14,6 +14,7 @@ import { openTelegram, telegramNumber, telegramWords } from "@/lib/telegram";
 import TelegramPaper, { TINK3 } from "@/components/telegram/TelegramPaper";
 import TelegramEnvelope from "@/components/telegram/TelegramEnvelope";
 import FollowSender from "@/components/social/FollowSender";
+import { SealedHandle } from "@/components/passport/OfficialSeal";
 import DeleteConfirm, { TrashButton } from "@/components/social/DeleteConfirm";
 
 const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
@@ -43,6 +44,11 @@ export default function TelegramCard({ row, me = undefined, meName = null, onRep
     setTimeout(() => setState("open"), 720);
   };
   const from = senderName(row.by || {}, me);
+  const by = row.by || {};
+  const byHandle = String(by.handle ?? "").replace(/^@+/, "") || null;
+  // The Seal rides the @username (founder, 2026-11-13): "Telegram from Nena @lolanena☀".
+  const sealedBy = by.verified && by.seal && byHandle ? <SealedHandle handle={byHandle} seal={by.seal} size={11} /> : null;
+  const fromNode = sealedBy ? (from === `@${byHandle}` ? sealedBy : <>{from} {sealedBy}</>) : from;
   const myHandle = String((me && typeof me === "object" ? me.handle : me) ?? "").replace(/^@+/, "") || null;
   const firstName = String(meName ?? "").trim().split(/\s+/)[0] || null;
   const groupSize = Array.isArray(row.group) ? row.group.filter(Boolean).length + 1 : 1;
@@ -54,7 +60,7 @@ export default function TelegramCard({ row, me = undefined, meName = null, onRep
       style={{ position: "relative", background: NEUTRAL.white, border: `1px solid ${NEUTRAL.airmailLine}`, borderRadius: 18, padding: 10, boxShadow: "0 10px 22px -16px rgba(22,17,13,.4)", ...style }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, margin: "2px 4px 8px" }}>
         <span style={{ minWidth: 0, fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".16em", textTransform: "uppercase", color: TINK3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          Telegram from <b style={{ fontWeight: 600, color: NEUTRAL.ink }}>{from}</b>{row.reply ? " · a reply" : ""}
+          Telegram from <b style={{ fontWeight: 600, color: NEUTRAL.ink }}>{fromNode}</b>{row.reply ? " · a reply" : ""}
         </span>
         {whenLabel(row.created_at) ? <span style={{ flex: "none", fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".08em", textTransform: "uppercase", color: TINK3 }}>{whenLabel(row.created_at)}</span> : null}
       </div>

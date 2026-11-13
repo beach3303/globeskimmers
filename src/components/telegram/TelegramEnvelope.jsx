@@ -9,6 +9,7 @@
 import React from "react";
 import { fs } from "@/components/redesign/constants";
 import { TINK, TINK3, TRED, TYPE } from "@/components/telegram/TelegramPaper";
+import OfficialSeal from "@/components/passport/OfficialSeal";
 
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
 const HEAVY = "'Inter Tight', system-ui, sans-serif";
@@ -71,7 +72,7 @@ export default function TelegramEnvelope({ to = null, from = null, group = false
         <span style={{ position: "absolute", left: 12, right: 12, bottom: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
           <span style={{ fontFamily: HEAVY, fontWeight: 800, fontSize: fs(15), letterSpacing: ".14em", color: TINK }}>{group ? "GROUP TELEGRAM" : "TELEGRAM"}</span>
           <span style={{ fontFamily: TYPE, fontSize: fs(13.5), letterSpacing: ".05em", color: TINK, overflowWrap: "anywhere" }}>FOR {label(to) || "YOU"}</span>
-          <span style={{ fontFamily: TYPE, fontSize: fs(11), letterSpacing: ".05em", color: TINK3, overflowWrap: "anywhere" }}>FROM {label(from) || "A TRAVELER"}</span>
+          <span style={{ fontFamily: TYPE, fontSize: fs(11), letterSpacing: ".05em", color: TINK3, overflowWrap: "anywhere" }}>FROM {label(from) || "A TRAVELER"}{from?.verified && from?.seal && from?.handle ? <OfficialSeal size={11} tier={from.seal} /> : null}</span>
           <span style={{ marginTop: 3, fontFamily: MONO, fontSize: fs(9.5), fontWeight: 600, letterSpacing: ".28em", color: TRED }} className="motion-safe:animate-pulse">TAP TO OPEN</span>
         </span>
       </span>

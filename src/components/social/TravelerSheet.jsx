@@ -13,7 +13,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, CornerUpLeft, Trash2 } from "lucide-react";
 import { showToast } from "@/components/Toast";
-import OfficialSeal from "@/components/passport/OfficialSeal";
+import OfficialSeal, { SealedHandle } from "@/components/passport/OfficialSeal";
 import { NEUTRAL } from "@/components/redesign/constants";
 import { useOverlayClose } from "@/components/home/SuggestPlaceSection";
 import { socialFollow, blockTraveler, unblockTraveler, reportShared } from "@/lib/passport";
@@ -144,9 +144,9 @@ export default function TravelerSheet({ person, list: listProp = null, report = 
             <div className="uppercase" style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".18em", color: STAMP }}>{postcard ? (what === "telegram" ? "Telegram from" : "Postcard from") : "Traveler"}</div>
             <h2 id="gs-traveler-h" ref={head} tabIndex={-1} className="flex items-center gap-1.5" style={{ ...titleStyle, marginTop: 2 }}>
               <span className="truncate">{name}</span>
-              {who.verified ? <OfficialSeal size={14} tier={who.seal || "burgundy"} /> : null}
+              {who.verified && !(who.handle && who.name) ? <OfficialSeal size={14} tier={who.seal || "burgundy"} /> : null}
             </h2>
-            {who.handle && who.name && <div style={{ fontFamily: MONO, fontSize: fs(11.5), color: INK3, marginTop: 2 }}>@{who.handle}</div>}
+            {who.handle && who.name && <div style={{ fontFamily: MONO, fontSize: fs(11.5), color: INK3, marginTop: 2 }}><SealedHandle handle={who.handle} seal={who.seal || "burgundy"} verified={who.verified === true} size={13} /></div>}
             {rel.blocked && <p style={{ fontSize: fs(13), color: INK2, marginTop: 6 }}>You&rsquo;ve blocked {name}.</p>}
             <div className="flex flex-col gap-2 mt-4">
               {postcard && typeof postcard.onReply === "function" && (

@@ -46,9 +46,9 @@ export default function BlockedTravelers({ blocked, onChanged }) {
               <div className="flex items-center gap-2" style={{ minHeight: 44 }}>
                 <span className="flex-1 min-w-0">
                   <span className="block truncate font-semibold" style={{ fontSize: fs(14), color: INK }}>
-                    {name}{p.verified ? <OfficialSeal size={12} tier={p.seal || "burgundy"} /> : null}
+                    {name}{p.verified && !(p.name && p.handle) ? <OfficialSeal size={12} tier={p.seal || "burgundy"} /> : null}
                   </span>
-                  {p.name && p.handle && <span className="block truncate" style={{ fontSize: fs(12), color: INK3 }}>@{p.handle}</span>}
+                  {p.name && p.handle && <span className="block truncate" style={{ fontSize: fs(12), color: INK3 }}><SealedHandle handle={p.handle} seal={p.seal || "burgundy"} verified={!!p.verified} size={12} /></span>}
                 </span>
                 {!open && (
                   <button type="button" onClick={() => { setAsking(p.user_id); setErr(null); }} aria-label={`Unblock ${name}`}

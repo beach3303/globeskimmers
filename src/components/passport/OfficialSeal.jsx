@@ -45,6 +45,23 @@ const TIERS = {
 const STAR_D = "M10 4.6 L11.45 8.1 L15.2 8.35 L12.3 10.75 L13.25 14.4 L10 12.35 L6.75 14.4 L7.7 10.75 L4.8 8.35 L8.55 8.1 Z";
 const HEART_D = "M10 15.6 C8.1 13.8 4.8 11.4 4.8 8.5 C4.8 6.6 6.3 5.2 8 5.2 C9 5.2 9.7 5.8 10 6.3 C10.3 5.8 11 5.2 12 5.2 C13.7 5.2 15.2 6.6 15.2 8.5 C15.2 11.4 11.9 13.8 10 15.6 Z";
 
+// The Seal belongs to the @username (founder, 2026-11-13: "i kinda want it to go to handle so
+// when handle sends telegram and post card then theres a seal there" — and "the same for all
+// future businesses as we award and release them burgundy seal. and gold seal also"). Every
+// ink — gold, burgundy, teal, sunshine — sits the same way: wherever a handle is printed, its
+// Seal follows it; a name alone carries the Seal only where no handle shows. Inherits the
+// line's font and case (mono uppercase lines print @LOLANENA, as the app already does).
+export function SealedHandle({ handle, seal = "burgundy", verified = true, size = 12, dark = false, style }) {
+  const h = String(handle ?? "").replace(/^@+/, "").trim();
+  if (!h) return null;
+  return (
+    <span style={{ whiteSpace: "nowrap", ...style }}>
+      @{h}
+      {verified && seal ? <OfficialSeal size={size} tier={seal} dark={dark} /> : null}
+    </span>
+  );
+}
+
 export default function OfficialSeal({ size = 13, tier = "burgundy", dark = false, style }) {
   const t = TIERS[tier] || TIERS.burgundy;
   const foil = `seal-foil-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;

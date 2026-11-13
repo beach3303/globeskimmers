@@ -73,6 +73,10 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
   const canStamp = !!stamp && stampThumbKind(stamp, { feedSafe: true }) !== null;
   const when = whenLabel(row.created_at);
   const seal = by.seal && by.verified !== false ? String(by.seal) : null;
+  // The Seal rides the @username (founder, 2026-11-13): "From Nena @lolanena☀"; a sender with
+  // no name on view is the handle itself, sealed.
+  const sealedBy = seal && handleOf(by) ? <SealedHandle handle={handleOf(by)} seal={seal} size={12} /> : null;
+  const fromIsHandle = !!sealedBy && from === `@${handleOf(by)}`;
   const firstName = String(meName ?? "").trim().split(/\s+/)[0] || null;
   const keepable = typeof onKeep === "function" && typeof row.kept === "boolean" && !toMe && canReport(row, me);
   const kept = row.kept === true;
@@ -144,8 +148,8 @@ export default function PostcardCard({ row, me = undefined, meName = null, onRep
           </div>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 6, rowGap: 2, marginTop: 8, fontFamily: MONO, fontSize: fs(10), letterSpacing: ".08em", lineHeight: 1.2, textTransform: "uppercase", color: NEUTRAL.ink3 }}>
-          <span>From {from}</span>
-          {seal ? <OfficialSeal size={12} tier={seal} style={undefined} /> : null}
+          <span>From {fromIsHandle ? sealedBy : <>{from}{sealedBy ? <> {sealedBy}</> : null}</>}</span>
+          {seal && !sealedBy ? <OfficialSeal size={12} tier={seal} style={undefined} /> : null}
           {toMe ? <span>{also.length ? `· Group card · ${also.length + 1} people` : "· To you"}</span> : null}
           {when ? <span style={{ marginLeft: "auto" }}>{when}</span> : null}
         </div>

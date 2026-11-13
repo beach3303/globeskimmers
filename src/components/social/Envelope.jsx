@@ -73,6 +73,7 @@ import { useDismissable } from '@/lib/dismissStack';
 import { reportShared } from '@/lib/passport';
 import { airportCodeIn, feedStamp, stampCountryCode } from '@/lib/stampKind';
 import { Face, VerifiedMark } from './SocialMarks';
+import { SealedHandle } from '@/components/passport/OfficialSeal';
 
 /** @typedef {import('react').CSSProperties} CSS */
 
@@ -494,7 +495,12 @@ export default function Envelope({
   const by = row.by || {};
   const who = senderName(by, me);
   const when = whenLabel(row.created_at);
-  const head = when ? `${who} · ${when}` : who;
+  // The Seal rides the @username (founder, 2026-11-13): 'Nena @lolanena☀ · 2d ago'.
+  const byHandle = handleOf(by);
+  const sealedBy = by.verified && by.seal && byHandle ? <SealedHandle handle={byHandle} seal={by.seal} size={11} /> : null;
+  const head = sealedBy
+    ? <>{who === `@${byHandle}` ? sealedBy : <>{who} {sealedBy}</>}{when ? ` · ${when}` : ''}</>
+    : when ? `${who} · ${when}` : who;
   const title = envelopeTitle(row);
   const line = placeLine(row.city, row.country);
   const verified = !postcard && row.verified === true;

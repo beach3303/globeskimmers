@@ -110,7 +110,8 @@ export default function ActivityList({ items = [], onOpen = undefined, onMore = 
               <Face name={by.name} handle={by.handle} avatar={by.avatar} cloth={by.cloth} size={28} style={{ marginTop: 2 }} />
               <span style={{ flex: 1, minWidth: 0, fontSize: fs(13), lineHeight: 18 / 13, color: NEUTRAL.ink2, overflowWrap: "anywhere" }}>
                 <b style={{ fontWeight: 600, color: NEUTRAL.ink }}>{who}</b>
-                {by.verified ? <OfficialSeal size={11} tier={by.seal || "burgundy"} style={undefined} /> : null} {text}
+                {by.verified && by.handle && String(by.name ?? "").trim() ? <> <SealedHandle handle={by.handle} seal={by.seal || "burgundy"} size={11} style={{ fontFamily: MONO, fontSize: fs(11), color: NEUTRAL.ink3 }} /></> : null}
+                {by.verified && !(by.handle && String(by.name ?? "").trim()) ? <OfficialSeal size={11} tier={by.seal || "burgundy"} style={undefined} /> : null} {text}
               </span>
               <span style={{ flex: "none", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, paddingTop: 2 }}>
                 {a.unread ? <span style={{ fontFamily: MONO, fontSize: fs(9.5), letterSpacing: ".14em", lineHeight: 1.26, color: NEUTRAL.stamp }}>NEW</span> : null}

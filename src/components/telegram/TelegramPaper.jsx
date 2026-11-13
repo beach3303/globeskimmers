@@ -20,6 +20,7 @@
 import React from "react";
 import { fs } from "@/components/redesign/constants";
 import { WORD_NAMES, inkColor } from "@/lib/telegram";
+import OfficialSeal from "@/components/passport/OfficialSeal";
 
 export const PAPER = "#F2E4BC";
 export const TINK = "#2A2219";      // printer's ink on the blank
@@ -212,7 +213,7 @@ export default function TelegramPaper({ mode = "received", body = "", to = null,
         {/* from, and the office's stamp on it */}
         <div style={{ position: "relative", display: "flex", alignItems: "baseline", gap: 8 }}>
           <span style={{ fontFamily: MONO, fontSize: fs(8.5), fontWeight: 600, letterSpacing: ".16em", color: TINK3 }}>FROM</span>
-          <span style={{ flex: 1, minWidth: 0, borderBottom: `1px dotted rgba(42,34,25,.55)`, fontFamily: TYPE, fontSize: fs(14), lineHeight: 1.35, color: TINK, overflowWrap: "anywhere", paddingRight: received ? 92 : 0 }}>{name(from) || "\u00A0"}</span>
+          <span style={{ flex: 1, minWidth: 0, borderBottom: `1px dotted rgba(42,34,25,.55)`, fontFamily: TYPE, fontSize: fs(14), lineHeight: 1.35, color: TINK, overflowWrap: "anywhere", paddingRight: received ? 92 : 0 }}>{name(from) || "\u00A0"}{from?.verified && from?.seal && from?.handle ? <OfficialSeal size={13} tier={from.seal} /> : null}</span>
           {received && got ? (
             <div aria-hidden="true" style={{ position: "absolute", right: 0, top: -24, transform: "rotate(-9deg)", padding: "3px 8px 4px", border: `2px solid ${TRED}`, borderRadius: 7, boxShadow: `inset 0 0 0 1.5px ${PAPER}, inset 0 0 0 2.5px ${TRED}`, color: TRED, opacity: 0.82, mixBlendMode: "multiply", textAlign: "center", fontFamily: MONO, lineHeight: 1.15 }}>
               <div style={{ fontSize: fs(7.5), fontWeight: 700, letterSpacing: ".24em" }}>RECEIVED</div>

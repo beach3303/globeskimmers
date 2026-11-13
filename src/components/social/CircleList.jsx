@@ -28,7 +28,7 @@ import { showToast } from "@/components/Toast";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { clothRow } from "@/components/profile/CoverBand";
 import { Face, TwoRingMark } from "@/components/social/SocialMarks";
-import OfficialSeal from "@/components/passport/OfficialSeal";
+import { SealedHandle } from "@/components/passport/OfficialSeal";
 import InviteButton from "@/components/passport/InviteButton";
 import { ReportSheet } from "@/components/social/Envelope";
 import { workerMessage } from "@/components/social/FollowByHandle";
@@ -186,7 +186,6 @@ export default function CircleList({ rows = [], circle, latest = null, cloth = u
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 6, rowGap: 2 }}>
                         {name}
-                        {p.verified && p.seal ? <OfficialSeal size={14} tier={p.seal} style={undefined} /> : null}
                         {inner ? (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: MONO, fontSize: fs(9), lineHeight: 12 / 9, letterSpacing: ".06em", color: c.cloth, whiteSpace: "nowrap" }}>
                             <TwoRingMark color={c.cloth} strokeWidth={1.2} />FRIENDS
@@ -195,7 +194,7 @@ export default function CircleList({ rows = [], circle, latest = null, cloth = u
                       </div>
                       {h || place ? (
                         <div style={{ marginTop: 2, fontFamily: MONO, fontSize: fs(10.5), lineHeight: 14 / 10.5, color: NEUTRAL.ink3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {h ? `@${h}` : ""}{h && place ? " · " : ""}{place ? place.toUpperCase() : ""}
+                          {h ? <SealedHandle handle={h} seal={p.seal} verified={p.verified === true} size={12} /> : null}{h && place ? " · " : ""}{place ? place.toUpperCase() : ""}
                         </div>
                       ) : null}
                     </div>
