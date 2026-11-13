@@ -5017,3 +5017,9 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   S10 admin login, aliased) and public.profiles (per login) are untouched. D1 member #66 stays as history.
   **Activate:** `git push origin stamping-v2:main` (the migrations Action applies it ~20 s later; it carries
   gs:allow-destructive). Then sign in on the S10 as founder@ once and confirm the handle reads @maiza.
+
+## 2026-11-13 20:38 UTC — LIVE: the @maiza_ merge applied (run 43503358601, "Applying migration 20261113120000…", green)
+
+  The founder pushed 5fd4e8a; the guard allowed the migration on its gs:allow-destructive marker and the CLI applied
+  it in under a second. The CLI does not surface RAISE NOTICE, so the moved/removed counts are not in the log.
+  To confirm on a phone: Find People → "maiza" should list only @maiza; founder@ on the S10 should read @maiza.
