@@ -1762,9 +1762,13 @@ export default function AdminAnalytics() {
         {/* The Seal desk FIRST and never waiting on the analytics (founder, 2026-10-20 "i don't see where the
             seal granting is" and 2026-11-13 "i can't find where to assign seal"): grant a Seal to a member by
             @username; their letter goes out with it. The Seal requests desk sits right under it. */}
-        <Section title={`✪ Grant a Seal — ${seals.rows.length} granted`} icon={UserCheck}
-          empty={seals.rows.length === 0 && !seals.error ? 'No seals granted yet. Reserved for official figures, official businesses, and whoever you choose to gift it to. Users never see a checkmark — they see the Seal.' : null}>
+        <Section title={`✪ Grant a Seal — ${seals.rows.length} granted`} icon={UserCheck}>
           {seals.error && <div style={{ fontSize: 12, color: COLORS.red, marginBottom: 8 }}>{seals.error}</div>}
+          {/* The grant form must never hide behind the empty state (founder, 2026-11-13, screenshot: "0 granted" and
+              no input anywhere) — Section's `empty` swaps out its children, so the first Seal could never be granted. */}
+          {seals.rows.length === 0 && !seals.error ? (
+            <div style={{ fontSize: 13, color: COLORS.gray, padding: '2px 0 10px' }}>No seals granted yet. Reserved for official figures, official businesses, and whoever you choose to gift it to. Users never see a checkmark — they see the Seal. Grant the first one below.</div>
+          ) : null}
           {sealLetter && (
             <div style={{ marginBottom: 10, padding: '10px 12px', borderRadius: 10, background: sealLetter.sent ? '#E7F8F0' : '#FFF8E6', border: `1px solid ${COLORS.border}` }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: sealLetter.sent ? COLORS.green : COLORS.amber }}>
