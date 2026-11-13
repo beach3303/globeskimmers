@@ -5023,3 +5023,16 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   The founder pushed 5fd4e8a; the guard allowed the migration on its gs:allow-destructive marker and the CLI applied
   it in under a second. The CLI does not surface RAISE NOTICE, so the moved/removed counts are not in the log.
   To confirm on a phone: Find People → "maiza" should list only @maiza; founder@ on the S10 should read @maiza.
+
+## 2026-11-13 ~13:00 PT — COMMITTED, push + OTA pending: the Seal sits on the @username (every ink)
+
+  Founder: "i kinda want it to go to handle so when handle sends telegram and post card then theres a seal
+  there" and "the same for all future businesses … burgundy seal. and gold seal also". Built: `SealedHandle` in
+  OfficialSeal.jsx prints `@handle` + Seal; CircleList, TravelerSheet, Requests, BlockedTravelers move the Seal
+  from the name to the handle line (name keeps it only when no handle shows); PostcardCard From line, TelegramCard
+  header, TelegramPaper FROM, TelegramEnvelope flap, Envelope head and ActivityList name the sealed handle
+  ("From Nena @lolanena☀"). Worker: `gbFaces` adds `{ verified, seal }` for sealed members, so every mail/feed
+  `by` carries it (before, mail senders never carried a Seal, so PostcardCard's seal check never fired).
+  Gates: eslint clean + no-undef clean on the 11 files, node --check, build exit 0, boot-check ✅.
+  Mock-up: https://claude.ai/artifact/DksqnJCch5ZC8dTjy9k5aw (Design canvas, private).
+  **Activate:** `git push origin stamping-v2:main` (worker deploys itself) → then `npm run ota` for the app.
