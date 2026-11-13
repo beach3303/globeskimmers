@@ -5036,3 +5036,11 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   Gates: eslint clean + no-undef clean on the 11 files, node --check, build exit 0, boot-check ✅.
   Mock-up: https://claude.ai/artifact/DksqnJCch5ZC8dTjy9k5aw (Design canvas, private).
   **Activate:** `git push origin stamping-v2:main` (worker deploys itself) → then `npm run ota` for the app.
+
+## 2026-11-13 ~13:20 PT — COMMITTED, OTA pending: the Seal desk is first on Admin and loads on its own
+
+  Founder: "i can't find where to assign seal". Cause: every desk sat inside `{data && (…)}` on AdminAnalytics,
+  so the Seal desk (ninth block) only appeared after the whole D1 analytics pull succeeded. Moved "✪ Grant a Seal"
+  and "📨 Username & Seal requests" to right under Newest members, above the loading/error states; both load in the
+  mount effect. Lint + no-undef clean, build exit 0, boot-check ✅. Path for the founder: Profile → Settings →
+  Admin Portal → the Seal desk is the third block (after Newest members and Age appeal).
