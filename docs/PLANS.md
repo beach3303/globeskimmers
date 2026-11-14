@@ -42,6 +42,27 @@ timeline, the first-party data rules). It supersedes the raw list below as the w
   Search Console, downloads the `google….html` file, Claude commits it into `site/`, she pushes, taps Verify,
   then Play Console → Account details → Website → Send verification request.
 
+## The shelf of books — tabled 2026-11-13 (founder: "let's table that..")
+
+Brainstormed and parked, nothing decided, nothing built. Canvas with both sketches: https://claude.ai/artifact/DksqnJCch5ZC8dTjy9k5aw
+(boards FoundingStamp and LifeBook; private to the founder).
+
+- **Founding stamp** instead of a "silver seal": a numbered "Founding Skimmer No. N" collectible on the passport's page one
+  (by the member number), earned at 5 distinct places with ≥1 verified, capped at 1,000, in-app nudge + share card; show
+  "No. 37", never "37 of 1,000". Not a Seal: Seals mean verified. Drives activation, not installs.
+- **Second book for life moments** (quinceañera, wedding, graduation, kids' school photos, sports, first job, engagement,
+  first child, milestones), a swipe to the right of the passport. Name offered: **Keepsake** ("Keep it"); alt Life Book,
+  Chapters, Milestones. Same booklet, cream pages, moment stamps in their own ink; every page starts Only me; kids never
+  wider than Friends; dated not timed (backdating, no GPS / 48 h); a moment can go out as a postcard. The acquisition bet:
+  moments have built-in family audiences on Viber/Messenger.
+- **About-me book** — passion, hobbies, talent, skills, work. Name offered: **Portrait** (or the passport's own identity
+  pages, like a real passport's first spread). Work as "where my work has taken me" (postings as stamps — OFWs, nurses,
+  seafarers), never a résumé; show-don't-claim (a clip/photo per passion, no endorsements or counts); no work page under
+  18; default Friends & followers; a **Calling Card** share (QR → /p/ link) as the growth loop.
+- **Third book replacing City Cards**: **Atlas** (alt Logbook, Field Notes) — polish, not growth; last or never.
+- Order suggested if revived: founding stamp → Keepsake v1 → identity pages + Calling Card → Atlas.
+
+
 ## Cards are regional, twenty stamps, with stays — founder decision 2026-11-06 (amends the City Cards section below)
 
 **Decided (founder, 2026-11-06, "yes to all except Passport wrap"; docs/plans/cards-and-passport.md):** a card
