@@ -5065,3 +5065,12 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   1.0.2611132120 to iOS and Android; the bundle synced to both platforms at 21:20 UTC holds the full-width
   "Grant the Seal" button. Nothing left to activate for the Seal work. Same day, the founder tabled the shelf of
   books (founding stamp, Keepsake, Portrait, Atlas) — filed in docs/PLANS.md, no build.
+
+## 2026-11-13 — The Philippines stamp list delivered (Desktop/Globeskimmers-Philippines-stamp-list.xlsx; scripts/stamp-art/philippines/)
+
+  Founder asked for the top 300 Philippine destinations to draw stamps for, and whether the real number is 500+.
+  Curated 648 places by region from knowledge (no web), ranked W/N/R, matched against the 1,984 PH rows in the
+  attractions DB (only 133 stampable) and the 1,062 art files: Top 300 (50 W · 144 N · 106 R; 59 stampable today,
+  59 exist-not-stampable, 182 missing rows, 11 already have art), Next 139 (regional favorites → ceiling ≈ 440),
+  Beyond 209 (local spots; fame bar says no passport stamp). Answer given: 300 now; ≈ 440 is the honest ceiling,
+  not 500. Follow-up when her art arrives: one SQL (promote 59 + insert 182 with Wikidata coords) + aliases.
