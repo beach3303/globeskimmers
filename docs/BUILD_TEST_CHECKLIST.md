@@ -5058,3 +5058,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   the Grant button sat off the right edge of the card. The row wraps now (handle full width, ink + person/business
   next, a full-width 44 px "Grant the Seal" button last) and Enter in the handle field grants. Lint + no-undef clean,
   build exit 0, boot-check ✅. **Activate:** push 275216e, then `npm run ota`.
+
+## 2026-11-13 ~17:25 PT — LIVE on phones: the Seal on the @username, the Seal desk, the Grant form (OTA 1.0.2611132120)
+
+  Checked, not assumed: origin/main = 3e5929c (275216e is on it); the Capgo production channel serves
+  1.0.2611132120 to iOS and Android; the bundle synced to both platforms at 21:20 UTC holds the full-width
+  "Grant the Seal" button. Nothing left to activate for the Seal work. Same day, the founder tabled the shelf of
+  books (founding stamp, Keepsake, Portrait, Atlas) — filed in docs/PLANS.md, no build.
