@@ -5094,3 +5094,15 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   '{"stay_category":false}'` hides the Stay door; `'{"place_page":false}'` brings the old options sheet back.
   Still to build from the same decisions: Stamps near you + Traveler tools, the four-tab bar, the welcome
   audience question + profile QR, the achievements ladder, the postcard shapes.
+
+## 2026-11-20 ~22:00 PT — PUSHED: passport-first slice 1 is on main (1e79516); worker + website deployed, OTA pending
+
+  Founder: "Push". stamping-v2 fast-forwarded origin/main (b0010a0 → 1e79516, 11 commits incl. the two site commits
+  of 20:37). GitHub Actions: Deploy Cloudflare Workers ✅ and Deploy website ✅ on 1e79516. Live probes after the deploy:
+  GET /flags → {"v":1,"flags":{}} (defaults); POST /attractions/facts for the Great Wall → Built 700 BC · Founded by
+  Qin Shi Huang · Length 21,195 km · 16 million visitors a year, with the Wikipedia link; the Eiffel Tower → Built
+  January 28, 1887 · Designed by Stéphen Sauvestre · 330 m · 6.2 million (2017). globeskimmers.io serves the brand hero.
+  **Activate (founder):** `npm run ota` — phones then open on the Passport, a stamp opens its place page, Upload
+  photos offers Stamp all. First phone check after the OTA: tap a stamp (story + facts load?), More shows five rows,
+  Send as a postcard opens, Upload photos with photos from two places shows "Stamp all 2 places".
+  Polish queued for the next worker push: a century-precision Wikidata date should read "7th century BC", not "700 BC".
