@@ -17,6 +17,7 @@ import { queueSharedPhotos } from "@/lib/sharedPhotos";
 import { fs } from "@/components/redesign/constants";
 import StayPicker from "@/components/citycards/StayPicker";
 import { useFlag } from "@/lib/remoteFlags";
+import { canPickNative, pickPhotosNative } from "@/lib/pickPhotosNative";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657";
@@ -34,6 +35,15 @@ export default function StampSheet({ onClose, onContribute = undefined }) {
     e.target.value = "";
     if (!files.length) return;
     queueSharedPhotos(files, [], { shared: false });
+    onClose();
+    navigate(createPageUrl("Passport"));
+  };
+  // The phone's own picker keeps each photo's location tag (2026-11-21); the web input is the fallback.
+  const upload = async () => {
+    if (!canPickNative()) { fileRef.current?.click(); return; }
+    const got = await pickPhotosNative(20);
+    if (!got) return;
+    queueSharedPhotos(got.files, got.clips, { shared: false });
     onClose();
     navigate(createPageUrl("Passport"));
   };
@@ -62,7 +72,7 @@ export default function StampSheet({ onClose, onContribute = undefined }) {
         </div>
 
         <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={picked} />
-        <button type="button" onClick={() => fileRef.current?.click()} style={{ ...card("#FBF6EC", "#EADFC9"), marginTop: 16 }}>
+        <button type="button" onClick={upload} style={{ ...card("#FBF6EC", "#EADFC9"), marginTop: 16 }}>
           <span aria-hidden="true" style={chip(STAMP)}><ImagePlus size={24} strokeWidth={2} color="#fff" /></span>
           <span style={{ minWidth: 0 }}>
             <span style={{ display: "block", fontSize: fs(16), fontWeight: 700, color: INK }}>Upload photos</span>

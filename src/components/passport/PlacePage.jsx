@@ -28,6 +28,8 @@ import TypographicStamp from "@/components/passport/TypographicStamp";
 import LocalFavoriteStamp, { isLocalFavorite } from "@/components/passport/LocalFavoriteStamp";
 import PostcardCompose from "@/components/passport/PostcardCompose";
 import StampActions from "@/components/passport/StampActions";
+import { canPickNative, pickPhotosNative } from "@/lib/pickPhotosNative";
+import BoardFromStamp from "@/components/passport/BoardFromStamp";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -69,9 +71,19 @@ export default function PlacePage({ stamp, pages = null, fits = null, readOnly =
   const room = Math.max(0, MAX_PHOTOS - photos.length);
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(null);
-  const onPick = async (e) => {
-    const files = [...(e.target.files || [])].slice(0, room);
+  const onPick = (e) => {
+    const files = [...(e.target.files || [])];
     e.target.value = "";
+    addFiles(files);
+  };
+  // The phone's own picker keeps each photo's location tag (2026-11-21); the web input is the fallback.
+  const pickPhotos = async () => {
+    if (!canPickNative()) { fileRef.current?.click(); return; }
+    const got = await pickPhotosNative(Math.min(room, 20));
+    if (got && got.files.length) addFiles(got.files);
+  };
+  const addFiles = async (picked) => {
+    const files = picked.slice(0, room);
     if (!files.length) return;
     let added = 0;
     for (let i = 0; i < files.length; i++) {
@@ -109,6 +121,9 @@ export default function PlacePage({ stamp, pages = null, fits = null, readOnly =
     setCompose(true);
   };
   const [more, setMore] = useState(false);
+  // One of this stamp's photos to its city's board (2026-11-21): the stamp is the proof of the place.
+  const [board, setBoard] = useState(false);
+  const canBoard = !readOnly && !minor && isVerified(stamp.verified) && Number.isFinite(+stamp.lat) && Number.isFinite(+stamp.lng) && !(+stamp.lat === 0 && +stamp.lng === 0) && photos.some((p) => p && p.id && !p.video);
   const reportStory = async () => {
     await callWorker("attractions/why-visit", { id: placeId, report: true });
     showToast("Thanks — we'll look at this place again", "success");
@@ -195,13 +210,18 @@ export default function PlacePage({ stamp, pages = null, fits = null, readOnly =
               </button>
             ))}
             {!readOnly && room > 0 && (
-              <button type="button" onClick={() => fileRef.current?.click()} disabled={!!busy} aria-label="Add photos" className="flex-none flex items-center justify-center disabled:opacity-60"
+              <button type="button" onClick={pickPhotos} disabled={!!busy} aria-label="Add photos" className="flex-none flex items-center justify-center disabled:opacity-60"
                 style={{ width: 72, height: 72, borderRadius: 12, border: `1px dashed rgba(22,17,13,.3)`, background: "#fff", color: INK2 }}>
                 {busy && busy !== "note" ? <Loader2 size={18} className="animate-spin" /> : <Plus size={20} strokeWidth={2.2} />}
               </button>
             )}
           </div>
           {busy && busy !== "note" && <p style={{ fontSize: fs(12), color: INK3 }}>{busy}</p>}
+          {canBoard ? (
+            <button type="button" onClick={() => setBoard(true)} style={{ alignSelf: "flex-start", padding: 0, border: 0, background: "transparent", font: "inherit", fontSize: fs(12.5), fontWeight: 650, color: "#2B4C8C" }}>
+              Share one with the {stamp.city || "city"} board ›
+            </button>
+          ) : null}
           {!noteEdit ? (
             <button type="button" onClick={() => { if (!readOnly) { setNoteDraft(stamp.note || ""); setNoteEdit(true); } }} className="text-left" style={{ padding: 0, border: 0, background: "transparent", font: "inherit" }}>
               <span style={{ fontFamily: SERIF, fontSize: fs(17), lineHeight: 1.35, color: stamp.note ? INK2 : INK3, fontStyle: "italic" }}>
@@ -238,6 +258,7 @@ export default function PlacePage({ stamp, pages = null, fits = null, readOnly =
       </div>
 
       <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onPick} />
+      {board ? <BoardFromStamp stamp={stamp} onClose={() => setBoard(false)} /> : null}
       {more && (
         <StampActions compact stamp={stamp} pages={pages} fits={fits} readOnly={readOnly}
           onClose={() => setMore(false)} onChanged={onChanged} onDetails={() => { setMore(false); onDetails?.(); }} onEnlarge={onEnlarge} />

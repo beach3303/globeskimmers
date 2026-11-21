@@ -47,6 +47,7 @@ import { countryCode } from "@/lib/countries";
 import { distanceUnit } from "@/lib/units";
 import { Wrench } from "lucide-react";
 import { useFlag } from "@/lib/remoteFlags";
+import { canPickNative, pickPhotosNative } from "@/lib/pickPhotosNative";
 import PhotoSorter from "@/components/passport/PhotoSorter";
 import ContributeAlbum, { SharedContributeSheet } from "@/components/passport/ContributeAlbum";
 import BoardPostcards from "@/components/passport/BoardPostcards";
@@ -696,6 +697,13 @@ function StampPlaceModal({ onClose, onDone, preset = null, sharedPhotos = null, 
     e.target.value = "";
     addPhotos(f);
   };
+  // The phone's own picker keeps the location tag (2026-11-21); one photo first (it senses the
+  // place), several once the place is set. The web input stays the fallback.
+  const pickPhotos = async () => {
+    if (!canPickNative()) { fileRef.current?.click(); return; }
+    const got = await pickPhotosNative(photos.length > 0 ? 10 : 1);
+    if (got && got.files.length) addPhotos(got.files);
+  };
   const addPhotos = (f) => {
     if (!f.length) return;
     const senseThis = photos.length === 0 && !preset && !located &&
@@ -874,7 +882,7 @@ function StampPlaceModal({ onClose, onDone, preset = null, sharedPhotos = null, 
 
         {/* Photo first (founder, 2026-10-14): a photo from the trip says where and when. */}
         {photos.length === 0 ? (
-          <button type="button" onClick={() => fileRef.current?.click()} className="w-full text-left flex items-center gap-3 rounded-2xl mt-4"
+          <button type="button" onClick={pickPhotos} className="w-full text-left flex items-center gap-3 rounded-2xl mt-4"
             style={{ padding: 14, border: `1.5px dashed ${RULE}`, background: IVORY_2 }}>
             <span aria-hidden="true" style={{ width: 44, height: 44, borderRadius: 12, background: "#fff", display: "grid", placeItems: "center", flexShrink: 0 }}><Camera size={20} color={STAMP} /></span>
             <span>
@@ -898,7 +906,7 @@ function StampPlaceModal({ onClose, onDone, preset = null, sharedPhotos = null, 
                 </div>
               ))}
               {photos.length < 4 && !located?.loading && (
-                <button onClick={() => fileRef.current?.click()} aria-label="Add another photo" className="rounded-xl flex items-center justify-center" style={{ width: 56, height: 56, border: `1px dashed ${RULE}`, background: IVORY_2 }}><Plus size={18} color={INK3} /></button>
+                <button onClick={pickPhotos} aria-label="Add another photo" className="rounded-xl flex items-center justify-center" style={{ width: 56, height: 56, border: `1px dashed ${RULE}`, background: IVORY_2 }}><Plus size={18} color={INK3} /></button>
               )}
             </div>
             {extraRef.current.length > 0 && (
@@ -1674,7 +1682,7 @@ function PassportInner({ embedded = false }) {
                   <>
                     <p style={{ margin: "6px 0 0", fontSize: fs(14), lineHeight: 1.5, color: INK2 }}>Stamps are earned by being there. Start with a trip you’ve already taken.</p>
                     <div className="mt-3 rounded-[18px] p-3" style={{ background: "#FBF6EC", border: "1px solid #EADFC9" }}>
-                      <button type="button" onClick={() => uploadRef.current?.click()} className="w-full font-semibold" style={{ minHeight: 54, borderRadius: 14, background: STAMP, color: "#fff", border: 0, fontSize: fs(15) }}>Upload photos</button>
+                      <button type="button" onClick={async () => { if (!canPickNative()) { uploadRef.current?.click(); return; } const got = await pickPhotosNative(20); if (got) setSorter({ files: got.files, clips: got.clips, shared: false, n: Date.now() }); }} className="w-full font-semibold" style={{ minHeight: 54, borderRadius: 14, background: STAMP, color: "#fff", border: 0, fontSize: fs(15) }}>Upload photos</button>
                       <p style={{ color: INK3, fontSize: fs(12), lineHeight: 1.4, marginTop: 6, textAlign: "center" }}>One photo or many. We find where and when each was taken.</p>
                       <button type="button" onClick={() => setShowStampPlace(true)} className="w-full font-semibold mt-2" style={{ minHeight: 48, borderRadius: 14, background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(14) }}>Stamp where I am</button>
                     </div>

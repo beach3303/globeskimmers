@@ -11,6 +11,13 @@ export const contributeOpen = (now = Date.now()) => now < CLOSES_AT;
 // One photo → { ok, board, progress, reward } · { code: 'no_location' | 'no_city' | 'child' | 'not_allowed' | 'caption' | 'slow_down' | …, error }
 // progress: photos posted and cities toward the collectible stamp (deleted ones still count);
 // reward: the stamp, when this photo earned it (src/lib/collectibles.js).
+// A photo already on one of your verified stamps → that place's board (2026-11-21): the worker
+// takes the stamp's own copy and the stamp's place; the same review as any board photo.
+export async function contributeStampPhoto(photo_id, caption = "") {
+  const { data, error } = await callWorker("board/contribute", { photo_id, caption }, { timeoutMs: 45000 });
+  if (!error && data?.ok) return { ok: true, id: data.id, url: data.url, board: data.board || null, progress: data.progress || null, reward: data.reward || null };
+  return { ok: false, code: data?.code || null, error: error || data?.error || "Upload failed" };
+}
 export async function contributePhoto({ image, exif, caption = "" }) {
   const { data, error } = await callWorker("board/contribute", { image, exif: exif || {}, caption }, { timeoutMs: 45000 });
   if (!error && data?.ok) return { ok: true, id: data.id, url: data.url, board: data.board || null, progress: data.progress || null, reward: data.reward || null };
