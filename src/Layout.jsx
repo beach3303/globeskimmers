@@ -129,7 +129,7 @@ export default function Layout({ children, currentPageName }) {
     if (!completed && currentPageName !== "Onboarding") {
       navigate(createPageUrl("Onboarding"));
     } else if (completed && currentPageName === "Onboarding") {
-      navigate(createPageUrl("Home"));
+      navigate(createPageUrl("Passport"));   // the book first (founder, 2026-11-20)
     }
   }, [profile, isLoadingAuth, currentPageName, navigate]);
 

@@ -38,7 +38,7 @@
  *   }
  *
  *   export const pagesConfig = {
- *       mainPage: "Home",
+ *       mainPage: "Passport",   // founder decision 2026-11-20 (1B): the app opens on the Passport, not Nearby
  *       Pages: PAGES,
  *       Layout: __Layout,
  *   };
@@ -124,7 +124,7 @@ export const PAGES = {
 }
 
 export const pagesConfig = {
-    mainPage: "Home",
+    mainPage: "Passport",   // founder decision 2026-11-20 (1B): the app opens on the Passport, not Nearby
     Pages: PAGES,
     Layout: __Layout,
 };
