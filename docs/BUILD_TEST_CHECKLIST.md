@@ -5136,3 +5136,17 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   expected: neither the worker nor the site changed in these slices. Everything from tonight — open on the Passport,
   the place page, Stamp all, the four-tab bar, stamps near you in the Passport, the Mailbox doors, the welcome
   audience question, your code on the Profile — reaches phones with ONE `npm run ota` (founder runs it).
+
+## 2026-11-21 ~00:10 PT — COMMITTED on stamping-v2, NOT pushed: card achievements (worker + app)
+
+  Approved by the founder 2026-11-20 ("i love this"). Worker: ccComputeAchievements (pure) over the member's
+  city_card_stamps + city_cards (+ profiles.home_city/home_country for Home Turf and Away Game); six ladders
+  (5 · 15 · 30 · 60 · 100 distinct places) + twenty behaviour seals; POST /city-cards/achievements; the stamp
+  route (new stamp and repeat visit) adds `achievements.earned_now`. Two of the mock's seals changed because card
+  stamps carry no time of day or coordinates: Early Bird / Night Owl → Weekender (10 weekend days) / All Year Round
+  (12 months); Neighborhood (1 km) → Ten in One Town. App: AchievementsShelf under the owner's cards (Cards tab),
+  AchievementEarnedSheet from CityCardStampButton (once; after the card-complete sheet when both fire). Not built:
+  the profile row of earned seals (opt-in), later. Gates: eslint clean (no-undef forced), worker node --check, build
+  exit 0, boot-check ✅; the counting checked on synthetic rows (30 cafés → Coffee Connoisseur, next at 60; home
+  turf, away game, the regular, coffee and cake all fire as designed). Not yet seen on a phone.
+  **Activate:** push to main (the worker deploys itself; the route is additive) → `npm run ota`.
