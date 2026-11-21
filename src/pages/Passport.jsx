@@ -42,6 +42,10 @@ import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import NearbyStampPrompt, { NEARBY_KEY, nearbySensingOn } from "@/components/passport/NearbyStampPrompt";
 import StampActions from "@/components/passport/StampActions";
 import PlacePage from "@/components/passport/PlacePage";
+import StampsNearYou from "@/components/home/StampsNearYou";
+import { countryCode } from "@/lib/countries";
+import { distanceUnit } from "@/lib/units";
+import { Wrench } from "lucide-react";
 import { useFlag } from "@/lib/remoteFlags";
 import PhotoSorter from "@/components/passport/PhotoSorter";
 import ContributeAlbum, { SharedContributeSheet } from "@/components/passport/ContributeAlbum";
@@ -1417,6 +1421,7 @@ function PassportInner({ embedded = false }) {
     try { const t = new URLSearchParams(window.location.search).get("tab"); return t === "photos" || t === "cards" ? t : "stamps"; } catch { return "stamps"; }
   });
   const { activeLocation: hereLoc } = useLocation();
+  const nearUnit = distanceUnit(profile, countryCode(hereLoc?.address?.country) || hereLoc?.address?.countryCode);
   const hereCity = hereLoc?.address?.city || profile?.home_city || null;
   // A Mailbox line opens the thing it names (founder, 2026-10-30): ?stamp=<id> opens that stamp's
   // sheet, &photo=<id> enlarges that memory photo. Once, when the stamps are in.
@@ -1439,8 +1444,8 @@ function PassportInner({ embedded = false }) {
       {/* HEADER */}
       <div className="px-4 pt-2 pb-3">
         <div className={`${colWrap} mx-auto flex items-center justify-between`}>
-          {embedded ? <span /> : (
-            <button onClick={() => ((window.history.state?.idx ?? 0) > 0 ? navigate(-1) : navigate(createPageUrl("Home")))} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-black/5" style={{ background: "#fff", border: `1px solid ${RULE}` }} aria-label="Back">
+          {embedded || (window.history.state?.idx ?? 0) === 0 ? <span /> : (
+            <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-black/5" style={{ background: "#fff", border: `1px solid ${RULE}` }} aria-label="Back">
               <ChevronLeft size={18} color={INK} strokeWidth={2.2} />
             </button>
           )}
@@ -1751,6 +1756,23 @@ function PassportInner({ embedded = false }) {
                     <span className="absolute top-[2px] rounded-full" style={{ width: 12, height: 12, background: "#fff", left: senseNearby ? 14 : 2, transition: "left .15s", boxShadow: "0 1px 2px rgba(0,0,0,.25)" }} />
                   </span>
                   Nearby stamps {senseNearby ? "on" : "off"}
+                </button>
+              </div>
+            )}
+            {/* Stamps near you, then the Traveler tools door (founder decisions 2B + 6B, 2026-11-20): the
+                nearest stampable places from the owned catalog, a tap opens the place; the finders
+                (the old Nearby page) sit one tap down behind one honest label. */}
+            {!readOnly && isAuthenticated && !preview && (
+              <div className="max-w-md mx-auto px-4 mt-6">
+                <StampsNearYou unit={nearUnit} onAction={(label) => navigate(createPageUrl(label === "Things to Do" ? "ThingsToDo" : "Home"))} />
+                <button type="button" onClick={() => navigate(createPageUrl("Home"))} className="w-full flex items-center gap-3 rounded-[14px] px-3.5 py-3 mt-3 text-left"
+                  style={{ background: "#F7F4EC", border: `1px solid ${RULE}`, fontFamily: "inherit" }}>
+                  <span className="flex-none w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#fff" }}><Wrench size={17} color={INK3} strokeWidth={2.1} /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold" style={{ color: INK, fontSize: fs(14.5) }}>Traveler tools</span>
+                    <span className="block" style={{ color: INK3, fontSize: fs(11.5), lineHeight: 1.35, marginTop: 1 }}>Eat · Coffee · Restrooms · ATMs · Money · Weather · Phrases · Culture</span>
+                  </span>
+                  <span aria-hidden="true" style={{ color: INK3, fontSize: fs(18) }}>›</span>
                 </button>
               </div>
             )}
