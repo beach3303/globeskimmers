@@ -62,6 +62,14 @@ the six QR business cards with per-card download tracking (Claude outputs/busine
 numbers to watch (installs by source, activation = first stamp with a photo within a day, week-two return), and the
 first two weeks of concrete actions. Not started.
 
+## A friend's four reports — 2026-11-21 (FIXED in code, not pushed; see BUILD_TEST_CHECKLIST 01:40)
+
+Photos arriving without a location (iOS web picker strips the tag) → the phone's own picker on every Passport door;
+a stamped photo refused by City Boards → "Share one with the city board" from the place page, the stamp as proof;
+delayed alerts → quiet hours by the phone's clock; one notifications place → the News tab in the Friends tab (Mailbox).
+Open: verify on a phone after the OTA; if the native picker still loses GPS on some iOS versions, the fallback is to
+read PHAsset.location in the VideoShrink plugin's probe for photos too.
+
 ## Play Console housekeeping — tabled 2026-11-10 (founder: "let's tab these for another day")
 
 - **EU trader status** — declare by **February 2027** or Play removes the app globally. Globeskimmers is a

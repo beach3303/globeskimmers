@@ -5169,3 +5169,24 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   it answers members only). Everything since 2026-11-20 evening — open on the Passport, the place page, Stamp all,
   the four-tab bar, stamps near you, the Mailbox doors, the welcome question, your code, achievements, postcard
   shapes — reaches phones with ONE `npm run ota` (founder).
+
+## 2026-11-21 ~01:40 PT — COMMITTED on stamping-v2, NOT pushed: a friend's four reports (photos without location, delayed alerts, boards refusing a stamped photo, one notifications tab)
+
+  Findings, from the code and the live event log: (1) 25 of 25 passport_photo_exif reads in 14 days had no GPS — iOS's
+  WEB file picker strips the location tag; the passport still stamped through the picture itself (photo_ai), but
+  /board/contribute requires exif lat/lng, so the SAME photo was refused as "no location" (report 3). (2) Quiet hours
+  (22–08) were judged by profiles.home_timezone — a member living away from their home city had alerts held through
+  the day and released by the hourly cron at "8" in the home city's clock. (4) Requests/news lived on the Profile's
+  Friends' news page, mail in the Mailbox: two places.
+  Fixes (worker 1 commit + app 3 commits): push/register carries the phone's timezone (KV pushtz:<uid>; pushTimezone
+  reads it first; push_held logs tz+hour); POST /board/contribute accepts photo_id (a photo on a verified stamp:
+  the stamp's place, the stamp's R2 copy, the same moderation); src/lib/pickPhotosNative.js opens the phone's own
+  picker (@capawesome file-picker, as the Contribute sheet already does) for Upload photos (Stamp sheet + new-member
+  card), Stamp a place and the place page, web input as fallback; the place page gets "Share one with the <city>
+  board ›" under the photos (BoardFromStamp); the Mailbox gets a News tab (FriendsNewsBody) with a dot, ?tab=news
+  stays there, and the Friends bar dot counts mail too.
+  Gates: eslint clean on all touched files (no-undef forced; the Mailbox's two pre-existing unused vars are not
+  ours), worker node --check, build exit 0, boot-check ✅. NOT verified on a phone: that the native picker's copy
+  keeps GPS on this iOS build (strong evidence: a board_contribution landed from that path on 11-14), and the
+  alerts timing. **Activate:** push to main (worker deploys) → `npm run ota`. Then watch D1 push_held payloads
+  for tz/hour, and passport_photo_exif has_gps turning true.
