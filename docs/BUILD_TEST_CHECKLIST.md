@@ -5199,3 +5199,14 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   board", the News tab, the Friends dot for mail, the phone's timezone on registration — rides the same pending
   `npm run ota` as everything since 2026-11-20 evening. After the OTA, watch D1: passport_photo_exif has_gps should turn
   true on iOS picks; push_held payloads now carry tz + hour.
+
+## 2026-11-21 00:29 PT — LIVE on phones: OTA 1.0.2611210829 (founder ran it; Capgo production channel checked)
+
+  The bundle was built at 00:29 local from the working tree at 4fbe8bc, so it carries EVERYTHING since the
+  2026-11-20 evening: open on the Passport, the place page + five-row More, Stamp all, the four-tab bar, stamps near
+  you + Traveler tools, the Mailbox doors + News tab, the welcome audience question, your code, achievements, tall
+  postcards, the phone's own photo picker, "Share one with the city board", the phone's timezone on registration.
+  Checked in dist/assets: "Stamp all", "Counting your stamps", "Share one with the" all present. Phones take it on
+  their next cold start. Clock note: the entries above from "21:15" on carry estimated wall-clock times; git's own
+  commit timestamps (all between 23:54 and 00:27 local) are the authoritative record.
+  Next: watch D1 for passport_photo_exif has_gps=true, push_held tz/hour, nav_tab 'friends', citycard achievements.
