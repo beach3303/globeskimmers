@@ -10,6 +10,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import CityCard from "@/components/citycards/CityCard";
 import CityCardSheet from "@/components/citycards/CityCardSheet";
+import AchievementsShelf from "@/components/citycards/AchievementsShelf";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { cardTitle, listCityCards } from "@/lib/cityCards";
 
@@ -77,6 +78,8 @@ export default function CityCardsPage({ embedded = false, cards: given = undefin
       {owner && cards.length ? (
         <p style={{ margin: "12px 0 0", fontFamily: MONO, fontSize: fs(10), letterSpacing: ".03em", color: NEUTRAL.ink3 }}>Tap a card to see every stamp, who sees it, or share it.</p>
       ) : null}
+      {/* The fifty achievements (approved 2026-11-20), under the cards, for the owner. */}
+      {owner && cards.length ? <AchievementsShelf /> : null}
       {open ? <CityCardSheet card={open} owner={owner} onClose={() => setOpen(null)} onChanged={onChanged} initialStamp={open.id === openId ? openStamp : null} /> : null}
     </div>
   );

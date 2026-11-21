@@ -26,6 +26,7 @@ import { logEvent } from "@/lib/analytics";
 import { stampCityCard, artFor, inkFor, stampDate, cardLeft, myCardStamps, forgetMyCardStamps, placeKey, cardTitle, showHotelNamesByDefault } from "@/lib/cityCards";
 import CityCardSheet from "@/components/citycards/CityCardSheet";
 import CityCardComplete from "@/components/citycards/CityCardComplete";
+import AchievementEarnedSheet from "@/components/citycards/AchievementEarnedSheet";
 
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
@@ -39,6 +40,7 @@ export default function CityCardStampButton({ finder, place, formatDistance = un
   const [refused, setRefused] = useState(null);   // { why, meters, message } after a refusal
   const [open, setOpen] = useState(false);        // the card, in its sheet
   const [complete, setComplete] = useState(false); // the tenth stamp's pop-up
+  const [earnedNow, setEarnedNow] = useState(null); // the seals this stamp just earned (achievements, 2026-11-20), shown once
   const [mine, setMine] = useState(null);         // { card, stamp } when this place is already on a card
   const name = place?.name || "this place";
   const key = placeKey(place?.id);
@@ -82,6 +84,7 @@ export default function CityCardStampButton({ finder, place, formatDistance = un
     else if (data.repeat) showToast(`Visit ${data.visits} at ${data.stamp?.name || name} — on your ${cardTitle(data.card)} card`, "success");
     else showToast(data.completed ? `${cardTitle(data.card)} card complete! 📇` : `Stamped on your ${cardTitle(data.card)} card`, "success");
     if (data.completed && !data.already && !data.repeat) setComplete(true);
+    else if (Array.isArray(data.achievements?.earned_now) && data.achievements.earned_now.length) setEarnedNow(data.achievements.earned_now);
   };
 
   const refusalText = (r) => (
@@ -147,7 +150,8 @@ export default function CityCardStampButton({ finder, place, formatDistance = un
         </div>
       )}
       {open && card ? <CityCardSheet card={card} owner onClose={() => setOpen(false)} onChanged={(c) => setResult((r) => (r ? { ...r, card: c } : r))} /> : null}
-      {complete && card ? <CityCardComplete card={card} onClose={() => setComplete(false)} onChanged={(c) => setResult((r) => (r ? { ...r, card: c } : r))} /> : null}
+      {complete && card ? <CityCardComplete card={card} onClose={() => { setComplete(false); if (Array.isArray(result?.achievements?.earned_now) && result.achievements.earned_now.length) setEarnedNow(result.achievements.earned_now); }} onChanged={(c) => setResult((r) => (r ? { ...r, card: c } : r))} /> : null}
+      {earnedNow ? <AchievementEarnedSheet earned={earnedNow} onClose={() => setEarnedNow(null)} /> : null}
     </div>
   );
 }

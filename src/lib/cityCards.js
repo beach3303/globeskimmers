@@ -60,6 +60,10 @@ export async function stampCityCard(payload) {
 }
 
 // My cards, newest first, each with its stamps.
+// The fifty achievements for stamping cards (approved 2026-11-20): the worker counts, the shelf draws.
+export async function cityCardAchievements() {
+  return callWorker("city-cards/achievements", {});
+}
 export async function listCityCards() {
   const { data, error } = await callWorker("city-cards", {});
   return { cards: Array.isArray(data?.cards) ? data.cards : [], error: error || data?.error || null, unavailable: !!data?.unavailable };
