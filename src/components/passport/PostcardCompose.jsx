@@ -200,6 +200,20 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
   const [linking, setLinking] = useState(false);
   const [made, setMade] = useState(/** @type {any} */ (null));
   useEffect(() => { setMade(null); }, [image, message, place, dish]);
+  // A photo's own shape (founder, 2026-11-21: "some of the users photo will be vertical"): a tall photo
+  // makes a tall card (4:5) instead of being cropped to 3:2; a wide one keeps the 3:2 front. Read from
+  // the picked (or edited) image itself; the card carries meta.shape so the receiver's card matches.
+  const [photoShape, setPhotoShape] = useState(null);
+  useEffect(() => {
+    if (!image || typeof Image === "undefined") { setPhotoShape(null); return undefined; }
+    let gone = false;
+    const im = new Image();
+    im.onload = () => { if (!gone) setPhotoShape({ w: im.naturalWidth, h: im.naturalHeight }); };
+    im.onerror = () => { if (!gone) setPhotoShape(null); };
+    im.src = image;
+    return () => { gone = true; };
+  }, [image]);
+  const portrait = !clip && !!image && !!photoShape && photoShape.h > photoShape.w * 1.05;
 
   // Focus moves into the sheet when it opens and back to where it was when it closes;
   // Escape closes it.
@@ -248,6 +262,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
     if (!f) return;
     clearClip();
     try { setImage(await resizePhoto(f)); } catch (err) { showToast(err?.message || "Couldn't read that photo", "error"); }
+    // the photo's own shape is read by the effect below, so the front follows it
   };
 
   // The clip on the front (video postcards, 2026-11-03). On the phone the native picker, the probe,
@@ -315,7 +330,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
       image, message,
       place_name: place || preset?.place_name, city: board?.city || preset?.city, country: board?.country || preset?.country,
       region: board?.region || preset?.region || undefined,
-      meta: dish ? { dish } : undefined,
+      meta: dish || portrait ? { ...(dish ? { dish } : {}), ...(portrait ? { shape: "portrait" } : {}) } : undefined,
       to_handle: address || undefined,
       to_user_ids: byId.length ? byId : undefined,
       to_handles: byHandle.length ? byHandle : undefined,
@@ -393,7 +408,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
       const { data, error } = await createLink({
         kind: "postcard", image, message,
         place_name: place || preset?.place_name, city: preset?.city, country: preset?.country, region: preset?.region || undefined,
-        meta: dish ? { dish } : undefined,
+        meta: dish || portrait ? { ...(dish ? { dish } : {}), ...(portrait ? { shape: "portrait" } : {}) } : undefined,
       });
       if (error || !data?.text) {
         setLinking(false);
@@ -507,7 +522,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
             type="button"
             onClick={() => fileRef.current?.click()}
             aria-label={image ? "Change the photo" : "Choose the photo"}
-            style={{ position: "relative", display: "block", width: "100%", marginTop: 12, padding: 0, overflow: "hidden", borderRadius: 14, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, aspectRatio: "3 / 2", cursor: "pointer" }}
+            style={{ position: "relative", display: "block", marginTop: 12, padding: 0, overflow: "hidden", borderRadius: 14, border: `1px solid ${NEUTRAL.airmailLine}`, background: NEUTRAL.white, cursor: "pointer", ...(portrait ? { height: "min(58vh, 560px)", width: "auto", aspectRatio: "4 / 5", marginLeft: "auto", marginRight: "auto" } : { width: "100%", aspectRatio: "3 / 2" }) }}
           >
             {image ? (
               <>
@@ -548,7 +563,7 @@ export default function PostcardCompose({ open = false, onClose = undefined, onS
               Edit the photo — our looks
             </button>
           ) : null}
-          <PhotoEditor open={editing} image={image} aspect="3:2" onDone={(u) => { setImage(u); setEditing(false); }} onClose={() => setEditing(false)} />
+          <PhotoEditor open={editing} image={image} aspect={portrait ? "4:5" : "3:2"} onDone={(u) => { setImage(u); setEditing(false); }} onClose={() => setEditing(false)} />
           {edit ? <ClipTrimmer src={edit.src} duration={edit.duration} seconds={CLIP_SECONDS} trim={edit.trim} marks homeSet={homeSet} city={place || preset?.place_name || null}
             onPick={(chosen) => { const { resolve } = edit; setEdit(null); resolve(chosen); }}
             onClose={() => { const { resolve } = edit; setEdit(null); resolve(null); }} /> : null}
