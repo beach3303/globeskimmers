@@ -23193,7 +23193,9 @@ async function handleCityCardStamp(request, env, ctx) {
           await founderAlert(env, `📇 ${who} ${who === 'You' ? 'are' : 'is'} back at ${had.category === 'stay' ? 'a stay' : had.name} — visit ${visits} on ${who === 'You' ? 'your' : 'their'} ${area.name} card No. ${card.no}${gbWhereLine(request)}`, 'bell', n ? { click: gbMemberLink(n) } : {});
         })().catch(() => {}));
       }
-      return jsonResponse({ ok: true, repeat: true, visits, card: ccCardRow(card, stamps.map((x) => (x.id === had.id ? row : x))), stamp: ccStampRow(row), completed: !!card.completed_at });
+      let achievements = null;
+      try { achievements = await ccAchievementsDelta(env, user.id, { repeatId: had.id }); } catch { achievements = null; }
+      return jsonResponse({ ok: true, repeat: true, visits, card: ccCardRow(card, stamps.map((x) => (x.id === had.id ? row : x))), stamp: ccStampRow(row), completed: !!card.completed_at, ...(achievements ? { achievements } : {}) });
     }
     const slot = stamps.length + 1;
     // A stay's name is hidden unless the owner says otherwise (b.name_hidden false = "Show the hotel's name"); a note is private.
@@ -23214,7 +23216,159 @@ async function handleCityCardStamp(request, env, ctx) {
         await founderAlert(env, `📇 ${who} stamped ${category === 'stay' ? `a stay in ${board.city}` : stampName} on ${who === 'You' ? 'your' : 'their'} ${area.name} card No. ${card.no} (${slot}/${CC_SLOTS}${completed ? ' — complete!' : ''})${gbWhereLine(request)}`, 'bell', n ? { click: gbMemberLink(n) } : {});
       })().catch(() => {}));
     }
-    return jsonResponse({ ok: true, card: ccCardRow(fresh, [...stamps, stamp]), stamp: ccStampRow(stamp), completed });
+    // The seals this stamp just earned, for the once-only sheet (achievements, 2026-11-20). Best effort.
+    let achievements = null;
+    try { achievements = await ccAchievementsDelta(env, user.id, { newId: stamp.id }); } catch { achievements = null; }
+    return jsonResponse({ ok: true, card: ccCardRow(fresh, [...stamps, stamp]), stamp: ccStampRow(stamp), completed, ...(achievements ? { achievements } : {}) });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
+// ─── Card achievements (founder, approved 2026-11-20: "i love this") ────────────────────────────
+// Fifty seals for stamping City Cards: six categories × five tiers at 5 · 15 · 30 · 60 · 100 DISTINCT
+// places, plus twenty for the way you stamp. Counted from the member's own city_card_stamps and
+// city_cards on every read — a few hundred rows at most — so there is nothing to keep in sync.
+// Nothing expires, nothing counts down, and no seal ever sends a notification; the stamp route
+// returns the seals a stamp just earned (earned_now) for the once-only sheet, and
+// POST /city-cards/achievements returns the whole shelf. Names are the founder's to change.
+const CC_ACH_TIERS = [5, 15, 30, 60, 100];
+const CC_ACH_LADDER = {
+  coffee:      { label: 'Coffee shops',       names: ['First Pour', 'Regular', 'Coffee Connoisseur', 'Roaster’s Friend', 'Caffeine Laureate'] },
+  restaurant:  { label: 'Restaurants',        names: ['Table for One', 'Good Appetite', 'Local Palate', 'Seasoned Diner', 'Gourmand'] },
+  shopping:    { label: 'Shopping',           names: ['Window Shopper', 'Bag in Hand', 'Boutique Hopper', 'Collector’s Eye', 'Grand Bazaar'] },
+  convenience: { label: 'Convenience stores', names: ['Corner Store', 'Quick Stop', 'Aisle Expert', 'Konbini Regular', 'Always Open'] },
+  market:      { label: 'Markets',            names: ['Market Morning', 'Stallholder’s Friend', 'Fresh Picks', 'Market Day', 'Bazaar Legend'] },
+  do:          { label: 'Things to do',       names: ['Day Out', 'Weekend Explorer', 'Out and About', 'Seen Plenty', 'Local Legend'] },
+};
+// The twenty: id, name, the line under it, and a test that returns { ok, n, of } from the facts.
+const CC_ACH_SEALS = [
+  ['first_card',     'First Card',      'Your first card stamp anywhere',           (f) => ({ ok: f.total >= 1, n: Math.min(f.total, 1), of: 1 })],
+  ['full_card',      'Full Card',       '20 of 20 on one card',                      (f) => ({ ok: f.maxCard >= CC_SLOTS, n: Math.min(f.maxCard, CC_SLOTS), of: CC_SLOTS })],
+  ['home_turf',      'Home Turf',       '20 stamps on your home card',              (f) => ({ ok: f.homeCard >= CC_SLOTS, n: Math.min(f.homeCard, CC_SLOTS), of: CC_SLOTS })],
+  ['away_game',      'Away Game',       'A card stamp outside your home country',   (f) => ({ ok: f.away >= 1, n: Math.min(f.away, 1), of: 1 })],
+  ['two_cities',     'Two Cities',      'Cards in two regions',                      (f) => ({ ok: f.areas >= 2, n: Math.min(f.areas, 2), of: 2 })],
+  ['five_cities',    'Five Cities',     'Cards in five regions',                     (f) => ({ ok: f.areas >= 5, n: Math.min(f.areas, 5), of: 5 })],
+  ['ten_cities',     'Ten Cities',      'Cards in ten regions',                      (f) => ({ ok: f.areas >= 10, n: Math.min(f.areas, 10), of: 10 })],
+  ['three_flags',    'Three Flags',     'Cards in three countries',                  (f) => ({ ok: f.countries >= 3, n: Math.min(f.countries, 3), of: 3 })],
+  ['the_regular',    'The Regular',     'One place stamped 10 times',                (f) => ({ ok: f.maxVisits >= 10, n: Math.min(f.maxVisits, 10), of: 10 })],
+  ['loyal',          'Loyal',           'One place stamped 25 times',                (f) => ({ ok: f.maxVisits >= 25, n: Math.min(f.maxVisits, 25), of: 25 })],
+  ['ten_in_town',    'Ten in One Town', '10 places in the same town',                (f) => ({ ok: f.maxTown >= 10, n: Math.min(f.maxTown, 10), of: 10 })],
+  ['explorer',       'Explorer',        'Stamps in 10 different towns',              (f) => ({ ok: f.towns >= 10, n: Math.min(f.towns, 10), of: 10 })],
+  ['coffee_and_cake','Coffee and Cake', 'A coffee shop and a restaurant, same day',  (f) => ({ ok: f.coffeeCake, n: f.coffeeCake ? 1 : 0, of: 1 })],
+  ['market_to_table','Market to Table', 'A market and a restaurant, same day',       (f) => ({ ok: f.marketTable, n: f.marketTable ? 1 : 0, of: 1 })],
+  ['full_day',       'Full Day',        'Three card categories in one day',          (f) => ({ ok: f.maxCatsDay >= 3, n: Math.min(f.maxCatsDay, 3), of: 3 })],
+  ['weekender',      'Weekender',       'Stamps on 10 different weekend days',       (f) => ({ ok: f.weekendDays >= 10, n: Math.min(f.weekendDays, 10), of: 10 })],
+  ['all_year',       'All Year Round',  'Stamps in 12 different months',             (f) => ({ ok: f.months >= 12, n: Math.min(f.months, 12), of: 12 })],
+  ['century',        'Century',         '100 card stamps in all',                    (f) => ({ ok: f.total >= 100, n: Math.min(f.total, 100), of: 100 })],
+  ['five_hundred',   'Five Hundred',    '500 card stamps in all',                    (f) => ({ ok: f.total >= 500, n: Math.min(f.total, 500), of: 500 })],
+  ['anniversary',    'Anniversary',     'A card stamp a year after your first',      (f) => ({ ok: f.spanDays >= 365, n: Math.min(f.spanDays, 365), of: 365 })],
+];
+const ccNorm = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+// The facts the twenty tests read, from the member's stamps and cards.
+function ccAchievementFacts(stamps, cards, home) {
+  const byCard = Object.fromEntries(cards.map((c) => [c.id, c]));
+  const homeCity = ccNorm(home && home.city), homeCountry = ccNorm(home && home.country);
+  const f = { total: stamps.length, maxCard: 0, homeCard: 0, away: 0, areas: 0, countries: 0, maxVisits: 0, maxTown: 0, towns: 0, coffeeCake: false, marketTable: false, maxCatsDay: 0, weekendDays: 0, months: 0, spanDays: 0 };
+  const perCard = {}, towns = {}, byDay = {}, weekend = new Set(), months = new Set(), areas = new Set(), countries = new Set();
+  let first = null, last = null;
+  for (const s of stamps) {
+    const c = byCard[s.card_id];
+    perCard[s.card_id] = (perCard[s.card_id] || 0) + 1;
+    if (c) {
+      if (c.area_key) areas.add(c.area_key); else if (c.board_key) areas.add(c.board_key);
+      if (c.country) countries.add(ccNorm(c.country));
+      if (homeCountry && c.country && ccNorm(c.country) !== homeCountry) f.away += 1;
+    }
+    f.maxVisits = Math.max(f.maxVisits, Number(s.visits) || 1);
+    const town = ccNorm(s.city || (c && c.city));
+    if (town) (towns[town] = towns[town] || new Set()).add(s.place_id);
+    const day = String(s.visited_on || s.created_at || '').slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      (byDay[day] = byDay[day] || new Set()).add(s.category);
+      const dow = new Date(day + 'T12:00:00Z').getUTCDay();
+      if (dow === 0 || dow === 6) weekend.add(day);
+      months.add(day.slice(0, 7));
+      if (!first || day < first) first = day;
+      if (!last || day > last) last = day;
+    }
+  }
+  for (const c of cards) {
+    const n = Math.max(perCard[c.id] || 0, Number(c.stamps) || 0);
+    f.maxCard = Math.max(f.maxCard, n);
+    if (homeCity && c.city && ccNorm(c.city) === homeCity) f.homeCard = Math.max(f.homeCard, n);
+  }
+  f.areas = areas.size; f.countries = countries.size;
+  f.towns = Object.keys(towns).length;
+  for (const t of Object.values(towns)) f.maxTown = Math.max(f.maxTown, t.size);
+  for (const cats of Object.values(byDay)) {
+    f.maxCatsDay = Math.max(f.maxCatsDay, cats.size);
+    if (cats.has('coffee') && cats.has('restaurant')) f.coffeeCake = true;
+    if (cats.has('market') && cats.has('restaurant')) f.marketTable = true;
+  }
+  f.weekendDays = weekend.size; f.months = months.size;
+  if (first && last) f.spanDays = Math.round((Date.parse(last + 'T00:00:00Z') - Date.parse(first + 'T00:00:00Z')) / 86400000);
+  return f;
+}
+// The whole shelf: { total, of, categories: [...], seals: [...] }. Pure; the same input gives the same answer.
+function ccComputeAchievements(stamps, cards, home) {
+  const categories = [];
+  let total = 0;
+  for (const [key, def] of Object.entries(CC_ACH_LADDER)) {
+    const places = new Set(stamps.filter((s) => s.category === key).map((s) => s.place_id)).size;
+    let tier = 0;
+    while (tier < CC_ACH_TIERS.length && places >= CC_ACH_TIERS[tier]) tier += 1;
+    total += tier;
+    categories.push({
+      key, label: def.label, count: places, tier,
+      earned: tier ? { name: def.names[tier - 1], tier, at: CC_ACH_TIERS[tier - 1] } : null,
+      next: tier < CC_ACH_TIERS.length ? { name: def.names[tier], tier: tier + 1, at: CC_ACH_TIERS[tier] } : null,
+      names: def.names, tiers: CC_ACH_TIERS,
+    });
+  }
+  const f = ccAchievementFacts(stamps, cards, home);
+  const seals = CC_ACH_SEALS.map(([id, name, line, test]) => { const r = test(f); if (r.ok) total += 1; return { id, name, line, earned: !!r.ok, n: r.n, of: r.of }; });
+  return { total, of: Object.keys(CC_ACH_LADDER).length * CC_ACH_TIERS.length + CC_ACH_SEALS.length, categories, seals };
+}
+// Everything a member stamped on cards, with the cards and the home city/country.
+async function ccAchievementRows(env, userId) {
+  const [cq, sq, pq] = await Promise.all([
+    gbRest(env, `city_cards?user_id=eq.${userId}&limit=500&select=id,area_key,area_name,board_key,city,country,stamps,completed_at`, {}),
+    gbRest(env, `city_card_stamps?user_id=eq.${userId}&limit=5000&select=id,card_id,place_id,category,city,visited_on,visits,created_at`, {}),
+    gbRest(env, `profiles?id=eq.${userId}&select=home_city,home_country`, { headers: { 'Accept-Profile': 'public' } }).catch(() => null),
+  ]);
+  if (!cq.ok || !sq.ok) return null;
+  const cards = await cq.json();
+  const stamps = (await sq.json()).filter((s) => s.category !== 'stay');   // stays never count (private, and no ladder)
+  const prof = pq && pq.ok ? (await pq.json())[0] : null;
+  return { cards, stamps, home: prof ? { city: prof.home_city, country: prof.home_country } : null };
+}
+// The seals a stamp just earned: the shelf with it minus the shelf without it. `newId` is a stamp
+// just inserted; `repeatId` a stamp whose visits just went up by one.
+async function ccAchievementsDelta(env, userId, { newId = null, repeatId = null } = {}) {
+  const rows = await ccAchievementRows(env, userId);
+  if (!rows) return null;
+  const after = ccComputeAchievements(rows.stamps, rows.cards, rows.home);
+  const before = ccComputeAchievements(
+    rows.stamps.filter((s) => s.id !== newId).map((s) => (s.id === repeatId ? { ...s, visits: Math.max(1, (Number(s.visits) || 1) - 1) } : s)),
+    rows.cards, rows.home);
+  const earnedNow = [];
+  for (const c of after.categories) {
+    const b = before.categories.find((x) => x.key === c.key);
+    if (c.tier > (b ? b.tier : 0) && c.earned) earnedNow.push({ kind: 'tier', category: c.key, label: c.label, name: c.earned.name, tier: c.tier, at: c.earned.at, count: c.count, next: c.next });
+  }
+  for (const sl of after.seals) {
+    const b = before.seals.find((x) => x.id === sl.id);
+    if (sl.earned && !(b && b.earned)) earnedNow.push({ kind: 'seal', id: sl.id, name: sl.name, line: sl.line });
+  }
+  return { earned_now: earnedNow, total: after.total, of: after.of };
+}
+// POST /city-cards/achievements → the shelf for the signed-in member.
+async function handleCityCardAchievements(request, env) {
+  try {
+    const user = await gbUser(request, env);
+    if (!user) return jsonResponse({ error: 'Sign in' }, 401);
+    const rows = await ccAchievementRows(env, user.id);
+    if (!rows) return jsonResponse({ error: 'Couldn’t load your achievements — try again' }, 502);
+    return jsonResponse({ ok: true, ...ccComputeAchievements(rows.stamps, rows.cards, rows.home) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
 
@@ -31470,6 +31624,7 @@ export default {
       if (pathname === '/city-cards' && request.method === 'POST') return await handleCityCards(request, env);
       if (pathname === '/admin/city-cards/remap' && request.method === 'POST') return await handleCityCardsRemap(request, env);
       if (pathname === '/city-cards/stamp/privacy' && request.method === 'POST') return await handleCityCardStampPrivacy(request, env);
+      if (pathname === '/city-cards/achievements' && request.method === 'POST') return await handleCityCardAchievements(request, env);
       if (pathname === '/city-cards/friends' && request.method === 'POST') return await handleCityCardsFriends(request, env);
       if (pathname === '/friends/added' && request.method === 'POST') return await handleFriendsAdded(request, env);
       if (pathname === '/city-cards/visibility' && request.method === 'POST') return await handleCityCardVisibility(request, env);
