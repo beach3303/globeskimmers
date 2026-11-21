@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { savePassportAudience } from "@/lib/audience";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { supabase } from "@/lib/supabaseClient";
@@ -109,6 +110,11 @@ export default function OnboardingPage() {
     // Page one (the home-city origin stamp) is offered by the Passport later, at home — after the
     // required birthday (2026-10-19), never from here.
 
+    // The one audience answer (founder decision 4B, 2026-11-20). Friends is the worker's default, so
+    // only another answer is sent; a failure is not fatal here — Settings → Privacy can set it later.
+    if (collected.audience && collected.audience !== "inner") {
+      try { await savePassportAudience(collected.audience); } catch { /* set it later in Settings */ }
+    }
     try { sessionStorage.setItem("gsk_review_toured", "1"); } catch { /* fine */ } // review account: one tour per launch
     await refreshProfile(); // so Layout's gate sees onboarding_completed = true
     // The passport ask is made once, on its own step (founder, 2026-10-30). Taken → the Passport
