@@ -21316,6 +21316,11 @@ function pushLocalHour(tz) {
 }
 const pushQuiet = (h) => h != null && (h >= PUSH_QUIET.from || h < PUSH_QUIET.to);
 async function pushTimezone(env, uid) {
+  // The phone's own timezone first (push/register, 2026-11-21), the home city's only as a fallback.
+  if (env.GLOBESKIMMERS_KV) {
+    const tz = await env.GLOBESKIMMERS_KV.get(`pushtz:${uid}`).catch(() => null);
+    if (tz) return tz;
+  }
   const r = await gbRest(env, `profiles?id=eq.${uid}&select=home_timezone`, { headers: { 'Accept-Profile': 'public' } }).catch(() => null);
   const row = r && r.ok ? (await r.json().catch(() => []))[0] : null;
   return row?.home_timezone || null;
@@ -21341,7 +21346,8 @@ async function pushNotify(env, uid, kind, make, opts = {}) {
     // postcard's, a comment's or a telegram's. A `preview` that slips in is dropped here.
     delete msg.preview;
     if (!msg.title || !msg.body) return;
-    if (!opts.now && kv && pushQuiet(pushLocalHour(await pushTimezone(env, uid)))) {
+    const tzUsed = opts.now || !kv ? null : await pushTimezone(env, uid);
+    if (!opts.now && kv && pushQuiet(pushLocalHour(tzUsed))) {
       // Held until 8 in the member's morning (pushHourly); one line per kind.
       const qk = `pushq:${uid}`;
       let q = []; try { q = JSON.parse((await kv.get(qk)) || '[]'); } catch { q = []; }
@@ -21349,7 +21355,7 @@ async function pushNotify(env, uid, kind, make, opts = {}) {
       q = q.filter((x) => !(x.kind === kind && (!opts.each || x.title === msg.title)));
       q.push({ kind, title: msg.title, body: msg.body, route: msg.route || '', ...(msg.collapse ? { collapse: msg.collapse } : {}), at: Date.now() });
       await kv.put(qk, JSON.stringify(q.slice(-10)), { expirationTtl: 36 * 3600 }).catch(() => {});
-      await gbLogEvent(env, 'push_held', { kind, to: String(uid).slice(0, 8) });
+      await gbLogEvent(env, 'push_held', { kind, to: String(uid).slice(0, 8), tz: tzUsed || null, hour: pushLocalHour(tzUsed) });
       return;
     }
     const out = {};
@@ -21435,6 +21441,14 @@ async function handlePushRegister(request, env) {
     const row = { token, user_id: user.id, platform, app_version: String(b.app_version || '').slice(0, 40) || null, seen_at: new Date().toISOString() };
     const w = await gbRest(env, 'push_tokens?on_conflict=token', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(row) });
     if (!w.ok) return jsonResponse({ error: 'Could not save' }, 502);
+    // The phone's own timezone (2026-11-21): quiet hours are judged by where the phone IS, not by the
+    // home city on the profile. Kept in KV per member, refreshed on every registration; no migration.
+    const tz = String(b.tz || '').trim().slice(0, 64);
+    if (tz && env.GLOBESKIMMERS_KV) {
+      let valid = false;
+      try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); valid = true; } catch { valid = false; }
+      if (valid) await env.GLOBESKIMMERS_KV.put(`pushtz:${user.id}`, tz).catch(() => {});
+    }
     return jsonResponse({ ok: true });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -22632,7 +22646,29 @@ async function handleBoardContribute(request, env, ctx) {
       if (n >= BC_PER_MINUTE) return jsonResponse({ error: 'That’s a lot at once — wait a minute and keep going', code: 'slow_down' }, 429);
       await env.GLOBESKIMMERS_KV.put(mk, String(n + 1), { expirationTtl: 120 }).catch(() => {});
     }
-    const exif = b.exif && typeof b.exif === 'object' ? b.exif : {};
+    let exif = b.exif && typeof b.exif === 'object' ? b.exif : {};
+    let imageData = b.image;
+    // A photo already on one of the member's stamps (2026-11-21): the stamp's own place is the
+    // location — it was verified by GPS or by the picture itself — so a photo the phone handed over
+    // without its tag (iOS's web picker strips it) still reaches the board. The bytes come from the
+    // stamp's own copy; nothing is re-uploaded, and the same review runs below.
+    if (BL_UUID.test(String(b.photo_id || ''))) {
+      const pq = await gbRest(env, `passport_stamp_photos?id=eq.${String(b.photo_id).toLowerCase()}&user_id=eq.${user.id}&select=id,photo_key,stamp_id`, {});
+      const ph = (pq.ok ? await pq.json() : [])[0];
+      if (!ph || !ph.photo_key) return jsonResponse({ error: 'That photo isn’t on your passport', code: 'not_found' }, 404);
+      const sq = await gbRest(env, `passport_stamps?id=eq.${ph.stamp_id}&user_id=eq.${user.id}&select=id,lat,lng,visited_on,verified`, {});
+      const st = (sq.ok ? await sq.json() : [])[0];
+      if (!st || !['gps', 'photo', 'photo_loc', 'photo_ai'].includes(String(st.verified)) || !Number.isFinite(+st.lat) || !Number.isFinite(+st.lng) || (+st.lat === 0 && +st.lng === 0)) {
+        return jsonResponse({ error: 'Only a photo on a verified stamp can reach a board this way', code: 'no_location' }, 400);
+      }
+      const obj = await env.MEDIA.get(ph.photo_key);
+      if (!obj) return jsonResponse({ error: 'That photo isn’t on your passport', code: 'not_found' }, 404);
+      const bb = new Uint8Array(await obj.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < bb.length; i += 0x8000) bin += String.fromCharCode.apply(null, bb.subarray(i, i + 0x8000));
+      imageData = btoa(bin);
+      exif = { lat: +st.lat, lng: +st.lng, ...(st.visited_on ? { taken_at: `${String(st.visited_on).slice(0, 10)}T12:00:00` } : {}) };
+    }
     const lat = Number(exif.lat), lng = Number(exif.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) {
       return jsonResponse({ error: 'This photo has no location, so we can’t tell which city it’s from', code: 'no_location' }, 400);
@@ -22649,7 +22685,7 @@ async function handleBoardContribute(request, env, ctx) {
       try { bb = Uint8Array.from(atob(d), (c) => c.charCodeAt(0)); } catch { return null; }
       return bb.length < 500 || bb.length > 4 * 1024 * 1024 || bb[0] !== 0xff || bb[1] !== 0xd8 ? null : { data: d, bytes: bb };
     };
-    const poster = jpegOf(b.image);
+    const poster = jpegOf(imageData);
     if (!poster) return jsonResponse({ error: isVideo ? 'The clip’s poster frame didn’t come through — try again' : 'Please pick a photo (JPEG, under 4 MB)' }, 400);
     const { data, bytes } = poster;
     let duration = 0, frames = [];
