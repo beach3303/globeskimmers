@@ -7905,6 +7905,104 @@ function wvGuard(text, facts, { maxChars, minWords, maxWords, noRules }) {
   return t;
 }
 
+// ─── GET /flags — the founder's remote switches (2026-11-20) ────────────────
+// One JSON the founder writes to KV by hand (`flags:v1`), read by the app once per launch
+// (src/lib/remoteFlags.js). A missing key means "defaults": the app owns the fallbacks, so an
+// empty KV never breaks anything. Cached at the edge for a minute.
+//   npx wrangler kv key put --binding=GLOBESKIMMERS_KV flags:v1 '{"stay_category":false}'
+async function handleFlags(env) {
+  let flags = {};
+  try {
+    const raw = env.GLOBESKIMMERS_KV ? await env.GLOBESKIMMERS_KV.get('flags:v1', { type: 'json' }) : null;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) flags = raw;
+  } catch { flags = {}; }
+  return new Response(JSON.stringify({ v: 1, flags }), { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60' } });
+}
+
+// ─── POST /attractions/facts { id } — the hard facts for a stamp's place page (2026-11-20) ──
+// Wikidata only (CC0, no credit needed): built / opened, by whom, height, length, elevation,
+// visitors a year (the latest year recorded), UNESCO status, and the English Wikipedia title for
+// a "Read more" link. Only what Wikidata holds is returned; an unknown fact is simply absent.
+// Cached 30 days per place (KV wf:v1:<id>). Free, so no sign-in and no daily cap.
+const WF_VERSION = 'v1';
+const WF_UNITS = { Q11573: 'm', Q828224: 'km', Q3710: 'ft', Q253276: 'mi' };
+function wfYear(t) { const m = /^[+-]?(\d{1,4})/.exec(String(t || '')); return m ? String(+m[1]) : null; }
+function wfDate(v) {
+  if (!v || !v.time) return null;
+  const y = wfYear(v.time);
+  if (!y) return null;
+  if ((v.precision || 9) <= 9) return y;                        // year precision or coarser
+  const m = /^[+-]?\d+-(\d\d)-(\d\d)/.exec(v.time);
+  if (!m || v.precision === 10) return `${['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][+m[1]] || ''} ${y}`.trim();
+  const d = new Date(Date.UTC(+y, +m[1] - 1, +m[2]));
+  return d.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+function wfAmount(v) {
+  if (!v || !v.amount) return null;
+  const n = Math.abs(+v.amount);
+  if (!Number.isFinite(n)) return null;
+  const unit = WF_UNITS[String(v.unit || '').split('/').pop()] || '';
+  const num = n >= 100 ? Math.round(n).toLocaleString('en-US') : (Math.round(n * 10) / 10).toLocaleString('en-US');
+  return unit ? `${num} ${unit}` : num;
+}
+function wfBest(claims, prop) {
+  const list = (claims && claims[prop]) || [];
+  const ranked = list.filter((c) => c.rank !== 'deprecated' && c.mainsnak && c.mainsnak.datavalue);
+  const pref = ranked.find((c) => c.rank === 'preferred');
+  return pref || ranked[0] || null;
+}
+async function handleAttractionFacts(request, env, ctx) {
+  try {
+    const b = await request.json().catch(() => ({}));
+    const id = String(b.id || '').trim();
+    if (!id || id.length > 200) return jsonResponse({ error: 'id required' }, 400);
+    const kv = env.GLOBESKIMMERS_KV;
+    const cacheKey = `wf:${WF_VERSION}:${id}`;
+    const cached = kv ? await kv.get(cacheKey, { type: 'json' }).catch(() => null) : null;
+    if (cached) return jsonResponse({ ...cached, _cache: 'hit' });
+    let row = null;
+    if (env.ATTRACTIONS_DB && ttdIdKind(id) === 'd1') row = await env.ATTRACTIONS_DB.prepare('SELECT id, name, qid, lat, lng FROM attractions WHERE id = ?1 LIMIT 1').bind(id).first().catch(() => null);
+    let q = String((row && row.qid) || (id.match(/Q\d+/) || [])[0] || '');
+    if (!/^Q\d+$/.test(q) && row) q = (await wvFindQid(row.name, +row.lat, +row.lng).catch(() => null)) || '';
+    const out = { ok: true, qid: /^Q\d+$/.test(q) ? q : null, facts: [], wikipedia: null, checked_at: new Date().toISOString() };
+    if (out.qid) {
+      const e = await wikiJson(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${out.qid}&props=claims|sitelinks&sitefilter=enwiki&format=json`).catch(() => null);
+      const ent = e && e.entities && e.entities[out.qid];
+      const claims = (ent && ent.claims) || {};
+      const title = ent && ent.sitelinks && ent.sitelinks.enwiki && ent.sitelinks.enwiki.title;
+      if (title) out.wikipedia = { title, url: `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}` };
+      const facts = [];
+      const built = wfBest(claims, 'P571'), opened = wfBest(claims, 'P1619');
+      if (built) { const d = wfDate(built.mainsnak.datavalue.value); if (d) facts.push({ key: 'built', label: 'Built', value: d }); }
+      else if (opened) { const d = wfDate(opened.mainsnak.datavalue.value); if (d) facts.push({ key: 'opened', label: 'Opened', value: d }); }
+      // By whom: the architect's (or founder's) English label, one lookup for up to two names.
+      const who = [...((claims.P84 || []).slice(0, 2)), ...((claims.P112 || []).slice(0, 1))].map((c) => c.mainsnak && c.mainsnak.datavalue && c.mainsnak.datavalue.value && c.mainsnak.datavalue.value.id).filter(Boolean).slice(0, 2);
+      if (who.length) {
+        const l = await wikiJson(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${who.join('|')}&props=labels&languages=en&format=json`).catch(() => null);
+        const names = who.map((w) => l && l.entities && l.entities[w] && l.entities[w].labels && l.entities[w].labels.en && l.entities[w].labels.en.value).filter(Boolean);
+        if (names.length) facts.push({ key: 'by', label: claims.P84 ? 'Designed by' : 'Founded by', value: names.join(' and ') });
+      }
+      const height = wfBest(claims, 'P2048'); if (height) { const v = wfAmount(height.mainsnak.datavalue.value); if (v) facts.push({ key: 'height', label: 'Height', value: v }); }
+      const length = wfBest(claims, 'P2043'); if (length) { const v = wfAmount(length.mainsnak.datavalue.value); if (v) facts.push({ key: 'length', label: 'Length', value: v }); }
+      const elev = !height && wfBest(claims, 'P2044'); if (elev) { const v = wfAmount(elev.mainsnak.datavalue.value); if (v) facts.push({ key: 'elevation', label: 'Elevation', value: v }); }
+      // Visitors a year: the latest year on record, the number rounded the way people say it.
+      const visits = (claims.P1174 || []).map((c) => ({ n: +((c.mainsnak.datavalue || {}).value || {}).amount, y: wfYear(c.qualifiers && c.qualifiers.P585 && c.qualifiers.P585[0].datavalue && c.qualifiers.P585[0].datavalue.value.time) })).filter((x) => Number.isFinite(x.n) && x.n > 0);
+      visits.sort((a, b) => String(b.y || '').localeCompare(String(a.y || '')));
+      if (visits.length) {
+        const v = visits[0];
+        const n = v.n >= 1e6 ? `${(Math.round(v.n / 1e5) / 10).toLocaleString('en-US')} million` : v.n >= 1e4 ? `${Math.round(v.n / 1000).toLocaleString('en-US')},000` : Math.round(v.n).toLocaleString('en-US');
+        facts.push({ key: 'visitors', label: 'Visitors a year', value: v.y ? `${n} (${v.y})` : n });
+      }
+      // UNESCO World Heritage (Q9259), with the year it was listed when recorded.
+      const unesco = (claims.P1435 || []).find((c) => c.mainsnak && c.mainsnak.datavalue && c.mainsnak.datavalue.value && c.mainsnak.datavalue.value.id === 'Q9259');
+      if (unesco) { const y = wfYear(unesco.qualifiers && unesco.qualifiers.P580 && unesco.qualifiers.P580[0].datavalue && unesco.qualifiers.P580[0].datavalue.value.time); facts.push({ key: 'unesco', label: 'UNESCO World Heritage', value: y ? `since ${y}` : 'listed' }); }
+      out.facts = facts.slice(0, 5);
+    }
+    if (kv) { const put = kv.put(cacheKey, JSON.stringify(out), { expirationTtl: 30 * 86400 }).catch(() => {}); if (ctx) ctx.waitUntil(put); else await put; }
+    return jsonResponse(out);
+  } catch (e) { return jsonResponse({ ok: false, error: e.message }, 500); }
+}
+
 // POST /attractions/why-visit { id } → { why_visit, story, can_do, checked_at }.
 // { id, report: true } is "Something's wrong?": clears the saved text so the
 // next open rewrites it, and logs wv_reported for the admin. That includes
@@ -31292,6 +31390,8 @@ export default {
       if (pathname === '/attractions/visit-info' && request.method === 'POST') return await handleAttractionVisitInfo(request, env, ctx);
       if (pathname === '/attractions/before-you-go' && request.method === 'POST') return await handleAttractionBeforeYouGo(request, env, ctx);
       if (pathname === '/attractions/why-visit' && request.method === 'POST') return await handleAttractionWhyVisit(request, env, ctx);
+      if (pathname === '/attractions/facts' && request.method === 'POST') return await handleAttractionFacts(request, env, ctx);
+      if (pathname === '/flags' && (request.method === 'GET' || request.method === 'POST')) return await handleFlags(env);
       if (pathname === '/attractions/link' && request.method === 'POST') return await handleAttractionLink(request, env);
       if (pathname === '/activities/one' && request.method === 'POST') return await handleActivityOne(request, env);
       if (pathname === '/places/dishes' && request.method === 'POST') return await handlePlaceDishes(request, env);
