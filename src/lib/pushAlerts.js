@@ -23,6 +23,10 @@ import { PushNotifications } from '@capacitor/push-notifications';
 // import chain back into the auth layer would be a cycle (the boot check caught one).
 const worker = async (route, body) => (await import('@/lib/callWorker')).callWorker(route, body);
 const KEY = 'gs_push_token';
+// The phone's own timezone rides with every registration (2026-11-21: a friend's alerts came hours
+// late — quiet hours were judged by the HOME city's clock, not the phone's). The worker keeps the
+// latest per member and judges 22:00–08:00 by it; the home timezone is only the fallback.
+const deviceTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } };
 const native = () => Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('PushNotifications');
 let listening = false;
 let onRegistered = null; // testAlerts waits here until the worker has this phone's token
@@ -42,7 +46,7 @@ export function attachPushListeners(onRoute) {
   PushNotifications.addListener('registration', async ({ value }) => {
     if (!value) return;
     try { localStorage.setItem(KEY, value); } catch { /* storage off */ }
-    await worker('push/register', { token: value, platform: Capacitor.getPlatform(), app_version: await versionLabel() }).catch(() => {});
+    await worker('push/register', { token: value, platform: Capacitor.getPlatform(), app_version: await versionLabel(), tz: deviceTz() }).catch(() => {});
     if (onRegistered) { const done = onRegistered; onRegistered = null; done(); }
   });
   PushNotifications.addListener('registrationError', () => { /* no token this time; the next open tries again */ });
