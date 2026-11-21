@@ -1,21 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { BookOpen, CircleUserRound, LayoutGrid, MapPin, Stamp } from 'lucide-react';
+import { BookOpen, CircleUserRound, Stamp, Users } from 'lucide-react';
 import { createPageUrl } from '@/utils';
 import { NEUTRAL, rgba } from '@/components/redesign/constants';
 import { logEvent } from '@/lib/analytics';
 import { refreshUnread, useUnread, wireUnread } from '@/lib/unreadStore';
 
-// Floating pill nav — fixed, centred, 22px above the bottom safe area. Five items (founder's
-// navigation redesign, 2026-10-31, docs/NAV_REDESIGN_2026-10-31.md): Boards · Nearby · Stamp
-// (raised, centre) · Passport · Profile. One rule: Passport is what you've collected, Profile is
-// who you are and who you know. Mail left the bar for an envelope at the banner's top-left
-// (src/components/mail/MailButton.jsx), Settings for a gear on the Profile cover.
+// Floating pill nav — fixed, centred, 22px above the bottom safe area. FOUR items (founder decision
+// 6B, 2026-11-20): Passport · Stamp (raised) · Friends · Profile. Passport is what you've
+// collected (with the stamps near you and the Traveler tools door inside it); Friends is your
+// people — the Mailbox first, with the circle and the City Boards one tap away; Profile is who you
+// are. The 2026-10-31 bar (Boards · Nearby · Stamp · Passport · Profile) is in git history; the
+// Nearby page (Home) still exists as Traveler tools, reached from the Passport.
+// Settings is a gear on the Profile cover.
 //
 // Active state comes from useLocation().pathname so Layout can render <FloatingNav /> without
-// prop wiring: Boards (and the board pages) light Boards; Home lights Nearby; Passport lights
-// Passport; Profile, Circle, Settings and Friends' news light Profile; everything else (finders,
-// a traveler's page, the Mailbox) lights nothing.
+// prop wiring: Passport lights Passport; the Mailbox, Postcards, Sent, Circle, Friends' news, a
+// traveler's page and the board pages light Friends; Profile and Settings light Profile;
+// everything else (the finders, Home as Traveler tools) lights nothing.
 //
 // The Stamp button opens the Stamp sheet (Upload photos · Stamp where I am · post to a City
 // Board) through `onStamp`, which Layout wires; without it, the Passport. On the bar: the founder's
@@ -25,7 +27,7 @@ import { refreshUnread, useUnread, wireUnread } from '@/lib/unreadStore';
 // -3x.png 192 px; docs/STAMP_ICON_RENDER_PROMPT.md). Until that render exists, and while it loads,
 // the flat version: a stamp-red disc with a cream ring and the lucide Stamp glyph.
 //
-// The Profile dot: a follow request waiting, or passport news unread (src/lib/unreadStore.js;
+// The Friends dot: a follow request waiting, or passport news unread (src/lib/unreadStore.js;
 // mail lights the envelope instead, never this dot).
 //
 // An always-on 1px cream outer ring keeps the pill's edge readable where it floats over dark
@@ -43,10 +45,9 @@ const STAMP_ART = 'https://globeskimmers-api.maizasimeon.workers.dev/stamp-art/u
 const STAMP_ART_3X = 'https://globeskimmers-api.maizasimeon.workers.dev/stamp-art/ui/stamp-button-3x.png';
 
 const ITEMS = [
-  { id: 'boards',   label: 'Boards',   route: 'Boards',   Icon: LayoutGrid },
-  { id: 'nearby',   label: 'Nearby',   route: 'Home',     Icon: MapPin },
-  { id: 'stamp',    label: 'Stamp',    route: 'Passport', Icon: Stamp, raised: true },
   { id: 'passport', label: 'Passport', route: 'Passport', Icon: BookOpen },
+  { id: 'stamp',    label: 'Stamp',    route: 'Passport', Icon: Stamp, raised: true },
+  { id: 'friends',  label: 'Friends',  route: 'Mailbox',  Icon: Users },
   { id: 'profile',  label: 'Profile',  route: 'Profile',  Icon: CircleUserRound },
 ];
 
@@ -71,7 +72,7 @@ export default function FloatingNav({ active, dark = false, onStamp = undefined 
   const location = useLocation();
   const art = useStampArt();
   const { news, requests } = useUnread();
-  const profileDot = news > 0 || requests > 0;
+  const friendsDot = news > 0 || requests > 0;
 
   const path = location.pathname.toLowerCase();
   // The shared unread read: on navigation, at most once a minute (the envelope reads it too).
@@ -79,10 +80,9 @@ export default function FloatingNav({ active, dark = false, onStamp = undefined 
 
   const detectActive = () => {
     if (active) return active;
-    if (path.includes('boards') || path.includes('cityboard')) return 'boards';
-    if (path.includes('passport')) return 'passport';
-    if (path.includes('profile') || path.includes('circle') || path.includes('settings') || path.includes('friendsnews')) return 'profile';
-    if (path === '/' || path.includes('home')) return 'nearby';
+    if (path === '/' || path.includes('passport')) return 'passport';
+    if (path.includes('mailbox') || path.includes('postcards') || path.includes('sent') || path.includes('circle') || path.includes('friendsnews') || path.includes('traveler') || path.includes('boards') || path.includes('cityboard')) return 'friends';
+    if (path.includes('profile') || path.includes('settings')) return 'profile';
     return null;
   };
   const activeTab = detectActive();
@@ -175,13 +175,13 @@ export default function FloatingNav({ active, dark = false, onStamp = undefined 
           );
         }
         const isActive = activeTab === it.id;
-        const dot = it.id === 'profile' && profileDot;
+        const dot = it.id === 'friends' && friendsDot;
         return (
           <button
             key={it.id}
             type="button"
             onClick={() => go(it)}
-            aria-label={dot ? 'Profile, something new' : it.label}
+            aria-label={dot ? 'Friends, something new' : it.label}
             aria-current={isActive ? 'page' : undefined}
             style={{
               width: 62,
