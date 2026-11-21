@@ -5106,3 +5106,15 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   photos offers Stamp all. First phone check after the OTA: tap a stamp (story + facts load?), More shows five rows,
   Send as a postcard opens, Upload photos with photos from two places shows "Stamp all 2 places".
   Polish queued for the next worker push: a century-precision Wikidata date should read "7th century BC", not "700 BC".
+
+## 2026-11-20 ~22:40 PT — COMMITTED on stamping-v2, NOT pushed: passport-first slice 2 (the four-tab bar; stamps near you in the Passport)
+
+  Founder: "Go" on slices 1+2 of the Near tab and the bar. Three commits: the bar is Passport · Stamp · Friends ·
+  Profile (FloatingNav; Friends = the Mailbox, which carries the news/request dot now); the Passport shows Home's
+  StampsNearYou under the book with a "Traveler tools" row beneath it that opens the old Nearby page (Home), and its
+  back arrow appears only when there is history; the Mailbox gets three pills above its tabs — Your circle, City
+  Boards, Friends' news. Gates: eslint clean with no-undef + no-unused-vars forced on the three files; build exit 0;
+  boot-check ✅. `npm run lint` reports 2 errors that are NOT ours: android/app/build/intermediates/…/native-bridge.js
+  (untracked Android build output on this Mac) trips a missing @typescript-eslint rule; it fails with or without
+  these changes. Not yet seen on a phone. **Activate:** push to main (no worker change in this slice) → `npm run ota`
+  (one OTA carries slices 1 and 2). Next: the welcome audience question + profile QR, then achievements.
