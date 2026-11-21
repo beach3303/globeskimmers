@@ -5129,3 +5129,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   plugin) and friends-on-the-spot auto-accept (needs a QR token on the worker); both are follow-ups.
   Gates: eslint clean (no-undef forced), build exit 0, boot-check ✅; `npm run lint`'s 2 errors are still the Android
   build intermediates. Not yet seen on a phone. **Activate:** push to main → `npm run ota` (one OTA carries slices 1–3).
+
+## 2026-11-20 ~23:30 PT — PUSHED: passport-first slices 2 and 3 are on main (9f390b1); no deploy ran (app files only); OTA pending
+
+  Founder: "push". stamping-v2 fast-forwarded origin/main 1e79516 → 9f390b1 (7 commits). No GitHub Action fired, as
+  expected: neither the worker nor the site changed in these slices. Everything from tonight — open on the Passport,
+  the place page, Stamp all, the four-tab bar, stamps near you in the Passport, the Mailbox doors, the welcome
+  audience question, your code on the Profile — reaches phones with ONE `npm run ota` (founder runs it).
