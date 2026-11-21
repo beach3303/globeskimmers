@@ -7,7 +7,7 @@
 // Every write goes through src/lib/passport.js; onChanged() reloads the
 // passport so the booklet repacks (a solo stamp moves to its own page at once).
 import React, { useRef, useState } from "react";
-import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck, ScanSearch, ArrowUpDown, MapPin, Type, ArrowRightLeft, Mail } from "lucide-react";
+import { Plus, Trash2, X, Images, BookOpen, Columns2, PencilLine, Loader2, BadgeCheck, ScanSearch, ArrowUpDown, MapPin, ArrowRightLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { openAttraction } from "@/lib/openAttraction";
 import { showToast } from "@/components/Toast";
@@ -27,13 +27,11 @@ import { useDismissable } from "@/lib/dismissStack";
 import PostcardCompose from "@/components/passport/PostcardCompose";
 import PhotoEditor from "@/components/passport/PhotoEditor";
 import { isLocalFavorite, localFavoriteLine } from "@/components/passport/LocalFavoriteStamp";
-import { socialFollow, setStampNote, setStampVisibility, setStampArt, setAlbumPrivacy } from "@/lib/passport";
+import { socialFollow, setStampNote, setStampVisibility, setAlbumPrivacy } from "@/lib/passport";
 import { usePassportAudience, aboveCeiling, capTo, audWord, AUD, ALBUM_OPTS, albumWord, albumLevel } from "@/lib/audience";
 import AudienceSheet from "@/components/privacy/AudienceSheet";
 import { PassportAudienceSheet } from "@/components/privacy/PassportPrivacy";
-import { respectPlaceFor } from "@/lib/respectPlaces";
 import { useAuth } from "@/lib/AuthContext";
-import { cityBoardUrl, hasBoard } from "@/lib/boardLinks";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -59,11 +57,11 @@ function Row({ icon: Icon, label, sub, onClick, disabled, tone }) {
   );
 }
 
-export default function StampActions({ stamp, onClose, onChanged, onDetails, onEnlarge, readOnly, pages = null, fits = null }) {
-  // A stamp in a city opens that city's board (City Boards, 2026-10-14), for adults as everywhere.
-  const { socialTier, socialTierReady } = useAuth();
-  const boardCity = String(stamp?.city || (stamp?.kind === "city" ? stamp?.name : "") || "").trim();
-  const showBoard = socialTierReady && String(socialTier || "") !== "blocked" && hasBoard(boardCity, stamp?.country);   // minors read boards (2026-10-16)
+export default function StampActions({ stamp, onClose, onChanged, onDetails, onEnlarge, readOnly, pages = null, fits = null, compact = false }) {
+  // compact (founder, 2026-11-20): the More menu under the place page — who can see it, who sees
+  // its photos, where the stamp sits, move to another page, delete (and the proof rows while a
+  // stamp is unverified). Photos, the note and the date live on the place page itself.
+  const { socialTier } = useAuth();
   // A minor: no postcards, and stamps stay Only me or Friends (founder, 2026-10-16).
   const minor = ["teen", "confirm"].includes(String(socialTier || ""));
   const navigate = useNavigate();
@@ -145,9 +143,8 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
   const photoFirst = isPhotoFirst(stamp);
   const stampPos = stamp.meta?.stamp_pos === "top" || stamp.meta?.stamp_pos === "bottom" ? stamp.meta.stamp_pos : "auto";
   const place = [stamp.city, stamp.region, stamp.country].filter(Boolean).join(", ");
-  // A memorial site (founder, 2026-10-04): the owner picks illustrated or text only.
-  const memorial = respectPlaceFor(stamp)?.kind === "memorial";
-  const artStyle = stamp.meta?.art === "plain" ? "plain" : "art";
+  // The illustrated / text-only choice for memorials went away (founder, 2026-11-20: no choice of
+  // how a stamp appears); meta.art is still honoured wherever it was already set.
 
   // Upload prepared photos ({ image, exif }). One photo passes through our looks first
   // (PhotoEditor, 2026-10-19); a batch goes up as it is.
@@ -209,15 +206,6 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
     setBusy(null);
     if (error) { showToast(error, "error"); return; }
     showToast(solo ? "This stamp now shares a page" : "This stamp has its own page", "success");
-    onChanged?.();
-  };
-  const setArt = async (next) => {
-    if (next === artStyle && stamp.meta?.art) return;
-    setBusy("art");
-    const { error } = await setStampArt(stamp.id, next);
-    setBusy(null);
-    if (error) { showToast(error, "error"); return; }
-    showToast(next === "plain" ? "This stamp now shows as text only" : "This stamp shows its illustration", "success");
     onChanged?.();
   };
   const movePos = async (next) => {
@@ -392,7 +380,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
           </div>
         )}
 
-        {!readOnly && (
+        {!readOnly && !compact && (
           <div className="mt-3 rounded-[14px] px-3.5 py-3" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
             {!noteEdit ? (
               <button type="button" onClick={() => setNoteEdit(true)} className="w-full text-left">
@@ -422,7 +410,7 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
         )}
 
         {/* Memory photos — tap to enlarge (swipe through them), × removes one */}
-        {photos.length > 0 && (
+        {!compact && photos.length > 0 && (
           <div className="flex gap-2 mt-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
             {photos.map((p, i) => (
               <div key={p.id} className="relative shrink-0">
@@ -441,12 +429,12 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
         )}
 
         <div className="flex flex-col gap-2 mt-3">
-          {!readOnly && (
+          {!readOnly && !compact && (
             <Row icon={busy === "photos" ? Loader2 : Plus} label={photos.length ? "Add more memory photos" : "Add memory photos"}
               sub={room ? (stamp.meta?.film ? `Up to ${room} more · your first photo opens full on the page` : `Up to ${room} more · 4 print under the stamp, the rest fill the album`) : "This album is full (30 photos)"}
               onClick={() => room && fileRef.current?.click()} disabled={busy === "photos" || !room} />
           )}
-          {photos.length > 0 && (
+          {!compact && photos.length > 0 && (
             <Row icon={Images} label={`View photo${photos.length === 1 ? "" : "s"} (${photos.length})`} sub="Full screen — swipe through, tap × to close" onClick={() => onEnlarge?.(0)} />
           )}
           {!readOnly && photoFirst && (
@@ -471,35 +459,13 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
               </div>
             </div>
           )}
-          {!readOnly && memorial && (
-            <div className="w-full rounded-[14px] px-3.5 py-3" style={{ background: "#fff", border: `1px solid ${RULE}` }}>
-              <div className="flex items-center gap-3">
-                <span className="flex-none w-9 h-9 rounded-full flex items-center justify-center" style={{ background: IVORY_2 }}>
-                  {busy === "art" ? <Loader2 size={17} color={INK} strokeWidth={2.1} className="animate-spin" /> : <Type size={17} color={INK} strokeWidth={2.1} />}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-semibold" style={{ color: INK, fontSize: fs(14.5) }}>How this stamp appears</span>
-                  <span className="block" style={{ color: INK3, fontSize: fs(11.5), lineHeight: 1.35, marginTop: 1 }}>A place of remembrance: its illustration, or text only</span>
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-1.5 mt-2.5" role="radiogroup" aria-label="How this stamp appears">
-                {[["art", "Illustrated"], ["plain", "Text only"]].map(([v, l]) => (
-                  <button key={v} type="button" role="radio" aria-checked={artStyle === v} disabled={busy === "art"} onClick={() => setArt(v)}
-                    className="rounded-lg py-2 font-semibold disabled:opacity-60"
-                    style={{ fontSize: fs(12.5), fontFamily: "inherit", background: artStyle === v ? INK : IVORY, color: artStyle === v ? "#fff" : INK2, border: `1px solid ${artStyle === v ? INK : RULE}` }}>
-                    {l}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {!readOnly && !photoFirst && (
+          {!readOnly && !compact && !photoFirst && (
             <Row icon={solo ? Columns2 : BookOpen}
               label={solo ? "Share a page with other stamps" : "Give this stamp its own page"}
               sub={solo ? "Back into the flow — it packs in beside other stamps" : "A solo page, nothing else on it"}
               onClick={toggleLayout} disabled={busy === "layout"} />
           )}
-          {!readOnly && stamp.meta?.film && (
+          {!readOnly && !compact && stamp.meta?.film && (
             <Row icon={busy === "film" ? Loader2 : PencilLine} label="Remove the movie note"
               sub={`Keeps the stamp — drops “${String(stamp.meta.film.title || "the scene").slice(0, 40)}”`}
               onClick={async () => {
@@ -562,18 +528,14 @@ export default function StampActions({ stamp, onClose, onChanged, onDetails, onE
               sub="Looks for the place itself in your photos — selfies alone can't prove it"
               onClick={checkPhotos} disabled={busy === "check"} />
           )}
-          {canSeePlace && (
+          {!compact && canSeePlace && (
             <Row icon={MapPin} label="See this place" sub={isLocalFav ? "Who recommends it, and why" : "Prices, parking, tips and its guestbook"}
               onClick={() => { onClose?.(); openAttraction(navigate, { id: stamp.entity_id, name: stamp.name, lat: stamp.lat, lng: stamp.lng }, "From your passport"); }} />
           )}
-          {!readOnly && !minor && (
+          {!readOnly && !compact && !minor && (
             <Row icon={PencilLine} label="Send as a postcard" sub="This place's photo on the front, your words on the back" onClick={openCompose} />
           )}
-          {showBoard && (
-            <Row icon={Mail} label={`Postcards from ${boardCity}`} sub="Its city board, from travelers who were really there"
-              onClick={() => { onClose?.(); navigate(cityBoardUrl(boardCity, stamp.country, stamp.region)); }} />
-          )}
-          {!readOnly && (
+          {!readOnly && !compact && (
             TAGGING_ENABLED
               ? <Row icon={PencilLine} label="Details, date & who you were with" sub="Set the real visit date, invite who you were with" onClick={onDetails} />
               : <Row icon={PencilLine} label="Details & visit date" sub="Set the real visit date" onClick={onDetails} />

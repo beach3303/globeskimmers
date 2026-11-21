@@ -41,6 +41,8 @@ import { takeSharedPhotos, SHARED_PHOTOS_EVENT } from "@/lib/sharedPhotos";
 import PhotoLightbox from "@/components/finder/PhotoLightbox";
 import NearbyStampPrompt, { NEARBY_KEY, nearbySensingOn } from "@/components/passport/NearbyStampPrompt";
 import StampActions from "@/components/passport/StampActions";
+import PlacePage from "@/components/passport/PlacePage";
+import { useFlag } from "@/lib/remoteFlags";
 import PhotoSorter from "@/components/passport/PhotoSorter";
 import ContributeAlbum, { SharedContributeSheet } from "@/components/passport/ContributeAlbum";
 import BoardPostcards from "@/components/passport/BoardPostcards";
@@ -1310,6 +1312,9 @@ function PassportInner({ embedded = false }) {
   // Tapping a stamp opens its OPTIONS sheet (photos, own page, delete…); the
   // detail card behind "Details, date & who you were with" is the old modal.
   const [actionsId, setActionsId] = useState(null);
+  // One tap on a stamp opens its place (founder, 2026-11-20); the old options sheet stays one
+  // remote switch away (src/lib/remoteFlags.js place_page).
+  const placePage = useFlag("place_page");
   // Nearby-stamp sensing switch (founder, 2026-09-27): same key as Settings →
   // Virtual Passport, so either place turns the pop-up off. Flipping it on
   // here remounts the prompt so it senses right away.
@@ -1435,7 +1440,7 @@ function PassportInner({ embedded = false }) {
       <div className="px-4 pt-2 pb-3">
         <div className={`${colWrap} mx-auto flex items-center justify-between`}>
           {embedded ? <span /> : (
-            <button onClick={() => navigate(createPageUrl("Home"))} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-black/5" style={{ background: "#fff", border: `1px solid ${RULE}` }} aria-label="Back">
+            <button onClick={() => ((window.history.state?.idx ?? 0) > 0 ? navigate(-1) : navigate(createPageUrl("Home")))} className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-black/5" style={{ background: "#fff", border: `1px solid ${RULE}` }} aria-label="Back">
               <ChevronLeft size={18} color={INK} strokeWidth={2.2} />
             </button>
           )}
@@ -1879,8 +1884,8 @@ function PassportInner({ embedded = false }) {
       )}
 
       {/* Stamp options — one tap on a stamp in the booklet */}
-      {actionsStamp && !memorialAsk && (
-        <StampActions
+      {actionsStamp && !memorialAsk && (() => { const Sheet = placePage ? PlacePage : StampActions; return (
+        <Sheet
           stamp={actionsStamp}
           pages={packBookPages(bookStamps, Math.min(0.94 * window.innerWidth, 440), readFontScale())}
           fits={(a, b) => fitsTogether(a, b, Math.min(0.94 * window.innerWidth, 440), readFontScale())}
@@ -1890,7 +1895,7 @@ function PassportInner({ embedded = false }) {
           onDetails={() => { setActionsId(null); setOpenStampId(actionsStamp.id); }}
           onEnlarge={(i) => enlargeStampPhotos(actionsStamp, i)}
         />
-      )}
+      ); })()}
 
       {/* Where you are right now — an attraction or airport you can stamp */}
       {!readOnly && !preview && isAuthenticated && !loading && senseNearby && (
