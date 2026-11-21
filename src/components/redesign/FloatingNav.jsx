@@ -71,8 +71,8 @@ export default function FloatingNav({ active, dark = false, onStamp = undefined 
   const navigate = useNavigate();
   const location = useLocation();
   const art = useStampArt();
-  const { news, requests } = useUnread();
-  const friendsDot = news > 0 || requests > 0;
+  const { news, requests, mail } = useUnread();
+  const friendsDot = news > 0 || requests > 0 || mail > 0;   // Friends is where all of it lives now (2026-11-21)
 
   const path = location.pathname.toLowerCase();
   // The shared unread read: on navigation, at most once a minute (the envelope reads it too).

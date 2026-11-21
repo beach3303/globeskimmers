@@ -39,6 +39,8 @@ import TelegramCompose from "@/components/telegram/TelegramCompose";
 import ReplyWays from "@/components/telegram/ReplyWays";
 import { deleteTelegram } from "@/lib/telegram";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
+import FriendsNewsBody from "@/components/social/FriendsNewsBody";
+import { useUnread } from "@/lib/unreadStore";
 import SentList from "@/components/mail/SentList";
 import { sealLabel } from "@/components/mail/SealUntil";
 import { TINK, TYPE } from "@/components/telegram/TelegramPaper";
@@ -94,12 +96,15 @@ function Masthead({ onPostcard = undefined, onTelegram = undefined, addressable 
 
 // The three folder tabs, in the Home tabs' airmail blue on one baseline. Postcards and Telegrams
 // carry how many are new.
-const MAIL_TABS = ["postcards", "telegrams", "sent"];
+const MAIL_TABS = ["postcards", "telegrams", "news", "sent"];
 const TAB_KEY = "gs_mailbox_tab_v1";
 function MailTabs({ tab, onTab, counts }) {
   const tabs = [
     { id: "postcards", label: "Postcards", n: counts.postcards },
     { id: "telegrams", label: "Telegrams", n: counts.telegrams },
+    // News (2026-11-21, a friend's ask: one place for every notification): follow requests, what
+    // happened on your pages, your circle's new stamps — the same lines as Friends' news.
+    { id: "news", label: "News", dot: counts.news > 0 },
     { id: "sent", label: "Sent" },
   ];
   return (
@@ -272,6 +277,7 @@ function MailboxBody() {
   const location = useLocation();
   const { profile } = useAuth();
   const circle = useCircle();
+  const unread = useUnread();                    // the News tab's dot: requests + unread news lines
   const [feed, setFeed] = useState(null);        // { rows, held, error } once read
   const [box, setBox] = useState(null);          // every card and telegram to me: { rows, next, held, error, partial }
   const [older, setOlder] = useState("idle");    // reading an older page of the box: 'idle' | 'busy' | 'failed'
@@ -283,7 +289,6 @@ function MailboxBody() {
   const wantedTg = params.get("tg");
   const wantedPc = params.get("pc");
   // The old News tab (links and notifications from before 2026-10-31) opens Friends' news on the Profile.
-  useEffect(() => { if (tabParam === "news") navigate(createPageUrl("FriendsNews"), { replace: true }); }, [tabParam]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [tab, setTabState] = useState(() => {
     if (MAIL_TABS.includes(tabParam)) return tabParam;
     if (wantedTg) return "telegrams";
@@ -476,7 +481,7 @@ function MailboxBody() {
   const readPc = boxRows.filter((r) => r.type !== "telegram");
   const readTg = boxRows.filter((r) => r.type === "telegram");
   // A message still sealed until its day (2026-11-03) is in the list but counts the morning it opens.
-  const tabCounts = { postcards: newPc.filter((r) => !r.sealed_until).length, telegrams: newTg.filter((r) => !r.received_at && !r.sealed_until).length };
+  const tabCounts = { postcards: newPc.filter((r) => !r.sealed_until).length, telegrams: newTg.filter((r) => !r.received_at && !r.sealed_until).length, news: unread.news + unread.requests };
 
   const isNew = (r) => (r.type === "postcard" || r.type === "telegram") && r.from_new;
   // One message or stamp, in full. `fresh`: from someone you don't follow.
@@ -608,7 +613,7 @@ function MailboxBody() {
         {me.loaded && !me.handle ? <ClaimCard onClaimed={(h) => setMe({ loaded: true, handle: h })} style={{ marginTop: 16 }} /> : null}
         <MailTabs tab={tab} onTab={setTab} counts={tabCounts} />
         <div role="tabpanel" id={`mail-panel-${tab}`} aria-labelledby={`mail-tab-${tab}`} style={{ paddingTop: 16 }}>
-          {tab === "sent" ? <SentList /> : mailTab(tab)}
+          {tab === "sent" ? <SentList /> : tab === "news" ? <FriendsNewsBody /> : mailTab(tab)}
         </div>
 
         {/* A friend texted a postcard or telegram (2026-10-24): the link's code opens it here. */}
