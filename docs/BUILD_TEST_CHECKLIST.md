@@ -5150,3 +5150,14 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   exit 0, boot-check ✅; the counting checked on synthetic rows (30 cafés → Coffee Connoisseur, next at 60; home
   turf, away game, the regular, coffee and cake all fire as designed). Not yet seen on a phone.
   **Activate:** push to main (the worker deploys itself; the route is additive) → `npm run ota`.
+
+## 2026-11-21 ~00:40 PT — COMMITTED on stamping-v2, NOT pushed: postcard shapes (a tall photo makes a tall card)
+
+  Founder said yes to the preview. Worker: meta.shape 'portrait' kept on send (people + boards) and returned as
+  row.shape on feed/box/board/link rows. App: PostcardCompose measures the photo (natural size, after pick or edit),
+  a portrait photo gets a 4:5 front (min(58vh, 560px) tall, centred) and the PhotoEditor opens on 4:5; PostcardCard
+  draws portrait rows at 4:5 (min(60vh, 520px)). The hooks sit above the composer's early return (rules-of-hooks).
+  Not done from the mock: the flip-to-back preview — the received card is one piece (photo, then the back under it),
+  so there is nothing to flip; the stamp-in-the-corner on the front is also not drawn (the stamp sits on the back
+  as today). Gates: eslint clean (no-undef forced), worker node --check, build exit 0, boot-check ✅. Not yet seen
+  on a phone. **Activate:** push to main (worker deploys) → `npm run ota`.
