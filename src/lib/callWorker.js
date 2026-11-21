@@ -13,7 +13,7 @@ import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { supabase } from '@/lib/supabaseClient';
 import { refusal } from '@/lib/ageGate';
 
-const WORKER_BASE = 'https://globeskimmers-api.maizasimeon.workers.dev';
+export const WORKER_BASE = 'https://globeskimmers-api.maizasimeon.workers.dev';   // also read by src/lib/remoteFlags.js
 const isNative = Capacitor.isNativePlatform();
 
 async function getToken() {
