@@ -5190,3 +5190,12 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   keeps GPS on this iOS build (strong evidence: a board_contribution landed from that path on 11-14), and the
   alerts timing. **Activate:** push to main (worker deploys) → `npm run ota`. Then watch D1 push_held payloads
   for tz/hour, and passport_photo_exif has_gps turning true.
+
+## 2026-11-21 ~01:50 PT — PUSHED: the friend's four fixes are on main (ef327a4); worker deployed ✅; ONE OTA pending
+
+  Founder: "push". origin/main 19e17e0 → ef327a4 (5 commits). Deploy Cloudflare Workers ✅ on ef327a4. Live probes:
+  /board/contribute with a photo_id and no session → 401; /push/register without a session → 401 (both routes answer
+  members only, as before). The app side — the phone's own picker on every photo door, "Share one with the city
+  board", the News tab, the Friends dot for mail, the phone's timezone on registration — rides the same pending
+  `npm run ota` as everything since 2026-11-20 evening. After the OTA, watch D1: passport_photo_exif has_gps should turn
+  true on iOS picks; push_held payloads now carry tz + hour.
