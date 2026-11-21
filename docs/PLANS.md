@@ -26,7 +26,7 @@ Decisions, numbered as the canvas rows (founder answered 1–3, then 4B, 6B and 
 6. **DECIDED 6B** — four tabs: Passport · Stamp (raised, centre) · Friends · Profile. Boards and Mailbox move under Friends; "Stamps near you" becomes a card inside the Passport (with the Traveler tools door under it, per decision 2).
 7. **DECIDED, expanded** — the founder loves 7A/7B and wants to ORDER. Six variations, each with its OWN QR so downloads can be compared per card (App Store Connect campaign `ct`, Play `utm_source`): `card-kit` (utilities + memories: stamping AND nearby services), `card-stamps` (stamp everywhere: airports, locally, globally; sample stamps, passport cover, open page, stamp on the passport, border crossings by land, air and sea), `card-us` (American travelers), `card-ph` (Filipino travelers), `card-jp` (people who love Japan), `card-nyc` (NYC local travelers). 3.5 × 2 in, QR ≥ 0.8 in, matte/uncoated back, scan test before printing. site/get/index.html: any `card-*` src now counts as medium "print" (edited 2026-11-20, NOT pushed). Then find an affordable online bulk colour printer (research in the canvas session; see Claude outputs/business-cards/).
 
-**BUILT + PUSHED 2026-11-20 ~22:00 — slice 1 on main (1e79516; worker + site deployed; `npm run ota` pending):** open on the Passport; worker /flags + /attractions/facts; remoteFlags (place_page, stay_category); PlacePage + the five-row More menu; Stamp all in the photo sorter. See the 21:15 entry in docs/BUILD_TEST_CHECKLIST.md for gates and Activate lines. **Slice 2 BUILT 22:40 (not pushed):** four-tab bar, StampsNearYou + Traveler tools in the Passport, Mailbox doors (22:40 entry).
+**BUILT + PUSHED 2026-11-20 ~22:00 — slice 1 on main (1e79516; worker + site deployed; `npm run ota` pending):** open on the Passport; worker /flags + /attractions/facts; remoteFlags (place_page, stay_category); PlacePage + the five-row More menu; Stamp all in the photo sorter. See the 21:15 entry in docs/BUILD_TEST_CHECKLIST.md for gates and Activate lines. **Slice 2 BUILT 22:40 (not pushed):** four-tab bar, StampsNearYou + Traveler tools in the Passport, Mailbox doors (22:40 entry). **Slice 3 BUILT 23:20 (not pushed):** welcome audience question, your-code QR on the Profile (23:20 entry). Follow-ups filed: in-app scanner, QR auto-accept.
 
 If agreed, the build is three small steps (each reversible, behind a `/flags` KV route): wk1 open-on-Passport + hide Stay + stamp sheet → place/memory/More + "Stamp all" in the sorter + flags route; wk2 Stamps near you + Traveler tools door + the place page; wk3 welcome audience question + profile QR + card files. Then the 1,000-member test (activation = a stamp with a photo within a day; week-two return; door taps).
 
@@ -52,6 +52,15 @@ Nuitée lane generally. Do not build on them without a new founder decision.
 docs/research/ and folded into one page — https://claude.ai/artifact/6q3WsLiBQw3qNq5j5pFomC
 (the sized build queue, the ten founder decisions, first five partnership deals, LA28
 timeline, the first-party data rules). It supersedes the raw list below as the working plan.
+
+## First 1,000 members — customer acquisition, founder 2026-11-20 ("after we update the look of the app, let's start customer acquisition and find a way to find our first 1000 customers who are into the type of stuff we built")
+
+Queued to start the moment the passport-first look is on phones (slices 1–4 pushed + OTA). Inputs already on file:
+the growth audiences (Filipino travelers first; docs and the growth artifact v3), the brand core (docs/BRAND_CORE.md),
+the six QR business cards with per-card download tracking (Claude outputs/business-cards/), the X account
+(@GlobeSkimmersHQ) and the message sheet. Deliverable when it starts: a 1,000-member plan with channels, the weekly
+numbers to watch (installs by source, activation = first stamp with a photo within a day, week-two return), and the
+first two weeks of concrete actions. Not started.
 
 ## Play Console housekeeping — tabled 2026-11-10 (founder: "let's tab these for another day")
 

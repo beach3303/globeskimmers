@@ -5118,3 +5118,14 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   (untracked Android build output on this Mac) trips a missing @typescript-eslint rule; it fails with or without
   these changes. Not yet seen on a phone. **Activate:** push to main (no worker change in this slice) → `npm run ota`
   (one OTA carries slices 1 and 2). Next: the welcome audience question + profile QR, then achievements.
+
+## 2026-11-20 ~23:20 PT — COMMITTED on stamping-v2, NOT pushed: passport-first slice 3 (the welcome audience question; your code on the profile)
+
+  Decision 4B. Two commits: WelcomeStep asks once "Who sees your passport?" (Friends recommended · Everyone · Only
+  me; a minor sees two) and Onboarding.finish saves a non-default answer through savePassportAudience (a failure is
+  not fatal); MemberCode (new, src/components/profile/) draws the member's /p/ share link as a QR with the `qrcode`
+  package (new dependency, 1.5.4), under CircleFolder on the owner's Profile, with Share my link. A friend's camera
+  → the /p/ page → Open in app → Traveler page → Add friend. NOT built: an in-app "Scan a friend" (needs a camera
+  plugin) and friends-on-the-spot auto-accept (needs a QR token on the worker); both are follow-ups.
+  Gates: eslint clean (no-undef forced), build exit 0, boot-check ✅; `npm run lint`'s 2 errors are still the Android
+  build intermediates. Not yet seen on a phone. **Activate:** push to main → `npm run ota` (one OTA carries slices 1–3).
