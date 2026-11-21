@@ -7926,7 +7926,7 @@ async function handleFlags(env) {
 // Cached 30 days per place (KV wf:v1:<id>). Free, so no sign-in and no daily cap.
 const WF_VERSION = 'v1';
 const WF_UNITS = { Q11573: 'm', Q828224: 'km', Q3710: 'ft', Q253276: 'mi' };
-function wfYear(t) { const m = /^[+-]?(\d{1,4})/.exec(String(t || '')); return m ? String(+m[1]) : null; }
+function wfYear(t) { const m = /^([+-]?)(\d{1,4})/.exec(String(t || '')); return m ? `${+m[2]}${m[1] === '-' ? ' BC' : ''}` : null; }
 function wfDate(v) {
   if (!v || !v.time) return null;
   const y = wfYear(v.time);
@@ -7934,6 +7934,7 @@ function wfDate(v) {
   if ((v.precision || 9) <= 9) return y;                        // year precision or coarser
   const m = /^[+-]?\d+-(\d\d)-(\d\d)/.exec(v.time);
   if (!m || v.precision === 10) return `${['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][+m[1]] || ''} ${y}`.trim();
+  if (/ BC$/.test(y)) return y;
   const d = new Date(Date.UTC(+y, +m[1] - 1, +m[2]));
   return d.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
