@@ -31,6 +31,7 @@ import useCircle from "@/lib/useCircle";
 import ClipTrimmer from "@/components/passport/ClipTrimmer";
 import { available as shrinkAvailable, probe, shrink, fileAt, previewUrl } from "@/lib/videoShrink";
 import { clipStills, uploadStampClip, CLIP_SECONDS } from "@/lib/clips";
+import { stampFromPhotos } from "@/lib/stampFromPhotos";
 
 const SERIF = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
 const INK = "#16110D", INK2 = "#3A3128", INK3 = "#736657", RULE = "rgba(22,17,13,.12)";
@@ -228,7 +229,7 @@ export default function PhotoSorter({ files, clips = [], stamps = [], shared = f
   const toStamp = chosen.filter((r) => r.kind === "new" || r.kind === "noloc");
   const toAdd = chosen.filter((r) => r.kind === "add");
   const places = rows.filter((r) => r.kind !== "old").length;
-  const go = async () => {
+  const addToExisting = async () => {
     for (const r of toAdd) {
       let added = 0;
       const room = Math.max(0, ALBUM_MAX - (r.stamp.photos?.length || 0));
@@ -250,12 +251,40 @@ export default function PhotoSorter({ files, clips = [], stamps = [], shared = f
       }
       showToast(added ? `${plural(added, "photo", "photos")} added to your ${r.stamp.name} stamp` : `Couldn't add the photos to ${r.stamp.name}`, added ? "success" : "error");
     }
+  };
+  const go = async () => {
+    await addToExisting();
     setBusy(null);
     if (toAdd.length) onChanged?.();
     if (toStamp.length) onStamp(toStamp.map((r) => ({ files: r.items.map((p) => p.file), placeHint: names[r.key]?.data || null, look: look === "none" ? null : lookFor(look) })));
     else onClose();
   };
-  const goLabel = toStamp.length && !toAdd.length ? `Stamp ${plural(toStamp.length, "place", "places")}`
+  // "Stamp all" (founder, 2026-11-20: "ask if they want stamps on all those places or only one"):
+  // every located, named place at once, no form — its first-choice place, its photos as proof,
+  // its first photo's day as the date (src/lib/stampFromPhotos.js). Places with no location,
+  // and any the photos could not prove, still open Stamp a place one by one afterwards.
+  const autoRows = toStamp.filter((r) => r.kind === "new" && r.at && names[r.key]?.data && photoOptions(names[r.key].data).length);
+  const canStampAll = autoRows.length >= 2;
+  const stampAll = async () => {
+    await addToExisting();
+    const done = [];
+    const left = toStamp.filter((r) => !autoRows.includes(r));
+    for (let i = 0; i < autoRows.length; i++) {
+      const r = autoRows[i];
+      const option = photoOptions(names[r.key].data)[0];
+      const { data, error } = await stampFromPhotos({ option, files: r.items.map((p) => p.file), at: r.at, day: r.day || null, look: look === "none" ? null : lookFor(look),
+        onProgress: (m) => setBusy(`${option.name} (${i + 1} of ${autoRows.length}) · ${m}`) });
+      if (error || !data) left.push(r); else done.push(data);
+    }
+    setBusy(null);
+    if (done.length) showToast(done.length === 1 ? "Place stamped 🛂" : `${done.length} places stamped 🛂`, "success");
+    if (done.length || toAdd.length) onChanged?.();
+    if (left.length) {
+      if (done.length) showToast(`${plural(left.length, "place", "places")} to confirm one by one`, "success");
+      onStamp(left.map((r) => ({ files: r.items.map((p) => p.file), placeHint: names[r.key]?.data || null, look: look === "none" ? null : lookFor(look) })));
+    } else onClose();
+  };
+  const goLabel = canStampAll ? "One by one" : toStamp.length && !toAdd.length ? `Stamp ${plural(toStamp.length, "place", "places")}`
     : toAdd.length && !toStamp.length ? (toAdd.length === 1 ? "Add the photos" : `Add to ${toAdd.length} stamps`)
     : "Continue";
 
@@ -395,9 +424,14 @@ export default function PhotoSorter({ files, clips = [], stamps = [], shared = f
               ))}
             </div>
             {busy && <p className="mt-2 flex items-center gap-2" style={{ fontSize: fs(12.5), color: INK2 }}><Loader2 size={14} className="animate-spin" /> {busy}</p>}
+            {canStampAll && (
+              <button onClick={stampAll} disabled={!!busy} className="w-full rounded-xl py-2.5 font-semibold mt-3 disabled:opacity-50" style={{ background: STAMP, color: "#fff", fontSize: fs(14) }}>
+                Stamp all {autoRows.length} places
+              </button>
+            )}
             <div className="flex gap-2 mt-3">
               <button onClick={onClose} disabled={!!busy} className="flex-1 rounded-xl py-2.5 font-semibold" style={{ background: "#fff", color: INK2, border: `1px solid ${RULE}`, fontSize: fs(14) }}>Cancel</button>
-              <button onClick={go} disabled={!!busy || !chosen.length} className="flex-1 rounded-xl py-2.5 font-semibold disabled:opacity-50" style={{ background: STAMP, color: "#fff", fontSize: fs(14) }}>{goLabel}</button>
+              <button onClick={go} disabled={!!busy || !chosen.length} className="flex-1 rounded-xl py-2.5 font-semibold disabled:opacity-50" style={canStampAll ? { background: "#fff", color: INK, border: `1px solid ${RULE}`, fontSize: fs(14) } : { background: STAMP, color: "#fff", fontSize: fs(14) }}>{goLabel}</button>
             </div>
           </>
         )}
