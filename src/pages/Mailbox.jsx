@@ -17,7 +17,7 @@
 // (a birthday still to complete) gets the note that lets it finish.
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, Lock, Mail, Mailbox as MailboxIcon, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, LayoutGrid, Lock, Mail, Mailbox as MailboxIcon, Sparkles, Users, Zap } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import useCircle from "@/lib/useCircle";
@@ -595,6 +595,16 @@ function MailboxBody() {
     <div>
       <Masthead onPostcard={() => setCompose(true)} onTelegram={wires ? () => setWireTo({}) : undefined} addressable={addressable} />
       <div className={COLUMN}>
+        {/* Friends is the bar's tab now (founder decision 6B, 2026-11-20): your circle, the City Boards and
+            Friends' news sit here, one tap from the mail. */}
+        <div role="group" aria-label="Your people" style={{ display: "flex", gap: 8, marginTop: 16, overflowX: "auto", scrollbarWidth: "none" }}>
+          {[["Circle", Users, "Your circle"], ["Boards", LayoutGrid, "City Boards"], ["FriendsNews", Sparkles, "Friends’ news"]].map(([route, Icon, label]) => (
+            <button key={route} type="button" onClick={() => navigate(createPageUrl(route))}
+              style={{ flex: "none", display: "inline-flex", alignItems: "center", gap: 8, minHeight: 40, padding: "0 14px", borderRadius: 999, background: "#fff", border: `1px solid rgba(43,76,140,.25)`, color: BLUE, font: "inherit", fontSize: 13.5, fontWeight: 650, cursor: "pointer" }}>
+              <Icon size={16} strokeWidth={2.1} aria-hidden="true" focusable="false" />{label}
+            </button>
+          ))}
+        </div>
         {me.loaded && !me.handle ? <ClaimCard onClaimed={(h) => setMe({ loaded: true, handle: h })} style={{ marginTop: 16 }} /> : null}
         <MailTabs tab={tab} onTab={setTab} counts={tabCounts} />
         <div role="tabpanel" id={`mail-panel-${tab}`} aria-labelledby={`mail-tab-${tab}`} style={{ paddingTop: 16 }}>
