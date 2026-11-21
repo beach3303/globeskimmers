@@ -5074,3 +5074,23 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   59 exist-not-stampable, 182 missing rows, 11 already have art), Next 139 (regional favorites → ceiling ≈ 440),
   Beyond 209 (local spots; fame bar says no passport stamp). Answer given: 300 now; ≈ 440 is the honest ceiling,
   not 500. Follow-up when her art arrives: one SQL (promote 59 + insert 182 with Wikidata coords) + aliases.
+
+## 2026-11-20 ~21:15 PT — COMMITTED on stamping-v2, NOT pushed: passport-first slice 1 (11ee8b1 … 8a37b4b)
+
+  The founder's seven decisions of the evening (docs/PLANS.md "Passport first") — the first slice, five commits:
+  11ee8b1 the app opens on the Passport (mainPage + the post-onboarding landing); fa24166 worker GET /flags
+  (KV `flags:v1`, the founder's remote switches) + POST /attractions/facts (Wikidata facts for a place, CC0,
+  30-day KV cache, no LLM); ae3127e src/lib/remoteFlags.js (place_page, stay_category; the "Where I'm staying"
+  door sits behind the second); 5e0b518 PlacePage.jsx — one tap on a stamp opens its place (the why-visit story
+  the worker already writes for Things to Do, the Wikidata facts, "You were here" with date / photos / note,
+  Send as a postcard, More) and StampActions gains `compact` (five rows + the proof rows while unverified; the
+  illustrated/text-only choice and the city-board door are gone for everyone); 8a37b4b Upload photos offers
+  "Stamp all N places" beside "One by one" (src/lib/stampFromPhotos.js, the modal's own proof path).
+  Gates: eslint clean with no-undef + no-unused-vars forced on every touched file; `node --check` on the worker;
+  `npm run build` exit 0; `npm run boot-check` ✅. The facts route's date/number helpers were run against the
+  Eiffel Tower's live Wikidata record. NOT yet seen on a phone: the place page, the compact More menu, Stamp all.
+  **Activate:** push to main (the worker deploys itself; the two new routes are additive) → `npm run ota` for the
+  app. Optional, any time, no release: `npx wrangler kv key put --binding=GLOBESKIMMERS_KV flags:v1
+  '{"stay_category":false}'` hides the Stay door; `'{"place_page":false}'` brings the old options sheet back.
+  Still to build from the same decisions: Stamps near you + Traveler tools, the four-tab bar, the welcome
+  audience question + profile QR, the achievements ladder, the postcard shapes.
