@@ -19603,7 +19603,7 @@ async function handleLinkCreate(request, env, ctx) {
       }
       row.message = b.message == null ? null : String(b.message).replace(/https?:\S+/gi, '').replace(/\s+/g, ' ').trim().slice(0, 240) || null;
       row.place_name = clean(b.place_name, 80); row.city = clean(b.city, 60); row.country = clean(b.country, 60); row.region = clean(b.region, 60);
-      if (b.meta && typeof b.meta === 'object') row.meta = { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60) };
+      if (b.meta && typeof b.meta === 'object') row.meta = { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60), ...(b.meta.shape === 'portrait' ? { shape: 'portrait' } : {}) };   // shape (2026-11-21): a tall photo makes a tall card
     }
     if (photo) {
       row.photo_key = `pc/${crypto.randomUUID()}.${photo.ext}`;
@@ -20047,7 +20047,7 @@ async function handlePostcardSend(request, env, ctx) {
     // One copy of the photo per card (see above).
     const put = async () => { const k = `pc/${crypto.randomUUID()}.${ext}`; await env.MEDIA.put(k, bytes, { httpMetadata: { contentType: mediaType, cacheControl: 'public, max-age=31536000, immutable' } }); return k; };
     const drop = (keys) => { if (ctx && keys.length) ctx.waitUntil(Promise.all(keys.map((k) => env.MEDIA.delete(k).catch(() => {})))); };
-    const cardMeta = b.meta && typeof b.meta === 'object' ? { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60) } : null;
+    const cardMeta = b.meta && typeof b.meta === 'object' ? { dish: clean(b.meta.dish, 60), from: clean(b.meta.from, 80), verdict: clean(b.meta.verdict, 60), ...(b.meta.shape === 'portrait' ? { shape: 'portrait' } : {}) } : null;
     const base = {
       sender_id: user.id, message: msg,
       place_name: clean(b.place_name, 80), city: clean(b.city, 60), country: clean(b.country, 60), region: cardRegion || clean(b.region, 60),
@@ -21893,7 +21893,7 @@ async function handleSocialFeed(request, env) {
       type: 'postcard', id: p.id, created_at: p.created_at,
       photo: `${origin}/pc-photo/${p.photo_key}`,
       message: p.message, place: p.place_name, city: p.city, region: p.region || null, country: p.country,
-      dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
+      dish: p.meta?.dish || null, shape: p.meta?.shape === 'portrait' ? 'portrait' : null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
       to_me: p.to_user_id === user.id,
       // A group card (2026-10-24): the others it reached, by @username — shown on the card, and
       // "Reply to all" reaches them too (2026-10-25).
@@ -22006,7 +22006,7 @@ async function handleMailSent(request, env) {
       const board = !!r.to_city;
       items.push({
         kind: 'postcard', from: 'postcards', ids: g.map((x) => x.id), group: r.group_id || null, at: r.created_at,
-        photo: photo(r.photo_key), message: r.message || null, place: r.place_name || r.city || null, dish: r.meta?.dish || null,
+        photo: photo(r.photo_key), message: r.message || null, place: r.place_name || r.city || null, dish: r.meta?.dish || null, shape: r.meta?.shape === 'portrait' ? 'portrait' : null,
         mode: board ? 'board' : !r.to_user_id ? (pcLeaked(r) ? 'lost' : 'followers') : r.group_id ? 'group' : g.length > 1 ? 'each' : 'one',
         ...(board ? { board: { kind: /^state:/.test(r.to_city) ? 'state' : /^country:/.test(r.to_city) ? 'country' : 'city', city: r.city || null, region: r.region || null, country: r.country || null, anon: !!r.meta?.anon } } : {}),
         to: board || !r.to_user_id ? [] : g.map((x) => who(x.to_user_id)),
@@ -22147,7 +22147,7 @@ async function handlePostcardBox(request, env) {
       type: 'postcard', id: p.id, created_at: p.created_at,
       photo: `${origin}/pc-photo/${p.photo_key}`,
       message: p.message, place: p.place_name, city: p.city, region: p.region || null, country: p.country,
-      dish: p.meta?.dish || null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
+      dish: p.meta?.dish || null, shape: p.meta?.shape === 'portrait' ? 'portrait' : null, from_place: p.meta?.from || null, food_verdict: p.meta?.verdict || null,
       to_me: p.to_user_id === user.id,
       ...(p.to_user_id === user.id && Array.isArray(p.cc) && p.cc.length ? { also_to: p.cc.map((id) => ccHandle[id]).filter(Boolean) } : {}),
       ...(p.to_user_id === null ? { kept: true } : {}),
@@ -22377,7 +22377,7 @@ async function handleCityBoard(request, env) {
       type: 'postcard', id: p.id, created_at: p.created_at,
       photo: `${origin}/pc-photo/${p.photo_key}`,
       message: p.message, place: p.place_name, city: p.city, region: p.region || null, country: p.country,
-      dish: p.meta?.dish || null, to_me: false, board: true,
+      dish: p.meta?.dish || null, shape: p.meta?.shape === 'portrait' ? 'portrait' : null, to_me: false, board: true,
       // A card signed "@local" / "@traveler" (founder, 2026-10-15) names nobody: no
       // handle, no name, no face. A SIGNED city-board card shows the @username alone
       // (founder, 2026-10-16: "signed — handle, no name"): real names stay off boards.
@@ -24083,7 +24083,7 @@ async function handleBoardPostcardsMine(request, env) {
       const kind = /^state:/.test(r.to_city) ? 'state' : /^country:/.test(r.to_city) ? 'country' : 'city';
       return {
         id: r.id, board: { kind, name: kind === 'state' ? r.region : kind === 'country' ? r.country : r.city, city: r.city || null, region: r.region || null, country: r.country || null },
-        photo: r.photo_key ? `${origin}/pc-photo/${r.photo_key}` : null, message: r.message || null, place: r.place_name || null, dish: r.meta?.dish || null, anon: r.meta?.anon || null, created_at: r.created_at,
+        photo: r.photo_key ? `${origin}/pc-photo/${r.photo_key}` : null, message: r.message || null, place: r.place_name || null, dish: r.meta?.dish || null, shape: r.meta?.shape === 'portrait' ? 'portrait' : null, anon: r.meta?.anon || null, created_at: r.created_at,
       };
     });
     return jsonResponse({ items });
