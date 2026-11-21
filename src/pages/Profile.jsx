@@ -32,6 +32,7 @@ import PrivacyCard from "@/components/profile/PrivacyCard";
 import VirtualItems from "@/components/profile/VirtualItems";
 import Luggage, { SHOW_LUGGAGE } from "@/components/passport/Luggage";
 import InviteButton from "@/components/passport/InviteButton";
+import MemberCode from "@/components/profile/MemberCode";
 import TeenHoldNote from "@/components/social/TeenHoldNote";
 import { initialOf } from "@/components/social/SocialMarks";
 import ClothPicker from "@/components/profile/ClothPicker";
@@ -285,6 +286,8 @@ export default function ProfilePage({ embedded = false } = {}) {
         ) : (
           <>
             <CircleFolder owner={owner} cloth={cloth.key} style={{ marginTop: GAP }} />
+            {/* Your code (founder decision 4B, 2026-11-20): a QR a friend scans to land on your page. */}
+            {handle.handle ? <MemberCode handle={handle.handle} cloth={cloth.key} style={{ marginTop: GAP }} /> : null}
             {/* Friends' news lives inside CircleFolder (the card) and on its own page (navigation redesign,
                 2026-10-31, step 6). The passport folder and the photo albums moved to the Passport's
                 Stamps · Photos · Cards. */}
