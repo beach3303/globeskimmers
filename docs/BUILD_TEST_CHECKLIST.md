@@ -5161,3 +5161,11 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   so there is nothing to flip; the stamp-in-the-corner on the front is also not drawn (the stamp sits on the back
   as today). Gates: eslint clean (no-undef forced), worker node --check, build exit 0, boot-check ✅. Not yet seen
   on a phone. **Activate:** push to main (worker deploys) → `npm run ota`.
+
+## 2026-11-21 ~00:55 PT — PUSHED: achievements + postcard shapes on main (272344b); worker deployed ✅; ONE OTA pending
+
+  Founder: "push". origin/main d6494ce → 272344b (6 commits). Deploy Cloudflare Workers ✅ on 272344b (no site
+  change). Live probe: POST /city-cards/achievements without a session → 401 {"error":"Sign in"} (the route is there;
+  it answers members only). Everything since 2026-11-20 evening — open on the Passport, the place page, Stamp all,
+  the four-tab bar, stamps near you, the Mailbox doors, the welcome question, your code, achievements, postcard
+  shapes — reaches phones with ONE `npm run ota` (founder).
