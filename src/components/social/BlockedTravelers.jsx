@@ -5,7 +5,7 @@
 import React, { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { showToast } from "@/components/Toast";
-import OfficialSeal from "@/components/passport/OfficialSeal";
+import OfficialSeal, { SealedHandle } from "@/components/passport/OfficialSeal";
 import { unblockTraveler } from "@/lib/passport";
 import { travelerLabel } from "@/lib/blocks";
 

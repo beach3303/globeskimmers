@@ -19,7 +19,7 @@ import { MoreHorizontal } from "lucide-react";
 import { NEUTRAL, fs } from "@/components/redesign/constants";
 import { Face } from "@/components/social/SocialMarks";
 import { whenLabel } from "@/components/social/Envelope";
-import OfficialSeal from "@/components/passport/OfficialSeal";
+import OfficialSeal, { SealedHandle } from "@/components/passport/OfficialSeal";
 
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
 const MAX_ROWS = 30;

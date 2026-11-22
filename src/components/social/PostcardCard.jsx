@@ -31,7 +31,7 @@ import { NEUTRAL, fs, rgba } from "@/components/redesign/constants";
 import { PostmarkLines } from "@/components/redesign/ornaments";
 import { PostmarkRing, ReportControl, canReport, senderName, whenLabel } from "@/components/social/Envelope";
 import StampThumb, { stampThumbKind } from "@/components/passport/StampThumb";
-import OfficialSeal from "@/components/passport/OfficialSeal";
+import OfficialSeal, { SealedHandle } from "@/components/passport/OfficialSeal";
 import { feedStamp } from "@/lib/stampKind";
 import FollowSender from "@/components/social/FollowSender";
 import DeleteConfirm, { TrashButton } from "@/components/social/DeleteConfirm";

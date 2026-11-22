@@ -22,7 +22,7 @@
 import React, { useId, useState } from 'react';
 import { Loader2, MoreHorizontal } from 'lucide-react';
 import { NEUTRAL, fs } from '@/components/redesign/constants';
-import OfficialSeal from '@/components/passport/OfficialSeal';
+import OfficialSeal, { SealedHandle } from '@/components/passport/OfficialSeal';
 import { Face } from './SocialMarks';
 
 /** @typedef {import('react').CSSProperties} CSS */
