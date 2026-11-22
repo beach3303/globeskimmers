@@ -5235,3 +5235,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   Founder: "push". origin/main 437c96c → d3a1a2f (4 commits: the four imports, the two permanent lint rules, the
   page error boundary, docs). App-only, so no Action ran and nothing deployed by itself. **Activate:** `npm run ota`
   → cold-start → Friends shows the postcard. Then watch D1 for `page_error` rows.
+
+## 2026-11-22 12:26 PT — LIVE on phones: OTA 1.0.2611222026 (founder ran it; Capgo production channel checked)
+
+  Built at 12:25 local from 13f9926; dist/assets carries the error card's copy ("couldn’t be drawn"), so the four
+  Seal imports, the lint rules' tree and the page error boundary are all in it. Phones take it on their next cold
+  start. Next: the founder opens Friends and sees the postcard; watch D1 for `page_error` (each is a crash with its
+  page and message), passport_photo_exif has_gps, push_held tz/hour, citycard achievements.
