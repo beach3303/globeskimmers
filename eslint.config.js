@@ -36,6 +36,12 @@ export default [
     },
     rules: {
       "no-unused-vars": "off",
+      // A free identifier white-screens the app and nothing else catches it: not Rollup, not the
+      // build, only the boot check on the pages it happens to boot. `no-undef` caught one on
+      // 2026-10-03; `<SealedHandle>` with no import (a JSX name, which no-undef never sees) blanked
+      // the Mail page from 2026-11-13 to 2026-11-22. Both stay on.
+      "no-undef": "error",
+      "react/jsx-no-undef": "error",
       "react/jsx-uses-vars": "error",
       "react/jsx-uses-react": "error",
       "unused-imports/no-unused-imports": "error",
