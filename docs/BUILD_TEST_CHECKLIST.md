@@ -5229,3 +5229,9 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   device: the fix is an import; the lint rule proves no other undefined JSX name remains in src/components or
   src/pages. **Activate:** push to main (nothing deploys — app only) → `npm run ota` → cold-start the app and
   open Friends: the postcard shows. Then watch D1 for `page_error` rows — any means another crash, with its page.
+
+## 2026-11-22 ~12:10 PT — PUSHED: the Mail white-screen fix is on main (d3a1a2f); ONE OTA pending
+
+  Founder: "push". origin/main 437c96c → d3a1a2f (4 commits: the four imports, the two permanent lint rules, the
+  page error boundary, docs). App-only, so no Action ran and nothing deployed by itself. **Activate:** `npm run ota`
+  → cold-start → Friends shows the postcard. Then watch D1 for `page_error` rows.
