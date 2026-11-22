@@ -5210,3 +5210,22 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   their next cold start. Clock note: the entries above from "21:15" on carry estimated wall-clock times; git's own
   commit timestamps (all between 23:54 and 00:27 local) are the authoritative record.
   Next: watch D1 for passport_photo_exif has_gps=true, push_held tz/hour, nav_tab 'friends', citycard achievements.
+
+## 2026-11-22 ~12:00 PT — FIXED, committed, NOT pushed: the Mail page went white on a received postcard
+
+  Founder: "i receieved a postcard but when i opened messages page, the screen went white blank screen" (three
+  Mailbox page_views at 10:56, each a blank). Cause: src/components/social/PostcardCard.jsx drew <SealedHandle>
+  (the Seal on the @username, 2026-11-13, commit 6a3dd89) with NO import — ReferenceError inside render → React
+  unmounts the whole tree → white screen. It fires for any postcard whose sender carries a Seal, so it has been
+  live since OTA 1.0.2611132120 (nine days); the same hole in ActivityList (Friends' news / the News tab),
+  Requests (a follow request from a sealed member) and BlockedTravelers. Why no gate caught it: core `no-undef`
+  never sees a JSX name; only `react/jsx-no-undef` does, and the config had neither (the explicit rules block
+  replaces the recommended set). The boot check only boots the Passport.
+  Fix (3 commits on main-to-be): the four imports; `no-undef` + `react/jsx-no-undef` permanent in eslint.config.js
+  (npm run lint clean with them; the only 2 errors are the pre-existing android/app/build intermediates);
+  src/components/PageErrorBoundary.jsx around every page's body in Layout — a render error now shows a cream
+  card (Try again · Your Passport), logs `page_error` {message, where} on the page's row in D1, resets on a route
+  change. Gates: lint ✅, build ✅, boot-check ✅ (#root 7879 chars, no uncaught errors). Not reproduced on a
+  device: the fix is an import; the lint rule proves no other undefined JSX name remains in src/components or
+  src/pages. **Activate:** push to main (nothing deploys — app only) → `npm run ota` → cold-start the app and
+  open Friends: the postcard shows. Then watch D1 for `page_error` rows — any means another crash, with its page.

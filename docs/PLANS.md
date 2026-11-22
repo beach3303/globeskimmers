@@ -62,7 +62,12 @@ the six QR business cards with per-card download tracking (Claude outputs/busine
 numbers to watch (installs by source, activation = first stamp with a photo within a day, week-two return), and the
 first two weeks of concrete actions. Not started.
 
-## A friend's four reports — 2026-11-21 (FIXED in code, not pushed; see BUILD_TEST_CHECKLIST 01:40)
+## A friend's four reports — 2026-11-21 (LIVE on phones via OTA 1.0.2611210829; verification signals still to land in D1)
+
+**Mail white screen — 2026-11-22 (FIXED, committed 454c1b2 + f431f9e + a1d0547, NOT pushed; OTA pending).** A postcard from a
+sender with a Seal blanked the Mail page for nine days (an un-imported `<SealedHandle>` in four files; no gate saw a JSX
+name). Fixed, the two lint rules are permanent, and every page now sits in an error boundary that shows Try again and
+logs `page_error` to D1. Activate: push → `npm run ota`. Watch D1 for `page_error`.
 
 Photos arriving without a location (iOS web picker strips the tag) → the phone's own picker on every Passport door;
 a stamped photo refused by City Boards → "Share one with the city board" from the place page, the stamp as proof;
