@@ -18,6 +18,7 @@ import FontScaleButton from "@/components/a11y/FontScaleButton";
 import MailButton from "@/components/mail/MailButton";
 import BackToTop from "@/components/BackToTop";
 import BoardNudge from "@/components/passport/BoardNudge";
+import PageErrorBoundary from "@/components/PageErrorBoundary";
 import { PageGroundProvider, usePageGroundValue, usePageInk } from "@/components/redesign/PageGround";
 import { logEvent } from "@/lib/analytics";
 import "@/lib/cloudSync"; // starts Wishlist/Saved → account sync on sign-in (side-effect)
@@ -246,7 +247,7 @@ function PageShell({ currentPageName, isOnboarding, stampPrompts = false, childr
           paddingBottom: isOnboarding ? undefined : BACK_TO_TOP_PAGES.has(currentPageName) ? BOTTOM_RESERVE_WITH_TOP : BOTTOM_RESERVE,
         }}
       >
-        {children}
+        <PageErrorBoundary page={currentPageName}>{children}</PageErrorBoundary>
       </div>
 
       {/* Floating "back to top" on long content/list pages, in the page's ink. */}
