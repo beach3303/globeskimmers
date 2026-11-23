@@ -70,7 +70,8 @@ state + D.C., in three kinds: **Tourist** 835 (the most visited; a published cou
 section, founder 11-22), **Local** 1,402. Checked against the LIVE attractions D1 on 11-22: 794 stampable today · 657 in
 the database, not yet stampable · 1,344 need a row; 101 already have art (+14 share).
 Deliverables: `Claude outputs/Globeskimmers-United-States-2795-places.pdf` + `…-stamp-list.xlsx` (Summary · Tourist ·
-Novelty · Local · All by region · To draw ✓), copies on the Desktop. Open: the founder's cut line (which kinds/regions to
+Novelty · Local · All by region · To draw ✓), plus the Tourist (835) and Novelty (558) lists as their own PDFs
+(founder 11-22 evening, `report.mjs <Kind>`), all copied to the Desktop. Open: the founder's cut line (which kinds/regions to
 draw first); when art lands, one SQL file (promotions + inserts) as the world tracker did. Honest note: the PH and CN tiers
 were curated by fame, not measured visits; the US Tourist tier is the first with published counts attached.
 

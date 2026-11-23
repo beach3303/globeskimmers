@@ -3,7 +3,7 @@
 "I want you to create also a list for the top most visited places in United States, tourist, and novelty and local."
 Built the same way as `../philippines/` and `../china/`, one list for all fifty states and D.C.
 
-- `places.mjs` — the hand-curated places by region (2,744 on 2026-11-22), each `[name, where, state, kind, category,
+- `places.mjs` — the hand-curated places by region (2,795 on 2026-11-22, Buc-ee's included), each `[name, where, state, kind, category,
   visitors]`. **Kind**: `T` tourist landmark (the most visited places; `visitors` is a published count where one exists —
   NPS recreation visits 2024, TEA/AECOM attendance 2023, or the operator's or city's own estimate — else listed by fame),
   `V` novelty (roadside America, world's-largest things, oddball museums, mystery spots), `L` local favorite (what the
@@ -18,7 +18,9 @@ Built the same way as `../philippines/` and `../china/`, one list for all fifty 
   (the same place when the name match is ≥ 90, otherwise "shares"). Files on the server come from
   `../world/uploaded-inventory.json` plus a GET probe of the worker for every other name (`probe-cache.json`).
   Writes `list-2026-11-22.json` and `review-fuzzy.txt` (every match under 100, for a human read).
-- `report.mjs` — the PDF (`Claude outputs/Globeskimmers-United-States-2744-places.pdf`, from HTML via headless Chrome).
+- `report.mjs` — the PDF (`Claude outputs/Globeskimmers-United-States-2795-places.pdf`, from HTML via headless Chrome).
+  `report.mjs Tourist` (or `Novelty`, `Local`) prints one kind on its own, numbered 1 … N, as
+  `Globeskimmers-United-States-<Kind>-<N>-places.pdf` — the founder asked for the Tourist and Novelty lists as separate PDFs on 2026-11-22.
 - `build_xlsx.py` — the workbook (`Claude outputs/Globeskimmers-United-States-stamp-list.xlsx`: Summary · Tourist ·
   Novelty · Local · All by region · To draw with a ✓ column).
 

@@ -5267,3 +5267,11 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   a database row (wikidata:Q4982335, stampable); San Marcos was borrowing it and is now a NO_MATCH. Rebuilt the PDF
   (Globeskimmers-United-States-2795-places.pdf) and the workbook; Desktop copies refreshed; the 2744 files removed.
   Totals: Tourist 835 · Novelty 558 · Local 1,402; 794 stampable · 657 promote · 1,344 insert · 101 with art.
+
+## 2026-11-22 ~19:25 PT — Tourist and Novelty as separate PDFs
+
+  Founder: "give me the list. separate tourist, separate novelty list. in pdf saved to my desktop." report.mjs now takes a
+  kind (Tourist | Novelty | Local): one kind on its own, numbered 1 … N, no Kind column, the Visitors column only where
+  the list carries ten or more counts (Novelty has two — they ride in the Note). Written: Globeskimmers-United-States-
+  Tourist-835-places.pdf (24 pp) and Globeskimmers-United-States-Novelty-558-places.pdf (16 pp), both in Claude outputs
+  and copied to the Desktop (byte-identical), beside the full 2795 PDF and the workbook. No data changed.
