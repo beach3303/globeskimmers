@@ -52,5 +52,14 @@ Squared and matched. ONE concern.
 Not concerns: 074 Shanghai Ocean Aquarium (generic tunnel, no logo); 062 Lujiazui and 058 Shanghai Tower (skyline only); 072 Jing'an Temple (the skyline behind is fine).
 Rows still needed from this batch: Qibao Ancient Town, Zhujiajiao Water Town (hand pins); Former French Concession, Lujiazui, Nanjing Road, Shanghai Disneyland, Shanghai Ocean Aquarium, Tianzifang, Xibaipo, Xintiandi (all in d1-world-rows.sql).
 
+## Batch 5 — Shanghai — 2026-11-22 21:25 — 11 stamps (077–087)
+Squared and matched. No concerns.
+
+| No. | Stamp | Concern | Note |
+|---|---|---|---|
+| — | — | none | 079 M50: the mural is an invented swirl, not a real artist's work — fine. 086 Haichang: orca + dolphin, no park logo. 087 Thames Town: a British phone box is a generic object. 085 Science & Tech Museum: the orange ring is her frame, not a logo. |
+
+Rows still needed from this batch: 1933 Old Millfun, Fuxing Park, M50, Haichang, Wild Animal Park, Thames Town, Wukang Mansion (all in d1-world-rows.sql).
+
 ## Running totals
-Batches 4 · stamps 69 · concerns 2
+Batches 5 · stamps 80 · concerns 2
