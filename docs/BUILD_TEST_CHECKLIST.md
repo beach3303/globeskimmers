@@ -5292,3 +5292,21 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   workbook; Desktop copies refreshed, the 2795/835 files removed. Totals: Tourist 871 · Novelty 558 · Local 1,396;
   800 stampable · 661 promote · 1,364 insert. Marathon and race-walk courses are still unannounced and are left out;
   Salt Lake City–Utah 2034 (13 venues) was researched but not added — the founder scoped this to 2028.
+
+## 2026-11-22 ~20:15 PT — China stamps, batch 1 (Beijing): 19 drawn, squared, matched; upload + one SQL for the founder
+
+  Founder: "i have the stamps for china but the names are not exactly as the list … i will send it here in batches."
+  intake.py now matches close names (same words any order, city tacked on, missing apostrophe, short spellings),
+  `--country China` limits the candidates, `--pad` never crops (a full-bleed stamp shape would lose its top and
+  bottom), smaller pictures are scaled UP to 1254², overrides.json fixes a wrong guess. Batch 1 arrived pasted into
+  the chat (19 PNGs ≈ 800 px with a 12 px black frame baked in) → frames trimmed, copied to ~/Desktop/Stamp inbox
+  named after the place, squared to Claude outputs/stamp-ready/. List numbers 005–018 + 020–024 (019 Wangfujing Street
+  not drawn yet). Looked at all 19: right landmarks; two cosmetic ghosted numbers (Lama Temple 008, Beijing Zoo 023);
+  Universal Beijing Resort carries the Universal globe (the entrance landmark, but a trademark — founder's call).
+  Data fix: the China list had matched Beihai Park to "Weihai Park" (Weihai) → aliases.json "Beihai Park": "" and the
+  list/to-draw JSON corrected; new hand pin icon:Q133650 (39.92444, 116.38306).
+  FOUNDER RUNS (nothing touched the server):
+    zsh "Claude outputs/stamp-ready/upload.sh"                                                        — 19 files → R2
+    npx wrangler d1 execute globeskimmers-attractions --remote --file=scripts/stamp-art/china/d1-batch-1-beijing.sql
+      — 6 inserts (798, Nanluoguxiang, Qianmen, Simatai, Gubei, Beihai) + Universal Beijing promotion; the other 12 are
+      stampable today. Both idempotent; the world SQL (d1-world-rows.sql) can still run later.
