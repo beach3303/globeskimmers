@@ -91,5 +91,15 @@ Squared and matched. No concerns.
 Rows still needed from this batch: Lu Xun's Hometown (hand pin); Hangzhou Grand Canal, Putuoshan, Qiandao Lake, Six Harmonies Pagoda, Songcheng, Xitang (all in d1-world-rows.sql).
 Cosmetic: 131 Hangzhou Grand Canal — "Art 2026" in a pale box. Optional.
 
+## Batch 9 — Zhejiang, Anhui, Xi'an — 2026-11-22 22:20 — 20 stamps (135–141, 144–152, 154, 156–158; 134, 142, 143, 153, 155 not in this batch)
+Squared and matched. No concerns.
+
+| No. | Stamp | Concern | Note |
+|---|---|---|---|
+| — | — | none | 157 Muslim Quarter: shop signboards are blank colour blocks, no legible brands — fine. 156 Big Wild Goose Pagoda: a Canada goose, not the local species — accuracy only, optional. 148 Mount Qiyun: a seated figure in a shrine niche, generic religious statue. |
+
+Rows still needed from this batch: Baohe Park, Huizhou Ancient City, Tangyue Memorial Archways, Tunxi Old Street (hand pins); Langya Mountain, Mount Jiuhua, Shenxianju, South Lake, Tiantai Mountain, Xidi, Zhujiajian (all in d1-world-rows.sql).
+Cosmetic: 148 Mount Qiyun — "Art 2026" is broken ("Art 2  026"). Optional.
+
 ## Running totals
-Batches 8 · stamps 120 · concerns 2
+Batches 9 · stamps 140 · concerns 2
