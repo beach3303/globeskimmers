@@ -42,5 +42,15 @@ Rows still needed from this batch: Beidaihe Beach, Shanhaiguan Old Dragon's Head
 CCTV HQ, Chengde, Five Great Avenues, Jinshanling, Longqing Gorge, NCPA, Puning, Putuo Zongcheng, Sanlitun, Tianjin Eye,
 Zhaozhou Bridge, Zhengding Longxing (all in d1-world-rows.sql).
 
+## Batch 4 — Shanghai (+ 055 Xibaipo, Hebei) — 2026-11-22 21:10 — 19 stamps (055, 058–076; 056–057 and 066 not in this batch)
+Squared and matched. ONE concern.
+
+| No. | Stamp | Concern | Note |
+|---|---|---|---|
+| 060 | Shanghai Disneyland | **trademark** — the Enchanted Storybook Castle is the centrepiece; Disney treats the castle silhouette as its mark (it is their logo) | a redraw could show the resort entrance gates, the lake and gardens with the castle small and far, or the Mickey Avenue streetscape without characters — the park's name alone is fine |
+
+Not concerns: 074 Shanghai Ocean Aquarium (generic tunnel, no logo); 062 Lujiazui and 058 Shanghai Tower (skyline only); 072 Jing'an Temple (the skyline behind is fine).
+Rows still needed from this batch: Qibao Ancient Town, Zhujiajiao Water Town (hand pins); Former French Concession, Lujiazui, Nanjing Road, Shanghai Disneyland, Shanghai Ocean Aquarium, Tianzifang, Xibaipo, Xintiandi (all in d1-world-rows.sql).
+
 ## Running totals
-Batches 3 · stamps 50 · concerns 1
+Batches 4 · stamps 69 · concerns 2
