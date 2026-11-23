@@ -64,11 +64,12 @@ first two weeks of concrete actions. Not started.
 
 ## United States stamp list — founder 2026-11-22 ("top most visited places in United States, tourist, and novelty and local") — BUILT
 
-Beside the Philippines (439, 11-13) and China (611, 11-14) lists: `scripts/stamp-art/united-states/` → 2,744 places, every
+Beside the Philippines (439, 11-13) and China (611, 11-14) lists: `scripts/stamp-art/united-states/` → 2,795 places, every
 state + D.C., in three kinds: **Tourist** 835 (the most visited; a published count where one exists: NPS 2024, TEA/AECOM
-2023, operators' estimates), **Novelty** 507 (roadside America), **Local** 1,402. Checked against the LIVE attractions D1 on
-11-22: 794 stampable today · 657 in the database, not yet stampable · 1,293 need a row; 101 already have art (+14 share).
-Deliverables: `Claude outputs/Globeskimmers-United-States-2744-places.pdf` + `…-stamp-list.xlsx` (Summary · Tourist ·
+2023, operators' estimates), **Novelty** 558 (roadside America, including every Buc-ee's — 52 stores in 14 states, its own
+section, founder 11-22), **Local** 1,402. Checked against the LIVE attractions D1 on 11-22: 794 stampable today · 657 in
+the database, not yet stampable · 1,344 need a row; 101 already have art (+14 share).
+Deliverables: `Claude outputs/Globeskimmers-United-States-2795-places.pdf` + `…-stamp-list.xlsx` (Summary · Tourist ·
 Novelty · Local · All by region · To draw ✓), copies on the Desktop. Open: the founder's cut line (which kinds/regions to
 draw first); when art lands, one SQL file (promotions + inserts) as the world tracker did. Honest note: the PH and CN tiers
 were curated by fame, not measured visits; the US Tourist tier is the first with published counts attached.

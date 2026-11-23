@@ -5258,3 +5258,12 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   Deliverables: Claude outputs/Globeskimmers-United-States-2744-places.pdf (99 pp) + Globeskimmers-United-States-stamp-list.xlsx,
   copies on the Desktop. Not done: no D1 writes (nothing promoted or inserted); the SQL comes when art lands, as for the
   world tracker. Committed to main (scripts + docs); Claude outputs stays untracked.
+
+## 2026-11-22 ~17:40 PT — Buc-ee's added to the United States list (now 2,795 places)
+
+  Founder: "I want to add Bucee's on the US places." Every store open today per the official locator (buc-ees.com/locations,
+  58 entries, one per town here): 52 Buc-ee's in 14 states as their own section at the end of the list (Novelty, category
+  store; Luling = world's largest since 2024; New Braunfels moved out of the Texas section into it). Only New Braunfels has
+  a database row (wikidata:Q4982335, stampable); San Marcos was borrowing it and is now a NO_MATCH. Rebuilt the PDF
+  (Globeskimmers-United-States-2795-places.pdf) and the workbook; Desktop copies refreshed; the 2744 files removed.
+  Totals: Tourist 835 · Novelty 558 · Local 1,402; 794 stampable · 657 promote · 1,344 insert · 101 with art.
