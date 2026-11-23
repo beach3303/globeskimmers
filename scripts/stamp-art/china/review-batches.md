@@ -1,0 +1,26 @@
+# China stamps — batch log and the concerns list (started 2026-11-22)
+
+The founder draws the China list (611 places) in Grok and pastes the stamps here in batches; 500+ to come. Her instruction
+2026-11-22: process every batch, hold the review, and when she says she is done give ONE list of the stamps with
+copyright / trademark concerns, which she then asks Grok to modify. Each batch: trim the baked-in black frame, copy to
+~/Desktop/Stamp inbox named after the place, `python3 scripts/stamp-art/intake.py --country China --pad`, add the rows
+here. Nothing is uploaded until she runs upload.sh.
+
+What counts as a concern (the rule she set for the Olympic venues — "let's not copy the logo so we don't get a lawsuit"):
+a company or event logo or wordmark drawn in (Universal globe, Disney castle silhouette / Mickey ears, Chimelong, Tsingtao,
+Olympic rings, team crests), a character or mascot (Minions, Harry Potter, Bing Dwen Dwen, pandas are fine), a recognizable
+living person or a political portrait, a copyrighted artwork reproduced as the whole stamp (a specific sculpture, mural,
+poster), brand signage legible in the scene. Buildings, landscapes, generic signs and the place's own name are fine.
+
+## Batch 1 — Beijing — 2026-11-22 20:00 — 19 stamps (list 005–018, 020–024; 019 Wangfujing Street not drawn)
+Squared and matched; upload.sh + d1-batch-1-beijing.sql handed to the founder.
+
+| No. | Stamp | Concern | Note |
+|---|---|---|---|
+| 017 | Universal Beijing Resort | **trademark** — the Universal globe is the whole centrepiece | the entrance globe is a real landmark, but it is their mark; a redraw could show the resort gate / Jurassic gate / the skyline of the park without the globe |
+
+Not concerns, cosmetic only (optional redraws): 008 Lama Temple and 023 Beijing Zoo — faint ghost digits behind the number.
+Resolution: this batch came in at ≈800 px and was scaled up to 1254²; larger originals would be crisper.
+
+## Running totals
+Batches 1 · stamps 19 · concerns 1
