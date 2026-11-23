@@ -42,6 +42,7 @@ const rowsHtml = (rs) => rs.map((x) => `<tr>
 <td class="name">${esc(x.name)}</td>
 <td>${esc(x.where)}</td>
 <td>${esc(x.state)}</td>
+<td class="country">${esc(x.country)}</td>
 ${KIND ? "" : `<td class="kind ${x.kind.toLowerCase()}">${esc(x.kind)}</td>`}
 <td>${esc(x.category)}</td>
 ${SHOW_VIS ? `<td class="vis">${esc(x.visitors)}</td>` : ""}
@@ -53,7 +54,7 @@ ${SHOW_VIS ? `<td class="vis">${esc(x.visitors)}</td>` : ""}
 const sections = regions.map((r) => {
   const rs = list.filter((x) => x.region === r);
   const states = [...new Set(rs.map((x) => x.stateName))].join(" · ");
-  return `<tr class="region"><td colspan="${10 - (KIND ? 1 : 0) - (SHOW_VIS ? 0 : 1)}">${esc(r)} <span class="states">${esc(states)} · ${rs.length} places</span></td></tr>\n${rowsHtml(rs)}`;
+  return `<tr class="region"><td colspan="${11 - (KIND ? 1 : 0) - (SHOW_VIS ? 0 : 1)}">${esc(r)} <span class="states">${esc(states)} · ${rs.length} places</span></td></tr>\n${rowsHtml(rs)}`;
 }).join("\n");
 
 const html = `<!doctype html><html><head><meta charset="utf-8"><title>${base}</title>
@@ -72,7 +73,7 @@ tr.region td { background: #FBF6EC; font-weight: 700; font-size: 9.5px; padding:
 td.n { color: #777; font-family: ui-monospace, Menlo, monospace; } td.name { font-weight: 600; }
 td.file { font-family: ui-monospace, Menlo, monospace; font-size: 7.6px; }
 td.kind.tourist { color: #8A2A1B; font-weight: 700; } td.kind.novelty { color: #6A3D9A; font-weight: 700; } td.kind.local { color: #24316B; }
-td.ok { color: #2E6B4E; } td.warn { color: #B36B00; } td.no { color: #B0472F; } td.vis { white-space: nowrap; color: #333; }
+td.ok { color: #2E6B4E; } td.warn { color: #B36B00; } td.no { color: #B0472F; } td.vis { white-space: nowrap; color: #333; } td.country { color: #555; white-space: nowrap; }
 td.note { color: #555; font-family: ui-monospace, Menlo, monospace; font-size: 7.4px; }
 thead { display: table-header-group; } tr { page-break-inside: avoid; }
 .foot { color: #777; font-size: 7.5px; margin-top: 8px; }
@@ -84,7 +85,7 @@ thead { display: table-header-group; } tr { page-break-inside: avoid; }
   : "By region, every state and D.C. In each region: <b>Tourist</b> (the most visited places; the Visitors column is a published count where one exists — NPS recreation visits 2024, TEA/AECOM attendance 2023, or the operator's or city's own estimate — otherwise listed by fame), then <b>Novelty</b> (roadside America, world's-largest things, oddball museums, mystery spots), then <b>Local</b> (what locals send you to)."}
  "File name" is exactly what the app looks for. "In the database" is checked against the live attractions database on ${DATE}; "art on the server" means a stamp file already answers to that name.${KIND ? ` This is the ${KINDS[KIND]} list on its own, numbered 1–${list.length}; the full list of ${all.length} places is Globeskimmers-United-States-${all.length}-places.pdf.` : ""}</p>
 <div class="tiles">${tiles.map(([n, l]) => `<div class="tile"><b>${n}</b><span>${l}</span></div>`).join("")}</div>
-<table><thead><tr><th>No.</th><th>Place</th><th>Where</th><th>State</th>${KIND ? "" : "<th>Kind</th>"}<th>Category</th>${SHOW_VIS ? "<th>Visitors</th>" : ""}<th>File name for the stamp</th><th>In the database</th><th>Note</th></tr></thead>
+<table><thead><tr><th>No.</th><th>Place</th><th>Where</th><th>State</th><th>Country</th>${KIND ? "" : "<th>Kind</th>"}<th>Category</th>${SHOW_VIS ? "<th>Visitors</th>" : ""}<th>File name for the stamp</th><th>In the database</th><th>Note</th></tr></thead>
 <tbody>${sections}</tbody></table>
 <p class="foot">GlobeSkimmers · United States stamp list${KIND ? " · " + KINDS[KIND] : ""} · ${DATE} · ${list.length} places · scripts/stamp-art/united-states/</p>
 </body></html>`;

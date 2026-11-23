@@ -246,72 +246,72 @@
 2162  69  Bixby Creek Bridge (Big Sur, CA)  →  Bixby Bridge [Big Sur] icon:Q4919293 world
 2183  70  Emerald Bay State Park (South Lake Tahoe, CA)  →  Emerald Bay [South Lake Tahoe] wikidata:Q5370411 local
 2185  60  Burney Falls (Burney, CA)  →  McArthur-Burney Falls Memorial State Park [Burney] wikidata:Q3364073 local
-2194  84  Urban Light (Los Angeles, CA)  →  LACMA — Urban Light [Los Angeles, CA] icon:lacma-urban-light national
-2195  64  LACMA (Los Angeles, CA)  →  LACMA — Urban Light [Los Angeles, CA] icon:lacma-urban-light national
-2202  94  Original Farmers Market (Los Angeles, CA)  →  The Original Farmers Market [Los Angeles, CA] icon:the-original-farmers-market national
-2203  94  Huntington Library, Art Museum, and Botanical Gardens (San Marino, CA)  →  The Huntington Library, Art Museum, and Botanical Gardens [San Marino] icon:Q1400558 national
-2211  88  Ronald Reagan Presidential Library (Simi Valley, CA)  →  Ronald Reagan Presidential Library & Museum [Simi Valley] wikidata:Q1432360 regional
-2223  88  Old Mission Santa Barbara (Santa Barbara, CA)  →  Mission Santa Barbara [Santa Barbara] wikidata:Q1413807 national
-2229  58  Watts Towers (Los Angeles, CA)  →  Watts Towers of Simon Rodia [Los Angeles] wikidata:Q445256 national
-2250  78  Rosicrucian Egyptian Museum (San Jose, CA)  →  Rosicrucian Egyptian Museum and Planetarium [San Jose] wikidata:Q3354610 regional
-2259  78  Jelly Belly Factory (Fairfield, CA)  →  Jelly Belly Factory tour [Fairfield] wikidata:Q522497 regional
-2265  63  Ferry Building Marketplace (San Francisco, CA)  →  Ferry Building [San Francisco] wikidata:Q1408117 national
-2272  63  Presidio of San Francisco (San Francisco, CA)  →  Presidio [San Francisco] wikidata:Q1755360 national
-2276  88  Castro Theatre (San Francisco, CA)  →  The Castro Theatre [San Francisco] wikidata:Q2941518 regional
-2284  79  Lassen Volcanic National Park (Mineral, CA)  →  Lassen Volcanic National Park [Shasta County] icon:Q1163542 national
-2285  63  Heavenly Mountain Resort (South Lake Tahoe, CA)  →  Heavenly [South Lake Tahoe] wikidata:Q1548153 regional
-2291  68  Getty Villa (Pacific Palisades, CA)  →  J. Paul Getty Villa [Pacific Palisades] wikidata:Q180401 regional
-2292  78  La Brea Tar Pits (Los Angeles, CA)  →  La Brea Tar Pits and Museum [Los Angeles] curated:united-states-los-angeles-la-brea-tar-pits-and-museum national
-2295  68  Rose Bowl (Pasadena, CA)  →  Rose Bowl Stadium [Pasadena] wikidata:Q582280 national
-2301  94  Runyon Canyon (Los Angeles, CA)  →  Runyon Canyon Park [Los Angeles, CA] icon:runyon-canyon-park regional
-2311  88  Echo Park Lake (Los Angeles, CA)  →  Echo Park [Los Angeles] wikidata:Q3047014 regional
-2316  74  Point Dume (Malibu, CA)  →  Point Dume State Beach [Los Angeles County] film:Q7208013 regional
-2324  68  Angel Stadium (Anaheim, CA)  →  Angel Stadium of Anaheim [Anaheim] wikidata:Q531897 regional
-2326  88  Richard Nixon Presidential Library (Yorba Linda, CA)  →  Richard Nixon Presidential Library and Museum [Yorba Linda] wikidata:Q1754354 regional
-2332  55  Sunset Cliffs Natural Park (San Diego, CA)  →  Sunset Cliffs [San Diego] wikidata:Q7641247 local
-2340  63  Mission Basilica San Diego de Alcalá (San Diego, CA)  →  Mission San Diego de Alcala [San Diego] wikidata:Q617891 national
-2341  55  Carlsbad Flower Fields (Carlsbad, CA)  →  Flower Fields [Carlsbad] wv:carlsbad-california-flower-fields local
-2345  65  State Street (Santa Barbara, CA)  →  State Street [Albany] wikidata:Q945249 local
-2385  55  Armstrong Redwoods State Natural Reserve (Guerneville, CA)  →  Armstrong Redwoods State Reserve [Guerneville] wikidata:Q4793960 local
-2395  70  Mission San Luis Rey (Oceanside, CA)  →  Mission San Luis Rey de Francia [Oceanside] wikidata:Q6878751 local
-2401  70  Leo Carrillo State Park (Malibu, CA)  →  Leo Carrillo Beach [Malibu] wikidata:Q6523617 local
-2406  55  Apple Park Visitor Center (Cupertino, CA)  →  Apple Park [Cupertino] wikidata:Q22041180 local
-2408  55  Vista House at Crown Point (Corbett, OR)  →  Vista House [Corbett] wikidata:Q14709314 local
-2414  78  International Rose Test Garden (Portland, OR)  →  International Rose Test Gardens [Portland] wikidata:Q2682829 regional
-2423  78  Smith Rock State Park (Terrebonne, OR)  →  Smith Rock [Terrebonne] wikidata:Q611986 regional
-2452  68  Palouse Falls State Park (LaCrosse, WA)  →  Palouse Falls [Franklin County] wikidata:Q7128680 regional
-2454  70  Museum of Glass (Tacoma, WA)  →  Tacoma Museum of Glass [Tacoma] wikidata:Q2894440 local
-2458  70  Rattlesnake Ledge (North Bend, WA)  →  Rattlesnake Ledge Trailhead [North Bend] wv:mountains-to-sound-greenway-rattlesnake-ledge-trailhead local
-2464  65  Paul Bunyan Statue (Portland, OR)  →  Paul Bunyan Statue [Atlanta] wikidata:Q7149595 local
-2472  55  Oregon City Municipal Elevator (Oregon City, OR)  →  Oregon City Elevator [Oregon City] wikidata:Q7101126 local
-2481  55  Hat n' Boots (Seattle, WA)  →  Hat & Boots Park [Seattle] wv:seattle-hat-boots-park local
-2509  56  Bonneville Dam (Cascade Locks, OR)  →  Bonneville Lock and Dam [Multnomah County] wikidata:Q892800 local
-2524  70  Mount Bachelor (Bend, OR)  →  Mt. Bachelor [Bend] wikidata:Q3326011 local
-2532  68  Jacksonville (Jacksonville, OR)  →  Jacksonville Naval Museum [Jacksonville] wikidata:Q7872490 regional
-2547  60  Cape Blanco Lighthouse (Port Orford, OR)  →  Cape Blanco Light [Curry County] wikidata:Q1034264 local
-2550  70  Sauvie Island (Portland, OR)  →  Sauvie Island Farms [Portland] wv:sauvie-island-sauvie-island-farms local
-2572  80  Alki Beach (Seattle, WA)  →  Alki Beach Park [Seattle] wikidata:Q4727699 local
-2573  68  Seattle Public Library (Seattle, WA)  →  Seattle Public Library-Central Library [Seattle] wikidata:Q2531939 regional
-2575  70  Kubota Garden (Seattle, WA)  →  Kubota Gardens [Seattle] wikidata:Q6441303 local
-2580  60  Sol Duc Falls (Olympic National Park, WA)  →  Sol Duc Valley [Olympic National Park] wv:olympic-national-park-sol-duc-valley local
-2597  78  Washington State Capitol (Olympia, WA)  →  Washington State Capitol Building [Olympia] wikidata:Q2620186 national
-2606  60  Mount Si (North Bend, WA)  →  Mount Si Trailhead [North Bend] wv:mountains-to-sound-greenway-mount-si-trailhead local
-2611  74  Denali (Denali National Park, AK)  →  Denali National Park [Denali Park, AK] icon:Q217136 national
-2612  84  Kenai Fjords National Park (Seward, AK)  →  Kenai Fjords [Seward] icon:Q841503 world
-2614  84  Glacier Bay National Park (Gustavus, AK)  →  Glacier Bay [Gustavus] icon:Q261577 world
-2621  74  Wrangell–St. Elias National Park (Copper Center, AK)  →  Wrangell–St. Elias National Park and Preserve [Yakutat] icon:Q748597 national
-2627  78  Diamond Head (Honolulu, HI)  →  Diamond Head State Monument [Honolulu] wikidata:Q944686 national
-2630  58  Hanauma Bay (Honolulu, HI)  →  Hanauma Bay Nature Preserve [Honolulu] wikidata:Q1574284 regional
-2632  80  Waimea Bay (Haleiwa, HI)  →  Waimea Bay Beach [Haleiwa] wv:pupukea-waimea-bay-beach local
-2639  60  Duke Kahanamoku Statue (Honolulu, HI)  →  Duke Paoa Kahanamoku Statue [Honolulu] auto:united-states-honolulu-duke-paoa-kahanamoku-statue local
-2651  73  Waipiʻo Valley Lookout (Honokaa, HI)  →  Waipio Valley [Honokaa] wikidata:Q3554006 regional
-2653  68  Waimea Canyon (Waimea, HI)  →  Waimea Canyon State Park [Waimea Canyon] wikidata:Q7960119 regional
-2656  78  Chena Hot Springs (Fairbanks, AK)  →  Chena Hot Springs Resort [Fairbanks] wikidata:Q4516024 regional
-2661  80  Hammer Museum (Haines, AK)  →  The Hammer Museum [Haines] wikidata:Q14680007 local
-2662  60  Chicken (Chicken, AK)  →  Chicken Statue [Chicken] wv:chicken-chicken-statue local
-2681  78  Portage Glacier (Girdwood, AK)  →  The Portage Glacier [Anchorage] wikidata:Q774759 regional
-2686  70  Independence Mine State Historical Park (Palmer, AK)  →  Independence Mine [Palmer (Alaska)] wikidata:Q19462474 local
-2692  68  Lake Clark National Park (Port Alsworth, AK)  →  Lake Clark [Lake Clark National Park and Preserve] wikidata:Q1476428 regional
-2695  74  Gates of the Arctic National Park (Bettles, AK)  →  Gates of the Arctic National Park and Preserve [Yukon-Koyukuk Census Area] icon:Q605657 world
-2703  60  Koko Head (Honolulu, HI)  →  Koko Head District Park [Honolulu] auto:united-states-honolulu-koko-head-district-park local
-2744  63  Buc-ee's New Braunfels (New Braunfels, TX)  →  Buc-ee's [New Braunfels] wikidata:Q4982335 regional
+2192  84  Urban Light (Los Angeles, CA)  →  LACMA — Urban Light [Los Angeles, CA] icon:lacma-urban-light national
+2193  64  LACMA (Los Angeles, CA)  →  LACMA — Urban Light [Los Angeles, CA] icon:lacma-urban-light national
+2199  94  Original Farmers Market (Los Angeles, CA)  →  The Original Farmers Market [Los Angeles, CA] icon:the-original-farmers-market national
+2200  94  Huntington Library, Art Museum, and Botanical Gardens (San Marino, CA)  →  The Huntington Library, Art Museum, and Botanical Gardens [San Marino] icon:Q1400558 national
+2208  88  Ronald Reagan Presidential Library (Simi Valley, CA)  →  Ronald Reagan Presidential Library & Museum [Simi Valley] wikidata:Q1432360 regional
+2220  88  Old Mission Santa Barbara (Santa Barbara, CA)  →  Mission Santa Barbara [Santa Barbara] wikidata:Q1413807 national
+2226  58  Watts Towers (Los Angeles, CA)  →  Watts Towers of Simon Rodia [Los Angeles] wikidata:Q445256 national
+2247  78  Rosicrucian Egyptian Museum (San Jose, CA)  →  Rosicrucian Egyptian Museum and Planetarium [San Jose] wikidata:Q3354610 regional
+2256  78  Jelly Belly Factory (Fairfield, CA)  →  Jelly Belly Factory tour [Fairfield] wikidata:Q522497 regional
+2262  63  Ferry Building Marketplace (San Francisco, CA)  →  Ferry Building [San Francisco] wikidata:Q1408117 national
+2269  63  Presidio of San Francisco (San Francisco, CA)  →  Presidio [San Francisco] wikidata:Q1755360 national
+2273  88  Castro Theatre (San Francisco, CA)  →  The Castro Theatre [San Francisco] wikidata:Q2941518 regional
+2281  79  Lassen Volcanic National Park (Mineral, CA)  →  Lassen Volcanic National Park [Shasta County] icon:Q1163542 national
+2282  63  Heavenly Mountain Resort (South Lake Tahoe, CA)  →  Heavenly [South Lake Tahoe] wikidata:Q1548153 regional
+2288  68  Getty Villa (Pacific Palisades, CA)  →  J. Paul Getty Villa [Pacific Palisades] wikidata:Q180401 regional
+2289  78  La Brea Tar Pits (Los Angeles, CA)  →  La Brea Tar Pits and Museum [Los Angeles] curated:united-states-los-angeles-la-brea-tar-pits-and-museum national
+2294  94  Runyon Canyon (Los Angeles, CA)  →  Runyon Canyon Park [Los Angeles, CA] icon:runyon-canyon-park regional
+2304  88  Echo Park Lake (Los Angeles, CA)  →  Echo Park [Los Angeles] wikidata:Q3047014 regional
+2309  74  Point Dume (Malibu, CA)  →  Point Dume State Beach [Los Angeles County] film:Q7208013 regional
+2317  68  Angel Stadium (Anaheim, CA)  →  Angel Stadium of Anaheim [Anaheim] wikidata:Q531897 regional
+2318  88  Richard Nixon Presidential Library (Yorba Linda, CA)  →  Richard Nixon Presidential Library and Museum [Yorba Linda] wikidata:Q1754354 regional
+2324  55  Sunset Cliffs Natural Park (San Diego, CA)  →  Sunset Cliffs [San Diego] wikidata:Q7641247 local
+2331  63  Mission Basilica San Diego de Alcalá (San Diego, CA)  →  Mission San Diego de Alcala [San Diego] wikidata:Q617891 national
+2332  55  Carlsbad Flower Fields (Carlsbad, CA)  →  Flower Fields [Carlsbad] wv:carlsbad-california-flower-fields local
+2336  65  State Street (Santa Barbara, CA)  →  State Street [Albany] wikidata:Q945249 local
+2376  55  Armstrong Redwoods State Natural Reserve (Guerneville, CA)  →  Armstrong Redwoods State Reserve [Guerneville] wikidata:Q4793960 local
+2386  70  Mission San Luis Rey (Oceanside, CA)  →  Mission San Luis Rey de Francia [Oceanside] wikidata:Q6878751 local
+2392  70  Leo Carrillo State Park (Malibu, CA)  →  Leo Carrillo Beach [Malibu] wikidata:Q6523617 local
+2397  55  Apple Park Visitor Center (Cupertino, CA)  →  Apple Park [Cupertino] wikidata:Q22041180 local
+2399  55  Vista House at Crown Point (Corbett, OR)  →  Vista House [Corbett] wikidata:Q14709314 local
+2405  78  International Rose Test Garden (Portland, OR)  →  International Rose Test Gardens [Portland] wikidata:Q2682829 regional
+2414  78  Smith Rock State Park (Terrebonne, OR)  →  Smith Rock [Terrebonne] wikidata:Q611986 regional
+2443  68  Palouse Falls State Park (LaCrosse, WA)  →  Palouse Falls [Franklin County] wikidata:Q7128680 regional
+2445  70  Museum of Glass (Tacoma, WA)  →  Tacoma Museum of Glass [Tacoma] wikidata:Q2894440 local
+2449  70  Rattlesnake Ledge (North Bend, WA)  →  Rattlesnake Ledge Trailhead [North Bend] wv:mountains-to-sound-greenway-rattlesnake-ledge-trailhead local
+2455  65  Paul Bunyan Statue (Portland, OR)  →  Paul Bunyan Statue [Atlanta] wikidata:Q7149595 local
+2463  55  Oregon City Municipal Elevator (Oregon City, OR)  →  Oregon City Elevator [Oregon City] wikidata:Q7101126 local
+2472  55  Hat n' Boots (Seattle, WA)  →  Hat & Boots Park [Seattle] wv:seattle-hat-boots-park local
+2500  56  Bonneville Dam (Cascade Locks, OR)  →  Bonneville Lock and Dam [Multnomah County] wikidata:Q892800 local
+2515  70  Mount Bachelor (Bend, OR)  →  Mt. Bachelor [Bend] wikidata:Q3326011 local
+2523  68  Jacksonville (Jacksonville, OR)  →  Jacksonville Naval Museum [Jacksonville] wikidata:Q7872490 regional
+2538  60  Cape Blanco Lighthouse (Port Orford, OR)  →  Cape Blanco Light [Curry County] wikidata:Q1034264 local
+2541  70  Sauvie Island (Portland, OR)  →  Sauvie Island Farms [Portland] wv:sauvie-island-sauvie-island-farms local
+2563  80  Alki Beach (Seattle, WA)  →  Alki Beach Park [Seattle] wikidata:Q4727699 local
+2564  68  Seattle Public Library (Seattle, WA)  →  Seattle Public Library-Central Library [Seattle] wikidata:Q2531939 regional
+2566  70  Kubota Garden (Seattle, WA)  →  Kubota Gardens [Seattle] wikidata:Q6441303 local
+2571  60  Sol Duc Falls (Olympic National Park, WA)  →  Sol Duc Valley [Olympic National Park] wv:olympic-national-park-sol-duc-valley local
+2588  78  Washington State Capitol (Olympia, WA)  →  Washington State Capitol Building [Olympia] wikidata:Q2620186 national
+2597  60  Mount Si (North Bend, WA)  →  Mount Si Trailhead [North Bend] wv:mountains-to-sound-greenway-mount-si-trailhead local
+2602  74  Denali (Denali National Park, AK)  →  Denali National Park [Denali Park, AK] icon:Q217136 national
+2603  84  Kenai Fjords National Park (Seward, AK)  →  Kenai Fjords [Seward] icon:Q841503 world
+2605  84  Glacier Bay National Park (Gustavus, AK)  →  Glacier Bay [Gustavus] icon:Q261577 world
+2612  74  Wrangell–St. Elias National Park (Copper Center, AK)  →  Wrangell–St. Elias National Park and Preserve [Yakutat] icon:Q748597 national
+2618  78  Diamond Head (Honolulu, HI)  →  Diamond Head State Monument [Honolulu] wikidata:Q944686 national
+2621  58  Hanauma Bay (Honolulu, HI)  →  Hanauma Bay Nature Preserve [Honolulu] wikidata:Q1574284 regional
+2623  80  Waimea Bay (Haleiwa, HI)  →  Waimea Bay Beach [Haleiwa] wv:pupukea-waimea-bay-beach local
+2630  60  Duke Kahanamoku Statue (Honolulu, HI)  →  Duke Paoa Kahanamoku Statue [Honolulu] auto:united-states-honolulu-duke-paoa-kahanamoku-statue local
+2642  73  Waipiʻo Valley Lookout (Honokaa, HI)  →  Waipio Valley [Honokaa] wikidata:Q3554006 regional
+2644  68  Waimea Canyon (Waimea, HI)  →  Waimea Canyon State Park [Waimea Canyon] wikidata:Q7960119 regional
+2647  78  Chena Hot Springs (Fairbanks, AK)  →  Chena Hot Springs Resort [Fairbanks] wikidata:Q4516024 regional
+2652  80  Hammer Museum (Haines, AK)  →  The Hammer Museum [Haines] wikidata:Q14680007 local
+2653  60  Chicken (Chicken, AK)  →  Chicken Statue [Chicken] wv:chicken-chicken-statue local
+2672  78  Portage Glacier (Girdwood, AK)  →  The Portage Glacier [Anchorage] wikidata:Q774759 regional
+2677  70  Independence Mine State Historical Park (Palmer, AK)  →  Independence Mine [Palmer (Alaska)] wikidata:Q19462474 local
+2683  68  Lake Clark National Park (Port Alsworth, AK)  →  Lake Clark [Lake Clark National Park and Preserve] wikidata:Q1476428 regional
+2686  74  Gates of the Arctic National Park (Bettles, AK)  →  Gates of the Arctic National Park and Preserve [Yukon-Koyukuk Census Area] icon:Q605657 world
+2694  60  Koko Head (Honolulu, HI)  →  Koko Head District Park [Honolulu] auto:united-states-honolulu-koko-head-district-park local
+2735  63  Buc-ee's New Braunfels (New Braunfels, TX)  →  Buc-ee's [New Braunfels] wikidata:Q4982335 regional
+2810  68  Rose Bowl (Pasadena, CA)  →  Rose Bowl Stadium [Pasadena] wikidata:Q582280 national

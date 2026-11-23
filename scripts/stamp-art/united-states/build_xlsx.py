@@ -17,9 +17,9 @@ DATE = "2026-11-22"
 rows = json.load(open(os.path.join(HERE, f"list-{DATE}.json")))
 OUT = os.path.join(ROOT, "Claude outputs", "Globeskimmers-United-States-stamp-list.xlsx")
 
-HEAD = ["No.", "Place", "Where", "State", "Region", "Kind", "Category", "Visitors (published)", "File name for the stamp", "In the database", "Art on the server", "Database row"]
+HEAD = ["No.", "Place", "Where", "State", "Country", "Region", "Kind", "Category", "Visitors (published)", "File name for the stamp", "In the database", "Art on the server", "Database row"]
 TEAL = PatternFill("solid", fgColor="0E7C73"); CREAM = PatternFill("solid", fgColor="FBF6EC"); GREEN = PatternFill("solid", fgColor="E3F1E6")
-WIDTHS = [6, 40, 22, 7, 20, 9, 16, 20, 40, 30, 32, 44]
+WIDTHS = [6, 40, 22, 7, 13, 20, 9, 16, 20, 40, 30, 32, 44]
 
 def note(x):
     if x["art"] and not x["shares"]: return "yes — " + x["art"]
@@ -34,10 +34,10 @@ def sheet(wb, title, data, tick=False):
         cell = ws.cell(row=1, column=c); cell.font = Font(bold=True, color="FFFFFF"); cell.fill = TEAL
         ws.column_dimensions[get_column_letter(c)].width = (WIDTHS + [8])[c - 1]
     for x in data:
-        ws.append([x["n"], x["name"], x["where"], x["state"], x["region"], x["kind"], x["category"], x["visitors"], x["file"], x["status"], note(x), (x["dbName"] + " · " + x["dbId"]) if x["dbId"] else ""] + ([""] if tick else []))
+        ws.append([x["n"], x["name"], x["where"], x["state"], x["country"], x["region"], x["kind"], x["category"], x["visitors"], x["file"], x["status"], note(x), (x["dbName"] + " · " + x["dbId"]) if x["dbId"] else ""] + ([""] if tick else []))
     ws.freeze_panes = "C2"; ws.auto_filter.ref = ws.dimensions
     for r in range(2, ws.max_row + 1):
-        st = ws.cell(row=r, column=10)
+        st = ws.cell(row=r, column=11)
         st.font = Font(color={"S": "2E6B4E", "I": "B36B00", "N": "B0472F"}[st.value[0]])
     if tick:
         col = get_column_letter(len(head))

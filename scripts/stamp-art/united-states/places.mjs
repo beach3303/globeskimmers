@@ -2278,15 +2278,12 @@ add("California", [
  ["Hollywood Walk of Fame","Los Angeles","CA","T","street","10M · est."],
  ["TCL Chinese Theatre","Los Angeles","CA","T","venue",""],
  ["Hollywood Sign","Los Angeles","CA","T","landmark",""],
- ["Griffith Observatory","Los Angeles","CA","T","observatory","1.6M · est."],
  ["Santa Monica Pier","Santa Monica","CA","T","pier","8M · est."],
- ["Venice Beach Boardwalk","Los Angeles","CA","T","boardwalk",""],
  ["Getty Center","Los Angeles","CA","T","museum","1.8M · TEA 2023"],
  ["Urban Light","Los Angeles","CA","T","art",""],
  ["LACMA","Los Angeles","CA","T","museum",""],
  ["The Broad","Los Angeles","CA","T","museum",""],
  ["Walt Disney Concert Hall","Los Angeles","CA","T","venue",""],
- ["Dodger Stadium","Los Angeles","CA","T","stadium",""],
  ["Rodeo Drive","Beverly Hills","CA","T","street",""],
  ["Warner Bros. Studio Tour Hollywood","Burbank","CA","T","studio tour",""],
  ["The Grove","Los Angeles","CA","T","mall",""],
@@ -2346,10 +2343,6 @@ add("California", [
  ["Crocker Art Museum","Sacramento","CA","L","museum",""],
  ["Getty Villa","Pacific Palisades","CA","L","museum",""],
  ["La Brea Tar Pits","Los Angeles","CA","L","museum",""],
- ["SoFi Stadium","Inglewood","CA","L","stadium",""],
- ["Crypto.com Arena","Los Angeles","CA","L","arena",""],
- ["Rose Bowl","Pasadena","CA","L","stadium",""],
- ["Los Angeles Memorial Coliseum","Los Angeles","CA","L","stadium",""],
  ["Sunset Strip","West Hollywood","CA","L","street",""],
  ["Dolby Theatre","Los Angeles","CA","L","venue",""],
  ["Hollywood Bowl","Los Angeles","CA","L","venue",""],
@@ -2378,7 +2371,6 @@ add("California", [
  ["Crystal Cove State Park","Laguna Beach","CA","L","state park",""],
  ["Dana Point Harbor","Dana Point","CA","L","waterfront",""],
  ["Angel Stadium","Anaheim","CA","L","stadium",""],
- ["Honda Center","Anaheim","CA","L","arena",""],
  ["Richard Nixon Presidential Library","Yorba Linda","CA","L","museum",""],
  ["Big Bear Lake","Big Bear Lake","CA","L","lake",""],
  ["Lake Arrowhead","Lake Arrowhead","CA","L","lake",""],
@@ -2390,7 +2382,6 @@ add("California", [
  ["Cabrillo National Monument","San Diego","CA","L","historic site",""],
  ["Belmont Park","San Diego","CA","L","theme park",""],
  ["Petco Park","San Diego","CA","L","stadium",""],
- ["Snapdragon Stadium","San Diego","CA","L","stadium",""],
  ["Seaport Village","San Diego","CA","L","district",""],
  ["Little Italy","San Diego","CA","L","district",""],
  ["Mission Basilica San Diego de Alcalá","San Diego","CA","L","mission",""],
@@ -2899,4 +2890,61 @@ add("Buc-ee's · every store", [
  ["Buc-ee's Huber Heights","Huber Heights","OH","V","store",""],
  ["Buc-ee's Goodyear","Goodyear","AZ","V","store",""],
  ["Buc-ee's Benton","Benton","AR","V","store",""],
+]);
+
+// The 2028 Olympic Games (founder 2026-11-22: "include all the olympic venues in USA … label it Olympic venue for what
+// sports … put the city and state"). Every competition venue of the Los Angeles 2028 Summer Games named by LA28 as of
+// 2026-11-22 — the LA venue plan of April 2025, the Oklahoma City venues (June 2024), the mountain-bike course (August
+// 2025), the seven football stadiums (February 2026) and the road-cycling start/finish (June 2026). Road-event courses
+// (marathon, race walk) are still unannounced and are left out. Venues already on the list above moved down here so each
+// place appears once. Everyday names, not the Games-time sponsor names. ART RULE: draw the venue itself — never the
+// Olympic rings, a Games emblem, torch or mascot; "Olympic venue" is a plain description, nothing more.
+add("Olympic venues · Los Angeles 2028", [
+ // Los Angeles — downtown and Exposition Park
+ ["Los Angeles Memorial Coliseum","Los Angeles","CA","T","Olympic venue · athletics, ceremonies",""],
+ ["Crypto.com Arena","Los Angeles","CA","T","Olympic venue · artistic gymnastics, trampoline, boxing finals",""],
+ ["Peacock Theater","Los Angeles","CA","T","Olympic venue · boxing preliminaries, weightlifting",""],
+ ["Los Angeles Convention Center","Los Angeles","CA","T","Olympic venue · fencing, judo, taekwondo, wrestling, table tennis",""],
+ ["Dodger Stadium","Los Angeles","CA","T","Olympic venue · baseball",""],
+ ["BMO Stadium","Los Angeles","CA","T","Olympic venue · flag football, lacrosse",""],
+ ["Galen Center","Los Angeles","CA","T","Olympic venue · badminton, rhythmic gymnastics",""],
+ // Inglewood
+ ["SoFi Stadium","Inglewood","CA","T","Olympic venue · swimming, ceremonies",""],
+ ["Intuit Dome","Inglewood","CA","T","Olympic venue · basketball",""],
+ // Carson
+ ["Dignity Health Sports Park","Carson","CA","T","Olympic venue · rugby sevens, archery, tennis, field hockey, track cycling",""],
+ // Long Beach and the harbor
+ ["Long Beach Convention & Entertainment Center","Long Beach","CA","T","Olympic venue · handball, target shooting, sport climbing, water polo, artistic swimming",""],
+ ["Alamitos Beach","Long Beach","CA","T","Olympic venue · beach volleyball",""],
+ ["Long Beach Marine Stadium","Long Beach","CA","T","Olympic venue · rowing, sprint canoe",""],
+ ["Belmont Veterans Memorial Pier","Long Beach","CA","T","Olympic venue · sailing — kite and windsurf",""],
+ ["Long Beach Waterfront","Long Beach","CA","T","Olympic venue · coastal rowing, marathon swimming",""],
+ ["Port of Los Angeles","San Pedro","CA","T","Olympic venue · sailing — dinghy, skiff, multihull",""],
+ // The Valley, Griffith Park, the Westside
+ ["Sepulveda Basin Recreation Area","Van Nuys","CA","T","Olympic venue · 3x3 basketball, BMX, skateboarding, modern pentathlon",""],
+ ["Universal Studios Lot","Universal City","CA","T","Olympic venue · squash",""],
+ ["Griffith Observatory","Los Angeles","CA","T","Olympic venue · road cycling finish","1.6M · est."],
+ ["Los Angeles Zoo","Los Angeles","CA","T","Olympic venue · road cycling time-trial start",""],
+ ["Venice Beach Boardwalk","Los Angeles","CA","T","Olympic venue · triathlon, road race start",""],
+ ["Riviera Country Club","Pacific Palisades","CA","T","Olympic venue · golf",""],
+ ["UCLA Campus","Westwood","CA","T","Olympic Village · where the athletes live",""],
+ // Pasadena, Arcadia, Anaheim, Pomona, the San Gabriel Valley, the coast
+ ["Rose Bowl","Pasadena","CA","T","Olympic venue · football (soccer) finals",""],
+ ["Rose Bowl Aquatics Center","Pasadena","CA","T","Olympic venue · diving",""],
+ ["Santa Anita Park","Arcadia","CA","T","Olympic venue · equestrian",""],
+ ["Honda Center","Anaheim","CA","T","Olympic venue · volleyball",""],
+ ["Pomona Fairplex","Pomona","CA","T","Olympic venue · cricket",""],
+ ["LA Clays Shooting Park","South El Monte","CA","T","Olympic venue · shotgun shooting",""],
+ ["Industry Hills Mountain Bike Course","City of Industry","CA","T","Olympic venue · mountain biking",""],
+ ["Lower Trestles","San Clemente","CA","T","Olympic venue · surfing",""],
+ // Oklahoma City
+ ["Devon Park","Oklahoma City","OK","T","Olympic venue · softball",""],
+ ["Riversport OKC","Oklahoma City","OK","T","Olympic venue · canoe slalom",""],
+ // Football (soccer) group stage, across the country
+ ["Etihad Park","Queens","NY","T","Olympic venue · football (soccer)",""],
+ ["Lower.com Field","Columbus","OH","T","Olympic venue · football (soccer)",""],
+ ["Geodis Park","Nashville","TN","T","Olympic venue · football (soccer)",""],
+ ["Energizer Park","St. Louis","MO","T","Olympic venue · football (soccer)",""],
+ ["PayPal Park","San Jose","CA","T","Olympic venue · football (soccer)",""],
+ ["Snapdragon Stadium","San Diego","CA","T","Olympic venue · football (soccer)",""],
 ]);

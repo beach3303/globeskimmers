@@ -5275,3 +5275,20 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   the list carries ten or more counts (Novelty has two — they ride in the Note). Written: Globeskimmers-United-States-
   Tourist-835-places.pdf (24 pp) and Globeskimmers-United-States-Novelty-558-places.pdf (16 pp), both in Claude outputs
   and copied to the Desktop (byte-identical), beside the full 2795 PDF and the workbook. No data changed.
+
+## 2026-11-22 ~19:35 PT — The Los Angeles 2028 Olympic venues on the United States list (now 2,825 places)
+
+  Founder: "research where all the olympic games will be done … include all the olympic venues in USA and let's label it
+  Olympic venue for what sports but lets not copy the logo … put the city and state, and country if possible … i'm
+  talking about the 2027 or 2028 olympic games in USA." Researched LA28's plan as it stands (venue plan April 2025,
+  Oklahoma City June 2024, mountain bike August 2025, seven football stadiums February 2026, road-cycling start/finish
+  June 2026) → a last section "Olympic venues · Los Angeles 2028", 39 venues in CA, OK, NY, OH, TN, MO; category
+  "Olympic venue · <sports>"; a Country column on every row of the PDF and workbook. The nine venues already on the list
+  (Coliseum, SoFi, Crypto.com Arena, Dodger Stadium, Rose Bowl, Honda Center, Snapdragon, Venice Beach Boardwalk, Griffith
+  Observatory) moved into it. Matcher: Universal Studios Lot → NO_MATCH (was borrowing the theme park), Los Angeles Zoo →
+  FORCE Q1370924 (was matching the Old Zoo). Of the 39: 15 stampable today · 4 promote · 20 need a row · none has art.
+  Art rule written into places.mjs, the README and generate.py's prompt: the venue itself, never the Olympic rings, a
+  Games emblem, torch or mascot. Re-rendered: the full PDF (103 pp), Tourist (871, 30 pp), Novelty (558, 17 pp), the
+  workbook; Desktop copies refreshed, the 2795/835 files removed. Totals: Tourist 871 · Novelty 558 · Local 1,396;
+  800 stampable · 661 promote · 1,364 insert. Marathon and race-walk courses are still unannounced and are left out;
+  Salt Lake City–Utah 2034 (13 venues) was researched but not added — the founder scoped this to 2028.

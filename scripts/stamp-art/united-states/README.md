@@ -3,7 +3,7 @@
 "I want you to create also a list for the top most visited places in United States, tourist, and novelty and local."
 Built the same way as `../philippines/` and `../china/`, one list for all fifty states and D.C.
 
-- `places.mjs` — the hand-curated places by region (2,795 on 2026-11-22, Buc-ee's included), each `[name, where, state, kind, category,
+- `places.mjs` — the hand-curated places by region (2,825 on 2026-11-22: 15 regions, every Buc-ee's, and the 39 venues of the Los Angeles 2028 Olympic Games), each `[name, where, state, kind, category,
   visitors]`. **Kind**: `T` tourist landmark (the most visited places; `visitors` is a published count where one exists —
   NPS recreation visits 2024, TEA/AECOM attendance 2023, or the operator's or city's own estimate — else listed by fame),
   `V` novelty (roadside America, world's-largest things, oddball museums, mystery spots), `L` local favorite (what the
@@ -18,13 +18,21 @@ Built the same way as `../philippines/` and `../china/`, one list for all fifty 
   (the same place when the name match is ≥ 90, otherwise "shares"). Files on the server come from
   `../world/uploaded-inventory.json` plus a GET probe of the worker for every other name (`probe-cache.json`).
   Writes `list-2026-11-22.json` and `review-fuzzy.txt` (every match under 100, for a human read).
-- `report.mjs` — the PDF (`Claude outputs/Globeskimmers-United-States-2795-places.pdf`, from HTML via headless Chrome).
+- `report.mjs` — the PDF (`Claude outputs/Globeskimmers-United-States-2825-places.pdf`, from HTML via headless Chrome).
   `report.mjs Tourist` (or `Novelty`, `Local`) prints one kind on its own, numbered 1 … N, as
   `Globeskimmers-United-States-<Kind>-<N>-places.pdf` — the founder asked for the Tourist and Novelty lists as separate PDFs on 2026-11-22.
 - `build_xlsx.py` — the workbook (`Claude outputs/Globeskimmers-United-States-stamp-list.xlsx`: Summary · Tourist ·
   Novelty · Local · All by region · To draw with a ✓ column).
 
 Re-run from the repo root: `node scripts/stamp-art/united-states/build.mjs && node scripts/stamp-art/united-states/report.mjs && python3 scripts/stamp-art/united-states/build_xlsx.py`.
+
+**Olympic venues (founder 2026-11-22):** the last section lists every LA 2028 competition venue LA28 has named (venue plan
+April 2025 · Oklahoma City June 2024 · mountain bike August 2025 · seven football stadiums February 2026 · road-cycling
+start/finish June 2026); road-event courses still unannounced are left out. Category reads `Olympic venue · <sports>`;
+every row carries City · State · Country. The nine venues that were already on the list moved into this section so each
+place appears once. **Art rule:** draw the venue itself — never the Olympic rings, a Games emblem, torch or mascot, and
+no Games wordmark; the label is a plain description. (In the US the word "Olympic" itself is protected by statute for the
+USOPC — 36 U.S.C. § 220506 — so the stamp must never look like Games merchandise.)
 
 **When the art lands:** build one SQL file from `list-2026-11-22.json` — `UPDATE … founder_scope` for the rows that exist
 but are not stampable, `INSERT` rows (Wikidata QID + P625 coordinates, else a hand pin) for the missing ones — the way
