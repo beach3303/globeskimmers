@@ -61,5 +61,15 @@ Squared and matched. No concerns.
 
 Rows still needed from this batch: 1933 Old Millfun, Fuxing Park, M50, Haichang, Wild Animal Park, Thames Town, Wukang Mansion (all in d1-world-rows.sql).
 
+## Batch 6 — Jiangsu (Nanjing, Suzhou, Yangzhou) — 2026-11-22 21:40 — 20 stamps (088–098, 100–103, 105–110; 099 and 104 not in this batch)
+Squared and matched. No concerns.
+
+| No. | Stamp | Concern | Note |
+|---|---|---|---|
+| — | — | none | 098 Nanjing Massacre Memorial Hall: the "Family Ruined" sculpture is drawn, but a stamp of a memorial is a depiction of a public monument, not a reproduction sold as the artwork — fine; keep the tone sober as it is. 103 Jinji Lake: the Gate to the East is a building. 109 Niushou: the Usnisa Palace domes are architecture. |
+
+Rows still needed from this batch: Shantang Street (hand pin); Jinji Lake, Niushou Mountain, Purple Mountain, Tongli, Zhouzhuang (all in d1-world-rows.sql).
+Cosmetic: 096 Confucius Temple of Nanjing — the "Art 2026" at the foot sits on a dark smudge; 102 Tongli — "Art 2026" is in a pale box bottom-right. Optional redraws only.
+
 ## Running totals
-Batches 5 · stamps 80 · concerns 2
+Batches 6 · stamps 100 · concerns 2
