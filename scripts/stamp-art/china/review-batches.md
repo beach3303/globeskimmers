@@ -71,5 +71,15 @@ Squared and matched. No concerns.
 Rows still needed from this batch: Shantang Street (hand pin); Jinji Lake, Niushou Mountain, Purple Mountain, Tongli, Zhouzhuang (all in d1-world-rows.sql).
 Cosmetic: 096 Confucius Temple of Nanjing — the "Art 2026" at the foot sits on a dark smudge; 102 Tongli — "Art 2026" is in a pale box bottom-right. Optional redraws only.
 
+## Batch 7 — Jiangsu + Hangzhou — 2026-11-22 21:55 — 10 stamps (111–116, 118, 120–122; 117 and 119 not in this batch)
+Squared and matched. No concerns.
+
+| No. | Stamp | Concern | Note |
+|---|---|---|---|
+| — | — | none | 116 Changzhou Dinosaur Park: generic dinosaurs and the dome, no park mascot/logo. 113 Three Kingdoms City: a film set, drawn as a generic walled gate. 118 Lingyin: the laughing Buddha is traditional iconography. |
+
+Rows still needed from this batch: Ge Garden, Hefang Street, Longjing Tea Plantations, Three Kingdoms City (hand pins); Changzhou Dinosaur Park, Jinshan Temple, Taihu Lake, Yuantouzhu (all in d1-world-rows.sql).
+Cosmetic: 111 Yuantouzhu — "Art 2026" in a pale box bottom-right (same as 102 Tongli). Optional.
+
 ## Running totals
-Batches 6 · stamps 100 · concerns 2
+Batches 7 · stamps 110 · concerns 2
