@@ -81,5 +81,15 @@ Squared and matched. No concerns.
 Rows still needed from this batch: Ge Garden, Hefang Street, Longjing Tea Plantations, Three Kingdoms City (hand pins); Changzhou Dinosaur Park, Jinshan Temple, Taihu Lake, Yuantouzhu (all in d1-world-rows.sql).
 Cosmetic: 111 Yuantouzhu — "Art 2026" in a pale box bottom-right (same as 102 Tongli). Optional.
 
+## Batch 8 — Zhejiang — 2026-11-22 22:05 — 10 stamps (123, 125–133; 124 not in this batch). 13 files pasted, 3 were exact repeats (Songcheng, Xitang, Qiandao Lake).
+Squared and matched. No concerns.
+
+| No. | Stamp | Concern | Note |
+|---|---|---|---|
+| — | — | none | 127 Songcheng: the park's buildings and a generic costumed show, no park logo. 128 Hengdian World Studios: a clapperboard and a generic camera, no studio mark. 126 Putuoshan: the Guanyin statue is a public religious monument. |
+
+Rows still needed from this batch: Lu Xun's Hometown (hand pin); Hangzhou Grand Canal, Putuoshan, Qiandao Lake, Six Harmonies Pagoda, Songcheng, Xitang (all in d1-world-rows.sql).
+Cosmetic: 131 Hangzhou Grand Canal — "Art 2026" in a pale box. Optional.
+
 ## Running totals
-Batches 7 · stamps 110 · concerns 2
+Batches 8 · stamps 120 · concerns 2
