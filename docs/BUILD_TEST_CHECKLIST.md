@@ -5242,3 +5242,19 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   Seal imports, the lint rules' tree and the page error boundary are all in it. Phones take it on their next cold
   start. Next: the founder opens Friends and sees the postcard; watch D1 for `page_error` (each is a crash with its
   page and message), passport_photo_exif has_gps, push_held tz/hour, citycard achievements.
+
+## 2026-11-22 ~17:15 PT — BUILT: the United States stamp list (2,744 places; tourist · novelty · local)
+
+  Founder: "Did you give me this list attached? … I want you to create also a list for the top most visited places in
+  United States, tourist, and novelty and local." (Yes: the Philippines 439 on 11-13 and China 611 on 11-14 were mine,
+  curated by fame tier and checked against the database; neither was ranked by measured visits.)
+  Built `scripts/stamp-art/united-states/`: places.mjs (2,744 hand-curated, 15 regions, every state + D.C.; Tourist 835 /
+  Novelty 507 / Local 1,402; a published visitor count on the Tourist tier where one exists — NPS recreation visits 2024,
+  TEA/AECOM attendance 2023, operators' own estimates), build.mjs (matched against the LIVE attractions D1 pulled 11-22,
+  20,787 US rows: exact/containment/word scoring + a distance check against the place's city and state from the database's
+  own coordinates + 100-odd hand-reviewed NO_MATCH + 24 FORCE rows; art via the server inventory + a 2,667-name probe,
+  cached), report.mjs (PDF via headless Chrome), build_xlsx.py (openpyxl). Result: 794 stampable today · 657 in the database
+  not stampable · 1,293 need a row · 101 with art already (+14 sharing). 317 fuzzy matches listed in review-fuzzy.txt.
+  Deliverables: Claude outputs/Globeskimmers-United-States-2744-places.pdf (99 pp) + Globeskimmers-United-States-stamp-list.xlsx,
+  copies on the Desktop. Not done: no D1 writes (nothing promoted or inserted); the SQL comes when art lands, as for the
+  world tracker. Committed to main (scripts + docs); Claude outputs stays untracked.
