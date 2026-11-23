@@ -31,5 +31,16 @@ Squared and matched (paste-batch.py → intake). No concerns.
 
 Rows still needed from this batch (into the end-of-run SQL): Juyongguan, Wangfujing, Panjiayuan, Huanghuacheng (all in d1-world-rows.sql), Marco Polo Bridge (hand pin).
 
+## Batch 3 — Beijing outskirts, Tianjin, Hebei — 2026-11-22 20:50 — 20 stamps (035–054)
+Squared and matched. No concerns.
+
+| No. | Stamp | Concern | Note |
+|---|---|---|---|
+| — | — | none | 036 CCTV Headquarters: the building only, no broadcaster logo (the place's name is the building's name). 035 Sanlitun: no shop signs. 053 Zhaozhou Bridge: a small lattice tower in the far background that isn't there in life — accuracy only, optional. |
+
+Rows still needed from this batch: Beidaihe Beach, Shanhaiguan Old Dragon's Head, Tianjin Porcelain House (hand pins);
+CCTV HQ, Chengde, Five Great Avenues, Jinshanling, Longqing Gorge, NCPA, Puning, Putuo Zongcheng, Sanlitun, Tianjin Eye,
+Zhaozhou Bridge, Zhengding Longxing (all in d1-world-rows.sql).
+
 ## Running totals
-Batches 2 · stamps 30 · concerns 1
+Batches 3 · stamps 50 · concerns 1
