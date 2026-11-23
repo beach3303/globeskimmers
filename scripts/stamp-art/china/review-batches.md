@@ -22,5 +22,14 @@ Squared and matched; upload.sh + d1-batch-1-beijing.sql handed to the founder.
 Not concerns, cosmetic only (optional redraws): 008 Lama Temple and 023 Beijing Zoo — faint ghost digits behind the number.
 Resolution: this batch came in at ≈800 px and was scaled up to 1254²; larger originals would be crisper.
 
+## Batch 2 — Beijing — 2026-11-22 20:30 — 11 stamps (019, 025–034)
+Squared and matched (paste-batch.py → intake). No concerns.
+
+| No. | Stamp | Concern | Note |
+|---|---|---|---|
+| — | — | none | 019 Wangfujing: the department store's own name sign (王府井百货大楼) and the rickshaw-puller bronze are the street's real fixtures, not a brand mark — no action. 034 Happy Valley: themed areas (Maya pyramid, Aegean temple), no park logo. 030 Water Cube: building only, no rings. |
+
+Rows still needed from this batch (into the end-of-run SQL): Juyongguan, Wangfujing, Panjiayuan, Huanghuacheng (all in d1-world-rows.sql), Marco Polo Bridge (hand pin).
+
 ## Running totals
-Batches 1 · stamps 19 · concerns 1
+Batches 2 · stamps 30 · concerns 1
