@@ -45,12 +45,28 @@ const ALIAS = {
   "lake-clark": "lake-clark-national-park",
   "new-river-gorge-bridge": "new-river-gorge-national-park",
   "wrangell-st-elias-national-park-and-preserve": "wrangell-st-elias",
+  // The Philippines Top 10 (founder's art, 2026-11-13): Fort Santiago had been sharing the
+  // Intramuros art through the generated ART_ALIAS; it has its own file now.
+  "fort-santiago": "fort-santiago", "fort-santiago-intramuros": "fort-santiago",
 };
 // Rows the generated ART_ONLY guard doesn't know but that ARE the place (2026-11-08): the index was
 // built expecting icon rows that were never inserted, and the dedup had banned the curated rows it
 // would have listed; the revive (scripts/stamp-art/d1-revive-icons.sql) brings those rows back.
 const ONLY_ALSO = {
   "arc-de-triomphe": ["curated:france-paris-arc-de-triomphe"],
+};
+// Hand-kept guards for art added after the 2026-10-04 index (the Philippines Top 10,
+// 2026-11-13). Generic names recur — a Rizal Park in many towns, a National Museum of
+// Natural History in Washington and Paris — so each art stays with its country and, where
+// the name repeats inside the country, with its reviewed row.
+const CC_ALSO = {
+  "fort-santiago": ["PH"], "san-agustin-church": ["PH"], "manila-cathedral": ["PH"], "rizal-park": ["PH"],
+  "national-museum-of-fine-arts": ["PH"], "national-museum-of-natural-history": ["PH"],
+  "binondo-chinatown": ["PH"], "quiapo-church": ["PH"], "sm-mall-of-asia": ["PH"],
+};
+const ONLY_HAND = {
+  "rizal-park": ["icon:Q2306339"],
+  "san-agustin-church": ["wikidata:Q1306513"],
 };
 
 const ccOf = (c) => {
@@ -72,9 +88,9 @@ export function stampArtSlug(name, { entityId, country } = {}) {
   const art = ALIAS[s] || ART_ALIAS[s] || s;
   // A row that merely shares the name (Notre-Dame in Lausanne, the Parthenon in
   // Nashville) never borrows the art.
-  const only = ART_ONLY[art];
+  const only = ART_ONLY[art] || ONLY_HAND[art];
   if (only && isRowId(id) && !only.includes(id) && !(ONLY_ALSO[art] || []).includes(id)) return null;
-  const ccs = ART_CC[art], cc = ccOf(country);
+  const ccs = ART_CC[art] || CC_ALSO[art], cc = ccOf(country);
   if (ccs && cc && !ccs.includes(cc)) return null;
   return art;
 }
@@ -90,7 +106,10 @@ const REDRAWN = { "2026-10-05": [
   "mount-elbrus", "mount-koya", "museum-of-the-future", "notre-dame-cathedral",
   "perito-moreno-glacier", "rhine-falls", "rijksmuseum", "selaron-steps", "shah-i-zinda",
   "somapura-mahavihara", "the-wave", "uxmal", "verona-arena", "zuma-rock",
-] };
+],
+  // 2026-11-13: the founder's Philippines Top 10 series redraws Intramuros.
+  "2026-11-13": ["intramuros"],
+};
 const REVISION = Object.fromEntries(Object.entries(REDRAWN).flatMap(([rev, list]) => list.map((s) => [s, rev])));
 
 // Returns a stamp-art URL (a candidate — the caller falls back on <img>
