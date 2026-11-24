@@ -61,3 +61,6 @@ scripts/search-eval/last-run*.json
 
 # Firebase config for push alerts (2026-10-19): kept on the Mac (~/Desktop/push-keys), never in the public repo.
 android/app/google-services.json
+
+# stamp-art resolver web cache (Wikidata/OSM responses, regenerated on demand)
+scripts/stamp-art/*/.resolve-cache.json
