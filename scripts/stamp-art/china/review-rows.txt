@@ -1,0 +1,564 @@
+# review of the database side · 2026-11-23 · ok 167 · promote 116 · insert 279 · hand pin 0
+
+005  ok       Tiananmen Square · Beijing  →  icon:Q164055 (Tiananmen Square)  ·  exact  ·  2 km from Beijing
+006  ok       Badaling Great Wall · Yanqing  →  icon:Q798826 (Great Wall — Badaling)  ·  hand alias  ·  12 km from Yanqing
+007  ok       Mutianyu Great Wall · Huairou  →  icon:Q212610 (Great Wall — Mutianyu)  ·  hand alias  ·  15 km from Huairou
+008  ok       Lama Temple · Beijing  →  wikidata:Q692723 (Yonghe Temple)  ·  hand alias  ·  3 km from Beijing
+009  ok       Beihai Park · Beijing  →  icon:beihai-park (Beihai Park)  ·  wikidata · Beihai Park → existing row icon:beihai-park  ·  0 km from Beijing
+010  insert   Jingshan Park · Beijing  →  icon:Q734499 (Jingshan Park)  ·  hand pin (wikidata) · Jingshan Park  ·  1 km from Beijing  ·  REJECTED wikidata:Q734499 (Jingshan Park, Wenzhou) is 1382 km from Beijing
+011  insert   Nanluoguxiang · Beijing  →  icon:Q9529545 (Nanluoguxiang)  ·  world SQL  ·  — from Beijing
+012  ok       Shichahai · Beijing  →  wikidata:Q1804621 (Lakes of Shichahai)  ·  hand alias  ·  2 km from Beijing
+013  insert   798 Art District · Beijing  →  icon:Q1203470 (798 Art District)  ·  world SQL  ·  — from Beijing
+014  ok       Ming Tombs · Changping  →  wikidata:Q41135 (Thirteen Ming Tombs)  ·  hand alias  ·  6 km from Changping
+015  ok       Old Summer Palace · Beijing  →  icon:Q907894 (Summer Palace)  ·  core  ·  12 km from Beijing
+016  ok       Bird's Nest Stadium · Beijing  →  icon:Q133525 (Beijing National Stadium (Bird's Nest))  ·  hand alias  ·  7 km from Beijing
+017  ok       Universal Beijing Resort · Tongzhou  →  icon:Q65064627 (Universal Beijing Resort)  ·  exact  ·  6 km from Tongzhou
+018  ok       National Museum of China · Beijing  →  wikidata:Q1074318 (National Museum of China)  ·  exact  ·  3 km from Beijing
+019  insert   Wangfujing Street · Beijing  →  icon:Q1009423 (Wangfujing Street)  ·  world SQL  ·  — from Beijing
+020  insert   Qianmen Street · Beijing  →  icon:Q10899082 (Qianmen Street)  ·  world SQL  ·  — from Beijing
+021  ok       Prince Gong Mansion · Beijing  →  wikidata:Q2666344 (Prince Gong's Mansion and Garden)  ·  hand alias  ·  1 km from Beijing
+022  insert   Gubei Water Town · Miyun  →  icon:Q54833281 (Gubei Water Town)  ·  world SQL  ·  — from Miyun
+023  ok       Beijing Zoo · Beijing  →  wikidata:Q220083 (Beijing Zoo and Aquarium)  ·  hand alias  ·  4 km from Beijing
+024  insert   Simatai Great Wall · Miyun  →  icon:Q2287033 (Simatai Great Wall)  ·  world SQL  ·  — from Miyun
+025  insert   Juyongguan Great Wall · Changping  →  icon:Q2592536 (Juyongguan Great Wall)  ·  world SQL  ·  — from Changping
+026  insert   Huanghuacheng Great Wall · Huairou  →  icon:Q111192246 (Huanghuacheng Great Wall)  ·  world SQL  ·  — from Huairou
+027  ok       Drum Tower and Bell Tower · Beijing  →  wikidata:Q2741116 (Drum and Bell Towers)  ·  hand alias  ·  2 km from Beijing
+028  ok       Confucius Temple and Imperial College · Beijing  →  wikidata:Q1064580 (Confucius Temple)  ·  hand alias  ·  3 km from Beijing
+029  ok       Fragrant Hills Park · Beijing  →  wikidata:Q943688 (Fragrant Hills)  ·  core  ·  19 km from Beijing
+030  ok       Water Cube · Beijing  →  wikidata:Q244877 (National Aquatics Center)  ·  hand alias  ·  7 km from Beijing
+031  insert   Panjiayuan Antique Market · Beijing  →  icon:Q4881099 (Panjiayuan Antique Market)  ·  world SQL  ·  — from Beijing
+032  insert   Marco Polo Bridge · Fengtai  →  icon:Q219230 (Marco Polo Bridge)  ·  hand pin (wikidata) · Marco Polo Bridge incident  ·  6 km from Fengtai
+033  ok       Tanzhe Temple · Mentougou  →  wikidata:Q1815062 (Tanzhe Temple)  ·  exact  ·  7 km from Mentougou
+034  ok       Happy Valley Beijing · Beijing  →  wikidata:Q3127206 (Happy Valley Amusement Park)  ·  hand alias  ·  11 km from Beijing
+035  insert   Sanlitun · Beijing  →  icon:Q1203969 (Sanlitun)  ·  world SQL  ·  — from Beijing
+036  insert   CCTV Headquarters · Beijing  →  icon:Q754321 (CCTV Headquarters)  ·  world SQL  ·  — from Beijing
+037  promote  National Centre for the Performing Arts · Beijing  →  wikidata:Q2945950 (National Centre for the Performing Arts)  ·  exact  ·  2 km from Beijing
+038  ok       Yuyuantan Park · Beijing  →  wikidata:Q15935908 (Yuyuantan Park)  ·  exact  ·  6 km from Beijing
+039  promote  Longqing Gorge · Yanqing  →  wv:beijing-longqingxia-longqing-gorge (Longqingxia (Longqing Gorge))  ·  hand alias  ·  11 km from Yanqing
+040  ok       Chengde Mountain Resort · Chengde  →  icon:Q1046818 (Chengde Mountain Resort and its outlying temples)  ·  world row (live)  ·  — from Chengde
+041  promote  Tianjin Eye · Tianjin  →  wikidata:Q750548 (Tianjin Eye)  ·  exact  ·  4 km from Tianjin
+042  promote  Five Great Avenues · Tianjin  →  wikidata:Q5455997 (The Five Avenues)  ·  core  ·  0 km from Tianjin
+043  promote  Ancient Culture Street · Tianjin  →  wikidata:Q3121449 (Ancient Cultural Street)  ·  fuzzy:ancient cultural street  ·  3 km from Tianjin
+044  ok       Italian Style Town · Tianjin  →  wikidata:Q961423 (Tianjin Italian Town)  ·  hand alias  ·  1 km from Tianjin
+045  insert   Shanhaiguan Old Dragon's Head · Qinhuangdao  →  icon:shanhaiguan-old-dragons-head (Shanhaiguan Old Dragon's Head)  ·  osm highway/bus_stop · 老龙头  ·  17 km from Qinhuangdao
+046  insert   Beidaihe Beach · Qinhuangdao  →  icon:beidaihe-beach (Beidaihe Beach)  ·  hand pin (forced, verify) · Beidaihe Beach  ·  14 km from Qinhuangdao
+047  insert   Jinshanling Great Wall · Chengde  →  icon:Q1689619 (Jinshanling Great Wall)  ·  world SQL  ·  — from Chengde
+048  insert   Puning Temple · Chengde  →  icon:Q188404 (Puning Temple)  ·  world SQL  ·  — from Chengde
+049  ok       Putuo Zongcheng Temple · Chengde  →  icon:Q1683898 (Putuo Zongcheng Temple)  ·  world row (live)  ·  — from Chengde
+050  insert   Tianjin Porcelain House · Tianjin  →  icon:tianjin-porcelain-house (Tianjin Porcelain House)  ·  osm highway/bus_stop · 瓷房子  ·  1 km from Tianjin
+051  ok       Tianjin Binhai Library · Tianjin  →  wikidata:Q47088811 (Tianjin Binhai Library)  ·  exact  ·  43 km from Tianjin
+052  insert   Zhengding Longxing Temple · Shijiazhuang  →  icon:Q1507370 (Zhengding Longxing Temple)  ·  world SQL  ·  — from Shijiazhuang
+053  ok       Zhaozhou Bridge · Zhao County  →  icon:Q551446 (Zhaozhou Bridge)  ·  world row (live)  ·  — from Zhao County
+054  insert   Baiyangdian Lake · Baoding  →  icon:baiyangdian-lake (Baiyangdian Lake)  ·  osm water/lake · Lake Baiyangdian  ·  47 km from Baoding
+055  insert   Xibaipo · Pingshan  →  icon:Q3373621 (Xibaipo)  ·  world SQL  ·  — from Pingshan
+058  ok       Shanghai Tower · Shanghai  →  curated:china-shanghai-shanghai-tower (Shanghai Tower)  ·  exact  ·  5 km from Shanghai
+059  ok       Yu Garden · Shanghai  →  curated:china-shanghai-yu-garden (Yu Garden)  ·  exact  ·  4 km from Shanghai
+060  ok       Shanghai Disneyland · Shanghai  →  curated:china-shanghai-shanghai-disneyland (Shanghai Disneyland)  ·  exact  ·  21 km from Shanghai
+061  ok       Nanjing Road · Shanghai  →  curated:china-shanghai-nanjing-road (Nanjing Road)  ·  exact  ·  3 km from Shanghai
+062  insert   Lujiazui · Shanghai  →  icon:Q1074628 (Lujiazui)  ·  world SQL  ·  — from Shanghai
+063  promote  Xintiandi · Shanghai  →  curated:china-shanghai-xintiandi (Xintiandi)  ·  exact  ·  2 km from Shanghai
+064  ok       Tianzifang · Shanghai  →  curated:china-shanghai-tianzifang (Tianzifang)  ·  exact  ·  2 km from Shanghai
+065  ok       Jade Buddha Temple · Shanghai  →  wikidata:Q967601 (Jade Buddha Temple)  ·  exact  ·  3 km from Shanghai
+067  ok       Shanghai Museum · Shanghai  →  curated:china-shanghai-shanghai-museum (Shanghai Museum)  ·  exact  ·  2 km from Shanghai
+068  ok       Shanghai World Financial Center · Shanghai  →  wikidata:Q80852 (Shanghai World Financial Center)  ·  exact  ·  5 km from Shanghai
+069  ok       Jin Mao Tower · Shanghai  →  wikidata:Q80813 (Jinmao Tower)  ·  fuzzy:jinmao tower  ·  5 km from Shanghai
+070  promote  Zhujiajiao Water Town · Shanghai  →  curated:china-shanghai-zhujiajiao-ancient-water-town (Zhujiajiao Ancient Water Town)  ·  core  ·  40 km from Shanghai
+071  promote  Former French Concession · Shanghai  →  curated:china-shanghai-former-french-concession (Former French Concession)  ·  exact  ·  1 km from Shanghai
+072  ok       Jing'an Temple · Shanghai  →  curated:china-shanghai-jing-an-temple (Jing'an Temple)  ·  exact  ·  1 km from Shanghai
+073  ok       City God Temple of Shanghai · Shanghai  →  wikidata:Q289901 (City God Temple)  ·  hand alias  ·  3 km from Shanghai
+074  promote  Shanghai Ocean Aquarium · Shanghai  →  wikidata:Q2859205 (Shanghai Ocean Aquarium)  ·  exact  ·  5 km from Shanghai
+075  ok       Longhua Temple · Shanghai  →  wikidata:Q41912 (Longhua Temple)  ·  exact  ·  5 km from Shanghai
+076  promote  Qibao Ancient Town · Shanghai  →  wv:shanghai-qibao-ancient-town (Qibao ancient town)  ·  exact  ·  12 km from Shanghai
+077  ok       Century Park · Shanghai  →  wikidata:Q847713 (Century Park)  ·  exact  ·  9 km from Shanghai
+078  promote  Shanghai Wild Animal Park · Shanghai  →  wikidata:Q6140007 (Shanghai Wild Animal Park)  ·  exact  ·  31 km from Shanghai
+079  promote  M50 Art District · Shanghai  →  wikidata:Q23817 (M50 art district)  ·  exact  ·  3 km from Shanghai
+080  promote  1933 Old Millfun · Shanghai  →  wv:shanghai-1933-shanghai (1933 Shanghai)  ·  hand alias  ·  5 km from Shanghai
+081  ok       Shanghai Natural History Museum · Shanghai  →  wikidata:Q1312291 (Shanghai Natural History Museum)  ·  exact  ·  2 km from Shanghai
+082  promote  Fuxing Park · Shanghai  →  wikidata:Q5510954 (Fuxing Park)  ·  exact  ·  1 km from Shanghai
+083  promote  Wukang Mansion · Shanghai  →  wikidata:Q11124219 (Wukang Mansion)  ·  exact  ·  2 km from Shanghai
+084  ok       Sheshan · Shanghai  →  wikidata:Q7495625 (Sheshan)  ·  exact  ·  28 km from Shanghai
+085  ok       Shanghai Science and Technology Museum · Shanghai  →  wikidata:Q855376 (Shanghai Science and Technology Museum)  ·  exact  ·  8 km from Shanghai
+086  insert   Shanghai Haichang Ocean Park · Shanghai  →  icon:Q19851614 (Shanghai Haichang Ocean Park)  ·  world SQL  ·  — from Shanghai
+087  promote  Thames Town · Shanghai  →  wikidata:Q30191 (Thames Town)  ·  exact  ·  32 km from Shanghai
+088  ok       Humble Administrator's Garden · Suzhou  →  wikidata:Q1076650 (The Humble Administrator's Garden)  ·  core  ·  1 km from Suzhou
+089  insert   Zhouzhuang · Suzhou  →  icon:Q198070 (Zhouzhuang)  ·  world SQL  ·  — from Suzhou
+091  ok       Tiger Hill · Suzhou  →  wikidata:Q1581102 (Tiger Hill Pagoda)  ·  hand alias  ·  5 km from Suzhou
+092  ok       Suzhou Museum · Suzhou  →  wikidata:Q998042 (Suzhou Museum)  ·  exact  ·  1 km from Suzhou
+093  promote  Pingjiang Road · Suzhou  →  wikidata:Q10281548 (Ping Jiang Road)  ·  fuzzy:ping jiang road  ·  1 km from Suzhou
+094  promote  Shantang Street · Suzhou  →  wikidata:Q46606 (Shantang Street)  ·  exact  ·  4 km from Suzhou
+095  ok       Sun Yat-sen Mausoleum · Nanjing  →  wikidata:Q1338405 (Dr. Sun Yat-sen Mausoleum)  ·  fuzzy:dr sun yat sen mausoleum  ·  7 km from Nanjing
+096  ok       Confucius Temple of Nanjing · Nanjing  →  wikidata:Q835494 (Confucius Temple)  ·  hand alias  ·  3 km from Nanjing
+097  ok       Ming Xiaoling Mausoleum · Nanjing  →  wikidata:Q28769 (Ming Xiaoling Mausoleum)  ·  exact  ·  5 km from Nanjing
+098  ok       Nanjing Massacre Memorial Hall · Nanjing  →  wikidata:Q32391 (Nanjing Massacre Memorial Hall)  ·  exact  ·  4 km from Nanjing
+100  ok       Slender West Lake · Yangzhou  →  wikidata:Q3215751 (Slender West Lake)  ·  exact  ·  1 km from Yangzhou
+101  ok       Master of the Nets Garden · Suzhou  →  wikidata:Q1193715 (The Garden of the Master of the Nets)  ·  hand alias  ·  2 km from Suzhou
+102  insert   Tongli · Suzhou  →  icon:Q1026454 (Tongli)  ·  world SQL  ·  — from Suzhou
+103  insert   Jinji Lake · Suzhou  →  icon:Q4921017 (Jinji Lake)  ·  world SQL  ·  — from Suzhou
+105  ok       Nanjing City Wall · Nanjing  →  wikidata:Q927701 (City Wall of Nanjing)  ·  hand alias  ·  4 km from Nanjing
+106  ok       Xuanwu Lake · Nanjing  →  wikidata:Q7361660 (Xuanwu Lake)  ·  exact  ·  3 km from Nanjing
+107  ok       Presidential Palace · Nanjing  →  wikidata:Q1065016 (Presidential Palace)  ·  exact  ·  1 km from Nanjing
+108  insert   Purple Mountain · Nanjing  →  icon:Q833990 (Purple Mountain)  ·  world SQL  ·  — from Nanjing
+109  insert   Niushou Mountain · Nanjing  →  icon:Q122900031 (Niushou Mountain)  ·  world SQL  ·  — from Nanjing
+110  ok       Zhonghua Gate · Nanjing  →  wikidata:Q3274892 (The Gate of China (Zhonghuamen))  ·  hand alias  ·  4 km from Nanjing
+111  promote  Yuantouzhu · Wuxi  →  wikidata:Q8060083 (Yuantouzhu)  ·  exact  ·  4 km from Wuxi
+112  insert   Taihu Lake · Wuxi  →  icon:Q140712 (Taihu Lake)  ·  world SQL  ·  — from Wuxi  ·  REJECTED wv:ma-anshan-taihu-mount-national-forest-park (Taihu Mount National Forest Park, Ma'anshan) is 210 km from Wuxi
+113  insert   Three Kingdoms City · Wuxi  →  icon:Q11085977 (Three Kingdoms City)  ·  wikidata · Three Kingdoms City, Wuxi  ·  6 km from Wuxi
+114  insert   Ge Garden · Yangzhou  →  icon:Q3277018 (Ge Garden)  ·  wikidata · Geyuan  ·  1 km from Yangzhou
+115  promote  Jinshan Temple · Zhenjiang  →  wv:zhenjiang-jinshan-park (Jinshan Park)  ·  core  ·  3 km from Zhenjiang
+116  insert   Changzhou Dinosaur Park · Changzhou  →  icon:Q2963705 (Changzhou Dinosaur Park)  ·  world SQL  ·  — from Changzhou
+118  insert   Lingyin Temple · Hangzhou  →  icon:Q1070228 (Lingyin Temple)  ·  wikidata · Lingyin Temple  ·  4 km from Hangzhou  ·  REJECTED wikidata:Q117690 (Lingyan Temple, Jinan) is 741 km from Hangzhou
+120  insert   Hefang Street · Hangzhou  →  icon:hefang-street (Hefang Street)  ·  osm highway/tertiary · Hefang Street  ·  2 km from Hangzhou
+121  ok       Xixi National Wetland Park · Hangzhou  →  wikidata:Q1089272 (Xixi National Wetlands Park)  ·  fuzzy:xixi national wetlands park  ·  8 km from Hangzhou
+122  promote  Longjing Tea Plantations · Hangzhou  →  wv:hangzhou-longjing-dragon-well-tea-fields (Longjing (Dragon Well) Tea Fields)  ·  hand alias  ·  5 km from Hangzhou
+123  ok       Qiandao Lake · Chun'an  →  icon:Q2470528 (Qiandao Lake)  ·  world row (live)  ·  — from Chun'an
+125  insert   Xitang · Jiashan  →  icon:Q781255 (Xitang)  ·  world SQL  ·  — from Jiashan
+126  insert   Putuoshan · Zhoushan  →  icon:Q716232 (Putuoshan)  ·  world SQL  ·  — from Zhoushan
+127  promote  Songcheng · Hangzhou  →  wv:hangzhou-song-dynasty-town (Song Dynasty Town)  ·  hand alias  ·  10 km from Hangzhou
+128  insert   Hengdian World Studios · Dongyang  →  icon:hengdian-world-studios (Hengdian World Studios)  ·  hand pin (forced, verify) · Hengdian World Studios  ·  16 km from Dongyang
+129  promote  Nanxun · Huzhou  →  wv:huzhou-nanxun-ancient-town (Nanxun Ancient Town)  ·  core  ·  32 km from Huzhou
+130  ok       Six Harmonies Pagoda · Hangzhou  →  icon:Q1195294 (Liuhe Pagoda)  ·  world row (live)  ·  — from Hangzhou
+131  insert   Hangzhou Grand Canal · Hangzhou  →  icon:hangzhou-grand-canal (Hangzhou Grand Canal)  ·  world SQL  ·  — from Hangzhou
+132  ok       Tianyi Pavilion · Ningbo  →  wikidata:Q2066117 (TianYi Pavilion)  ·  exact  ·  1 km from Ningbo
+133  insert   Lu Xun's Hometown · Shaoxing  →  icon:Q11173165 (Lu Xun's Hometown)  ·  wikidata · Lu Xun Guli  ·  1 km from Shaoxing
+135  insert   Tiantai Mountain · Taizhou  →  icon:tiantai-mountain (Tiantai Mountain)  ·  world SQL  ·  — from Taizhou  ·  REJECTED wv:fuzhou-yantai-mountain (Yantai Mountain, Fuzhou) is 357 km from Taizhou
+136  insert   Shenxianju · Xianju  →  icon:Q15894216 (Shenxianju)  ·  world SQL  ·  — from Xianju
+137  ok       Moganshan · Deqing  →  wikidata:Q12062116 (moganshan)  ·  exact  ·  17 km from Deqing
+138  insert   Zhujiajian · Zhoushan  →  icon:Q5009379 (Zhujiajian)  ·  world SQL  ·  — from Zhoushan
+139  ok       Dongqian Lake · Ningbo  →  wikidata:Q5296005 (Dongqian Lake)  ·  exact  ·  15 km from Ningbo
+140  ok       Nanxi River · Wenzhou  →  wikidata:Q3335815 (Nanxi River Scenic Area)  ·  core  ·  28 km from Wenzhou
+141  insert   South Lake · Jiaxing  →  icon:Q912306 (South Lake)  ·  world SQL  ·  — from Jiaxing  ·  REJECTED wv:changchun-south-lake-park (South Lake Park, Changchun) is 1511 km from Jiaxing
+144  insert   Xidi · Yi County  →  icon:Q4010 (Xidi)  ·  world SQL  ·  — from Yi County
+145  insert   Mount Jiuhua · Chizhou  →  icon:Q1154854 (Mount Jiuhua)  ·  world SQL  ·  — from Chizhou  ·  REJECTED wv:putian-jiuhua-temple (Jiuhua Temple, Putian) is 597 km from Chizhou
+146  insert   Tunxi Old Street · Huangshan  →  icon:tunxi-old-street (Tunxi Old Street)  ·  hand pin (approximate, verify) · Tunxi Old Street  ·  1797 km from Huangshan
+147  insert   Tangyue Memorial Archways · She County  →  icon:tangyue-memorial-archways (Tangyue Memorial Archways)  ·  osm tourism/attraction · Tangyue Memorial Archways  ·  22 km from She County
+148  ok       Mount Qiyun · Xiuning  →  wikidata:Q842124 (Mount Qiyun)  ·  exact  ·  15 km from Xiuning
+149  insert   Tianzhu Mountain · Anqing  →  icon:tianzhu-mountain (Tianzhu Mountain)  ·  hand pin (forced, verify) · Tianzhu Mountain  ·  19 km from Anqing  ·  REJECTED wikidata:Q7800262 (Tianzi Mountain, Zhangjiajie) is 614 km from Anqing
+150  insert   Huizhou Ancient City · She County  →  icon:huizhou-ancient-city (Huizhou Ancient City)  ·  hand pin (forced, verify) · Huizhou Ancient City  ·  15 km from She County  ·  REJECTED wv:huizhou-guangdong-huizhou-museum (Huizhou Museum, Huizhou (Guangdong)) is 858 km from She County
+151  insert   Baohe Park · Hefei  →  icon:baohe-park (Baohe Park)  ·  hand pin (forced, verify) · Baohe Park  ·  5 km from Hefei
+152  insert   Langya Mountain · Chuzhou  →  icon:Q97351333 (Langya Mountain)  ·  world SQL  ·  — from Chuzhou
+154  ok       Xi'an City Wall · Xi'an  →  wikidata:Q1334336 (Xi'an City Wall)  ·  exact  ·  1 km from Xi'an
+156  ok       Big Wild Goose Pagoda · Xi'an  →  wikidata:Q1047061 (Big (Wild) Goose Pagoda)  ·  hand alias  ·  4 km from Xi'an
+157  promote  Muslim Quarter · Xi'an  →  wv:xi-an-hui-muslim-quarter (Hui Muslim Quarter)  ·  hand alias  ·  1 km from Xi'an
+158  ok       Bell Tower of Xi'an · Xi'an  →  wikidata:Q1151087 (Bell Tower)  ·  hand alias  ·  1 km from Xi'an
+159  ok       Drum Tower of Xi'an · Xi'an  →  wikidata:Q2742315 (Drum Tower)  ·  hand alias  ·  1 km from Xi'an
+160  insert   Datang Everbright City · Xi'an  →  icon:datang-everbright-city (Datang Everbright City)  ·  osm railway/stop · Datang Everbright City  ·  6 km from Xi'an
+161  ok       Huaqing Palace · Xi'an  →  wikidata:Q4133842 (Huaqing Palace)  ·  exact  ·  27 km from Xi'an
+162  ok       Shaanxi History Museum · Xi'an  →  wikidata:Q1151210 (Shaanxi History Museum)  ·  exact  ·  3 km from Xi'an
+163  ok       Hukou Waterfall · Yichuan  →  wikidata:Q602973 (Hukou Waterfall)  ·  exact  ·  29 km from Yichuan
+164  ok       Small Wild Goose Pagoda · Xi'an  →  icon:Q1194818 (Small Wild Goose Pagoda)  ·  world row (live)  ·  — from Xi'an
+165  promote  Tang Paradise · Xi'an  →  wikidata:Q7682722 (Tang Paradise)  ·  exact  ·  5 km from Xi'an
+166  ok       Xi'an Beilin Museum · Xi'an  →  wikidata:Q641427 (Beilin (or Stele) Museum)  ·  hand alias  ·  0 km from Xi'an
+167  insert   Famen Temple · Baoji  →  icon:Q614916 (Famen Temple)  ·  world SQL  ·  — from Baoji
+168  ok       Qianling Mausoleum · Qian County  →  wikidata:Q950653 (Qianling Mausoleum)  ·  exact  ·  5 km from Qian County
+169  insert   Pagoda Hill · Yan'an  →  icon:pagoda-hill (Pagoda Hill)  ·  osm natural/peak · Pagoda Hill  ·  1 km from Yan'an
+170  ok       Han Yangling Mausoleum · Xianyang  →  wikidata:Q1350906 (Tomb of Emperor Jingdi)  ·  wikidata · Han Yang Ling → existing row wikidata:Q1350906  ·  21 km from Xianyang
+171  ok       Great Mosque of Xi'an · Xi'an  →  wikidata:Q820842 (Great Mosque)  ·  hand alias  ·  2 km from Xi'an
+172  insert   Yellow Emperor Mausoleum · Huangling  →  icon:Q1518486 (Yellow Emperor Mausoleum)  ·  world SQL  ·  — from Huangling
+173  insert   Taibai Mountain · Baoji  →  icon:Q6924020 (Taibai Mountain)  ·  wikidata · Mount Taibai  ·  67 km from Baoji
+174  insert   Qinling Wildlife Park · Xi'an  →  icon:qinling-wildlife-park (Qinling Wildlife Park)  ·  osm tourism/zoo · Xi'an Qinling Wildlife Park  ·  24 km from Xi'an
+175  promote  Tang West Market · Xi'an  →  wikidata:Q15919802 (Tang West Market Museum)  ·  core  ·  4 km from Xi'an
+179  insert   Mount Wutai · Wutai  →  icon:Q120314 (Mount Wutai)  ·  hand pin (wikidata) · Mount Wutai  ·  34 km from Wutai  ·  REJECTED wikidata:Q216059 (Mount Tai, Sacred sites of China) is 432 km from Wutai
+180  insert   Wang Family Compound · Lingshi  →  icon:Q11573026 (Wang Family Compound)  ·  world SQL  ·  — from Lingshi
+181  insert   Qiao Family Compound · Qi County  →  icon:Q7267658 (Qiao Family Compound)  ·  world SQL  ·  — from Qi County
+182  ok       Yingxian Wooden Pagoda · Yingxian  →  wikidata:Q117697 (Yīngxiàn Wooden Pagoda)  ·  exact  ·  0 km from Yingxian
+183  insert   Datong City Wall · Datong  →  icon:datong-city-wall (Datong City Wall)  ·  hand pin (approximate, verify) · Datong City Wall  ·  0 km from Datong
+184  promote  Huayan Temple · Datong  →  wikidata:Q15932853 (Huayan Monastery)  ·  hand alias  ·  1 km from Datong
+185  ok       Jinci Temple · Taiyuan  →  wikidata:Q1413164 (Jinci Temple)  ·  exact  ·  19 km from Taiyuan
+186  insert   Mian Mountain · Jiexiu  →  icon:Q43531116 (Mian Mountain)  ·  world SQL  ·  — from Jiexiu
+187  insert   Mount Heng · Hunyuan  →  icon:mount-heng (Mount Heng)  ·  hand pin (forced, verify) · Mount Heng  ·  11 km from Hunyuan  ·  REJECTED wikidata:Q644965 (Mount Heng, Sacred sites of China) is 1375 km from Hunyuan
+188  insert   Shuanglin Temple · Pingyao  →  icon:Q837991 (Shuanglin Temple)  ·  wikidata · Shuanglin Temple  ·  6 km from Pingyao  ·  REJECTED wikidata:Q4620346 (Hualin Temple, Fuzhou) is 1405 km from Pingyao
+189  insert   Yanmen Pass · Daixian  →  icon:Q1275915 (Yanmen Pass)  ·  world SQL  ·  — from Daixian
+190  promote  Zhangbi Ancient Castle · Jiexiu  →  wv:pingyao-zhangbi-castle (Zhangbi Castle)  ·  core  ·  8 km from Jiexiu
+192  ok       Shaolin Temple · Dengfeng  →  icon:Q232771 (Shaolin Monastery)  ·  wikidata · Shaolin Monastery → existing row icon:Q232771  ·  10 km from Dengfeng  ·  REJECTED wikidata:Q4620346 (Hualin Temple, Fuzhou) is 1109 km from Dengfeng
+193  ok       White Horse Temple · Luoyang  →  wikidata:Q1264618 (Baima Temple)  ·  hand alias  ·  14 km from Luoyang
+194  insert   Yuntai Mountain · Jiaozuo  →  icon:Q8061385 (Yuntai Mountain)  ·  world SQL  ·  — from Jiaozuo  ·  REJECTED wv:fuzhou-yantai-mountain (Yantai Mountain, Fuzhou) is 1169 km from Jiaozuo
+195  promote  Millennium City Park · Kaifeng  →  wikidata:Q15909131 (Kaifeng Qingming River Garden)  ·  hand alias  ·  2 km from Kaifeng
+196  promote  Laojun Mountain · Luanchuan  →  wikidata:Q17003951 (Laojun Mountain)  ·  exact  ·  21 km from Luanchuan
+197  ok       Iron Pagoda · Kaifeng  →  wikidata:Q1561904 (Iron Pagoda)  ·  exact  ·  3 km from Kaifeng
+198  insert   Songshan · Dengfeng  →  icon:Q1140980 (Songshan)  ·  world SQL  ·  — from Dengfeng  ·  REJECTED wv:dongguan-songshan-lake (Songshan Lake, Dongguan) is 1293 km from Dengfeng
+199  insert   Henan Museum · Zhengzhou  →  icon:Q857752 (Henan Museum)  ·  world SQL  ·  — from Zhengzhou  ·  REJECTED wv:jinhua-hengdian-museum (Hengdian Museum, Jinhua) is 856 km from Zhengzhou
+200  ok       Yinxu · Anyang  →  icon:Q464904 (Yinxu)  ·  world row (live)  ·  — from Anyang
+201  insert   Taihang Grand Canyon · Linzhou  →  icon:Q123515647 (Taihang Grand Canyon)  ·  world SQL  ·  — from Linzhou
+202  insert   Guoliang Tunnel · Huixian  →  icon:Q1028829 (Guoliang Tunnel)  ·  world SQL  ·  — from Huixian
+203  insert   Luoyi Ancient City · Luoyang  →  icon:luoyi-ancient-city (Luoyi Ancient City)  ·  osm tourism/attraction · Luoyi Ancient City Scenic Spot  ·  2 km from Luoyang
+204  promote  Dragon Pavilion · Kaifeng  →  wikidata:Q5305247 (Dragon Pavilion)  ·  exact  ·  1 km from Kaifeng
+205  ok       Erqi Memorial Tower · Zhengzhou  →  wikidata:Q4353771 (Er Qi (February 7) Memorial Tower)  ·  fuzzy:er qi memorial tower  ·  1 km from Zhengzhou
+206  promote  Yellow River Scenic Area · Zhengzhou  →  wikidata:Q15905062 (Yellow River Scenic Area)  ·  exact  ·  25 km from Zhengzhou
+207  promote  Lijing Gate · Luoyang  →  wv:luoyang-lijingmen-scenic-area (Lijingmen Scenic Area)  ·  hand alias  ·  2 km from Luoyang
+209  ok       Temple of Confucius · Qufu  →  wikidata:Q618618 (Temple of Confucius)  ·  hand alias  ·  0 km from Qufu
+210  promote  Zhanqiao Pier · Qingdao  →  wikidata:Q8070114 (Zhan Qiao)  ·  hand alias  ·  1 km from Qingdao
+211  promote  Badaguan · Qingdao  →  wikidata:Q4837047 (Badaguan)  ·  exact  ·  3 km from Qingdao
+212  promote  Tsingtao Beer Museum · Qingdao  →  wv:german-empire-tsingtao-brewery-museum (Tsingtao Brewery Museum)  ·  fuzzy:tsingtao brewery museum  ·  2 km from Qingdao
+213  promote  Laoshan · Qingdao  →  wv:qingdao-laoshan-beach (Laoshan Beach)  ·  core  ·  46 km from Qingdao
+214  promote  Baotu Spring · Jinan  →  wv:jinan-baotu-spring-park (Baotu Spring Park)  ·  core  ·  1 km from Jinan
+215  promote  Daming Lake · Jinan  →  wv:jinan-daming-lake-park (Daming Lake Park)  ·  core  ·  2 km from Jinan
+216  insert   Penglai Pavilion · Yantai  →  icon:Q1937908 (Penglai Pavilion)  ·  world SQL  ·  — from Yantai
+217  insert   May Fourth Square · Qingdao  →  icon:Q3269023 (May Fourth Square)  ·  world SQL  ·  — from Qingdao
+218  ok       Liugong Island · Weihai  →  wikidata:Q842587 (Liugong Island)  ·  exact  ·  4 km from Weihai
+219  insert   St. Michael's Cathedral · Qingdao  →  icon:Q2942408 (St. Michael's Cathedral)  ·  world SQL  ·  — from Qingdao
+220  ok       Thousand Buddha Mountain · Jinan  →  wikidata:Q2208134 (Thousand Buddha Mountain)  ·  exact  ·  3 km from Jinan
+221  insert   Weifang World Kite Museum · Weifang  →  icon:Q55698056 (Weifang World Kite Museum)  ·  world SQL  ·  — from Weifang
+222  ok       Taierzhuang Ancient Town · Zaozhuang  →  wikidata:Q1198168 (Taierzhuang Ancient Town)  ·  exact  ·  36 km from Zaozhuang
+223  promote  Golden Beach · Qingdao  →  wv:qingdao-golden-beach (Golden Beach)  ·  exact  ·  15 km from Qingdao
+224  insert   Yellow River Delta · Dongying  →  icon:Q11177840 (Yellow River Delta)  ·  world SQL  ·  — from Dongying
+225  insert   Qingdao Polar Ocean World · Qingdao  →  icon:qingdao-polar-ocean-world (Qingdao Polar Ocean World)  ·  osm tourism/theme_park · Qingdao Polar Ocean Park  ·  10 km from Qingdao
+226  insert   Cemetery of Confucius · Qufu  →  icon:Q619258 (Cemetery of Confucius)  ·  world SQL  ·  — from Qufu
+227  insert   Kong Family Mansion · Qufu  →  icon:Q5922554 (Kong Family Mansion)  ·  world SQL  ·  — from Qufu
+228  insert   Yantai Mountain · Yantai  →  icon:Q115046494 (Yantai Mountain)  ·  world SQL  ·  — from Yantai  ·  REJECTED wv:fuzhou-yantai-mountain (Yantai Mountain, Fuzhou) is 1292 km from Yantai
+233  ok       Hongya Cave · Chongqing  →  wikidata:Q32171478 (Hongyadong)  ·  hand alias  ·  1 km from Chongqing
+234  insert   Kuanzhai Alley · Chengdu  →  icon:Q10951691 (Kuanzhai Alley)  ·  world SQL  ·  — from Chengdu
+235  insert   Jinli Street · Chengdu  →  icon:Q6202606 (Jinli Street)  ·  world SQL  ·  — from Chengdu
+236  ok       Wuhou Shrine · Chengdu  →  wikidata:Q1069942 (Wuhouci Temple)  ·  hand alias  ·  2 km from Chengdu
+237  ok       Du Fu Thatched Cottage · Chengdu  →  wikidata:Q4390891 (Du Fu's Thatched Cottage)  ·  fuzzy:du fus thatched cottage  ·  2 km from Chengdu
+238  insert   Huanglong · Songpan  →  icon:huanglong (Huanglong)  ·  world SQL  ·  — from Songpan
+239  insert   Mount Siguniang · Xiaojin  →  icon:Q832362 (Mount Siguniang)  ·  world SQL  ·  — from Xiaojin
+240  promote  Dujiangyan · Dujiangyan  →  wv:dujiangyan-dujiangyan-old-city (Dujiangyan old city)  ·  core  ·  2 km from Dujiangyan
+241  ok       Mount Qingcheng · Dujiangyan  →  wikidata:Q905536 (Mount Qingcheng)  ·  exact  ·  2 km from Dujiangyan
+242  ok       Ciqikou Ancient Town · Chongqing  →  wikidata:Q5121327 (Ciqikou)  ·  core  ·  11 km from Chongqing
+243  promote  Jiefangbei · Chongqing  →  wikidata:Q13564560 (Jiefangbei Pedestrian Street)  ·  hand alias  ·  1 km from Chongqing
+244  insert   Wulong Karst · Wulong  →  icon:Q8039213 (Wulong Karst)  ·  world SQL  ·  — from Wulong
+245  promote  Dazu Rock Carvings · Dazu  →  wv:dazu-dazu-rock-carvings-museum (Dazu Rock Carvings Museum)  ·  core  ·  8 km from Dazu
+246  ok       Three Gorges · Chongqing  →  wikidata:Q10872783 (Three Gorges Museum)  ·  core  ·  1 km from Chongqing
+247  ok       Liziba Station · Chongqing  →  wikidata:Q11095941 (Liziba Station)  ·  exact  ·  3 km from Chongqing
+248  insert   Nanshan Yikeshu Viewpoint · Chongqing  →  icon:nanshan-yikeshu-viewpoint (Nanshan Yikeshu Viewpoint)  ·  hand pin (approximate, verify) · Nanshan Yikeshu Viewpoint  ·  5 km from Chongqing
+249  promote  Yangtze River Cableway · Chongqing  →  wikidata:Q21051796 (Yangtze River Cableway)  ·  exact  ·  2 km from Chongqing
+250  insert   Daocheng Yading · Daocheng  →  icon:daocheng-yading (Daocheng Yading)  ·  hand pin (forced, verify) · Daocheng Yading  ·  50 km from Daocheng
+251  ok       Sanxingdui Museum · Guanghan  →  wikidata:Q929072 (Sanxingdui)  ·  core  ·  6 km from Guanghan
+252  insert   Chunxi Road · Chengdu  →  icon:Q5116461 (Chunxi Road)  ·  world SQL  ·  — from Chengdu
+253  insert   Taikoo Li Chengdu · Chengdu  →  icon:Q15933370 (Taikoo Li Chengdu)  ·  world SQL  ·  — from Chengdu
+254  insert   Hailuogou Glacier · Luding  →  icon:Q11151292 (Hailuogou Glacier)  ·  world SQL  ·  — from Luding
+255  insert   Mount Gongga · Kangding  →  icon:Q1537157 (Mount Gongga)  ·  world SQL  ·  — from Kangding
+256  insert   Bipenggou · Li County  →  icon:bipenggou (Bipenggou)  ·  osm leisure/nature_reserve · Bipeng Valley  ·  32 km from Li County
+257  insert   Tagong Grassland · Kangding  →  icon:tagong-grassland (Tagong Grassland)  ·  osm natural/grassland · Tagong Grassland  ·  53 km from Kangding
+258  insert   Langzhong Ancient City · Langzhong  →  icon:Q21018339 (Langzhong Ancient City)  ·  wikidata · 閬中古城古建築群  ·  11 km from Langzhong
+259  insert   Anshun Bridge · Chengdu  →  icon:Q3366223 (Anshun Bridge)  ·  world SQL  ·  — from Chengdu
+260  promote  Qingyang Palace · Chengdu  →  wv:chengdu-qingyang-temple (Qingyang Temple)  ·  hand alias  ·  1 km from Chengdu
+261  promote  Wenshu Monastery · Chengdu  →  wikidata:Q11080015 (Wenshu Temple)  ·  hand alias  ·  3 km from Chengdu
+262  insert   Jianmen Pass · Jiange  →  icon:Q6191827 (Jianmen Pass)  ·  world SQL  ·  — from Jiange
+263  insert   Zigong Dinosaur Museum · Zigong  →  icon:Q827778 (Zigong Dinosaur Museum)  ·  world SQL  ·  — from Zigong
+264  promote  Luodai Ancient Town · Chengdu  →  wikidata:Q6704566 (Luodai Ancient Town)  ·  exact  ·  27 km from Chengdu
+265  insert   Pingle Ancient Town · Qionglai  →  icon:pingle-ancient-town (Pingle Ancient Town)  ·  osm tourism/hotel · Jinyang House Pingle Ancient Town Shop  ·  14 km from Qionglai
+266  insert   Danba Tibetan Villages · Danba  →  icon:danba-tibetan-villages (Danba Tibetan Villages)  ·  osm leisure/park · 甲居藏寨  ·  8 km from Danba
+267  insert   Zoige Grassland · Zoige  →  icon:Q8073502 (Zoige Grassland)  ·  world SQL  ·  — from Zoige
+268  insert   Mount Wawu · Hongya  →  icon:mount-wawu (Mount Wawu)  ·  osm leisure/nature_reserve · Mount Wawu Forest Park  ·  21 km from Hongya
+269  promote  Huanglongxi Ancient Town · Chengdu  →  wikidata:Q11178679 (Huanglongxi Ancient Town)  ·  exact  ·  39 km from Chengdu
+270  insert   Xiling Snow Mountain · Dayi  →  icon:Q3322234 (Xiling Snow Mountain)  ·  world SQL  ·  — from Dayi
+271  insert   Eling Park · Chongqing  →  icon:Q10567057 (Eling Park)  ·  world SQL  ·  — from Chongqing
+272  promote  Chongqing Zoo · Chongqing  →  wikidata:Q10563866 (Chongqing Zoo)  ·  exact  ·  9 km from Chongqing
+273  insert   Fengdu Ghost City · Fengdu  →  icon:Q5443419 (Fengdu Ghost City)  ·  wikidata · Fengdu Ghost City  ·  10 km from Fengdu
+274  ok       Baidicheng · Fengjie  →  icon:Q803709 (Baidicheng)  ·  world row (live)  ·  — from Fengjie
+275  insert   Black Valley · Wansheng  →  icon:black-valley (Black Valley)  ·  osm leisure/nature_reserve · Black Valley  ·  26 km from Wansheng
+276  insert   Jinfo Mountain · Nanchuan  →  icon:Q3321893 (Jinfo Mountain)  ·  world SQL  ·  — from Nanchuan
+277  promote  Chongqing People's Hall · Chongqing  →  wikidata:Q10563872 (Great Hall of the People)  ·  wikidata · Great Hall of the People → existing row wikidata:Q10563872  ·  1 km from Chongqing
+278  promote  Chengdu Giant Panda Breeding Research Base Dujiangyan · Dujiangyan  →  wv:dujiangyan-dujiangyan-panda-base (Dujiangyan Panda Base)  ·  hand alias  ·  14 km from Dujiangyan
+279  insert   Bifengxia Panda Base · Ya'an  →  icon:Q4904726 (Bifengxia Panda Base)  ·  world SQL  ·  — from Ya'an
+283  ok       Jade Dragon Snow Mountain · Lijiang  →  wikidata:Q1465660 (Jade Dragon Snow Mountain)  ·  exact  ·  23 km from Lijiang
+284  insert   Dali Old Town · Dali  →  icon:Q126678744 (Dali Old Town)  ·  world SQL  ·  — from Dali
+285  ok       Erhai Lake · Dali  →  wikidata:Q83628 (Erhai Lake)  ·  exact  ·  3 km from Dali
+286  insert   Dukezong Old Town · Shangri-La  →  icon:dukezong-old-town (Dukezong Old Town)  ·  osm tourism/attraction · Dukezong Ancient Town  ·  14 km from Shangri-La
+287  ok       Songzanlin Monastery · Shangri-La  →  wikidata:Q1493369 (Songzanlin Monastery)  ·  exact  ·  13 km from Shangri-La
+288  ok       Tiger Leaping Gorge · Shangri-La  →  icon:Q1460797 (Tiger Leaping Gorge)  ·  world row (live)  ·  — from Shangri-La
+289  insert   Xishuangbanna · Jinghong  →  icon:xishuangbanna (Xishuangbanna)  ·  world SQL  ·  — from Jinghong
+290  insert   Lugu Lake · Ninglang  →  icon:Q1351120 (Lugu Lake)  ·  world SQL  ·  — from Ninglang
+291  ok       Three Pagodas of Chongsheng Temple · Dali  →  wikidata:Q1257126 (Tang Dynasty Three Pagodas)  ·  hand alias  ·  4 km from Dali
+292  insert   Meili Snow Mountain · Deqin  →  icon:Q1937211 (Meili Snow Mountain)  ·  world SQL  ·  — from Deqin
+293  ok       Dianchi Lake · Kunming  →  wikidata:Q83640 (Dianchi Lake)  ·  exact  ·  21 km from Kunming
+294  promote  Yunnan Nationalities Village · Kunming  →  wikidata:Q9384908 (Yunnan Nationalities Village)  ·  exact  ·  10 km from Kunming
+295  insert   Manting Park · Jinghong  →  icon:Q115261707 (Manting Park)  ·  world SQL  ·  — from Jinghong
+296  insert   Wild Elephant Valley · Jinghong  →  icon:wild-elephant-valley (Wild Elephant Valley)  ·  osm tourism/zoo · Wild Elephant Valley  ·  19 km from Jinghong
+297  promote  Shuhe Old Town · Lijiang  →  wikidata:Q137572953 (Shuhe Old Town)  ·  exact  ·  4 km from Lijiang
+298  promote  Xizhou Ancient Town · Dali  →  wikidata:Q10923614 (Xizhou Town)  ·  core  ·  14 km from Dali
+299  insert   Shaxi Old Town · Jianchuan  →  icon:shaxi-old-town (Shaxi Old Town)  ·  hand pin (approximate, verify) · Shaxi Old Town  ·  15 km from Jianchuan
+300  insert   Nuodeng · Yunlong  →  icon:Q14284953 (Nuodeng)  ·  world SQL  ·  — from Yunlong
+301  ok       Pudacuo National Park · Shangri-La  →  wikidata:Q1010677 (Pudacuo (or Putacuo) National Park)  ·  exact  ·  16 km from Shangri-La
+302  promote  Heshun Ancient Town · Tengchong  →  wikidata:Q1615604 (Heshun Ancient Town)  ·  exact  ·  1 km from Tengchong
+303  insert   Tengchong Volcanic Geopark · Tengchong  →  icon:Q109351430 (Tengchong Volcanic Geopark)  ·  world SQL  ·  — from Tengchong
+304  insert   Yuanmou Earth Forest · Yuanmou  →  icon:Q30026385 (Yuanmou Earth Forest)  ·  world SQL  ·  — from Yuanmou
+305  insert   Jianshui Ancient Town · Jianshui  →  icon:jianshui-ancient-town (Jianshui Ancient Town)  ·  osm tourism/theme_park · 建水古城  ·  11 km from Jianshui  ·  REJECTED wv:zigong-xianshi-ancient-town (Xianshi Ancient Town, Zigong) is 658 km from Jianshui
+306  insert   Puzhehei · Qiubei  →  icon:Q15934165 (Puzhehei)  ·  wikidata · Lake Puzhehei  ·  12 km from Qiubei
+307  insert   Luoping Canola Fields · Luoping  →  icon:luoping-canola-fields (Luoping Canola Fields)  ·  osm leisure/nature_reserve · Jinji Peaks  ·  11 km from Luoping
+308  insert   Dongchuan Red Land · Kunming  →  icon:dongchuan-red-land (Dongchuan Red Land)  ·  osm tourism/attraction · Red Earth of Dongchuan  ·  106 km from Kunming
+309  insert   Green Lake Park · Kunming  →  icon:Q5602745 (Green Lake Park)  ·  world SQL  ·  — from Kunming
+310  promote  Western Hills Dragon Gate · Kunming  →  wikidata:Q7988085 (Western Mountains Forest Reserve / Xishan Scenic Area)  ·  hand alias  ·  12 km from Kunming
+311  promote  Yunnan Provincial Museum · Kunming  →  wikidata:Q2114114 (Yunnan Provincial Museum)  ·  exact  ·  11 km from Kunming
+312  ok       Black Dragon Pool · Lijiang  →  wikidata:Q4920688 (Black Dragon Pool)  ·  exact  ·  2 km from Lijiang
+313  insert   Blue Moon Valley · Lijiang  →  icon:blue-moon-valley (Blue Moon Valley)  ·  osm tourism/attraction · Blue Moon Valley  ·  27 km from Lijiang
+314  promote  Lashi Lake · Lijiang  →  wikidata:Q137573170 (Lashihai Lake Wetland Park)  ·  hand alias  ·  8 km from Lijiang
+315  insert   Kunming Golden Temple · Kunming  →  icon:Q64195662 (Kunming Golden Temple)  ·  world SQL  ·  — from Kunming
+317  promote  Yangshuo · Yangshuo  →  wv:yangshuo-yangshuo-park (Yangshuo Park)  ·  core  ·  1 km from Yangshuo
+320  insert   Longji Rice Terraces · Longsheng  →  icon:Q124394317 (Longji Rice Terraces)  ·  world SQL  ·  — from Longsheng
+321  ok       Elephant Trunk Hill · Guilin  →  wikidata:Q5359378 (Elephant Trunk Hill)  ·  exact  ·  0 km from Guilin
+322  promote  Yulong River · Yangshuo  →  wv:yangshuo-yulong-river-valley (Yulong River valley)  ·  hand alias  ·  6 km from Yangshuo
+323  ok       West Street · Yangshuo  →  wikidata:Q130424 (West Street)  ·  exact  ·  0 km from Yangshuo
+324  insert   Weizhou Island · Beihai  →  icon:Q749662 (Weizhou Island)  ·  wikidata · Weizhou Island  ·  74 km from Beihai  ·  REJECTED wikidata:Q1297152 (Meizhou Island, Sacred sites of China) is 1064 km from Beihai
+325  insert   Silver Beach · Beihai  →  icon:Q10903667 (Silver Beach)  ·  world SQL  ·  — from Beihai  ·  REJECTED wv:qingdao-silver-beach (Silver Beach, Qingdao) is 1901 km from Beihai
+326  insert   Two Rivers and Four Lakes · Guilin  →  icon:two-rivers-and-four-lakes (Two Rivers and Four Lakes)  ·  osm information/visitor_centre · 两江四湖象山景区游客中心  ·  0 km from Guilin
+327  ok       Sun and Moon Pagodas · Guilin  →  wikidata:Q104145587 (Sun and Moon Pagodas)  ·  exact  ·  0 km from Guilin
+328  promote  Xingping Ancient Town · Yangshuo  →  wv:yangshuo-yangdi-xingping-scenic-area (Yangdi-Xingping scenic area)  ·  hand alias  ·  25 km from Yangshuo
+329  insert   Silver Cave · Lipu  →  icon:Q17019606 (Silver Cave)  ·  world SQL  ·  — from Lipu
+330  promote  Impression Liu Sanjie · Yangshuo  →  wv:yangshuo-impression-liu-sanjie-theater (Impression Liu Sanjie Theater)  ·  hand alias  ·  2 km from Yangshuo
+331  ok       Moon Hill · Yangshuo  →  wikidata:Q284624 (Moon Hill)  ·  exact  ·  6 km from Yangshuo
+332  promote  Qingxiu Mountain · Nanning  →  wv:nanning-qingxiu-mountain (Qingxiu Mountain)  ·  exact  ·  4 km from Nanning
+333  insert   Huangyao Ancient Town · Zhaoping  →  icon:huangyao-ancient-town (Huangyao Ancient Town)  ·  osm leisure/nature_reserve · Huangyao Ancient Town  ·  28 km from Zhaoping
+334  ok       Chengyang Wind and Rain Bridge · Sanjiang  →  wikidata:Q2035546 (Chengyang Bridge)  ·  hand alias  ·  13 km from Sanjiang
+335  promote  Daxu Ancient Town · Guilin  →  wv:guilin-daxu-old-town (Daxu Old Town)  ·  core  ·  16 km from Guilin
+336  promote  Seven Star Park · Guilin  →  wikidata:Q6860293 (Seven Star Park)  ·  exact  ·  2 km from Guilin
+337  insert   Bama · Bama  →  icon:Q11059379 (Bama)  ·  wikidata · Bama  ·  1 km from Bama
+338  ok       Huashan Rock Art · Ningming  →  icon:Q1632877 (Rock Paintings of Hua Mountain)  ·  world row (live)  ·  — from Ningming
+339  promote  Jingjiang Princes' Palace · Guilin  →  wikidata:Q6202332 (Jingjiang Princes' City)  ·  hand alias  ·  1 km from Guilin
+340  promote  Fubo Hill · Guilin  →  wv:guilin-fubo-hill (Fubo Hill)  ·  exact  ·  2 km from Guilin
+341  ok       Canton Tower · Guangzhou  →  wikidata:Q168400 (Canton Tower)  ·  exact  ·  5 km from Guangzhou
+342  insert   Kaiping Diaolou · Kaiping  →  icon:Q16303641 (Kaiping Diaolou)  ·  world SQL  ·  — from Kaiping
+344  insert   Chimelong Paradise · Guangzhou  →  icon:Q2963655 (Chimelong Paradise)  ·  world SQL  ·  — from Guangzhou
+345  promote  Chimelong Safari Park · Guangzhou  →  wv:guangzhou-chimelong-safari-park (Chimelong Safari Park)  ·  exact  ·  14 km from Guangzhou
+346  ok       Shamian Island · Guangzhou  →  wikidata:Q529977 (Shamian Island)  ·  exact  ·  4 km from Guangzhou
+347  promote  Chen Clan Ancestral Hall · Guangzhou  →  wikidata:Q5090739 (Chen Clan Ancestral Hall)  ·  exact  ·  4 km from Guangzhou
+348  ok       Window of the World · Shenzhen  →  wikidata:Q2302764 (Window of The World)  ·  exact  ·  9 km from Shenzhen
+349  ok       Ping An Finance Centre · Shenzhen  →  wikidata:Q1077308 (Ping An Finance Centre)  ·  exact  ·  3 km from Shenzhen
+350  ok       Chimelong Ocean Kingdom · Zhuhai  →  wikidata:Q16258099 (Chimelong Ocean Kingdom)  ·  exact  ·  16 km from Zhuhai
+351  promote  Chaozhou Ancient City · Chaozhou  →  wv:chaozhou-chaozhou-museum (Chaozhou Museum)  ·  core  ·  3 km from Chaozhou
+352  ok       Guangji Bridge · Chaozhou  →  wikidata:Q826705 (Guangji Bridge)  ·  exact  ·  1 km from Chaozhou
+353  insert   Shangxiajiu Pedestrian Street · Guangzhou  →  icon:Q7488612 (Shangxiajiu Pedestrian Street)  ·  world SQL  ·  — from Guangzhou
+354  insert   Beijing Road · Guangzhou  →  icon:Q10902438 (Beijing Road)  ·  world SQL  ·  — from Guangzhou
+355  ok       Yuexiu Park · Guangzhou  →  wikidata:Q7209907 (Yuexiu Park)  ·  exact  ·  2 km from Guangzhou
+356  promote  Sun Yat-sen Memorial Hall · Guangzhou  →  wikidata:Q52762983 (Sun Yat-Sen Memorial Hall)  ·  exact  ·  2 km from Guangzhou
+357  ok       Baiyun Mountain · Guangzhou  →  wikidata:Q837385 (Baiyun Mountain (White Cloud Mountain))  ·  exact  ·  6 km from Guangzhou
+358  ok       Guangzhou Opera House · Guangzhou  →  wikidata:Q3354553 (Guangzhou Opera House)  ·  exact  ·  4 km from Guangzhou
+359  ok       Temple of the Six Banyan Trees · Guangzhou  →  wikidata:Q683127 (Liurong Temple)  ·  wikidata · Temple of the Six Banyan Trees → existing row wikidata:Q683127  ·  2 km from Guangzhou
+360  insert   Huacheng Square · Guangzhou  →  icon:Q29469292 (Huacheng Square)  ·  world SQL  ·  — from Guangzhou  ·  REJECTED wikidata:Q10379789 (Quancheng Square, Jinan) is 1547 km from Guangzhou
+361  ok       Splendid China Folk Village · Shenzhen  →  wikidata:Q3493681 (Splendid China)  ·  hand alias  ·  8 km from Shenzhen
+362  insert   OCT Harbour · Shenzhen  →  icon:Q25101738 (OCT Harbour)  ·  wikidata · OCT Harbour  ·  8 km from Shenzhen
+363  insert   Happy Valley Shenzhen · Shenzhen  →  icon:Q3127204 (Happy Valley Shenzhen)  ·  wikidata · Happy Valley Shenzhen  ·  8 km from Shenzhen
+364  promote  Dameisha Beach · Shenzhen  →  wikidata:Q25101745 (Dameisha Beach)  ·  exact  ·  26 km from Shenzhen
+365  promote  Shenzhen Bay Park · Shenzhen  →  wikidata:Q20716864 (Shenzhen Bay Park)  ·  exact  ·  12 km from Shenzhen
+366  promote  Lianhuashan Park · Shenzhen  →  wikidata:Q15941172 (Lianhua Mountain Park)  ·  wikidata · Lianhuashan Park → existing row wikidata:Q15941172  ·  1 km from Shenzhen  ·  REJECTED wv:huzhou-lianhuazhuang-park (Lianhuazhuang Park, Huzhou) is 1101 km from Shenzhen
+367  promote  Dafen Oil Painting Village · Shenzhen  →  wikidata:Q1019090 (Dafen Oil Painting Village)  ·  exact  ·  10 km from Shenzhen
+368  insert   Nantou Ancient Town · Shenzhen  →  icon:Q6964351 (Nantou Ancient Town)  ·  world SQL  ·  — from Shenzhen  ·  REJECTED wv:huzhou-nanxun-ancient-town (Nanxun Ancient Town, Huzhou) is 1121 km from Shenzhen
+369  ok       Wutong Mountain · Shenzhen  →  wikidata:Q996504 (Wutong Mountain National Park)  ·  core  ·  17 km from Shenzhen
+370  promote  Xichong Beach · Shenzhen  →  wv:shenzhen-xichong-beach (Xichong Beach)  ·  exact  ·  50 km from Shenzhen
+371  promote  Sea World Shekou · Shenzhen  →  wikidata:Q86757199 (Shekou Sea World)  ·  hand alias  ·  17 km from Shenzhen
+372  promote  Dapeng Fortress · Shenzhen  →  wikidata:Q1022212 (Dapeng Ancient Fort)  ·  hand alias  ·  47 km from Shenzhen
+373  promote  Fisher Girl Statue · Zhuhai  →  wv:zhuhai-fisher-girl-statue (Fisher Girl statue)  ·  exact  ·  4 km from Zhuhai
+374  promote  Lovers' Road · Zhuhai  →  wv:zhuhai-lovers-road (Lovers' Road)  ·  exact  ·  3 km from Zhuhai
+375  promote  Seven Star Crags · Zhaoqing  →  wikidata:Q837641 (Seven Star Crags Park)  ·  core  ·  1 km from Zhaoqing
+376  ok       Dinghu Mountain · Zhaoqing  →  wikidata:Q5278204 (Dinghu Mountain)  ·  exact  ·  14 km from Zhaoqing
+377  ok       Nan'ao Island · Shantou  →  wikidata:Q1374598 (Nan'ao Island)  ·  exact  ·  38 km from Shantou
+378  ok       Foshan Ancestral Temple · Foshan  →  wikidata:Q3081382 (Foshan Ancestral Temple)  ·  exact  ·  1 km from Foshan
+379  promote  Lingnan Tiandi · Foshan  →  wv:foshan-lingnan-tiandi (Lingnan Tiandi)  ·  exact  ·  0 km from Foshan
+380  promote  Huizhou West Lake · Huizhou  →  wikidata:Q6799432 (Huizhou West Lake)  ·  exact  ·  1 km from Huizhou
+381  insert   Hailing Island · Yangjiang  →  icon:Q11151430 (Hailing Island)  ·  world SQL  ·  — from Yangjiang
+382  ok       Luofu Mountain · Huizhou  →  wikidata:Q1877573 (Luofu Mountain)  ·  exact  ·  42 km from Huizhou
+383  promote  Fujian Tulou · Yongding  →  wv:fujian-tulou-fujian-tulou-museum (Fujian Tulou Museum)  ·  core  ·  9 km from Yongding
+384  insert   Gulangyu · Xiamen  →  icon:Q1025339 (Gulangyu)  ·  world SQL  ·  — from Xiamen
+386  insert   Xiamen University · Xiamen  →  icon:Q1153539 (Xiamen University)  ·  world SQL  ·  — from Xiamen
+387  ok       Nanputuo Temple · Xiamen  →  wikidata:Q2416831 (Nanputuo Temple)  ·  exact  ·  2 km from Xiamen
+388  ok       Quanzhou Kaiyuan Temple · Quanzhou  →  wikidata:Q1721819 (Kaiyuan Temple)  ·  hand alias  ·  1 km from Quanzhou
+389  promote  Three Lanes and Seven Alleys · Fuzhou  →  wikidata:Q6859970 (Three Lanes and Seven Alleys)  ·  exact  ·  1 km from Fuzhou
+390  insert   Zhongshan Road · Xiamen  →  icon:zhongshan-road (Zhongshan Road)  ·  osm highway/pedestrian · Zhongshan Road  ·  1 km from Xiamen  ·  REJECTED wikidata:Q970561 (Zhongshan Park, Beijing) is 1726 km from Xiamen
+391  insert   Zengcuo'an · Xiamen  →  icon:Q14383507 (Zengcuo'an)  ·  world SQL  ·  — from Xiamen
+392  insert   Huandao Road · Xiamen  →  icon:huandao-road (Huandao Road)  ·  osm highway/primary · Huandao East Road  ·  14 km from Xiamen
+393  promote  Hulishan Fortress · Xiamen  →  wv:xiamen-hulishan-fortress (Hulishan Fortress)  ·  exact  ·  4 km from Xiamen
+394  insert   Quanzhou West Street · Quanzhou  →  icon:quanzhou-west-street (Quanzhou West Street)  ·  hand pin (forced, verify) · Quanzhou West Street  ·  1 km from Quanzhou
+395  insert   Chongwu Ancient Town · Quanzhou  →  icon:chongwu-ancient-town (Chongwu Ancient Town)  ·  osm tourism/attraction · Chongwu Ancient Town  ·  35 km from Quanzhou
+396  insert   Gushan · Fuzhou  →  icon:Q11179998 (Gushan)  ·  world SQL  ·  — from Fuzhou
+397  insert   Xiapu Mudflats · Xiapu  →  icon:Q123146805 (Xiapu Mudflats)  ·  world SQL  ·  — from Xiapu
+398  insert   Taimu Mountain · Fuding  →  icon:Q3322129 (Taimu Mountain)  ·  world SQL  ·  — from Fuding
+399  ok       Meizhou Island · Putian  →  wikidata:Q1297152 (Meizhou Island)  ·  exact  ·  42 km from Putian
+400  insert   Pingtan Island · Pingtan  →  icon:Q1569595 (Pingtan Island)  ·  world SQL  ·  — from Pingtan
+401  promote  Yunshuiyao · Nanjing County  →  wv:fujian-tulou-yunshuiyao-scenic-area (Yunshuiyao Scenic Area)  ·  core  ·  19 km from Nanjing County
+402  insert   Taining · Taining  →  icon:Q1375194 (Taining)  ·  world SQL  ·  — from Taining
+403  insert   Dongshan Island · Dongshan  →  icon:Q17220308 (Dongshan Island)  ·  world SQL  ·  — from Dongshan
+404  insert   Yalong Bay · Sanya  →  icon:Q8047513 (Yalong Bay)  ·  world SQL  ·  — from Sanya
+405  ok       Tianya Haijiao · Sanya  →  wikidata:Q857031 (Tianya Haijiao)  ·  exact  ·  17 km from Sanya
+406  promote  Wuzhizhou Island · Sanya  →  wikidata:Q8039419 (Wuzhizhou Island)  ·  exact  ·  27 km from Sanya
+407  promote  Nanshan Temple · Sanya  →  wikidata:Q4494941 (Nanshan Temple)  ·  exact  ·  32 km from Sanya
+408  insert   Sanya Bay · Sanya  →  icon:Q7420780 (Sanya Bay)  ·  world SQL  ·  — from Sanya
+409  insert   Dadonghai · Sanya  →  icon:Q9857467 (Dadonghai)  ·  world SQL  ·  — from Sanya
+410  insert   Haitang Bay · Sanya  →  icon:Q5639669 (Haitang Bay)  ·  world SQL  ·  — from Sanya
+411  promote  Atlantis Sanya · Sanya  →  wikidata:Q97351905 (Atlantis Sanya)  ·  exact  ·  25 km from Sanya
+412  promote  Luhuitou Park · Sanya  →  wikidata:Q10567079 (Luhuitou Park)  ·  exact  ·  9 km from Sanya
+413  insert   Yanoda Rainforest · Baoting  →  icon:Q8048924 (Yanoda Rainforest)  ·  world SQL  ·  — from Baoting
+414  promote  Qilou Old Street · Haikou  →  wv:haikou-old-qilou-streets (Old Qilou Streets)  ·  hand alias  ·  4 km from Haikou
+415  ok       Haikou Volcanic Cluster Geopark · Haikou  →  wikidata:Q8535635 (Leiqiong Global Geopark Haikou District)  ·  hand alias  ·  15 km from Haikou
+416  ok       Boao · Qionghai  →  wikidata:Q887521 (Bo'ao Forum)  ·  hand alias  ·  17 km from Qionghai
+417  insert   Wuzhishan · Wuzhishan  →  icon:wuzhishan (Wuzhishan)  ·  hand pin (forced, verify) · Wuzhishan  ·  22 km from Wuzhishan
+418  insert   Fenjiezhou Island · Lingshui  →  icon:fenjiezhou-island (Fenjiezhou Island)  ·  hand pin (approximate, verify) · Fenjiezhou Island  ·  26 km from Lingshui
+419  promote  Holiday Beach · Haikou  →  wikidata:Q15224497 (Holiday Beach)  ·  exact  ·  11 km from Haikou
+420  promote  Xinglong Tropical Botanical Garden · Wanning  →  wv:wanning-xinglong-tropical-botanical-garden (Xinglong Tropical Botanical Garden)  ·  exact  ·  6 km from Wanning
+421  promote  Shimei Bay · Wanning  →  wv:wanning-shimei-bay (Shimei Bay)  ·  exact  ·  6 km from Wanning
+423  insert   Tianmen Mountain · Zhangjiajie  →  icon:Q3861073 (Tianmen Mountain)  ·  world SQL  ·  — from Zhangjiajie  ·  REJECTED wv:dalian-tianmen-mountain-national-forest-park (Tianmen Mountain National Forest Park, Dalian) is 1653 km from Zhangjiajie
+425  ok       Zhangjiajie Glass Bridge · Zhangjiajie  →  icon:Q27925184 (Zhangjiajie Glass Bridge)  ·  world row (live)  ·  — from Zhangjiajie
+426  ok       Tianzi Mountain · Zhangjiajie  →  wikidata:Q7800262 (Tianzi Mountain)  ·  exact  ·  9 km from Zhangjiajie
+427  promote  Yuanjiajie · Zhangjiajie  →  wv:zhangjiajie-yuanjiajie (Yuanjiajie)  ·  exact  ·  12 km from Zhangjiajie
+428  insert   Furong Town · Yongshun  →  icon:Q14065235 (Furong Town)  ·  world SQL  ·  — from Yongshun
+429  ok       Orange Isle · Changsha  →  wikidata:Q11121926 (Tangerine Island)  ·  hand alias  ·  1 km from Changsha
+430  ok       Yuelu Mountain · Changsha  →  wikidata:Q1537283 (Yuelu Mountain)  ·  exact  ·  3 km from Changsha
+431  ok       Yuelu Academy · Changsha  →  wikidata:Q2037593 (Yuelu Academy)  ·  exact  ·  3 km from Changsha
+432  insert   Mount Heng Nanyue · Hengyang  →  icon:Q841750 (Mount Heng Nanyue)  ·  world SQL  ·  — from Hengyang
+433  ok       Yueyang Tower · Yueyang  →  wikidata:Q1195796 (Yueyang Tower)  ·  exact  ·  3 km from Yueyang
+434  promote  Baofeng Lake · Zhangjiajie  →  wikidata:Q4857450 (Baofeng Lake)  ·  exact  ·  9 km from Zhangjiajie
+435  insert   Yellow Dragon Cave · Zhangjiajie  →  icon:Q5925989 (Yellow Dragon Cave)  ·  wikidata · Huanglong Cave  ·  11 km from Zhangjiajie
+436  ok       Hunan Museum · Changsha  →  wikidata:Q5942029 (Hunan Provincial Museum)  ·  wikidata · Hunan Museum → existing row wikidata:Q5942029  ·  4 km from Changsha  ·  REJECTED wv:huai-an-huai-an-museum (Huai'an Museum, Huai'an) is 834 km from Changsha
+437  insert   Taiping Street · Changsha  →  icon:taiping-street (Taiping Street)  ·  osm highway/pedestrian · Taiping Street  ·  1 km from Changsha  ·  REJECTED wv:wenzhou-taiping-temple (Taiping Temple, Wenzhou) is 751 km from Changsha
+438  insert   Shaoshan · Shaoshan  →  icon:Q838542 (Shaoshan)  ·  world SQL  ·  — from Shaoshan
+439  insert   Dongting Lake · Yueyang  →  icon:Q216083 (Dongting Lake)  ·  world SQL  ·  — from Yueyang
+440  insert   Langshan · Xinning  →  icon:Q11052488 (Langshan)  ·  wikidata · Mount Langshan  ·  27 km from Xinning
+441  insert   Aizhai Bridge · Jishou  →  icon:Q2914901 (Aizhai Bridge)  ·  world SQL  ·  — from Jishou
+442  insert   Dehang Miao Village · Jishou  →  icon:dehang-miao-village (Dehang Miao Village)  ·  osm landuse/residential · 德夯苗寨  ·  19 km from Jishou
+443  insert   Qianyang Ancient City · Hongjiang  →  icon:qianyang-ancient-city (Qianyang Ancient City)  ·  osm leisure/nature_reserve · 黔阳古城  ·  26 km from Hongjiang
+444  promote  Three Gorges Dam · Yichang  →  wikidata:Q12514 (Three Gorges Dam)  ·  exact  ·  22 km from Yichang
+445  promote  Wudang Mountains · Shiyan  →  wv:shiyan-wudang-museum (Wudang Museum)  ·  core  ·  11 km from Shiyan
+446  ok       Yellow Crane Tower · Wuhan  →  wikidata:Q462372 (Yellow Crane Tower)  ·  exact  ·  2 km from Wuhan
+447  insert   East Lake · Wuhan  →  icon:Q845631 (East Lake)  ·  world SQL  ·  — from Wuhan  ·  REJECTED wikidata:Q22932533 (East Beach, Putian) is 736 km from Wuhan
+448  insert   Shennongjia · Shennongjia  →  icon:Q1359055 (Shennongjia)  ·  world SQL  ·  — from Shennongjia
+449  insert   Enshi Grand Canyon · Enshi  →  icon:Q11073016 (Enshi Grand Canyon)  ·  world SQL  ·  — from Enshi
+450  promote  Hubei Provincial Museum · Wuhan  →  wikidata:Q4902549 (Hubei Provincial Museum)  ·  exact  ·  6 km from Wuhan
+451  ok       Wuhan Yangtze River Bridge · Wuhan  →  icon:Q8039097 (Wuhan Yangtze River Bridge)  ·  world row (live)  ·  — from Wuhan
+452  insert   Hubu Alley · Wuhan  →  icon:hubu-alley (Hubu Alley)  ·  osm landuse/retail · Hubu Alley  ·  2 km from Wuhan
+453  ok       Guiyuan Temple · Wuhan  →  wikidata:Q5616939 (Guiyuan Temple)  ·  exact  ·  4 km from Wuhan
+454  promote  Wuhan University · Wuhan  →  wikidata:Q1108197 (Wuhan University)  ·  exact  ·  6 km from Wuhan
+455  insert   Jianghan Road · Wuhan  →  icon:Q11134651 (Jianghan Road)  ·  wikidata · Jianghan Road Station  ·  2 km from Wuhan
+456  insert   Tenglong Cave · Lichuan  →  icon:Q7699818 (Tenglong Cave)  ·  world SQL  ·  — from Lichuan
+457  insert   Xiling Gorge · Yichang  →  icon:xiling-gorge (Xiling Gorge)  ·  osm natural/valley · Xilin Gorge  ·  38 km from Yichang
+458  insert   Three Gorges Tribe · Yichang  →  icon:three-gorges-tribe (Three Gorges Tribe)  ·  osm leisure/nature_reserve · 三峡人家风景区  ·  11 km from Yichang
+459  insert   Jingzhou Ancient City · Jingzhou  →  icon:Q137470460 (Jingzhou Ancient City)  ·  world SQL  ·  — from Jingzhou  ·  REJECTED wv:nanning-yongzhou-ancient-city (Yongzhou Ancient City, Nanning) is 922 km from Jingzhou
+460  insert   Mulan Tianchi · Wuhan  →  icon:mulan-tianchi (Mulan Tianchi)  ·  hand pin (approximate, verify) · Mulan Tianchi  ·  67 km from Wuhan
+461  insert   Qingjiang Gallery · Changyang  →  icon:Q67015413 (Qingjiang Gallery)  ·  world SQL  ·  — from Changyang
+462  insert   Lushan · Jiujiang  →  icon:Q622616 (Lushan)  ·  world SQL  ·  — from Jiujiang  ·  REJECTED wikidata:Q11175199 (Lushan Temple, Changsha) is 274 km from Jiujiang
+463  insert   Wuyuan · Wuyuan  →  icon:Q1357710 (Wuyuan)  ·  world SQL  ·  — from Wuyuan
+464  promote  Taoxichuan Ceramic Art Avenue · Jingdezhen  →  wv:jingdezhen-taoxichuan-ceramic-art-avenue (Taoxichuan Ceramic Art Avenue)  ·  exact  ·  3 km from Jingdezhen
+465  insert   Mount Sanqing · Shangrao  →  icon:Q873358 (Mount Sanqing)  ·  world SQL  ·  — from Shangrao
+466  ok       Tengwang Pavilion · Nanchang  →  wikidata:Q1375487 (Pavilion of Prince Teng)  ·  hand alias  ·  1 km from Nanchang
+467  ok       Longhu Mountain · Yingtan  →  wikidata:Q915410 (Mount Longhu)  ·  core  ·  21 km from Yingtan
+468  insert   Poyang Lake · Jiujiang  →  icon:Q207690 (Poyang Lake)  ·  world SQL  ·  — from Jiujiang
+469  insert   Jinggangshan · Ji'an  →  icon:Q1376419 (Jinggangshan)  ·  world SQL  ·  — from Ji'an
+470  insert   Wugong Mountain · Pingxiang  →  icon:Q3322189 (Wugong Mountain)  ·  world SQL  ·  — from Pingxiang  ·  REJECTED wikidata:Q826816 (Wugong Temple, Haikou) is 914 km from Pingxiang
+471  insert   Huangling · Wuyuan  →  icon:huangling (Huangling)  ·  world SQL  ·  — from Wuyuan
+472  insert   Bayi Square · Nanchang  →  icon:Q4874536 (Bayi Square)  ·  world SQL  ·  — from Nanchang
+473  insert   Guifeng · Yiyang  →  icon:Q3382412 (Guifeng)  ·  world SQL  ·  — from Yiyang  ·  REJECTED wv:central-jiangmen-guifeng-mountain-national-forest-park (Guifeng Mountain National Forest Park, Central Jiangmen) is 790 km from Yiyang
+474  promote  Jingdezhen Ancient Kiln Folk Customs Museum · Jingdezhen  →  wv:jingdezhen-ancient-kiln-folk-customs-museum (Ancient Kiln Folk Customs Museum)  ·  hand alias  ·  2 km from Jingdezhen
+475  ok       Huangguoshu Waterfall · Anshun  →  icon:Q38432 (Huangguoshu Waterfall)  ·  world row (live)  ·  — from Anshun
+476  insert   Fanjingshan · Tongren  →  icon:Q11116077 (Fanjingshan)  ·  world SQL  ·  — from Tongren
+477  insert   Xijiang Qianhu Miao Village · Leishan  →  icon:Q17067051 (Xijiang Qianhu Miao Village)  ·  world SQL  ·  — from Leishan
+478  insert   Zhaoxing Dong Village · Liping  →  icon:zhaoxing-dong-village (Zhaoxing Dong Village)  ·  osm place/village · Zhaoxing Dong Village  ·  36 km from Liping
+479  insert   Libo Xiaoqikong · Libo  →  icon:Q14176630 (Libo Xiaoqikong)  ·  world SQL  ·  — from Libo
+480  insert   Qingyan Ancient Town · Guiyang  →  icon:qingyan-ancient-town (Qingyan Ancient Town)  ·  osm tourism/attraction · 青岩古镇  ·  28 km from Guiyang
+481  insert   Jiaxiu Tower · Guiyang  →  icon:Q15934153 (Jiaxiu Tower)  ·  wikidata · Jiaxiu Pavilion  ·  2 km from Guiyang
+482  insert   Zhenyuan Ancient Town · Zhenyuan  →  icon:zhenyuan-ancient-town (Zhenyuan Ancient Town)  ·  hand pin (forced, verify) · Zhenyuan Ancient Town  ·  10 km from Zhenyuan
+483  insert   Wanfenglin · Xingyi  →  icon:Q10865035 (Wanfenglin)  ·  world SQL  ·  — from Xingyi
+484  insert   Malinghe Canyon · Xingyi  →  icon:Q15940864 (Malinghe Canyon)  ·  wikidata · Maling River Canyon  ·  8 km from Xingyi
+485  insert   Dragon Palace Cave · Anshun  →  icon:dragon-palace-cave (Dragon Palace Cave)  ·  hand pin (forced, verify) · Dragon Palace Cave  ·  17 km from Anshun
+486  insert   Zhijin Cave · Zhijin  →  icon:Q3117185 (Zhijin Cave)  ·  world SQL  ·  — from Zhijin
+487  insert   Chishui Waterfall · Chishui  →  icon:chishui-waterfall (Chishui Waterfall)  ·  osm waterway/waterfall · Chishui Great Waterfall  ·  22 km from Chishui
+488  insert   FAST Telescope · Pingtang  →  icon:Q1827255 (FAST Telescope)  ·  world SQL  ·  — from Pingtang
+489  insert   Qianling Mountain Park · Guiyang  →  icon:Q7267643 (Qianling Mountain Park)  ·  wikidata · Qianling Mountain  ·  2 km from Guiyang
+490  insert   Hongfeng Lake · Guiyang  →  icon:Q15928338 (Hongfeng Lake)  ·  wikidata · Hongfeng reservoir  ·  29 km from Guiyang
+491  insert   Tianlong Tunbao · Anshun  →  icon:Q16901649 (Tianlong Tunbao)  ·  wikidata · Tianlong Tunbao town  ·  24 km from Anshun
+492  insert   Basha Miao Village · Congjiang  →  icon:basha-miao-village (Basha Miao Village)  ·  osm place/village · Basha Miao Village  ·  14 km from Congjiang
+493  insert   Getu River · Ziyun  →  icon:getu-river (Getu River)  ·  osm waterway/river · Getu River  ·  16 km from Ziyun
+496  promote  Crescent Lake and Mingsha Dunes · Dunhuang  →  wikidata:Q11174373 (Singing Sand Dunes and Crescent Lake)  ·  hand alias  ·  5 km from Dunhuang
+497  insert   Jiayuguan Pass · Jiayuguan  →  icon:Q1193122 (Jiayuguan Pass)  ·  world SQL  ·  — from Jiayuguan
+498  insert   Labrang Monastery · Xiahe  →  icon:Q1799533 (Labrang Monastery)  ·  world SQL  ·  — from Xiahe
+499  ok       Maijishan Grottoes · Tianshui  →  wikidata:Q1885375 (Maijishan Grottoes)  ·  exact  ·  12 km from Tianshui
+500  insert   Qinghai Lake · Gonghe  →  icon:Q201294 (Qinghai Lake)  ·  world SQL  ·  — from Gonghe
+501  insert   Chaka Salt Lake · Ulan  →  icon:Q10504375 (Chaka Salt Lake)  ·  world SQL  ·  — from Ulan
+502  ok       Kumbum Monastery · Xining  →  wikidata:Q1791988 (Kumbum Monastery)  ·  exact  ·  39 km from Xining
+503  insert   Shapotou · Zhongwei  →  icon:Q10872579 (Shapotou)  ·  wikidata · Shapotou Scenic Area  ·  69 km from Zhongwei
+504  promote  Yadan National Geopark · Dunhuang  →  wikidata:Q11079378 (Yardang National Geopark)  ·  fuzzy:yardang national geopark  ·  143 km from Dunhuang
+505  insert   Yumen Pass · Dunhuang  →  icon:Q1324562 (Yumen Pass)  ·  world SQL  ·  — from Dunhuang
+506  ok       Bingling Temple Grottoes · Yongjing  →  icon:Q259336 (Bingling Temple)  ·  world row (live)  ·  — from Yongjing
+507  insert   Zhongshan Bridge · Lanzhou  →  icon:Q197892 (Zhongshan Bridge)  ·  world SQL  ·  — from Lanzhou
+508  promote  Waterwheel Garden · Lanzhou  →  wv:lanzhou-waterwheel-garden (Waterwheel Garden)  ·  exact  ·  2 km from Lanzhou
+509  insert   Zhuoer Mountain · Qilian  →  icon:zhuoer-mountain (Zhuoer Mountain)  ·  osm natural/peak · 卓尔山  ·  37 km from Qilian
+510  insert   Mati Temple · Zhangye  →  icon:Q1495655 (Mati Temple)  ·  world SQL  ·  — from Zhangye
+511  insert   Guide National Geopark · Guide  →  icon:guide-national-geopark (Guide National Geopark)  ·  osm tourism/attraction · 贵德国家地质公园  ·  21 km from Guide
+512  insert   Menyuan Rapeseed Fields · Menyuan  →  icon:menyuan-rapeseed-fields (Menyuan Rapeseed Fields)  ·  hand pin (approximate, verify) · Menyuan Rapeseed Fields  ·  13 km from Menyuan
+513  ok       Dongguan Mosque · Xining  →  icon:Q3091905 (Dongguan Mosque)  ·  world row (live)  ·  — from Xining
+514  insert   Sand Lake · Shizuishan  →  icon:sand-lake (Sand Lake)  ·  osm natural/water · 沙湖  ·  20 km from Shizuishan  ·  REJECTED wikidata:Q199786 (Swan Lake, Hefei) is 1264 km from Shizuishan
+515  ok       Western Xia Imperial Tombs · Yinchuan  →  wikidata:Q1069411 (Xixia Wangling National Park)  ·  wikidata · Western Xia Mausoleums → existing row wikidata:Q1069411  ·  22 km from Yinchuan
+516  ok       Helan Mountain Rock Art · Yinchuan  →  wikidata:Q20064097 (Helan Mountain Rock Art)  ·  exact  ·  34 km from Yinchuan
+517  insert   Zhenbeibu Western Film Studio · Yinchuan  →  icon:Q15897600 (Zhenbeibu Western Film Studio)  ·  wikidata · Zhenbeibu China West Film Studio  ·  20 km from Yinchuan
+518  insert   Langmusi · Luqu  →  icon:Q13990333 (Langmusi)  ·  world SQL  ·  — from Luqu
+519  insert   Zhagana · Diebu  →  icon:Q124576141 (Zhagana)  ·  world SQL  ·  — from Diebu
+520  insert   Kashgar Old City · Kashgar  →  icon:Q85877720 (Kashgar Old City)  ·  world SQL  ·  — from Kashgar
+521  ok       Id Kah Mosque · Kashgar  →  wikidata:Q1325825 (Id Kah Mosque)  ·  exact  ·  1 km from Kashgar
+522  insert   Heavenly Lake of Tianshan · Fukang  →  icon:Q965252 (Heavenly Lake of Tianshan)  ·  world SQL  ·  — from Fukang
+523  insert   Kanas Lake · Burqin  →  icon:Q1723644 (Kanas Lake)  ·  world SQL  ·  — from Burqin
+524  insert   Flaming Mountains · Turpan  →  icon:Q508454 (Flaming Mountains)  ·  world SQL  ·  — from Turpan
+525  insert   Sayram Lake · Bortala  →  icon:Q2410894 (Sayram Lake)  ·  world SQL  ·  — from Bortala
+526  ok       Urumqi International Grand Bazaar · Urumqi  →  wikidata:Q5594309 (Grand Bazaar)  ·  hand alias  ·  1 km from Urumqi
+527  ok       Jiaohe Ruins · Turpan  →  wikidata:Q1330939 (Yarghol Ancient City)  ·  hand alias  ·  28 km from Turpan
+528  promote  Grape Valley · Turpan  →  wikidata:Q13846598 (Grape Valley)  ·  exact  ·  19 km from Turpan
+529  insert   Karakul Lake · Akto  →  icon:Q1071180 (Karakul Lake)  ·  world SQL  ·  — from Akto
+530  insert   Bayanbulak Grassland · Hejing  →  icon:Q11059361 (Bayanbulak Grassland)  ·  world SQL  ·  — from Hejing
+531  insert   Narat Grassland · Xinyuan  →  icon:Q18663297 (Narat Grassland)  ·  wikidata · 那拉提景区  ·  48 km from Xinyuan
+532  insert   Hemu Village · Burqin  →  icon:Q14162264 (Hemu Village)  ·  world SQL  ·  — from Burqin
+533  insert   Tashkurgan Stone City · Tashkurgan  →  icon:Q17006509 (Tashkurgan Stone City)  ·  world SQL  ·  — from Tashkurgan
+534  insert   Karakoram Highway · Tashkurgan  →  icon:karakoram-highway (Karakoram Highway)  ·  world SQL  ·  — from Tashkurgan
+535  insert   Kalajun Grassland · Tekes  →  icon:kalajun-grassland (Kalajun Grassland)  ·  osm highway/service · Kalajun Grassland Shuttle Bus Road  ·  34 km from Tekes
+536  insert   Duku Highway · Dushanzi  →  icon:duku-highway (Duku Highway)  ·  hand pin (forced, verify) · Duku Highway  ·  4 km from Dushanzi
+537  insert   Wucaitan Rainbow Beach · Burqin  →  icon:wucaitan-rainbow-beach (Wucaitan Rainbow Beach)  ·  osm natural/bare_rock · 五彩滩  ·  72 km from Burqin
+538  ok       Kizil Caves · Baicheng  →  icon:Q1234019 (Kizil Caves)  ·  world row (live)  ·  — from Baicheng
+539  insert   Urho Ghost City · Karamay  →  icon:urho-ghost-city (Urho Ghost City)  ·  osm leisure/park · World Ghost Town Scenic Area  ·  90 km from Karamay
+540  insert   Taklamakan Desert Highway · Minfeng  →  icon:taklamakan-desert-highway (Taklamakan Desert Highway)  ·  osm highway/rest_area · 塔里木沙漠公路  ·  38 km from Minfeng
+541  insert   Tianshan Grand Canyon · Kuqa  →  icon:tianshan-grand-canyon (Tianshan Grand Canyon)  ·  osm tourism/attraction · Kuqa Grand Canyon  ·  46 km from Kuqa
+542  ok       Apak Hoja Tomb · Kashgar  →  wikidata:Q617328 (Tomb of Apak Hoja)  ·  hand alias  ·  4 km from Kashgar
+543  insert   Yili Lavender Fields · Huocheng  →  icon:yili-lavender-fields (Yili Lavender Fields)  ·  osm leisure/garden · 解忧公主薰衣草园  ·  23 km from Huocheng
+544  ok       Bezeklik Thousand Buddha Caves · Turpan  →  wikidata:Q980774 (Bezeklik Thousand Buddha Caves)  ·  exact  ·  11 km from Turpan
+545  ok       Emin Minaret · Turpan  →  wikidata:Q674778 (Emin Minaret)  ·  exact  ·  16 km from Turpan
+546  ok       Potala Palace · Lhasa  →  icon:Q71229 (Potala Palace)  ·  exact  ·  2 km from Lhasa
+547  ok       Jokhang Temple · Lhasa  →  wikidata:Q735914 (Jokhang Temple)  ·  exact  ·  0 km from Lhasa
+548  promote  Barkhor Street · Lhasa  →  wikidata:Q808281 (Barkhor Street)  ·  exact  ·  0 km from Lhasa
+549  insert   Namtso Lake · Damxung  →  icon:Q651294 (Namtso Lake)  ·  world SQL  ·  — from Damxung
+550  insert   Yamdrok Lake · Nagarze  →  icon:Q939604 (Yamdrok Lake)  ·  world SQL  ·  — from Nagarze
+551  ok       Sera Monastery · Lhasa  →  wikidata:Q124848 (Sera Monastery)  ·  exact  ·  5 km from Lhasa
+562  insert   Lake Manasarovar · Burang  →  icon:Q233627 (Lake Manasarovar)  ·  world SQL  ·  — from Burang
+563  insert   Karola Glacier · Nagarze  →  icon:karola-glacier (Karola Glacier)  ·  osm natural/glacier · 卡若拉冰川  ·  24 km from Nagarze
+564  insert   Gyantse Kumbum · Gyantse  →  icon:Q1785045 (Gyantse Kumbum)  ·  world SQL  ·  — from Gyantse
+565  ok       Tibet Museum · Lhasa  →  wikidata:Q1139682 (Tibet Museum)  ·  exact  ·  3 km from Lhasa
+566  insert   Guge Kingdom Ruins · Zanda  →  icon:guge-kingdom-ruins (Guge Kingdom Ruins)  ·  osm historic/ruins · Tsaparang  ·  13 km from Zanda
+567  insert   Hulunbuir Grassland · Hulunbuir  →  icon:hulunbuir-grassland (Hulunbuir Grassland)  ·  hand pin (forced, verify) · Hulunbuir Grassland  ·  14 km from Hulunbuir
+568  insert   Xiangshawan · Ordos  →  icon:Q42310009 (Xiangshawan)  ·  wikidata · Xiangshawan  ·  131 km from Ordos
+569  ok       Genghis Khan Mausoleum · Ordos  →  wikidata:Q3301848 (Mausoleum of Genghis Khan)  ·  wikidata · Mausoleum of Genghis Khan → existing row wikidata:Q3301848  ·  84 km from Ordos
+570  ok       Dazhao Temple · Hohhot  →  wikidata:Q1179294 (Da Zhao Temple)  ·  fuzzy:da zhao temple  ·  4 km from Hohhot
+571  insert   Arxan National Forest Park · Arxan  →  icon:arxan-national-forest-park (Arxan National Forest Park)  ·  osm boundary/national_park · 阿尔山国家森林公园  ·  1 km from Arxan
+572  insert   Xilamuren Grassland · Hohhot  →  icon:xilamuren-grassland (Xilamuren Grassland)  ·  osm natural/grassland · 希拉穆仁草原  ·  78 km from Hohhot
+573  insert   Matryoshka Square · Manzhouli  →  icon:matryoshka-square (Matryoshka Square)  ·  osm place/square · Manzhouli Matryoshka Square  ·  4 km from Manzhouli
+574  insert   Enhe Russian Ethnic Township · Ergun  →  icon:Q763813 (Enhe Russian Ethnic Township)  ·  world SQL  ·  — from Ergun
+575  insert   Badain Jaran Desert · Alxa  →  icon:Q939033 (Badain Jaran Desert)  ·  world SQL  ·  — from Alxa
+576  insert   Ejina Populus Euphratica Forest · Ejina  →  icon:ejina-populus-euphratica-forest (Ejina Populus Euphratica Forest)  ·  osm leisure/nature_reserve · Ejina Populus Euphratica Forest Scenic Area  ·  4 km from Ejina
+577  ok       Inner Mongolia Museum · Hohhot  →  wikidata:Q13410768 (Inner Mongolia Museum)  ·  exact  ·  4 km from Hohhot
+578  insert   Wulanbutong Grassland · Chifeng  →  icon:wulanbutong-grassland (Wulanbutong Grassland)  ·  hand pin (approximate, verify) · Wulanbutong Grassland  ·  188 km from Chifeng
+579  insert   Wudangzhao Monastery · Baotou  →  icon:Q2594698 (Wudangzhao Monastery)  ·  world SQL  ·  — from Baotou
+580  ok       Xanadu · Zhenglan Banner  →  icon:Q471765 (Xanadu)  ·  world row (live)  ·  — from Zhenglan Banner
+581  insert   Asihatu Stone Forest · Chifeng  →  icon:asihatu-stone-forest (Asihatu Stone Forest)  ·  world SQL  ·  — from Chifeng
+582  insert   Harbin Ice and Snow World · Harbin  →  icon:Q10895490 (Harbin Ice and Snow World)  ·  world SQL  ·  — from Harbin
+583  ok       Saint Sophia Cathedral · Harbin  →  icon:Q1632027 (Saint Sophia Cathedral in Harbin)  ·  world row (live)  ·  — from Harbin
+584  promote  Central Street · Harbin  →  wv:harbin-zhongyang-dajie (Zhongyang Dajie)  ·  hand alias  ·  1 km from Harbin
+585  insert   China Snow Town · Hailin  →  icon:Q97610105 (China Snow Town)  ·  world SQL  ·  — from Hailin
+586  insert   Changbai Mountain · Antu  →  icon:Q107635 (Changbai Mountain)  ·  world SQL  ·  — from Antu
+587  ok       Puppet Emperor's Palace · Changchun  →  wikidata:Q83332 (Museum of the Imperial Palace of Manchukuo)  ·  hand alias  ·  5 km from Changchun
+588  insert   Shenyang Imperial Palace · Shenyang  →  icon:Q14220289 (Shenyang Imperial Palace)  ·  wikidata · Imperial Palace in Shenyang  ·  1 km from Shenyang
+589  ok       Xinghai Square · Dalian  →  wikidata:Q6136716 (Xinghai Plaza)  ·  hand alias  ·  50 km from Dalian
+590  insert   Yalu River Broken Bridge · Dandong  →  icon:Q11174479 (Yalu River Broken Bridge)  ·  wikidata · Yalu River Broken Bridge  ·  1 km from Dandong
+591  promote  Sun Island · Harbin  →  wikidata:Q22928030 (Sun Island)  ·  exact  ·  2 km from Harbin
+592  insert   Yabuli Ski Resort · Shangzhi  →  icon:Q1005993 (Yabuli Ski Resort)  ·  world SQL  ·  — from Shangzhi
+593  insert   Harbin Polarland · Harbin  →  icon:harbin-polarland (Harbin Polarland)  ·  osm tourism/attraction · Harbin Polarland  ·  3 km from Harbin
+594  insert   Jingpo Lake · Mudanjiang  →  icon:Q716287 (Jingpo Lake)  ·  world SQL  ·  — from Mudanjiang
+595  insert   Wudalianchi · Wudalianchi  →  icon:Q1362976 (Wudalianchi)  ·  world SQL  ·  — from Wudalianchi
+596  insert   Rime Island · Jilin  →  icon:rime-island (Rime Island)  ·  osm tourism/viewpoint · 雾淞岛  ·  33 km from Jilin
+597  promote  Jingyuetan · Changchun  →  wikidata:Q14219794 (Jingyuetan National Forest Park)  ·  core  ·  13 km from Changchun
+598  promote  Zhang Zuolin Mansion · Shenyang  →  wikidata:Q11138922 (Former residence of Zhang Xueliang)  ·  hand alias  ·  2 km from Shenyang
+599  insert   Zhongjie Pedestrian Street · Shenyang  →  icon:Q1840078 (Zhongjie Pedestrian Street)  ·  world SQL  ·  — from Shenyang
+600  insert   Binhai Road · Dalian  →  icon:binhai-road (Binhai Road)  ·  osm highway/trunk · Binhai East Road  ·  7 km from Dalian
+601  promote  Tiger Beach Ocean Park · Dalian  →  wv:dalian-tiger-beach-ocean-park (Tiger Beach Ocean Park)  ·  exact  ·  7 km from Dalian
+602  promote  Discoveryland · Dalian  →  wikidata:Q5210918 (Dalian Discovery Kingdom)  ·  hand pin (wikidata) · Dalian Discovery Kingdom → existing row wikidata:Q5210918  ·  37 km from Dalian
+603  promote  Jinshitan · Dalian  →  wv:dalian-jinshitan-national-resort (Jinshitan National Resort)  ·  hand alias  ·  82 km from Dalian
+604  insert   Hushan Great Wall · Dandong  →  icon:Q1190340 (Hushan Great Wall)  ·  world SQL  ·  — from Dandong
+605  insert   Jade Buddha Palace · Anshan  →  icon:Q17040650 (Jade Buddha Palace)  ·  world SQL  ·  — from Anshan
+606  insert   Benxi Water Cave · Benxi  →  icon:Q384072 (Benxi Water Cave)  ·  world SQL  ·  — from Benxi
+607  insert   Qianshan · Anshan  →  icon:Q10904882 (Qianshan)  ·  wikidata · Qianshan  ·  37 km from Anshan
+608  promote  Lüshun · Dalian  →  wikidata:Q5944378 (Lüshun Museum)  ·  core  ·  37 km from Dalian
+609  insert   Xingcheng Ancient City · Huludao  →  icon:Q15902061 (Xingcheng Ancient City)  ·  world SQL  ·  — from Huludao
+610  insert   Arctic Village · Mohe  →  icon:Q10903106 (Arctic Village)  ·  wikidata · Beiji Village  ·  71 km from Mohe
+611  insert   Ji'an Koguryo Sites · Ji'an  →  icon:Q5371879 (Ji'an Koguryo Sites)  ·  world SQL  ·  — from Ji'an

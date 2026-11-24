@@ -1,0 +1,195 @@
+{
+ "Discoveryland": {
+  "qid": "Q5210918"
+ },
+ "Mount Wutai": {
+  "qid": "Q120314"
+ },
+ "Mount Heng": {
+  "lat": 39.6689,
+  "lng": 113.7403,
+  "force": true,
+  "radius": 3000
+ },
+ "Jingshan Park": {
+  "qid": "Q734499"
+ },
+ "Shanhaiguan Old Dragon's Head": {
+  "lat": 39.9667,
+  "lng": 119.796
+ },
+ "Beidaihe Beach": {
+  "lat": 39.82,
+  "lng": 119.52,
+  "force": true,
+  "radius": 3000
+ },
+ "Tianjin Porcelain House": {
+  "lat": 39.1231,
+  "lng": 117.2001
+ },
+ "Lu Xun's Hometown": {
+  "lat": 29.9947,
+  "lng": 120.5855
+ },
+ "Tunxi Old Street": {
+  "lat": 29.7128,
+  "lng": 118.3092
+ },
+ "Datong City Wall": {
+  "lat": 40.0909,
+  "lng": 113.3
+ },
+ "Qingdao Polar Ocean World": {
+  "lat": 36.069,
+  "lng": 120.4716
+ },
+ "Nanshan Yikeshu Viewpoint": {
+  "lat": 29.5411,
+  "lng": 106.6054
+ },
+ "Bipenggou": {
+  "lat": 31.575,
+  "lng": 102.943
+ },
+ "Langzhong Ancient City": {
+  "lat": 31.5581,
+  "lng": 105.978
+ },
+ "Danba Tibetan Villages": {
+  "lat": 30.915,
+  "lng": 101.893
+ },
+ "Dukezong Old Town": {
+  "lat": 27.818,
+  "lng": 99.708
+ },
+ "Shaxi Old Town": {
+  "lat": 26.322,
+  "lng": 99.847
+ },
+ "Luoping Canola Fields": {
+  "lat": 24.943,
+  "lng": 104.36
+ },
+ "Two Rivers and Four Lakes": {
+  "lat": 25.274,
+  "lng": 110.293
+ },
+ "Quanzhou West Street": {
+  "lat": 24.9145,
+  "lng": 118.583,
+  "force": true,
+  "radius": 600
+ },
+ "Fenjiezhou Island": {
+  "lat": 18.579,
+  "lng": 110.194
+ },
+ "Yellow Dragon Cave": {
+  "lat": 29.332,
+  "lng": 110.603
+ },
+ "Dehang Miao Village": {
+  "lat": 28.376,
+  "lng": 109.597
+ },
+ "Qianyang Ancient City": {
+  "lat": 27.188,
+  "lng": 109.969
+ },
+ "Xiling Gorge": {
+  "lat": 30.84,
+  "lng": 111.05
+ },
+ "Three Gorges Tribe": {
+  "lat": 30.826,
+  "lng": 111.041
+ },
+ "Mulan Tianchi": {
+  "lat": 31.142,
+  "lng": 114.51
+ },
+ "Zhaoxing Dong Village": {
+  "lat": 25.879,
+  "lng": 109.175
+ },
+ "Basha Miao Village": {
+  "lat": 25.723,
+  "lng": 108.893
+ },
+ "Menyuan Rapeseed Fields": {
+  "lat": 37.376,
+  "lng": 101.618
+ },
+ "Wulanbutong Grassland": {
+  "lat": 42.396,
+  "lng": 116.998
+ },
+ "Marco Polo Bridge": {
+  "qid": "Q219230"
+ },
+ "Huizhou Ancient City": {
+  "lat": 29.8673,
+  "lng": 118.4358,
+  "force": true,
+  "radius": 800
+ },
+ "Baohe Park": {
+  "lat": 31.8485,
+  "lng": 117.292,
+  "force": true,
+  "radius": 800
+ },
+ "Daocheng Yading": {
+  "lat": 28.433,
+  "lng": 100.33,
+  "force": true,
+  "radius": 8000
+ },
+ "Wuzhishan": {
+  "lat": 18.899,
+  "lng": 109.673,
+  "force": true,
+  "radius": 4000
+ },
+ "Zhenyuan Ancient Town": {
+  "lat": 27.0497,
+  "lng": 108.4277,
+  "force": true,
+  "radius": 1200
+ },
+ "Dragon Palace Cave": {
+  "lat": 26.103,
+  "lng": 105.948,
+  "force": true,
+  "radius": 3000
+ },
+ "Duku Highway": {
+  "lat": 44.296,
+  "lng": 84.855,
+  "force": true,
+  "radius": 6000
+ },
+ "Hulunbuir Grassland": {
+  "lat": 49.3,
+  "lng": 119.6,
+  "force": true,
+  "radius": 8000
+ },
+ "Tianzhu Mountain": {
+  "lat": 30.72,
+  "lng": 116.45,
+  "force": true,
+  "radius": 5000
+ },
+ "Qiao Family Compound": {
+  "qid": "Q1297236"
+ },
+ "Hengdian World Studios": {
+  "lat": 29.155,
+  "lng": 120.3,
+  "force": true,
+  "radius": 2500
+ }
+}
