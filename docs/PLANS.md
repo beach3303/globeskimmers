@@ -78,6 +78,21 @@ Novelty · Local · All by region · To draw ✓), plus the Tourist (871) and No
 draw first); when art lands, one SQL file (promotions + inserts) as the world tracker did. Honest note: the PH and CN tiers
 were curated by fame, not measured visits; the US Tourist tier is the first with published counts attached.
 
+
+## China stamp series — founder 2026-11-22/23 — DRAWN, review done, upload + SQL in her hands
+
+The founder drew the China list in Grok: 562 of 611 arrived 11-23 as zips in ~/Downloads (`subtle_fixes_01…46`, `china_stamps_batch47…58`),
+squared to `Claude outputs/stamp-ready/` (transparent background kept). Her rule (11-22): review everything at the end, one list.
+**The concerns list (11-23):** 017 Universal Beijing Resort (Universal globe), 060 Shanghai Disneyland (castle), 602 Discoveryland
+Dalian (Disney-shaped castle, soft), 429 Orange Isle (Young Mao sculpture — a political portrait, her call). Everything else clear.
+**Not drawn:** 31 that already have world-set art; **batch 53 (552–561, Tibet) — no zip in Downloads**; 8 Grok skipped (066, 090, 099,
+104, 119, 124, 134, 343). **Her steps:** `zsh "Claude outputs/stamp-ready/upload.sh"` (558 files; the 4 concerns + Potala/Jokhang held
+in hold.json) and `npx wrangler d1 execute globeskimmers-attractions --remote --file=scripts/stamp-art/china/d1-china-stamps.sql`
+(116 promotions + 279 inserts; 24 pins are Claude's from the map, marked "verify" in review-rows.txt). **Decisions open:** swap the
+live Potala Palace / Jokhang Temple for the new series look (backups kept); the four redraws; batch 53. App side committed 11-23
+(`src/lib/stampArtChina.js`, consulted before the old index) — needs a push + OTA for rows whose database name differs from the file.
+Ledger: `scripts/stamp-art/china/review-batches.md`.
+
 ## A friend's four reports — 2026-11-21 (LIVE on phones via OTA 1.0.2611210829; verification signals still to land in D1)
 
 **Mail white screen — 2026-11-22 (FIXED, committed 454c1b2 + f431f9e + a1d0547, NOT pushed; OTA pending).** A postcard from a
