@@ -101,5 +101,53 @@ Squared and matched. No concerns.
 Rows still needed from this batch: Baohe Park, Huizhou Ancient City, Tangyue Memorial Archways, Tunxi Old Street (hand pins); Langya Mountain, Mount Jiuhua, Shenxianju, South Lake, Tiantai Mountain, Xidi, Zhujiajian (all in d1-world-rows.sql).
 Cosmetic: 148 Mount Qiyun — "Art 2026" is broken ("Art 2  026"). Optional.
 
+## Batch 10 — the zip drop (everything) — 2026-11-23 — 562 stamps
+The founder exported the whole run from Grok as zips in ~/Downloads: `subtle_fixes_01…46.zip` (inner folders batch01–batch46,
+re-renders of 001–489 with small fixes — the 19:51 `subtle_fixes_01 (3)` supersedes the 11:58 copies) and
+`china_stamps_batch47…58.zip` (490–611). 562 PNGs, every file already named with the list's own file name, transparent
+background (~850–1150 px). They replace the 140 pasted stamps (batches 1–9, kept in the session scratchpad). Squared with
+sharp (`square.mjs`, background stays clear), all 562 matched exactly; contact sheets (`contact-sheets.mjs`, 47 sheets) read
+end to end.
+
+**Not in the drop (49):** 31 famous places that already have art from the world set (Great Wall, Forbidden City, Temple of
+Heaven, Summer Palace, The Bund, Oriental Pearl Tower, West Lake, Huangshan, Hongcun, Terracotta Army, Mount Hua, Pingyao,
+Yungang, Hanging Temple, Longmen, Mount Tai, Chengdu Panda Base, Leshan, Jiuzhaigou, Mount Emei, Lijiang, Stone Forest,
+Yuanyang, Li River, Reed Flute Cave, Detian Falls, Mount Wuyi, Fenghuang, Mogao, Zhangye Danxia, Zhangjiajie NFP);
+**batch 53 (552–561, Tibet: Drepung, Tashilhunpo, Everest Base Camp, Mount Kailash, Norbulingka, Ganden, Samye, Lulang,
+Basum Tso, Yarlung Tsangpo) has no zip in Downloads**; and 8 never came out of Grok (066 People's Square, 090 Lingering
+Garden, 099 Lingshan Grand Buddha, 104 Hanshan Temple, 119 Leifeng Pagoda, 124 Wuzhen, 134 Yandang Mountain, 343 Danxia
+Mountain — their batch folders hold 8–9 files).
+
+**Already live from the world set, redrawn here:** 546 Potala Palace, 547 Jokhang Temple. The live files are backed up in
+`replaced-live/`; the new ones sit in `hold.json` until the founder picks (comparison sheet shown 11-23). If she takes the
+new ones: remove them from hold.json, add both to REDRAWN "2026-11-22" in src/lib/stampArt.js, re-run intake.
+
+| No. | Stamp | Concern | Note |
+|---|---|---|---|
+| 017 | Universal Beijing Resort | **trademark** — still the Universal globe (the zip version is a re-render, same centrepiece) | redraw without the globe: the gate, the Jurassic gate, the skyline of the park |
+| 060 | Shanghai Disneyland | **trademark** — still the Enchanted Storybook Castle silhouette with fireworks | redraw: the lakeside, the Mickey-less gardens, a parade float without characters, or the park's gate |
+| 602 | Discoveryland (Dalian) | **castle silhouette, softer case** — the park's own castle copies the Disney one; the stamp's blue-turreted castle reads as the same shape | optional redraw: the ferris wheel and carousel without the castle |
+| 429 | Orange Isle (Changsha) | **political portrait — founder's call, not copyright** — the 32 m Young Mao Zedong sculpture (2009) is the island's landmark; outdoor public art may be reproduced under PRC copyright law, but the stamp is a political portrait | keep (it is what the place is) or redraw: the island tip, the orange groves, the fireworks |
+
+Not concerns, noted: 373 Fisher Girl Statue (1982 public sculpture, the city's own emblem — outdoor art, fine); 348 Window of
+the World (replicas of the Eiffel Tower, Arc de Triomphe, pyramids — the park's real exhibits, public-domain monuments);
+350 / 344 / 345 Chimelong (the park name only, no logo); 212 Tsingtao Beer Museum (a generic mug, no Tsingtao mark);
+411 Atlantis Sanya (the building silhouette only); 262 Jianmen Pass (a torch shape, not the Olympic torch); 356 Sun Yat-sen
+Memorial Hall and 438 Shaoshan (buildings only, no portraits); 399 Meizhou Island (the Mazu statue, religious monument).
+
+Cosmetic, optional: 156 Big Wild Goose Pagoda still a Canada goose; a run of shapes are animals that do not live in China
+(475 toucan, 479 bulldog, 481 kiwi, 433 kangaroo, 445 raccoon, 450 armadillo, 440 skunk, 439 walrus, 411 sea otter,
+448 anteater, 435 crocodile, 608 puffin) — the founder chose varied shapes for China, so these stay unless she minds.
+
+Rows: see `d1-china-stamps.sql` + `review-rows.txt` (resolve_rows.py, 11-23) — one SQL for every promotion and insert,
+hand pins listed at its head.
+
+## The concerns list (for the founder, 2026-11-23)
+1. **017 Universal Beijing Resort** — the Universal globe. Redraw without it.
+2. **060 Shanghai Disneyland** — the castle. Redraw without it.
+3. **602 Discoveryland, Dalian** — a Disney-shaped castle. Softer case; redraw if you want to be safe.
+4. **429 Orange Isle, Changsha** — the Young Mao sculpture. Not a copyright problem; a political portrait, your call.
+Everything else is clear.
+
 ## Running totals
-Batches 9 · stamps 140 · concerns 2
+Batches 10 · stamps 562 (the zip drop replaces the 140 pasted) · concerns 2 firm + 1 soft + 1 founder's call
