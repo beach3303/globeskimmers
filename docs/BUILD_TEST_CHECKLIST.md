@@ -5339,6 +5339,9 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - FOUNDER RUNS (nothing touched the server):
     zsh "Claude outputs/stamp-ready/upload.sh"                                                         — 558 files → R2
     npx wrangler d1 execute globeskimmers-attractions --remote --file=scripts/stamp-art/china/d1-china-stamps.sql
+  2026-11-24 update: her first upload.sh run failed (`zsh:1: command not found: put` — a zsh function does not reach
+  xargs' children; fixed in `c794109`, the put is inline). She was away, so Claude ran the fixed script: **558 of 558 live**
+  on the server (PNG, byte sizes match the local files). The D1 line was refused by the permission gate — **still hers to run.**
   Decisions: Potala Palace + Jokhang Temple are live from the world set — new ones HELD (backups in
   scripts/stamp-art/china/replaced-live/; to swap: remove from hold.json, add to REDRAWN "2026-11-22", re-run intake);
   the four concern redraws (drop the new PNGs in the inbox under the same names, remove from hold.json, re-run intake);

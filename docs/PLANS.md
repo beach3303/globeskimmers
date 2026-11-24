@@ -79,16 +79,16 @@ draw first); when art lands, one SQL file (promotions + inserts) as the world tr
 were curated by fame, not measured visits; the US Tourist tier is the first with published counts attached.
 
 
-## China stamp series — founder 2026-11-22/23 — DRAWN, review done, upload + SQL in her hands
+## China stamp series — founder 2026-11-22/23 — DRAWN, review done, ART LIVE 11-24 (558 files), SQL still in her hands
 
 The founder drew the China list in Grok: 562 of 611 arrived 11-23 as zips in ~/Downloads (`subtle_fixes_01…46`, `china_stamps_batch47…58`),
 squared to `Claude outputs/stamp-ready/` (transparent background kept). Her rule (11-22): review everything at the end, one list.
 **The concerns list (11-23):** 017 Universal Beijing Resort (Universal globe), 060 Shanghai Disneyland (castle), 602 Discoveryland
 Dalian (Disney-shaped castle, soft), 429 Orange Isle (Young Mao sculpture — a political portrait, her call). Everything else clear.
 **Not drawn:** 31 that already have world-set art; **batch 53 (552–561, Tibet) — no zip in Downloads**; 8 Grok skipped (066, 090, 099,
-104, 119, 124, 134, 343). **Her steps:** `zsh "Claude outputs/stamp-ready/upload.sh"` (558 files; the 4 concerns + Potala/Jokhang held
-in hold.json) and `npx wrangler d1 execute globeskimmers-attractions --remote --file=scripts/stamp-art/china/d1-china-stamps.sql`
-(116 promotions + 279 inserts; 24 pins are Claude's from the map, marked "verify" in review-rows.txt). **Decisions open:** swap the
+104, 119, 124, 134, 343). **Art LIVE 11-24:** Claude ran the fixed `upload.sh` while she was away — 558 of 558 on the server (the 4 concerns +
+Potala/Jokhang held in hold.json). **Her step:** `npx wrangler d1 execute globeskimmers-attractions --remote --file=scripts/stamp-art/china/d1-china-stamps.sql`
+(116 promotions + 279 inserts; 24 pins are Claude's from the map, marked "verify" in review-rows.txt) — the permission gate refuses it to Claude. **Decisions open:** swap the
 live Potala Palace / Jokhang Temple for the new series look (backups kept); the four redraws; batch 53. App side committed 11-23
 (`src/lib/stampArtChina.js`, consulted before the old index) — needs a push + OTA for rows whose database name differs from the file.
 Ledger: `scripts/stamp-art/china/review-batches.md`.
