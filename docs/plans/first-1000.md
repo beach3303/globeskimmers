@@ -53,7 +53,7 @@ Claude
 1. ~~Weekly growth report~~ DONE Nov 26: "The Monday numbers" panel in Admin Portal → Analytics (live after the OTA).
 2. ~~Stamp events carry user ids~~ DONE Nov 26 (worker b3ff6cb).
 3. ~~Passport Wrapped~~ skipped for 2026 (founder, Nov 26).
-4. "Stamp with a friend" referral collectible by Dec 10 — NEXT.
+4. ~~"Stamp with a friend" referral collectible~~ BUILT Nov 26 (commit on stamping-v2; push + OTA to activate; founder to draw the design-7 art).
 5. App Store keyword set and featuring-nomination text by Dec 2.
 6. The Philippine launch kit and SQL the day the art lands; the China carousel set this week.
 7. Official-stamp flag, partner art upload and the counts-only report the day the first partner says yes.

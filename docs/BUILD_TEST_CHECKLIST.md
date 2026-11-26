@@ -5368,3 +5368,19 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   the route answers 401 without a token (deployed). Gates: node --check ✓, eslint ✓, build ✓, boot-check ✓.
 - **Activate:** `npm run ota` (the panel is in the app bundle; the same OTA carries the China art index, the PH guards and the header).
 
+### 2026-11-26 ~15:10 — Stamp with a friend (referral collectible) — COMMITTED, NOT PUSHED
+- Invite button (Profile → Your code, Mailbox, Circle) now shares a CLAIMABLE invite link (`links/create` kind 'invite', `/m/<code>`),
+  text ends "Stamp your first place and we both earn a collectible 🏅". Falls back to the /p/ link if the invite can't be made.
+- Claim (deep link or typed code in the Mailbox): kind 'invite' → `api.referrals` row (new accounts only, ≤30 days; one referrer ever),
+  toast "You're in 🏅 …", lands on the Passport. Teens may claim invites; postcards/telegrams still open at 18.
+- First stamp of a referred member (`refMaybeAward` after `ppUpsertStamp`) → collectible design 7 "Stamp with a friend" (source 'friend',
+  unique per member) for BOTH; `referrals.awarded_at`; push to the inviter (kind 'follows', default on); founder bell; events
+  `referral_recorded` / `referral_awarded` (with user_id). The City Boards draw is pinned to designs 1–6 (`CB_BOARD_BADGES`).
+- `/collectibles` returns every source (+`source`); the Passport shows the friend reward once (localStorage `gs_cb_seen`);
+  CollectibleReward has friend copy. Placeholder art `src/assets/collectibles/cb-7.webp` (teal typographic) until the founder draws it.
+- Migration `20261127000000_stamp_with_a_friend.sql`: message_links.kind allows 'invite'; `api.referrals` (service role only). Applies
+  itself ~20 s after the push (no destructive SQL). **Order matters:** the migration and the worker deploy ride the same push.
+- Gates: node --check ✓, eslint ✓ (Passport, Mailbox, InviteButton, CollectibleReward), build ✓, boot-check ✓.
+- **Activate:** push (migration + worker), then `npm run ota` (the app side). Then test: share an invite from the founder's phone,
+  open it on a fresh account, stamp once, both passports show the reward.
+
