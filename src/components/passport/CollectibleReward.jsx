@@ -35,6 +35,7 @@ const CONFETTI = [GOLD, "#E8CC86", BLUE, RED, "#2E6B4E", "#FFFFFF"];
 export default function CollectibleReward({ item, fresh = true, onClose, onSaved = undefined }) {
   const reduce = useReducedMotion();
   const art = collectibleOf(item?.badge);
+  const friend = item?.source === "friend";   // Stamp with a friend (2026-11-26): earned together, not for photos
   const [ceiling] = usePassportAudience(true);
   const [level, setLevel] = useState(item?.visibility || null);
   const [busy, setBusy] = useState(null);   // 'place' | 'remove' while saving
@@ -84,14 +85,14 @@ export default function CollectibleReward({ item, fresh = true, onClose, onSaved
         </button>
         <div style={{ padding: "16px 20px calc(20px + env(safe-area-inset-bottom))", textAlign: "center" }}>
           <div style={{ fontFamily: MONO, fontSize: fs(9.5), fontWeight: 600, letterSpacing: ".18em", textTransform: "uppercase", color: RED, padding: "0 28px", textWrap: "balance" }}>
-            {fresh ? "Thank you for contributing to City Boards!" : "Collectible stamp"}
+            {fresh ? (friend ? "You stamped with a friend!" : "Thank you for contributing to City Boards!") : "Collectible stamp"}
           </div>
           <h2 id="cb-reward-h" style={{ margin: "6px 0 0", fontFamily: SERIF, fontSize: fs(fresh ? 31 : 27), fontWeight: 400, lineHeight: 1.05, color: NEUTRAL.ink }}>
-            {fresh ? <>You’re {withArticle(item.title).split(" ")[0]} <em style={{ color: BLUE }}>{item.title}</em>!</> : item.title}
+            {fresh ? (friend ? <>You both earned <em style={{ color: BLUE }}>{item.title}</em>!</> : <>You’re {withArticle(item.title).split(" ")[0]} <em style={{ color: BLUE }}>{item.title}</em>!</>) : item.title}
           </h2>
           {fresh ? (
             <p style={{ margin: "8px auto 0", maxWidth: 320, fontSize: fs(14), lineHeight: 1.45, color: NEUTRAL.ink2 }}>
-              {item.milestone} photos{item.cities ? ` from ${item.cities} cities` : ""}, shared with travelers everywhere. This collectible stamp is yours to keep, even if you delete the photos.
+              {friend ? "A friend you invited made their first stamp, or you were that friend. This collectible stamp is yours to keep, and so is theirs." : <>{item.milestone} photos{item.cities ? ` from ${item.cities} cities` : ""}, shared with travelers everywhere. This collectible stamp is yours to keep, even if you delete the photos.</>}
             </p>
           ) : null}
 
@@ -156,7 +157,7 @@ export default function CollectibleReward({ item, fresh = true, onClose, onSaved
                 style={{ width: "100%", minHeight: 44, marginTop: 4, background: "transparent", border: 0, color: NEUTRAL.ink2, fontSize: fs(14), fontWeight: 600 }}>
                 Not now
               </button>
-              <p style={{ margin: 0, fontSize: fs(11.5), lineHeight: 1.4, color: NEUTRAL.ink3 }}>It waits for you in Contribute to City Boards.</p>
+              <p style={{ margin: 0, fontSize: fs(11.5), lineHeight: 1.4, color: NEUTRAL.ink3 }}>{friend ? "It waits for you in your passport." : "It waits for you in Contribute to City Boards."}</p>
             </>
           )}
         </div>

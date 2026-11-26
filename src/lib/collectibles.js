@@ -11,6 +11,7 @@ import cb3 from "@/assets/collectibles/cb-3.webp";
 import cb4 from "@/assets/collectibles/cb-4.webp";
 import cb5 from "@/assets/collectibles/cb-5.webp";
 import cb6 from "@/assets/collectibles/cb-6.webp";
+import cb7 from "@/assets/collectibles/cb-7.webp";   // Stamp with a friend (2026-11-26); placeholder art until the founder draws it
 
 export const REWARD_PHOTOS = 10;
 export const REWARD_CITIES = 3;
@@ -22,6 +23,7 @@ export const COLLECTIBLES = {
   4: { no: 4, title: "Certified Explorer", art: cb4 },
   5: { no: 5, title: "Adventure Pro", art: cb5 },
   6: { no: 6, title: "Adventure Pro", art: cb6 },
+  7: { no: 7, title: "Stamp with a friend", art: cb7 },
 };
 export const collectibleOf = (badge) => COLLECTIBLES[Number(badge)] || null;
 // "an Official Traveler", "a Certified Explorer", "an Adventure Pro"

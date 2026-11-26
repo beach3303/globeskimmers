@@ -24,6 +24,7 @@ import { Capacitor } from "@capacitor/core";
 import { Loader2, Send } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { getHandle, getShareLink } from "@/lib/passport";
+import { createInvite } from "@/lib/messageLinks";
 import { logEvent } from "@/lib/analytics";
 import { TAGGING_ENABLED } from "@/lib/flags";
 import { CLOTH, NEUTRAL, fs } from "@/components/redesign/constants";
@@ -41,12 +42,14 @@ const isCloth = (v) => (typeof v === "string" && Object.prototype.hasOwnProperty
  * @param {string|null} handle
  * @param {string} url
  */
-export function inviteText(handle, url) {
+export function inviteText(handle, url, reward = false) {
   const me = handle ? ` (I'm @${handle})` : "";
   const what = TAGGING_ENABLED
     ? "collect stamps from everywhere you go, save memories & tag the people you share them with"
     : "collect stamps from everywhere you go & save memories";
-  return `Join me on Globeskimmers 🌎✈️${me} Claim your username, ${what}. Let's fill our virtual passports together! 💛 ${url}`;
+  // Stamp with a friend (2026-11-26): when the link is a claimable invite, say what it earns.
+  const prize = reward ? " Stamp your first place and we both earn a collectible 🏅" : "";
+  return `Join me on Globeskimmers 🌎✈️${me} Claim your username, ${what}. Let's fill our virtual passports together! 💛${prize} ${url}`;
 }
 
 /**
@@ -73,9 +76,11 @@ export default function InviteButton({
     if (busy) return;
     setBusy(true);
     try {
-      const [{ handle }, { data: sl }] = await Promise.all([getHandle(), getShareLink()]);
-      const url = sl?.url || "https://globeskimmers.io";
-      const text = inviteText(handle, url);
+      // The claimable invite link first (Stamp with a friend); the public page link if it can't be made.
+      const [{ handle }, { data: sl }, inv] = await Promise.all([getHandle(), getShareLink(), createInvite().catch(() => ({ data: null }))]);
+      const claimable = !!inv?.data?.url;
+      const url = claimable ? inv.data.url : (sl?.url || "https://globeskimmers.io");
+      const text = inviteText(handle, url, claimable);
       if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("Share")) {
         const { Share } = await import("@capacitor/share");
         await Share.share({ title: "Join me on Globeskimmers", text });
@@ -85,7 +90,7 @@ export default function InviteButton({
         await navigator.clipboard.writeText(text);
         showToast("Invite copied — paste it anywhere", "success");
       }
-      logEvent("invite_sent", { has_handle: !!handle }, "Profile");
+      logEvent("invite_sent", { has_handle: !!handle, claimable }, "Profile");
     } catch (e) {
       if (e?.name !== "AbortError") showToast(e?.message || "Couldn't open sharing", "error");
     }

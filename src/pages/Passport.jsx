@@ -35,6 +35,7 @@ import { isPlain, renderLook } from "@/lib/photoLook";
 import PhotoEditor from "@/components/passport/PhotoEditor";
 import StampEarnedSheet from "@/components/passport/StampEarnedSheet";
 import CollectibleReward from "@/components/passport/CollectibleReward";
+import { listCollectibles } from "@/lib/collectibles";
 import { readPhotoExif } from "@/lib/photoExif";
 import { uploadStampClip } from "@/lib/clips";
 import { takeSharedPhotos, SHARED_PHOTOS_EVENT } from "@/lib/sharedPhotos";
@@ -1063,6 +1064,26 @@ function PassportInner({ embedded = false }) {
   // Collectible stamps placed in this passport (City Boards, 2026-10-28), and the owner's open one.
   const [collectibles, setCollectibles] = useState([]);
   const [colOpen, setColOpen] = useState(null);
+  // Stamp with a friend (2026-11-26): the collectible earned when a friend you invited makes a first
+  // stamp, or when you were that friend. Shown once, the first time the passport opens after it lands.
+  const [friendReward, setFriendReward] = useState(null);
+  useEffect(() => {
+    let gone = false;
+    (async () => {
+      try {
+        const r = await listCollectibles();
+        if (gone || r.error || r.unavailable) return;
+        const mine = (r.items || []).find((i) => i.source === "friend");
+        if (!mine) return;
+        let seen = [];
+        try { seen = JSON.parse(localStorage.getItem("gs_cb_seen") || "[]"); } catch { seen = []; }
+        if (seen.includes(mine.id)) return;
+        try { localStorage.setItem("gs_cb_seen", JSON.stringify([...seen, mine.id].slice(-20))); } catch { /* shown anyway */ }
+        setFriendReward(mine);
+      } catch { /* the passport itself is the news */ }
+    })();
+    return () => { gone = true; };
+  }, []);
 
   // Read-only friend view: a shared link (globeskimmers://passport/view?u=slug)
   // drops the slug in sessionStorage; web can pass ?view_slug=. When set, we load
@@ -1876,6 +1897,7 @@ function PassportInner({ embedded = false }) {
       )}
       <StampEarnedSheet stamp={earned} slug={share?.slug || null} onClose={() => setEarned(null)} onChanged={load} />
       {colOpen ? <CollectibleReward key={colOpen.id} item={colOpen} fresh={false} onClose={() => setColOpen(null)} onSaved={load} /> : null}
+      {friendReward ? <CollectibleReward key={friendReward.id} item={friendReward} fresh onClose={() => setFriendReward(null)} onSaved={load} /> : null}
 
       {/* Friend view: the quiet report door (and the sheet of reasons), and Block */}
       {readOnly && (

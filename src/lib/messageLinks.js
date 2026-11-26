@@ -20,6 +20,10 @@ export async function createLink(payload) {
   return { data, error: error || data?.error || null };
 }
 
+// Stamp with a friend (2026-11-26): an invite link on the same rails; whoever claims it is counted as
+// your friend, and their first stamp earns you both the collectible.
+export async function createInvite() { return createLink({ kind: 'invite' }); }
+
 export async function shareText(text) {
   try {
     if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('Share')) {

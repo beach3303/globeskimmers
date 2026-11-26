@@ -417,6 +417,11 @@ function MailboxBody() {
     if (error) { showToast(workerMessage(error, "Couldn’t open it. Try again."), "error"); return; }
     setCodeOpen(false);
     setCodeText("");
+    if (data?.kind === "invite") {   // Stamp with a friend (2026-11-26)
+      showToast(data?.already ? "You already opened this invite" : "You’re in 🏅 Stamp your first place and you both earn the Stamp-with-a-friend collectible", "success");
+      navigate(createPageUrl("Passport"));
+      return;
+    }
     const tg = data?.kind === "telegram";
     setTab(tg ? "telegrams" : "postcards");
     showToast(data?.already ? "You opened this one already — it’s in your Mailbox" : `Your ${tg ? "telegram" : "postcard"} is here, under New`, "success");

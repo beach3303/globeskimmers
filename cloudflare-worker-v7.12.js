@@ -15275,6 +15275,7 @@ async function handlePassportStamp(request, env, ctx) {
     // Stamps are airport-arrival + iconic-attraction only — we do NOT auto-stamp cities.
     const localHour = Number.isFinite(+b.local_hour) && +b.local_hour >= 0 && +b.local_hour <= 23 ? Math.floor(+b.local_hour) : null;
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, country: row.country, city: row.city, name: row.name, verified: result.verified, updated: !!result.updated, local_hour: localHour, zone: presence?.zone || null }, user.id));
+    if (ctx) ctx.waitUntil(refMaybeAward(env, user).catch(() => {}));   // Stamp with a friend (2026-11-26)
     // Private stamps (every sensitive place starts private) never reach the alert,
     // and neither does any stamp of a 13–17 traveler: their whole passport is
     // private to them (privacy policy §9), and a member number leads to a name.
@@ -19578,14 +19579,14 @@ async function handleLinkCreate(request, env, ctx) {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const b = await request.json().catch(() => ({}));
-    const kind = b.kind === 'telegram' ? 'telegram' : 'postcard';
+    const kind = b.kind === 'telegram' ? 'telegram' : b.kind === 'invite' ? 'invite' : 'postcard';   // invite: Stamp with a friend (2026-11-26)
     const sp = await gbSocialProfile(env, user.id);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
     if (sp.social_tier === 'blocked') return jsonResponse({ error: 'This isn’t available on this account' }, 403);
     if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
-    if (sp.social_tier === 'teen') return jsonResponse({ error: kind === 'telegram' ? 'Telegrams open at age 18' : 'Postcards open at age 18', code: 'teen_hold' }, 403);
+    if (sp.social_tier === 'teen' && kind !== 'invite') return jsonResponse({ error: kind === 'telegram' ? 'Telegrams open at age 18' : 'Postcards open at age 18', code: 'teen_hold' }, 403);
     const clean = (v, n) => (v == null ? null : String(v).replace(/\s+/g, ' ').trim().slice(0, n) || null);
-    const row = { sender_id: user.id, kind, max_claims: LINK_MAX_CLAIMS };
+    const row = { sender_id: user.id, kind, max_claims: kind === 'invite' ? 200 : LINK_MAX_CLAIMS };
     let photo = null;
     if (kind === 'telegram') {
       const body = tgClean(b.body);
@@ -19595,7 +19596,7 @@ async function handleLinkCreate(request, env, ctx) {
       if (!(await gbModerate(env, body)).allow) return jsonResponse({ error: 'Let’s keep it kind. Try different words.' }, 422);
       row.body = body;
       if (b.ink === 'red' || b.ink === 'green') row.ink = b.ink;
-    } else {
+    } else if (kind === 'postcard') {
       photo = pcPhotoOf(b);
       if (photo.error) return jsonResponse({ error: photo.error }, photo.status);
       const verdict = await gbModeratePhoto(env, ppBytesToB64(photo.bytes), photo.mediaType, 'memory');
@@ -19624,9 +19625,11 @@ async function handleLinkCreate(request, env, ctx) {
     }
     const { first, handle } = await linkSender(env, user.id);
     const url = `https://globeskimmers.io/m/${code}`;
-    const text = `${handle ? `${first} (@${handle})` : first} sent you a ${kind} on GlobeSkimmers ✈️ Open it here: ${url}`;
+    const text = kind === 'invite'
+      ? `${handle ? `${first} (@${handle})` : first} invited you to Globeskimmers ✈️ Get the app, stamp your first place, and you both earn the Stamp-with-a-friend collectible: ${url}`
+      : `${handle ? `${first} (@${handle})` : first} sent you a ${kind} on GlobeSkimmers ✈️ Open it here: ${url}`;
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'link_create', { kind }));
-    if (ctx) ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => `${kind === 'telegram' ? '⚡' : '💌'} ${who} made a ${kind} to send by text or share`, request));
+    if (ctx) ctx.waitUntil(gbActivityBell(env, user, 'mail', (who) => (kind === 'invite' ? `🤝 ${who} made an invite link` : `${kind === 'telegram' ? '⚡' : '💌'} ${who} made a ${kind} to send by text or share`), request));
     return jsonResponse({ ok: true, code, url, text });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
 }
@@ -19648,19 +19651,20 @@ async function handleLinkLanding(request, env, ctx) {
   if (ctx) ctx.waitUntil(gbLogEvent(env, 'link_landing_view', { live, kind: link?.kind || null }));
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const wire = link?.kind === 'telegram';
-  const thing = wire ? 'telegram' : 'postcard';
+  const inv = link?.kind === 'invite';
+  const thing = wire ? 'telegram' : inv ? 'invite' : 'postcard';
   const first = who?.first || 'A friend';
   const where = !wire ? (link?.place_name || link?.city || null) : null;
   const src = `link_${thing}`;
-  const ogTitle = who ? `${first} sent you a ${thing} · GlobeSkimmers` : 'GlobeSkimmers — collect the world, one stamp at a time';
-  const ogDesc = who ? `It’s sealed until you open it in GlobeSkimmers — free on iPhone and Android.` : 'Turn your trip photos into passport stamps. Free on iPhone and Android.';
+  const ogTitle = who ? (inv ? `${first} invited you to GlobeSkimmers` : `${first} sent you a ${thing} · GlobeSkimmers`) : 'GlobeSkimmers — collect the world, one stamp at a time';
+  const ogDesc = who ? (inv ? 'Stamp your first place and you both earn the Stamp-with-a-friend collectible. Free on iPhone and Android.' : `It’s sealed until you open it in GlobeSkimmers — free on iPhone and Android.`) : 'Turn your trip photos into passport stamps. Free on iPhone and Android.';
   const body = who ? `
-  <div class="eyebrow">GlobeSkimmers ${wire ? 'telegraph' : 'mail'}</div>
-  <h1>${esc(first)} sent you a <em>${thing}</em></h1>
+  <div class="eyebrow">GlobeSkimmers ${wire ? 'telegraph' : inv ? 'invitation' : 'mail'}</div>
+  <h1>${esc(first)} ${inv ? 'invited you to <em>Globeskimmers</em>' : `sent you a <em>${thing}</em>`}</h1>
   <div class="card ${wire ? 'wire' : ''}">
     <div class="k">From</div><div class="from">${esc(first)}${who.handle ? ` <span>@${esc(who.handle)}</span>` : ''}</div>
     <div class="k">To</div><div class="to">You</div>
-    <div class="seal">${wire ? '&#9889; Four words by wire' : `&#9993;&#65039; A photo and a note${where ? ` from ${esc(where)}` : ''}`}, sealed until you open it in the app.</div>
+    <div class="seal">${inv ? '&#127941; Stamp your first place in the app and you both earn the Stamp-with-a-friend collectible.' : `${wire ? '&#9889; Four words by wire' : `&#9993;&#65039; A photo and a note${where ? ` from ${esc(where)}` : ''}`}, sealed until you open it in the app.`}</div>
   </div>
   <a class="btn primary" href="globeskimmers://message/claim?code=${code}">Open in GlobeSkimmers</a>
   <a class="btn" href="/go/ios?src=${src}">Download for iPhone</a>
@@ -19716,11 +19720,13 @@ async function handleLinkClaim(request, env, ctx) {
     if (sp === undefined) return jsonResponse({ error: 'Couldn’t check your account — try again' }, 503);
     if (!sp?.birth_year) return jsonResponse({ error: 'age_required' }, 428);
     if (gbAgeHeld(sp)) return gbAgeHeldResp(sp);
-    if (sp.social_tier === 'teen' || sp.social_tier === 'blocked') return jsonResponse({ error: 'Postcards and telegrams open at age 18', code: 'teen_hold' }, 403);
+    if (sp.social_tier === 'blocked') return jsonResponse({ error: 'This isn’t available on this account' }, 403);
+    const teen = sp.social_tier === 'teen';   // an invite may be claimed at any age; mail opens at 18
     const gone = jsonResponse({ error: 'That link has expired or doesn’t exist' }, 404);
     const q = await gbRest(env, `message_links?code=eq.${code}&select=*`, {});
     const link = q.ok ? (await q.json())[0] || null : null;
     if (!link || Date.parse(link.expires_at) <= Date.now()) return gone;
+    if (teen && link.kind !== 'invite') return jsonResponse({ error: 'Postcards and telegrams open at age 18', code: 'teen_hold' }, 403);
     if (link.sender_id === user.id) return jsonResponse({ error: 'That one’s yours — send the link to someone else 🙂' }, 400);
     const cq = await gbRest(env, `message_link_claims?link_id=eq.${link.id}&user_id=eq.${user.id}&select=link_id`, {});
     if (cq.ok && (await cq.json()).length) return jsonResponse({ ok: true, kind: link.kind, already: true });
@@ -19732,7 +19738,9 @@ async function handleLinkClaim(request, env, ctx) {
     if (!mine.ok) return mine.status === 409 ? jsonResponse({ ok: true, kind: link.kind, already: true }) : jsonResponse({ error: 'That didn’t go through — try again' }, 503);
     const undo = () => gbRest(env, `message_link_claims?link_id=eq.${link.id}&user_id=eq.${user.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }).catch(() => {});
     let made = null;
-    if (link.kind === 'telegram') {
+    if (link.kind === 'invite') {
+      made = await refRecord(env, user, link);
+    } else if (link.kind === 'telegram') {
       const w = await gbRest(env, 'telegrams', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ sender_id: link.sender_id, to_user_id: user.id, body: link.body, created_at: link.created_at, ...(link.ink ? { ink: link.ink } : {}) }) });
       made = w.ok ? (await w.json().catch(() => []))[0] || null : null;
     } else {
@@ -19748,8 +19756,51 @@ async function handleLinkClaim(request, env, ctx) {
     if (!made) { await undo(); return jsonResponse({ error: 'Couldn’t open it right now — try again' }, 502); }
     await gbRest(env, `message_links?id=eq.${link.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ claims: link.claims + 1 }) }).catch(() => {});
     if (ctx) ctx.waitUntil(gbLogEvent(env, 'link_claim', { kind: link.kind }));
-    return jsonResponse({ ok: true, kind: link.kind, id: made.id || null });
+    return jsonResponse({ ok: true, kind: link.kind, id: made.id || null, ...(link.kind === 'invite' ? { counted: !!made.counted, inviter: made.inviter || null } : {}) });
   } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+// Stamp with a friend (2026-11-26). refRecord: a member opened an invite link → one referral row, if
+// they are new (account younger than 30 days) and have none yet; never fails the claim. refMaybeAward:
+// on a member's FIRST stamp, when a referral is waiting, both earn the collectible (design 7, source
+// 'friend'; one per member, ever) and the inviter gets one notification. Counts only, never names.
+async function refRecord(env, user, link) {
+  const out = { id: null, counted: false, inviter: null };
+  try {
+    const { first, handle } = await linkSender(env, link.sender_id).catch(() => ({ first: null, handle: null }));
+    out.inviter = { first: first || null, handle: handle || null };
+    const pq = await gbRest(env, `profiles?id=eq.${user.id}&select=created_at`, { headers: { 'Accept-Profile': 'public' } });
+    const prof = pq.ok ? (await pq.json())[0] : null;
+    const age = prof?.created_at ? Date.now() - Date.parse(prof.created_at) : Infinity;
+    if (!(age <= 30 * 86400000)) return out;   // not a new member: the link still opens, nothing is counted
+    const ins = await gbRest(env, 'referrals?on_conflict=referred_id', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify({ referred_id: user.id, referrer_id: link.sender_id, via: 'invite', code: link.code }) });
+    const rows = ins.ok ? await ins.json().catch(() => []) : [];
+    out.counted = Array.isArray(rows) && rows.length > 0;
+    if (out.counted) await gbLogEvent(env, 'referral_recorded', { via: 'invite' }, user.id);
+  } catch { /* the claim still succeeds */ }
+  return out;
+}
+async function refMaybeAward(env, user) {
+  const q = await gbRest(env, `referrals?referred_id=eq.${user.id}&awarded_at=is.null&select=referrer_id,code`, {});
+  const ref = q.ok ? (await q.json())[0] : null;
+  if (!ref) return;
+  const c = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&select=id&limit=2`, {});
+  const n = c.ok ? (await c.json()).length : 0;
+  if (n !== 1) return;   // the first stamp only
+  const grant = async (uid) => {
+    const ins = await gbRest(env, 'collectibles?on_conflict=user_id,source', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify({ user_id: uid, source: 'friend', badge: 7, milestone: 1 }) });
+    const rows = ins.ok ? await ins.json().catch(() => []) : [];
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  };
+  const [mine, theirs] = await Promise.all([grant(user.id), grant(ref.referrer_id)]);
+  await gbRest(env, `referrals?referred_id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ awarded_at: new Date().toISOString() }) }).catch(() => {});
+  await gbLogEvent(env, 'referral_awarded', { friend_got: !!mine, inviter_got: !!theirs }, user.id);
+  const { first, handle } = await linkSender(env, user.id).catch(() => ({ first: null, handle: null }));
+  const who = handle ? `@${handle}` : first || 'Your friend';
+  await pushNotify(env, ref.referrer_id, 'follows', { title: `${who} stamped their first place`, body: 'You both earned Stamp with a friend 🏅 It’s waiting in your passport', route: '/Passport', collapse: `friend-${user.id}` }, { each: true });
+  try {
+    const { who: line, n: num } = await gbWhoLine(env, user);
+    await founderAlert(env, `🤝 ${line} made a first stamp through a friend's invite — both earned Stamp with a friend`, 'bell', num ? { click: gbMemberLink(num) } : {});
+  } catch { /* the alert is a courtesy */ }
 }
 // The daily prune: expired links go, and a postcard link's photo with them (claimed copies have their own).
 async function linkPrune(env) {
@@ -22882,8 +22933,9 @@ async function handleBoardContributionCaption(request, env) {
 // stamp. The art ships in the app (src/lib/collectibles.js).
 const BC_REWARD_PHOTOS = 10;
 const BC_REWARD_CITIES = 3;
-const CB_TITLES = { 1: 'Official Traveler', 2: 'Official Traveler', 3: 'Certified Explorer', 4: 'Certified Explorer', 5: 'Adventure Pro', 6: 'Adventure Pro' };
-const cbRow = (r) => ({ id: r.id, badge: r.badge, title: CB_TITLES[r.badge] || 'Collectible', milestone: r.milestone, earned_at: r.earned_at, placed: !!r.placed_at, visibility: r.visibility || null });
+const CB_TITLES = { 1: 'Official Traveler', 2: 'Official Traveler', 3: 'Certified Explorer', 4: 'Certified Explorer', 5: 'Adventure Pro', 6: 'Adventure Pro', 7: 'Stamp with a friend' };
+const CB_BOARD_BADGES = [1, 2, 3, 4, 5, 6];   // the City Boards draw; 7 is earned with a friend (2026-11-26)
+const cbRow = (r) => ({ id: r.id, source: r.source || 'city_boards', badge: r.badge, title: CB_TITLES[r.badge] || 'Collectible', milestone: r.milestone, earned_at: r.earned_at, placed: !!r.placed_at, visibility: r.visibility || null });
 // One more photo posted from this city → { posted, cities } (null before the table exists).
 async function bcTallyBump(env, userId, cityKey) {
   const r = await gbRest(env, 'rpc/bc_tally_bump', { method: 'POST', body: JSON.stringify({ p_user: userId, p_city: String(cityKey || '') }) });
@@ -22935,7 +22987,7 @@ async function bcHasCollectible(env, userId) {
 async function bcAward(env, user, milestone, cities, ctx) {
   const userId = user.id;
   if (await bcHasCollectible(env, userId)) return null;
-  const all = Object.keys(CB_TITLES).map(Number);
+  const all = CB_BOARD_BADGES;
   const badge = all[crypto.getRandomValues(new Uint32Array(1))[0] % all.length];
   const ins = await gbRest(env, 'collectibles', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ user_id: userId, source: 'city_boards', badge, milestone }) });
   if (!ins.ok) return null;
@@ -22952,7 +23004,7 @@ async function bcAward(env, user, milestone, cities, ctx) {
 }
 // The stamps placed in a passport, oldest first.
 async function cbPlaced(env, userId) {
-  const q = await gbRest(env, `collectibles?user_id=eq.${userId}&placed_at=not.is.null&order=placed_at.asc&select=id,badge,milestone,visibility,earned_at,placed_at`, {}).catch(() => null);
+  const q = await gbRest(env, `collectibles?user_id=eq.${userId}&placed_at=not.is.null&order=placed_at.asc&select=id,source,badge,milestone,visibility,earned_at,placed_at`, {}).catch(() => null);
   return q && q.ok ? (await q.json()).map(cbRow) : [];
 }
 
@@ -22962,13 +23014,13 @@ async function handleCollectibles(request, env) {
     const user = await gbUser(request, env);
     if (!user) return jsonResponse({ error: 'Sign in' }, 401);
     const [q, t] = await Promise.all([
-      gbRest(env, `collectibles?user_id=eq.${user.id}&source=eq.city_boards&select=id,badge,milestone,visibility,earned_at,placed_at`, {}),
+      gbRest(env, `collectibles?user_id=eq.${user.id}&select=id,source,badge,milestone,visibility,earned_at,placed_at&order=earned_at.asc`, {}),
       bcTally(env, user.id),
     ]);
     if (q.status === 404) return jsonResponse({ items: [], progress: null, unavailable: true });
     if (!q.ok) return jsonResponse({ error: 'Couldn’t load your stamp — try again', items: [] }, 502);
     const items = (await q.json()).map(cbRow);
-    return jsonResponse({ items, progress: { ...t, need_photos: BC_REWARD_PHOTOS, need_cities: BC_REWARD_CITIES, earned: items.length > 0 } });
+    return jsonResponse({ items, progress: { ...t, need_photos: BC_REWARD_PHOTOS, need_cities: BC_REWARD_CITIES, earned: items.some((i) => i.source === 'city_boards') } });
   } catch (e) { return jsonResponse({ error: e.message, items: [] }, 500); }
 }
 
