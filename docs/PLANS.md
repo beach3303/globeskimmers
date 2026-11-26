@@ -93,7 +93,7 @@ a 60–90 s phone screen recording is optional and recommended. Open: her answer
 
 **Speedrun said no 11-26 → the global investor/incubator research** (six background researchers, report to
 `docs/research/reports/GlobeSkimmers global investors and incubators.md`): travel programs, tourism boards + stages, media-pull
-investors, founder-fit funds, the payments/travel-network path, lead-investor candidates. Deliver as one report + a short list.
+investors, founder-fit funds, the payments/travel-network path, lead-investor candidates. **DELIVERED 11-26:** `docs/research/reports/GlobeSkimmers global investors and incubators.md` — best-fit lead Slauson & Co. (LA), parallel Wonder Ventures; the blocker every door names is the full-time job, not ~100 users; zero-cost stack this week (Cloudflare Tier 3, Amber Grant by Nov 30, Verizon by Dec 7, Grid110, Apple Featuring); open forms (Graham & Walker, Hyphen, Cleo, January, Precursor, Z Fellows, Founder University, The Pitch, Expert Dojo); YC Spring 2027 after Dec 11, speedrun SR009 with a delta. Airline ambition judged not fundable from an app; payments on partner rails.
 
 ## China stamp series — founder 2026-11-22/23 — DRAWN, review done, ART LIVE 11-24 (558 files), ROWS LIVE 11-26 — push + OTA next
 
