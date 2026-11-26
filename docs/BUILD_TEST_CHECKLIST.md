@@ -5342,6 +5342,10 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   2026-11-24 update: her first upload.sh run failed (`zsh:1: command not found: put` — a zsh function does not reach
   xargs' children; fixed in `c794109`, the put is inline). She was away, so Claude ran the fixed script: **558 of 558 live**
   on the server (PNG, byte sizes match the local files). The D1 line was refused by the permission gate — **still hers to run.**
+  2026-11-26 09:39: the founder ran the D1 line on this Mac — 395 statements, verified by a read: 279 inserted ids present,
+  116 rows promoted, China rows 2621 → 2899 (one of the 279 ids already existed), 445 stampable China rows. Wrangler's
+  "leftover buffer" warning was the trailing comment after the last semicolon; the last row (Ji'an Koguryo Sites) is in.
+  **Her 11-25 laptop run had applied nothing** (the file lives only in unpushed commits here). Left: push + OTA for stampArtChina.js.
   Decisions: Potala Palace + Jokhang Temple are live from the world set — new ones HELD (backups in
   scripts/stamp-art/china/replaced-live/; to swap: remove from hold.json, add to REDRAWN "2026-11-22", re-run intake);
   the four concern redraws (drop the new PNGs in the inbox under the same names, remove from hold.json, re-run intake);
