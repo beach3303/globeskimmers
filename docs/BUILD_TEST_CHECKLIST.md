@@ -5362,3 +5362,9 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - Docs: investor research report + notes (5c52af5), the honest audit = THE LONG PLAN (5ab9d02, f9154a3), the first-thousand plan (644b415), No Excuses declined (7af3a5d).
 - OTA still pending for the China art index + PH guards + the index.html header (phones carry neither until `npm run ota`).
 
+### 2026-11-26 ~14:10 — PUSHED + DEPLOYED: the Monday numbers (admin growth-week)
+- `38a6129` worker `POST /admin/growth-week` (admin-gated; Supabase profiles/passport_stamps/postcards + D1 activity days; admins + demo
+  excluded) and the "📅 The Monday numbers — the first thousand" panel above Activity overview in AdminAnalytics. CI success on 38a6129;
+  the route answers 401 without a token (deployed). Gates: node --check ✓, eslint ✓, build ✓, boot-check ✓.
+- **Activate:** `npm run ota` (the panel is in the app bundle; the same OTA carries the China art index, the PH guards and the header).
+
