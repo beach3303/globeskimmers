@@ -364,3 +364,7 @@ Nearest gaps the North Star exposes (build-queue candidates, in rough order):
 strategy sessions. PLANS.md references this file; memory
 `google-of-travel-brief` and the Stamp Atlas remain the product/design
 companions.*
+
+---
+
+**2026-11-26 — the long plan.** The founder's standing order: `docs/STRATEGY_AUDIT_2026-11-26.md` is the plan "until we make it to hundreds of billions of dollars": the American Express of the passport generation, proof → points → payments → planes; members never pay for stamps; retention prices every rung.

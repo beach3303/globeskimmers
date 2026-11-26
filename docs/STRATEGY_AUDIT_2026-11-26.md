@@ -80,6 +80,26 @@ From today's research and from the funds that say so in writing: a16z speedrun (
 4. Put the printed passport book on sale by spring, print on demand, so "we sell a product" is a fact too.
 5. Apply to Slauson, Wonder and the zero-cost stack this week, and reapply to YC in February and speedrun in spring with those four facts.
 
+## How to become more powerful than the payment networks (founder's question, same day)
+
+Not by building a better card network; nobody has beaten Visa at its own game in fifty years. The companies that rose above the networks owned something the networks do not and made them plumbing underneath. Visa and Mastercard own the rules and the default, not the money, the banks or the merchants; they take a toll on every transaction without carrying risk, and they do not know the person, the place or the reason. Apple Pay owns the tap and takes a fee from issuers without owning a network. Alipay and WeChat Pay skipped cards with QR and signed 150 million small merchants the networks never reached; Ant was headed above $300B before the state stopped it, which is the lesson in both directions. UPI and PIX are government rails built to shrink the networks' power; whoever owns the interface on top wins the user. Amex owns both sides in a closed loop and earns more per transaction than Visa.
+
+What Globeskimmers owns that none of them have: proof of presence (a verified "this human is at this place now" signal, worth more than a card number because fraud is the networks' largest cost and intent their blindest spot), the traveler before the spend, the small places the networks never signed, and a currency both sides want. Nobody owns the tap across borders; that seat is empty.
+
+The route, in order: (1) own the currency, stamps that pay, funded by places; (2) own the tap, one Globeskimmers tap or QR that works at a stamped place in any country, routed underneath to the cheapest rail there (Visa in Paris, Alipay+ in Bangkok, UPI in Delhi, PIX in Rio); (3) route around, pushing volume to cheap account-to-account and QR rails and handing the savings to small merchants, which with passport foot traffic is how cash-only places are won; (4) close the loop in travel economies the way Amex did. Then the networks need Globeskimmers more than it needs them. Caveats: about a hundred million traveling members and roughly a decade (Alipay fifteen years, Apple Pay ten), and power at that scale draws regulators, so partner with central-bank rails rather than fight them.
+
+## Shorter than Alipay, and who pays (founder's question, same day)
+
+Members never pay for a stamp. Stamps, the passport, postcards and cards stay free; the person is the asset, as the cardholder is for Amex and the renter for Bilt. The other side pays: places that want an official stamp, destinations, airports, airlines, brands sponsoring a country series, and later the bank that issues the card. A paid decorative cover is the only thing a member ever buys.
+
+Why it can be shorter: Alipay and Apple Pay had to create the behavior and the hardware; today Tap to Pay runs on any phone through Stripe or Adyen, QR covers Asia, Alipay+ connects 150M merchants, so the acceptance layer is assembled in one to two years. Distribution is the only hard part. What compresses time: ride existing audiences (the Filipino diaspora and home country, a China series, the US list, each a country launch with creators and press); ride moments (LA28, Wrapped every December); build loops into the product (a postcard to a non-member, a shared page, a QR card are all invitations); let partners recruit (an official-stamp destination promotes it, an airport prints "stamp your arrival"); capital.
+
+The arithmetic: Duolingo took about ten years to 100M monthly users, Polarsteps five years to 1M, Pokémon GO 100M in weeks on a borrowed brand. Ladder if retention holds: 1,000 by March 2027, 50,000 in 2027, 1M in the LA28 year, 10–25M by 2031, 100M around 2032–33: seven years instead of fifteen, and only if people who stamp once come back and bring someone. Retention is the number every rung is priced off. Claude builds the loops, partner tooling, reports, launches, measurement and raises; only the product can make a stranger open the app twice.
+
+## Standing order (founder, 2026-11-26)
+
+"Save this plan until we make it to hundreds of billions of dollars." This document is the long plan. It stays the reference until the founder replaces it. Every quarterly plan answers to the ladder above.
+
 ## Sources for the figures
 
 Bilt: company announcement of the $250M round at $10.75B (July 2025) and its forecast of more than $1B revenue by Q1 2026. Loyalty programs: On Point Loyalty's 2026 ranking (modelled values, not market prices). Market values: companiesmarketcap, Capital.com and MarketScreener snapshots from mid-2026, which differ by up to 20% between sources. Alaska and Hawaiian: Bloomberg, December 2023. Airline founding capital and the payments licensing ladder: the investor research report of 2026-11-26 in docs/research/reports/. Rimowa, Away, Supreme, Liquid Death, Revolut, Tripadvisor and Yelp figures are from memory of public reporting and need a check before they are quoted anywhere.

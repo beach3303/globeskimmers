@@ -79,6 +79,10 @@ draw first); when art lands, one SQL file (promotions + inserts) as the world tr
 were curated by fame, not measured visits; the US Tourist tier is the first with published counts attached.
 
 
+## THE LONG PLAN — standing order, founder 2026-11-26: "Save this plan until we make it to hundreds of billions of dollars"
+
+`docs/STRATEGY_AUDIT_2026-11-26.md` is the long plan (artifact: https://claude.ai/artifact/MuCmbvpvLg122vXpJja3Pj). The Amex of the passport generation: proof → points → payments → planes. Members never pay for stamps; places, destinations, airports, airlines, sponsors and later the issuing bank pay. Retention is the number every rung is priced off. Every quarterly plan in this file answers to its ladder (1,000 by Mar 2027 · 50k in 2027 · 1M in the LA28 year · 10–25M by 2031 · 100M ~2032–33). Replace only on the founder's word.
+
 ## The honest audit — founder 2026-11-26 ("audit the possibility of Globeskimmers becoming something big… hundreds of billions")
 
 `docs/STRATEGY_AUDIT_2026-11-26.md`. Answer: yes, and not through an airline. Proof of presence → loyalty currency (stamps that
