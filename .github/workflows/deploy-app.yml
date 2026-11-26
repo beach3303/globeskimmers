@@ -7,21 +7,12 @@ name: Deploy web app
 #   VITE_SUPABASE_ANON_KEY   the anon (public) key — RLS guards the data, not secrecy
 # Without them src/lib/supabaseClient.js throws at import time and the page is white, so the build step
 # refuses to run when either is missing.
+# MANUAL for now (2026-11-26): the two VITE_SUPABASE_* repository variables are not set yet, so a push-triggered
+# run would fail. Run it from the Actions tab, or restore the push trigger below once the variables exist:
+#   push: { branches: [main], paths: ['src/**', 'public/**', 'index.html', 'vite.config.js', 'tailwind.config.js',
+#          'postcss.config.js', 'package.json', 'package-lock.json', 'wrangler-app.toml', '.github/workflows/deploy-app.yml'] }
+# Until then the founder deploys from the Mac: npm run build && npx wrangler deploy --config wrangler-app.toml
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'src/**'
-      - 'public/**'
-      - 'index.html'
-      - 'vite.config.js'
-      - 'tailwind.config.js'
-      - 'postcss.config.js'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'wrangler-app.toml'
-      - '.github/workflows/deploy-app.yml'
   workflow_dispatch:
 
 jobs:

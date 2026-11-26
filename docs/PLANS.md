@@ -95,7 +95,7 @@ This quarter: No Excuses + web app, 1,000 members + retention curve, three paid 
 by spring, Slauson/Wonder/zero-cost stack now, YC Feb + speedrun spring with those facts. Decisions open for the founder: adopt the
 Amex sentence; schedule the verified-reviews re-decision; green-light the printed passport book as the first product.
 
-## The No Excuses Fund (.TECH domains) — founder 2026-11-26 ("help me finish this application") — DUE 2026-12-15 23:59 PT
+## The No Excuses Fund (.TECH domains) — founder 2026-11-26 — DECLINED by the founder the same day (the "free" .tech showed $49.99; "I don't wanna do .tech anymore", focus on the next 1,000 members). KEPT: the web app at https://globeskimmers-app.maizasimeon.workers.dev (demo link for investors), the 12-slide deck (reusable), the eight answers.
 
 $1M equity-free, grants of $10K / $50K / $100K, "working builds only", founders 18+, day zero to pre-Series A; she registered
 2026-11-17 (@beach3303). Eight questions; paste-ready answers in `Claude outputs/noexcuses-application-2026-11-26.md`
