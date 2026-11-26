@@ -19779,13 +19779,29 @@ async function refRecord(env, user, link) {
   } catch { /* the claim still succeeds */ }
   return out;
 }
+// Friends on the spot: when a follow is accepted and one of the two is a NEW member (account ≤ 30 days)
+// with no referrer yet, the older member (≥ 7 days) becomes the referrer, exactly as if the link had been
+// claimed. So the friend never types a code: install any way, add the friend, stamp once.
+async function refLinkFriends(env, a, b) {
+  const pq = await gbRest(env, `profiles?id=in.(${a},${b})&select=id,created_at`, { headers: { 'Accept-Profile': 'public' } });
+  const rows = pq.ok ? await pq.json().catch(() => []) : [];
+  if (rows.length !== 2) return;
+  const [p1, p2] = rows.map((r) => ({ id: String(r.id), t: Date.parse(r.created_at) }));
+  const newer = p1.t >= p2.t ? p1 : p2, older = newer === p1 ? p2 : p1;
+  const now = Date.now();
+  if (!(now - newer.t <= 30 * 86400000) || !(now - older.t >= 7 * 86400000)) return;
+  const ins = await gbRest(env, 'referrals?on_conflict=referred_id', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify({ referred_id: newer.id, referrer_id: older.id, via: 'friend', code: null }) });
+  const made = ins.ok ? await ins.json().catch(() => []) : [];
+  if (Array.isArray(made) && made.length) await gbLogEvent(env, 'referral_recorded', { via: 'friend' }, newer.id);
+  await refMaybeAward(env, { id: newer.id });   // they may have stamped already
+}
 async function refMaybeAward(env, user) {
   const q = await gbRest(env, `referrals?referred_id=eq.${user.id}&awarded_at=is.null&select=referrer_id,code`, {});
   const ref = q.ok ? (await q.json())[0] : null;
   if (!ref) return;
   const c = await gbRest(env, `passport_stamps?user_id=eq.${user.id}&select=id&limit=2`, {});
   const n = c.ok ? (await c.json()).length : 0;
-  if (n !== 1) return;   // the first stamp only
+  if (n < 1) return;   // once they have stamped (the referral row exists only for accounts ≤ 30 days old)
   const grant = async (uid) => {
     const ins = await gbRest(env, 'collectibles?on_conflict=user_id,source', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify({ user_id: uid, source: 'friend', badge: 7, milestone: 1 }) });
     const rows = ins.ok ? await ins.json().catch(() => []) : [];
@@ -21823,6 +21839,8 @@ async function handleSocialFollow(request, env, ctx) {
           return jsonResponse({ ok: true });
         }
         await gbRest(env, `user_follows?follower_id=eq.${fid}&followee_id=eq.${user.id}&status=eq.pending`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'accepted', responded_at: new Date().toISOString() }) });
+        // Stamp with a friend (2026-11-26): a friendship with a new member counts as the invite, no code needed.
+        if (ctx) ctx.waitUntil(refLinkFriends(env, user.id, fid).catch(() => {}));
         // The knock (push): the follow was allowed.
         if (ctx) { const who = await ppHolder(env, user.id); ctx.waitUntil(pushNotify(env, fid, 'follows', { title: `${who} accepted your follow`, body: 'Their new stamps show under Friends’ news', route: '/Mailbox?tab=news' })); }
       } else {
