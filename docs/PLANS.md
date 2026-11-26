@@ -79,6 +79,22 @@ draw first); when art lands, one SQL file (promotions + inserts) as the world tr
 were curated by fame, not measured visits; the US Tourist tier is the first with published counts attached.
 
 
+## The No Excuses Fund (.TECH domains) — founder 2026-11-26 ("help me finish this application") — DUE 2026-12-15 23:59 PT
+
+$1M equity-free, grants of $10K / $50K / $100K, "working builds only", founders 18+, day zero to pre-Series A; she registered
+2026-11-17 (@beach3303). Eight questions; paste-ready answers in `Claude outputs/noexcuses-application-2026-11-26.md`
+(30-day unique users 29, members 96, revenue $0, no co-founders, bootstrapped). **Two prerequisites:** (1) the product live
+on its own .tech domain, not a redirect → `wrangler-app.toml` + `.github/workflows/deploy-app.yml` (commit 11f6eb2, not pushed):
+the web build of the app as the `globeskimmers-app` Worker; her steps: `npx wrangler deploy --config wrangler-app.toml` (the
+gate refuses it to Claude), register globeskimmers.tech via the form's free link, add the zone to Cloudflare, attach the custom
+domain in the dashboard, add the two VITE_SUPABASE_* repository variables so CI can rebuild it on push; (2) a deck or video →
+deck built 11-26 (Slides artifact https://claude.ai/artifact/R9DhYkDPxUiKjhB4UQW6Gt, 10 slides, download as PDF ≤ 10 MB);
+a 60–90 s phone screen recording is optional and recommended. Open: her answer to "registered company?"; ask for $100K.
+
+**Speedrun said no 11-26 → the global investor/incubator research** (six background researchers, report to
+`docs/research/reports/GlobeSkimmers global investors and incubators.md`): travel programs, tourism boards + stages, media-pull
+investors, founder-fit funds, the payments/travel-network path, lead-investor candidates. Deliver as one report + a short list.
+
 ## China stamp series — founder 2026-11-22/23 — DRAWN, review done, ART LIVE 11-24 (558 files), ROWS LIVE 11-26 — push + OTA next
 
 The founder drew the China list in Grok: 562 of 611 arrived 11-23 as zips in ~/Downloads (`subtle_fixes_01…46`, `china_stamps_batch47…58`),
