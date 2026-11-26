@@ -14418,12 +14418,14 @@ async function gbUser(request, env) {
 // posts/photos/reports…) failed silently from launch until 2026-09-28, which
 // is why the admin passport sections read empty. session_id is now the
 // constant 'server'; page follows the event family.
-async function gbLogEvent(env, type, payload) {
+// userId (2026-11-26): server-side stamp events used to carry no member id, so activation (first stamp within
+// a day of signing up) and week-two return could not be computed from D1. Pass user.id where the handler has it.
+async function gbLogEvent(env, type, payload, userId = null) {
   try {
     if (!env.DB) return;
     const page = String(type || '').startsWith('passport') ? 'Passport' : 'guestbook';
-    await env.DB.prepare('insert into events (ts, session_id, event_type, page, payload) values (?,?,?,?,?)')
-      .bind(Math.floor(Date.now() / 1000), 'server', type, page, JSON.stringify(payload)).run();
+    await env.DB.prepare('insert into events (ts, session_id, event_type, page, payload, user_id) values (?,?,?,?,?,?)')
+      .bind(Math.floor(Date.now() / 1000), 'server', type, page, JSON.stringify(payload), userId || null).run();
   } catch { /* admin signal is best-effort */ }
 }
 // Multilingual moderation: local slur regex (instant, always-on) + Claude Haiku
@@ -15069,7 +15071,7 @@ async function handlePassportStamp(request, env, ctx) {
       const countedAs = variantParent || entityId;
       const countedName = (variantParent && truth?.name) || name;
       if (!truth && !reporting) {
-        if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp_refused', { code: 'unlocatable', entity_id: countedAs, name: countedName }));
+        if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp_refused', { code: 'unlocatable', entity_id: countedAs, name: countedName }, user.id));
         return jsonResponse({ error: 'We can\u2019t place this attraction on the map yet, so it can\u2019t be stamped right now', code: 'unlocatable' }, 409);
       }
       if (!truth) {
@@ -15096,7 +15098,7 @@ async function handlePassportStamp(request, env, ctx) {
       // reading, and a reading within PP_REPORT_MAX_M of the place. Farther, or none, is refused
       // like any tap — the app shows no report button then either.
       if (reporting && truth && (!hasFix || (Number.isFinite(meters) && meters > (reach || 0) + PP_REPORT_MAX_M))) {
-        if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp_refused', { code: hasFix ? 'report_far' : 'report_no_fix', entity_id: countedAs, name: countedName, d: ppBand(meters, [50, 150, 500, 1500, 5000]), radius_m: reach, reported: true }));
+        if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp_refused', { code: hasFix ? 'report_far' : 'report_no_fix', entity_id: countedAs, name: countedName, d: ppBand(meters, [50, 150, 500, 1500, 5000]), radius_m: reach, reported: true }, user.id));
         return jsonResponse(hasFix
           ? { error: 'Stamps open when you\u2019re there \u2014 your GPS puts you too far from this place to report it', code: 'not_here', distance_m: Math.round(meters) }
           : { error: 'Turn on location for GlobeSkimmers, then try again from the place', code: 'proof_needed' }, 409);
@@ -15108,7 +15110,7 @@ async function handlePassportStamp(request, env, ctx) {
       if (refusal) {
         // Counted per place with no position (founder: a place that fails
         // quietly still shows up), whether or not the person reports it.
-        if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp_refused', { code: refusal, entity_id: countedAs, name: countedName, d: ppBand(meters, [50, 150, 500, 1500, 5000]), radius_m: reach, acc: ppBand(fix?.acc, [20, 65, 100, 300]), reported: reporting }));
+        if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp_refused', { code: refusal, entity_id: countedAs, name: countedName, d: ppBand(meters, [50, 150, 500, 1500, 5000]), radius_m: reach, acc: ppBand(fix?.acc, [20, 65, 100, 300]), reported: reporting }, user.id));
         if (!reporting) {
           if (refusal === 'not_here' && truth.shape?.inside_only) return jsonResponse({ error: `${truth.shape.inside_note} Your GPS shows you outside the building.`, code: 'not_here', inside_only: true, distance_m: Math.round(meters) }, 409);
           if (refusal === 'not_here' || refusal === 'other_variant') return jsonResponse({ error: 'Your GPS doesn\u2019t show you at this place yet \u2014 stamping opens when you\u2019re here', code: 'not_here', distance_m: Math.round(meters), radius_m: reach, ...(refusal === 'other_variant' ? { other_variant: true } : {}) }, 409);
@@ -15272,7 +15274,7 @@ async function handlePassportStamp(request, env, ctx) {
     await fileReport(refusal ? 'stamped (reported)' : 'stamped (GPS passed on retry)');
     // Stamps are airport-arrival + iconic-attraction only — we do NOT auto-stamp cities.
     const localHour = Number.isFinite(+b.local_hour) && +b.local_hour >= 0 && +b.local_hour <= 23 ? Math.floor(+b.local_hour) : null;
-    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, country: row.country, city: row.city, name: row.name, verified: result.verified, updated: !!result.updated, local_hour: localHour, zone: presence?.zone || null }));
+    if (ctx) ctx.waitUntil(gbLogEvent(env, 'passport_stamp', { kind, country: row.country, city: row.city, name: row.name, verified: result.verified, updated: !!result.updated, local_hour: localHour, zone: presence?.zone || null }, user.id));
     // Private stamps (every sensitive place starts private) never reach the alert,
     // and neither does any stamp of a 13–17 traveler: their whole passport is
     // private to them (privacy policy §9), and a member number leads to a name.
@@ -23245,7 +23247,7 @@ async function handleCityCardStamp(request, env, ctx) {
     const upd = await gbRest(env, `city_cards?id=eq.${card.id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ stamps: slot, completed_at: completed ? now : null, updated_at: now }) });
     const fresh = (upd.ok ? await upd.json() : [])[0] || { ...card, stamps: slot, completed_at: completed ? now : null, updated_at: now };
     if (ctx) {
-      ctx.waitUntil(gbLogEvent(env, 'city_card_stamp', { category, finder, country: board.country, city: board.city, slot, completed }));
+      ctx.waitUntil(gbLogEvent(env, 'city_card_stamp', { category, finder, country: board.country, city: board.city, slot, completed }, user.id));
       // The founder's bell: who, what, which card, how far along, and where they connected from.
       ctx.waitUntil((async () => {
         const { who, n } = await gbWhoLine(env, user);
