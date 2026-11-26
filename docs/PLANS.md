@@ -1472,7 +1472,8 @@ store build — the share target already exists).
 
 **On hold (founder, same day):** "hold off attempt partnership with pink's incase i get accepted and my partners want to
 solidify a better more credible process". Don't contact Pink's or build the Pink's stamp until the founder says so
-(after YC / a16z Speedrun decisions). The letter and files stay ready.
+(after YC / a16z Speedrun decisions). The letter and files stay ready. **2026-11-26: Speedrun said no; YC W27 is the one
+decision still open — the hold is hers to lift.**
 
 The founder picked Pink's (original La Brea stand, since 1939) as the first iconic LA restaurant to stamp. Letter + PDF:
 https://claude.ai/artifact/SQwDHdXgx6mRLnVqkwvv37 (`Claude outputs/GlobeSkimmers-letter-to-Pinks.pdf`). Offer: official
@@ -1504,6 +1505,9 @@ monthly report by hand until it's built.
 - **Now (2026-11-03)** — **Greylock Edge** takes applications on a rolling basis (pre-idea → seed, 3-month program,
   capital optional and unstandardised; apply via greylock.com/edge). Speedrun (submitted 10-25) and YC W27 (submitted
   by 11-02) are in; Edge is the one credible door open today.
+  **2026-11-26 — a16z Speedrun SR008: DECLINED** ("we won't be moving forward with your application this cycle … not a
+  reflection of what you're building … a meaningful number of teams selected applied more than once, so we hope you'll
+  apply again"; no feedback given). Reapply next cycle (SR009) with more traction. YC W27 still unanswered.
 
 - **2026-11-03 — Border grace, PROPOSED (decisions open):** the founder drove I-10 into Arizona and never got the
   crossing prompt (Home-only, live-fix-only, 8-hour baseline, and one failed lookup at the river consumes the
