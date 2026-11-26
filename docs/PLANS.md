@@ -79,6 +79,18 @@ draw first); when art lands, one SQL file (promotions + inserts) as the world tr
 were curated by fame, not measured visits; the US Tourist tier is the first with published counts attached.
 
 
+## The honest audit — founder 2026-11-26 ("audit the possibility of Globeskimmers becoming something big… hundreds of billions")
+
+`docs/STRATEGY_AUDIT_2026-11-26.md`. Answer: yes, and not through an airline. Proof of presence → loyalty currency (stamps that
+pay; Bilt $10.75B is the pattern) → card via a bank partner → wallet and acceptance on partner rails → "the American Express of the
+passport generation" (Amex ~$230–250B contains every dream but the planes). Six paths judged (presence data · loyalty · wallet ·
+trusted marketplace with verified-only reviews, which conflicts with the 10-03 no-booking rule and is to be re-decided at 1M
+members · brand and products, starting with the printed passport book · airline = a trophy to buy at $50B+, not a path). Ladder:
+1,000 members by Mar 2027 → 50k + stamp rewards 2027 → 1M + the card in the LA28 year → 10–25M + the wallet 2029–31 → 100M+.
+This quarter: No Excuses + web app, 1,000 members + retention curve, three paid official stamps, the printed passport book on sale
+by spring, Slauson/Wonder/zero-cost stack now, YC Feb + speedrun spring with those facts. Decisions open for the founder: adopt the
+Amex sentence; schedule the verified-reviews re-decision; green-light the printed passport book as the first product.
+
 ## The No Excuses Fund (.TECH domains) — founder 2026-11-26 ("help me finish this application") — DUE 2026-12-15 23:59 PT
 
 $1M equity-free, grants of $10K / $50K / $100K, "working builds only", founders 18+, day zero to pre-Series A; she registered
