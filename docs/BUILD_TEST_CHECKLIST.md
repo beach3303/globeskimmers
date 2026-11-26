@@ -5383,4 +5383,8 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
 - Gates: node --check ✓, eslint ✓ (Passport, Mailbox, InviteButton, CollectibleReward), build ✓, boot-check ✓.
 - **Activate:** push (migration + worker), then `npm run ota` (the app side). Then test: share an invite from the founder's phone,
   open it on a fresh account, stamp once, both passports show the reward.
+- 15:40 **No code needed (founder: "can we make it easier without typing eight letter code"):** accepting a follow between a new member
+  (≤30 d) and an older one (≥7 d) records the referral (`refLinkFriends`, via 'friend') and awards once the new member has stamped
+  (`refMaybeAward` now fires at ≥1 stamp). The link + code stay as the fallback. Not yet: Universal Links / Android App Links for
+  `/m/` and `/p/` (AASA + associated domains + autoVerify = a store build) and the Play Install Referrer for automatic attribution.
 
