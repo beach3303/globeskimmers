@@ -1,0 +1,60 @@
+name: Deploy web app
+
+# The app itself in a browser (dist/ → the globeskimmers-app Worker, static assets). Its own workflow so
+# a worker or site change never rebuilds the app, and vice versa. The build needs the two PUBLIC Supabase
+# client values as repository Actions VARIABLES (Settings → Secrets and variables → Actions → Variables):
+#   VITE_SUPABASE_URL        https://bkaxadiyehddzkiuheea.supabase.co
+#   VITE_SUPABASE_ANON_KEY   the anon (public) key — RLS guards the data, not secrecy
+# Without them src/lib/supabaseClient.js throws at import time and the page is white, so the build step
+# refuses to run when either is missing.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.js'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'wrangler-app.toml'
+      - '.github/workflows/deploy-app.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-app:
+    name: Deploy globeskimmers-app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the app
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Set the repository variables VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (Settings → Secrets and variables → Actions → Variables)."
+            exit 1
+          fi
+          npm run build
+
+      - name: Deploy static assets to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          wranglerVersion: '4.131.2'
+          command: deploy --config wrangler-app.toml

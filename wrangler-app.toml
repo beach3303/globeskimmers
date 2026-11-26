@@ -1,0 +1,23 @@
+# globeskimmers-app — the web build of the app (dist/), served as static assets from a Worker so the
+# product itself runs in a browser at its own address (first use: the .TECH No Excuses Fund requires the
+# product live on a .tech domain, 2026-11-26). Same app as the phones: it talks to the same API worker
+# and Supabase; sign-in is the same account.
+#
+# Deployed by .github/workflows/deploy-app.yml on every push to main that touches the app (it builds
+# dist/ with the two public Supabase values from the repo's Actions *variables*, then deploys).
+# Locally: npm run build && npx wrangler deploy --config wrangler-app.toml
+#
+# The custom domain (globeskimmers.tech) is attached in the Cloudflare dashboard, like the site:
+# Workers & Pages → globeskimmers-app → Settings → Domains & Routes → Add custom domain.
+# No `routes` key on purpose (it would overwrite the dashboard-managed domain on every deploy).
+name = "globeskimmers-app"
+compatibility_date = "2025-06-01"
+# the workers.dev address stays on so the build can be checked before (and beside) the custom domain
+workers_dev = true
+preview_urls = false
+
+[assets]
+directory = "./dist"
+# React Router owns the paths (/Passport, /Profile …): unknown paths get index.html, not a 404
+not_found_handling = "single-page-application"
+html_handling = "auto-trailing-slash"
