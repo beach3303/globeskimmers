@@ -5350,3 +5350,15 @@ scratchpad `bctest/run.mjs`): 39/39 ✅.
   scripts/stamp-art/china/replaced-live/; to swap: remove from hold.json, add to REDRAWN "2026-11-22", re-run intake);
   the four concern redraws (drop the new PNGs in the inbox under the same names, remove from hold.json, re-run intake);
   batch 53. Then push + OTA so phones carry stampArtChina.js.
+
+### 2026-11-26 ~13:35 — PUSHED + DEPLOYED: stamp events carry the member id; web app Worker config; the long plan, the investor research, the first-thousand plan
+- `b3ff6cb` worker: `gbLogEvent(env, type, payload, userId)`; passport_stamp, the three passport_stamp_refused and city_card_stamp pass `user.id`
+  (242 of 242 stamp events in the last 90 days had no user_id). CI "Deploy Cloudflare Workers" on b3ff6cb: success 21:33Z; `/flags` answers 200.
+  Verify in a week: `SELECT COUNT(*), SUM(user_id IS NOT NULL) FROM events WHERE event_type='passport_stamp' AND ts >= unixepoch()-7*86400`.
+- `11f6eb2` + `7af3a5d` web app: `wrangler-app.toml` (globeskimmers-app, dist/ as assets, SPA fallback) + `.github/workflows/deploy-app.yml`
+  (workflow_dispatch ONLY until the VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY repository variables exist). The founder deployed it from the
+  Mac twice; LIVE at https://globeskimmers-app.maizasimeon.workers.dev (title "Globeskimmers", favicon, boot clean). No custom domain (No Excuses declined).
+- `adb4309` index.html: Globeskimmers title/icon/description (was "Base44 APP" + Base44 favicon). Build ✓, boot-check ✓.
+- Docs: investor research report + notes (5c52af5), the honest audit = THE LONG PLAN (5ab9d02, f9154a3), the first-thousand plan (644b415), No Excuses declined (7af3a5d).
+- OTA still pending for the China art index + PH guards + the index.html header (phones carry neither until `npm run ota`).
+
