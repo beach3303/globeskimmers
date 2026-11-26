@@ -104,6 +104,71 @@ const OV_LABELS = {
 const xbtn = { borderRadius: 8, padding: '5px 11px', fontSize: 12, fontWeight: 600, border: '1px solid #d8d2c6', background: '#fff', color: '#3A3128', cursor: 'pointer' };
 const today = () => new Date().toISOString().slice(0, 10);
 
+// The Monday numbers (the first-thousand plan, docs/plans/first-1000.md, 2026-11-26): the week's new members,
+// who stamped on day one, who came back in week two, and the pace the target needs. People, never names.
+function GrowthWeek() {
+  const [g, setG] = React.useState(null);
+  React.useEffect(() => {
+    (async () => {
+      const { data, error } = await callWorker('admin/growth-week', {});
+      setG(error || data?.error ? { error: error || data.error } : data);
+    })();
+  }, []);
+  const title = '📅 The Monday numbers — the first thousand';
+  if (!g) return <Section title={title} icon={Users}><div style={{ color: COLORS.gray, fontSize: 13 }}>Counting…</div></Section>;
+  if (g.error) return <Section title={title} icon={Users}><div style={{ color: '#B0472F', fontSize: 13 }}>{g.error}</div></Section>;
+  const pct = (a, b) => (b ? `${Math.round((a / b) * 100)}%` : '—');
+  const weeks = g.weeks || [];
+  const thisWeek = weeks[weeks.length - 1] || {};
+  const lastWeek = weeks[weeks.length - 2] || {};
+  const tiles = [
+    ['Accounts', g.accounts ?? '—', `goal ${g.goal} by Mar 31 · ${g.weeks_left} weeks left`],
+    ['Needed a week', g.needed_per_week ?? '—', `this week so far ${thisWeek.new_accounts ?? 0} · last week ${lastWeek.new_accounts ?? 0}`],
+    ['Stamped on day one', pct(g.activated_24h, g.new_30d), `${g.activated_24h} of ${g.new_30d} new in 30 days · within 7 days ${pct(g.activated_7d, g.new_30d)}`],
+    ['Week-two return', pct(g.week2_returned, g.week2_cohort), `${g.week2_returned} of ${g.week2_cohort} who joined 2–4 weeks ago came back in week two`],
+    ['Stamps per stamper · 30d', g.stampers_30d ? (g.stamps_30d / g.stampers_30d).toFixed(1) : '—', `${g.stamps_30d} stamps by ${g.stampers_30d} members`],
+  ];
+  const th = { textAlign: 'right', fontSize: 11, color: COLORS.gray, fontWeight: 600, padding: '4px 6px', whiteSpace: 'nowrap' };
+  const td = { textAlign: 'right', fontSize: 12.5, padding: '4px 6px', fontVariantNumeric: 'tabular-nums' };
+  return (
+    <Section title={title} icon={Users}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+        {tiles.map(([l, v, s]) => (
+          <div key={l} style={{ background: '#FBF7EE', borderRadius: 10, padding: '8px 10px', border: '1px solid #EADFC9' }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#16110D', lineHeight: 1.1 }}>{v}</div>
+            <div style={{ fontSize: 11, color: '#736657', marginTop: 2, fontWeight: 600 }}>{l}</div>
+            <div style={{ fontSize: 11, color: '#8B6A2B', marginTop: 2 }}>{s}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ overflowX: 'auto', marginTop: 12 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr><th style={{ ...th, textAlign: 'left' }}>Week of</th><th style={th}>New</th><th style={th}>Active</th><th style={th}>Stamps</th><th style={th}>Stampers</th><th style={th}>Postcards</th></tr></thead>
+          <tbody>{weeks.map((w) => (
+            <tr key={w.week} style={{ borderTop: `1px solid ${COLORS.border}`, fontWeight: w.current ? 700 : 400 }}>
+              <td style={{ ...td, textAlign: 'left' }}>{w.week.slice(5)}{w.current ? ' · so far' : ''}</td>
+              <td style={td}>{w.new_accounts}</td><td style={td}>{w.active}</td><td style={td}>{w.stamps}</td><td style={td}>{w.stampers}</td><td style={td}>{w.postcards}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <div style={{ overflowX: 'auto', marginTop: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: COLORS.gray, marginBottom: 4 }}>Who came back · by the week they joined</div>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr><th style={{ ...th, textAlign: 'left' }}>Joined week of</th><th style={th}>Joined</th><th style={th}>Week 2</th><th style={th}>Week 3</th><th style={th}>Week 4</th><th style={th}>Week 5</th></tr></thead>
+          <tbody>{(g.cohorts || []).map((c) => (
+            <tr key={c.week} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+              <td style={{ ...td, textAlign: 'left' }}>{c.week.slice(5)}</td><td style={td}>{c.size}</td>
+              {c.weeks.map((v, i) => <td key={`${c.week}-${i}`} style={td}>{v == null ? '·' : `${v}%`}</td>)}
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <div style={{ fontSize: 11.5, color: COLORS.gray, marginTop: 8 }}>People, never names. {g.excluded} admin and demo accounts left out. “Active” means opened the app, stamped or sent a postcard that week. Read it on Mondays; the plan is docs/plans/first-1000.md.</div>
+    </Section>
+  );
+}
+
 function ActivityOverview() {
   const [ov, setOv] = React.useState(null);
   const [gran, setGran] = React.useState('month');
@@ -1946,6 +2011,7 @@ export default function AdminAnalytics() {
               <KpiCard icon={Sparkles} label="Taps/session" value={avgRowsTaps} color={COLORS.accent} />
             </div>
 
+            <GrowthWeek />
             <ActivityOverview />
 
             <VirtualItemsReport />

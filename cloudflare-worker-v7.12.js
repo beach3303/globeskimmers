@@ -30436,6 +30436,103 @@ async function handleGuestbookReport(request, env, ctx) {
 // guestbook notes, dish photos and owner messages. Built for legal requests and
 // audits only: computed when asked, from data the product already stores —
 // no standing profiles are kept (deliberate: see docs/LAWYER_BRIEF.md §5).
+// POST /admin/growth-week — the Monday numbers for the first-thousand plan (docs/plans/first-1000.md,
+// 2026-11-26): new accounts per week, weekly active members, stamps and stampers, activation within 24 hours
+// and 7 days of joining, week-two return, weekly retention cohorts, and the pace the target needs. People,
+// never names; the admins and the review demo are left out. Sources: Supabase profiles, passport_stamps and
+// postcards (the truth), plus D1 events for "opened the app" days.
+async function handleAdminGrowthWeek(request, env) {
+  const denied = await requireAdmin(request, env);
+  if (denied) return denied;
+  try {
+    const DAY = 86400000;
+    const now = Date.now();
+    const since = new Date(now - 120 * DAY).toISOString();
+    const test = new Set(await gbTestAccountIds(env));
+    const pub = { headers: { 'Accept-Profile': 'public' } };
+    const readAll = async (path, extra = {}) => {
+      const rows = [];
+      for (let page = 0; page < 40; page++) {
+        const q = await gbRest(env, `${path}&order=created_at.asc&limit=1000&offset=${page * 1000}`, extra);
+        if (!q.ok) return rows;
+        const part = await q.json().catch(() => []);
+        rows.push(...part);
+        if (part.length < 1000) break;
+      }
+      return rows;
+    };
+    const [profiles, stamps, postcards, totalQ] = await Promise.all([
+      readAll(`profiles?select=id,created_at&created_at=gte.${encodeURIComponent(since)}`, pub),
+      readAll(`passport_stamps?select=user_id,created_at&created_at=gte.${encodeURIComponent(since)}`),
+      readAll(`postcards?select=sender_id,created_at&created_at=gte.${encodeURIComponent(since)}`),
+      gbRest(env, 'profiles?select=id&limit=1', { headers: { 'Accept-Profile': 'public', Prefer: 'count=exact' } }),
+    ]);
+    const accountsAll = (() => { const m = String(totalQ.headers.get('content-range') || '').match(/\/(\d+)$/); return m ? Number(m[1]) : null; })();
+    const accounts = accountsAll == null ? null : Math.max(0, accountsAll - test.size);
+    // "Opened the app" days from D1: one row per member per UTC day, last 120 days.
+    const dayRows = env.DB ? ((await env.DB.prepare(`SELECT user_id, CAST(ts/86400 AS INTEGER) AS d FROM events WHERE user_id IS NOT NULL AND user_id != '' AND ts >= ?1 GROUP BY user_id, d`).bind(Math.floor((now - 120 * DAY) / 1000)).all()).results || []) : [];
+    const active = new Map(); // member -> Set of UTC day indexes with any activity
+    const addDay = (u, dayIdx) => { if (!u || test.has(u) || !Number.isFinite(dayIdx)) return; let s = active.get(u); if (!s) active.set(u, (s = new Set())); s.add(dayIdx); };
+    for (const r of dayRows) addDay(String(r.user_id), Number(r.d));
+    for (const r of stamps) addDay(r.user_id, Math.floor(Date.parse(r.created_at) / DAY));
+    for (const r of postcards) addDay(r.sender_id, Math.floor(Date.parse(r.created_at) / DAY));
+    const activeBetween = (u, a, b) => { const days = active.get(u); if (!days) return false; for (const d of days) if (d >= a && d < b) return true; return false; };
+    const joined = new Map(); // member -> joined (ms)
+    for (const p of profiles) if (!test.has(String(p.id))) joined.set(String(p.id), Date.parse(p.created_at));
+    const firstStamp = new Map();
+    for (const r of stamps) { const u = r.user_id; if (!u || test.has(u)) continue; const t = Date.parse(r.created_at); if (!firstStamp.has(u) || t < firstStamp.get(u)) firstStamp.set(u, t); }
+    const mondayOf = (ms) => { const d = new Date(ms); d.setUTCHours(0, 0, 0, 0); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d; };
+    const own = (r, key) => r[key] && !test.has(r[key]);
+    const thisMonday = mondayOf(now);
+    // Weekly series, the last 10 weeks, oldest first; the current week is marked.
+    const weeks = [];
+    for (let i = 9; i >= 0; i--) {
+      const start = new Date(thisMonday); start.setUTCDate(start.getUTCDate() - 7 * i);
+      const s = +start, e = s + 7 * DAY, d0 = Math.floor(s / DAY), d1 = Math.floor(e / DAY);
+      const newAcc = [...joined.values()].filter((t) => t >= s && t < e).length;
+      const activeUsers = [...active.keys()].filter((u) => activeBetween(u, d0, d1)).length;
+      const wkStamps = stamps.filter((r) => own(r, 'user_id') && Date.parse(r.created_at) >= s && Date.parse(r.created_at) < e);
+      const wkPost = postcards.filter((r) => own(r, 'sender_id') && Date.parse(r.created_at) >= s && Date.parse(r.created_at) < e).length;
+      weeks.push({ week: start.toISOString().slice(0, 10), new_accounts: newAcc, active: activeUsers, stamps: wkStamps.length, stampers: new Set(wkStamps.map((r) => r.user_id)).size, postcards: wkPost, current: i === 0 });
+    }
+    // Activation: accounts opened in the last 30 days that stamped within 24 hours / 7 days of joining.
+    const d30 = now - 30 * DAY;
+    const newer = [...joined.entries()].filter(([, t]) => t >= d30);
+    const within = (hours) => newer.filter(([u, t]) => firstStamp.has(u) && firstStamp.get(u) - t <= hours * 3600000).length;
+    // Week-two return: accounts 14–28 days old that were active on any of days 8–14 after joining.
+    const cohort2 = [...joined.entries()].filter(([, t]) => t <= now - 14 * DAY && t >= now - 28 * DAY);
+    const returned2 = cohort2.filter(([u, t]) => { const j = Math.floor(t / DAY); return activeBetween(u, j + 7, j + 15); }).length;
+    // Retention by join week: the last 6 join-weeks, share active in each of the next 4 weeks (null = not yet).
+    const cohorts = [];
+    for (let i = 6; i >= 1; i--) {
+      const start = new Date(thisMonday); start.setUTCDate(start.getUTCDate() - 7 * i);
+      const s = +start, e = s + 7 * DAY;
+      const members = [...joined.entries()].filter(([, t]) => t >= s && t < e).map(([u]) => u);
+      const wk = [];
+      for (let k = 1; k <= 4; k++) {
+        const ws = s + 7 * k * DAY;
+        if (ws > now) { wk.push(null); continue; }
+        const a = Math.floor(ws / DAY), b = Math.floor((ws + 7 * DAY) / DAY);
+        const n = members.filter((u) => activeBetween(u, a, b)).length;
+        wk.push(members.length ? Math.round((n / members.length) * 100) : null);
+      }
+      cohorts.push({ week: start.toISOString().slice(0, 10), size: members.length, weeks: wk });
+    }
+    const recent = stamps.filter((r) => own(r, 'user_id') && Date.parse(r.created_at) >= d30);
+    const goalBy = Date.parse('2027-03-31T23:59:59Z');
+    const weeksLeft = Math.max(1, (goalBy - now) / (7 * DAY));
+    return jsonResponse({
+      as_of: new Date(now).toISOString(), excluded: test.size,
+      accounts, goal: 1000, goal_by: '2027-03-31', weeks_left: Math.round(weeksLeft * 10) / 10,
+      needed_per_week: accounts == null ? null : Math.ceil(Math.max(0, 1000 - accounts) / weeksLeft),
+      new_30d: newer.length, activated_24h: within(24), activated_7d: within(24 * 7),
+      week2_cohort: cohort2.length, week2_returned: returned2,
+      stamps_30d: recent.length, stampers_30d: new Set(recent.map((r) => r.user_id)).size,
+      weeks, cohorts,
+    });
+  } catch (e) { return jsonResponse({ error: e.message }, 500); }
+}
+
 // POST /admin/activity-overview — the whole app's activity, aggregated (founder,
 // 2026-10-05: "how many activities are happening in a day, week, month, year —
 // are people stamping more? writing on food more? which city more?"). Built for
@@ -31621,6 +31718,7 @@ export default {
       if (pathname === '/admin/user-activity' && request.method === 'POST') return await handleAdminUserActivity(request, env);
       if (pathname === '/admin/members' && request.method === 'POST') return await handleAdminMembers(request, env);
       if (pathname === '/admin/activity-overview' && request.method === 'POST') return await handleAdminActivityOverview(request, env);
+      if (pathname === '/admin/growth-week' && request.method === 'POST') return await handleAdminGrowthWeek(request, env);
       if (pathname === '/admin/gear-report' && request.method === 'POST') return await handleAdminGearReport(request, env);
       if (pathname === '/admin/event-clicks' && request.method === 'POST') return await handleAdminEventClicks(request, env);
       if (pathname === '/passport/sets' && request.method === 'POST') return await handlePassportSets(request, env);
