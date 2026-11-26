@@ -60,7 +60,7 @@ the growth audiences (Filipino travelers first; docs and the growth artifact v3)
 the six QR business cards with per-card download tracking (Claude outputs/business-cards/), the X account
 (@GlobeSkimmersHQ) and the message sheet. Deliverable when it starts: a 1,000-member plan with channels, the weekly
 numbers to watch (installs by source, activation = first stamp with a photo within a day, week-two return), and the
-first two weeks of concrete actions. **PLAN WRITTEN 2026-11-26:** `docs/plans/first-1000.md` (page: https://claude.ai/artifact/GnvpoCR1UzTbB6WeABd5wD). Baseline 96 accounts, ≈16 new in 30 days (4/week), 29 active/30d, 5/7d; target 1,000 by 2027-03-31 (≈55/week; 200 by Dec 31, 500 by Feb 14). Four engines: Filipino travelers now (balikbayan + Simbang Gabi, PH series as the hook, 20/wk) · LA in person (cards, a Saturday table, partner QRs, 10/wk) · China series on RedNote/Instagram (10/wk) · product loops (Wrapped by Dec 15, Stamp with a friend, profile QR, Product Hunt, Apple featuring, keywords; 15/wk). Claude's first-two-weeks: weekly growth report Dec 1 (fix: passport_stamp events carry no user_id), Wrapped Dec 1–12, referral collectible Dec 10, keywords Dec 2, PH SQL + launch kit when art lands, official-stamp flag + partner report on the first yes. Founder's: 200 cards by Nov 28, the fastest fifty one-on-one, 10 creator DMs/week, three partner emails, five posts/week, Simbang Gabi, her hours/week.
+first two weeks of concrete actions. **PLAN WRITTEN 2026-11-26:** `docs/plans/first-1000.md` (page: https://claude.ai/artifact/GnvpoCR1UzTbB6WeABd5wD). Baseline 96 accounts, ≈16 new in 30 days (4/week), 29 active/30d, 5/7d; target 1,000 by 2027-03-31 (≈55/week; 200 by Dec 31, 500 by Feb 14). Four engines: Filipino travelers now (balikbayan + Simbang Gabi, PH series as the hook, 20/wk) · LA in person (cards, a Saturday table, partner QRs, 10/wk) · China series on RedNote/Instagram (10/wk) · product loops (Stamp with a friend, profile QR, Product Hunt, Apple featuring, keywords; 15/wk; Wrapped SKIPPED 11-26). Claude's first-two-weeks: weekly growth report (DONE 11-26: the Monday numbers panel), stamp events carry user_id (DONE 11-26), referral collectible by Dec 10, keywords Dec 2, PH SQL + launch kit when art lands, official-stamp flag + partner report on the first yes. Founder's: 200 cards by Nov 28, the fastest fifty one-on-one, 10 creator DMs/week, three partner emails, five posts/week, Simbang Gabi, her hours/week.
 
 ## United States stamp list — founder 2026-11-22 ("top most visited places in United States, tourist, and novelty and local") — BUILT
 
@@ -1531,8 +1531,9 @@ monthly report by hand until it's built.
   sign-in (or anything live) uses, keep it by running one Sign in with Google flow / a refresh-token exchange;
   if they are leftovers from the Base44 days, let them go (restorable for 30 days after deletion).
 
-- **2026-11-24** — start **Passport Wrapped** (founder 2026-11-03: "we can do passport wrapped before the end of the
-  year and remind us"); ship by 2026-12-15 so it lands before holiday travel. Spec in the clips section (2026-11-03).
+- ~~**2026-11-24** — start **Passport Wrapped**~~ **SKIPPED for 2026 (founder 2026-11-26: "let's not do the wrap up"** — too few stamps
+  to move anything; a one-day share-card mockup was shown; revisit for 2027 when the count justifies it). The December build
+  time goes to the referral collectible and the partner tooling instead.
 
 - **Now (2026-11-03)** — **Greylock Edge** takes applications on a rolling basis (pre-idea → seed, 3-month program,
   capital optional and unstandardised; apply via greylock.com/edge). Speedrun (submitted 10-25) and YC W27 (submitted

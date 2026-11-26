@@ -38,9 +38,9 @@ Why now: December is balikbayan season and Simbang Gabi runs Dec 16–24; the Ph
 - A "stamp of the day" carousel from the China art, five a week, with the place's one-line story. The art is the content; nothing new to make.
 
 ### 4. The product's own loops (target 15 a week by January, compounding)
-- Passport Wrapped by Dec 15: every member gets a share card, the one December moment people already share.
+- ~~Passport Wrapped by Dec 15~~ skipped for 2026 (founder, Nov 26: too few stamps to move anything).
 - Postcards to non-members already land in email; the landing page is the invitation. Add "Stamp with a friend": both members earn a collectible when a referred friend makes a first stamp.
-- The profile QR ("scan a friend") exists; put it on the Wrapped card.
+- The profile QR ("scan a friend") exists; put it on the referral collectible's share card.
 - Product Hunt on a December weekend; an Apple featuring nomination three weeks before the next release; App Store keywords (travel passport, stamps, I was here, countries visited); a rating prompt after the first stamp.
 
 ## The weekly numbers (a Monday report, built by Claude)
@@ -50,10 +50,10 @@ Installs by source (the card and campaign tags already count in App Store Connec
 ## The first two weeks, Nov 27 to Dec 10
 
 Claude
-1. Weekly growth report from D1 and Supabase, first edition Monday Dec 1.
-2. Stamp events carry user ids; activation and week-two return computed.
-3. Passport Wrapped built Dec 1–12, shipped by Dec 15 (OTA).
-4. "Stamp with a friend" referral collectible by Dec 10.
+1. ~~Weekly growth report~~ DONE Nov 26: "The Monday numbers" panel in Admin Portal → Analytics (live after the OTA).
+2. ~~Stamp events carry user ids~~ DONE Nov 26 (worker b3ff6cb).
+3. ~~Passport Wrapped~~ skipped for 2026 (founder, Nov 26).
+4. "Stamp with a friend" referral collectible by Dec 10 — NEXT.
 5. App Store keyword set and featuring-nomination text by Dec 2.
 6. The Philippine launch kit and SQL the day the art lands; the China carousel set this week.
 7. Official-stamp flag, partner art upload and the counts-only report the day the first partner says yes.
